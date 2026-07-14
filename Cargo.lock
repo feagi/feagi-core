@@ -232,6 +232,8 @@ version = "0.0.12"
 dependencies = [
  "feagi-data",
  "feagi-genomic",
+ "feagi-models",
+ "feagi-npu-common",
  "paste",
 ]
 

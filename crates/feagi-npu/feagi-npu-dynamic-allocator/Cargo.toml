@@ -17,8 +17,10 @@ description = "Systems to dynamically edit the connectome and make/respond to re
 
 [dependencies]
 paste = { workspace = true}
+feagi-npu-common = {path = "../feagi-npu-common"}
 feagi-data = {path = "../../feagi-data"}
 feagi-genomic = {path = "../../feagi-genomic"}
+feagi-models = {path = "../../feagi-models"}
 
 
 [lints]

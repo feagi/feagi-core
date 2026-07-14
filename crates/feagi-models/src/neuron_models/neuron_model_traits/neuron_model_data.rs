@@ -3,7 +3,7 @@ use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPo
 /// Root trait for all cortical_area data implementations, essentially any cortical_area level data shared
 /// by all neurons in a cortical_area area of a given neuron model. This should be extended with only
 /// the cortical_area level data
-pub trait NeuronModelCorticalData<CPQ>: Clone + Copy
+pub trait NeuronModelCorticalData<CPQ>: Clone + Copy + Default
 where
     CPQ: CorticalPotentialCPUQuantization,
 {
@@ -23,7 +23,7 @@ where
 
 /// Root trait for all neuron data implementation, essentially per neuron data for a given
 /// neuron model. This should be extended with only the per neuron data
-pub trait NeuronModelNeuronData<CPQ>: Clone + Copy
+pub trait NeuronModelNeuronData<CPQ>: Clone + Copy + Default
 where
     CPQ: CorticalPotentialCPUQuantization,
 {

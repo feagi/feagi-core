@@ -1,4 +1,4 @@
-use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
+use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Represents what type of cortical area layout is being used in a cortical area, within 3 bits
@@ -10,6 +10,7 @@ pub enum CorticalAreaLayoutType {
     #[default]
     Dimensional = 0b0000_0000,
     Memory = 0b0000_0001,
+    // TODO add more
 }
 
 impl CorticalAreaLayoutType {
@@ -24,7 +25,9 @@ impl CorticalAreaLayoutType {
 }
 
 /// Describes how a cortical area neurons are laid out.
-pub trait CorticalAreaLayoutData<FIQ: FeagiIndexQuantization> {}
+pub trait CorticalAreaLayoutData<FIQ: FeagiIndexQuantization> {
+    fn get_total_number_neurons(&self) -> NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>;
+}
 
 /// Describes a cortical area of neurons arranged in voxels with depth as 4d XYZD dimensions
 #[derive(Copy, Clone)]
@@ -35,7 +38,11 @@ where
     pub dimensions: DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
 }
 
-impl<FIQ: FeagiIndexQuantization> CorticalAreaLayoutData<FIQ> for CorticalAreaLayoutDataDimensional<FIQ> {}
+impl<FIQ: FeagiIndexQuantization> CorticalAreaLayoutData<FIQ> for CorticalAreaLayoutDataDimensional<FIQ> {
+    fn get_total_number_neurons(&self) -> NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant> {
+        self.dimensions.number_contained_elements()
+    }
+}
 
 /// Describes a cortical area of neurons arranged for memory formation
 #[derive(Copy, Clone)]
@@ -46,4 +53,8 @@ where
     pub num_neurons: FIQ::NeuronIndexCountQuant, // TODO
 }
 
-impl<FIQ: FeagiIndexQuantization> CorticalAreaLayoutData<FIQ> for CorticalAreaLayoutDataMemory<FIQ> {}
+impl<FIQ: FeagiIndexQuantization> CorticalAreaLayoutData<FIQ> for CorticalAreaLayoutDataMemory<FIQ> {
+    fn get_total_number_neurons(&self) -> NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant> {
+        todo!()
+    }
+}

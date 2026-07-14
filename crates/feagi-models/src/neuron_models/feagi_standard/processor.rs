@@ -1,6 +1,6 @@
 use crate::burst_index::BurstIndex;
 use crate::cortical_area_layout::{CorticalAreaLayoutDataDimensional, CorticalAreaLayoutDataMemory};
-use crate::neuron_history::NeuronHistory;
+use crate::neuron_history::NeuronHistoryFull;
 use crate::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalData, FeagiStandardModelNeuronData};
 use crate::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
 use crate::neuron_models::neuron_model_traits::neuron_model_processor::NeuronModelProcessor;
@@ -24,7 +24,7 @@ where
     FIQ: FeagiIndexQuantization,
     CPQ: FeagiStandardModelQuantization,
 {
-    type UsedNeuronHistory = NeuronHistory<FIQ>;
+    type UsedNeuronHistory = NeuronHistoryFull<FIQ>;
 
     fn process_neuron_potential_for_dimensional_cortical_configuration(
         incoming_potential: &NeuronMembranePotential<CPQ::MembranePotentialQuant>,

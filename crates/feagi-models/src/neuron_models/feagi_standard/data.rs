@@ -32,6 +32,15 @@ where
     pub degeneracy_constant: CPQ::DegeneracyConstantQuant,
 }
 
+impl<CPQ> Default for FeagiStandardModelCorticalData<CPQ>
+where
+    CPQ: FeagiStandardModelQuantization,
+{
+    fn default() -> Self {
+        todo!()
+    }
+}
+
 impl<CPQ> NeuronModelCorticalData<CPQ> for FeagiStandardModelCorticalData<CPQ>
 where
     CPQ: FeagiStandardModelQuantization,
@@ -73,6 +82,15 @@ where
     pub neuron_leak_coefficient: CPQ::CorticalLimitAndSnoozeQuants,
     pub neuron_refractory_countdown: CPQ::NeuronCountdownQuants,
     pub neuron_consecutive_fire_countdown: CPQ::NeuronCountdownQuants,
+}
+
+impl<CPQ> Default for FeagiStandardModelNeuronData<CPQ>
+where
+    CPQ: FeagiStandardModelQuantization,
+{
+    fn default() -> Self {
+        todo!()
+    }
 }
 
 impl<CPQ> NeuronModelNeuronData<CPQ> for FeagiStandardModelNeuronData<CPQ> where CPQ: FeagiStandardModelQuantization {}

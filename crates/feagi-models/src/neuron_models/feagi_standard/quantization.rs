@@ -5,7 +5,7 @@ use feagi_data::quantization_levels::cortical_potential_quantization::{
 use feagi_data::values::quantizable::{QuantizedDecimalTrait, QuantizedIndexCountTrait};
 
 #[repr(u8)]
-#[derive(Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum FeagiStandardModelQuantizationLevel {
     #[default]
     Standard32bit = 0b0000_0000,
@@ -13,6 +13,11 @@ pub enum FeagiStandardModelQuantizationLevel {
 
 impl NeuronModelQuantizationLevel for FeagiStandardModelQuantizationLevel {
     const MODEL_INDEX: u8 = 0b0000_0000;
+
+    fn get_cortical_potential_level(&self) -> CorticalMembranePotentialQuantizationLevel {
+        CorticalMembranePotentialQuantizationLevel::Float32
+    }
+
 
     unsafe fn get_quant_enum_from_quant_bits(quant_bits: u8) -> Self {
         core::mem::transmute(quant_bits)

@@ -3,7 +3,7 @@ use feagi_data::collections::linear::bitpacked::BitPackedVector;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 use feagi_models::cortical_area_layout::{CorticalAreaLayoutDataDimensional, CorticalAreaLayoutDataMemory};
-use feagi_models::neuron_history::NeuronHistory;
+use feagi_models::neuron_history::NeuronHistoryFull;
 use feagi_npu_common::npu_encoded_data::cortical_area_runtime_flags::CorticalAreaRuntimeFlags;
 use feagi_npu_common::npu_encoded_data::neuron_runtime_flags::NeuronRuntimeFlags;
 use feagi_models::burst_index::{BurstIndex, CorticalEngineIndex, CorticalEngineIndexedVector, CorticalLayoutIndexedVector, NeuronEngineByteIndexedVector, NeuronEngineIndexedVector, NeuronHistoryIndexedVector, NeuronMPIndexedVector, NeuronPSPUniformIndexedVector};
@@ -30,7 +30,7 @@ pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
     pub neuron_psp_uniformity_divisors: NeuronPSPUniformIndexedPotentials<FIQ::NeuronIndexCountQuant>,
 
     // History Level - only neurons that are using models that need neuron history
-    pub neuron_history: NeuronHistoryIndexedVector<FIQ::NeuronIndexCountQuant, NeuronHistory<FIQ>>,
+    pub neuron_history: NeuronHistoryIndexedVector<FIQ::NeuronIndexCountQuant, NeuronHistoryFull<FIQ>>,
 
     // Cortical
     // Engine Level - Cortical areas relative to the burst engine

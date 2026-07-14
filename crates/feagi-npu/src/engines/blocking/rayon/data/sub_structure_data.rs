@@ -1,8 +1,5 @@
-use feagi_data::neurons::NeuronCorticalLocalIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::burst_index::{BurstIndex, CorticalLayoutIndex, CorticalModelIndex, NeuronEngineIndex, NeuronHistoryIndex};
-
-
+use feagi_npu_common::wrapped_indexes::{CorticalLayoutIndex, CorticalModelIndex};
 
 /// Contains cortical level neuron offsets to go from a neuron engine index to various other
 /// neuron related properties relative to its parent cortical area
