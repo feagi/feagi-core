@@ -1,4 +1,4 @@
-use crate::synapse_models::synapse_model_traits::synapse_model_data::{
+use crate::synapse_models::shared::synapse_model_data::{
     SynapseModelAxonBundleData, SynapseModelQuantization, SynapseModelSynapseData,
 };
 use feagi_data::neurons::NeuronMembranePotential;
