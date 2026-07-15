@@ -1,12 +1,19 @@
 use ahash::HashMap;
 
 
+
+
+
 pub struct NPULegacyBurstEngineWrapper {
-    engine: BurstEngineCpuRayon<FeagiStandardModelStandard32BitQuant>
+    
 }
 
 impl NPULegacyBurstEngineWrapper {
 
+    
+    
+    
+    
     pub fn new() -> Self {
         Self {
             engine: BurstEngineCpuRayon::new() // TODO init function must be externally usable

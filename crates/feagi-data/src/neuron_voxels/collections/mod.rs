@@ -2,9 +2,9 @@
 
 mod contiguous_vector;
 
-mod sparse_hashmap;
+//mod sparse_hashmap;
 
-pub mod shared_traits;
-pub use contiguous_vector::NeuronVoxelCollectionContiguousVectorGeneric;
-pub use sparse_hashmap::NeuronVoxelCollectionSparseHashmapGeneric;
+//pub mod shared_traits;
+//pub use contiguous_vector::NeuronVoxelCollectionContiguousVectorGeneric;
+//pub use sparse_hashmap::NeuronVoxelCollectionSparseHashmapGeneric;
 

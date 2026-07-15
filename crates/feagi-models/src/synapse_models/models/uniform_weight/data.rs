@@ -8,7 +8,7 @@ create_wrapped_quantized_decimal!(
 
 // This synapse model has no per synapse data at all
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct BasicSynapseModelAxonBundleData<SMQ>
 where
     SMQ: UniformSynapseModelQuantization,

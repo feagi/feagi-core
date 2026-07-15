@@ -35,39 +35,5 @@ pub mod cortical_neuron_writers {
         );
     }
 
-    /// Overwrites every neuron with a given copy of data
-    pub struct UniformReplacingNeuronWriter<CPQ: CorticalPotentialQuantization, NMND: NeuronModelNeuronData<CPQ>> {
-        uniform_neuron: NMND,
-        _p: PhantomData<(CPQ, NMND)>,
-    }
 
-    impl<CPQ: CorticalPotentialQuantization, NMND: NeuronModelNeuronData<CPQ>> DimensionalCorticalNeuronWriter
-        for UniformReplacingNeuronWriter<CPQ, NMND>
-    {
-        type CorticalModelAndQuant = CPQ;
-        type NeuronData = NMND;
-
-        fn write_dimensional_neuron_data<FIQ: FeagiIndexQuantization>(
-            &self,
-            existing_neuron: &mut Self::NeuronData,
-            _index: NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
-            _cortical_dimensions: &DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
-        ) {
-            *existing_neuron = self.uniform_neuron;
-        }
-    }
-
-    impl<CPQ: CorticalPotentialQuantization, NMND: NeuronModelNeuronData<CPQ>> MemoryCorticalNeuronWriter for UniformReplacingNeuronWriter<CPQ, NMND> {
-        type CorticalModelAndQuant = CPQ;
-        type NeuronData = NMND;
-
-        fn write_memory_neuron_data<FIQ: FeagiIndexQuantization>(
-            &self,
-            existing_neuron: &mut Self::NeuronData,
-            _index: NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
-            _total_neuron_count: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
-        ) {
-            *existing_neuron = self.uniform_neuron;
-        }
-    }
 }

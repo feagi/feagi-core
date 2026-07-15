@@ -13,7 +13,7 @@ create_wrapped_quantized_decimal!(pub DegeneracyConstant);
 create_wrapped_quantized_decimal!(pub LeakCoefficient);
 create_wrapped_quantized_index!(pub RefractoryCountdown);
 create_wrapped_quantized_index!(pub ConsecutiveFireCountdown);
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct FeagiAdvancedModelCorticalData<CPQ>
 where
     CPQ: FeagiAdvancedModelQuantization,
@@ -72,7 +72,7 @@ where
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct FeagiAdvancedModelNeuronData<CPQ>
 where
     CPQ: FeagiAdvancedModelQuantization,

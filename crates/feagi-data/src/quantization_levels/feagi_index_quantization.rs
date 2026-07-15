@@ -1,10 +1,11 @@
 //! Sets the indexing of various data types, where higher quantizations can support bigger
 //! collections of those items but at an increased memory cost
 
+use std::hash::Hash;
 use crate::values::quantizable::QuantizedIndexCountTrait;
 
 /// Global Indexing across an instance of FEAGI, primarily NPU. Controlled by NPU primarily
-pub trait FeagiIndexQuantization: Clone + Copy {
+pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq {
     const QUANTIZATION_LEVEL: FeagiGlobalQuantizationLevel;
 
     /// Defines the quantization of the NPU global burst index. This is not model configurable,
@@ -43,7 +44,7 @@ pub enum FeagiGlobalQuantizationLevel {
 
 /// The default quantization level for most deployments. Practical balance between speed and
 /// indexing size. The only level supported by some platforms
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct FeagiGlobalQuantizationStandard;
 
 impl FeagiIndexQuantization for FeagiGlobalQuantizationStandard {

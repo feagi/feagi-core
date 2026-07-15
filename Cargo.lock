@@ -233,6 +233,7 @@ dependencies = [
  "feagi-genomic",
  "feagi-models",
  "feagi-npu-common",
+ "feagi-npu-dynamic-allocator",
  "paste",
  "rayon",
  "serde",

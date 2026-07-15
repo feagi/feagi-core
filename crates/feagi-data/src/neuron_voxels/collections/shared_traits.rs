@@ -1,24 +1,24 @@
-use crate::neuron_voxels::voxel_collection_generic_descriptors::*;
+use crate::neuron_voxels::wrapped_values::{NeuronVoxelDimensions, NeuronVoxelLinearIndex};
 use crate::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
-use crate::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
+use crate::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization};
 
-pub trait NeuronVoxelCollection<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization>
+pub trait NeuronVoxelCollection<FIQ: FeagiIndexQuantization,  CPQ: CorticalPotentialQuantization>
 {
-    fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensionsGeneric<FIQ::NeuronIndexCountQuant>;
+    fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensions<FIQ::NeuronIndexCountQuant>;
 
-    fn max_linear_index(&self) -> NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant> {
-        self.get_voxel_dimensions().max_linear_index()
+    fn max_linear_index(&self) -> NeuronVoxelLinearIndex<FIQ::NeuronIndexCountQuant> {
+        self.get_voxel_dimensions().number_contained_elements()
     }
 }
 
-pub trait NeuronVoxelCollectionDense<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization>:
+pub trait NeuronVoxelCollectionDense<FIQ: FeagiIndexQuantization,  CPQ: CorticalPotentialQuantization>:
 NeuronVoxelCollection<FIQ, CPQ>
 {
     // No certain access to data
 }
 
 
-pub trait NeuronVoxelCollectionSparse<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization>:
+pub trait NeuronVoxelCollectionSparse<FIQ: FeagiIndexQuantization,  CPQ: CorticalPotentialQuantization>:
 NeuronVoxelCollection<FIQ, CPQ>
 {
     // No certain access to data
@@ -27,7 +27,7 @@ NeuronVoxelCollection<FIQ, CPQ>
 
 
 
-pub trait CPUNeuronVoxelCollection<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization>:
+pub trait CPUNeuronVoxelCollection<FIQ: FeagiIndexQuantization,  CPQ: CorticalPotentialQuantization>:
 NeuronVoxelCollection<FIQ, CPQ>
 {
     fn try_get_potential_by_voxel_index(&self, voxel_index: NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant>) -> Option<&NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>>;
@@ -62,7 +62,7 @@ NeuronVoxelCollection<FIQ, CPQ>
 
 }
 
-pub trait CPUNeuronVoxelCollectionDense<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization>:
+pub trait CPUNeuronVoxelCollectionDense<FIQ: FeagiIndexQuantization,  CPQ: CorticalPotentialQuantization>:
 CPUNeuronVoxelCollection<FIQ, CPQ>
 + NeuronVoxelCollectionDense<FIQ, CPQ>
 {
@@ -72,7 +72,7 @@ CPUNeuronVoxelCollection<FIQ, CPQ>
 }
 
 
-pub trait CPUNeuronVoxelCollectionSparse<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization>:
+pub trait CPUNeuronVoxelCollectionSparse<FIQ: FeagiIndexQuantization,  CPQ: CorticalPotentialQuantization>:
 CPUNeuronVoxelCollection<FIQ, CPQ>
 + NeuronVoxelCollectionSparse<FIQ, CPQ>
 {

@@ -44,7 +44,7 @@ where
         neuron_model_data: &mut NMND,
         this_neuron_potential: &mut NeuronMembranePotential<CPQ::MembranePotentialQuant>,
     ) -> bool;
-
+    
     /// If enabled via the const, this method will be called on all neurons of that
     /// neuron model type right before the global burst index overflows and resets to 0. Use this
     /// method to update any values that need to be updated in that case

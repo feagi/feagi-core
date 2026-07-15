@@ -35,12 +35,6 @@ impl NeuronModelTypeAndQuantization {
     }
 }
 
-impl Into<NeuronModelType> for NeuronModelTypeAndQuantization {
-    fn into(self) -> NeuronModelType {
-        self.strip_quantization()
-    }
-}
-
 //#[doc(hidden)] // TODO hide when api is stable
 /// An enum describing all possible neuron model and model quantizations as a flat list. This is
 /// intended for rapid lookups in the NPU and not really general use. The bytes / bits are
@@ -78,17 +72,5 @@ impl PackedNeuronModelTypeAndQuantization {
     }
 }
 
-impl Into<NeuronModelTypeAndQuantization> for PackedNeuronModelTypeAndQuantization {
-    fn into(self) -> NeuronModelTypeAndQuantization {
-        self.to_unpacked()
-    }
-}
-
-impl From<NeuronModelTypeAndQuantization> for PackedNeuronModelTypeAndQuantization {
-    fn from(value: NeuronModelTypeAndQuantization) -> Self {
-        Self::from_unpacked(value)
-    }
-}
-
 // NOTE: Yes, `PackedNeuronModelTypeAndQuantization` is used mainly in the NPU, but we are
-// defining it here since it is following
+// defining it here since it is following the same pattern in macro generation

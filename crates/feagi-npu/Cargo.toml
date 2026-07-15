@@ -43,6 +43,14 @@ alloc = [
 
 
 [dependencies]
+feagi-npu-common = {path = "feagi-npu-common"}
+feagi-npu-dynamic-allocator = {path = "feagi-npu-dynamic-allocator"}
+
+feagi-data = {path = "../feagi-data"}
+feagi-models = {path = "../feagi-models" }
+feagi-genomic = {path = "../feagi-genomic"}
+
+
 
 # External crates
 paste = { workspace = true}
@@ -51,10 +59,7 @@ serde = { workspace = true, optional = true}
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 
-feagi-data = {path = "../feagi-data"}
-feagi-models = {path = "../feagi-models" }
-feagi-genomic = {path = "../feagi-genomic"}
-feagi-npu-common = {path = "feagi-npu-common"}
+
 
 
 [lints]
