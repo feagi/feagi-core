@@ -1,6 +1,5 @@
-use crate::synapse_models::shared::synapse_model_data::{
-    SynapseModelAxonBundleData, SynapseModelQuantization, SynapseModelSynapseData,
-};
+use crate::synapse_models::shared::data::{SynapseModelAxonBundleData, SynapseModelSynapseData};
+use crate::synapse_models::shared::quantization::{SynapseModelQuantization, SynapseModelQuantizationLevel};
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;

@@ -1,9 +1,9 @@
 use core::marker::PhantomData;
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::neuron_models::feagi_advanced::data::{FeagiStandardModelCorticalData, FeagiStandardModelNeuronData};
-use feagi_models::neuron_models::feagi_advanced::quantization::FeagiStandardModelStandard32BitQuant;
-use feagi_models::neuron_models::neuron_model_traits::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use feagi_models::neuron::models::feagi_advanced::data::{FeagiStandardModelCorticalData, FeagiStandardModelNeuronData};
+use feagi_models::neuron::models::feagi_advanced::quantization::FeagiStandardModelStandard32BitQuant;
+use feagi_models::neuron::shared::data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_npu_common::wrapped_indexes::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 
 // TODO this should be macroized

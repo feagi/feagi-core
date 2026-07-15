@@ -2,8 +2,8 @@ use crate::engines::blocking::rayon::data::sub_structure_data::{CorticalContext,
 use feagi_data::collections::linear::bitpacked::BitPackedVector;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedIndexCountTrait;
-use feagi_models::cortical_area_layout::{CorticalAreaLayoutDataDimensional, CorticalAreaLayoutDataMemory};
-use feagi_models::neuron_history::NeuronHistoryFull;
+use feagi_models::neuron::cortical_area_layout::{CorticalAreaLayoutDataDimensional, CorticalAreaLayoutDataMemory};
+use feagi_models::neuron::neuron_history::NeuronHistoryFull;
 use feagi_npu_common::npu_encoded_data::cortical_area_runtime_flags::CorticalAreaRuntimeFlags;
 use feagi_npu_common::npu_encoded_data::neuron_runtime_flags::NeuronRuntimeFlags;
 use feagi_models::burst_index::{BurstIndex, CorticalEngineIndex, CorticalEngineIndexedVector, CorticalLayoutIndexedVector, NeuronEngineByteIndexedVector, NeuronEngineIndexedVector, NeuronHistoryIndexedVector, NeuronMPIndexedVector, NeuronPSPUniformIndexedVector};

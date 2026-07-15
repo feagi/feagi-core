@@ -72,6 +72,8 @@ pub trait QuantizedDecimalTrait:
     + 'static
     + QuantizedElementBase
 {
+    const LEVEL: DecimalQuantizationLevel;
+    
     fn to_storage_f8(self) -> StorageF8;
     fn from_storage_f8(v: StorageF8) -> Self;
 
@@ -92,6 +94,8 @@ pub trait QuantizedDecimalTrait:
 }
 
 impl QuantizedDecimalTrait for StorageF8 {
+    const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::StorageF8;
+
     fn to_storage_f8(self) -> StorageF8 {
         todo!()
     }
@@ -138,6 +142,8 @@ impl QuantizedDecimalTrait for StorageF8 {
 }
 
 impl QuantizedDecimalTrait for f16 {
+    const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F16;
+    
     fn to_storage_f8(self) -> StorageF8 {
         todo!()
     }
@@ -184,6 +190,8 @@ impl QuantizedDecimalTrait for f16 {
 }
 
 impl QuantizedDecimalTrait for bf16 {
+    const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::BF16;
+    
     fn to_storage_f8(self) -> StorageF8 {
         todo!()
     }
@@ -230,6 +238,8 @@ impl QuantizedDecimalTrait for bf16 {
 }
 
 impl QuantizedDecimalTrait for f32 {
+    const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F32;
+    
     fn to_storage_f8(self) -> StorageF8 {
         todo!()
     }
@@ -276,6 +286,7 @@ impl QuantizedDecimalTrait for f32 {
 }
 
 impl QuantizedDecimalTrait for f64 {
+    const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F64;
     fn to_storage_f8(self) -> StorageF8 {
         todo!()
     }

@@ -14,4 +14,5 @@ description = "Contains the definitions and math behind the neuron and synapse m
 feagi-data = {path = "../feagi-data" }
 
 paste = {workspace = true}
+enum_delegate = {workspace = true}
 

@@ -1,8 +1,8 @@
 use crate::burst_index::BurstIndex;
-use crate::neuron_history::NeuronHistoryFull;
-use crate::neuron_models::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
-use crate::neuron_models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
-use crate::neuron_models::neuron_model_traits::neuron_model_processor::NeuronModelProcessor;
+use crate::neuron::neuron_history::NeuronHistoryFull;
+use crate::neuron::models::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
+use crate::neuron::models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
+use crate::neuron::shared::processor::NeuronModelProcessor;
 use core::marker::PhantomData;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;

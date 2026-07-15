@@ -7,12 +7,12 @@ use crate::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait
 /// potential quantization has discrete steps that must be followed.
 pub trait CorticalPotentialQuantization: Clone + Copy {
     
-    /// The quantization used by the membrane potential in a given cortical area
-    const CORTICAL_POTENTIAL_QUANTIZATION_LEVEL: DecimalQuantizationLevel;
+    // /// The quantization used by the membrane potential in a given cortical area
+    // const CORTICAL_POTENTIAL_QUANTIZATION_LEVEL: DecimalQuantizationLevel;
     
     /// All quantizations used by a given neuron model quantization level. Useful for validating
     /// device compatibility. This will also be extended in extensions of this trait
-    const USED_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel] = &[Self::CORTICAL_POTENTIAL_QUANTIZATION_LEVEL];
+    const USED_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel]; // Don't include a default, as we then forget about it
 
     /// Defines the quantization of the membrane potential of a neuron, which all models must
     /// include. This may vary between cortical areas, even of the same model. This also impacts
@@ -26,7 +26,8 @@ pub trait CorticalPotentialQuantization: Clone + Copy {
 pub struct CorticalPotentialQuantizationFloat32;
 
 impl CorticalPotentialQuantization for CorticalPotentialQuantizationFloat32 {
-    const CORTICAL_POTENTIAL_QUANTIZATION_LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F32;
+    //const CORTICAL_POTENTIAL_QUANTIZATION_LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F32;
+    const USED_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel] = &[DecimalQuantizationLevel::F32];
     type MembranePotentialQuant = f32;
 }
 
@@ -34,7 +35,8 @@ impl CorticalPotentialQuantization for CorticalPotentialQuantizationFloat32 {
 pub struct CorticalPotentialQuantizationFloat64;
 
 impl CorticalPotentialQuantization for CorticalPotentialQuantizationFloat64 {
-    const CORTICAL_POTENTIAL_QUANTIZATION_LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F64;
+    //const CORTICAL_POTENTIAL_QUANTIZATION_LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F64;
+    const USED_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel] = &[DecimalQuantizationLevel::F64];
     type MembranePotentialQuant = f64;
 }
 

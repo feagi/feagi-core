@@ -1,2 +1,3 @@
-pub mod synapse_model_data;
-pub mod synapse_model_processor;
+pub mod data;
+pub mod processor;
+pub mod quantization;

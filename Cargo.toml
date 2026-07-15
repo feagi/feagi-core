@@ -183,7 +183,7 @@ serde = { version = "1.0.228", default-features = false}
 serde_json = { version = "1.0.150", default-features = false}
 paste = { version =  "1.0.15" , default-features = false}
 ahash = { version = "0.8.12", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM) # TODO remove features
-
+enum_delegate  = {version = "0.2.0"}
 
 # TODO update and review below
 image = { version = "0.25.10" } # TODO this shouldnt be here, this should be in the feagi sensiomotor specifically
@@ -200,7 +200,6 @@ uuid = { version = "1.11", features = ["v7", "serde", "js"] }  # js feature for 
 
 [workspace.lints.rust]
 # TODO for Phase 2
-
 
 
 [profile.release]

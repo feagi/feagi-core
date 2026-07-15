@@ -2,8 +2,8 @@ use feagi_data::collections::index_range_managers::index_manager::IndexManager;
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
-use feagi_models::cortical_area_layout::{CorticalAreaLayoutData, CorticalAreaLayoutDataDimensional};
-use feagi_models::neuron_models::neuron_model_traits::neuron_model_data::NeuronModelNeuronData;
+use feagi_models::neuron::cortical_area_layout::{CorticalAreaLayoutData, CorticalAreaLayoutDataDimensional};
+use feagi_models::neuron::shared::data::NeuronModelNeuronData;
 use feagi_npu_common::wrapped_indexes::CorticalEngineIndex;
 use crate::request_parameters::neuron_data_writer::CorticalWriter;
 

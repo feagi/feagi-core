@@ -1,5 +1,5 @@
 use crate::burst_index::BurstIndex;
-use crate::neuron_models::neuron_model_traits::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use crate::neuron::shared::data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;

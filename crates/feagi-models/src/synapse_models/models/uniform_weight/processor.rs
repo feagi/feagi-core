@@ -1,6 +1,6 @@
-use crate::synapse_models::uniform_weight::data::BasicSynapseModelAxonBundleData;
-use crate::synapse_models::uniform_weight::quantization::BasicSynapseModelQuantization;
-use crate::synapse_models::shared::synapse_model_processor::{SynapseModelProcessorAxonBundleOnly, SynapseModelProcessorBase};
+use crate::synapse_models::models::uniform_weight::data::BasicSynapseModelAxonBundleData;
+use crate::synapse_models::models::uniform_weight::quantization::UniformSynapseModelQuantization;
+use crate::synapse_models::shared::processor::{SynapseModelProcessorAxonBundleOnly, SynapseModelProcessorBase};
 use core::marker::PhantomData;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
@@ -10,7 +10,7 @@ use feagi_data::values::quantizable::QuantizedDecimalTrait;
 pub struct BasicSynapseModelProcessor<FIQ, SMQ, CPQIn, CPQOut>
 where
     FIQ: FeagiIndexQuantization,
-    SMQ: BasicSynapseModelQuantization,
+    SMQ: UniformSynapseModelQuantization,
     CPQIn: CorticalPotentialQuantization,
     CPQOut: CorticalPotentialQuantization,
 {
@@ -22,7 +22,7 @@ impl<FIQ, SMQ, CPQIn, CPQOut> SynapseModelProcessorBase<FIQ, SMQ, BasicSynapseMo
     for BasicSynapseModelProcessor<FIQ, SMQ, CPQIn, CPQOut>
 where
     FIQ: FeagiIndexQuantization,
-    SMQ: BasicSynapseModelQuantization,
+    SMQ: UniformSynapseModelQuantization,
     CPQIn: CorticalPotentialQuantization,
     CPQOut: CorticalPotentialQuantization,
 {
@@ -33,7 +33,7 @@ impl<FIQ, SMQ, CPQIn, CPQOut> SynapseModelProcessorAxonBundleOnly<FIQ, SMQ, Basi
     for BasicSynapseModelProcessor<FIQ, SMQ, CPQIn, CPQOut>
 where
     FIQ: FeagiIndexQuantization,
-    SMQ: BasicSynapseModelQuantization,
+    SMQ: UniformSynapseModelQuantization,
     CPQIn: CorticalPotentialQuantization,
     CPQOut: CorticalPotentialQuantization,
 {
@@ -43,6 +43,7 @@ where
         _custom_context: &Self::CustomContext,
         potential_write_target: &mut NeuronMembranePotential<CPQOut::MembranePotentialQuant>,
     ) {
+        
         // TODO going through f32?
         *potential_write_target += NeuronMembranePotential::from_f32(outgoing_potential.to_f32() * axon_bundle_data.multiplier.to_f32());
     }

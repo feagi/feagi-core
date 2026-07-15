@@ -7,7 +7,7 @@ use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 use feagi_models::burst_index::{CorticalEngineIndex, CorticalLayoutIndex, NeuronEngineByteIndex, NeuronEngineIndex, NeuronHistoryIndex, NeuronMPIndex, NeuronPSPUniformIndex};
 use rayon::prelude::*;
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinateAxis;
-use feagi_models::cortical_area_layout::CorticalAreaLayoutDataDimensional;
+use feagi_models::neuron::cortical_area_layout::CorticalAreaLayoutDataDimensional;
 use feagi_npu_models::neuron_models::feagi_standard::processor::FeagiStandardModelProcessor;
 use feagi_npu_models::neuron_models::NeuronModelCPUDescriptor;
 

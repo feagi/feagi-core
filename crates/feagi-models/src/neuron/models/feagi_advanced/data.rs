@@ -1,5 +1,5 @@
-use crate::neuron_models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
-use crate::neuron_models::neuron_model_traits::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use crate::neuron::models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
+use crate::neuron::shared::data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
 // TODO percentages should be their own types
 

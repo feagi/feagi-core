@@ -1,7 +1,7 @@
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensions;
 use feagi_data::neurons::NeuronVoxelDensityIndex;
 use feagi_genomic::feagi_genomic_context::cortical_area::CorticalID;
-use feagi_models::neuron_models::neuron_model_quantization_encoding::NeuronModelTypeAndQuantization;
+use feagi_models::neuron::interfacing::model_and_quantization::NeuronModelTypeAndQuantization;
 use crate::request_parameters::writers::cortical_neuron_writers::DimensionalCorticalNeuronWriter;
 
 /// Add / Remove / Edit cortical areas
