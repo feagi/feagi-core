@@ -115,7 +115,7 @@ impl RayonNeuronProcessing {
                                 let mp = data.neuron_mp.float_32.get_mut_par(neuron_mp_i);
 
                                 let cortical_data = data.neuron_model_data_container.cortical_feagi_standard_float_32.cortical_areas.get_par(cortical_context.cortical_model_index);
-                                let neuron_data = data.neuron_model_data_container.neuron_feagi_standard_float_32.neurons.get_mut_par()
+                                let neuron_data = data.neuron_model_data_container.neuron_feagi_standard_float_32.neurons.get_mut_par();
                                 
                                 let neuron_local_i: NeuronCorticalLocalIndex<
                                     FIQ::NeuronIndexCountQuant,

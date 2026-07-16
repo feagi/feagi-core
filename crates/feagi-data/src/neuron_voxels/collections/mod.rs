@@ -2,6 +2,8 @@
 
 mod contiguous_vector;
 
+pub use contiguous_vector::ContiguousVoxelVector;
+
 //mod sparse_hashmap;
 
 //pub mod shared_traits;

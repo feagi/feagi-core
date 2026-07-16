@@ -29,5 +29,9 @@ impl<Q: FeagiIndexQuantization> BlockingEngine for RayonBurstEngine<Q> {
 }
 
 impl<Q: FeagiIndexQuantization> RayonBurstEngine<Q> {
-    
+    pub fn new() -> Self {
+        Self {
+            _p: core::marker::PhantomData,
+        }
+    }
 }

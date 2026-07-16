@@ -21,10 +21,10 @@ impl<Q: FeagiIndexQuantization> BlockingEngineInterface<Q> {
     /// runs some number of bursts without foreign involvement
     pub fn run_complete_bursts(&mut self, number_bursts: usize, force_update_visualization: bool) {
         for _ in 0..(number_bursts - 1) {
-            self.run_synapse_processing_phase();
+            self.run_synapse_processing();
             self.run_neuron_processing(false);
         }
-        self.run_synapse_processing_phase();
+        self.run_synapse_processing();
         self.run_neuron_processing(force_update_visualization);
     }
 

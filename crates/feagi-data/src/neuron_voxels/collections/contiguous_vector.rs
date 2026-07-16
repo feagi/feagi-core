@@ -1,11 +1,24 @@
 use crate::collections::linear::contiguous_data::QuantizedContiguousVector;
-use crate::neuron_voxels::wrapped_values::NeuronVoxelPotential;
+use crate::collections::spatial::contiguous::SpatialContiguousVector3D;
+use crate::neuron_voxels::wrapped_values::{NeuronVoxelDimensions, NeuronVoxelPotential};
 use crate::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::values::spatial::quantizable_index::QuantizedIndexDimension3D;
+
+// TODO wrapper generator?
+// TODO proper wrapper, dont just pub the internals
 
 pub struct ContiguousVoxelVector<FIQ: FeagiIndexQuantization, CPQ: CorticalPotentialQuantization>(
-    QuantizedContiguousVector<>
-)
+    pub SpatialContiguousVector3D<FIQ::NeuronIndexCountQuant, CPQ::MembranePotentialQuant>
+);
+
+impl<FIQ: FeagiIndexQuantization, CPQ: CorticalPotentialQuantization> ContiguousVoxelVector<FIQ, CPQ> {
+
+    pub fn new_uniform(dimensions: NeuronVoxelDimensions<FIQ::NeuronIndexCountQuant>, initial_value: NeuronVoxelPotential<CPQ::MembranePotentialQuant>) -> Self {
+        let vector_3d = SpatialContiguousVector3D::new_uniform(dimensions.temp_to_ref(), *initial_value.as_ref());
+        Self(vector_3d)
+    }
+}
 
 
 /*
