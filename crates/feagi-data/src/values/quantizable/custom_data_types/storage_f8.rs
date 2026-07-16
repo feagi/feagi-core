@@ -19,6 +19,7 @@ impl StorageF8 {
     const MAX_FINITE_BITS: u8 = 0b0111_1111;
 
     pub const ZERO: Self = Self(0);
+    pub const ONE: Self = Self(0b0111_0000); // TODO this isnt correct
     pub const NEGATIVE_ZERO: Self = Self(Self::SIGN_MASK);
     pub const MAX: Self = Self(Self::MAX_FINITE_BITS);
     pub const MIN: Self = Self(Self::SIGN_MASK | Self::MAX_FINITE_BITS);

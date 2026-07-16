@@ -5,6 +5,7 @@ pub use feagi_logging_and_errors_derive::{FeagiError, FeagiErrorKey};
 #[macro_export]
 macro_rules! generate_feagi_error {
     (
+        $(#[doc = $doc:expr])?
         $error_name:ident,
         keys: {
             $( $key_name:ident : $key_type:ty ),* $(,)?
@@ -14,7 +15,7 @@ macro_rules! generate_feagi_error {
             $( $sub_error_name:ident : $sub_error_type:ty ),* $(,)?
         }$(,)?
     ) => {
-
+        $(#[doc = $doc])?
         #[derive(FeagiError)]
         pub enum $error_name {
             $( $key_name($key_type) ),*

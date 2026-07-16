@@ -1,4 +1,4 @@
-use crate::values::feagi_data_value_error::{FeagiInvalidIndexErrKey, FeagiValueError};
+use crate::values::feagi_data_value_error::{FeagiInvalidIndexErrKey, FeagiDataValueError};
 use crate::values::quantizable::QuantizedIndexCountTrait;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
@@ -129,7 +129,7 @@ pub trait QuantizedContiguousTrait<QI: QuantizedIndexCountTrait, V: Clone + Copy
     ///
     /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
-    fn subslice(&self, range: Range<QI>) -> Result<QuantizedContiguousSlice<'_, QI, V>, FeagiValueError> {
+    fn subslice(&self, range: Range<QI>) -> Result<QuantizedContiguousSlice<'_, QI, V>, FeagiDataValueError> {
         match self.as_slice().get(range.start.to_usize()..range.end.to_usize()) {
             Some(slice) => Ok(QuantizedContiguousSlice::new(slice)),
             None => Err(FeagiInvalidIndexErrKey::new("subslice range is out of bounds").into()),
@@ -187,7 +187,7 @@ pub trait QuantizedContiguousMutTrait<QI: QuantizedIndexCountTrait, V: Clone + C
     ///
     /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
-    fn subslice_mut(&mut self, range: Range<QI>) -> Result<QuantizedContiguousSliceMut<'_, QI, V>, FeagiValueError> {
+    fn subslice_mut(&mut self, range: Range<QI>) -> Result<QuantizedContiguousSliceMut<'_, QI, V>, FeagiDataValueError> {
         match self.as_mut_slice().get_mut(range.start.to_usize()..range.end.to_usize()) {
             Some(slice) => Ok(QuantizedContiguousSliceMut::new(slice)),
             None => Err(FeagiInvalidIndexErrKey::new("subslice range is out of bounds").into()),

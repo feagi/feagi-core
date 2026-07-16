@@ -1,41 +1,25 @@
 use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
+use crate::values::quantizable::feagi_data_value_quantization_error::FeagiDataValueQuantizationError;
 
 #[derive(FeagiErrorKey)]
-pub struct FeagiInvalidQuantizationErrKey {
+/// Attempted to index using a coordinate and it was not in the given dimensions
+pub struct FeagiFailInvalidSpatialIndex {
     context: &'static str,
 }
 
 #[derive(FeagiErrorKey)]
-pub struct FeagiHardwareNoLikeQuant { // :3
-    context: &'static str,
-    hardware_type: &'static str,
-    attempted_quant: &'static str,
-}
-
-#[derive(FeagiErrorKey)]
-pub struct FeagiInvalidIndexErrKey {
-    context: &'static str,
-}
-
-#[derive(FeagiErrorKey)]
-pub struct FeagiInvalidCoordErrKey {
-    context: &'static str,
-}
-
-#[derive(FeagiErrorKey)]
-pub struct FeagiDimensionsErrKey {
+/// Attempted to create a dimensions value with a zero sized axis
+pub struct FeagiFailDimensionsCannotBeZero {
     context: &'static str,
 }
 
 generate_feagi_error! {
-    FeagiValueError,
+    /// Error related to a base data type of FEAGI
+    FeagiDataValueError,
     keys: {
-        InvalidQuantization: FeagiInvalidQuantizationErrKey,
-        InvalidIndex: FeagiInvalidIndexErrKey,
-        InvalidCoordinate: FeagiInvalidCoordErrKey,
-        InvalidDimensions: FeagiDimensionsErrKey
+
     },
     sub_errors: {
-
+        Quantization: FeagiDataValueQuantizationError
     },
 }

@@ -102,7 +102,7 @@ macro_rules! create_wrapped_contiguous_slice {
             pub fn subslice(
                 &self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$struct_name<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiValueError> {
+            ) -> Result<$struct_name<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let inner = self.0.subslice(range.start.const_deref()..range.end.const_deref())?;
                 Ok($struct_name(inner))
@@ -243,7 +243,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             pub fn subslice(
                 &self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiValueError> {
+            ) -> Result<$slice<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let inner = self.0.subslice(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice::from_inner(inner))
@@ -253,7 +253,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             pub fn subslice_mut(
                 &mut self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$struct_name<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiValueError> {
+            ) -> Result<$struct_name<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let inner = self.0.subslice_mut(range.start.const_deref()..range.end.const_deref())?;
                 Ok($struct_name(inner))
@@ -442,7 +442,7 @@ macro_rules! create_wrapped_contiguous_vector {
             pub fn subslice(
                 &self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiValueError> {
+            ) -> Result<$slice<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let inner = self.0.subslice(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice::from_inner(inner))
@@ -452,7 +452,7 @@ macro_rules! create_wrapped_contiguous_vector {
             pub fn subslice_mut(
                 &mut self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice_mut<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiValueError> {
+            ) -> Result<$slice_mut<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let inner = self.0.subslice_mut(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice_mut::from_inner(inner))
@@ -642,7 +642,7 @@ macro_rules! create_wrapped_contiguous_array {
             pub fn subslice(
                 &self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiValueError> {
+            ) -> Result<$slice<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let inner = self.0.subslice(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice::from_inner(inner))
@@ -652,7 +652,7 @@ macro_rules! create_wrapped_contiguous_array {
             pub fn subslice_mut(
                 &mut self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice_mut<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiValueError> {
+            ) -> Result<$slice_mut<'_, Q, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let inner = self.0.subslice_mut(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice_mut::from_inner(inner))

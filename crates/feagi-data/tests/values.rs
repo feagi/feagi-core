@@ -59,7 +59,7 @@ fn quantized_index_count_u32_conversions() {
 //region QuantizedDecimalTrait
 
 fn decimal_roundtrip<Q: QuantizedDecimalTrait>(value: f32) -> f32 {
-    Q::from_f32(value).to_f32()
+    Q::quant_from_f32(value).quant_to_f32()
 }
 
 #[test]

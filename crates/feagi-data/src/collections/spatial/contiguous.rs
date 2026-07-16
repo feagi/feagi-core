@@ -46,7 +46,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn try_from_vector(
                 data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<QI, V>,
                 dimensions: $dim_impl<QI>,
-            ) -> Result<$struct_name<QI, V>, $crate::values::feagi_data_value_error::FeagiValueError> {
+            ) -> Result<$struct_name<QI, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 if data.len() != dimensions.number_contained_elements() {
                     return Err($crate::values::feagi_data_value_error::FeagiDimensionsErrKey::new(
@@ -62,7 +62,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn try_from_vec(
                 data: Vec<V>,
                 dimensions: $dim_impl<QI>,
-            ) -> Result<$struct_name<QI, V>, $crate::values::feagi_data_value_error::FeagiValueError> {
+            ) -> Result<$struct_name<QI, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 Self::try_from_vector(
                     $crate::collections::linear::contiguous_data::QuantizedContiguousVector::from_vec(data),
                     dimensions,

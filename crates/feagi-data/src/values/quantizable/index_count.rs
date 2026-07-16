@@ -77,8 +77,6 @@ pub trait QuantizedIndexCountTrait:
     const QUANT_MAX: Self;
     const QUANT_MAX_AS_USIZE: usize;
 
-    const QUANT_ONE: Self;
-
     // TODO to other quantizations
 
     /// Converts to usize
@@ -100,7 +98,6 @@ pub trait QuantizedIndexCountTrait:
 impl QuantizedIndexCountTrait for u8 {
     const QUANT_MAX: Self = u8::MAX;
     const QUANT_MAX_AS_USIZE: usize = u8::MAX as usize;
-    const QUANT_ONE: Self = 1;
 
     fn to_usize(self) -> usize {
         self as usize
@@ -130,7 +127,6 @@ impl QuantizedIndexCountTrait for u8 {
 impl QuantizedIndexCountTrait for u16 {
     const QUANT_MAX: Self = u16::MAX;
     const QUANT_MAX_AS_USIZE: usize = u16::MAX as usize;
-    const QUANT_ONE: Self = 1;
 
     fn to_usize(self) -> usize {
         self as usize
@@ -161,7 +157,6 @@ impl QuantizedIndexCountTrait for u16 {
 impl QuantizedIndexCountTrait for u32 {
     const QUANT_MAX: Self = u32::MAX;
     const QUANT_MAX_AS_USIZE: usize = u32::MAX as usize;
-    const QUANT_ONE: Self = 1;
 
     fn to_usize(self) -> usize {
         self as usize
@@ -187,7 +182,6 @@ impl QuantizedIndexCountTrait for u32 {
 impl QuantizedIndexCountTrait for u64 {
     const QUANT_MAX: Self = u64::MAX;
     const QUANT_MAX_AS_USIZE: usize = u64::MAX as usize;
-    const QUANT_ONE: Self = 1;
 
     fn to_usize(self) -> usize {
         self as usize
@@ -248,7 +242,7 @@ macro_rules! create_wrapped_quantized_index {
             }
 
             /// Bounds-checked conversion from usiz
-            pub fn try_from_usize(u: usize) -> Result<Self, $crate::values::feagi_data_value_error::FeagiValueError> {
+            pub fn try_from_usize(u: usize) -> Result<Self, $crate::values::feagi_data_value_error::FeagiDataValueError> {
                 if u > Q::QUANT_MAX_AS_USIZE {
                     return Err($crate::values::feagi_data_value_error::FeagiInvalidQuantizationErrKey::new("Given usize exceeds current quantization bounds!").into())
                 }

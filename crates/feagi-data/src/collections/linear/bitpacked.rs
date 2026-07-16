@@ -1,4 +1,4 @@
-use crate::values::feagi_data_value_error::{FeagiInvalidIndexErrKey, FeagiValueError};
+use crate::values::feagi_data_value_error::{FeagiInvalidIndexErrKey, FeagiDataValueError};
 use crate::values::quantizable::QuantizedIndexCountTrait;
 use core::ops::{Index, IndexMut, Range};
 
@@ -166,7 +166,7 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> +
     ///
     /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
-    fn subslice_bytes(&self, range: Range<QI>) -> Result<BitPackedSlice<'_, QI>, FeagiValueError> {
+    fn subslice_bytes(&self, range: Range<QI>) -> Result<BitPackedSlice<'_, QI>, FeagiDataValueError> {
         match self.as_bytes().get(range.start.to_usize()..range.end.to_usize()) {
             Some(slice) => {
                 let bits = QI::from_usize(slice.len() * 8);
@@ -255,7 +255,7 @@ pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
     ///
     /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
-    fn subslice_bytes_mut(&mut self, range: Range<QI>) -> Result<BitPackedSliceMut<'_, QI>, FeagiValueError> {
+    fn subslice_bytes_mut(&mut self, range: Range<QI>) -> Result<BitPackedSliceMut<'_, QI>, FeagiDataValueError> {
         match self.as_mut_bytes().get_mut(range.start.to_usize()..range.end.to_usize()) {
             Some(slice) => {
                 let bits = QI::from_usize(slice.len() * 8);

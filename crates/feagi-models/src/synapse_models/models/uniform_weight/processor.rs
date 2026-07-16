@@ -50,6 +50,6 @@ where
 
     fn get_psp_uniformity_weight(axon_bundle_data: &BasicSynapseModelAxonBundleData<SMQ>) -> CPQIn::MembranePotentialQuant {
         // TODO this is dumb :3
-        CPQIn::MembranePotentialQuant::from_f32(axon_bundle_data.multiplier.to_f32())
+        CPQIn::MembranePotentialQuant::quant_from_f32(axon_bundle_data.multiplier.to_f32())
     }
 }
