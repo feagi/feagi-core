@@ -23,7 +23,7 @@ impl<Q: QuantizedIndexCountTrait> CombiningRangeVector<Q> {
 
     /// Returns the number of contained ranges
     pub fn get_number_ranges(&self) -> Q {
-        Q::from_usize(self.ranges.len())
+        Q::quant_from_usize(self.ranges.len())
     }
 
     /// Returns the total value of all lengths of all ranges summed together
@@ -41,7 +41,7 @@ impl<Q: QuantizedIndexCountTrait> CombiningRangeVector<Q> {
         // internal sorted length vector to quickly jump to the index of each range!
         let mut found_range_index: Option<usize> = None;
         for sorted_position in (0..self.indexes_sorted_by_length.len()) {
-            let range_index = self.indexes_sorted_by_length[sorted_position].to_usize();
+            let range_index = self.indexes_sorted_by_length[sorted_position].quant_to_usize();
             let range = &self.ranges[range_index];
             if range.end - range.start >= length {
                 found_range_index = Some(range_index);
@@ -191,17 +191,17 @@ impl<Q: QuantizedIndexCountTrait> CombiningRangeVector<Q> {
         self.indexes_sorted_by_length.clear();
         self.indexes_sorted_by_length.reserve(self.ranges.len());
         for i in 0..self.ranges.len() {
-            self.indexes_sorted_by_length.push(Q::from_usize(i));
+            self.indexes_sorted_by_length.push(Q::quant_from_usize(i));
         }
 
         let ranges = &self.ranges;
         self.indexes_sorted_by_length.sort_by(|a, b| {
             let length_a = {
-                let range = &ranges[a.to_usize()];
+                let range = &ranges[a.quant_to_usize()];
                 range.end - range.start
             };
             let length_b = {
-                let range = &ranges[b.to_usize()];
+                let range = &ranges[b.quant_to_usize()];
                 range.end - range.start
             };
             // Decrementing order: longest ranges first.

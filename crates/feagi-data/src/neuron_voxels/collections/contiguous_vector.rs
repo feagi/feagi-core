@@ -1,8 +1,8 @@
 use crate::collections::linear::contiguous_data::QuantizedContiguousVector;
 use crate::collections::spatial::contiguous::SpatialContiguousVector3D;
 use crate::neuron_voxels::wrapped_values::{NeuronVoxelDimensions, NeuronVoxelPotential};
-use crate::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::feagi_quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use crate::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::values::spatial::quantizable_index::QuantizedIndexDimension3D;
 
 // TODO wrapper generator?

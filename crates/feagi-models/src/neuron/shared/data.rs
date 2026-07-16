@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::feagi_quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 
 /// Root trait for all cortical_area data implementations, essentially any cortical_area level data shared
 /// by all neurons in a cortical_area area of a given neuron model. This should be extended with only

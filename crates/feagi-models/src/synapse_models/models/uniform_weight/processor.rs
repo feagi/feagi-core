@@ -3,8 +3,8 @@ use crate::synapse_models::models::uniform_weight::quantization::UniformSynapseM
 use crate::synapse_models::shared::processor::{SynapseModelProcessorAxonBundleOnly, SynapseModelProcessorBase};
 use core::marker::PhantomData;
 use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedDecimalTrait;
 
 pub struct BasicSynapseModelProcessor<FIQ, SMQ, CPQIn, CPQOut>

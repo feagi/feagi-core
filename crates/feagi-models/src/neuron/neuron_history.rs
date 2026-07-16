@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 use crate::burst_index::BurstIndex;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Describes the type of Neuron History used
 pub trait NeuronHistoryBackend {

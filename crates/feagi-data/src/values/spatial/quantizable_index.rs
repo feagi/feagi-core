@@ -14,7 +14,7 @@ macro_rules! create_coordinate {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
-            pub inner: [Q; $num_dimensions],
+            pub(crate) inner: [Q; $num_dimensions],
         }
 
         ::paste::paste! {
@@ -23,6 +23,11 @@ macro_rules! create_coordinate {
                     $struct_name {
                         inner: [ $( $field ),+ ]
                     }
+                }
+
+                pub fn try_new_from_usizes($( $field: usize ),+ ) -> Result<Self, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                    $(let $field: Q = Q::quant_try_from_usize($field).map_err(|_| $crate::values::spatial::feagi_data_values_spatial_error::FeagiFailInvalidSpatialQuantization::new("Given usize does not fit current coordinate quantization").into() )?; )+;
+                    Ok(Self::new($( $field),+))
                 }
 
                 $(
@@ -51,15 +56,26 @@ macro_rules! create_dimension {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
-            pub inner: [Q; $num_dimensions],
+            pub(crate) inner: [Q; $num_dimensions],
         }
 
         ::paste::paste! {
             impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> $struct_name<Q> {
-                pub fn new( $( $field: Q ),+ ) -> Self {
-                    $struct_name {
-                        inner: [ $( $field ),+ ]
+                pub fn try_new( $( $field: Q ),+ ) -> Result<Self, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                    $(
+                    if $field == Q::QUANT_ZERO {
+                        return Err($crate::values::spatial::feagi_data_values_spatial_error::FeagiFailDimensionsCannotBeZero::new("Dimension axis cannot have a length of zero!").into())
                     }
+                    )+
+
+                    Ok($struct_name {
+                        inner: [ $( $field ),+ ]
+                    })
+                }
+
+                pub fn try_new_from_usizes($( $field: usize ),+ ) -> Result<Self, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                    $(let $field: Q = Q::quant_try_from_usize($field).map_err(|_| $crate::values::spatial::feagi_data_values_spatial_error::FeagiFailInvalidSpatialQuantization::new("Given usize does not fit current dimension quantization").into() )?; )+;
+                    Self::try_new($( $field),+)
                 }
 
                 /// Total number of discrete coordinates contained within these dimensions
@@ -70,26 +86,39 @@ macro_rules! create_dimension {
 
                 /// Converts a coordinate to its linear index, incrementing along the first axis
                 /// fastest (x -> y -> z -> ...).
-                pub fn coordinate_to_linear_index(&self, coord: $coord_impl<Q>) -> Q {
+                pub fn coordinate_to_linear_index(&self, coord: $coord_impl<Q>) -> Result<Q, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError>  {
                     let mut linear_index = Q::QUANT_ZERO;
                     let mut stride = Q::QUANT_ONE;
                     for (axis, size) in coord.inner.iter().zip(self.inner.iter()) {
                         linear_index = linear_index + (*axis * stride);
                         stride = stride * *size;
                     }
-                    linear_index
+                    if linear_index > self.number_contained_elements() {
+                        return Err(
+                            $crate::values::spatial::feagi_data_values_spatial_error::FeagiFailInvalidSpatialIndex::new("Given given coordinate is out of bounds of the given dimensions!").into()
+                        )
+                    }
+
+                    Ok(linear_index)
                 }
 
                 /// Converts a linear index back into a coordinate, the inverse of
                 /// [`coordinate_to_linear_index`](Self::coordinate_to_linear_index).
-                pub fn linear_to_coordinate_index(&self, linear_index: Q) -> $coord_impl<Q> {
+                pub fn linear_to_coordinate_index(&self, linear_index: Q) -> Result<$coord_impl<Q>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+
+                    if linear_index > self.number_contained_elements() {
+                        return Err(
+                            $crate::values::spatial::feagi_data_values_spatial_error::FeagiFailInvalidSpatialIndex::new("Given given linear index is out of bounds of the given dimensions!").into()
+                        )
+                    }
+
                     let mut coordinate = [Q::QUANT_ZERO; $num_dimensions];
                     let mut stride = Q::QUANT_ONE;
                     for (axis, size) in coordinate.iter_mut().zip(self.inner.iter()) {
                         *axis = (linear_index / stride) % *size;
                         stride = stride * *size;
                     }
-                    $coord_impl { inner: coordinate }
+                    Ok($coord_impl { inner: coordinate })
                 }
 
                 $(

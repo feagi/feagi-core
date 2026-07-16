@@ -1,9 +1,5 @@
-use crate::values::quantizable::{QuantizationLevelPacking, QuantizedElementBase};
-
-// TODO serde serialization / deserialization? is it a good idea?
-
-// TODO have from/to other quantization levels besides u32
-// TODO have try_from support, with error reporting the invalid number as a 3 char string (const)
+use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
+use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
@@ -46,7 +42,6 @@ impl QuantizationLevelPacking for IndexCountQuantizationLevel {
     }
 }
 
-
 /// Trait designed to hold index and/or count values in a quantized form
 pub trait QuantizedIndexCountTrait:
     Copy
@@ -76,80 +71,295 @@ pub trait QuantizedIndexCountTrait:
 {
     const QUANT_MAX: Self;
     const QUANT_MAX_AS_USIZE: usize;
+    const QUANT_MAX_U8: Self;
+    const QUANT_MAX_U16: Self;
+    const QUANT_MAX_U32: Self;
+    const QUANT_MAX_U64: Self;
 
     // TODO to other quantizations
 
-    /// Converts to usize
-    fn to_usize(self) -> usize;
-
-    /// Converts to u32
-    fn to_u32(self) -> u32;
-
     /// Tries to convert from usize, does NOT check bounds!
-    fn from_usize(value: usize) -> Self;
+    fn quant_from_usize(value: usize) -> Self;
 
+    /// Converts to usize
+    fn quant_to_usize(self) -> usize;
+
+    /// Tries to convert from u8 (this can never fail, we have nothing smaller than u8)
+    fn quant_from_u8(value: u8) -> Self;
     /// Tries to convert from u32, does NOT check bounds!
-    fn from_u32(value: u32) -> Self;
+    fn quant_to_u8(self) -> u8;
+    /// Tries to convert from u16, does NOT check bounds!
+    fn quant_from_u16(value: u16) -> Self;
+    /// Tries to convert to u16, does NOT check bounds!
+    fn quant_to_u16(self) -> u16;
+    /// Tries to convert from u32, does NOT check bounds!
+    fn quant_from_u32(value: u32) -> Self;
+    /// Tries to convert to u32, does NOT check bounds!
+    fn quant_to_u32(self) -> u32;
+    /// Tries to convert from u64, does NOT check bounds!
+    fn quant_from_u64(value: u64) -> Self;
+    /// Tries to convert to u64, bound checking shouldnt matter since this is the biggest type (not doing u128 lol)
+    fn quant_to_u64(self) -> u64;
 
+    /// Tries to convert from u8, clamping if it goes out of range!
+    fn quant_from_u8_clamped(value: u8) -> Self;
+    /// Tries to convert from u16, clamping if it goes out of range!
+    fn quant_from_u16_clamped(value: u16) -> Self;
     /// Tries to convert from u32, clamping if it goes out of range!
-    fn from_u32_clamped(value: u32) -> Self;
+    fn quant_from_u32_clamped(value: u32) -> Self;
+
+    /// Just converts to u64, added for completeness but there is no situation where we need to
+    /// clamp an u64 value
+    fn quant_from_u64_clamped(value: u64) -> Self {
+        Self::quant_from_u64(value)
+    }
+    
+    /// Tries converting from usize, returns an error if out of bounds
+    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError>;
+    
+    /// Tries converting from u8, returns an error if out of bounds
+    fn quant_try_from_u8(value: u8) -> Result<Self, FeagiDataValueQuantizationError>;
+    /// Tries converting to u8, returns an error if out of bounds
+    fn quant_try_to_u8(self) -> Result<u8, FeagiDataValueQuantizationError>;
+    /// Tries converting from u16, returns an error if out of bounds
+    fn quant_try_from_u16(value: u16) -> Result<Self, FeagiDataValueQuantizationError>;
+    /// Tries converting to u16, returns an error if out of bounds
+    fn quant_try_to_u16(self) -> Result<u16, FeagiDataValueQuantizationError>;
+    /// Tries converting from u32, returns an error if out of bounds
+    fn quant_try_from_u32(value: u32) -> Result<Self, FeagiDataValueQuantizationError>;
+    /// Tries converting to u32, returns an error if out of bounds
+    fn quant_try_to_u32(self) -> Result<u32, FeagiDataValueQuantizationError>;
+    /// Tries converting from u64, returns an error if out of bounds
+    fn quant_try_from_u64(value: u64) -> Result<Self, FeagiDataValueQuantizationError>;
+    /// Tries converting to u64, returns an error if out of bounds
+    fn quant_try_to_u64(self) -> Result<u64, FeagiDataValueQuantizationError>;
 }
 
 impl QuantizedIndexCountTrait for u8 {
     const QUANT_MAX: Self = u8::MAX;
     const QUANT_MAX_AS_USIZE: usize = u8::MAX as usize;
+    const QUANT_MAX_U8: Self = u8::MAX;
+    const QUANT_MAX_U16: Self = u8::MAX;
+    const QUANT_MAX_U32: Self = u8::MAX;
+    const QUANT_MAX_U64: Self = u8::MAX;
 
-    fn to_usize(self) -> usize {
+    fn quant_to_usize(self) -> usize {
         self as usize
     }
 
-    fn to_u32(self) -> u32 {
+    fn quant_from_usize(value: usize) -> Self {
+        value as u8
+    }
+
+    fn quant_from_u8(value: u8) -> Self {
+        value
+    }
+
+    fn quant_to_u8(self) -> u8 {
+        self
+    }
+
+    fn quant_from_u16(value: u16) -> Self {
+        value as u8
+    }
+
+    fn quant_to_u16(self) -> u16 {
+        self as u16
+    }
+
+    fn quant_from_u32(value: u32) -> Self {
+        value as u8
+    }
+
+    fn quant_to_u32(self) -> u32 {
         self as u32
     }
 
-    fn from_usize(value: usize) -> Self {
+    fn quant_from_u64(value: u64) -> Self {
         value as u8
     }
 
-    fn from_u32(value: u32) -> Self {
-        value as u8
+    fn quant_to_u64(self) -> u64 {
+        self as u64
     }
 
-    fn from_u32_clamped(value: u32) -> Self {
-        const MAX_AS_U32: u32 = u8::MAX as u32;
-        if value > MAX_AS_U32 {
-            return u8::MAX;
+    fn quant_from_u8_clamped(value: u8) -> Self {
+        value
+    }
+
+    fn quant_from_u16_clamped(value: u16) -> Self {
+        value.min(u8::MAX as u16) as u8
+    }
+
+    fn quant_from_u32_clamped(value: u32) -> Self {
+        value.min(u8::MAX as u32) as u8
+    }
+
+    fn quant_try_from_u8(value: u8) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value)
+    }
+
+    fn quant_try_to_u8(self) -> Result<u8, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self)
+    }
+
+    fn quant_try_from_u16(value: u16) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value > u8::MAX as u16 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", value as usize).into());
         }
-        value as u8
+        Ok(value as u8)
+    }
+
+    fn quant_try_to_u16(self) -> Result<u16, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self as u16)
+    }
+
+    fn quant_try_from_u32(value: u32) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value > u8::MAX as u32 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", value as usize).into());
+        }
+        Ok(value as u8)
+    }
+
+    fn quant_try_to_u32(self) -> Result<u32, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self as u32)
+    }
+
+    fn quant_try_from_u64(value: u64) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value > u8::MAX as u64 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", value as usize).into());
+        }
+        Ok(value as u8)
+    }
+
+    fn quant_try_to_u64(self) -> Result<u64, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self as u64)
+    }
+
+    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value > u8::MAX as usize {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", value as usize).into());
+        }
+        Ok(value as u8)
     }
 }
 
 impl QuantizedIndexCountTrait for u16 {
     const QUANT_MAX: Self = u16::MAX;
     const QUANT_MAX_AS_USIZE: usize = u16::MAX as usize;
+    const QUANT_MAX_U8: Self = u8::MAX as u16;
+    const QUANT_MAX_U16: Self = u16::MAX;
+    const QUANT_MAX_U32: Self = u16::MAX;
+    const QUANT_MAX_U64: Self = u16::MAX;
 
-    fn to_usize(self) -> usize {
+    fn quant_to_usize(self) -> usize {
         self as usize
     }
 
-    fn to_u32(self) -> u32 {
+    fn quant_from_usize(value: usize) -> Self {
+        value as u16
+    }
+
+    fn quant_from_u8(value: u8) -> Self {
+        value as u16
+    }
+
+    fn quant_to_u8(self) -> u8 {
+        self as u8
+    }
+
+    fn quant_from_u16(value: u16) -> Self {
+        value
+    }
+
+    fn quant_to_u16(self) -> u16 {
+        self
+    }
+
+    fn quant_from_u32(value: u32) -> Self {
+        value as u16
+    }
+
+    fn quant_to_u32(self) -> u32 {
         self as u32
     }
 
-    fn from_usize(value: usize) -> Self {
+    fn quant_from_u64(value: u64) -> Self {
         value as u16
     }
 
-    fn from_u32(value: u32) -> Self {
+    fn quant_to_u64(self) -> u64 {
+        self as u64
+    }
+
+    fn quant_from_u8_clamped(value: u8) -> Self {
         value as u16
     }
 
-    fn from_u32_clamped(value: u32) -> Self {
-        const MAX_AS_U32: u32 = u16::MAX as u32;
-        if value > MAX_AS_U32 {
-            return u16::MAX;
+    fn quant_from_u16_clamped(value: u16) -> Self {
+        value
+    }
+
+    fn quant_from_u32_clamped(value: u32) -> Self {
+        value.min(u16::MAX as u32) as u16
+    }
+
+    fn quant_try_from_u8(value: u8) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value as u16)
+    }
+
+    fn quant_try_to_u8(self) -> Result<u8, FeagiDataValueQuantizationError> {
+        if self > u8::MAX as u16 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", self as usize).into());
         }
-        value as u16
+        Ok(self as u8)
+    }
+
+    fn quant_try_from_u16(value: u16) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value)
+    }
+
+    fn quant_try_to_u16(self) -> Result<u16, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self)
+    }
+
+    fn quant_try_from_u32(value: u32) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value > u16::MAX as u32 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u16!", value as usize).into());
+        }
+        Ok(value as u16)
+    }
+
+    fn quant_try_to_u32(self) -> Result<u32, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self as u32)
+    }
+
+    fn quant_try_from_u64(value: u64) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value > u16::MAX as u64 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u16!", value as usize).into());
+        }
+        Ok(value as u16)
+    }
+
+    fn quant_try_to_u64(self) -> Result<u64, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self as u64)
+    }
+
+    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value > u16::MAX as usize {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u16!", value as usize).into());
+        }
+        Ok(value as u16)
     }
 }
 
@@ -157,55 +367,231 @@ impl QuantizedIndexCountTrait for u16 {
 impl QuantizedIndexCountTrait for u32 {
     const QUANT_MAX: Self = u32::MAX;
     const QUANT_MAX_AS_USIZE: usize = u32::MAX as usize;
+    const QUANT_MAX_U8: Self = u8::MAX as u32;
+    const QUANT_MAX_U16: Self = u16::MAX as u32;
+    const QUANT_MAX_U32: Self = u32::MAX;
+    const QUANT_MAX_U64: Self = u32::MAX;
 
-    fn to_usize(self) -> usize {
+    fn quant_to_usize(self) -> usize {
         self as usize
     }
 
-    fn to_u32(self) -> u32 {
-        self
-    }
-
-    fn from_usize(value: usize) -> Self {
+    fn quant_from_usize(value: usize) -> Self {
         value as u32
     }
 
-    fn from_u32(value: u32) -> Self {
+    fn quant_from_u8(value: u8) -> Self {
+        value as u32
+    }
+
+    fn quant_to_u8(self) -> u8 {
+        self as u8
+    }
+
+    fn quant_from_u16(value: u16) -> Self {
+        value as u32
+    }
+
+    fn quant_to_u16(self) -> u16 {
+        self as u16
+    }
+
+    fn quant_from_u32(value: u32) -> Self {
         value
     }
 
-    fn from_u32_clamped(value: u32) -> Self {
+    fn quant_to_u32(self) -> u32 {
+        self
+    }
+
+    fn quant_from_u64(value: u64) -> Self {
+        value as u32
+    }
+
+    fn quant_to_u64(self) -> u64 {
+        self as u64
+    }
+
+    fn quant_from_u8_clamped(value: u8) -> Self {
+        value as u32
+    }
+
+    fn quant_from_u16_clamped(value: u16) -> Self {
+        value as u32
+    }
+
+    fn quant_from_u32_clamped(value: u32) -> Self {
         value
+    }
+
+    fn quant_try_from_u8(value: u8) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value as u32)
+    }
+
+    fn quant_try_to_u8(self) -> Result<u8, FeagiDataValueQuantizationError> {
+        if self > u8::MAX as u32 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", self as usize).into());
+        }
+        Ok(self as u8)
+    }
+
+    fn quant_try_from_u16(value: u16) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value as u32)
+    }
+
+    fn quant_try_to_u16(self) -> Result<u16, FeagiDataValueQuantizationError> {
+        if self > u16::MAX as u32 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u16!", self as usize).into());
+        }
+        Ok(self as u16)
+    }
+
+    fn quant_try_from_u32(value: u32) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value)
+    }
+
+    fn quant_try_to_u32(self) -> Result<u32, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self)
+    }
+
+    fn quant_try_from_u64(value: u64) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value > u32::MAX as u64 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u32!", value as usize).into());
+        }
+        Ok(value as u32)
+    }
+
+    fn quant_try_to_u64(self) -> Result<u64, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self as u64)
+    }
+
+    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value > u32::MAX as usize {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u32!", value as usize).into());
+        }
+        Ok(value as u32)
     }
 }
 
 impl QuantizedIndexCountTrait for u64 {
     const QUANT_MAX: Self = u64::MAX;
     const QUANT_MAX_AS_USIZE: usize = u64::MAX as usize;
+    const QUANT_MAX_U8: Self = u8::MAX as u64;
+    const QUANT_MAX_U16: Self = u16::MAX as u64;
+    const QUANT_MAX_U32: Self = u32::MAX as u64;
+    const QUANT_MAX_U64: Self = u64::MAX;
 
-    fn to_usize(self) -> usize {
+    fn quant_to_usize(self) -> usize {
         self as usize
     }
 
-    fn to_u32(self) -> u32 {
+    fn quant_from_usize(value: usize) -> Self {
+        value as u64
+    }
+
+    fn quant_from_u8(value: u8) -> Self {
+        value as u64
+    }
+
+    fn quant_to_u8(self) -> u8 {
+        self as u8
+    }
+
+    fn quant_from_u16(value: u16) -> Self {
+        value as u64
+    }
+
+    fn quant_to_u16(self) -> u16 {
+        self as u16
+    }
+
+    fn quant_from_u32(value: u32) -> Self {
+        value as u64
+    }
+
+    fn quant_to_u32(self) -> u32 {
         self as u32
     }
 
-    fn from_usize(value: usize) -> Self {
+    fn quant_from_u64(value: u64) -> Self {
+        value
+    }
+
+    fn quant_to_u64(self) -> u64 {
+        self
+    }
+
+    fn quant_from_u8_clamped(value: u8) -> Self {
         value as u64
     }
 
-    fn from_u32(value: u32) -> Self {
+    fn quant_from_u16_clamped(value: u16) -> Self {
         value as u64
     }
 
-    fn from_u32_clamped(value: u32) -> Self {
-        value as u64 // no way it can escape the clamp
+    fn quant_from_u32_clamped(value: u32) -> Self {
+        value as u64
+    }
+
+    fn quant_try_from_u8(value: u8) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value as u64)
+    }
+
+    fn quant_try_to_u8(self) -> Result<u8, FeagiDataValueQuantizationError> {
+        if self > u8::MAX as u64 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", self as usize).into());
+        }
+        Ok(self as u8)
+    }
+
+    fn quant_try_from_u16(value: u16) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value as u64)
+    }
+
+    fn quant_try_to_u16(self) -> Result<u16, FeagiDataValueQuantizationError> {
+        if self > u16::MAX as u64 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u16!", self as usize).into());
+        }
+        Ok(self as u16)
+    }
+
+    fn quant_try_from_u32(value: u32) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value as u64)
+    }
+
+    fn quant_try_to_u32(self) -> Result<u32, FeagiDataValueQuantizationError> {
+        if self > u32::MAX as u64 {
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u32!", self as usize).into());
+        }
+        Ok(self as u32)
+    }
+
+    fn quant_try_from_u64(value: u64) -> Result<Self, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(value)
+    }
+
+    fn quant_try_to_u64(self) -> Result<u64, FeagiDataValueQuantizationError> {
+        // This will never fail
+        Ok(self)
+    }
+
+    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
+        // never fails
+        Ok(value as u64)
     }
 }
 
 // Note: Specifically we will not support usize directly since it can vary in size depending on
-// backend, which could cause some issues
+// backend, which could cause some issues with device interoperability
 
 /// Creates a wrapper for quantized indexes / counts
 #[macro_export]
@@ -237,20 +623,102 @@ macro_rules! create_wrapped_quantized_index {
                 Self(v)
             }
 
-            pub fn from_usize_unchecked(u: usize) -> Self {
-                Self(Q::from_usize(u))
+            pub fn from_usize(value: usize) -> Self {
+                Self(Q::quant_from_usize(value))
             }
 
-            /// Bounds-checked conversion from usiz
-            pub fn try_from_usize(u: usize) -> Result<Self, $crate::values::feagi_data_value_error::FeagiDataValueError> {
-                if u > Q::QUANT_MAX_AS_USIZE {
-                    return Err($crate::values::feagi_data_value_error::FeagiInvalidQuantizationErrKey::new("Given usize exceeds current quantization bounds!").into())
-                }
-                Ok(Self(Q::from_usize(u)))
+            pub fn to_usize(self) -> usize {
+                self.0.quant_to_usize()
             }
 
-            pub fn to_usize(&self) -> usize {
-                self.0.to_usize()
+            pub fn from_u8(value: u8) -> Self {
+                Self(Q::quant_from_u8(value))
+            }
+
+            pub fn to_u8(self) -> u8 {
+                self.0.quant_to_u8()
+            }
+
+            pub fn from_u16(value: u16) -> Self {
+                Self(Q::quant_from_u16(value))
+            }
+
+            pub fn to_u16(self) -> u16 {
+                self.0.quant_to_u16()
+            }
+
+            pub fn from_u32(value: u32) -> Self {
+                Self(Q::quant_from_u32(value))
+            }
+
+            pub fn to_u32(self) -> u32 {
+                self.0.quant_to_u32()
+            }
+
+            pub fn from_u64(value: u64) -> Self {
+                Self(Q::quant_from_u64(value))
+            }
+
+            pub fn to_u64(self) -> u64 {
+                self.0.quant_to_u64()
+            }
+
+            pub fn from_u8_clamped(value: u8) -> Self {
+                Self(Q::quant_from_u8_clamped(value))
+            }
+
+            pub fn from_u16_clamped(value: u16) -> Self {
+                Self(Q::quant_from_u16_clamped(value))
+            }
+
+            pub fn from_u32_clamped(value: u32) -> Self {
+                Self(Q::quant_from_u32_clamped(value))
+            }
+
+            pub fn from_u64_clamped(value: u64) -> Self {
+                Self(Q::quant_from_u64_clamped(value))
+            }
+
+            pub fn try_from_u8(value: u8) -> Result<Self, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                Ok(Self(Q::quant_try_from_u8(value)?))
+            }
+
+            pub fn try_to_u8(self) -> Result<u8, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                self.0.quant_try_to_u8()
+            }
+
+            pub fn try_from_u16(value: u16) -> Result<Self, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                Ok(Self(Q::quant_try_from_u16(value)?))
+            }
+
+            pub fn try_to_u16(self) -> Result<u16, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                self.0.quant_try_to_u16()
+            }
+
+            pub fn try_from_u32(value: u32) -> Result<Self, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                Ok(Self(Q::quant_try_from_u32(value)?))
+            }
+
+            pub fn try_to_u32(self) -> Result<u32, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                self.0.quant_try_to_u32()
+            }
+
+            pub fn try_from_u64(value: u64) -> Result<Self, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                Ok(Self(Q::quant_try_from_u64(value)?))
+            }
+
+            pub fn try_to_u64(self) -> Result<u64, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                self.0.quant_try_to_u64()
+            }
+            
+            pub fn try_from_usize(value: usize) -> Result<Self, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                 Ok(Self(Q::quant_try_from_usize(value)?))
+            }
+            
+            
+            /// Extracts the inner quantized index / count
+            pub fn deref(self) -> Q {
+                self.0
             }
         }
 

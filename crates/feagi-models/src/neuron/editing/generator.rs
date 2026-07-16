@@ -1,8 +1,8 @@
 use crate::neuron::cortical_area_layout::CorticalAreaLayout;
 use crate::neuron::shared::data::NeuronModelNeuronData;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex};
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use std::marker::PhantomData;
 
 /// Creates the neuron data for a newly forming cortical area

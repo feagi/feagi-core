@@ -174,19 +174,19 @@ impl QuantizedDecimalTrait for f16 {
     }
 
     fn quant_to_f16(self) -> f16 {
-        todo!()
+        self
     }
 
     fn quant_from_f16(v: f16) -> Self {
-        todo!()
+        v
     }
 
     fn quant_to_bf16(self) -> bf16 {
-        todo!()
+        bf16::from_f32(self.to_f32())
     }
 
     fn quant_from_bf16(v: bf16) -> Self {
-        todo!()
+        f16::from_f32(v.to_f32())
     }
 
     fn quant_to_f32(self) -> f32 {
@@ -198,19 +198,19 @@ impl QuantizedDecimalTrait for f16 {
     }
 
     fn quant_to_f64(self) -> f64 {
-        todo!()
+        f16::to_f64(self)
     }
 
     fn quant_from_f64(value: f64) -> Self {
-        todo!()
+        f16::from_f64(value)
     }
 
     fn runtime_other_to_own_quantization<OTHER: QuantizedDecimalTrait>(other: OTHER) -> Self {
-        todo!()
+        other.quant_to_f16()
     }
 
     fn quant_clamp(self, min: Self, max: Self) -> Self {
-        todo!()
+        self.clamp(min, max)
     }
 }
 
@@ -226,19 +226,19 @@ impl QuantizedDecimalTrait for bf16 {
     }
 
     fn quant_to_f16(self) -> f16 {
-        todo!()
+        f16::from_f32(self.to_f32())
     }
 
     fn quant_from_f16(v: f16) -> Self {
-        todo!()
+        bf16::from_f32(v.to_f32())
     }
 
     fn quant_to_bf16(self) -> bf16 {
-        todo!()
+        self
     }
 
     fn quant_from_bf16(v: bf16) -> Self {
-        todo!()
+        v
     }
 
     fn quant_to_f32(self) -> f32 {
@@ -250,19 +250,19 @@ impl QuantizedDecimalTrait for bf16 {
     }
 
     fn quant_to_f64(self) -> f64 {
-        todo!()
+        bf16::to_f64(self)
     }
 
     fn quant_from_f64(value: f64) -> Self {
-        todo!()
+        bf16::from_f64(value)
     }
 
     fn runtime_other_to_own_quantization<OTHER: QuantizedDecimalTrait>(other: OTHER) -> Self {
-        todo!()
+        other.quant_to_bf16()
     }
 
     fn quant_clamp(self, min: Self, max: Self) -> Self {
-        todo!()
+        self.clamp(min, max)
     }
 }
 
@@ -329,19 +329,19 @@ impl QuantizedDecimalTrait for f64 {
     }
 
     fn quant_to_f16(self) -> f16 {
-        todo!()
+        f16::from_f64(self)
     }
 
     fn quant_from_f16(v: f16) -> Self {
-        todo!()
+        f16::to_f64(v)
     }
 
     fn quant_to_bf16(self) -> bf16 {
-        todo!()
+        bf16::from_f64(self)
     }
 
     fn quant_from_bf16(v: bf16) -> Self {
-        todo!()
+        bf16::to_f64(v)
     }
 
     fn quant_to_f32(self) -> f32 {
@@ -353,19 +353,19 @@ impl QuantizedDecimalTrait for f64 {
     }
 
     fn quant_to_f64(self) -> f64 {
-        todo!()
+        self
     }
 
     fn quant_from_f64(value: f64) -> Self {
-        todo!()
+        value
     }
 
     fn runtime_other_to_own_quantization<OTHER: QuantizedDecimalTrait>(other: OTHER) -> Self {
-        todo!()
+        other.quant_to_f64()
     }
 
     fn quant_clamp(self, min: Self, max: Self) -> Self {
-        todo!()
+        self.clamp(min, max)
     }
 }
 
@@ -382,12 +382,83 @@ macro_rules! create_wrapped_quantized_decimal {
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedDecimalTrait>(Q);
 
         impl<Q: $crate::values::quantizable::QuantizedDecimalTrait> $struct_name<Q> {
+
+            pub const QUANT_ZERO: Self = Self::const_new(Q::QUANT_ZERO);
+            pub const QUANT_ONE: Self = Self::const_new(Q::QUANT_ONE);
+
+            pub const fn const_new(value: Q) -> Self
+            {
+                Self(value)
+            }
+
+            pub const fn const_deref(self) -> Q
+            {
+                self.0
+            }
+
+            pub fn new(v: Q) -> Self {
+                Self(v)
+            }
+
+            pub fn to_storage_f8(self) -> $crate::values::quantizable::custom_data_types::StorageF8 {
+                self.0.quant_to_storage_f8()
+            }
+
+            pub fn from_storage_f8(value: $crate::values::quantizable::custom_data_types::StorageF8) -> Self {
+                Self(Q::quant_from_storage_f8(value))
+            }
+
+            pub fn to_f16(self) -> half::f16 {
+                self.0.quant_to_f16()
+            }
+
+            pub fn from_f16(value: half::f16) -> Self {
+                Self(Q::quant_from_f16(value))
+            }
+
+            pub fn to_bf16(self) -> half::bf16 {
+                self.0.quant_to_bf16()
+            }
+
+            pub fn from_bf16(value: half::bf16) -> Self {
+               Self(Q::quant_from_bf16(value))
+            }
+
             pub fn to_f32(self) -> f32 {
-                self.0.to_f32()
+                self.0.quant_to_f32()
             }
 
             pub fn from_f32(value: f32) -> Self {
-                Self(Q::quant_from_f32(value))
+                 Self(Q::quant_from_f32(value))
+            }
+
+            pub fn to_f64(self) -> f64 {
+                self.0.quant_to_f64()
+            }
+
+            pub fn from_f64(value: f64) -> Self {
+                 Self(Q::quant_from_f64(value))
+            }
+
+            pub fn clamp(self, min: Self, max: Self) -> Self {
+                Self(self.0.quant_clamp(min.0, max.0))
+            }
+
+            pub fn runtime_wrap_from_unknown_quant<OTHER: $crate::values::quantizable::QuantizedDecimalTrait>(other: OTHER) -> Self {
+                Self(Q::runtime_other_to_own_quantization(other))
+            }
+
+            pub fn scale_self_by_unsigned_percentage<OTHER: $crate::values::quantizable::QuantizedDecimalTrait>(self, p: $crate::values::quantizable::PercentageUnsigned<OTHER>) -> Self {
+                Self(self.0.scale_self_by_unsigned_percentage(p))
+            }
+
+            pub fn scale_self_by_same_quant_unsigned_percentage(self, p: &$crate::values::quantizable::PercentageUnsigned<Q>) -> Self {
+                Self(self.0.scale_self_by_same_quant_unsigned_percentage(p))
+            }
+
+            /// Extracts the inner quantized decimal
+            pub fn deref(self) -> Q {
+                self.0
             }
         }
 

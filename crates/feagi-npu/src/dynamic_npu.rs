@@ -1,8 +1,8 @@
 use crate::engines::blocking::rayon::RayonBurstEngine;
 use ahash::{HashMap, HashMapExt};
 use feagi_data::neuron_voxels::collections::ContiguousVoxelVector;
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantizationFloat32;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantizationStandard;
+use feagi_data::feagi_quantization_levels::cortical_potential_quantization::CorticalPotentialQuantizationFloat32;
+use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiGlobalQuantizationStandard;
 use feagi_genomic::feagi_genomic_context::cortical_area::CorticalID;
 use feagi_npu_dynamic_allocator::npu_request::npu_request::NPURequest;
 

@@ -1,5 +1,5 @@
 use crate::engines::blocking::rayon::RayonBurstEngine;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub(crate) trait BlockingEngine {
     /// Import sensor data, and export motor, sensor, and neuron mp data (all optionally).

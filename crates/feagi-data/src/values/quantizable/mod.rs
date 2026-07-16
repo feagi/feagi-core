@@ -5,18 +5,19 @@
 mod base_traits;
 mod decimal;
 mod index_count;
+mod percentage_unsigned;
 mod quantization_level_packing;
 mod signed_integer;
 mod unsigned_integer;
-mod percentage_unsigned;
 
 pub mod custom_data_types;
 pub mod feagi_data_value_quantization_error;
 
 pub use base_traits::QuantizedElementBase;
 pub use decimal::{DecimalQuantizationLevel, QuantizedDecimalTrait};
+pub use feagi_data_value_quantization_error::FeagiDataValueQuantizationError;
 pub use index_count::{IndexCountQuantizationLevel, QuantizedIndexCountTrait};
+pub use percentage_unsigned::PercentageUnsigned;
+pub use quantization_level_packing::QuantizationLevelPacking;
 pub use signed_integer::{QuantizedSignedIntegerTrait, SignedIntegerQuantizationLevel};
 pub use unsigned_integer::{QuantizedUnsignedIntegerTrait, UnsignedIntegerQuantizationLevel};
-pub use quantization_level_packing::QuantizationLevelPacking;
-pub use percentage_unsigned::PercentageUnsigned;

@@ -125,14 +125,14 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> +
 
     /// Number of bytes backing this collection.
     fn number_bytes(&self) -> QI {
-        QI::from_usize(self.as_bytes().len())
+        QI::quant_from_usize(self.as_bytes().len())
     }
 
     /// Number of unused ("dangling") bits in the final byte, i.e. the bits of
     /// the backing storage beyond [`Self::number_addressable_bits`].
     fn number_dangling_bits(&self) -> u8 {
         let capacity = self.as_bytes().len() * 8;
-        (capacity - self.number_addressable_bits().to_usize()) as u8
+        (capacity - self.number_addressable_bits().quant_to_usize()) as u8
     }
 
     /// Returns `true` if there are no bits.
@@ -142,8 +142,8 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> +
 
     /// Copies out the bit at `index`, or `None` if out of bounds.
     fn get_bit(&self, index: QI) -> Option<bool> {
-        let bit = index.to_usize();
-        if bit >= self.number_addressable_bits().to_usize() {
+        let bit = index.quant_to_usize();
+        if bit >= self.number_addressable_bits().quant_to_usize() {
             return None;
         }
         let byte = self.as_bytes()[bit / 8];
@@ -152,7 +152,7 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> +
 
     /// Copies out the whole byte at `index`, or `None` if out of bounds.
     fn get_byte(&self, index: QI) -> Option<u8> {
-        self.as_bytes().get(index.to_usize()).copied()
+        self.as_bytes().get(index.quant_to_usize()).copied()
     }
 
     /// Borrows the whole collection as a [`BitPackedSlice`] view.
@@ -167,9 +167,9 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> +
     /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
     fn subslice_bytes(&self, range: Range<QI>) -> Result<BitPackedSlice<'_, QI>, FeagiDataValueError> {
-        match self.as_bytes().get(range.start.to_usize()..range.end.to_usize()) {
+        match self.as_bytes().get(range.start.quant_to_usize()..range.end.quant_to_usize()) {
             Some(slice) => {
-                let bits = QI::from_usize(slice.len() * 8);
+                let bits = QI::quant_from_usize(slice.len() * 8);
                 Ok(BitPackedSlice::new(slice, bits))
             }
             None => Err(FeagiInvalidIndexErrKey::new("subslice byte range is out of bounds").into()),
@@ -183,14 +183,14 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> +
 
     /// Given a byte index, gets the index of the first bit of that byte
     fn get_first_bit_index_from_byte_unchecked(&self, byte_index: QI) -> QI {
-        QI::from_usize((byte_index.to_usize()) << 3)
+        QI::quant_from_usize((byte_index.quant_to_usize()) << 3)
     }
 
     /// If the bit packed array is holding data of length not divisible by 8, eventually the last
     /// byte will cover a range less than 8. This function will return less than 8 if thats the case
     fn get_number_bits_remaining_from_byte_unchecked(&self, byte_index: QI) -> u8 {
         let first_index = self.get_first_bit_index_from_byte_unchecked(byte_index);
-        let bits_remaining = (self.number_addressable_bits() - first_index).to_usize();
+        let bits_remaining = (self.number_addressable_bits() - first_index).quant_to_usize();
         bits_remaining.min(8) as u8
     }
 
@@ -217,8 +217,8 @@ pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
     /// Sets the bit at `index`, returning the previous value if the index was in
     /// bounds (otherwise leaves the collection untouched).
     fn set_bit(&mut self, index: QI, value: bool) -> Option<bool> {
-        let bit = index.to_usize();
-        if bit >= self.number_addressable_bits().to_usize() {
+        let bit = index.quant_to_usize();
+        if bit >= self.number_addressable_bits().quant_to_usize() {
             return None;
         }
         let byte = &mut self.as_mut_bytes()[bit / 8];
@@ -233,13 +233,13 @@ pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
 
     /// Mutably borrows the whole byte at `index`, or `None` if out of bounds.
     fn get_byte_mut(&mut self, index: QI) -> Option<&mut u8> {
-        self.as_mut_bytes().get_mut(index.to_usize())
+        self.as_mut_bytes().get_mut(index.quant_to_usize())
     }
 
     /// Overwrites the whole byte at `index`, returning the previous value if the
     /// index was in bounds (otherwise leaves the collection untouched).
     fn set_byte(&mut self, index: QI, value: u8) -> Option<u8> {
-        match self.as_mut_bytes().get_mut(index.to_usize()) {
+        match self.as_mut_bytes().get_mut(index.quant_to_usize()) {
             Some(slot) => {
                 let previous = *slot;
                 *slot = value;
@@ -256,9 +256,9 @@ pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
     /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
     fn subslice_bytes_mut(&mut self, range: Range<QI>) -> Result<BitPackedSliceMut<'_, QI>, FeagiDataValueError> {
-        match self.as_mut_bytes().get_mut(range.start.to_usize()..range.end.to_usize()) {
+        match self.as_mut_bytes().get_mut(range.start.quant_to_usize()..range.end.quant_to_usize()) {
             Some(slice) => {
-                let bits = QI::from_usize(slice.len() * 8);
+                let bits = QI::quant_from_usize(slice.len() * 8);
                 Ok(BitPackedSliceMut::new(slice, bits))
             }
             None => Err(FeagiInvalidIndexErrKey::new("subslice byte range is out of bounds").into()),
@@ -301,7 +301,7 @@ pub trait BitPackedParTrait<QI: QuantizedIndexCountTrait>: BitPackedTrait<QI> {
     /// # Safety
     /// - `index` must be in bounds (`index < self.number_bytes()`).
     unsafe fn get_byte_par(&self, index: QI) -> &u8 {
-        &*self.as_byte_ptr().add(index.to_usize())
+        &*self.as_byte_ptr().add(index.quant_to_usize())
     }
 }
 
@@ -334,7 +334,7 @@ pub unsafe trait BitPackedParMutTrait<QI: QuantizedIndexCountTrait>: BitPackedPa
     ///   the duration of the returned borrow. Concurrent callers must only ever
     ///   target disjoint byte indices.
     unsafe fn get_byte_mut_par(&self, index: QI) -> &mut u8 {
-        &mut *self.as_mut_byte_ptr_par().add(index.to_usize())
+        &mut *self.as_mut_byte_ptr_par().add(index.quant_to_usize())
     }
 }
 
@@ -359,11 +359,11 @@ impl<QI: QuantizedIndexCountTrait> BitPackedVector<QI> {
     /// Builds a vector holding `number_bits` booleans, every one initialised to
     /// `initial_state`. Any dangling bits in the final byte are kept zeroed.
     pub fn new_uniform(number_bits: QI, initial_state: bool) -> BitPackedVector<QI> {
-        let number_bytes = QI::from_usize(number_bits_to_number_bytes(number_bits.to_usize()));
+        let number_bytes = QI::quant_from_usize(number_bits_to_number_bytes(number_bits.quant_to_usize()));
         let mut data: Vec<u8> = if initial_state {
-            vec![0xFF; number_bytes.to_usize()]
+            vec![0xFF; number_bytes.quant_to_usize()]
         } else {
-            vec![0x00; number_bytes.to_usize()]
+            vec![0x00; number_bytes.quant_to_usize()]
         };
 
         Self { data, number_bits }
@@ -372,7 +372,7 @@ impl<QI: QuantizedIndexCountTrait> BitPackedVector<QI> {
     /// Wraps an existing `Vec` without copying, treating every byte as full
     /// (bit count is `data.len() * 8`, no dangling bits).
     pub fn from_vec(data: Vec<u8>) -> BitPackedVector<QI> {
-        let number_bits = QI::from_usize(data.len() * 8);
+        let number_bits = QI::quant_from_usize(data.len() * 8);
         Self { data, number_bits }
     }
 
@@ -413,13 +413,13 @@ unsafe impl<QI: QuantizedIndexCountTrait> BitPackedParMutTrait<QI> for BitPacked
 impl<QI: QuantizedIndexCountTrait> Index<QI> for BitPackedVector<QI> {
     type Output = u8;
     fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.to_usize()]
+        &self.data[index.quant_to_usize()]
     }
 }
 
 impl<QI: QuantizedIndexCountTrait> IndexMut<QI> for BitPackedVector<QI> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.to_usize()]
+        &mut self.data[index.quant_to_usize()]
     }
 }
 
@@ -461,7 +461,7 @@ impl<'a, QI: QuantizedIndexCountTrait> BitPackedSlice<'a, QI> {
     /// Wraps an existing shared byte slice, treating every byte as full
     /// (bit count is `data.len() * 8`, no dangling bits).
     pub fn from_bytes(data: &'a [u8]) -> BitPackedSlice<'a, QI> {
-        let number_bits = QI::from_usize(data.len() * 8);
+        let number_bits = QI::quant_from_usize(data.len() * 8);
         Self { data, number_bits }
     }
 
@@ -488,7 +488,7 @@ impl<'a, QI: QuantizedIndexCountTrait> BitPackedParTrait<QI> for BitPackedSlice<
 impl<'a, QI: QuantizedIndexCountTrait> Index<QI> for BitPackedSlice<'a, QI> {
     type Output = u8;
     fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.to_usize()]
+        &self.data[index.quant_to_usize()]
     }
 }
 
@@ -523,7 +523,7 @@ impl<'a, QI: QuantizedIndexCountTrait> BitPackedSliceMut<'a, QI> {
     /// Wraps an existing mutable byte slice, treating every byte as full
     /// (bit count is `data.len() * 8`, no dangling bits).
     pub fn from_bytes(data: &'a mut [u8]) -> BitPackedSliceMut<'a, QI> {
-        let number_bits = QI::from_usize(data.len() * 8);
+        let number_bits = QI::quant_from_usize(data.len() * 8);
         Self { data, number_bits }
     }
 
@@ -563,13 +563,13 @@ unsafe impl<'a, QI: QuantizedIndexCountTrait> BitPackedParMutTrait<QI> for BitPa
 impl<'a, QI: QuantizedIndexCountTrait> Index<QI> for BitPackedSliceMut<'a, QI> {
     type Output = u8;
     fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.to_usize()]
+        &self.data[index.quant_to_usize()]
     }
 }
 
 impl<'a, QI: QuantizedIndexCountTrait> IndexMut<QI> for BitPackedSliceMut<'a, QI> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.to_usize()]
+        &mut self.data[index.quant_to_usize()]
     }
 }
 
@@ -614,7 +614,7 @@ impl<QI: QuantizedIndexCountTrait, const N: usize> BitPackedArray<QI, N> {
     /// Wraps an existing array, treating every byte as full (bit count is
     /// `N * 8`, no dangling bits).
     pub fn from_array(data: [u8; N]) -> BitPackedArray<QI, N> {
-        let number_bits = QI::from_usize(N * 8);
+        let number_bits = QI::quant_from_usize(N * 8);
         Self { data, number_bits }
     }
 
@@ -655,13 +655,13 @@ unsafe impl<QI: QuantizedIndexCountTrait, const N: usize> BitPackedParMutTrait<Q
 impl<QI: QuantizedIndexCountTrait, const N: usize> Index<QI> for BitPackedArray<QI, N> {
     type Output = u8;
     fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.to_usize()]
+        &self.data[index.quant_to_usize()]
     }
 }
 
 impl<QI: QuantizedIndexCountTrait, const N: usize> IndexMut<QI> for BitPackedArray<QI, N> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.to_usize()]
+        &mut self.data[index.quant_to_usize()]
     }
 }
 

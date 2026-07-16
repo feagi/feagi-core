@@ -1,5 +1,5 @@
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex};
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use std::hash::Hash;
 
 /// Represents what type of cortical area layout is being used in a cortical area, within 2 bits

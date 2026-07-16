@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::engines::blocking::blocking_engine::BlockingEngine;
 
 pub struct RayonBurstEngine<Q: FeagiIndexQuantization> {

@@ -1,6 +1,6 @@
 use crate::engines::blocking::blocking_engine::BlockingEngine;
 use crate::engines::blocking::rayon::RayonBurstEngine;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Shorthand way to call through an enum a method implemented by all key members
 macro_rules! dispatch {

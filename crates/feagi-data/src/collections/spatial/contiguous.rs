@@ -229,7 +229,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 self.data
                     .iter()
                     .enumerate()
-                    .map(|(i, v)| (QI::from_usize(i), v))
+                    .map(|(i, v)| (QI::quant_from_usize(i), v))
             }
 
             /// Iterates over `(linear_index, &mut value)` pairs, in linear order.
@@ -238,7 +238,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 self.data
                     .iter_mut()
                     .enumerate()
-                    .map(|(i, v)| (QI::from_usize(i), v))
+                    .map(|(i, v)| (QI::quant_from_usize(i), v))
             }
 
             /// Iterates over `(coordinate, &value)` pairs, in linear order.
@@ -246,7 +246,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let dimensions = self.dimensions;
                 self.data.iter().enumerate().map(move |(i, v)| {
-                    (dimensions.linear_to_coordinate_index(QI::from_usize(i)), v)
+                    (dimensions.linear_to_coordinate_index(QI::quant_from_usize(i)), v)
                 })
             }
 
@@ -257,7 +257,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let dimensions = self.dimensions;
                 self.data.iter_mut().enumerate().map(move |(i, v)| {
-                    (dimensions.linear_to_coordinate_index(QI::from_usize(i)), v)
+                    (dimensions.linear_to_coordinate_index(QI::quant_from_usize(i)), v)
                 })
             }
 
@@ -269,7 +269,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let dimensions = self.dimensions;
                 self.data.iter().enumerate().map(move |(i, v)| {
-                    let linear_index = QI::from_usize(i);
+                    let linear_index = QI::quant_from_usize(i);
                     (linear_index, dimensions.linear_to_coordinate_index(linear_index), v)
                 })
             }
@@ -282,7 +282,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let dimensions = self.dimensions;
                 self.data.iter_mut().enumerate().map(move |(i, v)| {
-                    let linear_index = QI::from_usize(i);
+                    let linear_index = QI::quant_from_usize(i);
                     (linear_index, dimensions.linear_to_coordinate_index(linear_index), v)
                 })
             }

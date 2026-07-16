@@ -3,9 +3,8 @@ use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
 #[derive(FeagiErrorKey)]
 /// Tried bringing a value into quantization that was not in possible range of quantization
 pub struct FeagiFailQuantizationOutOfRange {
-    given_index: usize,
-    max_quantization_index: usize,
     context: &'static str,
+    given_index: usize,
 }
 
 #[derive(FeagiErrorKey)]
@@ -23,14 +22,6 @@ pub struct FeagiFailHardwareNoLikeQuant { // :3
 }
 
 #[derive(FeagiErrorKey)]
-/// Attempted to index an array or something and the index was out of range
-pub struct FeagiFailInvalidLinearIndex {
-    given_index: usize,
-    max_index_accepted: usize,
-    context: &'static str,
-}
-
-#[derive(FeagiErrorKey)]
 /// Attempted to store a percentage value that was not in range
 pub struct FeagiFailPercentageOutOfRange {
     context: &'static str,
@@ -44,7 +35,6 @@ generate_feagi_error! {
         QuantizationOutOfRange: FeagiFailQuantizationOutOfRange,
         InvalidQuantization: FeagiFailInvalidQuantization,
         IncompatibleHardware: FeagiFailHardwareNoLikeQuant,
-        InvalidLinearIndex: FeagiFailInvalidLinearIndex,
         PercentageOutOfRange: FeagiFailPercentageOutOfRange,
 
     },

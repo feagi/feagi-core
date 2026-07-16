@@ -107,7 +107,7 @@ pub trait QuantizedContiguousTrait<QI: QuantizedIndexCountTrait, V: Clone + Copy
 
     /// Number of elements, expressed in the quantized index/count type.
     fn len(&self) -> QI {
-        QI::from_usize(self.as_slice().len())
+        QI::quant_from_usize(self.as_slice().len())
     }
 
     /// Returns `true` if there are no elements.
@@ -117,7 +117,7 @@ pub trait QuantizedContiguousTrait<QI: QuantizedIndexCountTrait, V: Clone + Copy
 
     /// Copies out the element at `index`, or `None` if out of bounds.
     fn get(&self, index: QI) -> Option<V> {
-        self.as_slice().get(index.to_usize()).copied()
+        self.as_slice().get(index.quant_to_usize()).copied()
     }
 
     /// Borrows the whole collection as a [`QuantizedContiguousSlice`] view.
@@ -130,7 +130,7 @@ pub trait QuantizedContiguousTrait<QI: QuantizedIndexCountTrait, V: Clone + Copy
     /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
     fn subslice(&self, range: Range<QI>) -> Result<QuantizedContiguousSlice<'_, QI, V>, FeagiDataValueError> {
-        match self.as_slice().get(range.start.to_usize()..range.end.to_usize()) {
+        match self.as_slice().get(range.start.quant_to_usize()..range.end.quant_to_usize()) {
             Some(slice) => Ok(QuantizedContiguousSlice::new(slice)),
             None => Err(FeagiInvalidIndexErrKey::new("subslice range is out of bounds").into()),
         }
@@ -166,13 +166,13 @@ pub trait QuantizedContiguousMutTrait<QI: QuantizedIndexCountTrait, V: Clone + C
 
     /// Mutably borrows the element at `index`, or `None` if out of bounds.
     fn get_mut(&mut self, index: QI) -> Option<&mut V> {
-        self.as_mut_slice().get_mut(index.to_usize())
+        self.as_mut_slice().get_mut(index.quant_to_usize())
     }
 
     /// Overwrites the element at `index`, returning the previous value if the
     /// index was in bounds (otherwise leaves the collection untouched).
     fn set(&mut self, index: QI, value: V) -> Option<V> {
-        match self.as_mut_slice().get_mut(index.to_usize()) {
+        match self.as_mut_slice().get_mut(index.quant_to_usize()) {
             Some(slot) => {
                 let previous = *slot;
                 *slot = value;
@@ -188,7 +188,7 @@ pub trait QuantizedContiguousMutTrait<QI: QuantizedIndexCountTrait, V: Clone + C
     /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
     fn subslice_mut(&mut self, range: Range<QI>) -> Result<QuantizedContiguousSliceMut<'_, QI, V>, FeagiDataValueError> {
-        match self.as_mut_slice().get_mut(range.start.to_usize()..range.end.to_usize()) {
+        match self.as_mut_slice().get_mut(range.start.quant_to_usize()..range.end.quant_to_usize()) {
             Some(slice) => Ok(QuantizedContiguousSliceMut::new(slice)),
             None => Err(FeagiInvalidIndexErrKey::new("subslice range is out of bounds").into()),
         }
@@ -230,7 +230,7 @@ pub trait QuantizedContiguousParTrait<QI: QuantizedIndexCountTrait, V: Clone + C
     /// # Safety
     /// - `index` must be in bounds (`index < self.len()`).
     unsafe fn get_par(&self, index: QI) -> &V {
-        &*self.as_ptr().add(index.to_usize())
+        &*self.as_ptr().add(index.quant_to_usize())
     }
 }
 
@@ -265,7 +265,7 @@ pub unsafe trait QuantizedContiguousParMutTrait<QI: QuantizedIndexCountTrait, V:
     ///   for the duration of the returned borrow. Concurrent callers must only
     ///   ever target disjoint indices.
     unsafe fn get_mut_par(&self, index: QI) -> &mut V {
-        &mut *self.as_mut_ptr_par().add(index.to_usize())
+        &mut *self.as_mut_ptr_par().add(index.quant_to_usize())
     }
 }
 
@@ -290,7 +290,7 @@ impl<QI: QuantizedIndexCountTrait, V: Clone + Copy> QuantizedContiguousVector<QI
     pub fn new_uniform(number_values: QI, filling_value: V) -> QuantizedContiguousVector<QI, V> {
         // TODO ensure length isnt 0!
 
-        let values = vec![filling_value; number_values.to_usize()];
+        let values = vec![filling_value; number_values.quant_to_usize()];
         Self {
             data: values,
             phantom_data: PhantomData,
@@ -332,13 +332,13 @@ unsafe impl<QI: QuantizedIndexCountTrait, V: Clone + Copy> QuantizedContiguousPa
 impl<QI: QuantizedIndexCountTrait, V: Clone + Copy> Index<QI> for QuantizedContiguousVector<QI, V> {
     type Output = V;
     fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.to_usize()]
+        &self.data[index.quant_to_usize()]
     }
 }
 
 impl<QI: QuantizedIndexCountTrait, V: Clone + Copy> IndexMut<QI> for QuantizedContiguousVector<QI, V> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.to_usize()]
+        &mut self.data[index.quant_to_usize()]
     }
 }
 
@@ -398,7 +398,7 @@ impl<'a, QI: QuantizedIndexCountTrait, V: Clone + Copy> QuantizedContiguousParTr
 impl<'a, QI: QuantizedIndexCountTrait, V: Clone + Copy> Index<QI> for QuantizedContiguousSlice<'a, QI, V> {
     type Output = V;
     fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.to_usize()]
+        &self.data[index.quant_to_usize()]
     }
 }
 
@@ -462,13 +462,13 @@ unsafe impl<'a, QI: QuantizedIndexCountTrait, V: Clone + Copy> QuantizedContiguo
 impl<'a, QI: QuantizedIndexCountTrait, V: Clone + Copy> Index<QI> for QuantizedContiguousSliceMut<'a, QI, V> {
     type Output = V;
     fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.to_usize()]
+        &self.data[index.quant_to_usize()]
     }
 }
 
 impl<'a, QI: QuantizedIndexCountTrait, V: Clone + Copy> IndexMut<QI> for QuantizedContiguousSliceMut<'a, QI, V> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.to_usize()]
+        &mut self.data[index.quant_to_usize()]
     }
 }
 
@@ -543,13 +543,13 @@ unsafe impl<QI: QuantizedIndexCountTrait, V: Clone + Copy, const N: usize> Quant
 impl<QI: QuantizedIndexCountTrait, V: Clone + Copy, const N: usize> Index<QI> for QuantizedContiguousArray<QI, V, N> {
     type Output = V;
     fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.to_usize()]
+        &self.data[index.quant_to_usize()]
     }
 }
 
 impl<QI: QuantizedIndexCountTrait, V: Clone + Copy, const N: usize> IndexMut<QI> for QuantizedContiguousArray<QI, V, N> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.to_usize()]
+        &mut self.data[index.quant_to_usize()]
     }
 }
 
