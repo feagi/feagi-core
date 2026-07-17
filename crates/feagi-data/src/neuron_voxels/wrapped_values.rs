@@ -66,7 +66,7 @@ impl<Q: QuantizedIndexCountTrait> NeuronVoxelDimensions<Q> {
         let x = NeuronVoxelCoordinateAxis::new(Q::quant_from_usize(x));
         let y = NeuronVoxelCoordinateAxis::new(Q::quant_from_usize(y));
         let z = NeuronVoxelCoordinateAxis::new(Q::quant_from_usize(z));
-        Ok(NeuronVoxelDimensions::new(x, y, z))
+        Ok(NeuronVoxelDimensions::new_unchecked(x, y, z))
     }
 
     // TODO this should be part of the macro!
