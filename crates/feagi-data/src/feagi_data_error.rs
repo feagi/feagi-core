@@ -3,10 +3,15 @@ use crate::neuron_voxels::neuron_voxel_error::FeagiVoxelError;
 use crate::values::quantizable::FeagiDataValueQuantizationError;
 use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
 
+#[derive(FeagiErrorKey)]
+pub struct FeagiFailDataEtc {
+    context: &'static str
+}
+
 generate_feagi_error! {
     FeagiDataError,
     keys: {
-        
+        DataEtc: FeagiFailDataEtc,
     },
     sub_errors: {
         QuantizationValue: FeagiDataValueQuantizationError,

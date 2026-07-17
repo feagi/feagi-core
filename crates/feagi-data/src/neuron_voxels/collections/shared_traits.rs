@@ -8,7 +8,6 @@ pub trait NeuronVoxelCollection<FIQ: FeagiIndexQuantization,  CPQ: CorticalPoten
     /// Get the dimensions of the voxel structure
     fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensions<FIQ::NeuronIndexCountQuant>;
 
-
     fn max_linear_index(&self) -> NeuronVoxelLinearIndex<FIQ::NeuronIndexCountQuant> {
         self.get_voxel_dimensions().number_contained_elements()
     }
@@ -16,7 +15,6 @@ pub trait NeuronVoxelCollection<FIQ: FeagiIndexQuantization,  CPQ: CorticalPoten
     fn try_get_potential_by_voxel_index(&self, voxel_index: NeuronVoxelLinearIndex<FIQ::NeuronIndexCountQuant>) -> Option<&NeuronVoxelPotential<CPQ::MembranePotentialQuant>>;
 
     fn try_get_potential_by_voxel_index_mut(&mut self, voxel_index: NeuronVoxelLinearIndex<FIQ::NeuronIndexCountQuant>) -> Option<&mut NeuronVoxelPotential<CPQ::MembranePotentialQuant>>;
-
 
 
     /// Tries setting a neuron voxel potential at a voxel index. Returns any value being bumped out if it is.

@@ -1,10 +1,10 @@
 //! Collections and traits for collections of neuron voxels (where each voxel represents one or
 //! more neurons)
 
-pub mod shared_traits;
-mod contiguous_vector;
+//pub mod shared_traits;
+//mod contiguous_vector;
 
-pub use contiguous_vector::ContiguousVoxelVector;
+//pub use contiguous_vector::ContiguousVoxelVector;
 
 
 // TODO bring back others later
