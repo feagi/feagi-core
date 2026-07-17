@@ -30,6 +30,12 @@ macro_rules! create_coordinate {
                     Ok(Self::new($( $field),+))
                 }
 
+                /// Constructs from usizes without checking that each value fits within the
+                /// current quantization. Out of range values are silently truncated.
+                pub fn new_from_usizes_unchecked($( $field: usize ),+ ) -> Self {
+                    Self::new($( Q::quant_from_usize($field) ),+)
+                }
+
                 $(
                     pub fn [<get_ $field>](&self) -> &Q {
                         &self.inner[$index]
@@ -78,6 +84,20 @@ macro_rules! create_dimension {
                     Self::try_new($( $field),+)
                 }
 
+                /// Constructs without checking that each axis is non-zero. A dimension with a
+                /// zero length axis contains no coordinates and will misbehave in index math.
+                pub fn new_unchecked( $( $field: Q ),+ ) -> Self {
+                    $struct_name {
+                        inner: [ $( $field ),+ ]
+                    }
+                }
+
+                /// Constructs from usizes without checking that each value fits within the
+                /// current quantization or that each axis is non-zero.
+                pub fn new_from_usizes_unchecked($( $field: usize ),+ ) -> Self {
+                    Self::new_unchecked($( Q::quant_from_usize($field) ),+)
+                }
+
                 /// Total number of discrete coordinates contained within these dimensions
                 /// (the product of every axis).
                 pub fn number_contained_elements(&self) -> Q {
@@ -121,6 +141,18 @@ macro_rules! create_dimension {
                     Ok($coord_impl { inner: coordinate })
                 }
 
+                /// Iterates over every coordinate contained within these dimensions, incrementing
+                /// along the first axis (x) fastest, then the second (y), then the third (z), and
+                /// so on. This matches the ordering used by
+                /// [`coordinate_to_linear_index`](Self::coordinate_to_linear_index).
+                pub fn iter_coordinates(&self) -> [<$struct_name CoordinateIter>]<Q> {
+                    [<$struct_name CoordinateIter>] {
+                        dimensions: self.inner,
+                        current: [Q::QUANT_ZERO; $num_dimensions],
+                        remaining: self.number_contained_elements().quant_to_usize(),
+                    }
+                }
+
                 $(
                     pub fn [<get_ $field>](&self) -> &Q {
                         &self.inner[$index]
@@ -132,6 +164,42 @@ macro_rules! create_dimension {
                     }
                 )+
             }
+
+            #[doc = concat!("Iterator over every coordinate contained within a [`", stringify!($struct_name), "`], incrementing along the first axis (x) fastest.")]
+            $vis struct [<$struct_name CoordinateIter>]<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
+                dimensions: [Q; $num_dimensions],
+                current: [Q; $num_dimensions],
+                remaining: usize,
+            }
+
+            impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> Iterator for [<$struct_name CoordinateIter>]<Q> {
+                type Item = $coord_impl<Q>;
+
+                fn next(&mut self) -> Option<Self::Item> {
+                    if self.remaining == 0 {
+                        return None;
+                    }
+                    let coordinate = $coord_impl { inner: self.current };
+                    self.remaining -= 1;
+                    if self.remaining > 0 {
+                        // Increment odometer style, first axis (x) fastest.
+                        for (axis, size) in self.current.iter_mut().zip(self.dimensions.iter()) {
+                            *axis = *axis + Q::QUANT_ONE;
+                            if *axis < *size {
+                                break;
+                            }
+                            *axis = Q::QUANT_ZERO;
+                        }
+                    }
+                    Some(coordinate)
+                }
+
+                fn size_hint(&self) -> (usize, Option<usize>) {
+                    (self.remaining, Some(self.remaining))
+                }
+            }
+
+            impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> ExactSizeIterator for [<$struct_name CoordinateIter>]<Q> {}
         }
     };
 }
