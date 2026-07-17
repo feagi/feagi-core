@@ -1,6 +1,7 @@
 use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
 use crate::neuron_voxels::neuron_voxel_error::FeagiVoxelError;
-
+use crate::values::quantizable::FeagiDataValueQuantizationError;
+use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
 
 generate_feagi_error! {
     FeagiDataError,
@@ -8,6 +9,8 @@ generate_feagi_error! {
         
     },
     sub_errors: {
+        QuantizationValue: FeagiDataValueQuantizationError,
+        SpatialValue: FeagiDataValuesSpatialError,
         VoxelError: FeagiVoxelError,
     },
 }

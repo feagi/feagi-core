@@ -21,7 +21,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             fn clone(&self) -> Self {
                 Self {
                     data: self.data.clone(),
-                    dimensions: self.dimensions,
+                    dimensions: self.dimensions.clone(),
                 }
             }
         }
@@ -43,13 +43,13 @@ macro_rules! create_spatial_quantized_contiguous_vector {
 
             /// Wraps an existing linear vector, checking that its length matches the
             /// number of elements described by `dimensions`.
-            pub fn try_from_vector(
+            pub fn try_from_linear_vector(
                 data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<QI, V>,
                 dimensions: $dim_impl<QI>,
-            ) -> Result<$struct_name<QI, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
+            ) -> Result<$struct_name<QI, V>, $crate::collections::feagi_data_collections_errorFeagiDataValueError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 if data.len() != dimensions.number_contained_elements() {
-                    return Err($crate::values::feagi_data_value_error::FeagiDimensionsErrKey::new(
+                    return Err($crate::collections::feagi_data_collections_error::FeagiFailCollectionDimensionMismatch::new(
                         "backing vector length does not match the given dimensions",
                     )
                     .into());
@@ -62,15 +62,15 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn try_from_vec(
                 data: Vec<V>,
                 dimensions: $dim_impl<QI>,
-            ) -> Result<$struct_name<QI, V>, $crate::values::feagi_data_value_error::FeagiDataValueError> {
-                Self::try_from_vector(
+            ) -> Result<$struct_name<QI, V>, $crate::collections::feagi_data_collections_errorFeagiDataValueError> {
+                Self::try_from_linear_vector(
                     $crate::collections::linear::contiguous_data::QuantizedContiguousVector::from_vec(data),
                     dimensions,
                 )
             }
 
             /// Consumes the wrapper, returning the backing linear vector.
-            pub fn into_vector(
+            pub fn into_linear_vector(
                 self,
             ) -> $crate::collections::linear::contiguous_data::QuantizedContiguousVector<QI, V> {
                 self.data
@@ -87,7 +87,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             }
 
             /// Total number of elements, expressed in the quantized index/count type.
-            pub fn len(&self) -> QI {
+            pub fn number_contained_elements(&self) -> QI {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.data.len()
             }
@@ -100,27 +100,26 @@ macro_rules! create_spatial_quantized_contiguous_vector {
 
             //region Coordinate <-> linear index
 
-            /// Returns `true` if every axis of `coordinate` is within the bounds of
-            /// this collection's dimensions.
+            /// Returns `true` if the given coordinate is within bounds
             pub fn contains_coordinate(&self, coordinate: &$coord_impl<QI>) -> bool {
-                for (axis, size) in coordinate.inner.iter().zip(self.dimensions.inner.iter()) {
-                    if *axis >= *size {
-                        return false;
-                    }
-                }
-                true
+                self.dimensions.contains_coordinate(coordinate)
+            }
+            
+            /// Returns `true` if the given index is within bounds
+            pub fn contains_linear_index(&self, linear_index: QI) -> bool {
+                self.dimensions.contains_linear_index(linear_index)
             }
 
             /// Converts a coordinate into its linear index, with the first axis
             /// varying fastest. Does not bounds-check the coordinate.
-            pub fn coordinate_to_linear_index(&self, coordinate: $coord_impl<QI>) -> QI {
-                self.dimensions.coordinate_to_linear_index(coordinate)
+            pub fn coordinate_to_linear_index(&self, coordinate: $coord_impl<QI>) ->  Result<Q, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                self.dimensions.coordinate_to_linear_index(coordinate).map_err(|_|)
             }
 
             /// Converts a linear index back into its coordinate, the inverse of
             /// [`coordinate_to_linear_index`](Self::coordinate_to_linear_index).
-            pub fn linear_to_coordinate(&self, linear_index: QI) -> $coord_impl<QI> {
-                self.dimensions.linear_to_coordinate_index(linear_index)
+            pub fn linear_index_to_coordinate(&self, linear_index: QI) -> $coord_impl<QI> {
+                self.dimensions.linear_index_to_coordinate(linear_index)
             }
 
             //endregion
@@ -246,7 +245,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let dimensions = self.dimensions;
                 self.data.iter().enumerate().map(move |(i, v)| {
-                    (dimensions.linear_to_coordinate_index(QI::quant_from_usize(i)), v)
+                    (dimensions.linear_index_to_coordinate(QI::quant_from_usize(i)), v)
                 })
             }
 
@@ -257,7 +256,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let dimensions = self.dimensions;
                 self.data.iter_mut().enumerate().map(move |(i, v)| {
-                    (dimensions.linear_to_coordinate_index(QI::quant_from_usize(i)), v)
+                    (dimensions.linear_index_to_coordinate(QI::quant_from_usize(i)), v)
                 })
             }
 
@@ -270,7 +269,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 let dimensions = self.dimensions;
                 self.data.iter().enumerate().map(move |(i, v)| {
                     let linear_index = QI::quant_from_usize(i);
-                    (linear_index, dimensions.linear_to_coordinate_index(linear_index), v)
+                    (linear_index, dimensions.linear_index_to_coordinate(linear_index), v)
                 })
             }
 
@@ -283,7 +282,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 let dimensions = self.dimensions;
                 self.data.iter_mut().enumerate().map(move |(i, v)| {
                     let linear_index = QI::quant_from_usize(i);
-                    (linear_index, dimensions.linear_to_coordinate_index(linear_index), v)
+                    (linear_index, dimensions.linear_index_to_coordinate(linear_index), v)
                 })
             }
 
@@ -318,42 +317,6 @@ macro_rules! create_spatial_quantized_contiguous_vector {
     }
 }
 
-#[macro_export]
-macro_rules! create_spatial_bitpacked_vector {
-    (
-        $(#[$meta:meta])*
-        $vis:vis $struct_name:ident,
-        $coord_impl:ident,
-        $dim_impl:ident,
-        $num_dimensions:expr,
-    ) => {
-        $(#[$meta])*
-        $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedIndexCountTrait> {
-            pub(crate) data: $crate::collections::linear::bitpacked::BitPackedVector,
-            pub(crate) dimensions: $dim_impl<QI>
-        }
-
-        impl<QI: $crate::values::quantizable::QuantizedIndexCountTrait> $struct_name<QI>
-        {
-            pub fn new_uniform(dimensions: $dim_impl<QI>, initial_state: bool) -> $struct_name<QI> {
-                let linear = dimensions.max_linear_index();
-
-                let values: Vec<u8> = if initial_state
-                { vec![255; linear.to_usize()] }
-                else { vec![0; linear.to_usize()] };
-
-                Self {
-                    data: $crate::collections::linear::bitpacked::BitPackedVector::new_uniform(linear, initial_state),
-                    dimensions
-                }
-            }
-
-            // TODO with iter
-
-            // TODO getters, setters, also with slices, with checks, iterators
-        }
-    }
-}
 
 // These are the base spatial contiguous vectors, mirroring the base coordinate /
 // dimension types defined in `crate::values::spatial::quantizable_index`.

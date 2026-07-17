@@ -51,28 +51,28 @@ impl QuantizationLevelPacking for DecimalQuantizationLevel {
 
 /// Quantizable data for some decimal value (float)
 pub trait QuantizedDecimalTrait:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + Default
-    + core::ops::Add<Output = Self>
-    + core::ops::Sub<Output = Self>
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::AddAssign
-    + core::ops::SubAssign
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + core::cmp::PartialOrd
-    + core::fmt::Debug
-    + core::fmt::Display
-    + Sized
-    + 'static
-    + QuantizedElementBase
+Copy
++ Clone
++ Send
++ Sync
++ Default
++ core::ops::Add<Output=Self>
++ core::ops::Sub<Output=Self>
++ core::ops::Mul<Output=Self>
++ core::ops::Div<Output=Self>
++ core::ops::AddAssign
++ core::ops::SubAssign
++ core::ops::MulAssign
++ core::ops::DivAssign
++ core::cmp::PartialOrd
++ core::fmt::Debug
++ core::fmt::Display
++ Sized
++ 'static
++ QuantizedElementBase
 {
     const LEVEL: DecimalQuantizationLevel;
-    
+
     fn quant_to_storage_f8(self) -> StorageF8;
     fn quant_from_storage_f8(v: StorageF8) -> Self;
 
@@ -98,7 +98,6 @@ pub trait QuantizedDecimalTrait:
 
     /// Restricts itself to a given range
     fn quant_clamp(self, min: Self, max: Self) -> Self;
-
 
     fn scale_self_by_unsigned_percentage<OTHER: QuantizedDecimalTrait>(self, p: PercentageUnsigned<OTHER>) -> Self {
         // percentages will always be in valid range, we dont need a checked conversion
@@ -164,7 +163,7 @@ impl QuantizedDecimalTrait for StorageF8 {
 
 impl QuantizedDecimalTrait for f16 {
     const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F16;
-    
+
     fn quant_to_storage_f8(self) -> StorageF8 {
         todo!()
     }
@@ -216,7 +215,7 @@ impl QuantizedDecimalTrait for f16 {
 
 impl QuantizedDecimalTrait for bf16 {
     const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::BF16;
-    
+
     fn quant_to_storage_f8(self) -> StorageF8 {
         todo!()
     }
@@ -268,7 +267,7 @@ impl QuantizedDecimalTrait for bf16 {
 
 impl QuantizedDecimalTrait for f32 {
     const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F32;
-    
+
     fn quant_to_storage_f8(self) -> StorageF8 {
         todo!()
     }

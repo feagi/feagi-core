@@ -1,42 +1,35 @@
-use crate::values::feagi_data_value_error::{FeagiInvalidIndexErrKey, FeagiDataValueError};
-use crate::values::quantizable::QuantizedIndexCountTrait;
 use core::ops::{Index, IndexMut, Range};
+use crate::values::quantizable::QuantizedIndexCountTrait;
+use crate::collections::feagi_data_collections_error::{FeagiDataCollectionError, FeagiFailCollectionInvalidIndex};
 
-/// Generates read-only [`Index`] impls for every std range kind (`Range`,
-/// `RangeInclusive`, `RangeFrom`, `RangeTo`, `RangeFull`) so a bit-packed
-/// collection can be sub-sliced with a quantized *byte* range directly, yielding
-/// a `[u8]` slice.
-///
-/// `$qi` must be passed as a separate token (rather than reused from the generic
-/// list) so it shares the caller's macro hygiene context; the impl body
-/// delegates to the `self.data` backing store.
+
 macro_rules! impl_bitpacked_range_read {
     ($self_ty:ty, $qi:ty, [$($generics:tt)*]) => {
         impl<$($generics)*> Index<Range<$qi>> for $self_ty {
             type Output = [u8];
             fn index(&self, range: Range<$qi>) -> &Self::Output {
-                &self.data[range.start.to_usize()..range.end.to_usize()]
+                &self.data[range.start.quant_to_usize()..range.end.quant_to_usize()]
             }
         }
 
         impl<$($generics)*> Index<core::ops::RangeInclusive<$qi>> for $self_ty {
             type Output = [u8];
             fn index(&self, range: core::ops::RangeInclusive<$qi>) -> &Self::Output {
-                &self.data[range.start().to_usize()..=range.end().to_usize()]
+                &self.data[range.start().quant_to_usize()..=range.end().quant_to_usize()]
             }
         }
 
         impl<$($generics)*> Index<core::ops::RangeFrom<$qi>> for $self_ty {
             type Output = [u8];
             fn index(&self, range: core::ops::RangeFrom<$qi>) -> &Self::Output {
-                &self.data[range.start.to_usize()..]
+                &self.data[range.start.quant_to_usize()..]
             }
         }
 
         impl<$($generics)*> Index<core::ops::RangeTo<$qi>> for $self_ty {
             type Output = [u8];
             fn index(&self, range: core::ops::RangeTo<$qi>) -> &Self::Output {
-                &self.data[..range.end.to_usize()]
+                &self.data[..range.end.quant_to_usize()]
             }
         }
 
@@ -49,34 +42,31 @@ macro_rules! impl_bitpacked_range_read {
     };
 }
 
-/// Companion to [`impl_bitpacked_range_read`] that additionally generates the
-/// [`IndexMut`] impls for the same set of *byte* range kinds. Only for
-/// collections whose `self.data` supports mutable slicing.
 macro_rules! impl_bitpacked_range_read_write {
     ($self_ty:ty, $qi:ty, [$($generics:tt)*]) => {
         impl_bitpacked_range_read!($self_ty, $qi, [$($generics)*]);
 
         impl<$($generics)*> IndexMut<Range<$qi>> for $self_ty {
             fn index_mut(&mut self, range: Range<$qi>) -> &mut Self::Output {
-                &mut self.data[range.start.to_usize()..range.end.to_usize()]
+                &mut self.data[range.start.quant_to_usize()..range.end.quant_to_usize()]
             }
         }
 
         impl<$($generics)*> IndexMut<core::ops::RangeInclusive<$qi>> for $self_ty {
             fn index_mut(&mut self, range: core::ops::RangeInclusive<$qi>) -> &mut Self::Output {
-                &mut self.data[range.start().to_usize()..=range.end().to_usize()]
+                &mut self.data[range.start().quant_to_usize()..=range.end().quant_to_usize()]
             }
         }
 
         impl<$($generics)*> IndexMut<core::ops::RangeFrom<$qi>> for $self_ty {
             fn index_mut(&mut self, range: core::ops::RangeFrom<$qi>) -> &mut Self::Output {
-                &mut self.data[range.start.to_usize()..]
+                &mut self.data[range.start.quant_to_usize()..]
             }
         }
 
         impl<$($generics)*> IndexMut<core::ops::RangeTo<$qi>> for $self_ty {
             fn index_mut(&mut self, range: core::ops::RangeTo<$qi>) -> &mut Self::Output {
-                &mut self.data[..range.end.to_usize()]
+                &mut self.data[..range.end.quant_to_usize()]
             }
         }
 
@@ -98,29 +88,13 @@ fn number_bits_to_number_bytes(n: usize) -> usize {
     }
 }
 
-/// Shared, read-only behaviour for every bit-packed quantized collection in this
-/// module (the owned [`BitPackedVector`], the borrowed [`BitPackedSlice`] /
-/// [`BitPackedSliceMut`] views, and the fixed-size [`BitPackedArray`]).
-///
-/// Storage is a run of `u8` *bytes*, but the collection exposes two granularities:
-/// individual *bits* (booleans) via [`Self::get_bit`], and whole *bytes* via
-/// [`Self::get_byte`] plus the [`Index`] impls. Only byte access supports the
-/// (unsafe) parallel traits — parallel access to individual bits makes no sense
-/// because bits within a byte are not independently addressable.
-///
-/// Implementors only need to expose their backing storage via [`Self::as_bytes`]
-/// and their logical bit count via [`Self::number_addressable_bits`] (plus the [`Index`]
-/// impls required by the supertrait bounds); everything else is provided as
-/// default methods.
-///
-/// The [`Index<Range<QI>>`] supertrait lets callers index with a quantized
-/// *byte* range directly (`collection[start..end] -> &[u8]`) instead of
-/// converting to `usize` at every call site.
+
 pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> + Index<Range<QI>, Output = [u8]> {
     /// Borrows the backing storage as a regular shared byte slice.
     fn as_bytes(&self) -> &[u8];
 
-    /// Total number of addressable bits (booleans) held by this collection.
+    /// Total number of addressable bits (booleans) held by this collection. Note that some bits
+    /// may not be accessible (dangling)
     fn number_addressable_bits(&self) -> QI;
 
     /// Number of bytes backing this collection.
@@ -141,18 +115,20 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> +
     }
 
     /// Copies out the bit at `index`, or `None` if out of bounds.
-    fn get_bit(&self, index: QI) -> Option<bool> {
-        let bit = index.quant_to_usize();
+    fn get_bit(&self, bit_index: QI) -> Option<bool> {
+        let bit = bit_index.quant_to_usize();
         if bit >= self.number_addressable_bits().quant_to_usize() {
             return None;
         }
-        let byte = self.as_bytes()[bit / 8];
-        Some((byte >> (bit % 8)) & 1 == 1)
+        // ' >> 3' is the same as ' / 8'
+        let byte = self.as_bytes()[bit >> 3];
+        // '& 0b00000111' is the same as  '% 8'
+        Some((byte >> (bit & 0b00000111)) & 1 == 1)
     }
 
     /// Copies out the whole byte at `index`, or `None` if out of bounds.
-    fn get_byte(&self, index: QI) -> Option<u8> {
-        self.as_bytes().get(index.quant_to_usize()).copied()
+    fn get_byte(&self, bool_index: QI) -> Option<u8> {
+        self.as_bytes().get(bool_index.quant_to_usize()).copied()
     }
 
     /// Borrows the whole collection as a [`BitPackedSlice`] view.
@@ -164,18 +140,26 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> +
     /// resulting view treats every byte as full (its bit count is `bytes * 8`),
     /// so any dangling bits of the original collection are not carried over.
     ///
-    /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
+    /// Returns [`FeagiFailCollectionInvalidIndex`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
-    fn subslice_bytes(&self, range: Range<QI>) -> Result<BitPackedSlice<'_, QI>, FeagiDataValueError> {
+    fn subslice(&self, range: Range<QI>) -> Result<BitPackedSlice<'_, QI>, FeagiDataCollectionError> {
         match self.as_bytes().get(range.start.quant_to_usize()..range.end.quant_to_usize()) {
             Some(slice) => {
                 let bits = QI::quant_from_usize(slice.len() * 8);
                 Ok(BitPackedSlice::new(slice, bits))
             }
-            None => Err(FeagiInvalidIndexErrKey::new("subslice byte range is out of bounds").into()),
+            None => Err(FeagiFailCollectionInvalidIndex::new("subslice byte range is out of bounds").into()),
         }
     }
 
+    /// Copies the internal bytes and total length to a new owned vector structure
+    fn clone_to_owned(&self) -> BitPackedVector<QI> {
+        BitPackedVector::from_vec_with_bits(
+            self.as_bytes().to_vec(),
+            self.number_addressable_bits(),
+        )
+    }
+    
     /// Iterates over shared references to the bytes.
     fn iter_bytes(&self) -> core::slice::Iter<'_, u8> {
         self.as_bytes().iter()
@@ -253,15 +237,15 @@ pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
     /// view. The resulting view treats every byte as full (its bit count is
     /// `bytes * 8`).
     ///
-    /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
+    /// Returns [`FeagiFailCollectionInvalidIndex`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
-    fn subslice_bytes_mut(&mut self, range: Range<QI>) -> Result<BitPackedSliceMut<'_, QI>, FeagiDataValueError> {
+    fn subslice_bytes_mut(&mut self, range: Range<QI>) -> Result<BitPackedSliceMut<'_, QI>, FeagiDataCollectionError> {
         match self.as_mut_bytes().get_mut(range.start.quant_to_usize()..range.end.quant_to_usize()) {
             Some(slice) => {
                 let bits = QI::quant_from_usize(slice.len() * 8);
                 Ok(BitPackedSliceMut::new(slice, bits))
             }
-            None => Err(FeagiInvalidIndexErrKey::new("subslice byte range is out of bounds").into()),
+            None => Err(FeagiFailCollectionInvalidIndex::new("subslice byte range is out of bounds").into()),
         }
     }
 
@@ -678,6 +662,20 @@ impl<QI: QuantizedIndexCountTrait, const N: usize> From<[u8; N]> for BitPackedAr
 
 //endregion
 
+
+
+
+
+
+
+
+
+
+/*
 pub fn byte_index_to_first_bit_index(byte_index: usize) -> usize {
     byte_index << 3
 }
+
+ */
+
+

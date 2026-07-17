@@ -1,4 +1,3 @@
-
 /// Common trait for the enums describing the quantization level which establishes a standard
 /// way to read / write the data from a byte. Enforces that the bits encoding this are on the X
 /// first (right side) of a byte, with X being configurable on implementation. This allows the

@@ -1,42 +1,35 @@
-use crate::values::feagi_data_value_error::{FeagiInvalidIndexErrKey, FeagiDataValueError};
-use crate::values::quantizable::QuantizedIndexCountTrait;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
+use crate::values::quantizable::QuantizedIndexCountTrait;
+use crate::collections::feagi_data_collections_error::{FeagiDataCollectionError, FeagiFailCollectionInvalidIndex};
 
-/// Generates read-only [`Index`] impls for every std range kind (`Range`,
-/// `RangeInclusive`, `RangeFrom`, `RangeTo`, `RangeFull`) so a collection can be
-/// sub-sliced with a quantized range directly, yielding a `[$elem]` slice.
-///
-/// `$qi`/`$elem` must be passed as separate tokens (rather than reused from the
-/// generic list) so they share the caller's macro hygiene context; the impl body
-/// delegates to the `self.data` backing store.
 macro_rules! impl_quantized_range_read {
     ($self_ty:ty, $qi:ty, $elem:ty, [$($generics:tt)*]) => {
         impl<$($generics)*> Index<Range<$qi>> for $self_ty {
             type Output = [$elem];
             fn index(&self, range: Range<$qi>) -> &Self::Output {
-                &self.data[range.start.to_usize()..range.end.to_usize()]
+                &self.data[range.start.quant_to_usize()..range.end.quant_to_usize()]
             }
         }
 
         impl<$($generics)*> Index<core::ops::RangeInclusive<$qi>> for $self_ty {
             type Output = [$elem];
             fn index(&self, range: core::ops::RangeInclusive<$qi>) -> &Self::Output {
-                &self.data[range.start().to_usize()..=range.end().to_usize()]
+                &self.data[range.start().quant_to_usize()..=range.end().quant_to_usize()]
             }
         }
 
         impl<$($generics)*> Index<core::ops::RangeFrom<$qi>> for $self_ty {
             type Output = [$elem];
             fn index(&self, range: core::ops::RangeFrom<$qi>) -> &Self::Output {
-                &self.data[range.start.to_usize()..]
+                &self.data[range.start.quant_to_usize()..]
             }
         }
 
         impl<$($generics)*> Index<core::ops::RangeTo<$qi>> for $self_ty {
             type Output = [$elem];
             fn index(&self, range: core::ops::RangeTo<$qi>) -> &Self::Output {
-                &self.data[..range.end.to_usize()]
+                &self.data[..range.end.quant_to_usize()]
             }
         }
 
@@ -49,34 +42,31 @@ macro_rules! impl_quantized_range_read {
     };
 }
 
-/// Companion to [`impl_quantized_range_read`] that additionally generates the
-/// [`IndexMut`] impls for the same set of range kinds. Only for collections whose
-/// `self.data` supports mutable slicing.
 macro_rules! impl_quantized_range_read_write {
     ($self_ty:ty, $qi:ty, $elem:ty, [$($generics:tt)*]) => {
         impl_quantized_range_read!($self_ty, $qi, $elem, [$($generics)*]);
 
         impl<$($generics)*> IndexMut<Range<$qi>> for $self_ty {
             fn index_mut(&mut self, range: Range<$qi>) -> &mut Self::Output {
-                &mut self.data[range.start.to_usize()..range.end.to_usize()]
+                &mut self.data[range.start.quant_to_usize()..range.end.quant_to_usize()]
             }
         }
 
         impl<$($generics)*> IndexMut<core::ops::RangeInclusive<$qi>> for $self_ty {
             fn index_mut(&mut self, range: core::ops::RangeInclusive<$qi>) -> &mut Self::Output {
-                &mut self.data[range.start().to_usize()..=range.end().to_usize()]
+                &mut self.data[range.start().quant_to_usize()..=range.end().quant_to_usize()]
             }
         }
 
         impl<$($generics)*> IndexMut<core::ops::RangeFrom<$qi>> for $self_ty {
             fn index_mut(&mut self, range: core::ops::RangeFrom<$qi>) -> &mut Self::Output {
-                &mut self.data[range.start.to_usize()..]
+                &mut self.data[range.start.quant_to_usize()..]
             }
         }
 
         impl<$($generics)*> IndexMut<core::ops::RangeTo<$qi>> for $self_ty {
             fn index_mut(&mut self, range: core::ops::RangeTo<$qi>) -> &mut Self::Output {
-                &mut self.data[..range.end.to_usize()]
+                &mut self.data[..range.end.quant_to_usize()]
             }
         }
 
@@ -127,13 +117,19 @@ pub trait QuantizedContiguousTrait<QI: QuantizedIndexCountTrait, V: Clone + Copy
 
     /// Borrows a half-open sub-range as a [`QuantizedContiguousSlice`] view.
     ///
-    /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
+    /// Returns [`FeagiFailCollectionInvalidIndex`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
-    fn subslice(&self, range: Range<QI>) -> Result<QuantizedContiguousSlice<'_, QI, V>, FeagiDataValueError> {
+    fn subslice(&self, range: Range<QI>) -> Result<QuantizedContiguousSlice<'_, QI, V>, FeagiDataCollectionError> {
         match self.as_slice().get(range.start.quant_to_usize()..range.end.quant_to_usize()) {
             Some(slice) => Ok(QuantizedContiguousSlice::new(slice)),
-            None => Err(FeagiInvalidIndexErrKey::new("subslice range is out of bounds").into()),
+            None => Err(FeagiFailCollectionInvalidIndex::new("subslice range is out of bounds").into()),
         }
+    }
+
+    /// Copies the internal data to a new owned vector structure
+    fn clone_to_owned(&self) -> QuantizedContiguousVector<QI, V>
+    {
+        QuantizedContiguousVector::from_vec(self.as_slice().to_vec())
     }
 
     /// Iterates over shared references to the elements.
@@ -185,12 +181,12 @@ pub trait QuantizedContiguousMutTrait<QI: QuantizedIndexCountTrait, V: Clone + C
     /// Mutably borrows a half-open sub-range as a
     /// [`QuantizedContiguousSliceMut`] view.
     ///
-    /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
+    /// Returns [`FeagiFailCollectionInvalidIndex`] if `range` is out of bounds or its
     /// start is greater than its end (rather than panicking like `self[range]`).
-    fn subslice_mut(&mut self, range: Range<QI>) -> Result<QuantizedContiguousSliceMut<'_, QI, V>, FeagiDataValueError> {
+    fn subslice_mut(&mut self, range: Range<QI>) -> Result<QuantizedContiguousSliceMut<'_, QI, V>, FeagiDataCollectionError> {
         match self.as_mut_slice().get_mut(range.start.quant_to_usize()..range.end.quant_to_usize()) {
             Some(slice) => Ok(QuantizedContiguousSliceMut::new(slice)),
-            None => Err(FeagiInvalidIndexErrKey::new("subslice range is out of bounds").into()),
+            None => Err(FeagiFailCollectionInvalidIndex::new("subslice range is out of bounds").into()),
         }
     }
 

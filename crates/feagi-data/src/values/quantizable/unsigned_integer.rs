@@ -46,31 +46,30 @@ impl QuantizationLevelPacking for UnsignedIntegerQuantizationLevel {
 
 /// Trait designed to hold uint data values in a quantized form
 pub trait QuantizedUnsignedIntegerTrait:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + Default
-    + core::ops::Add<Output = Self>
-    + core::ops::Sub<Output = Self>
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::AddAssign
-    + core::ops::SubAssign
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + core::cmp::PartialOrd
-    + core::fmt::Debug
-    + core::fmt::Display
-    + core::ops::Rem<Output = Self>
-    + core::ops::RemAssign
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Sized
-    + 'static
-    + QuantizedElementBase
-{
-}
+Copy
++ Clone
++ Send
++ Sync
++ Default
++ core::ops::Add<Output=Self>
++ core::ops::Sub<Output=Self>
++ core::ops::Mul<Output=Self>
++ core::ops::Div<Output=Self>
++ core::ops::AddAssign
++ core::ops::SubAssign
++ core::ops::MulAssign
++ core::ops::DivAssign
++ core::cmp::PartialOrd
++ core::fmt::Debug
++ core::fmt::Display
++ core::ops::Rem<Output=Self>
++ core::ops::RemAssign
++ core::cmp::Eq
++ core::hash::Hash
++ Sized
++ 'static
++ QuantizedElementBase
+{}
 
 impl QuantizedUnsignedIntegerTrait for usize {}
 

@@ -15,7 +15,8 @@ pub struct FeagiFailInvalidQuantization {
 
 #[derive(FeagiErrorKey)]
 /// Attempted to use a quantization level on a device that does not support it
-pub struct FeagiFailHardwareNoLikeQuant { // :3
+pub struct FeagiFailHardwareNoLikeQuant {
+    // :3
     context: &'static str,
     hardware_type: &'static str, // TODO maybe this should be an enum?
     attempted_quant: &'static str,

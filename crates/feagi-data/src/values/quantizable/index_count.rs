@@ -44,30 +44,30 @@ impl QuantizationLevelPacking for IndexCountQuantizationLevel {
 
 /// Trait designed to hold index and/or count values in a quantized form
 pub trait QuantizedIndexCountTrait:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + Default
-    + core::ops::Add<Output = Self>
-    + core::ops::Sub<Output = Self>
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::AddAssign
-    + core::ops::SubAssign
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + core::cmp::PartialOrd
-    + core::iter::Sum
-    + core::fmt::Debug
-    + core::fmt::Display
-    + core::ops::Rem<Output = Self>
-    + core::ops::RemAssign
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Sized
-    + 'static
-    + QuantizedElementBase
+Copy
++ Clone
++ Send
++ Sync
++ Default
++ core::ops::Add<Output=Self>
++ core::ops::Sub<Output=Self>
++ core::ops::Mul<Output=Self>
++ core::ops::Div<Output=Self>
++ core::ops::AddAssign
++ core::ops::SubAssign
++ core::ops::MulAssign
++ core::ops::DivAssign
++ core::cmp::PartialOrd
++ core::iter::Sum
++ core::fmt::Debug
++ core::fmt::Display
++ core::ops::Rem<Output=Self>
++ core::ops::RemAssign
++ core::cmp::Eq
++ core::hash::Hash
++ Sized
++ 'static
++ QuantizedElementBase
 {
     const QUANT_MAX: Self;
     const QUANT_MAX_AS_USIZE: usize;
@@ -113,10 +113,10 @@ pub trait QuantizedIndexCountTrait:
     fn quant_from_u64_clamped(value: u64) -> Self {
         Self::quant_from_u64(value)
     }
-    
+
     /// Tries converting from usize, returns an error if out of bounds
     fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError>;
-    
+
     /// Tries converting from u8, returns an error if out of bounds
     fn quant_try_from_u8(value: u8) -> Result<Self, FeagiDataValueQuantizationError>;
     /// Tries converting to u8, returns an error if out of bounds
@@ -710,12 +710,12 @@ macro_rules! create_wrapped_quantized_index {
             pub fn try_to_u64(self) -> Result<u64, $crate::values::quantizable::FeagiDataValueQuantizationError> {
                 self.0.quant_try_to_u64()
             }
-            
+
             pub fn try_from_usize(value: usize) -> Result<Self, $crate::values::quantizable::FeagiDataValueQuantizationError> {
                  Ok(Self(Q::quant_try_from_usize(value)?))
             }
-            
-            
+
+
             /// Extracts the inner quantized index / count
             pub fn deref(self) -> Q {
                 self.0

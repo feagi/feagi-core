@@ -1,1 +1,2 @@
-pub mod contiguous;
+pub mod contiguous_data;
+pub mod bitpacked;
