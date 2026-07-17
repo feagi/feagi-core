@@ -43,13 +43,12 @@ where
         _custom_context: &Self::CustomContext,
         potential_write_target: &mut NeuronMembranePotential<CPQOut::MembranePotentialQuant>,
     ) {
-        
-        // TODO going through f32?
-        *potential_write_target += NeuronMembranePotential::from_f32(outgoing_potential.to_f32() * axon_bundle_data.multiplier.to_f32());
+        let incoming_potential = outgoing_potential.deref().to_quantization::<SMQ::MultiplierQuant>() * axon_bundle_data.multiplier.deref();
+        *potential_write_target += NeuronMembranePotential::from_quantization(incoming_potential);
     }
 
     fn get_psp_uniformity_weight(axon_bundle_data: &BasicSynapseModelAxonBundleData<SMQ>) -> CPQIn::MembranePotentialQuant {
-        // TODO this is dumb :3
-        CPQIn::MembranePotentialQuant::quant_from_f32(axon_bundle_data.multiplier.to_f32())
+        // TODO this is dumb
+        CPQIn::MembranePotentialQuant::from_quantization(axon_bundle_data.multiplier.deref())
     }
 }

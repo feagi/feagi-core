@@ -1,11 +1,22 @@
-use feagi_data::create_wrapped_index;
+use feagi_data::feagi_quantization_levels::feagi_index_quantization::{FeagiIndexQuantization};
 
-create_wrapped_index!(
-    /// Denotes the index for grouping cortical_area units of the same type within a genome.
-    pub CorticalUnitIndex, u8
-);
 
-create_wrapped_index!(
-    /// Denotes the index for a cortical area within a cortical unit
-    pub CorticalSubUnitIndex, u8
-);
+/// Denotes the index for grouping cortical_area units of the same type within a genome.
+pub type CorticalUnitIndex = generics::CorticalUnitIndexQuant<u8>;
+
+/// Denotes the index for a cortical area within a cortical unit
+pub type CorticalSubUnitIndex = generics::CorticalSubUnitIndexQuant<u8>;
+
+pub mod generics {
+    use feagi_data::create_wrapped_quantized_index;
+
+    create_wrapped_quantized_index!(
+        /// Denotes the index for grouping cortical_area units of the same type within a genome.
+        pub CorticalUnitIndexQuant
+    );
+
+    create_wrapped_quantized_index!(
+        /// Denotes the index for a cortical area within a cortical unit
+        pub CorticalSubUnitIndexQuant
+    );
+}

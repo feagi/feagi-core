@@ -221,6 +221,7 @@ version = "0.0.12"
 dependencies = [
  "enum_delegate",
  "feagi-data",
+ "half",
  "paste",
 ]
 

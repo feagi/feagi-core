@@ -685,3 +685,4 @@ macro_rules! create_wrapped_quantized_index {
 
     };
 }
+

@@ -15,4 +15,5 @@ feagi-data = {path = "../feagi-data" }
 
 paste = {workspace = true}
 enum_delegate = {workspace = true}
+half = {workspace = true}
 
