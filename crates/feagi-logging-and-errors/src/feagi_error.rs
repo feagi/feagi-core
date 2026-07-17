@@ -18,7 +18,7 @@ macro_rules! generate_feagi_error {
         $(#[doc = $doc])?
         #[derive(FeagiError)]
         pub enum $error_name {
-            $( $key_name($key_type) ),*
+            $( $key_name($key_type) ),*,
             $( $sub_error_name($sub_error_type) ),*
         }
 

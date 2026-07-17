@@ -69,6 +69,44 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 )
             }
 
+            /// Total number of elements, expressed in the quantized index/count type.
+            pub fn number_contained_elements(&self) -> QI {
+                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                self.data.len()
+            }
+
+            /// Returns `true` if the given coordinate is within bounds
+            pub fn contains_coordinate(&self, coordinate: &$coord_impl<QI>) -> bool {
+                self.dimensions.contains_coordinate(coordinate)
+            }
+
+            /// Returns `true` if the given index is within bounds
+            pub fn contains_linear_index(&self, linear_index: QI) -> bool {
+                self.dimensions.contains_linear_index(linear_index)
+            }
+
+            /// Converts a coordinate into its linear index, with the first axis
+            /// varying fastest.
+            pub fn coordinate_to_linear_index(&self, coordinate: $coord_impl<QI>) ->  Result<Q, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                self.dimensions.coordinate_to_linear_index(coordinate).into()
+            }
+
+            /// Converts an index to a coordinate
+            pub fn linear_index_to_coordinate(&self, linear_index: QI) ->  Result<$coord_impl<QI>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                self.dimensions.linear_index_to_coordinate(linear_index).into()
+            }
+
+            /// Converts a coordinate into its linear index, with the first axis
+            /// varying fastest. Doesn't check bounds.
+            pub fn coordinate_to_linear_index_unchecked(&self, coordinate: $coord_impl<QI>) ->  Q {
+                self.dimensions.coordinate_to_linear_index_unchecked(coordinate).into()
+            }
+
+            /// Converts an index to a coordinate. Doesnt check bounds
+            pub fn linear_index_to_coordinate_unchecked(&self, linear_index: QI) ->  $coord_impl<QI> {
+                self.dimensions.linear_index_to_coordinate_unchecked(linear_index).into()
+            }
+
             /// Consumes the wrapper, returning the backing linear vector.
             pub fn into_linear_vector(
                 self,
@@ -86,43 +124,11 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 &self.dimensions
             }
 
-            /// Total number of elements, expressed in the quantized index/count type.
-            pub fn number_contained_elements(&self) -> QI {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
-                self.data.len()
-            }
-
             /// Returns `true` if there are no elements.
             pub fn is_empty(&self) -> bool {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.data.is_empty()
             }
-
-            //region Coordinate <-> linear index
-
-            /// Returns `true` if the given coordinate is within bounds
-            pub fn contains_coordinate(&self, coordinate: &$coord_impl<QI>) -> bool {
-                self.dimensions.contains_coordinate(coordinate)
-            }
-            
-            /// Returns `true` if the given index is within bounds
-            pub fn contains_linear_index(&self, linear_index: QI) -> bool {
-                self.dimensions.contains_linear_index(linear_index)
-            }
-
-            /// Converts a coordinate into its linear index, with the first axis
-            /// varying fastest. Does not bounds-check the coordinate.
-            pub fn coordinate_to_linear_index(&self, coordinate: $coord_impl<QI>) ->  Result<Q, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                self.dimensions.coordinate_to_linear_index(coordinate).map_err(|_|)
-            }
-
-            /// Converts a linear index back into its coordinate, the inverse of
-            /// [`coordinate_to_linear_index`](Self::coordinate_to_linear_index).
-            pub fn linear_index_to_coordinate(&self, linear_index: QI) -> $coord_impl<QI> {
-                self.dimensions.linear_index_to_coordinate(linear_index)
-            }
-
-            //endregion
 
             //region Linear index access
 
