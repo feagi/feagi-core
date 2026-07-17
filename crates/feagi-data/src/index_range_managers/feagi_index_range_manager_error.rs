@@ -13,7 +13,7 @@ pub struct FeagiIndexManagerLimit {
 #[derive(FeagiErrorKey)]
 pub struct FeagiIndexManagerInvalidIndex {
     context: &'static str,
-    index: u32
+    index: usize
 }
 
 #[derive(FeagiErrorKey)]

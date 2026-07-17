@@ -1,4 +1,4 @@
-use crate::collections::index_range_managers::errors::{FeagiIndexManagerInvalid, FeagiIndexManagerInvalidIndex, FeagiIndexManagerLimit, FeagiIndexRangeManagerError};
+use crate::index_range_managers::feagi_index_range_manager_error::{FeagiIndexManagerInvalid, FeagiIndexManagerInvalidIndex, FeagiIndexManagerLimit, FeagiIndexRangeManagerError};
 use crate::values::quantizable::QuantizedIndexCountTrait;
 
 pub struct IndexManager<Q: QuantizedIndexCountTrait> {
@@ -50,6 +50,6 @@ impl<Q: QuantizedIndexCountTrait> IndexManager<Q> {
             self.skipped_indexes.swap_remove(index);
         }
 
-        Err(FeagiIndexManagerInvalidIndex::new("Index not found.", index.to_u32()).into())
+        Err(FeagiIndexManagerInvalidIndex::new("Index not found.", index.quant_to_usize()).into())
     }
 }

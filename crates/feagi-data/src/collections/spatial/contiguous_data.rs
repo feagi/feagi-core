@@ -46,7 +46,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn try_from_linear_vector(
                 data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<QI, V>,
                 dimensions: $dim_impl<QI>,
-            ) -> Result<$struct_name<QI, V>, $crate::collections::feagi_data_collections_errorFeagiDataValueError> {
+            ) -> Result<$struct_name<QI, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
                 if data.len() != dimensions.number_contained_elements() {
                     return Err($crate::collections::feagi_data_collections_error::FeagiFailCollectionDimensionMismatch::new(
@@ -62,7 +62,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn try_from_vec(
                 data: Vec<V>,
                 dimensions: $dim_impl<QI>,
-            ) -> Result<$struct_name<QI, V>, $crate::collections::feagi_data_collections_errorFeagiDataValueError> {
+            ) -> Result<$struct_name<QI, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
                 Self::try_from_linear_vector(
                     $crate::collections::linear::contiguous_data::QuantizedContiguousVector::from_vec(data),
                     dimensions,
@@ -87,24 +87,24 @@ macro_rules! create_spatial_quantized_contiguous_vector {
 
             /// Converts a coordinate into its linear index, with the first axis
             /// varying fastest.
-            pub fn coordinate_to_linear_index(&self, coordinate: $coord_impl<QI>) ->  Result<Q, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                self.dimensions.coordinate_to_linear_index(coordinate).into()
+            pub fn coordinate_to_linear_index(&self, coordinate: $coord_impl<QI>) ->  Result<QI, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                self.dimensions.coordinate_to_linear_index(coordinate).map_err(Into::into)
             }
 
             /// Converts an index to a coordinate
             pub fn linear_index_to_coordinate(&self, linear_index: QI) ->  Result<$coord_impl<QI>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                self.dimensions.linear_index_to_coordinate(linear_index).into()
+                self.dimensions.linear_index_to_coordinate(linear_index).map_err(Into::into)
             }
 
             /// Converts a coordinate into its linear index, with the first axis
             /// varying fastest. Doesn't check bounds.
-            pub fn coordinate_to_linear_index_unchecked(&self, coordinate: $coord_impl<QI>) ->  Q {
-                self.dimensions.coordinate_to_linear_index_unchecked(coordinate).into()
+            pub fn coordinate_to_linear_index_unchecked(&self, coordinate: $coord_impl<QI>) ->  QI {
+                self.dimensions.coordinate_to_linear_index_unchecked(coordinate)
             }
 
             /// Converts an index to a coordinate. Doesnt check bounds
             pub fn linear_index_to_coordinate_unchecked(&self, linear_index: QI) ->  $coord_impl<QI> {
-                self.dimensions.linear_index_to_coordinate_unchecked(linear_index).into()
+                self.dimensions.linear_index_to_coordinate_unchecked(linear_index)
             }
 
             /// Consumes the wrapper, returning the backing linear vector.
@@ -163,7 +163,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 if !self.contains_coordinate(&coordinate) {
                     return None;
                 }
-                self.get(self.coordinate_to_linear_index(coordinate))
+                self.get(self.coordinate_to_linear_index_unchecked(coordinate))
             }
 
             /// Mutably borrows the element at `coordinate`, or `None` if the
@@ -172,7 +172,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 if !self.contains_coordinate(&coordinate) {
                     return None;
                 }
-                let index = self.coordinate_to_linear_index(coordinate);
+                let index = self.coordinate_to_linear_index_unchecked(coordinate);
                 self.get_mut(index)
             }
 
@@ -182,7 +182,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 if !self.contains_coordinate(&coordinate) {
                     return None;
                 }
-                let index = self.coordinate_to_linear_index(coordinate);
+                let index = self.coordinate_to_linear_index_unchecked(coordinate);
                 self.set(index, value)
             }
 
@@ -249,9 +249,9 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             /// Iterates over `(coordinate, &value)` pairs, in linear order.
             pub fn iter_with_coordinate(&self) -> impl Iterator<Item = ($coord_impl<QI>, &V)> + '_ {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
-                let dimensions = self.dimensions;
+                let dimensions = &self.dimensions;
                 self.data.iter().enumerate().map(move |(i, v)| {
-                    (dimensions.linear_index_to_coordinate(QI::quant_from_usize(i)), v)
+                    (dimensions.linear_index_to_coordinate_unchecked(QI::quant_from_usize(i)), v)
                 })
             }
 
@@ -260,9 +260,9 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 &mut self,
             ) -> impl Iterator<Item = ($coord_impl<QI>, &mut V)> + '_ {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
-                let dimensions = self.dimensions;
+                let dimensions = &self.dimensions;
                 self.data.iter_mut().enumerate().map(move |(i, v)| {
-                    (dimensions.linear_index_to_coordinate(QI::quant_from_usize(i)), v)
+                    (dimensions.linear_index_to_coordinate_unchecked(QI::quant_from_usize(i)), v)
                 })
             }
 
@@ -272,10 +272,10 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 &self,
             ) -> impl Iterator<Item = (QI, $coord_impl<QI>, &V)> + '_ {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
-                let dimensions = self.dimensions;
+                let dimensions = &self.dimensions;
                 self.data.iter().enumerate().map(move |(i, v)| {
                     let linear_index = QI::quant_from_usize(i);
-                    (linear_index, dimensions.linear_index_to_coordinate(linear_index), v)
+                    (linear_index, dimensions.linear_index_to_coordinate_unchecked(linear_index), v)
                 })
             }
 
@@ -285,10 +285,10 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                 &mut self,
             ) -> impl Iterator<Item = (QI, $coord_impl<QI>, &mut V)> + '_ {
                 use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
-                let dimensions = self.dimensions;
+                let dimensions = &self.dimensions;
                 self.data.iter_mut().enumerate().map(move |(i, v)| {
                     let linear_index = QI::quant_from_usize(i);
-                    (linear_index, dimensions.linear_index_to_coordinate(linear_index), v)
+                    (linear_index, dimensions.linear_index_to_coordinate_unchecked(linear_index), v)
                 })
             }
 
@@ -304,7 +304,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                     self.contains_coordinate(&coordinate),
                     "coordinate is out of bounds of the collection's dimensions",
                 );
-                &self.data[self.coordinate_to_linear_index(coordinate)]
+                &self.data[self.coordinate_to_linear_index_unchecked(coordinate)]
             }
         }
 
@@ -316,7 +316,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
                     self.contains_coordinate(&coordinate),
                     "coordinate is out of bounds of the collection's dimensions",
                 );
-                let index = self.coordinate_to_linear_index(coordinate);
+                let index = self.coordinate_to_linear_index_unchecked(coordinate);
                 &mut self.data[index]
             }
         }

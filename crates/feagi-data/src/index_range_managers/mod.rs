@@ -1,3 +1,3 @@
 pub mod combining_range_vector;
 pub mod index_manager;
-pub mod errors;
+pub mod feagi_index_range_manager_error;

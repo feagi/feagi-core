@@ -37,7 +37,7 @@ feagi_data::create_wrapped_quantized_decimal!(
 fn quantized_index_count_constants() {
     assert_eq!(<u8 as QuantizedIndexCountTrait>::QUANT_ONE, 1);
     assert_eq!(<u8 as QuantizedIndexCountTrait>::QUANT_MAX, u8::MAX);
-    assert_eq!(<u8 as QuantizedIndexCountTrait>::QUANT_MAX_AS_USIZE, u8::MAX as usize);
+    assert_eq!(<u8 as QuantizedIndexCountTrait>::QUANT_MAX_USIZE, u8::MAX as usize);
     assert_eq!(<u16 as QuantizedIndexCountTrait>::QUANT_MAX, u16::MAX);
     assert_eq!(<u32 as QuantizedIndexCountTrait>::QUANT_MAX, u32::MAX);
 }
@@ -110,7 +110,7 @@ fn quantized_element_base_constants() {
 fn supports_uint_ops() {
     assert_eq!(<u8>::QUANT_ONE, 1);
     assert_eq!(<u8>::QUANT_MAX, u8::MAX);
-    assert_eq!(<u8>::QUANT_MAX_AS_USIZE, u8::MAX as usize);
+    assert_eq!(<u8>::QUANT_MAX_USIZE, u8::MAX as usize);
 
     //endregion
 

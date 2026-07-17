@@ -18,6 +18,7 @@ generate_feagi_error! {
     FeagiDataCollectionError,
     keys: {
         PackedIndex: FeagiFailCollectionInvalidIndex,
+        DimensionMismatch: FeagiFailCollectionDimensionMismatch,
     },
     sub_errors: {
         ValueSpatialError: FeagiDataValuesSpatialError,

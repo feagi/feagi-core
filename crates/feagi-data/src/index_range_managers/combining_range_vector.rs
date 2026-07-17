@@ -1,6 +1,6 @@
 use crate::values::quantizable::QuantizedIndexCountTrait;
 use core::ops::Range;
-use crate::collections::index_range_managers::errors::{FeagiIndexRangeManagerError, FeagiIndexRangeVectorFailedMerge};
+use crate::index_range_managers::feagi_index_range_manager_error::{FeagiIndexRangeManagerError, FeagiIndexRangeVectorFailedMerge};
 
 /// Contains a vector of incrementing (by start / end index) ranges that are not overlapping, as well as indexes to those
 /// ranges in order of decrementing lengths of each range. Inserting a range will attempt to insert
