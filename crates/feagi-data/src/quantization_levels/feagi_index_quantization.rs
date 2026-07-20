@@ -24,7 +24,7 @@ pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq {
     type CorticalAreaIndexCountQuant: QuantizedIndexCountTrait;
 
     /// Indexing of axon bundles within the NPU. Note that indexes are not stable outside the NPU!
-    type AxonBundleIndexCountQuant: QuantizedIndexCountTrait;
+    type CorticalMappingEntryIndexCountQuant: QuantizedIndexCountTrait;
 
     /// Indexing along the FCLC (the primary or its extensions)
     type FireCandidateListCacheIndexCountQuant: QuantizedIndexCountTrait;
@@ -38,6 +38,7 @@ pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq {
 /// follow
 pub enum FeagiGlobalQuantizationLevel {
     #[default]
+    // 4b Neurons, 4b Synapses, 4b FCLC Entries, 2b Burst index, 32k Cortical Areas, 32k Cortical Mapping Entries
     Standard = 0,
     // TODO tiny, mini, big, absurd
 }
@@ -53,7 +54,7 @@ impl FeagiIndexQuantization for FeagiGlobalQuantizationStandard {
     type NeuronIndexCountQuant = u32;
     type SynapseIndexCountQuant = u32;
     type CorticalAreaIndexCountQuant = u16;
-    type AxonBundleIndexCountQuant = u16;
+    type CorticalMappingEntryIndexCountQuant = u16;
     type FireCandidateListCacheIndexCountQuant = u32;
 }
 

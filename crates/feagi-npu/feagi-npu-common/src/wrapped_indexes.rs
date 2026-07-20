@@ -1,5 +1,8 @@
 // TODO the following macro should be common throughout
 
+// TODO dissolve this whole subcrate and put it in neuron model
+
+
 use feagi_data::{create_wrapped_quantized_index, create_wrapped_contiguous_slice, create_wrapped_contiguous_slice_mut, create_wrapped_contiguous_vector};
 
 /// Given a name and level, creates a linear index type, and slice, slicemut, vector structs of it

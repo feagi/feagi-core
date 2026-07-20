@@ -3,4 +3,7 @@
 // TODO Use build.rs to automatically build enums and include! to bring them here!
 
 pub mod model_and_quantization;
+pub mod data_io;
+pub mod resizer;
+pub mod iterators;
 

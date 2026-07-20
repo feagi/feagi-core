@@ -2,7 +2,7 @@ use crate::burst_index::BurstIndex;
 use crate::neuron::neuron_history::NeuronHistoryFull;
 use crate::neuron::models::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
 use crate::neuron::models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
-use crate::neuron::shared::processor::NeuronModelProcessor;
+use crate::neuron::models_shared::model::NeuronModel;
 use core::marker::PhantomData;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
@@ -17,7 +17,7 @@ where
     _p: PhantomData<(FIQ, CPQ)>,
 }
 
-impl<FIQ, CPQ> NeuronModelProcessor<FIQ, CPQ, FeagiAdvancedModelCorticalData<CPQ>, FeagiAdvancedModelNeuronData<CPQ>>
+impl<FIQ, CPQ> NeuronModel<FIQ, CPQ, FeagiAdvancedModelCorticalData<CPQ>, FeagiAdvancedModelNeuronData<CPQ>>
     for FeagiAdvancedModelProcessor<FIQ, CPQ>
 where
     FIQ: FeagiIndexQuantization,
@@ -25,7 +25,7 @@ where
 {
     type UsedNeuronHistory = NeuronHistoryFull<FIQ>;
 
-    fn process_neuron_potential_for_dimensional_cortical_configuration(
+    fn process_neuron_potential_for_dimensional_layout_cortical_area(
         incoming_potential: &NeuronMembranePotential<CPQ::MembranePotentialQuant>,
         neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
         burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
@@ -48,7 +48,7 @@ where
         false
     }
 
-    fn process_neuron_potential_for_memory_cortical_configuration(
+    fn process_neuron_potential_for_none_layout_cortical_area(
         incoming_potential: &NeuronMembranePotential<CPQ::MembranePotentialQuant>,
         neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
         burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,

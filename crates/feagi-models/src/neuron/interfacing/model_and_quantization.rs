@@ -1,5 +1,5 @@
 use crate::neuron::models::feagi_advanced::quantization::FeagiAdvancedModelQuantizationLevel;
-use crate::neuron::shared::NeuronModelQuantizationLevel;
+use crate::neuron::models_shared::NeuronModelQuantizationLevel;
 use feagi_data::values::quantizable::DecimalQuantizationLevel;
 
 // TODO build.rs should generate these enums

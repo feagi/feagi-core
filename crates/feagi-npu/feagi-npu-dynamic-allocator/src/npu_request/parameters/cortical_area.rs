@@ -14,6 +14,8 @@ pub enum NPURequestParametersCorticalArea {
     // TODO Edit / Remove
 }
 
+// TODO Target Engine Index
+
 impl IntoNPURequest for NPURequestParametersCorticalArea {
     fn into_npu_request(self) -> NPURequest {
         self.into()
@@ -25,11 +27,6 @@ impl From<NPURequestParametersCorticalAreaCreate> for NPURequestParametersCortic
         Self::AddCorticalArea(v)
     }
 }
-
-
-
-// TODO Target Engine Index
-
 
 
 /// Request Making a Cortical Area
@@ -44,7 +41,7 @@ pub enum NPURequestParametersCorticalAreaCreate
         specific_engine_index: Option<()>
     },
     // TODO other cortical types, including IO (we can have them without having agents)
-} 
+}
 
 impl IntoNPURequest for NPURequestParametersCorticalAreaCreate {
     fn into_npu_request(self) -> NPURequest {

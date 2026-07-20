@@ -3,7 +3,7 @@ use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPo
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::neuron::cortical_area_layout::CorticalAreaLayoutNested;
 use feagi_models::neuron::interfacing::model_and_quantization::NeuronModelTypeAndQuantization;
-use feagi_models::neuron::shared::data::NeuronModelNeuronData;
+use feagi_models::neuron::models_shared::data::NeuronModelNeuronData;
 use feagi_npu_common::wrapped_indexes::CorticalEngineIndex;
 
 

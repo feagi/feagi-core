@@ -1,3 +1,5 @@
 pub mod npu_request;
 pub mod npu_state_manager;
 pub mod request_parameters;
+
+pub mod genome_engine_map;

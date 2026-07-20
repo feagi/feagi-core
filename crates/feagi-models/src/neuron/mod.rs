@@ -1,7 +1,8 @@
-pub mod shared;
+pub mod models_shared;
 pub mod models;
 pub mod interfacing;
 pub mod neuron_history;
 pub mod cortical_area_layout;
-pub mod editing;
+pub mod neuron_runtime_flags;
+pub mod cortical_area_runtime_flags;
 
