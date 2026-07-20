@@ -34,3 +34,4 @@ create_wrapped_quantized_index_dimension!(
     NeuronVoxelLinearIndex,
     (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis)
 );
+
