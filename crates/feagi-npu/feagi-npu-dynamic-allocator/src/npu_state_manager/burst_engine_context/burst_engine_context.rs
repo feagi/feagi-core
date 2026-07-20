@@ -1,11 +1,11 @@
-use feagi_data::collections::index_range_managers::index_manager::IndexManager;
+use feagi_data::index_range_managers::index_manager::IndexManager;
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-
-use feagi_models::neuron::cortical_area_layout::{CorticalAreaLayoutData, CorticalAreaLayoutDataDimensional};
+use feagi_models::neuron::cortical_area_layout::CorticalAreaLayoutNested;
+use feagi_models::neuron::interfacing::model_and_quantization::NeuronModelTypeAndQuantization;
 use feagi_models::neuron::shared::data::NeuronModelNeuronData;
 use feagi_npu_common::wrapped_indexes::CorticalEngineIndex;
-use crate::request_parameters::neuron_data_writer::CorticalWriter;
+
 
 /// A given index for a burst engine directly managed by this NPU. Is an u8 since if you have
 /// more than 256 GPUs attached to one motherboard, you are doing something wrong
@@ -18,7 +18,16 @@ pub struct BurstEngineContext<FIQ: FeagiIndexQuantization> {
 
 impl<FIQ: FeagiIndexQuantization> BurstEngineContext<FIQ> {
 
-    fn add_cortical_area<CPQ: CorticalPotentialQuantization, Model: NeuronModelNeuronData<CPQ>, Layout: CorticalAreaLayoutData<FIQ>>(
+    fn try_add_cortical_area(
+        &mut self,
+        neuron_model_and_type: NeuronModelTypeAndQuantization,
+        cortical_area_layout: CorticalAreaLayoutNested<FIQ>
+
+    )
+
+
+
+    fn add_cortical_area<CPQ: CorticalPotentialQuantization, Model: NeuronModelNeuronData<CPQ>>(
         &mut self,
         neuron_writer: &impl CorticalWriter<FIQ, CPQ, Model, Layout>,
     ) -> CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant> {

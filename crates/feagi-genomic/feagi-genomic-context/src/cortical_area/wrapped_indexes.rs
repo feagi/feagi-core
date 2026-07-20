@@ -1,4 +1,4 @@
-use feagi_data::feagi_quantization_levels::feagi_index_quantization::{FeagiGlobalQuantizationStandard, FeagiIndexQuantization};
+use feagi_data::quantization_levels::feagi_index_quantization::{FeagiGlobalQuantizationStandard, FeagiIndexQuantization};
 
 type StandardNeuronQuantization = <FeagiGlobalQuantizationStandard as FeagiIndexQuantization>::NeuronIndexCountQuant;
 

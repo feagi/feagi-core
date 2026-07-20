@@ -1,8 +1,8 @@
 pub mod cortical_neuron_writers {
     use core::marker::PhantomData;
     use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex};
-    use feagi_data::feagi_quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
-    use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+    use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+    use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
     use feagi_models::neuron::shared::data::NeuronModelNeuronData;
 
     /// Writes neuron data within a dimensional cortical area

@@ -1,7 +1,7 @@
 //! Common definitions of iterating over the neurons of a cortical area
 
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex};
-use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Common trait that defines how to iterate the neurons over a dimensional cortical area
 pub trait DimensionalCorticalNeuronIterator<FIQ: FeagiIndexQuantization> {

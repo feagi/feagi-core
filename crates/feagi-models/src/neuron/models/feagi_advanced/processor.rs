@@ -5,7 +5,7 @@ use crate::neuron::models::feagi_advanced::quantization::FeagiAdvancedModelQuant
 use crate::neuron::shared::processor::NeuronModelProcessor;
 use core::marker::PhantomData;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
-use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedElementBase;
 
 pub struct FeagiAdvancedModelProcessor<FIQ, CPQ>

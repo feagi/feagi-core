@@ -46,6 +46,8 @@ feagi-logging-and-errors = {path = "../feagi-logging-and-errors"} # This should 
 # External crates
 paste = { workspace = true }
 half = {workspace = true}
+heapless = {workspace = true}
+futures = {workspace = true}
 ahash = { workspace = true}
 serde = { workspace = true, optional = true}
 serde_json = { workspace = true, optional = true}

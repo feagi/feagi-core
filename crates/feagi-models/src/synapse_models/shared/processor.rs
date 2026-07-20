@@ -1,8 +1,8 @@
 use crate::synapse_models::shared::data::{SynapseModelAxonBundleData, SynapseModelSynapseData};
 use crate::synapse_models::shared::quantization::{SynapseModelQuantization, SynapseModelQuantizationLevel};
 use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::feagi_quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
-use feagi_data::feagi_quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root base trait for defining synapse firing and alteration of
 /// transmitting neuron potentials between neurons. Does NOT store actual data,
