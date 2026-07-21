@@ -44,7 +44,7 @@ impl TryFrom<u8> for DecimalQuantizationLevel {
 impl QuantizationLevelPacking for DecimalQuantizationLevel {
     const NUMBER_BITS: usize = 4; // 16 quants
 
-    unsafe fn from_packed_byte(byte: u8) -> Self {
+    unsafe fn from_unpacked_byte(byte: u8) -> Self {
         core::mem::transmute(byte)
     }
 }

@@ -37,7 +37,7 @@ impl TryFrom<u8> for SignedIntegerQuantizationLevel {
 impl QuantizationLevelPacking for SignedIntegerQuantizationLevel {
     const NUMBER_BITS: usize = 3;
 
-    unsafe fn from_packed_byte(byte: u8) -> Self {
+    unsafe fn from_unpacked_byte(byte: u8) -> Self {
         core::mem::transmute(byte)
     }
 }

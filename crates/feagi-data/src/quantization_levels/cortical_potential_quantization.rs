@@ -6,10 +6,6 @@ use crate::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait
 /// is controlled by the Neuron Model quantization state, although this cortical level neuron
 /// potential quantization has discrete steps that must be followed.
 pub trait CorticalPotentialQuantization: Clone + Copy {
-    
-    // /// The quantization used by the membrane potential in a given cortical area
-    // const CORTICAL_POTENTIAL_QUANTIZATION_LEVEL: DecimalQuantizationLevel;
-    
     /// All quantizations used by a given neuron model quantization level. Useful for validating
     /// device compatibility. This will also be extended in extensions of this trait
     const USED_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel]; // Don't include a default, as we then forget about it

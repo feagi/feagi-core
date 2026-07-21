@@ -15,5 +15,5 @@ pub trait QuantizationLevelPacking: Into<u8> + TryFrom<u8> + Clone + Copy + Size
     /// Implementation should use "core::mem::transmute(byte)" to directly a (properly masked) byte
     /// to the enum. While fast, this function is unsafe in that if there is no corresponding bits,
     /// we will get undefined behavior!
-    unsafe fn from_packed_byte(byte: u8) -> Self;
+    unsafe fn from_unpacked_byte(byte: u8) -> Self;
 }
