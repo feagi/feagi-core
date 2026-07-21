@@ -1,10 +1,10 @@
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 /// Helper structs to make dealing with multiple quantizations / models less annoying
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::neuron::interfacing::model_and_quantization::NeuronModelTypeAndQuantization;
+use feagi_models::neuron::common_structs::model_and_quantization::NestedNeuronModelTypeAndQuantization;
 use feagi_models::neuron::models::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
 use feagi_models::neuron::models::feagi_advanced::quantization::{FeagiAdvancedModelQuantizationLevel, FeagiAdvancedModelStandard32BitQuant};
-use feagi_models::neuron::models_shared::data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use feagi_models::neuron::models_shared_traits::data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_models::wrapped_indexes::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 
 // TODO coincidentally, this can also be used as connectome file storage...
@@ -38,7 +38,7 @@ impl<FIQ: FeagiIndexQuantization> NeuronModelData<FIQ> {
     pub fn get_quant_cortical_data<CPQ: CorticalPotentialQuantization, NMCD: NeuronModelCorticalData<CPQ>>(&self) -> &NMCD
     {
         match NMCD::LEVEL {
-            NeuronModelTypeAndQuantization::FeagiAdvanced(quant) => {
+            NestedNeuronModelTypeAndQuantization::FeagiAdvanced(quant) => {
                 match quant { 
                     FeagiAdvancedModelQuantizationLevel::Standard32bit => { &self.cortical_model_feagi_advanced_quant_standard_32_bit} 
                 }
@@ -49,7 +49,7 @@ impl<FIQ: FeagiIndexQuantization> NeuronModelData<FIQ> {
     pub fn get_quant_neuron_data<CPQ: CorticalPotentialQuantization, NMND: NeuronModelNeuronData<CPQ>>(&self) -> &NMND
     {
         match NMND::LEVEL {
-            NeuronModelTypeAndQuantization::FeagiAdvanced(quant) => {
+            NestedNeuronModelTypeAndQuantization::FeagiAdvanced(quant) => {
                 match quant {
                     FeagiAdvancedModelQuantizationLevel::Standard32bit => { &self.neuron_model_feagi_advanced_quant_standard_32_bit}
                 }

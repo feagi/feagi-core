@@ -3,7 +3,7 @@ pub mod cortical_neuron_writers {
     use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex};
     use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
     use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-    use feagi_models::neuron::models_shared::data::NeuronModelNeuronData;
+    use feagi_models::neuron::models_shared_traits::data::NeuronModelNeuronData;
 
     /// Writes neuron data within a dimensional cortical area
     pub trait DimensionalCorticalNeuronWriter {

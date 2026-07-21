@@ -1,7 +1,7 @@
-use crate::neuron::models_shared::NeuronModelQuantizationLevel;
+use crate::neuron::models_shared_traits::NeuronModelQuantizationLevel;
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedIndexCountTrait};
-use crate::neuron::interfacing::model_and_quantization::PackedNeuronModelTypeAndQuantization;
+use crate::neuron::common_structs::model_and_quantization::PackedNeuronModelTypeAndQuantization;
 
 /// The quantization level for the Feagi Advanced Neuron Model
 #[repr(u8)]

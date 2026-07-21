@@ -1,9 +1,9 @@
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::neuron::cortical_area_layout::CorticalAreaLayoutNested;
-use feagi_models::neuron::interfacing::data_io::NeuronModelWriter;
-use feagi_models::neuron::interfacing::model_and_quantization::NeuronModelTypeAndQuantization;
-use feagi_models::neuron::models_shared::data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use feagi_models::neuron::common_structs::cortical_area_layout::CorticalAreaLayoutNested;
+use feagi_models::neuron::genome_interface::neuron_model_writer::NeuronModelWriter;
+use feagi_models::neuron::common_structs::model_and_quantization::NestedNeuronModelTypeAndQuantization;
+use feagi_models::neuron::models_shared_traits::data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_models::wrapped_indexes::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 // 1: append consequences of commands (deleting / remaking connections)
 //  2: sort into the following order -> delete synapses -> delete areas -> resize area? -> make areas -> (re)make connections
@@ -19,7 +19,7 @@ pub trait EditableEngine<FIQ: FeagiIndexQuantization> {
     fn add_cortical_area<CPQ: CorticalPotentialQuantization, NMCD: NeuronModelCorticalData<CPQ>, NMND: NeuronModelNeuronData<CPQ>>(
         &mut self,
         cortical_area_layout: CorticalAreaLayoutNested<FIQ>,
-        neuron_model_type_and_quantization: NeuronModelTypeAndQuantization,
+        neuron_model_type_and_quantization: NestedNeuronModelTypeAndQuantization,
         neuron_writer: impl NeuronModelWriter<CPQ, NMCD, NMND>,
     ); // TODO
 

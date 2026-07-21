@@ -1,5 +1,6 @@
+use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::values::quantizable::DecimalQuantizationLevel;
-use crate::neuron::interfacing::model_and_quantization::PackedNeuronModelTypeAndQuantization;
+use crate::neuron::common_structs::model_and_quantization::PackedNeuronModelTypeAndQuantization;
 
 /// Defines the quantization of neurons within a cortical area
 pub trait NeuronModelQuantizationLevel: Clone + Copy {
@@ -23,5 +24,7 @@ pub trait NeuronModelQuantizationLevel: Clone + Copy {
     fn from_packed_neuron_model_and_quant(packed: PackedNeuronModelTypeAndQuantization) -> Self;
 }
 
-// NOTE: we dont need to define a "NeuronModelQuantization" as all the model specific trait
-// extend off of `CorticalPotentialQuantization`
+/// Common root trait shared by all neuron Model Quantizations
+pub trait NeuronModelQuantization: CorticalPotentialQuantization {
+    const LEVEL: 
+}

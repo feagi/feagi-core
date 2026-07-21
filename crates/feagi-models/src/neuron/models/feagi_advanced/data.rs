@@ -1,6 +1,6 @@
-use crate::neuron::interfacing::model_and_quantization::NeuronModelTypeAndQuantization;
+use crate::neuron::common_structs::model_and_quantization::NestedNeuronModelTypeAndQuantization;
 use crate::neuron::models::feagi_advanced::quantization::{FeagiAdvancedModelQuantization, FeagiAdvancedModelQuantizationLevel};
-use crate::neuron::models_shared::data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use crate::neuron::models_shared_traits::data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::values::quantizable::PercentageUnsigned;
 use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
@@ -39,7 +39,7 @@ impl<CPQ> NeuronModelCorticalData<CPQ> for FeagiAdvancedModelCorticalData<CPQ>
 where
     CPQ: FeagiAdvancedModelQuantization,
 {
-    const LEVEL: NeuronModelTypeAndQuantization = NeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard32bit);
+    const LEVEL: NestedNeuronModelTypeAndQuantization = NestedNeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard32bit);
 }
 
 impl<CPQ> FeagiAdvancedModelCorticalData<CPQ>
@@ -80,7 +80,7 @@ impl<CPQ> NeuronModelNeuronData<CPQ> for FeagiAdvancedModelNeuronData<CPQ>
 where
     CPQ: FeagiAdvancedModelQuantization,
 {
-    const LEVEL: NeuronModelTypeAndQuantization = NeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard32bit);
+    const LEVEL: NestedNeuronModelTypeAndQuantization = NestedNeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard32bit);
 }
 
 impl<CPQ> FeagiAdvancedModelNeuronData<CPQ>

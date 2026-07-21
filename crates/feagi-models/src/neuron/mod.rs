@@ -1,8 +1,6 @@
-pub mod models_shared;
+pub mod models_shared_traits;
 pub mod models;
-pub mod interfacing;
-pub mod neuron_history;
-pub mod cortical_area_layout;
-pub mod neuron_runtime_flags;
-pub mod cortical_area_runtime_flags;
+pub mod genome_interface;
+pub mod common_structs;
+pub mod bit_packed_data;
 

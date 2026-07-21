@@ -1,9 +1,8 @@
 use crate::burst_index::BurstIndex;
-use crate::neuron::models_shared::data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use crate::neuron::models_shared_traits::data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::neuron::interfacing::data_io::{NeuronModelWriter, UniformNeuronModelWriter};
 
 /// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data,
 pub trait NeuronModel<FIQ, CPQ, NMCD, NMND>

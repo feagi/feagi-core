@@ -1,11 +1,11 @@
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiGlobalQuantizationAbsurd, FeagiGlobalQuantizationStandard, FeagiIndexQuantization};
-use feagi_models::neuron::cortical_area_layout::CorticalAreaLayoutDimensional;
+use feagi_models::neuron::common_structs::cortical_area_layout::CorticalAreaLayoutDimensional;
 use feagi_npu_dynamic_allocator::genome_engine_map::{GenomeEngineMap, GenomeEngineMapSingleEngine};
-use feagi_npu_dynamic_allocator::npu_request::npu_request::NPURequest;
+use feagi_npu_dynamic_allocator::npu_request::request_type::NPURequest;
 use feagi_npu_dynamic_allocator::npu_request::parameters::cortical_area::{NPURequestParametersCorticalArea, NPURequestParametersCorticalAreaCreate};
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex};
 use feagi_models::neuron::models::feagi_advanced::model::FeagiAdvancedModel;
-use feagi_models::neuron::models_shared::model::NeuronModel;
+use feagi_models::neuron::models_shared_traits::model::NeuronModel;
 
 type StandardNeuronQuantization = <FeagiGlobalQuantizationAbsurd as FeagiIndexQuantization>::NeuronIndexCountQuant; // TODO swap from absurd
 

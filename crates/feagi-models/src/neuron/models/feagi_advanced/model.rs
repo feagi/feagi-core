@@ -1,12 +1,12 @@
 use crate::burst_index::BurstIndex;
-use crate::neuron::interfacing::data_io::{NeuronModelWriter, UniformNeuronModelWriter};
+use crate::neuron::genome_interface::neuron_model_writer::{NeuronModelWriter, UniformNeuronModelWriter};
 use crate::neuron::models::feagi_advanced::data::{
     ConsecutiveFireCountdown, ConsecutiveFireLimit, DegeneracyConstant, FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData,
     LeakCoefficient, RefractoryCountdown, RefractoryPeriodLimit, SnoozePeriod,
 };
 use crate::neuron::models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
-use crate::neuron::models_shared::model::NeuronModel;
-use crate::neuron::neuron_history::NeuronHistoryFull;
+use crate::neuron::models_shared_traits::model::NeuronModel;
+use crate::neuron::common_structs::neuron_history::NeuronHistoryFull;
 use core::marker::PhantomData;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;

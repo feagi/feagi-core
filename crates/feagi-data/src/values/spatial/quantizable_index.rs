@@ -37,6 +37,8 @@ macro_rules! create_coordinate {
                     Self::new($( Q::quant_from_usize($field) ),+)
                 }
 
+                
+                
                 $(
                     pub fn [<get_ $field>](&self) -> &Q {
                         &self.inner[$index]
