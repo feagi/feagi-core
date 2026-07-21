@@ -39,7 +39,7 @@ impl NeuronModelTypeAndQuantization {
 /// An enum describing all possible neuron model and model quantizations as a flat list. This is
 /// intended for rapid lookups in the NPU and not really general use. The bytes / bits are
 /// based on `NEURON_MODEL_TYPE_BITMASK` and `NEURON_MODEL_QUANTIZATION_BITMASK` from
-/// `NeuronModelQuantizationLevels`
+/// `NeuronModelQuantizationLevels`. This is all done ina  single byte.
 #[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -63,6 +63,10 @@ impl PackedNeuronModelTypeAndQuantization {
                 NeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard32bit)
             }
         }
+    }
+    
+    pub fn to_byte(self) -> u8 {
+        self as u8
     }
 
     /// Quickly convert from a byte without safety checking. Note that an invalid byte will cause

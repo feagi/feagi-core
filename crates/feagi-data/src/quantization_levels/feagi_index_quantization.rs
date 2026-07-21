@@ -40,6 +40,7 @@ pub enum FeagiGlobalQuantizationLevel {
     #[default]
     // 4b Neurons, 4b Synapses, 4b FCLC Entries, 2b Burst index, 32k Cortical Areas, 32k Cortical Mapping Entries
     Standard = 0,
+    Absurd = 1,
     // TODO tiny, mini, big, absurd
 }
 
@@ -56,6 +57,20 @@ impl FeagiIndexQuantization for FeagiGlobalQuantizationStandard {
     type CorticalAreaIndexCountQuant = u16;
     type CorticalMappingEntryIndexCountQuant = u16;
     type FireCandidateListCacheIndexCountQuant = u32;
+}
+
+/// The largest index qunatization. everything is a u64
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub struct FeagiGlobalQuantizationAbsurd;
+
+impl FeagiIndexQuantization for FeagiGlobalQuantizationAbsurd {
+    const QUANTIZATION_LEVEL: FeagiGlobalQuantizationLevel = FeagiGlobalQuantizationLevel::Absurd;
+    type GlobalBurstIndexQuant = u64;
+    type NeuronIndexCountQuant = u64;
+    type SynapseIndexCountQuant = u64;
+    type CorticalAreaIndexCountQuant = u64;
+    type CorticalMappingEntryIndexCountQuant = u64;
+    type FireCandidateListCacheIndexCountQuant = u64;
 }
 
 //endregion

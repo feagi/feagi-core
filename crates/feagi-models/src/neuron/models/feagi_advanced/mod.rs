@@ -1,3 +1,3 @@
 pub mod data;
-pub mod processor;
+pub mod model;
 pub mod quantization;

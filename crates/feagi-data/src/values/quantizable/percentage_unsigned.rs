@@ -7,8 +7,8 @@ use crate::values::quantizable::QuantizedDecimalTrait;
 pub struct PercentageUnsigned<D: QuantizedDecimalTrait>(D);
 
 impl<D: QuantizedDecimalTrait> PercentageUnsigned<D> {
-    const ZERO_PERCENT: Self = Self(D::QUANT_ZERO);
-    const HUNDRED_PERCENT: Self = Self(D::QUANT_ONE);
+    pub const ZERO_PERCENT: Self = Self(D::QUANT_ZERO);
+    pub const HUNDRED_PERCENT: Self = Self(D::QUANT_ONE);
 
     /// Checks value is between 0.0 - 1.0 before creating itself as such
     pub fn new_checked(value: D) -> Result<Self, FeagiDataValueQuantizationError> {

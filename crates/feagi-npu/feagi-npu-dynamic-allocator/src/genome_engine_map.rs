@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_genomic::feagi_genomic_context::cortical_area::CorticalID;
-use feagi_npu_common::wrapped_indexes::CorticalEngineIndex;
+use feagi_models::wrapped_indexes::CorticalEngineIndex;
 use crate::npu_state_manager::burst_engine_context::burst_engine_context::BurstEngineIndex;
 
 /// Maps various Genome lookups to the NPU. Also used for some initial request validity checking
@@ -17,9 +17,8 @@ pub trait GenomeEngineMap<FIQ: FeagiIndexQuantization> {
 
     /// From the cortical ID, try to get the cortical area engine index and the engine it resides in
     fn try_get_engine_and_cortical_engine_index(&self, cortical_id: &CorticalID) -> Result<(CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, BurstEngineIndex), ()>; // TODO Error
-
-
-
+    
+    
 
 
 }
@@ -29,6 +28,16 @@ pub struct GenomeEngineMapSingleEngine<FIQ: FeagiIndexQuantization>
 {
     cortical_id_lookup: HashMap<CorticalID, CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>>,
     mapping_entry_id_lookup: HashMap<u64, CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>>, // TODO synapse
+}
+
+impl<FIQ: FeagiIndexQuantization> GenomeEngineMapSingleEngine<FIQ>
+{
+    pub fn new() -> Self {
+        Self {
+            cortical_id_lookup: HashMap::new(),
+            mapping_entry_id_lookup: HashMap::new(),
+        }
+    }
 }
 
 impl<FIQ: FeagiIndexQuantization> GenomeEngineMap<FIQ> for GenomeEngineMapSingleEngine<FIQ> {

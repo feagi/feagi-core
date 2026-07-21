@@ -3,6 +3,7 @@ use feagi_data::neurons::NeuronVoxelDensityIndex;
 use feagi_genomic::feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::neuron::interfacing::model_and_quantization::NeuronModelTypeAndQuantization;
 use crate::npu_request::npu_request::{IntoNPURequest, NPURequest};
+use crate::npu_state_manager::burst_engine_context::burst_engine_context::BurstEngineIndex;
 use crate::request_parameters::writers::cortical_neuron_writers::DimensionalCorticalNeuronWriter;
 
 /// Add / Remove / Edit cortical areas
@@ -11,7 +12,6 @@ pub enum NPURequestParametersCorticalArea {
     AddCorticalArea(NPURequestParametersCorticalAreaCreate),
     EditCorticalAreaProperties(), // TODO -> in here editing properties, resizing,
     DeleteCorticalArea(), // TODO
-    // TODO Edit / Remove
 }
 
 // TODO Target Engine Index
@@ -38,7 +38,7 @@ pub enum NPURequestParametersCorticalAreaCreate
         voxel_density: NeuronVoxelDensityIndex<u64>,
         cortical_id: CorticalID,
         neuron_model_type_and_quantization: NeuronModelTypeAndQuantization,
-        specific_engine_index: Option<()>
+        specific_engine_index: Option<BurstEngineIndex>
     },
     // TODO other cortical types, including IO (we can have them without having agents)
 }

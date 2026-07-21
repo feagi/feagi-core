@@ -1,4 +1,5 @@
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use crate::neuron::interfacing::model_and_quantization::NeuronModelTypeAndQuantization;
 
 /// Root trait for all cortical_area data implementations, essentially any cortical_area level data shared
 /// by all neurons in a cortical_area area of a given neuron model. This should be extended with only
@@ -6,7 +7,9 @@ use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPo
 pub trait NeuronModelCorticalData<CPQ>: Clone
 where
     CPQ: CorticalPotentialQuantization,
-{ }
+{
+    const LEVEL: NeuronModelTypeAndQuantization;
+}
 
 
 
@@ -17,6 +20,8 @@ pub trait NeuronModelNeuronData<CPQ>: Clone
 where
     CPQ: CorticalPotentialQuantization,
 {
+    const LEVEL: NeuronModelTypeAndQuantization;
+    
     // NOTE: Implementations of Neuron Models do not store their own membrane potential! They
     // will be passed in by reference if need be! History is also passed in separately if enabled!
 }

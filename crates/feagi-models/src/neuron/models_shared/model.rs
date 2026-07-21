@@ -3,6 +3,7 @@ use crate::neuron::models_shared::data::{NeuronModelCorticalData, NeuronModelNeu
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::neuron::interfacing::data_io::{NeuronModelWriter, UniformNeuronModelWriter};
 
 /// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data,
 pub trait NeuronModel<FIQ, CPQ, NMCD, NMND>
@@ -49,13 +50,17 @@ where
         incoming_potential: &NeuronMembranePotential<CPQ::MembranePotentialQuant>,
         neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
         burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
-        memory_cortical_number_neurons: NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
+        number_neurons: NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
         neuron_history: &Self::UsedNeuronHistory,
         cortical_area_data: &NMCD,
         neuron_model_data: &mut NMND,
         this_neuron_potential: &mut NeuronMembranePotential<CPQ::MembranePotentialQuant>,
     ) -> bool;
 
+    fn default_neuron_writer_dimensional_layout_cortical_area(dimensional_cortical_dimensions: DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>) -> Option<impl NeuronModelWriter<CPQ, NMCD, NMND>>;
+
+    fn default_neuron_writer_none_layout_cortical_area(number_neurons: NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>) -> Option<impl NeuronModelWriter<CPQ, NMCD, NMND>>;
+    
     /// If enabled via the const, this method will be called on all neurons of that
     /// neuron model type right before the global burst index overflows and resets to 0. Use this
     /// method to update any values that need to be updated in that case

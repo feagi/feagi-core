@@ -1,5 +1,8 @@
-use crate::neuron::models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
+use crate::neuron::interfacing::model_and_quantization::NeuronModelTypeAndQuantization;
+use crate::neuron::models::feagi_advanced::quantization::{FeagiAdvancedModelQuantization, FeagiAdvancedModelQuantizationLevel};
 use crate::neuron::models_shared::data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use feagi_data::neurons::NeuronMembranePotential;
+use feagi_data::values::quantizable::PercentageUnsigned;
 use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
 // TODO percentages should be their own types
 
@@ -18,35 +21,25 @@ pub struct FeagiAdvancedModelCorticalData<CPQ>
 where
     CPQ: FeagiAdvancedModelQuantization,
 {
-    pub excitability: CPQ::PercentageQuant,
+    pub excitability: PercentageUnsigned<CPQ::PercentageQuant>,
 
-    pub refractory_period_limit: CPQ::CorticalLimitAndSnoozeQuants,
+    pub refractory_period_limit: RefractoryPeriodLimit<CPQ::CorticalLimitAndSnoozeQuants>,
 
     /// Upper limit of fire threshold, over this and we wont fire
-    pub fire_threshold_limit: CPQ::MembranePotentialQuant,
+    pub fire_threshold_limit: NeuronMembranePotential<CPQ::MembranePotentialQuant>,
 
-    pub consecutive_fire_limit: CPQ::CorticalLimitAndSnoozeQuants,
+    pub consecutive_fire_limit: ConsecutiveFireLimit<CPQ::CorticalLimitAndSnoozeQuants>,
 
-    pub snooze_period: CPQ::CorticalLimitAndSnoozeQuants,
+    pub snooze_period: SnoozePeriod<CPQ::CorticalLimitAndSnoozeQuants>,
 
-    pub degeneracy_constant: CPQ::DegeneracyConstantQuant,
-}
-
-impl<CPQ> Default for FeagiAdvancedModelCorticalData<CPQ>
-where
-    CPQ: FeagiAdvancedModelQuantization,
-{
-    fn default() -> Self {
-        todo!()
-    }
+    pub degeneracy_constant: DegeneracyConstant<CPQ::DegeneracyConstantQuant>,
 }
 
 impl<CPQ> NeuronModelCorticalData<CPQ> for FeagiAdvancedModelCorticalData<CPQ>
 where
     CPQ: FeagiAdvancedModelQuantization,
 {
-    const MODEL_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool = true;
-    const MODEL_SUPPORTS_CORTICAL_LAYOUT_DIMENSIONAL: bool = true;
+    const LEVEL: NeuronModelTypeAndQuantization = NeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard32bit);
 }
 
 impl<CPQ> FeagiAdvancedModelCorticalData<CPQ>
@@ -54,12 +47,12 @@ where
     CPQ: FeagiAdvancedModelQuantization,
 {
     pub fn new(
-        excitability: CPQ::PercentageQuant,
-        refractory_period_limit: CPQ::CorticalLimitAndSnoozeQuants,
-        fire_threshold_limit: CPQ::MembranePotentialQuant,
-        consecutive_fire_limit: CPQ::CorticalLimitAndSnoozeQuants,
-        snooze_period: CPQ::CorticalLimitAndSnoozeQuants,
-        degeneracy_constant: CPQ::DegeneracyConstantQuant,
+        excitability: PercentageUnsigned<CPQ::PercentageQuant>,
+        refractory_period_limit: RefractoryPeriodLimit<CPQ::CorticalLimitAndSnoozeQuants>,
+        fire_threshold_limit: NeuronMembranePotential<CPQ::MembranePotentialQuant>,
+        consecutive_fire_limit: ConsecutiveFireLimit<CPQ::CorticalLimitAndSnoozeQuants>,
+        snooze_period: SnoozePeriod<CPQ::CorticalLimitAndSnoozeQuants>,
+        degeneracy_constant: DegeneracyConstant<CPQ::DegeneracyConstantQuant>,
     ) -> Self {
         Self {
             excitability,
@@ -77,33 +70,28 @@ pub struct FeagiAdvancedModelNeuronData<CPQ>
 where
     CPQ: FeagiAdvancedModelQuantization,
 {
-    // TODO this is arguable a cortical level property except that fire threshold increment may be used. This is a prime example os something to move to an advanced model
-    pub neuron_fire_threshold: CPQ::MembranePotentialQuant,
-    pub neuron_leak_coefficient: CPQ::CorticalLimitAndSnoozeQuants,
-    pub neuron_refractory_countdown: CPQ::NeuronCountdownQuants,
-    pub neuron_consecutive_fire_countdown: CPQ::NeuronCountdownQuants,
+    pub neuron_fire_threshold: NeuronMembranePotential<CPQ::MembranePotentialQuant>,
+    pub neuron_leak_coefficient: LeakCoefficient<CPQ::DegeneracyConstantQuant>, // TODO is this correct quant?
+    pub neuron_refractory_countdown: RefractoryCountdown<CPQ::NeuronCountdownQuants>,
+    pub neuron_consecutive_fire_countdown: ConsecutiveFireCountdown<CPQ::NeuronCountdownQuants>,
 }
 
-impl<CPQ> Default for FeagiAdvancedModelNeuronData<CPQ>
+impl<CPQ> NeuronModelNeuronData<CPQ> for FeagiAdvancedModelNeuronData<CPQ>
 where
     CPQ: FeagiAdvancedModelQuantization,
 {
-    fn default() -> Self {
-        todo!()
-    }
+    const LEVEL: NeuronModelTypeAndQuantization = NeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard32bit);
 }
-
-impl<CPQ> NeuronModelNeuronData<CPQ> for FeagiAdvancedModelNeuronData<CPQ> where CPQ: FeagiAdvancedModelQuantization {}
 
 impl<CPQ> FeagiAdvancedModelNeuronData<CPQ>
 where
     CPQ: FeagiAdvancedModelQuantization,
 {
     pub fn new(
-        neuron_fire_threshold: CPQ::MembranePotentialQuant,
-        neuron_leak_coefficient: CPQ::CorticalLimitAndSnoozeQuants,
-        neuron_refractory_countdown: CPQ::NeuronCountdownQuants,
-        neuron_consecutive_fire_countdown: CPQ::NeuronCountdownQuants,
+        neuron_fire_threshold: NeuronMembranePotential<CPQ::MembranePotentialQuant>,
+        neuron_leak_coefficient: LeakCoefficient<CPQ::DegeneracyConstantQuant>,
+        neuron_refractory_countdown: RefractoryCountdown<CPQ::NeuronCountdownQuants>,
+        neuron_consecutive_fire_countdown: ConsecutiveFireCountdown<CPQ::NeuronCountdownQuants>,
     ) -> Self {
         Self {
             neuron_fire_threshold,

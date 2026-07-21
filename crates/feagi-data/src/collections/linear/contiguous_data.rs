@@ -283,6 +283,14 @@ impl<QI: QuantizedIndexCountTrait, V: Clone + Copy> Clone for QuantizedContiguou
 }
 
 impl<QI: QuantizedIndexCountTrait, V: Clone + Copy> QuantizedContiguousVector<QI, V> {
+    
+    pub fn new_empty() -> Self {
+        Self {
+            data: Vec::new(),
+            phantom_data: PhantomData,
+        }
+    }
+    
     pub fn new_uniform(number_values: QI, filling_value: V) -> QuantizedContiguousVector<QI, V> {
         // TODO ensure length isnt 0!
 
@@ -304,6 +312,15 @@ impl<QI: QuantizedIndexCountTrait, V: Clone + Copy> QuantizedContiguousVector<QI
     /// Consumes the wrapper, returning the backing `Vec`.
     pub fn into_vec(self) -> Vec<V> {
         self.data
+    }
+    
+    pub fn extend(&mut self, number_elements_to_extend: QI, extend_with: V)
+    {
+        // TODO set capacity?
+        // TODO not this
+        for _ in 0..number_elements_to_extend.quant_to_usize() {
+            self.data.push(extend_with);
+        }
     }
 }
 

@@ -61,7 +61,7 @@ make_index_and_linear_collections!(
     /// Neuron Indexed at the array for psp uniformity divisor
     NeuronPSPUniform);
 make_index_and_linear_collections!(
-    /// Neuron indexed at the common neuron model and quantization level within the engine
+    /// Neuron indexed at the neuron model and quantization level within the engine
     NeuronModel);
 
 // Cortical Areas
@@ -72,8 +72,24 @@ make_index_and_linear_collections!(
     /// Cortical area indexed at the burst engine level
     CorticalEngine);
 make_index_and_linear_collections!(
-    /// Cortical area indexed at the common neuron model and quantization level within the engine
+    /// Cortical area indexed at the neuron model and quantization level within the engine
     CorticalModel);
 make_index_and_linear_collections!(
     /// Cortical area indexed for layout. Is typed depending on layout type
     CorticalLayout);
+
+// Cortical Mapping Entry
+make_index_and_linear_collections!(
+    /// Cortical mapping entry indexed at the connectome level
+    MappingEntryConnectome);
+make_index_and_linear_collections!(
+    /// Cortical mapping entry indexed at the burst engine level
+    MappingEntryEngine);
+make_index_and_linear_collections!(
+    /// Cortical mapping entry indexed at the synapse model and quantization level within the engine
+    MappingEntryModel);
+
+// Synapse
+make_index_and_linear_collections!(
+    /// Cortical mapping entry indexed in regards to its parent cortical mapping
+    SynapseGlobal);

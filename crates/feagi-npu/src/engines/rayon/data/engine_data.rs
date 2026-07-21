@@ -1,6 +1,6 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::burst_index::BurstIndex;
-use feagi_npu_common::wrapped_indexes::CorticalModelIndexedVector;
+use feagi_models::wrapped_indexes::CorticalModelIndexedVector;
 use crate::engines::rayon::data::model_quantized_data::NeuronModelData;
 
 pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
@@ -12,7 +12,7 @@ pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
     // TODO Synapse
 
 
-    pub neuron_group_to_cortical_mapping: CorticalModelIndexedVector<>
+    pub neuron_group_to_cortical_mapping: CorticalModelIndexedVector<Q, V>
 
 
 }
