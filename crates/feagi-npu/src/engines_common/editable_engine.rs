@@ -1,9 +1,9 @@
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::neuron::common_structs::cortical_area_layout::CorticalAreaLayoutNested;
-use feagi_models::neuron::genome_interface::neuron_model_writer::NeuronModelWriter;
-use feagi_models::neuron::common_structs::model_and_quantization::NestedNeuronModelTypeAndQuantization;
-use feagi_models::neuron::models_shared_traits::data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use feagi_models::neuron::genome_interface::cortical_area_spawner::NeuronModelWriter;
+use feagi_models::neuron::model_and_quantization::NestedNeuronModelTypeAndQuantization;
+use feagi_models::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_models::wrapped_indexes::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 // 1: append consequences of commands (deleting / remaking connections)
 //  2: sort into the following order -> delete synapses -> delete areas -> resize area? -> make areas -> (re)make connections
@@ -12,11 +12,11 @@ use feagi_models::wrapped_indexes::{CorticalModelIndexedVector, NeuronModelIndex
 pub trait EditableEngine<FIQ: FeagiIndexQuantization> {
     //region Cortical Area
 
-    fn get_editable_cortical_area_data<CPQ: CorticalPotentialQuantization,  NMCD: NeuronModelCorticalData<CPQ>>(&mut self) -> &CorticalModelIndexedVector<FIQ::CorticalAreaIndexCountQuant, NMCD>;
+    fn get_editable_cortical_area_data<CPQ: MembranePotentialQuantization,  NMCD: NeuronModelCorticalData<CPQ>>(&mut self) -> &CorticalModelIndexedVector<FIQ::CorticalAreaIndexCountQuant, NMCD>;
     
-    fn get_editable_neuron_data<CPQ: CorticalPotentialQuantization,  NMND: NeuronModelNeuronData<CPQ>>(&mut self) -> &NeuronModelIndexedVector<FIQ::NeuronIndexCountQuant, NMND>;
+    fn get_editable_neuron_data<CPQ: MembranePotentialQuantization,  NMND: NeuronModelNeuronData<CPQ>>(&mut self) -> &NeuronModelIndexedVector<FIQ::NeuronIndexCountQuant, NMND>;
     
-    fn add_cortical_area<CPQ: CorticalPotentialQuantization, NMCD: NeuronModelCorticalData<CPQ>, NMND: NeuronModelNeuronData<CPQ>>(
+    fn add_cortical_area<CPQ: MembranePotentialQuantization, NMCD: NeuronModelCorticalData<CPQ>, NMND: NeuronModelNeuronData<CPQ>>(
         &mut self,
         cortical_area_layout: CorticalAreaLayoutNested<FIQ>,
         neuron_model_type_and_quantization: NestedNeuronModelTypeAndQuantization,

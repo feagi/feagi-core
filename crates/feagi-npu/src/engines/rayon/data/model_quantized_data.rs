@@ -1,10 +1,10 @@
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 /// Helper structs to make dealing with multiple quantizations / models less annoying
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::neuron::common_structs::model_and_quantization::NestedNeuronModelTypeAndQuantization;
+use feagi_models::neuron::model_and_quantization::NestedNeuronModelTypeAndQuantization;
 use feagi_models::neuron::models::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
 use feagi_models::neuron::models::feagi_advanced::quantization::{FeagiAdvancedModelQuantizationLevel, FeagiAdvancedModelStandard32BitQuant};
-use feagi_models::neuron::models_shared_traits::data::{NeuronModelCorticalData, NeuronModelNeuronData};
+use feagi_models::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_models::wrapped_indexes::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 
 // TODO coincidentally, this can also be used as connectome file storage...
@@ -35,7 +35,7 @@ impl<FIQ: FeagiIndexQuantization> NeuronModelData<FIQ> {
         }
     }
     
-    pub fn get_quant_cortical_data<CPQ: CorticalPotentialQuantization, NMCD: NeuronModelCorticalData<CPQ>>(&self) -> &NMCD
+    pub fn get_quant_cortical_data<CPQ: MembranePotentialQuantization, NMCD: NeuronModelCorticalData<CPQ>>(&self) -> &NMCD
     {
         match NMCD::LEVEL {
             NestedNeuronModelTypeAndQuantization::FeagiAdvanced(quant) => {
@@ -46,7 +46,7 @@ impl<FIQ: FeagiIndexQuantization> NeuronModelData<FIQ> {
         }
     }
 
-    pub fn get_quant_neuron_data<CPQ: CorticalPotentialQuantization, NMND: NeuronModelNeuronData<CPQ>>(&self) -> &NMND
+    pub fn get_quant_neuron_data<CPQ: MembranePotentialQuantization, NMND: NeuronModelNeuronData<CPQ>>(&self) -> &NMND
     {
         match NMND::LEVEL {
             NestedNeuronModelTypeAndQuantization::FeagiAdvanced(quant) => {

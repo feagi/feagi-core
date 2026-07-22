@@ -1,8 +1,10 @@
-use crate::neuron::models::feagi_advanced::quantization::FeagiAdvancedModelQuantizationLevel;
-use crate::neuron::models_shared_traits::NeuronModelQuantizationLevel;
-use feagi_data::values::quantizable::DecimalQuantizationLevel;
 
+use feagi_data::values::quantizable::DecimalQuantizationLevel;
+use crate::neuron::models::feagi_advanced::{FeagiAdvancedModel, FeagiAdvancedModelQuantizationLevel};
+use crate::neuron::neuron_model::NeuronModel;
+use crate::neuron::neuron_model_quantization::NeuronModelQuantizationLevel;
 // TODO build.rs should generate these enums
+
 
 /// Describes what Neuron Model is being used without further context. Internally is encoded as an
 /// u8 of the same value of the neuron models `MODEL_INDEX` for bitpacking reasons. This makes
@@ -10,9 +12,9 @@ use feagi_data::values::quantizable::DecimalQuantizationLevel;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum NeuronModelType {
-    // The individual implementations calculate their bits. Use those
-    FeagiAdvanced = FeagiAdvancedModelQuantizationLevel::MODEL_INDEX,
+    FeagiAdvanced = FeagiAdvancedModel::MODEL_INDEX,
 }
+
 
 /// Describes the neuron model and the neuron model quantization it uses as a nested enum. This
 /// makes it convenient to use but not store in cross platform environments
@@ -38,12 +40,12 @@ impl NestedNeuronModelTypeAndQuantization {
     /// this for high performance requiring functions)
     pub fn get_membrane_potential_quantization(&self) -> DecimalQuantizationLevel {
         match &self {
-            NestedNeuronModelTypeAndQuantization::FeagiAdvanced(model_quant) => model_quant.get_cortical_potential_level(),
+            NestedNeuronModelTypeAndQuantization::FeagiAdvanced(model_quant) => model_quant.get_membrane_potential_level(),
         }
     }
     
     /// Returns the `PackedNeuronModelTypeAndQuantization` of this enum
-    pub fn to_packed(self) -> PackedNeuronModelTypeAndQuantization {
+    pub const fn to_packed(self) -> PackedNeuronModelTypeAndQuantization {
         PackedNeuronModelTypeAndQuantization::from_nested(self)
     }
 }
@@ -58,22 +60,22 @@ impl NestedNeuronModelTypeAndQuantization {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum PackedNeuronModelTypeAndQuantization {
     #[default]
-    FeagiAdvanced_Standard32Bit = FeagiAdvancedModelQuantizationLevel::MODEL_INDEX & (FeagiAdvancedModelQuantizationLevel::Standard32bit as u8),
+    FeagiAdvanced_Standard32 = FeagiAdvancedModel::MODEL_INDEX & (FeagiAdvancedModelQuantizationLevel::Standard as u8),
 }
 
 impl PackedNeuronModelTypeAndQuantization {
-    pub fn from_nested(nested: NestedNeuronModelTypeAndQuantization) -> Self {
+    pub const fn from_nested(nested: NestedNeuronModelTypeAndQuantization) -> Self {
         match nested {
             NestedNeuronModelTypeAndQuantization::FeagiAdvanced(v) => match v {
-                FeagiAdvancedModelQuantizationLevel::Standard32bit => PackedNeuronModelTypeAndQuantization::FeagiAdvanced_Standard32Bit,
+                FeagiAdvancedModelQuantizationLevel::Standard => PackedNeuronModelTypeAndQuantization::FeagiAdvanced_Standard32,
             },
         }
     }
 
     pub fn to_unpacked(self) -> NestedNeuronModelTypeAndQuantization {
         match self {
-            PackedNeuronModelTypeAndQuantization::FeagiAdvanced_Standard32Bit => {
-                NestedNeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard32bit)
+            PackedNeuronModelTypeAndQuantization::FeagiAdvanced_Standard32 => {
+                NestedNeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard)
             }
         }
     }

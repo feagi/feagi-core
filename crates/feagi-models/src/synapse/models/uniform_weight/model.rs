@@ -3,7 +3,7 @@ use crate::synapse::models::uniform_weight::quantization::UniformSynapseModelQua
 use crate::synapse::shared::model::{SynapseModelProcessorAxonBundleOnly, SynapseModelProcessorBase};
 use core::marker::PhantomData;
 use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedDecimalTrait;
 
@@ -11,8 +11,8 @@ pub struct BasicSynapseModelProcessor<FIQ, SMQ, CPQIn, CPQOut>
 where
     FIQ: FeagiIndexQuantization,
     SMQ: UniformSynapseModelQuantization,
-    CPQIn: CorticalPotentialQuantization,
-    CPQOut: CorticalPotentialQuantization,
+    CPQIn: MembranePotentialQuantization,
+    CPQOut: MembranePotentialQuantization,
 {
     // No actual members
     _p: PhantomData<(FIQ, SMQ, CPQIn, CPQOut)>,
@@ -23,8 +23,8 @@ impl<FIQ, SMQ, CPQIn, CPQOut> SynapseModelProcessorBase<FIQ, SMQ, BasicSynapseMo
 where
     FIQ: FeagiIndexQuantization,
     SMQ: UniformSynapseModelQuantization,
-    CPQIn: CorticalPotentialQuantization,
-    CPQOut: CorticalPotentialQuantization,
+    CPQIn: MembranePotentialQuantization,
+    CPQOut: MembranePotentialQuantization,
 {
     type CustomContext = ();
 }
@@ -34,8 +34,8 @@ impl<FIQ, SMQ, CPQIn, CPQOut> SynapseModelProcessorAxonBundleOnly<FIQ, SMQ, Basi
 where
     FIQ: FeagiIndexQuantization,
     SMQ: UniformSynapseModelQuantization,
-    CPQIn: CorticalPotentialQuantization,
-    CPQOut: CorticalPotentialQuantization,
+    CPQIn: MembranePotentialQuantization,
+    CPQOut: MembranePotentialQuantization,
 {
     fn process_neuron_potential_through_bundle(
         outgoing_potential: &NeuronMembranePotential<CPQIn::MembranePotentialQuant>,

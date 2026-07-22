@@ -5,7 +5,7 @@ use feagi_npu_dynamic_allocator::npu_request::request_type::NPURequest;
 use feagi_npu_dynamic_allocator::npu_request::parameters::cortical_area::{NPURequestParametersCorticalArea, NPURequestParametersCorticalAreaCreate};
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex};
 use feagi_models::neuron::models::feagi_advanced::model::FeagiAdvancedModel;
-use feagi_models::neuron::models_shared_traits::model::NeuronModel;
+use feagi_models::neuron::neuron_model::NeuronModel;
 
 type StandardNeuronQuantization = <FeagiGlobalQuantizationAbsurd as FeagiIndexQuantization>::NeuronIndexCountQuant; // TODO swap from absurd
 

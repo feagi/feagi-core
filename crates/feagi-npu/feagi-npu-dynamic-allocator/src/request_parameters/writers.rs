@@ -1,13 +1,13 @@
 pub mod cortical_neuron_writers {
     use core::marker::PhantomData;
     use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex};
-    use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+    use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
     use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-    use feagi_models::neuron::models_shared_traits::data::NeuronModelNeuronData;
+    use feagi_models::neuron::neuron_model_data::NeuronModelNeuronData;
 
     /// Writes neuron data within a dimensional cortical area
     pub trait DimensionalCorticalNeuronWriter {
-        type CorticalModelAndQuant: CorticalPotentialQuantization;
+        type CorticalModelAndQuant: MembranePotentialQuantization;
         type NeuronData: NeuronModelNeuronData<Self::CorticalModelAndQuant>;
 
         /// This function will be called using some `DimensionalCorticalNeuronIterator` to modify
@@ -22,7 +22,7 @@ pub mod cortical_neuron_writers {
 
     /// Writes neuron data within a memory cortical area
     pub trait MemoryCorticalNeuronWriter {
-        type CorticalModelAndQuant: CorticalPotentialQuantization;
+        type CorticalModelAndQuant: MembranePotentialQuantization;
         type NeuronData: NeuronModelNeuronData<Self::CorticalModelAndQuant>;
 
         /// This function will be called using some `MemoryCorticalNeuronIterator` to modify

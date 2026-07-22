@@ -1,9 +1,9 @@
 use feagi_data::index_range_managers::index_manager::IndexManager;
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::neuron::common_structs::cortical_area_layout::CorticalAreaLayoutNested;
-use feagi_models::neuron::common_structs::model_and_quantization::NestedNeuronModelTypeAndQuantization;
-use feagi_models::neuron::models_shared_traits::data::NeuronModelNeuronData;
+use feagi_models::neuron::model_and_quantization::NestedNeuronModelTypeAndQuantization;
+use feagi_models::neuron::neuron_model_data::NeuronModelNeuronData;
 use feagi_npu_common::wrapped_indexes::CorticalEngineIndex;
 
 
@@ -27,7 +27,7 @@ impl<FIQ: FeagiIndexQuantization> BurstEngineContext<FIQ> {
 
 
 
-    fn add_cortical_area<CPQ: CorticalPotentialQuantization, Model: NeuronModelNeuronData<CPQ>>(
+    fn add_cortical_area<CPQ: MembranePotentialQuantization, Model: NeuronModelNeuronData<CPQ>>(
         &mut self,
         neuron_writer: &impl CorticalWriter<FIQ, CPQ, Model, Layout>,
     ) -> CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant> {

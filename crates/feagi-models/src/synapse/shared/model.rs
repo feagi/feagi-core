@@ -1,7 +1,7 @@
 use crate::synapse::shared::data::{SynapseModelAxonBundleData, SynapseModelSynapseData};
 use crate::synapse::shared::quantization::{SynapseModelQuantization, SynapseModelQuantizationLevel};
 use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root base trait for defining synapse firing and alteration of
@@ -11,8 +11,8 @@ where
     FIQ: FeagiIndexQuantization,
     SMQ: SynapseModelQuantization,
     SMABD: SynapseModelAxonBundleData<SMQ>,
-    CPQIn: CorticalPotentialQuantization,
-    CPQOut: CorticalPotentialQuantization,
+    CPQIn: MembranePotentialQuantization,
+    CPQOut: MembranePotentialQuantization,
 {
     // TODO custom context may need to be moved somewhere else, cause wouldnt this cause slowdown for memory stuff?
     /// Some synapses require custom contexts / additional information. This advanced parameter
@@ -25,8 +25,8 @@ where
     FIQ: FeagiIndexQuantization,
     SMQ: SynapseModelQuantization,
     SMABD: SynapseModelAxonBundleData<SMQ>,
-    CPQIn: CorticalPotentialQuantization,
-    CPQOut: CorticalPotentialQuantization,
+    CPQIn: MembranePotentialQuantization,
+    CPQOut: MembranePotentialQuantization,
 {
     fn process_neuron_potential_through_bundle(
         outgoing_potential: &NeuronMembranePotential<CPQIn::MembranePotentialQuant>,
@@ -45,8 +45,8 @@ where
     SMQ: SynapseModelQuantization,
     SMABD: SynapseModelAxonBundleData<SMQ>,
     SMSD: SynapseModelSynapseData<SMQ>,
-    CPQIn: CorticalPotentialQuantization,
-    CPQOut: CorticalPotentialQuantization,
+    CPQIn: MembranePotentialQuantization,
+    CPQOut: MembranePotentialQuantization,
 {
     fn process_neuron_potential_through_synapse(
         outgoing_potential: &NeuronMembranePotential<CPQIn::MembranePotentialQuant>,
