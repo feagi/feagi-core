@@ -5,6 +5,10 @@ use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
+pub trait CorticalAreaSpawner {
+    
+}
+
 /// Writes the data for a dimensional cortical area, both dimensional and neuron, to init a cortical
 /// area of a given neuron model
 pub trait DimensionalCorticalAreaSpawner {
@@ -12,8 +16,8 @@ pub trait DimensionalCorticalAreaSpawner {
     type CorticalData: NeuronModelCorticalData<Self::NeuronModelQuantization>;
     type NeuronData: NeuronModelNeuronData<Self::NeuronModelQuantization>;
 
-    /// Given a mutable slice of all neurons of a dimensional cortical area and the cortical area, 
-    /// write the data for this new cortical area. Note that if the area does not contain per 
+    /// Given a mutable slice of all neurons of a dimensional cortical area and the cortical area,
+    /// write the data for this new cortical area. Note that if the area does not contain per
     /// neuron data, existing_neurons will be empty
     fn write_all_neuron_data<FIQ: FeagiIndexQuantization>(
         &self,
@@ -68,7 +72,7 @@ where
         existing_neurons: &mut [Self::NeuronData],
         _dimensions: &DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
     ) {
-        *existing_cortical = self.uniform_neuron_data;
+        *existing_cortical = self.cortical_data.clone();
         existing_neurons.iter_mut().for_each(|existing| {
             *existing = self.uniform_neuron_data.clone();
         })

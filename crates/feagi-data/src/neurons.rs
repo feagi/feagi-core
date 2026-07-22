@@ -16,12 +16,6 @@ create_wrapped_quantized_index!(
     pub NeuronVoxelDensityIndex
 );
 
-impl<Q: QuantizedIndexCountTrait> Default for NeuronVoxelDensityIndex<Q> {
-    fn default() -> Self {
-        NeuronVoxelDensityIndex(Q::QUANT_ONE)
-    }
-}
-
 create_wrapped_quantized_index!(
     /// Index of a neuron relative to its parent cortical area
     pub NeuronCorticalLocalIndex

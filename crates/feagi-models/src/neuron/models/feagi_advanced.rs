@@ -190,7 +190,6 @@ where
     FIQ: FeagiIndexQuantization,
     NMQ: FeagiAdvancedModelQuantization,
 {
-    const MODEL_INDEX: u8 = 0;
     type CorticalData = FeagiAdvancedModelCorticalData<NMQ>;
     type NeuronData = FeagiAdvancedModelNeuronData<NMQ>;
     type NeuronHistoryType = NeuronModelFullNeuronHistory<FIQ>;

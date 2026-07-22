@@ -21,7 +21,7 @@ pub trait DimensionalCorticalNeuronIterator {
         &self,
         dimensions: &DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
     ) -> usize {
-        Self::iterate_over_dimensional_neuron_indexes(self, dimensions,).count()
+        Self::iterate_over_dimensional_neuron_indexes::<FIQ>(self, dimensions,).count()
     }
 }
 
@@ -39,6 +39,6 @@ pub trait FormlessLayoutCorticalNeuronIterator {
     fn number_neurons_iterated<FIQ: FeagiIndexQuantization>(
         total_neuron_count: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
     ) -> usize {
-        Self::iterate_over_memory_neuron_indexes(total_neuron_count).count()
+        Self::iterate_over_memory_neuron_indexes::<FIQ>(total_neuron_count).count()
     }
 }

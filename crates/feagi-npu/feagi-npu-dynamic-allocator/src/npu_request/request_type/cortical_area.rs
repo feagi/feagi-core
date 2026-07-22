@@ -1,5 +1,6 @@
 
 use feagi_genomic::feagi_genomic_context::cortical_area::{CorticalAreaType, CorticalID};
+use feagi_models::neuron::genome_interface::cortical_area_spawner::DimensionalCorticalAreaSpawner;
 use crate::npu_request::npu_request::{ConnectomeRequest, NPURequestConnectomeConsequences,};
 use crate::npu_state_manager::burst_engine_context::burst_engine_context::BurstEngineIndex;
 
@@ -31,7 +32,11 @@ impl NPURequestAddCorticalArea
         todo!()
     }
 
-    pub fn new_interneuron_area(cortical_id: CorticalID, ) -> Self {
+    pub fn new_interneuron_area(
+        cortical_id: CorticalID,
+        dimensional_area_spawner: Box<dyn DimensionalCorticalAreaSpawner>
+    
+    ) -> Self {
         todo!()
     }
 

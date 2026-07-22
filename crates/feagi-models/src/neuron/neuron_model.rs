@@ -11,9 +11,6 @@ where
     FIQ: FeagiIndexQuantization,
     NMQ: NeuronModelQuantization,
 {
-    /// All Neuron Models must have a UNIQUE model index in the range from 0 to 32 (5 bits)
-    const MODEL_INDEX: u8;
-    
     /// The type of cortical data this neuron model needs
     type CorticalData: NeuronModelCorticalData<NMQ>;
     /// The per neuron data needed by this neuron model. To have none, use `EmptyPerNeuronData`

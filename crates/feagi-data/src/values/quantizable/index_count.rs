@@ -682,6 +682,12 @@ macro_rules! create_wrapped_quantized_index {
                 self.0 %= rhs.0;
             }
         }
+        
+                impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> Default for $struct_name<Q> {
+            fn default() -> Self {
+                Self(Q::default())
+            }
+        }
 
     };
 }

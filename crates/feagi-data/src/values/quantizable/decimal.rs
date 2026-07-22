@@ -416,5 +416,11 @@ macro_rules! create_wrapped_quantized_decimal {
                 self.0 /= rhs.0;
             }
         }
+        
+        impl<Q: $crate::values::quantizable::QuantizedDecimalTrait> Default for $struct_name<Q> {
+            fn default() -> Self {
+                Self(Q::default())
+            }
+        }
     };
 }

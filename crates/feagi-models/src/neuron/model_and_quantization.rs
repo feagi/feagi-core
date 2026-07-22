@@ -1,7 +1,6 @@
 
 use feagi_data::values::quantizable::DecimalQuantizationLevel;
 use crate::neuron::models::feagi_advanced::{FeagiAdvancedModel, FeagiAdvancedModelQuantizationLevel};
-use crate::neuron::neuron_model::NeuronModel;
 use crate::neuron::neuron_model_quantization::NeuronModelQuantizationLevel;
 // TODO build.rs should generate these enums
 
@@ -12,7 +11,7 @@ use crate::neuron::neuron_model_quantization::NeuronModelQuantizationLevel;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum NeuronModelType {
-    FeagiAdvanced = FeagiAdvancedModel::MODEL_INDEX,
+    FeagiAdvanced = 0
 }
 
 
@@ -60,7 +59,7 @@ impl NestedNeuronModelTypeAndQuantization {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum PackedNeuronModelTypeAndQuantization {
     #[default]
-    FeagiAdvanced_Standard32 = FeagiAdvancedModel::MODEL_INDEX & (FeagiAdvancedModelQuantizationLevel::Standard as u8),
+    FeagiAdvanced_Standard32 = NeuronModelType::FeagiAdvanced as u8 & (FeagiAdvancedModelQuantizationLevel::Standard as u8),
 }
 
 impl PackedNeuronModelTypeAndQuantization {
