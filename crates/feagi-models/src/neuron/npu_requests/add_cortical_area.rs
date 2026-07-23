@@ -1,6 +1,6 @@
 // TODO build.rs should build this struct tree
 
-use crate::neuron::genome_interface::cortical_area_spawner::DimensionalCorticalAreaSpawner;
+use crate::neuron::genome_interface::cortical_area_spawners::DimensionalCorticalAreaSpawner;
 use crate::neuron::models::feagi_advanced::{
     FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData, FeagiAdvancedModelQuantization, FeagiAdvancedModelStandardQuant,
 };

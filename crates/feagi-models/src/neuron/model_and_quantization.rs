@@ -1,6 +1,6 @@
 
 use feagi_data::values::quantizable::DecimalQuantizationLevel;
-use crate::neuron::models::feagi_advanced::{FeagiAdvancedModel, FeagiAdvancedModelQuantizationLevel};
+use crate::neuron::models::feagi_advanced::{FeagiAdvancedModelQuantizationLevel};
 use crate::neuron::neuron_model_quantization::NeuronModelQuantizationLevel;
 // TODO build.rs should generate these enums
 
@@ -28,7 +28,7 @@ impl NestedNeuronModelTypeAndQuantization {
         packed.to_unpacked()
     }
     
-    pub fn strip_quantization(&self) -> NeuronModelType {
+    pub const fn strip_quantization(&self) -> NeuronModelType {
         match self {
             NestedNeuronModelTypeAndQuantization::FeagiAdvanced(_) => NeuronModelType::FeagiAdvanced,
         }
@@ -53,7 +53,7 @@ impl NestedNeuronModelTypeAndQuantization {
 /// An enum describing all possible neuron model and model quantizations as a flat list. This is
 /// intended for rapid lookups in the NPU and not really general use. The bytes / bits are
 /// based on `NEURON_MODEL_TYPE_BITMASK` and `NEURON_MODEL_QUANTIZATION_BITMASK` from
-/// `NeuronModelQuantizationLevels`. This is all done ina  single byte.
+/// `NeuronModelQuantizationLevels`. This is all done in a single byte.
 #[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]

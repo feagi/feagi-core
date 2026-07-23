@@ -15,7 +15,8 @@ description = "Contains the logic for the neural processing unit and their inter
 
 default = [
     "std",
-    "use-rayon"
+    "use-rayon",
+    "editable"
 ]
 
 # ========================= Toggleable Features ========================= #
@@ -27,6 +28,11 @@ default = [
 use-rayon = [
     "rayon",
     "std",
+]
+
+# Enables interfaces for editing connectomes, such as adding / removing cortical areas and mappings
+editable = [
+    "std"
 ]
 
 
@@ -43,9 +49,6 @@ alloc = [
 
 
 [dependencies]
-feagi-npu-common = {path = "feagi-npu-common"}
-feagi-npu-dynamic-allocator = {path = "feagi-npu-dynamic-allocator"}
-
 feagi-data = {path = "../feagi-data"}
 feagi-models = {path = "../feagi-models" }
 feagi-genomic = {path = "../feagi-genomic"}

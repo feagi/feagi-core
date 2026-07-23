@@ -5,7 +5,6 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantiz
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, PercentageUnsigned, QuantizedDecimalTrait, QuantizedIndexCountTrait};
 use crate::wrapped_indexes::BurstIndex;
-use crate::neuron::genome_interface::cortical_area_spawner::DimensionalCorticalAreaSpawner;
 use crate::neuron::model_and_quantization::{NestedNeuronModelTypeAndQuantization, NeuronModelType};
 use crate::neuron::model_extensions::neuron_burst_index_rollover_handling::NeuronModelNoSpecialBurstIndexRolloverHandling;
 use crate::neuron::model_extensions::neuron_history::NeuronModelFullNeuronHistory;
@@ -17,7 +16,7 @@ use crate::neuron::neuron_model_quantization::{NeuronModelQuantization, NeuronMo
 // TODO a lot of this is honestly proc macro work
 //region Quantization
 
-pub trait FeagiAdvancedModelQuantization: NeuronModelQuantization + Default + Clone {
+pub trait FeagiAdvancedModelQuantization: NeuronModelQuantization {
     const MODEL_QUANTIZATION_LEVEL: FeagiAdvancedModelQuantizationLevel;
 
     type NeuronCountdownQuants: QuantizedIndexCountTrait;
@@ -71,6 +70,8 @@ impl NeuronModelQuantizationLevel for FeagiAdvancedModelQuantizationLevel
             FeagiAdvancedModelQuantizationLevel::Standard => DecimalQuantizationLevel::F32
         }
     }
+
+    // TODO copy some properties here
 }
 
 
@@ -197,6 +198,8 @@ where
     type NeuronHistoryType = NeuronModelFullNeuronHistory<FIQ>;
     type BurstIndexRolloverHandling = NeuronModelNoSpecialBurstIndexRolloverHandling;
 }
+
+// Support Dimensional Cortical Areas
 
 impl<FIQ, NMQ> DimensionalNeuronModel<FIQ, NMQ> for FeagiAdvancedModel<FIQ, NMQ>
 where

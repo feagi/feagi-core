@@ -1,10 +1,6 @@
-use crate::synapse::models::uniform_weight::quantization::UniformSynapseModelQuantization;
-use crate::synapse::shared::data::SynapseModelAxonBundleData;
-use feagi_data::create_wrapped_quantized_decimal;
+use crate::synapse::models::uniform_weight_D::quantization::UniformSynapseModelQuantization;
+use crate::synapse::synapse_model_data::SynapseModelAxonBundleData;
 
-create_wrapped_quantized_decimal!(
-    /// A multiplier synapse value, applies some scale to incoming signal
-   pub UniformSynapseMultiplier);
 
 // This synapse model has no per synapse data at all
 

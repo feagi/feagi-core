@@ -5,7 +5,7 @@
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::wrapped_indexes::BurstIndex;
-use crate::neuron::genome_interface::cortical_area_spawner::{DimensionalCorticalAreaSpawner, UniformDimensionalCorticalAreaSpawner};
+use crate::neuron::genome_interface::cortical_area_spawners::{DimensionalCorticalAreaSpawner, UniformDimensionalCorticalAreaSpawner};
 use crate::neuron::neuron_model::NeuronModel;
 use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 

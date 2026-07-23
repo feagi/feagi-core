@@ -161,8 +161,6 @@ members = [
     "crates/feagi-genomic/feagi-genomic-context",
     "crates/feagi-genomic/feagi-genomic-data",
     "crates/feagi-npu",
-    "crates/feagi-npu/feagi-npu-common",
-    "crates/feagi-npu/feagi-npu-dynamic-allocator"
 ]
 
 [workspace.package]

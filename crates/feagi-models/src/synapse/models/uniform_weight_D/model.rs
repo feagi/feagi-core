@@ -1,6 +1,6 @@
-use crate::synapse::models::uniform_weight::data::BasicSynapseModelAxonBundleData;
-use crate::synapse::models::uniform_weight::quantization::UniformSynapseModelQuantization;
-use crate::synapse::shared::model::{SynapseModelProcessorAxonBundleOnly, SynapseModelProcessorBase};
+use crate::synapse::models::uniform_weight_D::data::BasicSynapseModelAxonBundleData;
+use crate::synapse::models::uniform_weight_D::quantization::UniformSynapseModelQuantization;
+use crate::synapse::synapse_model::{SynapseModelProcessorAxonBundleOnly, SynapseModelProcessorBase};
 use core::marker::PhantomData;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;

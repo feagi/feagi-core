@@ -4,6 +4,6 @@
 //! in the rest of FEAGI (the only exception should be for struct initialization to pass in
 //! immediately into the NPU)
 
-pub mod cortical_area_spawner;
+pub mod cortical_area_spawners;
 pub mod iterators;
 

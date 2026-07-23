@@ -3,9 +3,9 @@ use crate::neuron::model_and_quantization::{NestedNeuronModelTypeAndQuantization
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_data::values::quantizable::DecimalQuantizationLevel;
 
-/// Common root trait shared by all neuron Model Quantizations. This trait should be extended
+/// Common root trait shared by all Neuron Model Quantizations. This trait should be extended
 /// by the given neuron model to add any quantization parameters for their given data
-pub trait NeuronModelQuantization: MembranePotentialQuantization {
+pub trait NeuronModelQuantization: MembranePotentialQuantization + Default + Clone {
     /// A flat enum value denoting what type of neuron model this neuron model instance is
     const NEURON_MODEL: NeuronModelType;
 
@@ -32,17 +32,6 @@ pub trait NeuronModelQuantization: MembranePotentialQuantization {
 /// `PackedNeuronModelTypeAndQuantization` for use in burst engines This trait should be implemented
 /// for an enum that represents the different quantization presets of the neuron model.
 pub trait NeuronModelQuantizationLevel: Clone + Copy + Hash + Eq + PartialEq + Default {
-    /// The number of bits dedicated to the model type
-    //const NUMBER_BITS_FOR_NEURON_MODEL_TYPE: u8 = 5;
-
-    /// The number of bits dedicated to the quantization level
-    //const NUMBER_BITS_FOR_NEURON_MODEL_QUANTIZATION: u8 = 8 - Self::NUMBER_BITS_FOR_NEURON_MODEL_TYPE; // 3
-    //const NEURON_MODEL_TYPE_BITMASK: u8 = 255 << Self::NUMBER_BITS_FOR_NEURON_MODEL_QUANTIZATION; // 0b1111_1000
-    //const NEURON_MODEL_QUANTIZATION_BITMASK: u8 = 255 >> Self::NUMBER_BITS_FOR_NEURON_MODEL_TYPE; // 0b0000_0111
-
-    /// The index of the model. Make sure it does not conflict with other models
-    //const MODEL_INDEX: u8;
-
     /// Calculate the membrane potential level from the given neuron model quantization level. Note
     /// that we do not expect that this be directly encoded in the byte, and should be calculated.
     /// This is alright since this is not used in extremely performance sensitive use cases.

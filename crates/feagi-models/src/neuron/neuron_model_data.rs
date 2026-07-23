@@ -14,10 +14,10 @@ where
     /// A flat enum value denoting the quantization level of this neuron model instance
     const NEURON_QUANTIZATION: NMQ::QuantLevelType = NMQ::NEURON_QUANTIZATION;
     /// A nested enum that denotes both the neuron model and the quantization at runtime.
-    const NEURON_MODEL_AND_QUANTIZATION: NestedNeuronModelTypeAndQuantization = NMQ::NESTED_NEURON_MODEL_AND_QUANTIZATION;
+    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NestedNeuronModelTypeAndQuantization = NMQ::NESTED_NEURON_MODEL_AND_QUANTIZATION;
     /// A flat enum (byte) that denotes both the neuron model and the quantization at runtime. Mainly
     /// useful for NPU
-    const NEURON_PACKED_MODEL_AND_QUANTIZATION: PackedNeuronModelTypeAndQuantization = NMQ::PACKED_NEURON_MODEL_AND_QUANTIZATION;
+    const PACKED_NEURON_MODEL_AND_QUANTIZATION: PackedNeuronModelTypeAndQuantization = NMQ::PACKED_NEURON_MODEL_AND_QUANTIZATION;
 }
 
 /// Root trait for all neuron data implementation, essentially per neuron data for a given
@@ -39,10 +39,10 @@ where
     /// A flat enum value denoting the quantization level of this neuron model instance
     const NEURON_QUANTIZATION: NMQ::QuantLevelType = NMQ::NEURON_QUANTIZATION;
     /// A nested enum that denotes both the neuron model and the quantization at runtime.
-    const NEURON_MODEL_AND_QUANTIZATION: NestedNeuronModelTypeAndQuantization = NMQ::NESTED_NEURON_MODEL_AND_QUANTIZATION;
+    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NestedNeuronModelTypeAndQuantization = NMQ::NESTED_NEURON_MODEL_AND_QUANTIZATION;
     /// A flat enum (byte) that denotes both the neuron model and the quantization at runtime. Mainly
     /// useful for NPU
-    const NEURON_PACKED_MODEL_AND_QUANTIZATION: PackedNeuronModelTypeAndQuantization = NMQ::PACKED_NEURON_MODEL_AND_QUANTIZATION;
+    const PACKED_NEURON_MODEL_AND_QUANTIZATION: PackedNeuronModelTypeAndQuantization = NMQ::PACKED_NEURON_MODEL_AND_QUANTIZATION;
 }
 
 /// A neuron "implementation" to use if your neuron model does not need to store per neuron data

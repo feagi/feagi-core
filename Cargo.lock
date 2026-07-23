@@ -233,35 +233,10 @@ dependencies = [
  "feagi-data",
  "feagi-genomic",
  "feagi-models",
- "feagi-npu-common",
- "feagi-npu-dynamic-allocator",
  "paste",
  "rayon",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "feagi-npu-common"
-version = "0.0.12"
-dependencies = [
- "ahash",
- "feagi-data",
- "paste",
- "rayon",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "feagi-npu-dynamic-allocator"
-version = "0.0.12"
-dependencies = [
- "feagi-data",
- "feagi-genomic",
- "feagi-models",
- "feagi-npu-common",
- "paste",
 ]
 
 [[package]]

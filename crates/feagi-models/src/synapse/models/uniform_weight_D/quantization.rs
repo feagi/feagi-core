@@ -1,6 +1,6 @@
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait};
-use crate::synapse::interfacing::model_and_quantization::PackedSynapseModelTypeAndQuantization;
-use crate::synapse::shared::quantization::{SynapseModelQuantization, SynapseModelQuantizationLevel};
+use crate::synapse::model_and_quantization::PackedSynapseModelTypeAndQuantization;
+use crate::synapse::synapse_model_quantization::{SynapseModelQuantization, SynapseModelQuantizationLevel};
 
 /// The quantization used by the Uniform Synapse Model
 #[repr(u8)]
