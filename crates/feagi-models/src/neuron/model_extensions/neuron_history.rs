@@ -1,4 +1,4 @@
-use crate::burst_index::BurstIndex;
+use crate::wrapped_indexes::BurstIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Defines the type of neuron history that a neuron model will use. Do not extend this trait

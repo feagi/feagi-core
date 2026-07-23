@@ -15,3 +15,4 @@ pub mod cortical_flags;
 
 // TODO Use build.rs to automatically build enums and include! to bring them here!
 pub mod model_and_quantization;
+pub mod npu_requests;

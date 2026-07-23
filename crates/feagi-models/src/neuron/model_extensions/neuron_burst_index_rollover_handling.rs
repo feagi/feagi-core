@@ -1,4 +1,4 @@
-use crate::burst_index::BurstIndex;
+use crate::wrapped_indexes::BurstIndex;
 use crate::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;

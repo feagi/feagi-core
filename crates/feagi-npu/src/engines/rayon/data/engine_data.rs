@@ -1,6 +1,6 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::burst_index::BurstIndex;
-use feagi_models::wrapped_indexes::CorticalModelIndexedVector;
+use feagi_models::wrapped_indexes::BurstIndex;
+use feagi_models::wrapped_index_collections::CorticalModelIndexedVector;
 use crate::engines::rayon::data::model_quantized_data::NeuronModelData;
 
 pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {

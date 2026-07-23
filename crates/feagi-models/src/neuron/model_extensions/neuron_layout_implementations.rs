@@ -4,15 +4,15 @@
 
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::burst_index::BurstIndex;
-use crate::neuron::genome_interface::cortical_area_spawner::{DimensionalCorticalAreaSpawner, UniformCorticalAreaSpawner};
+use crate::wrapped_indexes::BurstIndex;
+use crate::neuron::genome_interface::cortical_area_spawner::{DimensionalCorticalAreaSpawner, UniformDimensionalCorticalAreaSpawner};
 use crate::neuron::neuron_model::NeuronModel;
 use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 
 //region Dimensional
 
 /// Extend `NeuronModel` to denote that the model can function on dimensional cortical areas
-pub trait NeuronModelDimensionalLayoutSupport<FIQ, NMQ>: NeuronModel<FIQ, NMQ>
+pub trait DimensionalNeuronModel<FIQ, NMQ>: NeuronModel<FIQ, NMQ>
 where // NOTE: These all should be extended for the given neuron model!
     FIQ: FeagiIndexQuantization,
     NMQ: NeuronModelQuantization,
@@ -36,8 +36,8 @@ where // NOTE: These all should be extended for the given neuron model!
     fn default_dimensional_area_cortical_data() -> Self::CorticalData;
     
     /// Default `DimensionalCorticalAreaSpawner` for creating this model with its initial parameters
-    fn default_dimensional_area_spawner() -> impl DimensionalCorticalAreaSpawner {
-        UniformCorticalAreaSpawner::new(
+    fn default_dimensional_area_spawner() -> impl DimensionalCorticalAreaSpawner<FIQ, NMQ, Self> {
+        UniformDimensionalCorticalAreaSpawner::new(
             Self::CorticalData::default(),
             Self::NeuronData::default(),
         )
@@ -46,4 +46,4 @@ where // NOTE: These all should be extended for the given neuron model!
 
 //endregion
 
-// TODO formless (similar as above but 
+// TODO formless (similar as above but no dimensions, only a count of neurons

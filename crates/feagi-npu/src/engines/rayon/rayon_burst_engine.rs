@@ -4,7 +4,7 @@ use feagi_models::neuron::common_structs::cortical_area_layout::CorticalAreaLayo
 use feagi_models::neuron::genome_interface::cortical_area_spawner::NeuronModelWriter;
 use feagi_models::neuron::model_and_quantization::NestedNeuronModelTypeAndQuantization;
 use feagi_models::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
-use feagi_models::wrapped_indexes::{CorticalModelIndexedVector, NeuronModelIndexedVector};
+use feagi_models::wrapped_index_collections::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 use crate::engines::rayon::data::RayonEngineData;
 use crate::engines_common::editable_engine::EditableEngine;
 

@@ -4,12 +4,12 @@ use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLoc
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, PercentageUnsigned, QuantizedDecimalTrait, QuantizedIndexCountTrait};
-use crate::burst_index::BurstIndex;
+use crate::wrapped_indexes::BurstIndex;
 use crate::neuron::genome_interface::cortical_area_spawner::DimensionalCorticalAreaSpawner;
 use crate::neuron::model_and_quantization::{NestedNeuronModelTypeAndQuantization, NeuronModelType};
 use crate::neuron::model_extensions::neuron_burst_index_rollover_handling::NeuronModelNoSpecialBurstIndexRolloverHandling;
 use crate::neuron::model_extensions::neuron_history::NeuronModelFullNeuronHistory;
-use crate::neuron::model_extensions::neuron_layout_implementations::NeuronModelDimensionalLayoutSupport;
+use crate::neuron::model_extensions::neuron_layout_implementations::DimensionalNeuronModel;
 use crate::neuron::neuron_model::NeuronModel;
 use crate::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use crate::neuron::neuron_model_quantization::{NeuronModelQuantization, NeuronModelQuantizationLevel};
@@ -72,6 +72,8 @@ impl NeuronModelQuantizationLevel for FeagiAdvancedModelQuantizationLevel
         }
     }
 }
+
+
 
 //endregion
 
@@ -196,7 +198,7 @@ where
     type BurstIndexRolloverHandling = NeuronModelNoSpecialBurstIndexRolloverHandling;
 }
 
-impl<FIQ, NMQ> NeuronModelDimensionalLayoutSupport<FIQ, NMQ> for FeagiAdvancedModel<FIQ, NMQ>
+impl<FIQ, NMQ> DimensionalNeuronModel<FIQ, NMQ> for FeagiAdvancedModel<FIQ, NMQ>
 where
     FIQ: FeagiIndexQuantization,
     NMQ: FeagiAdvancedModelQuantization,

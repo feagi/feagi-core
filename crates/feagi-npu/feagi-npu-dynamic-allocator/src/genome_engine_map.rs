@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_genomic::feagi_genomic_context::cortical_area::CorticalID;
-use feagi_models::wrapped_indexes::CorticalEngineIndex;
-use crate::npu_state_manager::burst_engine_context::burst_engine_context::BurstEngineIndex;
+use feagi_models::wrapped_index_collections::CorticalEngineIndex;
+
+pub type BurstEngineIndex = u8;
 
 /// Maps various Genome lookups to the NPU. Also used for some initial request validity checking
 pub trait GenomeEngineMap<FIQ: FeagiIndexQuantization> {
@@ -43,7 +44,7 @@ impl<FIQ: FeagiIndexQuantization> GenomeEngineMapSingleEngine<FIQ>
 impl<FIQ: FeagiIndexQuantization> GenomeEngineMap<FIQ> for GenomeEngineMapSingleEngine<FIQ> {
 
     fn try_get_engine_and_cortical_engine_index(&self, cortical_id: &CorticalID) -> Result<(CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, BurstEngineIndex), ()> {
-        let result = self.cortical_id_lookup.get(cortical_id).ok_or(Err(()))?;
+        let result = self.cortical_id_lookup.get(cortical_id).ok_or(())?;
         Ok((result.clone(), 0)) // engine index always 0
     }
 }

@@ -5,7 +5,7 @@ use feagi_models::neuron::model_and_quantization::NestedNeuronModelTypeAndQuanti
 use feagi_models::neuron::models::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
 use feagi_models::neuron::models::feagi_advanced::quantization::{FeagiAdvancedModelQuantizationLevel, FeagiAdvancedModelStandard32BitQuant};
 use feagi_models::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
-use feagi_models::wrapped_indexes::{CorticalModelIndexedVector, NeuronModelIndexedVector};
+use feagi_models::wrapped_index_collections::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 
 // TODO coincidentally, this can also be used as connectome file storage...
 

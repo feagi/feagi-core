@@ -1,53 +1,53 @@
 //! Traits and a basic implementation for creating cortical areas per layout
 
-use crate::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::neuron::model_extensions::neuron_layout_implementations::DimensionalNeuronModel;
+use crate::neuron::neuron_model::NeuronModel;
 
-pub trait CorticalAreaSpawner {
-    
-}
+//region Dimensional
 
 /// Writes the data for a dimensional cortical area, both dimensional and neuron, to init a cortical
 /// area of a given neuron model
-pub trait DimensionalCorticalAreaSpawner {
-    type NeuronModelQuantization: NeuronModelQuantization;
-    type CorticalData: NeuronModelCorticalData<Self::NeuronModelQuantization>;
-    type NeuronData: NeuronModelNeuronData<Self::NeuronModelQuantization>;
+pub trait DimensionalCorticalAreaSpawner<FIQ, NMQ, NM>
+where
+    FIQ: FeagiIndexQuantization,
+    NMQ: NeuronModelQuantization,
+    NM: DimensionalNeuronModel<FIQ, NMQ>,
+{
+
 
     /// Given a mutable slice of all neurons of a dimensional cortical area and the cortical area,
     /// write the data for this new cortical area. Note that if the area does not contain per
     /// neuron data, existing_neurons will be empty
-    fn write_all_neuron_data<FIQ: FeagiIndexQuantization>(
+    fn write_all_neuron_data(
         &self,
-        existing_cortical: &mut Self::CorticalData,
-        existing_neurons: &mut [Self::NeuronData],
+        existing_cortical: &mut NM::CorticalData,
+        existing_neurons: &mut [NM::NeuronData],
         dimensions: &DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
     );
 }
 
-// TODO Formless
-
 /// For any type of cortical area, writes neuron data in a uniform matter, which is a common default.
-pub struct UniformCorticalAreaSpawner<NMQ, NMCD, NMND>
+pub struct UniformDimensionalCorticalAreaSpawner<FIQ, NMQ, NM>
 where
+    FIQ: FeagiIndexQuantization,
     NMQ: NeuronModelQuantization,
-    NMCD: NeuronModelCorticalData<NMQ>,
-    NMND: NeuronModelNeuronData<NMQ>,
+    NM: NeuronModel<FIQ, NMQ>,
 {
-    cortical_data: NMCD,
-    uniform_neuron_data: NMND,
+    cortical_data: NM::CorticalData,
+    uniform_neuron_data: NM::NeuronData,
     _p: core::marker::PhantomData<NMQ>,
 }
 
-impl<NMQ, NMCD, NMND> UniformCorticalAreaSpawner<NMQ, NMCD, NMND>
+impl<FIQ, NMQ, NM> UniformDimensionalCorticalAreaSpawner<FIQ, NMQ, NM>
 where
+    FIQ: FeagiIndexQuantization,
     NMQ: NeuronModelQuantization,
-    NMCD: NeuronModelCorticalData<NMQ>,
-    NMND: NeuronModelNeuronData<NMQ>,
+    NM: NeuronModel<FIQ, NMQ>,
 {
-    pub fn new(cortical_data: NMCD, uniform_neuron_data: NMND) -> Self {
+    pub fn new(cortical_data: NM::CorticalData, uniform_neuron_data: NM::NeuronData) -> Self {
         Self {
             cortical_data,
             uniform_neuron_data,
@@ -56,20 +56,17 @@ where
     }
 }
 
-impl<NMQ, NMCD, NMND> DimensionalCorticalAreaSpawner for UniformCorticalAreaSpawner<NMQ, NMCD, NMND>
+impl<FIQ, NMQ, DNM> DimensionalCorticalAreaSpawner<FIQ, NMQ, DNM> for UniformDimensionalCorticalAreaSpawner<FIQ, NMQ, DNM>
 where
+    FIQ: FeagiIndexQuantization,
     NMQ: NeuronModelQuantization,
-    NMCD: NeuronModelCorticalData<NMQ>,
-    NMND: NeuronModelNeuronData<NMQ>,
+    DNM: DimensionalNeuronModel<FIQ, NMQ>,
 {
-    type NeuronModelQuantization = NMQ;
-    type CorticalData = NMCD;
-    type NeuronData = NMND;
 
-    fn write_all_neuron_data<FIQ: FeagiIndexQuantization>(
+    fn write_all_neuron_data(
         &self,
-        existing_cortical: &mut Self::CorticalData,
-        existing_neurons: &mut [Self::NeuronData],
+        existing_cortical: &mut DNM::CorticalData,
+        existing_neurons: &mut [DNM::NeuronData],
         _dimensions: &DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
     ) {
         *existing_cortical = self.cortical_data.clone();
@@ -78,5 +75,10 @@ where
         })
     }
 }
+
+//endregion
+
+// TODO Formless
+
 
 // TODO also implement for formless

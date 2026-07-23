@@ -6,7 +6,7 @@ use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data,
-pub trait NeuronModel<FIQ, NMQ>
+pub trait NeuronModel<FIQ, NMQ>: Sized
 where
     FIQ: FeagiIndexQuantization,
     NMQ: NeuronModelQuantization,
