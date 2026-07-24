@@ -10,8 +10,8 @@ use feagi_models::wrapped_index_collections::{CorticalEngineIndex, NeuronEngineI
 
 pub struct RayonAllocationManager<FIQ: FeagiIndexQuantization> {
     cortical_area: RayonCorticalAreaAllocationManager<FIQ>,
-    mapping_entry: RayonMappingEntryAllocationManager<FIQ>,
-    synapse: RayonSynapseAllocationManager<FIQ>,
+    //mapping_entry: RayonMappingEntryAllocationManager<FIQ>,
+    //synapse: RayonSynapseAllocationManager<FIQ>,
 }
 
 impl<FIQ: FeagiIndexQuantization> RayonAllocationManager<FIQ> {
@@ -25,7 +25,7 @@ struct RayonCorticalAreaAllocationManager<FIQ: FeagiIndexQuantization> {
 impl<FIQ: FeagiIndexQuantization> RayonCorticalAreaAllocationManager<FIQ> {
 
     /// Gets an immutable ref to the cortical to neuron range mapping manager to easily get context info
-    pub fn get_cortical_index_mappings(&self) -> &IndexRangeMappingManager<FIQ::CorticalAreaIndexCountQuant, FIQ::CorticalAreaIndexCountQuant> {
+    pub fn get_cortical_index_mappings(&self) -> &IndexRangeMappingManager<CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronEngineIndex<FIQ::NeuronIndexCountQuant>> {
         &self.engine_cortical_indexes
     }
 
@@ -36,11 +36,19 @@ impl<FIQ: FeagiIndexQuantization> RayonCorticalAreaAllocationManager<FIQ> {
         dimensions: DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
         spawner: impl DimensionalCorticalAreaSpawner<FIQ, NMQ, NM>,
     ) -> Result<(), ()> {
-        let amount_neurons_needed = dimensions.number_contained_elements()
-        let context = self.engine_cortical_indexes.allocate_for_length()
+        let amount_neurons_needed = NeuronEngineIndex::new(dimensions.number_contained_elements().deref());
+        let context = self.engine_cortical_indexes.allocate_for_length(amount_neurons_needed)?;
+        
+        
+        
+        todo!()
     }
 }
 
+/*
 struct RayonMappingEntryAllocationManager<FIQ: FeagiIndexQuantization> {}
 
 struct RayonSynapseAllocationManager<FIQ: FeagiIndexQuantization> {}
+
+
+ */

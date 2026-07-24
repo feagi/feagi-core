@@ -4,6 +4,8 @@ use crate::neuron::model_extensions::neuron_history::NeuronModelHistory;
 use crate::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::values::quantizable::QuantizedIndexCountTrait;
+use crate::wrapped_indexes::BurstIndex;
 
 /// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data,
 pub trait NeuronModel<FIQ, NMQ>: Sized
@@ -24,6 +26,9 @@ where
     /// in their implementation.
     type BurstIndexRolloverHandling: NeuronModelBurstIndexRolloverHandling<FIQ, NMQ, Self::CorticalData, Self::NeuronData>;
 
+    /// When creating a neuron, how far ba
+    const INITIAL_BURST_INDEX_OFFSET: BurstIndex<FIQ::GlobalBurstIndexQuant> = BurstIndex::QUANT_MAX;
+    
     // Proxied properties, here to make using this easier
     /// A flat enum denoting what type of neuron model this is
     const NEURON_MODEL: NeuronModelType  = NMQ::NEURON_MODEL;

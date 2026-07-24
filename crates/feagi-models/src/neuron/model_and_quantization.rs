@@ -59,21 +59,21 @@ impl NestedNeuronModelTypeAndQuantization {
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum PackedNeuronModelTypeAndQuantization {
     #[default]
-    FeagiAdvanced_Standard32 = NeuronModelType::FeagiAdvanced as u8 & (FeagiAdvancedModelQuantizationLevel::Standard as u8),
+    FeagiAdvanced_Standard = NeuronModelType::FeagiAdvanced as u8 & (FeagiAdvancedModelQuantizationLevel::Standard as u8),
 }
 
 impl PackedNeuronModelTypeAndQuantization {
     pub const fn from_nested(nested: NestedNeuronModelTypeAndQuantization) -> Self {
         match nested {
             NestedNeuronModelTypeAndQuantization::FeagiAdvanced(v) => match v {
-                FeagiAdvancedModelQuantizationLevel::Standard => PackedNeuronModelTypeAndQuantization::FeagiAdvanced_Standard32,
+                FeagiAdvancedModelQuantizationLevel::Standard => PackedNeuronModelTypeAndQuantization::FeagiAdvanced_Standard,
             },
         }
     }
 
     pub fn to_unpacked(self) -> NestedNeuronModelTypeAndQuantization {
         match self {
-            PackedNeuronModelTypeAndQuantization::FeagiAdvanced_Standard32 => {
+            PackedNeuronModelTypeAndQuantization::FeagiAdvanced_Standard => {
                 NestedNeuronModelTypeAndQuantization::FeagiAdvanced(FeagiAdvancedModelQuantizationLevel::Standard)
             }
         }

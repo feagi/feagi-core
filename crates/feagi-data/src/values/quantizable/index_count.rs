@@ -59,6 +59,7 @@ Copy
 + core::ops::MulAssign
 + core::ops::DivAssign
 + core::cmp::PartialOrd
++ core::cmp::Ord
 + core::iter::Sum
 + core::fmt::Debug
 + core::fmt::Display
@@ -480,6 +481,7 @@ Copy
 + core::cmp::PartialEq
 + core::cmp::Eq
 + core::cmp::PartialOrd
++ core::cmp::Ord
 + core::hash::Hash
 + core::ops::Add<Output=Self>
 + core::ops::Sub<Output=Self>
@@ -750,6 +752,8 @@ macro_rules! create_wrapped_quantized_index {
                 Self(self.0 % rhs.0)
             }
         }
+        
+
 
         impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> core::ops::AddAssign for $struct_name<Q> {
             fn add_assign(&mut self, rhs: Self) {

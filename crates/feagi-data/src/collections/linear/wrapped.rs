@@ -36,23 +36,19 @@ macro_rules! create_wrapped_contiguous_slice {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        $vis struct $struct_name<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>(
+        $vis struct $struct_name<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >(
             $crate::collections::linear::contiguous_data::QuantizedContiguousSlice<'a, Q, V>
         );
 
-        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy> Clone
+        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone > Clone
             for $struct_name<'a, Q, V>
         {
             fn clone(&self) -> Self {
-                *self
+                Self(self.0.clone())
             }
         }
 
-        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy> Copy
-            for $struct_name<'a, Q, V>
-        {}
-
-        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             $struct_name<'a, Q, V>
         {
             /// Wraps a raw shared slice.
@@ -125,7 +121,7 @@ macro_rules! create_wrapped_contiguous_slice {
             }
         }
 
-        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             core::ops::Index<$index<Q>> for $struct_name<'a, Q, V>
         {
             type Output = V;
@@ -134,7 +130,7 @@ macro_rules! create_wrapped_contiguous_slice {
             }
         }
 
-        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             From<&'a [V]> for $struct_name<'a, Q, V>
         {
             fn from(value: &'a [V]) -> Self {
@@ -160,11 +156,11 @@ macro_rules! create_wrapped_contiguous_slice_mut {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        $vis struct $struct_name<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>(
+        $vis struct $struct_name<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >(
             $crate::collections::linear::contiguous_data::QuantizedContiguousSliceMut<'a, Q, V>
         );
 
-        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             $struct_name<'a, Q, V>
         {
             /// Wraps a raw mutable slice.
@@ -293,7 +289,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             }
         }
 
-        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             core::ops::Index<$index<Q>> for $struct_name<'a, Q, V>
         {
             type Output = V;
@@ -302,7 +298,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             }
         }
 
-        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             core::ops::IndexMut<$index<Q>> for $struct_name<'a, Q, V>
         {
             fn index_mut(&mut self, index: $index<Q>) -> &mut V {
@@ -310,7 +306,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             }
         }
 
-        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<'a, Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             From<&'a mut [V]> for $struct_name<'a, Q, V>
         {
             fn from(value: &'a mut [V]) -> Self {
@@ -336,11 +332,11 @@ macro_rules! create_wrapped_contiguous_vector {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>(
+        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >(
             $crate::collections::linear::contiguous_data::QuantizedContiguousVector<Q, V>
         );
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy> Clone
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone > Clone
             for $struct_name<Q, V>
         {
             fn clone(&self) -> Self {
@@ -348,7 +344,7 @@ macro_rules! create_wrapped_contiguous_vector {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             $struct_name<Q, V>
         {
             
@@ -502,7 +498,7 @@ macro_rules! create_wrapped_contiguous_vector {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             core::ops::Index<$index<Q>> for $struct_name<Q, V>
         {
             type Output = V;
@@ -511,7 +507,7 @@ macro_rules! create_wrapped_contiguous_vector {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             core::ops::IndexMut<$index<Q>> for $struct_name<Q, V>
         {
             fn index_mut(&mut self, index: $index<Q>) -> &mut V {
@@ -519,7 +515,7 @@ macro_rules! create_wrapped_contiguous_vector {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             From<Vec<V>> for $struct_name<Q, V>
         {
             fn from(value: Vec<V>) -> Self {
@@ -545,23 +541,19 @@ macro_rules! create_wrapped_contiguous_array {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy, const N: usize>(
+        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone , const N: usize>(
             $crate::collections::linear::contiguous_data::QuantizedContiguousArray<Q, V, N>
         );
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy, const N: usize> Clone
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone , const N: usize> Clone
             for $struct_name<Q, V, N>
         {
             fn clone(&self) -> Self {
-                *self
+                Self(self.0.clone())
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy, const N: usize> Copy
-            for $struct_name<Q, V, N>
-        {}
-
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy, const N: usize>
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone , const N: usize>
             $struct_name<Q, V, N>
         {
             /// Builds an array with every element set to `filling_value`.
@@ -702,7 +694,7 @@ macro_rules! create_wrapped_contiguous_array {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy, const N: usize>
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone , const N: usize>
             core::ops::Index<$index<Q>> for $struct_name<Q, V, N>
         {
             type Output = V;
@@ -711,7 +703,7 @@ macro_rules! create_wrapped_contiguous_array {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy, const N: usize>
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone , const N: usize>
             core::ops::IndexMut<$index<Q>> for $struct_name<Q, V, N>
         {
             fn index_mut(&mut self, index: $index<Q>) -> &mut V {
@@ -719,7 +711,7 @@ macro_rules! create_wrapped_contiguous_array {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy, const N: usize>
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone , const N: usize>
             From<[V; N]> for $struct_name<Q, V, N>
         {
             fn from(value: [V; N]) -> Self {
