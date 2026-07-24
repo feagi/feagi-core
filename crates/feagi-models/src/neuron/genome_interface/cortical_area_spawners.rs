@@ -17,7 +17,6 @@ where
     NM: DimensionalNeuronModel<FIQ, NMQ>,
 {
 
-
     /// Given a mutable slice of all neurons of a dimensional cortical area and the cortical area,
     /// write the data for this new cortical area. Note that if the area does not contain per
     /// neuron data, existing_neurons will be empty

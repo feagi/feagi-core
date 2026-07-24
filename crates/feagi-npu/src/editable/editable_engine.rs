@@ -3,6 +3,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantiz
 
 /// Engine with an editable connectome
 pub trait EditableEngine<FIQ: FeagiIndexQuantization> {
-    //region Cortical Area
+
+    fn add_
 
 }
