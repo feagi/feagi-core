@@ -6,7 +6,7 @@ use feagi_models::neuron::genome_interface::cortical_area_spawners::DimensionalC
 use feagi_models::neuron::model_extensions::neuron_layout_implementations::DimensionalNeuronModel;
 use feagi_models::neuron::neuron_model::NeuronModel;
 use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;
-use feagi_models::wrapped_index_collections::CorticalEngineIndex;
+use feagi_models::wrapped_index_collections::{CorticalEngineIndex, NeuronEngineIndex};
 
 pub struct RayonAllocationManager<FIQ: FeagiIndexQuantization> {
     cortical_area: RayonCorticalAreaAllocationManager<FIQ>,
@@ -19,16 +19,16 @@ impl<FIQ: FeagiIndexQuantization> RayonAllocationManager<FIQ> {
 }
 
 struct RayonCorticalAreaAllocationManager<FIQ: FeagiIndexQuantization> {
-    engine_cortical_indexes: IndexRangeMappingManager<CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, FIQ::CorticalAreaIndexCountQuant>,
+    engine_cortical_indexes: IndexRangeMappingManager<CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronEngineIndex<FIQ::NeuronIndexCountQuant>>,
 }
 
 impl<FIQ: FeagiIndexQuantization> RayonCorticalAreaAllocationManager<FIQ> {
-    
+
     /// Gets an immutable ref to the cortical to neuron range mapping manager to easily get context info
     pub fn get_cortical_index_mappings(&self) -> &IndexRangeMappingManager<FIQ::CorticalAreaIndexCountQuant, FIQ::CorticalAreaIndexCountQuant> {
         &self.engine_cortical_indexes
     }
-    
+
     /// allocates for (if needed) and adds a cortical area with its neurons.
     pub fn add_dimensional_cortical_area<NMQ: NeuronModelQuantization, NM: DimensionalNeuronModel<FIQ, NMQ>>(
         &mut self,

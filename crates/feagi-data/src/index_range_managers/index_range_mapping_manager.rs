@@ -1,9 +1,9 @@
 use core::ops::Range;
-use crate::values::quantizable::QuantizedIndexCountTrait;
+use crate::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
 
 // TODO rn very basic implementation just for adding stuff
 
-pub struct IndexRangeMappingManager<HeaderIndex: QuantizedIndexCountTrait, RangeIndex: QuantizedIndexCountTrait> {
+pub struct IndexRangeMappingManager<HeaderIndex: WrappedQuantizedIndexCount, RangeIndex: WrappedQuantizedIndexCount> {
     header_indexed_used_ranges: Vec<Option<Range<RangeIndex>>>,
     empty_ranges_decreasing_order: Vec<(HeaderIndex, RangeIndex)>, // header to the current empty range, and the length of it
     skipped_headers: Vec<HeaderIndex>,
@@ -19,8 +19,8 @@ pub struct IndexRangeMappingManager<HeaderIndex: QuantizedIndexCountTrait, Range
 
 
 
-impl<HeaderIndex: QuantizedIndexCountTrait, RangeIndex: QuantizedIndexCountTrait> IndexRangeMappingManager<HeaderIndex, RangeIndex> {
-    
+impl<HeaderIndex: WrappedQuantizedIndexCount, RangeIndex: WrappedQuantizedIndexCount> IndexRangeMappingManager<HeaderIndex, RangeIndex> {
+
     pub fn new_empty(max_range_allowed: RangeIndex) -> Self {
         Self {
             header_indexed_used_ranges: vec![],
@@ -32,21 +32,21 @@ impl<HeaderIndex: QuantizedIndexCountTrait, RangeIndex: QuantizedIndexCountTrait
             amount_unused_capacity: RangeIndex::QUANT_ZERO,
         }
     }
-    
-    
+
+
     pub fn allocate_for_length(&mut self, needed_length: RangeIndex) -> Result<NewHeaderRangeStruct<HeaderIndex, RangeIndex>, ()>
     {
         // TODO check for space in fragmented space
-        
-        
+
+
         // Not enough contiguous space in fragmented free areas, append to the end
         if needed_length + self.current_max_range_index > self.max_allowed_range_index {
             return Err(()); // would overshoot allowed memory
         }
-        
+
         let amount_to_allocate = needed_length - (self.current_range_allocated - self.current_max_range_index); // Make use of any free allocated space at the end
         let allocation_needed = if amount_to_allocate != RangeIndex::QUANT_ZERO {Some(amount_to_allocate)} else {None};
-        
+
         let new_range = self.current_max_range_index..(self.current_max_range_index + needed_length);
         self.current_max_range_index = needed_length;
         self.current_range_allocated = new_range.end;
@@ -60,12 +60,12 @@ impl<HeaderIndex: QuantizedIndexCountTrait, RangeIndex: QuantizedIndexCountTrait
             }
         )
     }
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
     /// Gets an unused header index and the mutable reference to the range it relates to (which will be a None)
     fn get_header_index_and_option_range(&mut self) -> (HeaderIndex, &mut Option<Range<RangeIndex>>) {
         if let Some(header_index) = self.skipped_headers.pop()
@@ -80,7 +80,7 @@ impl<HeaderIndex: QuantizedIndexCountTrait, RangeIndex: QuantizedIndexCountTrait
 }
 
 
-pub struct NewHeaderRangeStruct<HeaderIndex: QuantizedIndexCountTrait, RangeIndex: QuantizedIndexCountTrait> {
+pub struct NewHeaderRangeStruct<HeaderIndex: WrappedQuantizedIndexCount, RangeIndex: WrappedQuantizedIndexCount> {
     pub new_header_index: HeaderIndex,
     pub additional_allocation_needed: Option<RangeIndex>,
     pub range: Range<RangeIndex>,
