@@ -233,6 +233,7 @@ dependencies = [
  "feagi-data",
  "feagi-genomic",
  "feagi-models",
+ "half",
  "paste",
  "rayon",
  "serde",

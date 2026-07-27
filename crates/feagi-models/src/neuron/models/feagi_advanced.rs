@@ -1,10 +1,3 @@
-use half::bf16;
-use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
-use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, PercentageUnsigned, QuantizedDecimalTrait, QuantizedIndexCountTrait};
-use crate::wrapped_indexes::BurstIndex;
 use crate::neuron::model_and_quantization::{NestedNeuronModelTypeAndQuantization, NeuronModelType};
 use crate::neuron::model_extensions::neuron_burst_index_rollover_handling::NeuronModelNoSpecialBurstIndexRolloverHandling;
 use crate::neuron::model_extensions::neuron_history::NeuronModelFullNeuronHistory;
@@ -12,6 +5,13 @@ use crate::neuron::model_extensions::neuron_layout_implementations::DimensionalN
 use crate::neuron::neuron_model::NeuronModel;
 use crate::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use crate::neuron::neuron_model_quantization::{NeuronModelQuantization, NeuronModelQuantizationLevel};
+use crate::wrapped_indexes::BurstIndex;
+use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::values::quantizable::{DecimalQuantizationLevel, PercentageUnsigned, QuantizedDecimalTrait, QuantizedIndexCountTrait};
+use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
+use half::bf16;
 
 // TODO a lot of this is honestly proc macro work
 //region Quantization
@@ -44,7 +44,8 @@ impl NeuronModelQuantization for FeagiAdvancedModelStandardQuant {
     const NEURON_MODEL: NeuronModelType = NeuronModelType::FeagiAdvanced;
     type QuantLevelType = FeagiAdvancedModelQuantizationLevel;
     const NEURON_QUANTIZATION: Self::QuantLevelType = FeagiAdvancedModelQuantizationLevel::Standard;
-    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NestedNeuronModelTypeAndQuantization = NestedNeuronModelTypeAndQuantization::FeagiAdvanced(Self::NEURON_QUANTIZATION) ;
+    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NestedNeuronModelTypeAndQuantization =
+        NestedNeuronModelTypeAndQuantization::FeagiAdvanced(Self::NEURON_QUANTIZATION);
     const USED_DECIMAL_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel] = &[DecimalQuantizationLevel::BF16, DecimalQuantizationLevel::F32];
 }
 
@@ -63,18 +64,15 @@ pub enum FeagiAdvancedModelQuantizationLevel {
     Standard = 0,
 }
 
-impl NeuronModelQuantizationLevel for FeagiAdvancedModelQuantizationLevel
-{
+impl NeuronModelQuantizationLevel for FeagiAdvancedModelQuantizationLevel {
     fn get_membrane_potential_level(&self) -> DecimalQuantizationLevel {
         match self {
-            FeagiAdvancedModelQuantizationLevel::Standard => DecimalQuantizationLevel::F32
+            FeagiAdvancedModelQuantizationLevel::Standard => DecimalQuantizationLevel::F32,
         }
     }
 
     // TODO copy some properties here
 }
-
-
 
 //endregion
 
@@ -90,7 +88,6 @@ create_wrapped_quantized_decimal!(pub DegeneracyConstant);
 create_wrapped_quantized_decimal!(pub LeakCoefficient);
 create_wrapped_quantized_index!(pub RefractoryCountdown);
 create_wrapped_quantized_index!(pub ConsecutiveFireCountdown);
-
 
 #[derive(Debug, Clone, Default)]
 pub struct FeagiAdvancedModelCorticalData<NMQ>
@@ -111,11 +108,7 @@ where
     pub degeneracy_constant: DegeneracyConstant<NMQ::DegeneracyConstantQuant>,
 }
 
-
-impl<NMQ> NeuronModelCorticalData<NMQ> for FeagiAdvancedModelCorticalData<NMQ>
-where
-    NMQ: FeagiAdvancedModelQuantization,
-{}
+impl<NMQ> NeuronModelCorticalData<NMQ> for FeagiAdvancedModelCorticalData<NMQ> where NMQ: FeagiAdvancedModelQuantization {}
 
 impl<NMQ> FeagiAdvancedModelCorticalData<NMQ>
 where
@@ -140,7 +133,6 @@ where
     }
 }
 
-
 #[derive(Debug, Clone, Default)]
 pub struct FeagiAdvancedModelNeuronData<NMQ>
 where
@@ -152,10 +144,7 @@ where
     pub neuron_consecutive_fire_countdown: ConsecutiveFireCountdown<NMQ::NeuronCountdownQuants>,
 }
 
-impl<NMQ> NeuronModelNeuronData<NMQ> for FeagiAdvancedModelNeuronData<NMQ>
-where
-    NMQ: FeagiAdvancedModelQuantization,
-{}
+impl<NMQ> NeuronModelNeuronData<NMQ> for FeagiAdvancedModelNeuronData<NMQ> where NMQ: FeagiAdvancedModelQuantization {}
 
 impl<NMQ> FeagiAdvancedModelNeuronData<NMQ>
 where
@@ -206,7 +195,16 @@ where
     FIQ: FeagiIndexQuantization,
     NMQ: FeagiAdvancedModelQuantization,
 {
-    fn process_incoming_potential_for_dimensional_area(incoming_potential: &NeuronMembranePotential<NMQ::MembranePotentialQuant>, neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>, burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>, dimensional_cortical_dimensions: &DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>, neuron_history: &Self::NeuronHistoryType, cortical_area_data: &Self::CorticalData, neuron_model_data: &mut Self::NeuronData, this_neuron_potential: &mut NeuronMembranePotential<NMQ::MembranePotentialQuant>) -> bool {
+    fn process_incoming_potential_for_dimensional_area(
+        incoming_potential: &NeuronMembranePotential<NMQ::MembranePotentialQuant>,
+        neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
+        burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
+        dimensional_cortical_dimensions: &DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
+        neuron_history: &Self::NeuronHistoryType,
+        cortical_area_data: &Self::CorticalData,
+        neuron_model_data: &mut Self::NeuronData,
+        this_neuron_potential: &mut NeuronMembranePotential<NMQ::MembranePotentialQuant>,
+    ) -> bool {
         *this_neuron_potential += *incoming_potential; // - QuantizedDecimalTrait::QUANT_ZERO )); // TODO right now subtracting 0, but this is the resting potential
         false
     }
@@ -219,6 +217,5 @@ where
     //    todo!()
     //}
 }
-
 
 //endregion

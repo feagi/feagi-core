@@ -12,4 +12,11 @@
 pub struct PackedCorticalNeuronPhaseFlags(u8);
 
 
-impl PackedCorticalNeuronPhaseFlags {}
+impl PackedCorticalNeuronPhaseFlags {
+    
+    pub fn get_is_cortical_area_frozen_input(&self) -> bool {
+        todo!()
+    }
+    
+    
+}

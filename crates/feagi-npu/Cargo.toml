@@ -57,6 +57,7 @@ feagi-genomic = {path = "../feagi-genomic"}
 
 # External crates
 paste = { workspace = true}
+half = {workspace = true}
 ahash = { workspace = true}
 serde = { workspace = true, optional = true}
 serde_json = { workspace = true, optional = true}
