@@ -13,7 +13,6 @@ pub struct NeuronRuntimeFlags(u8);
 impl NeuronRuntimeFlags {
     const BITMASK_NEURON_FORCE_OFF: u8 = 1 << 0;
     const BITMASK_FORCE_FIRE: u8 = 1 << 1;
-    const BITMASK_KEEP_MP_CONSTANT: u8 = 1 << 2;
 
     /// Prevents neuron from actually firing. Takes priority over `get_force_fire`
     pub fn get_force_off(self) -> bool {
@@ -24,20 +23,13 @@ impl NeuronRuntimeFlags {
         (self.0 & Self::BITMASK_FORCE_FIRE) != 0
     }
 
-    pub fn get_keep_mp_constant(self) -> bool {
-        (self.0 & Self::BITMASK_KEEP_MP_CONSTANT) != 0
-    }
-
-    pub fn new(force_off: bool, force_fire: bool, keep_mp_constant: bool) -> NeuronRuntimeFlags {
+    pub fn new(force_off: bool, force_fire: bool) -> NeuronRuntimeFlags {
         let mut out = 0u8;
         if force_off {
             out |= Self::BITMASK_NEURON_FORCE_OFF;
         }
         if force_fire {
             out |= Self::BITMASK_FORCE_FIRE;
-        }
-        if keep_mp_constant {
-            out |= Self::BITMASK_KEEP_MP_CONSTANT;
         }
         NeuronRuntimeFlags(out)
     }
