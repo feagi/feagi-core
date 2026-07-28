@@ -8,7 +8,7 @@ use feagi_models::neuron::models::feagi_advanced::FeagiAdvancedModel;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, NeuronEngineByteIndex, NeuronEngineIndex};
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::engines::rayon::data::RayonEngineData;
-use crate::engines::rayon::data::sub_structure_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
+use crate::engines::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
 
 fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
 {
@@ -37,7 +37,7 @@ fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
                     return;
                 }
                 let cortical_lookup = data.cortical_index_lookup_table.get_par(cortical_engine_index);
-                let neuron_is_firing_byte = data.neuron_is_firing.get_byte_mut_par(neuron_group_index.deref());
+                let neuron_is_firing_byte = data.neuron_voxel_is_firing.get_byte_mut_par(neuron_group_index.deref());
                 *neuron_is_firing_byte = 0; // reset neuron activity
                 let neuron_group_lookup = data.cortical_neuron_index_lookup_table.get_par(cortical_engine_index);
                 let neuron_count = data.cortical_neuron_count.get_par(cortical_engine_index);
