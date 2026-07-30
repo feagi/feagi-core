@@ -91,5 +91,17 @@ make_index_and_linear_collections!(
 
 // Synapse
 make_index_and_linear_collections!(
-    /// Cortical mapping entry indexed in regards to its parent cortical mapping
-    SynapseGlobal);
+    /// Synapse indexed at the connectome level
+    SynapseConnectome);
+
+make_index_and_linear_collections!(
+    /// Synapse indexed at the current burst engine level
+    SynapseEngine);
+
+make_index_and_linear_collections!(
+    /// Synapse indexed at the synapse model and quantization level in the burst engine
+    SynapseModel);
+
+make_index_and_linear_collections!(
+    /// Synapse indexed at the level local to its owning Cortical Mapping Entry
+    SynapseLocal);

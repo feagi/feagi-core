@@ -1,14 +1,8 @@
-use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 /// Helper structs to make dealing with multiple quantizations / models less annoying
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::neuron::model_and_quantization::NestedNeuronModelTypeAndQuantization;
-use feagi_models::neuron::models::feagi_advanced::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData, FeagiAdvancedModelStandardQuant};
-use feagi_models::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
-use feagi_models::wrapped_index_collections::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 use crate::engines::rayon::data::neuron::model_quantized_data::feagi_advanced_model::ModelFeagiAdvanced;
 
-macro_rules! quant_default {
+macro_rules! quant_default_with_neurons {
     ($struct_name:ident) => {
     impl<FIQ: FeagiIndexQuantization> Default for $struct_name<FIQ> {
         fn default() -> Self {
@@ -81,7 +75,7 @@ mod feagi_advanced_model {
         >,
     }
 
-    quant_default!(QuantizationStandard);
+    quant_default_with_neurons!(QuantizationStandard);
 
 
 

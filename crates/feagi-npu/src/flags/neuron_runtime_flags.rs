@@ -10,8 +10,8 @@
 /// as a result of dynamics
 /// bit 0 - IsFiring -> Is the neuron currently firing as a result of dynamics>
 /// bits 1-5 - Unused
-/// bit 6 - force fire -> neuron is forced to fire unless force off is enabled
-/// bit 7 - force off -> neuron is forced to not fire regardless of anything else
+/// bit 6 - force fire -> neuron is forced to fire unless force off is enabled. Neuron Dynamics still runs!
+/// bit 7 - force off -> neuron is forced to not fire regardless of anything else. Neuron Dynamics still runs!
 #[derive(Clone, Copy)]
 pub struct NeuronRuntimeFlags(u8);
 
@@ -30,15 +30,21 @@ impl NeuronRuntimeFlags {
         (self.0 & Self::BITMASK_FORCE_FIRE) != 0
     }
 
-    /// Is the neuron current firing as a result of neuron dynamics
+    /// Is the neuron current firing as a result of neuron dynamics (NOT A FLAG, RUNTIME DATA!)
     pub fn get_firing(&self) -> bool {
         (self.0 & Self::BITMASK_FIRING) != 0
     }
+    
+    pub fn set_force_off(&mut self, value: bool) {
+        todo!()
+    }
 
-    // TODO SET commands
-
+    pub fn set_force_fire(&mut self, value: bool) {
+        todo!()
+    }
+    
     pub fn set_firing(&mut self, firing: bool) {
-        // TODO
+        todo!()
     }
 
     pub fn new(force_off: bool, force_fire: bool) -> NeuronRuntimeFlags {

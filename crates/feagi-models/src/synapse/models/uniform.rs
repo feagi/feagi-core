@@ -9,6 +9,7 @@ use feagi_data::create_wrapped_quantized_decimal;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait};
+use crate::synapse::model_extensions::source_fire_history::NeuronFireHistoryNone;
 
 pub trait UniformSynapseModelQuantization: SynapseModelQuantization {
     const MODEL_QUANTIZATION_LEVEL: UniformSynapseModelQuantizationLevel;
@@ -94,16 +95,17 @@ where
 {
     type CorticalMappingEntryData = UniformSynapseModelCorticalMappingEntryData<SMQ>;
     type SynapseData = EmptyPerSynapseData;
+    type SourceFireHistory = NeuronFireHistoryNone;
 
     fn synapse_process_incoming_signal(
         incoming_potential: &NeuronMembranePotential<SMQ::JunctionPotentialQuant>,
-        mapping_entry_data: Self::CorticalMappingEntryData,
-        write_to: &mut NeuronMembranePotential<SMQ::JunctionPotentialQuant>,
-    ) {
+        mapping_entry_data: &Self::CorticalMappingEntryData,
+        _source_fire_history: &Self::SourceFireHistory,
+    ) -> NeuronMembranePotential<SMQ::JunctionPotentialQuant> {
         let incoming = incoming_potential.deref();
         let multiplier = mapping_entry_data.post_synaptic_multiplier.deref();
         
-        *write_to += NeuronMembranePotential::new(incoming *  multiplier);
+        NeuronMembranePotential::new(incoming *  multiplier)
     }
 }
 

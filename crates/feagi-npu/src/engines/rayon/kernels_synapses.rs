@@ -1,6 +1,14 @@
 use rayon::prelude::*;
+use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedIndexCount};
+use feagi_models::synapse::model_and_quantization::PackedSynapseModelTypeAndQuantization;
+use feagi_models::synapse::models::uniform::{UniformSynapseModel, UniformSynapseModelStandardQuant};
+use feagi_models::synapse::synapse_model::SynapseModel;
+use feagi_models::synapse::synapse_model_quantization::SynapseModelQuantization;
+use feagi_models::wrapped_index_collections::{MappingEntryEngineIndex, MappingEntryModelIndex, NeuronMPIndex, SynapseEngineIndex};
 use crate::engines::rayon::data::RayonEngineData;
+use crate::engines::rayon::data::synapse::synapse_sub_data::CorticalMappingEntryProperties;
 
 fn process_synapses<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
 {
@@ -12,7 +20,31 @@ fn process_synapses<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
 
         // no clustering with synapses, since the way they access data *may* be sporadic.
 
+        data.cortical_mapping_entry_indexes
+            .as_slice()
+            .par_iter()
+            .enumerate()
+            .for_each(|(synapse_index, &mapping_entry_index)| {
 
+                let synapse_engine_index: SynapseEngineIndex<FIQ::SynapseIndexCountQuant> = SynapseEngineIndex::quant_from_usize(synapse_index);
+                
+                let mapping_entry_properties = data.cortical_mapping_entry_properties.get_par(mapping_entry_index);
+                
+                if mapping_entry_properties.flags.get_is_mapping_entry_disabled() {
+                    return; // mapping entry is disabled, stop here
+                }
+                
+                let mapping_entry_lookup_table = data.cortical_mapping_index_lookup_table.get_par(mapping_entry_index);
+                
+                let synapse_neuron_indexes = data.synapse_source_destination_mp_neuron_indexes.get_par(synapse_engine_index);
+
+                let mapping_entry_lookup_table = data.cortical_mapping_index_lookup_table.get_par(mapping_entry_index);
+                let synapse_neuron_indexes = data.synapse_source_destination_mp_neuron_indexes.get_par(synapse_engine_index);
+
+
+
+
+        })
 
 
     }
@@ -21,3 +53,72 @@ fn process_synapses<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
 
 
 }
+
+
+#[inline(always)]
+unsafe fn synapse_dynamics<FIQ: FeagiIndexQuantization> (
+    data: &RayonEngineData<FIQ>,
+    source_neuron_mp_quant: DecimalQuantizationLevel,
+    source_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexCountQuant>,
+    destination_neuron_mp_quant: DecimalQuantizationLevel,
+    destination_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexCountQuant>,
+    synapse_model_and_quant: PackedSynapseModelTypeAndQuantization,
+    mapping_entry_index: MappingEntryModelIndex<FIQ::CorticalMappingEntryIndexCountQuant>,
+)
+{
+    
+    match synapse_model_and_quant 
+    { 
+        PackedSynapseModelTypeAndQuantization::Uniform_Standard => {
+            let input = source_to_junction::<FIQ, <UniformSynapseModelStandardQuant as SynapseModelQuantization>::JunctionPotentialQuant>(
+                data,
+                &source_neuron_mp_quant,
+                source_neuron_mp_index,
+            );
+            
+            let output_potential = UniformSynapseModel::synapse_process_incoming_signal(
+                &input, 
+                data.synapse_model_data.uniform.quantization_standard.mapping_entry_data.get_par(mapping_entry_index));
+            
+            
+            
+        } 
+    }
+    
+    
+}
+unsafe fn source_to_junction<FIQ: FeagiIndexQuantization, JunctionQuant: QuantizedDecimalTrait>(data: &RayonEngineData<FIQ>, source_quant: &DecimalQuantizationLevel, source_index: NeuronMPIndex<FIQ::NeuronIndexCountQuant>) -> NeuronMembranePotential<JunctionQuant> {
+    match source_quant {
+        DecimalQuantizationLevel::StorageF8 => {
+            let potential = data.neuron_membrane_data.mp_storage_f8.get_par(source_index).deref();
+            NeuronMembranePotential::from_quantization(potential)
+        }
+        DecimalQuantizationLevel::F16 => {
+            let potential = data.neuron_membrane_data.mp_f16.get_par(source_index).deref();
+            NeuronMembranePotential::from_quantization(potential)
+        }
+        DecimalQuantizationLevel::BF16 => {
+            let potential = data.neuron_membrane_data.mp_bf16.get_par(source_index).deref();
+            NeuronMembranePotential::from_quantization(potential)
+        }
+        DecimalQuantizationLevel::F32 => {
+            let potential = data.neuron_membrane_data.mp_f32.get_par(source_index).deref();
+            NeuronMembranePotential::from_quantization(potential)
+        }
+        DecimalQuantizationLevel::F64 => {
+            let potential = data.neuron_membrane_data.mp_f64.get_par(source_index).deref();
+            NeuronMembranePotential::from_quantization(potential)
+        }
+    }
+}
+
+unsafe fn junction_to_destination<FIQ: FeagiIndexQuantization, JunctionQuant: QuantizedDecimalTrait>(data: &RayonEngineData<FIQ>, value: NeuronMembranePotential<JunctionQuant>, destination_quant: &DecimalQuantizationLevel, destination_index: FIQ::NeuronIndexCountQuant, fclc_index: u8) {
+    match destination_quant {
+        DecimalQuantizationLevel::StorageF8 => {}
+        DecimalQuantizationLevel::F16 => {}
+        DecimalQuantizationLevel::BF16 => {}
+        DecimalQuantizationLevel::F32 => {}
+        DecimalQuantizationLevel::F64 => {}
+    }
+}
+

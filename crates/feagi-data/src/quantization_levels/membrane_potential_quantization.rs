@@ -9,6 +9,10 @@ use crate::values::quantizable::custom_data_types::StorageF8;
 pub trait MembranePotentialQuantization: Clone + Copy {
     /// Defines the quantization of the membrane potential of a neuron within a cortical area.
     type MembranePotentialQuant: QuantizedDecimalTrait;
+    
+    fn get_quantization_level() -> DecimalQuantizationLevel {
+        Self::MembranePotentialQuant::LEVEL
+    }
 }
 
 //region Discrete Levels

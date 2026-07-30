@@ -343,6 +343,14 @@ macro_rules! create_wrapped_contiguous_vector {
                 Self(self.0.clone())
             }
         }
+        
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone > Default
+            for $struct_name<Q, V>
+        {
+            fn default() -> Self {
+                Self::new_empty()
+            }
+        }
 
         impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             $struct_name<Q, V>

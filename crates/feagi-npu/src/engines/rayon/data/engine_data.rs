@@ -1,26 +1,24 @@
-use feagi_data::collections::linear::bitpacked::BitPackedVector;
 use crate::engines::rayon::data::neuron::model_quantized_data::NeuronModelData;
 use crate::engines::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
+use crate::engines::rayon::data::neuron::potential_quantized_data::NeuronQuantizedData;
+use crate::flags::cortical_runtime_flags::CorticalRuntimeFlags;
+use crate::flags::neuron_runtime_flags::NeuronRuntimeFlags;
+use feagi_data::collections::linear::bitpacked::BitPackedVector;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
-use feagi_models::neuron::common_structs::cortical_area_layout::CorticalAreaLayoutDimensional;
-use feagi_models::neuron::common_structs::neuron_runtime_flags::NeuronRuntimeFlags;
-use feagi_models::neuron::common_structs::packed_cortical_neuron_flags::PackedCorticalNeuronPhaseFlags;
-use feagi_models::neuron::common_structs::cortical_runtime_flags::PackedCorticalSynapseFlags;
+use feagi_models::neuron::cortical_area_layout::CorticalAreaLayoutDimensional;
 use feagi_models::neuron::model_and_quantization::PackedNeuronModelTypeAndQuantization;
 use feagi_models::neuron::model_extensions::neuron_history::NeuronModelFullNeuronHistory;
-use feagi_models::wrapped_index_collections::{CorticalEngineIndex, CorticalEngineIndexedVector, CorticalLayoutIndexedVector, NeuronEngineByteIndexedVector, NeuronEngineIndexedVector, NeuronHistoryIndexedVector};
+use feagi_models::wrapped_index_collections::{CorticalEngineIndex, CorticalEngineIndexedVector, CorticalLayoutIndexedVector, MappingEntryEngineIndex, MappingEntryEngineIndexedVector, NeuronEngineIndexedVector, NeuronHistoryIndexedVector, NeuronMPIndex, SynapseEngineIndexedVector};
 use feagi_models::wrapped_indexes::BurstIndex;
-use crate::engines::rayon::data::neuron::potential_quantized_data::NeuronQuantizedData;
+use crate::engines::rayon::data::synapse::model_quantized_data::SynapseModelData;
+use crate::engines::rayon::data::synapse::synapse_sub_data::{CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties, SynapseMappingMPQuants};
 
 pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
     /// The current burst index
     pub burst_index: BurstIndex<FIQ::GlobalBurstIndexQuant>,
 
-
     //region Cortical / Neuron Level Data
-    /// INIT - engine cortical indexes indexed by `NeuronEngineByteIndex`, used to get the
-    /// `CorticalEngineIndex` for every 8 neurons
     /// INIT - Engine Cortical Indexes indexed by `NeuronEngineIndex`, used to get the cortical index for each neuron
     pub cortical_engine_indexes: NeuronEngineIndexedVector<FIQ::NeuronIndexCountQuant, CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>>,
 
@@ -32,11 +30,9 @@ pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
     pub neuron_membrane_data: NeuronQuantizedData<FIQ>,
 
     /// Indexed by `CorticalEngineIndex`, gets a tuple of `PackedNeuronModelTypeAndQuantization`
-    /// and `CorticalNeuronPhaseFlags`
+    /// and `CorticalRuntimeFlags`
     pub cortical_neuron_model_and_quant_and_neuron_properties:
-        CorticalEngineIndexedVector<FIQ::CorticalAreaIndexCountQuant, (PackedNeuronModelTypeAndQuantization, PackedCorticalNeuronPhaseFlags)>,
-    /// Indexed by `CorticalEngineIndex`, gets the flag for `PackedCorticalSynapseFlags` which are needed for synapse properties
-    pub cortical_synapse_properties: CorticalEngineIndexedVector<FIQ::CorticalAreaIndexCountQuant, PackedCorticalSynapseFlags>,
+        CorticalEngineIndexedVector<FIQ::CorticalAreaIndexCountQuant, (PackedNeuronModelTypeAndQuantization, CorticalRuntimeFlags)>,
     /// Indexed by `CorticalEngineIndex`, contains various indexes for other cortical level properties this cortical area may have
     pub cortical_index_lookup_table: CorticalEngineIndexedVector<FIQ::CorticalAreaIndexCountQuant, CorticalIndexLookupTable<FIQ>>,
     /// Indexed by `CorticalEngineIndex`, contains the number of neurons within that cortical area
@@ -47,7 +43,6 @@ pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
     /// Indexed by `CorticalLayoutIndex`, contains dimensional layout information
     pub cortical_layout_dimensional_data: CorticalLayoutIndexedVector<FIQ::CorticalAreaIndexCountQuant, CorticalAreaLayoutDimensional<FIQ>>,
     // TODO formless (NOTE: uniquely couldnt we just use cortical_neuron_count?)
-
     /// Indexed by `NeuronEngineByteIndex`, contains the per neuron runtime flags
     pub neuron_runtime_flags: NeuronEngineIndexedVector<FIQ::NeuronIndexCountQuant, NeuronRuntimeFlags>,
 
@@ -56,39 +51,31 @@ pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
 
     /// Indexed by `NeuronHistoryIndex`, for neurons wth it, is the per neuron history of that neuron
     pub neuron_history_data: NeuronHistoryIndexedVector<FIQ::NeuronIndexCountQuant, NeuronModelFullNeuronHistory<FIQ>>,
-
     //endregion
 
     //region Synapse data
+    /// INIT - Cortical Mapping Entries indexed by `SynapseEngineIndex`
+    pub cortical_mapping_entry_indexes: SynapseEngineIndexedVector<FIQ::SynapseIndexCountQuant, MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant>>,
+    
+    /// Quantized and per model data for all cortical mapping entries and their synapses
+    pub synapse_model_data: SynapseModelData<FIQ>,
+
+    /// Retains various properties of a cortical mapping entry, such as start/end mp quants, flags, and its own model / quant, indexed by `MappingEntryEngineIndex`
+    pub cortical_mapping_entry_properties: MappingEntryEngineIndexedVector<FIQ::CorticalMappingEntryIndexCountQuant, CorticalMappingEntryProperties>,
+
+    pub cortical_mapping_index_lookup_table: MappingEntryEngineIndexedVector<FIQ::CorticalMappingEntryIndexCountQuant, CorticalMappingEntryIndexLookupTable<FIQ>>,
+
+    
+    
 
 
+    /// the MP indexes of the source and destination (in that order) neurons of a given synapse. Destination may be from the FCL or FCLC but source is always from the MP
+    pub synapse_source_destination_mp_neuron_indexes: SynapseEngineIndexedVector<FIQ::SynapseIndexCountQuant, (NeuronMPIndex<FIQ::NeuronIndexCountQuant>, NeuronMPIndex<FIQ::NeuronIndexCountQuant>)>,
 
 
 
 
     //endregion
-
-
-
-
-
-
-
-
 }
 
-impl<FIQ: FeagiIndexQuantization> RayonEngineData<FIQ> {
-    pub fn new_empty() -> Self {
-        Self {
-            burst_index: BurstIndex::QUANT_MAX / (BurstIndex::quant_from_usize(2)),
-            cortical_engine_indexes: NeuronEngineByteIndexedVector::new_empty(),
-            neuron_model_data: NeuronModelData::new(),
-            cortical_neuron_model_and_quant_and_neuron_properties: CorticalEngineIndexedVector::new_empty(),
-            cortical_synapse_properties: CorticalEngineIndexedVector::new_empty(),
-            cortical_neuron_index_lookup_table: CorticalEngineIndexedVector::new_empty(),
-            cortical_layout_dimensional_data: CorticalLayoutIndexedVector::new_empty(),
-            neuron_history_data: NeuronHistoryIndexedVector::new_empty(),
-        }
-    }
-}
 
