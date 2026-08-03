@@ -1,5 +1,4 @@
 use crate::FeagiSerializable;
-use feagi_structures::FeagiJSON;
 use std::fmt::{Display, Formatter};
 
 /// Represents different types of serializable data structures in the FEAGI system.
@@ -31,6 +30,8 @@ pub enum FeagiByteStructureType {
 }
 
 impl FeagiByteStructureType {
+    
+    /*
     /// Determines the structure type from the first byte of a byte array.
     ///
     /// # Example
@@ -44,15 +45,22 @@ impl FeagiByteStructureType {
     /// let empty_bytes = [];
     /// assert!(FeagiByteStructureType::try_get_type_from_bytes(&empty_bytes).is_err());
     /// ```
-    pub fn try_get_type_from_bytes(bytes: &[u8]) -> Result<FeagiByteStructureType, FeagiDataError> {
+    pub fn try_get_type_from_bytes(bytes: &[u8]) -> Result<FeagiByteStructureType, ()> {
         if bytes.is_empty() {
+            return Err(());
+            /*
             return Err(FeagiDataError::DeserializationError(
                 "Cannot ascertain type of empty bytes array!".into(),
             ));
+            
+             */
         }
         FeagiByteStructureType::try_from(bytes[0])
     }
+    
+     */
 
+    /*
     /// Creates a new empty instance of the serializable structure for this type.
     ///
     /// # Example
@@ -75,8 +83,11 @@ impl FeagiByteStructureType {
             FeagiByteStructureType::JSON => Box::new(FeagiJSON::new_empty()),
         }
     }
+    
+     */
 }
 
+/*
 impl TryFrom<u8> for FeagiByteStructureType {
     type Error = FeagiDataError;
     fn try_from(value: u8) -> Result<Self, FeagiDataError> {
@@ -100,3 +111,5 @@ impl Display for FeagiByteStructureType {
         write!(f, "{name}")
     }
 }
+
+ */

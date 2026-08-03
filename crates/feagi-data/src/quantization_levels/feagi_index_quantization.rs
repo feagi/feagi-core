@@ -15,7 +15,7 @@ pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq {
 
     /// Neuron linear indexing, linear count, voxel indexing,
     /// and voxel count quantization
-    type NeuronIndexCountQuant: QuantizedIndexCountTrait;
+    type NeuronIndexQuant: QuantizedIndexCountTrait;
 
     /// Indexing of synapses within the NPU
     type SynapseIndexCountQuant: QuantizedIndexCountTrait;
@@ -30,7 +30,7 @@ pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq {
 //region Discrete Levels
 
 #[repr(u8)]
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq)]
 /// Enum that describes what `FeagiGlobalQuantization` implementation (quantization preset) to
 /// follow
 pub enum FeagiIndexQuantizationLevel {
@@ -49,7 +49,7 @@ pub struct FeagiGlobalQuantizationStandard;
 impl FeagiIndexQuantization for FeagiGlobalQuantizationStandard {
     const QUANTIZATION_LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::Standard;
     type GlobalBurstIndexQuant = u32;
-    type NeuronIndexCountQuant = u32;
+    type NeuronIndexQuant = u32;
     type SynapseIndexCountQuant = u32;
     type CorticalAreaIndexCountQuant = u16;
     type CorticalMappingEntryIndexCountQuant = u16;
@@ -62,7 +62,7 @@ pub struct FeagiGlobalQuantizationAbsurd;
 impl FeagiIndexQuantization for FeagiGlobalQuantizationAbsurd {
     const QUANTIZATION_LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::Absurd;
     type GlobalBurstIndexQuant = u64;
-    type NeuronIndexCountQuant = u64;
+    type NeuronIndexQuant = u64;
     type SynapseIndexCountQuant = u64;
     type CorticalAreaIndexCountQuant = u64;
     type CorticalMappingEntryIndexCountQuant = u64;

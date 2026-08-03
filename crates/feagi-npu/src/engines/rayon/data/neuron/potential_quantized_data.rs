@@ -6,30 +6,30 @@ use feagi_models::wrapped_index_collections::NeuronMPIndexedVector;
 
 
 pub struct NeuronQuantizedData<FIQ: FeagiIndexQuantization> {
-    pub fcl_storage_f8: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<StorageF8>>,
-    pub mp_storage_f8: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<StorageF8>>,
-    pub fcl_f16: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f16>>,
-    pub mp_f16: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f16>>,
-    pub fcl_bf16: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<bf16>>,
-    pub mp_bf16: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<bf16>>,
-    pub fcl_f32: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f32>>,
-    pub mp_f32: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f32>>,
-    pub fcl_f64: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f64>>,
-    pub mp_f64: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f64>>,
+    pub fcl_storage_f8: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<StorageF8>>,
+    pub mp_storage_f8: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<StorageF8>>,
+    pub fcl_f16: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f16>>,
+    pub mp_f16: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f16>>,
+    pub fcl_bf16: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<bf16>>,
+    pub mp_bf16: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<bf16>>,
+    pub fcl_f32: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f32>>,
+    pub mp_f32: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f32>>,
+    pub fcl_f64: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f64>>,
+    pub mp_f64: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f64>>,
 }
 
 impl<FIQ: FeagiIndexQuantization> NeuronQuantizedData<FIQ> {
     pub fn new(
-        fcl_storage_f8: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<StorageF8>>,
-        mp_storage_f8: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<StorageF8>>,
-        fcl_f16: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f16>>,
-        mp_f16: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f16>>,
-        fcl_bf16: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<bf16>>,
-        mp_bf16: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<bf16>>,
-        fcl_f32: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f32>>,
-        mp_f32: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f32>>,
-        fcl_f64: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f64>>,
-        mp_f64: NeuronMPIndexedVector<FIQ::NeuronIndexCountQuant, NeuronMembranePotential<f64>>,
+        fcl_storage_f8: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<StorageF8>>,
+        mp_storage_f8: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<StorageF8>>,
+        fcl_f16: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f16>>,
+        mp_f16: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f16>>,
+        fcl_bf16: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<bf16>>,
+        mp_bf16: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<bf16>>,
+        fcl_f32: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f32>>,
+        mp_f32: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f32>>,
+        fcl_f64: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f64>>,
+        mp_f64: NeuronMPIndexedVector<FIQ::NeuronIndexQuant, NeuronMembranePotential<f64>>,
     ) -> Self {
         Self {
             fcl_storage_f8,

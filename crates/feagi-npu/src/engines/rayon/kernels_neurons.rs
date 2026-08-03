@@ -3,7 +3,7 @@ use feagi_data::collections::linear::bitpacked::{BitPackedMutTrait, BitPackedPar
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
 use feagi_models::neuron::model_and_quantization::PackedNeuronModelTypeAndQuantization;
-use feagi_models::neuron::model_extensions::neuron_layout_implementations::DimensionalNeuronModel;
+use feagi_models::neuron::model_capabilities::neuron_layout_implementations::DimensionalNeuronModel;
 use feagi_models::neuron::models::feagi_advanced::FeagiAdvancedModel;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, NeuronEngineByteIndex, NeuronEngineIndex};
 use feagi_models::wrapped_indexes::BurstIndex;
@@ -38,7 +38,7 @@ fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
 
                 let cortical_lookup = data.cortical_index_lookup_table.get_par(cortical_engine_index);
 
-                let neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexCountQuant> = NeuronEngineIndex::quant_from_usize(neuron_index);
+                let neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant> = NeuronEngineIndex::quant_from_usize(neuron_index);
                 let neuron_runtime_flags = data.neuron_runtime_flags.get_mut_par(neuron_engine_index);
                 let neuron_indexes_lookup = data.cortical_neuron_index_lookup_table.get_par(cortical_engine_index);
 
@@ -71,7 +71,7 @@ unsafe fn neuron_dynamics<FIQ: FeagiIndexQuantization>(
     model: PackedNeuronModelTypeAndQuantization,
     burst_index: BurstIndex<FIQ::GlobalBurstIndexQuant>,
     cortical_lookup_table: &CorticalIndexLookupTable<FIQ>,
-    neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexCountQuant>,
+    neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant>,
     neuron_index_lookup_table: &NeuronIndexLookupTable<FIQ>) -> bool
 {
 

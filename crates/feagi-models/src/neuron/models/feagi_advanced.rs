@@ -1,7 +1,6 @@
-use crate::neuron::model_and_quantization::{NestedNeuronModelTypeAndQuantization, NeuronModelType};
-use crate::neuron::model_extensions::neuron_burst_index_rollover_handling::NeuronModelNoSpecialBurstIndexRolloverHandling;
-use crate::neuron::model_extensions::neuron_history::NeuronModelFullNeuronHistory;
-use crate::neuron::model_extensions::neuron_layout_implementations::DimensionalNeuronModel;
+use crate::neuron::model_capabilities::neuron_burst_index_rollover_handling::NeuronModelNoSpecialBurstIndexRolloverHandling;
+use crate::neuron::model_capabilities::neuron_history::NeuronModelFullNeuronHistory;
+use crate::neuron::model_capabilities::neuron_layout_implementations::DimensionalNeuronModel;
 use crate::neuron::neuron_model::NeuronModel;
 use crate::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use crate::neuron::neuron_model_quantization::{NeuronModelQuantization, NeuronModelQuantizationLevel};
@@ -12,7 +11,7 @@ use feagi_data::quantization_levels::membrane_potential_quantization::MembranePo
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, PercentageUnsigned, QuantizedDecimalTrait, QuantizedIndexCountTrait};
 use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
 use half::bf16;
-
+use crate::neuron::model_generated::model_type_and_quantization::{NeuronModelType, NeuronModelTypeAndQuantizationNested};
 // TODO a lot of this is honestly proc macro work
 //region Quantization
 
@@ -44,8 +43,8 @@ impl NeuronModelQuantization for FeagiAdvancedModelStandardQuant {
     const NEURON_MODEL: NeuronModelType = NeuronModelType::FeagiAdvanced;
     type QuantLevelType = FeagiAdvancedModelQuantizationLevel;
     const NEURON_QUANTIZATION: Self::QuantLevelType = FeagiAdvancedModelQuantizationLevel::Standard;
-    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NestedNeuronModelTypeAndQuantization =
-        NestedNeuronModelTypeAndQuantization::FeagiAdvanced(Self::NEURON_QUANTIZATION);
+    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NeuronModelTypeAndQuantizationNested =
+        NeuronModelTypeAndQuantizationNested::FeagiAdvanced(Self::NEURON_QUANTIZATION);
     const USED_DECIMAL_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel] = &[DecimalQuantizationLevel::BF16, DecimalQuantizationLevel::F32];
 }
 
@@ -197,9 +196,9 @@ where
 {
     fn process_incoming_potential_for_dimensional_area(
         incoming_potential: &NeuronMembranePotential<NMQ::MembranePotentialQuant>,
-        neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
+        neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
         burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
-        dimensional_cortical_dimensions: &DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
+        dimensional_cortical_dimensions: &DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexQuant>,
         neuron_history: &Self::NeuronHistoryType,
         cortical_area_data: &Self::CorticalData,
         neuron_model_data: &mut Self::NeuronData,
@@ -208,14 +207,7 @@ where
         *this_neuron_potential += *incoming_potential; // - QuantizedDecimalTrait::QUANT_ZERO )); // TODO right now subtracting 0, but this is the resting potential
         false
     }
-
-    fn default_dimensional_area_cortical_data() -> Self::CorticalData {
-        Self::CorticalData::default()
-    }
-
-    //fn default_dimensional_area_spawner() -> impl DimensionalCorticalAreaSpawner {
-    //    todo!()
-    //}
+    
 }
 
 //endregion

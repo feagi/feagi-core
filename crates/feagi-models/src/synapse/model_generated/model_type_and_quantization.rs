@@ -1,5 +1,7 @@
+
 // TODO build.rs should generate these enums
 
+use crate::synapse::models::plastic::PlasticSynapseModelQuantizationLevel;
 use crate::synapse::models::uniform::UniformSynapseModelQuantizationLevel;
 
 /// Describes what Synapse Model is being used without further context. Internally is encoded as an
@@ -8,37 +10,38 @@ use crate::synapse::models::uniform::UniformSynapseModelQuantizationLevel;
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum SynapseModelType {
-    Uniform
+    Uniform = 0,
+    Plastic = 1
 }
 
 
 /// Describes the synapse model and the synapse model quantization it uses as a nested enum. This
 /// makes it convenient to use but not store in cross platform environments
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum NestedSynapseModelTypeAndQuantization {
+pub enum SynapseModelTypeAndQuantizationNested {
     Uniform(UniformSynapseModelQuantizationLevel),
+    Plastic(PlasticSynapseModelQuantizationLevel)
 }
 
-impl NestedSynapseModelTypeAndQuantization {
+impl SynapseModelTypeAndQuantizationNested {
     /// Init from the packed representation of `PackedSynapseModelTypeAndQuantization`
-    pub fn from_packed(packed: PackedSynapseModelTypeAndQuantization) -> Self {
+    pub fn from_packed(packed: SynapseModelTypeAndQuantizationPacked) -> Self {
         packed.to_unpacked()
     }
 
     pub const fn strip_quantization(&self) -> SynapseModelType {
         match self {
-            NestedSynapseModelTypeAndQuantization::Uniform(_) => SynapseModelType::Uniform,
+            SynapseModelTypeAndQuantizationNested::Uniform(_) => SynapseModelType::Uniform,
+            SynapseModelTypeAndQuantizationNested::Plastic(_) => SynapseModelType::Plastic
         }
     }
 
     /// Returns the `PackedSynapseModelTypeAndQuantization` of this enum
-    pub const fn to_packed(self) -> PackedSynapseModelTypeAndQuantization {
-        PackedSynapseModelTypeAndQuantization::from_nested(self)
+    pub const fn to_packed(self) -> SynapseModelTypeAndQuantizationPacked {
+        SynapseModelTypeAndQuantizationPacked::from_nested(self)
     }
 }
 
-
-//#[doc(hidden)] // TODO hide when api is stable
 /// An enum describing all possible synapse model and model quantizations as a flat list. This is
 /// intended for rapid lookups in the NPU and not really general use. The bytes / bits are
 /// based on `SYNAPSE_MODEL_TYPE_BITMASK` and `SYNAPSE_MODEL_QUANTIZATION_BITMASK` from
@@ -46,25 +49,33 @@ impl NestedSynapseModelTypeAndQuantization {
 #[allow(non_camel_case_types)]
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub enum PackedSynapseModelTypeAndQuantization {
+pub enum SynapseModelTypeAndQuantizationPacked {
     #[default]
-    Uniform_Standard = SynapseModelType::Uniform as u8 & (UniformSynapseModelQuantizationLevel::Standard as u8),
+    Uniform_Standard = (SynapseModelType::Uniform as u8) << 4 | UniformSynapseModelQuantizationLevel::Standard as u8,
+    Plastic_Standard = (SynapseModelType::Plastic as u8) << 4 | (PlasticSynapseModelQuantizationLevel::Standard as u8),
 }
 
-impl PackedSynapseModelTypeAndQuantization {
-    pub const fn from_nested(nested: NestedSynapseModelTypeAndQuantization) -> Self {
+impl SynapseModelTypeAndQuantizationPacked {
+    pub const fn from_nested(nested: SynapseModelTypeAndQuantizationNested) -> Self {
         match nested {
-            NestedSynapseModelTypeAndQuantization::Uniform(v) => match v {
-                UniformSynapseModelQuantizationLevel::Standard => PackedSynapseModelTypeAndQuantization::Uniform_Standard,
+            SynapseModelTypeAndQuantizationNested::Uniform(v) => match v {
+                UniformSynapseModelQuantizationLevel::Standard => SynapseModelTypeAndQuantizationPacked::Uniform_Standard,
             },
+            SynapseModelTypeAndQuantizationNested::Plastic(v) => match v {
+                PlasticSynapseModelQuantizationLevel::Standard => SynapseModelTypeAndQuantizationPacked::Plastic_Standard,
+            }
         }
     }
 
-    pub fn to_unpacked(self) -> NestedSynapseModelTypeAndQuantization {
+    pub fn to_unpacked(self) -> SynapseModelTypeAndQuantizationNested {
         match self {
-            PackedSynapseModelTypeAndQuantization::Uniform_Standard => {
-                NestedSynapseModelTypeAndQuantization::Uniform(UniformSynapseModelQuantizationLevel::Standard)
+            SynapseModelTypeAndQuantizationPacked::Uniform_Standard => {
+                SynapseModelTypeAndQuantizationNested::Uniform(UniformSynapseModelQuantizationLevel::Standard)
             }
+            SynapseModelTypeAndQuantizationPacked::Plastic_Standard => {
+                SynapseModelTypeAndQuantizationNested::Plastic(PlasticSynapseModelQuantizationLevel::Standard)
+            }
+            
         }
     }
 

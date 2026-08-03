@@ -11,27 +11,27 @@ use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimal
 use crate::synapse::model_capabilities::source_fire_history::NeuronFireHistoryNone;
 use crate::synapse::model_generated::model_type_and_quantization::{SynapseModelTypeAndQuantizationNested, SynapseModelType};
 
-pub trait UniformSynapseModelQuantization: SynapseModelQuantization {
-    const MODEL_QUANTIZATION_LEVEL: UniformSynapseModelQuantizationLevel;
+pub trait PlasticSynapseModelQuantization: SynapseModelQuantization {
+    const MODEL_QUANTIZATION_LEVEL: PlasticSynapseModelQuantizationLevel;
     // Multiplier quant uses the same quant as the In/ Out for synapse
 }
 
 //region Discrete Levels
 
 #[derive(Default, Clone, Copy)]
-pub struct UniformSynapseModelStandardQuant;
+pub struct PlasticSynapseModelStandardQuant;
 
-impl UniformSynapseModelQuantization for UniformSynapseModelStandardQuant {
-    const MODEL_QUANTIZATION_LEVEL: UniformSynapseModelQuantizationLevel = UniformSynapseModelQuantizationLevel::Standard;
+impl PlasticSynapseModelQuantization for PlasticSynapseModelStandardQuant {
+    const MODEL_QUANTIZATION_LEVEL: PlasticSynapseModelQuantizationLevel = PlasticSynapseModelQuantizationLevel::Standard;
 }
 
-impl SynapseModelQuantization for UniformSynapseModelStandardQuant {
+impl SynapseModelQuantization for PlasticSynapseModelStandardQuant {
     type JunctionPotentialQuant = f32;
-    const SYNAPSE_MODEL: SynapseModelType = SynapseModelType::Uniform;
-    type QuantLevelType = UniformSynapseModelQuantizationLevel;
-    const SYNAPSE_QUANTIZATION: Self::QuantLevelType = UniformSynapseModelQuantizationLevel::Standard;
+    const SYNAPSE_MODEL: SynapseModelType = SynapseModelType::Plastic;
+    type QuantLevelType = PlasticSynapseModelQuantizationLevel;
+    const SYNAPSE_QUANTIZATION: Self::QuantLevelType = PlasticSynapseModelQuantizationLevel::Standard;
     const NESTED_SYNAPSE_MODEL_AND_QUANTIZATION: SynapseModelTypeAndQuantizationNested =
-        SynapseModelTypeAndQuantizationNested::Uniform(Self::SYNAPSE_QUANTIZATION);
+        SynapseModelTypeAndQuantizationNested::Plastic(Self::SYNAPSE_QUANTIZATION);
     const USED_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel] = &[DecimalQuantizationLevel::F32];
 }
 
@@ -39,15 +39,15 @@ impl SynapseModelQuantization for UniformSynapseModelStandardQuant {
 
 // TODO Macro should eb generating this stuff
 
-/// The quantization used by the Uniform Synapse Model
+/// The quantization used by the Plastic Synapse Model
 #[repr(u8)]
 #[derive(Debug, Copy, Default, Clone, Hash, PartialEq, Eq)]
-pub enum UniformSynapseModelQuantizationLevel {
+pub enum PlasticSynapseModelQuantizationLevel {
     #[default]
     Standard = 0,
 }
 
-impl SynapseModelQuantizationLevel for UniformSynapseModelQuantizationLevel {
+impl SynapseModelQuantizationLevel for PlasticSynapseModelQuantizationLevel {
     // TODO copy some properties here
 }
 
@@ -57,23 +57,23 @@ impl SynapseModelQuantizationLevel for UniformSynapseModelQuantizationLevel {
 
 create_wrapped_quantized_decimal!(
     /// A multiplier synapse value, applies some scale to incoming signal
-   pub UniformSynapseMultiplier);
+   pub PlasticSynapseMultiplier);
 
 #[derive(Debug, Clone, Default)]
 pub struct UniformSynapseModelCorticalMappingEntryData<SMQ>
 where
-    SMQ: UniformSynapseModelQuantization,
+    SMQ: PlasticSynapseModelQuantization,
 {
-    pub post_synaptic_multiplier: UniformSynapseMultiplier<SMQ::JunctionPotentialQuant>,
+    pub post_synaptic_multiplier: PlasticSynapseMultiplier<SMQ::JunctionPotentialQuant>,
 }
 
-impl<SMQ> SynapseCorticalMappingEntryData<SMQ> for UniformSynapseModelCorticalMappingEntryData<SMQ> where SMQ: UniformSynapseModelQuantization {}
+impl<SMQ> SynapseCorticalMappingEntryData<SMQ> for UniformSynapseModelCorticalMappingEntryData<SMQ> where SMQ: PlasticSynapseModelQuantization {}
 
 impl<SMQ> UniformSynapseModelCorticalMappingEntryData<SMQ>
 where
-    SMQ: UniformSynapseModelQuantization,
+    SMQ: PlasticSynapseModelQuantization,
 {
-    pub fn new(post_synaptic_multiplier: UniformSynapseMultiplier<SMQ::JunctionPotentialQuant>) -> Self {
+    pub fn new(post_synaptic_multiplier: PlasticSynapseMultiplier<SMQ::JunctionPotentialQuant>) -> Self {
         Self { post_synaptic_multiplier }
     }
 }
@@ -83,7 +83,7 @@ where
 pub struct UniformSynapseModel<FIQ, SMQ>
 where
     FIQ: FeagiIndexQuantization,
-    SMQ: UniformSynapseModelQuantization,
+    SMQ: PlasticSynapseModelQuantization,
 {
     _p: core::marker::PhantomData<(FIQ, SMQ)>,
 }
@@ -91,7 +91,7 @@ where
 impl<FIQ, SMQ> SynapseModel<FIQ, SMQ> for UniformSynapseModel<FIQ, SMQ>
 where
     FIQ: FeagiIndexQuantization,
-    SMQ: UniformSynapseModelQuantization,
+    SMQ: PlasticSynapseModelQuantization,
 {
     type CorticalMappingEntryData = UniformSynapseModelCorticalMappingEntryData<SMQ>;
     type SynapseData = EmptyPerSynapseData;

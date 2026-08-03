@@ -65,12 +65,12 @@ mod feagi_advanced_model {
         >,
         pub psp_uniformity: NeuronModelIndexedVector
         <
-            FIQ::NeuronIndexCountQuant,
+            FIQ::NeuronIndexQuant,
             FeagiAdvancedModelNeuronData<FeagiAdvancedModelStandardQuant>,
         >,
         pub neuron_data: NeuronModelIndexedVector
         <
-            FIQ::NeuronIndexCountQuant,
+            FIQ::NeuronIndexQuant,
             FeagiAdvancedModelNeuronData<FeagiAdvancedModelStandardQuant>,
         >,
     }

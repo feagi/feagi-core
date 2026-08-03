@@ -2,11 +2,6 @@
 
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 use byteorder::{ByteOrder, LittleEndian};
-use feagi_genome_definitions::::CorticalID;
-use feagi_potential_voxels::::coord_potential::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPSparseVectors,
-};
-use feagi_structures::FeagiDataError;
 use std::any::Any;
 
 /// Current version of the neuron XYZP serialization format.
@@ -41,7 +36,7 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
     fn try_serialize_struct_to_byte_slice(
         &self,
         byte_destination: &mut [u8],
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), ()> {
         // write per struct header
         byte_destination[0] = self.get_type() as u8;
         byte_destination[1] = self.get_version();
@@ -105,7 +100,7 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
     fn try_deserialize_and_update_self_from_byte_slice(
         &mut self,
         byte_reading: &[u8],
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), ()> {
         // Assuming type is correct
         self.verify_byte_slice_is_of_correct_version(byte_reading)?;
         self.clear_neurons_only(); // This causes a memory leak. Too Bad!
@@ -138,7 +133,8 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
             ) as usize;
 
             if byte_reading.len() < data_start_reading + number_bytes_to_read {
-                return Err(FeagiDataError::SerializationError("Byte structure for NeuronCategoricalXYZP is too short to fit the data the header says it contains!".into()));
+                return Err(());
+                //return Err(()::SerializationError("Byte structure for NeuronCategoricalXYZP is too short to fit the data the header says it contains!".into()));
             }
 
             let neuron_bytes =
@@ -147,7 +143,8 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
 
             #[allow(clippy::manual_is_multiple_of)] // Manual modulo check is clear and works
             if bytes_length % NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON != 0 {
-                return Err(FeagiDataError::SerializationError("As NeuronXYCPArrays contains 4 internal arrays of equal length, each of elements of 4 bytes each (uint32 and float), the input bytes array must be divisible by 16!".into()));
+                return Err(());
+                //return Err(()::SerializationError("As NeuronXYCPArrays contains 4 internal arrays of equal length, each of elements of 4 bytes each (uint32 and float), the input bytes array must be divisible by 16!".into()));
             }
 
             let x_end = bytes_length / 4; // q1
@@ -191,12 +188,12 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
 fn write_neuron_array_to_bytes(
     neuron_array: &NeuronVoxelXYZPSparseVectors,
     bytes_to_write_to: &mut [u8],
-) -> Result<(), FeagiDataError> {
+) -> Result<(), ()> {
     const U32_F32_LENGTH: usize = 4;
     let number_of_neurons_to_write: usize = neuron_array.len();
     let number_bytes_needed = neuron_array.get_size_in_number_of_bytes();
     if bytes_to_write_to.len() != number_bytes_needed {
-        return Err(FeagiDataError::SerializationError(format!(
+        return Err(()::SerializationError(format!(
             "Need exactly {} bytes to write xyzp neuron data, but given a space of {} bytes!",
             bytes_to_write_to.len(),
             number_bytes_needed

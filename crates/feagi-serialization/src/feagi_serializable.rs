@@ -1,6 +1,4 @@
 use crate::{FeagiByteContainer, FeagiByteStructureType};
-use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
-use feagi_structures::{FeagiDataError, FeagiJSON};
 use std::any::Any;
 use std::fmt::Debug;
 
@@ -25,13 +23,13 @@ pub trait FeagiSerializable: Debug + Any {
     fn try_serialize_struct_to_byte_slice(
         &self,
         byte_destination: &mut [u8],
-    ) -> Result<(), FeagiDataError>;
+    ) -> Result<(), ()>;
 
     /// Deserializes data from a byte slice and updates this structure.
     fn try_deserialize_and_update_self_from_byte_slice(
         &mut self,
         byte_reading: &[u8],
-    ) -> Result<(), FeagiDataError>;
+    ) -> Result<(), ()>;
 
     /// Provide access to `Any` trait for downcasting
     fn as_any(&self) -> &dyn Any;
@@ -40,14 +38,19 @@ pub trait FeagiSerializable: Debug + Any {
     fn verify_byte_slice_is_of_correct_type(
         &self,
         byte_source: &[u8],
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), ()> {
         if byte_source.len() <= FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT {
+            return Err(());
+            /*
             return Err(FeagiDataError::DeserializationError(
                 format!("Byte slice needs to be at least {} bytes long to be considered valid! Given slice is {} elements long!", FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT, byte_source.len())
             ));
+            
+             */
         }
         if byte_source[0] != self.get_type() as u8 {
-            return Err(FeagiDataError::DeserializationError(format!("Attempted to process byte slice as structure type {} when given slice seems to be type {}!", self.get_type(), byte_source[0])));
+            return Err(());
+            //return Err(FeagiDataError::DeserializationError(format!("Attempted to process byte slice as structure type {} when given slice seems to be type {}!", self.get_type(), byte_source[0])));
         }
         Ok(())
     }
@@ -56,14 +59,19 @@ pub trait FeagiSerializable: Debug + Any {
     fn verify_byte_slice_is_of_correct_version(
         &self,
         byte_source: &[u8],
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), ()> {
         if byte_source.len() < FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT {
+            return Err(());
+            /*
             return Err(FeagiDataError::DeserializationError(
                 format!("Byte slice needs to be at least {} bytes long to be considered valid! Given slice is {} elements long!", FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT, byte_source.len())
             ));
+            
+             */
         }
         if byte_source[1] != self.get_version() {
-            return Err(FeagiDataError::DeserializationError(format!("Current implementation of Feagi Data Serialization supports structure ID {} of version {}, however version {} was given!!", self.get_type(), self.get_version(), byte_source[1])));
+            return Err(());
+            //return Err(FeagiDataError::DeserializationError(format!("Current implementation of Feagi Data Serialization supports structure ID {} of version {}, however version {} was given!!", self.get_type(), self.get_version(), byte_source[1])));
         }
         Ok(())
     }
@@ -73,6 +81,7 @@ pub trait FeagiSerializable: Debug + Any {
 
 // TODO there is cloning here, can it be avoided?
 
+/*
 impl TryFrom<Box<dyn FeagiSerializable>> for FeagiJSON {
     type Error = FeagiDataError;
     fn try_from(value: Box<dyn FeagiSerializable>) -> Result<Self, Self::Error> {
@@ -98,3 +107,5 @@ impl TryFrom<Box<dyn FeagiSerializable>> for CorticalMappedXYZPNeuronVoxels {
         }
     }
 }
+
+ */

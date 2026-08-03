@@ -1,9 +1,24 @@
-/// Defines any single npu edit request to be interpreted by the NPU and if valid, executed upon
-pub trait ConnectomeRequest: Clone {
-    /// How will this request impact the connectome?
-    fn get_connectome_consequences() -> NPURequestConnectomeConsequences;
+use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
+
+
+pub struct ConnectomeRequest {
+    pub index_level: FeagiIndexQuantizationLevel,
+    pub request_type: ConnectomeRequestType,
+
 }
 
+// TODO define model and quantization
+pub enum ConnectomeRequestType {
+    CorticalAreaAddDimensional(u64, DimensionalCorticalArea4DDimensions<u64>),
+    CorticalAreaAddFormless(u64),
+    CorticalAreaDelete(u64),
+    MappingEntryAdd(u64, u64, )
+    
+}
+
+
+/*
 /// What effects on the connectome would the request have?
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -32,4 +47,4 @@ pub enum NPURequestConnectomeConsequences {
 
 }
 
-
+ */

@@ -37,8 +37,25 @@ macro_rules! create_coordinate {
                     Self::new($( Q::quant_from_usize($field) ),+)
                 }
 
-                
-                
+                /// Converts this coordinate from its current quantization to another quantization (without checking if valid)
+                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $struct_name<NewQ> {
+                    $struct_name::new($( self.inner[$index].to_quantization() ),+)
+                }
+
+                /// Tries to convert this coordinate from its current quantization to another quantization, returning an error if any axis value does not fit
+                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                    Ok($struct_name::new(
+                        $(
+                            self.inner[$index].try_to_quantization().map_err(|_| $crate::values::spatial::feagi_data_values_spatial_error::FeagiFailSpatialQuantizationOutOfRange::new("A coordinate axis value does not fit in the target quantization").into() )?
+                        ),+
+                    ))
+                }
+
+                /// Converts this coordinate from its current quantization to another quantization, clamping each axis value to fit
+                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $struct_name<NewQ> {
+                    $struct_name::new($( self.inner[$index].to_quantization_clamped() ),+)
+                }
+
                 $(
                     pub fn [<get_ $field>](&self) -> &Q {
                         &self.inner[$index]
@@ -99,6 +116,25 @@ macro_rules! create_dimension {
                 /// current quantization or that each axis is non-zero.
                 pub fn new_from_usizes_unchecked($( $field: usize ),+ ) -> Self {
                     Self::new_unchecked($( Q::quant_from_usize($field) ),+)
+                }
+
+                /// Converts this dimension from its current quantization to another quantization (without checking if valid)
+                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $struct_name<NewQ> {
+                    $struct_name::new_unchecked($( self.inner[$index].to_quantization() ),+)
+                }
+
+                /// Tries to convert this dimension from its current quantization to another quantization, returning an error if any axis value does not fit
+                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                    Ok($struct_name::new_unchecked(
+                        $(
+                            self.inner[$index].try_to_quantization().map_err(|_| $crate::values::spatial::feagi_data_values_spatial_error::FeagiFailSpatialQuantizationOutOfRange::new("A dimension axis value does not fit in the target quantization").into() )?
+                        ),+
+                    ))
+                }
+
+                /// Converts this dimension from its current quantization to another quantization, clamping each axis value to fit
+                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $struct_name<NewQ> {
+                    $struct_name::new_unchecked($( self.inner[$index].to_quantization_clamped() ),+)
                 }
 
                 /// Total number of discrete coordinates contained within these dimensions
@@ -271,6 +307,21 @@ macro_rules! create_wrapped_quantized_index_coordinate {
                     )
                 }
 
+                /// Converts this coordinate from its current quantization to another quantization (without checking if valid)
+                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $wrapper_struct_name<NewQ> {
+                    $wrapper_struct_name(self.0.to_quantization_unchecked())
+                }
+
+                /// Tries to convert this coordinate from its current quantization to another quantization, returning an error if any axis value does not fit
+                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                    Ok($wrapper_struct_name(self.0.try_to_quantization()?))
+                }
+
+                /// Converts this coordinate from its current quantization to another quantization, clamping each axis value to fit
+                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $wrapper_struct_name<NewQ> {
+                    $wrapper_struct_name(self.0.to_quantization_clamped())
+                }
+
                 $(
                     pub fn [<get_ $field_name>](&self) -> &$field_wrapped_quant_index<Q> {
                         (&self.0.inner[$index]).into()
@@ -332,6 +383,21 @@ macro_rules! create_wrapped_quantized_index_dimension {
                     $wrapper_struct_name(
                         $quant_index_dim_to_wrap::new_from_usizes_unchecked($( $field_name ),+)
                     )
+                }
+
+                /// Converts this dimension from its current quantization to another quantization (without checking if valid)
+                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $wrapper_struct_name<NewQ> {
+                    $wrapper_struct_name(self.0.to_quantization_unchecked())
+                }
+
+                /// Tries to convert this dimension from its current quantization to another quantization, returning an error if any axis value does not fit
+                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                    Ok($wrapper_struct_name(self.0.try_to_quantization()?))
+                }
+
+                /// Converts this dimension from its current quantization to another quantization, clamping each axis value to fit
+                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $wrapper_struct_name<NewQ> {
+                    $wrapper_struct_name(self.0.to_quantization_clamped())
                 }
 
                 /// Total number of discrete coordinates contained within these dimensions

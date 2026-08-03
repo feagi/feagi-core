@@ -1,5 +1,5 @@
-pub mod genome_interface;
-pub mod model_extensions;
+pub mod model_capabilities;
+
 pub mod models;
 /// A neuron models base definition trait. Is extended with other functionality via other traits
 pub mod neuron_model;
@@ -7,9 +7,5 @@ pub mod neuron_model;
 /// and optionally (most likely) needs per neuron data defined as well
 pub mod neuron_model_data;
 pub mod neuron_model_quantization;
-
-
-// TODO Use build.rs to automatically build enums and include! to bring them here!
-pub mod model_and_quantization;
-pub mod npu_requests;
 pub mod cortical_area_layout;
+pub mod model_generated;

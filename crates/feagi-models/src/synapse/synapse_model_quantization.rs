@@ -1,6 +1,6 @@
 use std::hash::Hash;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait};
-use crate::synapse::model_and_quantization::{NestedSynapseModelTypeAndQuantization, PackedSynapseModelTypeAndQuantization, SynapseModelType};
+use crate::synapse::model_generated::model_type_and_quantization::{SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked, SynapseModelType};
 
 /// Common root trait shared by all Synapse Model Quantizations. This trait should be extended
 /// by the given synapse model to add any quantization parameters for their given data
@@ -19,11 +19,11 @@ pub trait SynapseModelQuantization: Clone + Default {
     const SYNAPSE_QUANTIZATION: Self::QuantLevelType;
 
     /// A nested enum that denotes both the synapse model and the quantization at runtime.
-    const NESTED_SYNAPSE_MODEL_AND_QUANTIZATION: NestedSynapseModelTypeAndQuantization;
+    const NESTED_SYNAPSE_MODEL_AND_QUANTIZATION: SynapseModelTypeAndQuantizationNested;
 
     /// A flat enum (byte) that denotes both the synapse model and the quantization at runtime.
     /// Useful for some burst engines
-    const PACKED_SYNAPSE_MODEL_AND_QUANTIZATION: PackedSynapseModelTypeAndQuantization = PackedSynapseModelTypeAndQuantization::from_nested(Self::NESTED_SYNAPSE_MODEL_AND_QUANTIZATION);
+    const PACKED_SYNAPSE_MODEL_AND_QUANTIZATION: SynapseModelTypeAndQuantizationPacked = SynapseModelTypeAndQuantizationPacked::from_nested(Self::NESTED_SYNAPSE_MODEL_AND_QUANTIZATION);
 
     /// All quantizations used by a given synapse model quantization level. Useful for validating
     /// device compatibility. This will also be extended in extensions of this trait

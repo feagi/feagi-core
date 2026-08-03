@@ -3,7 +3,7 @@ use feagi_data::index_range_managers::index_range_mapping_manager::IndexRangeMap
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::neuron::genome_interface::cortical_area_spawners::DimensionalCorticalAreaSpawner;
-use feagi_models::neuron::model_extensions::neuron_layout_implementations::DimensionalNeuronModel;
+use feagi_models::neuron::model_capabilities::neuron_layout_implementations::DimensionalNeuronModel;
 use feagi_models::neuron::neuron_model::NeuronModel;
 use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, NeuronEngineIndex};
@@ -19,13 +19,13 @@ impl<FIQ: FeagiIndexQuantization> RayonAllocationManager<FIQ> {
 }
 
 struct RayonCorticalAreaAllocationManager<FIQ: FeagiIndexQuantization> {
-    engine_cortical_indexes: IndexRangeMappingManager<CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronEngineIndex<FIQ::NeuronIndexCountQuant>>,
+    engine_cortical_indexes: IndexRangeMappingManager<CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronEngineIndex<FIQ::NeuronIndexQuant>>,
 }
 
 impl<FIQ: FeagiIndexQuantization> RayonCorticalAreaAllocationManager<FIQ> {
 
     /// Gets an immutable ref to the cortical to neuron range mapping manager to easily get context info
-    pub fn get_cortical_index_mappings(&self) -> &IndexRangeMappingManager<CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronEngineIndex<FIQ::NeuronIndexCountQuant>> {
+    pub fn get_cortical_index_mappings(&self) -> &IndexRangeMappingManager<CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, NeuronEngineIndex<FIQ::NeuronIndexQuant>> {
         &self.engine_cortical_indexes
     }
 
@@ -33,7 +33,7 @@ impl<FIQ: FeagiIndexQuantization> RayonCorticalAreaAllocationManager<FIQ> {
     pub fn add_dimensional_cortical_area<NMQ: NeuronModelQuantization, NM: DimensionalNeuronModel<FIQ, NMQ>>(
         &mut self,
         rayon_data: (),
-        dimensions: DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
+        dimensions: DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexQuant>,
         spawner: impl DimensionalCorticalAreaSpawner<FIQ, NMQ, NM>,
     ) -> Result<(), ()> {
         let amount_neurons_needed = NeuronEngineIndex::new(dimensions.number_contained_elements().deref());

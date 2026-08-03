@@ -1,4 +1,4 @@
-use crate::neuron::model_and_quantization::{NestedNeuronModelTypeAndQuantization, NeuronModelType, PackedNeuronModelTypeAndQuantization};
+use crate::neuron::model_generated::model_type_and_quantization::{NeuronModelType, NeuronModelTypeAndQuantizationNested, NeuronModelTypeAndQuantizationPacked};
 use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 
 /// Root trait for all cortical_area data implementations, essentially any cortical_area level data shared
@@ -14,10 +14,10 @@ where
     /// A flat enum value denoting the quantization level of this neuron model instance
     const NEURON_QUANTIZATION: NMQ::QuantLevelType = NMQ::NEURON_QUANTIZATION;
     /// A nested enum that denotes both the neuron model and the quantization at runtime.
-    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NestedNeuronModelTypeAndQuantization = NMQ::NESTED_NEURON_MODEL_AND_QUANTIZATION;
+    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NeuronModelTypeAndQuantizationNested = NMQ::NESTED_NEURON_MODEL_AND_QUANTIZATION;
     /// A flat enum (byte) that denotes both the neuron model and the quantization at runtime. Mainly
     /// useful for NPU
-    const PACKED_NEURON_MODEL_AND_QUANTIZATION: PackedNeuronModelTypeAndQuantization = NMQ::PACKED_NEURON_MODEL_AND_QUANTIZATION;
+    const PACKED_NEURON_MODEL_AND_QUANTIZATION: NeuronModelTypeAndQuantizationPacked = NMQ::PACKED_NEURON_MODEL_AND_QUANTIZATION;
 }
 
 /// Root trait for all neuron data implementation, essentially per neuron data for a given
@@ -39,11 +39,12 @@ where
     /// A flat enum value denoting the quantization level of this neuron model instance
     const NEURON_QUANTIZATION: NMQ::QuantLevelType = NMQ::NEURON_QUANTIZATION;
     /// A nested enum that denotes both the neuron model and the quantization at runtime.
-    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NestedNeuronModelTypeAndQuantization = NMQ::NESTED_NEURON_MODEL_AND_QUANTIZATION;
+    const NESTED_NEURON_MODEL_AND_QUANTIZATION: NeuronModelTypeAndQuantizationNested = NMQ::NESTED_NEURON_MODEL_AND_QUANTIZATION;
     /// A flat enum (byte) that denotes both the neuron model and the quantization at runtime. Mainly
     /// useful for NPU
-    const PACKED_NEURON_MODEL_AND_QUANTIZATION: PackedNeuronModelTypeAndQuantization = NMQ::PACKED_NEURON_MODEL_AND_QUANTIZATION;
+    const PACKED_NEURON_MODEL_AND_QUANTIZATION: NeuronModelTypeAndQuantizationPacked = NMQ::PACKED_NEURON_MODEL_AND_QUANTIZATION;
 }
+
 
 /// A neuron "implementation" to use if your neuron model does not need to store per neuron data
 /// outside of what FEAGI automatically can allocate (membrane potential, firing history)

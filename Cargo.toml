@@ -161,6 +161,7 @@ members = [
     "crates/feagi-genomic/feagi-genomic-context",
     "crates/feagi-genomic/feagi-genomic-data",
     "crates/feagi-npu",
+    "crates/feagi-serialization"
 ]
 
 [workspace.package]

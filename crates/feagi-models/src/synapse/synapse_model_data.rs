@@ -1,4 +1,4 @@
-use crate::synapse::model_and_quantization::{NestedSynapseModelTypeAndQuantization, PackedSynapseModelTypeAndQuantization, SynapseModelType};
+use crate::synapse::model_generated::model_type_and_quantization::{SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked, SynapseModelType};
 use crate::synapse::synapse_model_quantization::SynapseModelQuantization;
 
 /// Root trait for all cortical mapping entry implementations, which is essentially any data shared 
@@ -13,10 +13,10 @@ where
     /// A flat enum value denoting the quantization level of this synapse model instance
     const SYNAPSE_QUANTIZATION: SMQ::QuantLevelType = SMQ::SYNAPSE_QUANTIZATION;
     /// A nested enum that denotes both the synapse model and the quantization at runtime.
-    const NESTED_SYNAPSE_MODEL_AND_QUANTIZATION: NestedSynapseModelTypeAndQuantization = SMQ::NESTED_SYNAPSE_MODEL_AND_QUANTIZATION;
+    const NESTED_SYNAPSE_MODEL_AND_QUANTIZATION: SynapseModelTypeAndQuantizationNested = SMQ::NESTED_SYNAPSE_MODEL_AND_QUANTIZATION;
     /// A flat enum (byte) that denotes both the synapse model and the quantization at runtime.
     /// Useful for some burst engines
-    const PACKED_SYNAPSE_MODEL_AND_QUANTIZATION: PackedSynapseModelTypeAndQuantization = SMQ::PACKED_SYNAPSE_MODEL_AND_QUANTIZATION;
+    const PACKED_SYNAPSE_MODEL_AND_QUANTIZATION: SynapseModelTypeAndQuantizationPacked = SMQ::PACKED_SYNAPSE_MODEL_AND_QUANTIZATION;
 
 }
 
@@ -34,10 +34,10 @@ where
     /// A flat enum value denoting the quantization level of this synapse model instance
     const SYNAPSE_QUANTIZATION: SMQ::QuantLevelType = SMQ::SYNAPSE_QUANTIZATION;
     /// A nested enum that denotes both the synapse model and the quantization at runtime.
-    const NESTED_SYNAPSE_MODEL_AND_QUANTIZATION: NestedSynapseModelTypeAndQuantization = SMQ::NESTED_SYNAPSE_MODEL_AND_QUANTIZATION;
+    const NESTED_SYNAPSE_MODEL_AND_QUANTIZATION: SynapseModelTypeAndQuantizationNested = SMQ::NESTED_SYNAPSE_MODEL_AND_QUANTIZATION;
     /// A flat enum (byte) that denotes both the synapse model and the quantization at runtime.
     /// Useful for some burst engines
-    const PACKED_SYNAPSE_MODEL_AND_QUANTIZATION: PackedSynapseModelTypeAndQuantization = SMQ::PACKED_SYNAPSE_MODEL_AND_QUANTIZATION;
+    const PACKED_SYNAPSE_MODEL_AND_QUANTIZATION: SynapseModelTypeAndQuantizationPacked = SMQ::PACKED_SYNAPSE_MODEL_AND_QUANTIZATION;
 }
 
 /// A synapse "implementation" to use if your synapse model does not need to store per synapse data

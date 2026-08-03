@@ -18,12 +18,19 @@ pub struct FeagiFailDimensionsCannotBeZero {
     context: &'static str,
 }
 
+#[derive(FeagiErrorKey)]
+/// Attempted to convert spatial data to another quantization but a value would not fit in the target quantization
+pub struct FeagiFailSpatialQuantizationOutOfRange {
+    context: &'static str,
+}
+
 generate_feagi_error! {
     FeagiDataValuesSpatialError,
     keys: {
         InvalidSpatialQuantization: FeagiFailInvalidSpatialQuantization,
         InvalidSpatialIndex: FeagiFailInvalidSpatialIndex,
         DimensionsCannotBeZero: FeagiFailDimensionsCannotBeZero,
+        SpatialQuantizationOutOfRange: FeagiFailSpatialQuantizationOutOfRange,
     },
     sub_errors: {
 

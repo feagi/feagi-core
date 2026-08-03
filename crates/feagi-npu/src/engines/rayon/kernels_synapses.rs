@@ -2,7 +2,7 @@ use rayon::prelude::*;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedIndexCount};
-use feagi_models::synapse::model_and_quantization::PackedSynapseModelTypeAndQuantization;
+use feagi_models::synapse::model_type_and_quantization::PackedSynapseModelTypeAndQuantization;
 use feagi_models::synapse::models::uniform::{UniformSynapseModel, UniformSynapseModelStandardQuant};
 use feagi_models::synapse::synapse_model::SynapseModel;
 use feagi_models::synapse::synapse_model_quantization::SynapseModelQuantization;
@@ -59,9 +59,9 @@ fn process_synapses<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
 unsafe fn synapse_dynamics<FIQ: FeagiIndexQuantization> (
     data: &RayonEngineData<FIQ>,
     source_neuron_mp_quant: DecimalQuantizationLevel,
-    source_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexCountQuant>,
+    source_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexQuant>,
     destination_neuron_mp_quant: DecimalQuantizationLevel,
-    destination_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexCountQuant>,
+    destination_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexQuant>,
     synapse_model_and_quant: PackedSynapseModelTypeAndQuantization,
     mapping_entry_index: MappingEntryModelIndex<FIQ::CorticalMappingEntryIndexCountQuant>,
 )
@@ -87,7 +87,7 @@ unsafe fn synapse_dynamics<FIQ: FeagiIndexQuantization> (
     
     
 }
-unsafe fn source_to_junction<FIQ: FeagiIndexQuantization, JunctionQuant: QuantizedDecimalTrait>(data: &RayonEngineData<FIQ>, source_quant: &DecimalQuantizationLevel, source_index: NeuronMPIndex<FIQ::NeuronIndexCountQuant>) -> NeuronMembranePotential<JunctionQuant> {
+unsafe fn source_to_junction<FIQ: FeagiIndexQuantization, JunctionQuant: QuantizedDecimalTrait>(data: &RayonEngineData<FIQ>, source_quant: &DecimalQuantizationLevel, source_index: NeuronMPIndex<FIQ::NeuronIndexQuant>) -> NeuronMembranePotential<JunctionQuant> {
     match source_quant {
         DecimalQuantizationLevel::StorageF8 => {
             let potential = data.neuron_membrane_data.mp_storage_f8.get_par(source_index).deref();
@@ -112,7 +112,7 @@ unsafe fn source_to_junction<FIQ: FeagiIndexQuantization, JunctionQuant: Quantiz
     }
 }
 
-unsafe fn junction_to_destination<FIQ: FeagiIndexQuantization, JunctionQuant: QuantizedDecimalTrait>(data: &RayonEngineData<FIQ>, value: NeuronMembranePotential<JunctionQuant>, destination_quant: &DecimalQuantizationLevel, destination_index: FIQ::NeuronIndexCountQuant, fclc_index: u8) {
+unsafe fn junction_to_destination<FIQ: FeagiIndexQuantization, JunctionQuant: QuantizedDecimalTrait>(data: &RayonEngineData<FIQ>, value: NeuronMembranePotential<JunctionQuant>, destination_quant: &DecimalQuantizationLevel, destination_index: FIQ::NeuronIndexQuant, fclc_index: u8) {
     match destination_quant {
         DecimalQuantizationLevel::StorageF8 => {}
         DecimalQuantizationLevel::F16 => {}

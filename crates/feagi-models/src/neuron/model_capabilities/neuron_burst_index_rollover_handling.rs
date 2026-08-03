@@ -23,7 +23,8 @@ where
 
     /// The function that will be called per neuron of a cortical area if the model type needs
     /// to do something if there is about to be a burst index rollover. Use this function to
-    /// update any values in the neuron to ensure a smooth transition. Note that we do not
+    /// update any values in the neuron to ensure a smooth transition. Note that we do not edit
+    /// cortical level data, only neuron level!
     fn special_rollover_handling(
         
         neuron_data: &mut NMND,

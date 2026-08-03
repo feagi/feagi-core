@@ -4,7 +4,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantiz
 pub trait SynapseNeuronPairIterator<FIQ: FeagiIndexQuantization> {
     fn iterate_over_neuron_pairs(
         &self,
-        number_source_neurons: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
-        number_destination_neurons: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
-    ) -> impl Iterator<Item= (NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>, NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>)>;
+        number_source_neurons: &NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
+        number_destination_neurons: &NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
+    ) -> impl Iterator<Item= (NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>, NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>)>;
 }

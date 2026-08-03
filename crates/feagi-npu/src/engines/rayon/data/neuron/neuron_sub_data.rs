@@ -36,21 +36,21 @@ impl<FIQ: FeagiIndexQuantization> CorticalIndexLookupTable<FIQ> {
 #[derive(Clone, Copy)]
 pub struct NeuronIndexLookupTable<FIQ: FeagiIndexQuantization> {
     /// The first neuron's local index of this cortical area
-    pub cortical_first_neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexCountQuant>,
+    pub cortical_first_neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant>,
     /// The first neuron's MP index of this cortical area
-    pub cortical_first_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexCountQuant>,
+    pub cortical_first_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexQuant>,
     /// The first neuron's model index of this cortical area
-    pub cortical_first_model_index: NeuronModelIndex<FIQ::NeuronIndexCountQuant>,
+    pub cortical_first_model_index: NeuronModelIndex<FIQ::NeuronIndexQuant>,
     /// The neuron history index (if it uses it)
-    pub cortical_first_neuron_history_index: NeuronHistoryIndex<FIQ::NeuronIndexCountQuant>,
+    pub cortical_first_neuron_history_index: NeuronHistoryIndex<FIQ::NeuronIndexQuant>,
 }
 
 impl<FIQ: FeagiIndexQuantization> NeuronIndexLookupTable<FIQ> {
     pub fn new(
-        cortical_first_neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexCountQuant>,
-        cortical_first_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexCountQuant>,
-        cortical_first_model_index: NeuronModelIndex<FIQ::NeuronIndexCountQuant>,
-        cortical_first_neuron_history_index: NeuronHistoryIndex<FIQ::NeuronIndexCountQuant>,
+        cortical_first_neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant>,
+        cortical_first_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexQuant>,
+        cortical_first_model_index: NeuronModelIndex<FIQ::NeuronIndexQuant>,
+        cortical_first_neuron_history_index: NeuronHistoryIndex<FIQ::NeuronIndexQuant>,
     ) -> Self {
         Self {
             cortical_first_neuron_engine_index,
@@ -66,8 +66,8 @@ impl<FIQ: FeagiIndexQuantization> NeuronIndexLookupTable<FIQ> {
     /// usize due to limitations with rust compiler
     pub fn get_neuron_engine_index_range_for_group(
         &self,
-        group_index: &NeuronEngineByteIndex<FIQ::NeuronIndexCountQuant>,
-        cortical_number_of_neurons: FIQ::NeuronIndexCountQuant,
+        group_index: &NeuronEngineByteIndex<FIQ::NeuronIndexQuant>,
+        cortical_number_of_neurons: FIQ::NeuronIndexQuant,
     ) -> Range<usize> {
         let cortical_last_byte_index = self.cortical_first_neuron_engine_index + NeuronEngineIndex::new(cortical_number_of_neurons);
         let cur_index = group_index.quant_to_usize() * EMPLOYEE_427;
@@ -76,29 +76,29 @@ impl<FIQ: FeagiIndexQuantization> NeuronIndexLookupTable<FIQ> {
 
     pub fn get_neuron_mp_index(
         &self,
-        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexCountQuant>,
-    ) -> NeuronMPIndex<FIQ::NeuronIndexCountQuant> {
+        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexQuant>,
+    ) -> NeuronMPIndex<FIQ::NeuronIndexQuant> {
         NeuronMPIndex::new(from_engine_index.deref() - self.cortical_first_neuron_mp_index.deref())
     }
 
     pub fn get_neuron_model_index(
         &self,
-        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexCountQuant>,
-    ) -> NeuronModelIndex<FIQ::NeuronIndexCountQuant> {
+        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexQuant>,
+    ) -> NeuronModelIndex<FIQ::NeuronIndexQuant> {
         NeuronModelIndex::new(from_engine_index.deref() - self.cortical_first_model_index.deref())
     }
 
     pub fn get_neuron_local_index(
         &self,
-        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexCountQuant>,
-    ) -> NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant> {
+        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexQuant>,
+    ) -> NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant> {
         NeuronCorticalLocalIndex::new(from_engine_index.deref() - self.cortical_first_neuron_engine_index.deref())
     }
 
     pub fn get_neuron_history_index(
         &self,
-        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexCountQuant>,
-    ) -> NeuronHistoryIndex<FIQ::NeuronIndexCountQuant> {
+        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexQuant>,
+    ) -> NeuronHistoryIndex<FIQ::NeuronIndexQuant> {
         NeuronHistoryIndex::new(from_engine_index.deref() - self.cortical_first_neuron_history_index.deref())
     }
 }

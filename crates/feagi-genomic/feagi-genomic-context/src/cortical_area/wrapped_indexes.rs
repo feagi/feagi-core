@@ -1,6 +1,6 @@
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiGlobalQuantizationStandard, FeagiIndexQuantization};
 
-type StandardNeuronQuantization = <FeagiGlobalQuantizationStandard as FeagiIndexQuantization>::NeuronIndexCountQuant;
+type StandardNeuronQuantization = <FeagiGlobalQuantizationStandard as FeagiIndexQuantization>::NeuronIndexQuant;
 
 /// Used for counting and indexing specific channels within an I/O cortical area.
 pub type CorticalChannelIndexCount = generics::CorticalChannelIndexCountQuant<StandardNeuronQuantization>;
