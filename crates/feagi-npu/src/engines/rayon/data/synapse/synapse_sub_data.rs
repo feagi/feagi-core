@@ -1,6 +1,6 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizationLevelPacking};
-use feagi_models::synapse::model_type_and_quantization::{PackedSynapseModelTypeAndQuantization};
+use feagi_models::synapse::model_generated::model_type_and_quantization::SynapseModelTypeAndQuantizationPacked;
 use feagi_models::wrapped_index_collections::{MappingEntryModelIndex, SynapseEngineIndex};
 use crate::flags::cortical_mapping_entry_runtime_flags::CorticalMappingEntryRuntimeFlags;
 
@@ -15,7 +15,7 @@ pub struct CorticalMappingEntryIndexLookupTable<FIQ: FeagiIndexQuantization> {
 #[derive(Clone, Copy)]
 pub struct CorticalMappingEntryProperties {
     pub flags: CorticalMappingEntryRuntimeFlags,
-    pub model_and_quant: PackedSynapseModelTypeAndQuantization,
+    pub model_and_quant: SynapseModelTypeAndQuantizationPacked,
     pub source_destination_mp_quants: SynapseMappingMPQuants,
     pub delay: u8
 }

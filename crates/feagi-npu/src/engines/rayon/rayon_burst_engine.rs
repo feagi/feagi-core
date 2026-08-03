@@ -3,7 +3,10 @@ use feagi_models::connectome_requests::properties::UniversalCorticalAreaProperti
 use feagi_models::neuron::neuron_model::NeuronModel;
 use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryEngineIndex};
+use feagi_models::wrapped_indexes::BurstIndex;
 use crate::engines::rayon::data::RayonEngineData;
+use crate::engines::rayon::kernels_neurons;
+use crate::engines::rayon::kernels_synapses;
 use crate::engines_common::EditableEngine::EditableEngine;
 
 pub struct RayonBurstEngine<FIQ: FeagiIndexQuantization> {
@@ -36,8 +39,12 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
     pub fn get_visualization_data(&self) {
         todo!()
     }
-
-
+    
+    pub fn execute_single_burst(&mut self) {
+        kernels_neurons::process_neurons(&self.data);
+        kernels_synapses::process_synapses(&self.data);
+        self.data.burst_index += BurstIndex::QUANT_ONE;
+    }
 }
 
 impl<FIQ: FeagiIndexQuantization> EditableEngine<FIQ> for RayonBurstEngine<FIQ> {

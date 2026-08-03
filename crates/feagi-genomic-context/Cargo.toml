@@ -32,8 +32,8 @@ alloc = [
 ]
 
 [dependencies]
-feagi-logging-and-errors = {path = "../../feagi-logging-and-errors"}
-feagi-data = {path = "../../feagi-data"}
+feagi-logging-and-errors = {path = "../feagi-logging-and-errors" }
+feagi-data = {path = "../feagi-data" }
 
 # External crates
 paste = { workspace = true }

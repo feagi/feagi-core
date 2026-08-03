@@ -7,7 +7,9 @@ use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryE
 /// When a burst engine is stopped, these function calls
 pub trait EditableEngine<FIQ: FeagiIndexQuantization> {
 
-    fn add_cortical_area<NMQ: NeuronModelQuantization, NM: NeuronModel<FIQ, NMQ>> (&mut self, number_neurons: FIQ::NeuronIndexQuant, cortical_flags: UniversalCorticalAreaProperties , cortical_data: NM::CorticalData, neuron_data_writer: impl NeuronDataWriter) -> CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>;
+    // TODO: `neuron_data_writer` should become a real `NeuronDataWriter` trait bound once per-neuron
+    // initial-value seeding is designed; for now callers just pass `()`.
+    fn add_cortical_area<NMQ: NeuronModelQuantization, NM: NeuronModel<FIQ, NMQ>> (&mut self, number_neurons: FIQ::NeuronIndexQuant, cortical_flags: UniversalCorticalAreaProperties , cortical_data: NM::CorticalData, neuron_data_writer: ()) -> CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>;
 
     fn edit_cortical_area_cortical_flags(&mut self, cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, cortical_flags: UniversalCorticalAreaProperties);
 

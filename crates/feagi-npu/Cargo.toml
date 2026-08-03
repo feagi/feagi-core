@@ -51,8 +51,7 @@ alloc = [
 [dependencies]
 feagi-data = {path = "../feagi-data"}
 feagi-models = {path = "../feagi-models" }
-feagi-genomic = {path = "../feagi-genomic"}
-
+feagi-genomic-context = {path = "../feagi-genomic-context"}
 
 
 # External crates

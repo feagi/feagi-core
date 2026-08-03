@@ -9,7 +9,7 @@ use feagi_genomic::feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::connectome_requests::connectome_request::{ConnectomeRequest, ConnectomeRequestType};
 use feagi_models::connectome_requests::connectome_request_builder::ConnectomeRequestBuilder;
 use feagi_models::connectome_requests::properties::UniversalCorticalAreaProperties;
-use feagi_models::neuron::models::feagi_advanced::{ConsecutiveFireLimit, DegeneracyConstant, FeagiAdvancedModelCorticalData, RefractoryPeriodLimit, SnoozePeriod};
+use feagi_models::neuron::models::feagi_advanced::{ConsecutiveFireLimit, DegeneracyConstant, FeagiAdvancedModel, FeagiAdvancedModelCorticalData, FeagiAdvancedModelStandardQuant, RefractoryPeriodLimit, SnoozePeriod};
 use feagi_models::wrapped_index_collections::CorticalEngineIndex;
 use crate::engines_common::EditableEngine::EditableEngine;
 
@@ -23,6 +23,7 @@ impl DynamicNPU {
     pub fn new() -> Self {
         Self {
             rayon_burst_engine: RayonBurstEngine::<FeagiGlobalQuantizationAbsurd>::new(),
+            cortical_id_engine_mapping: Default::default(),
         }
     }
     
@@ -46,7 +47,8 @@ impl DynamicNPU {
                     is_psp_uniform: false,
                     is_psp_mp_driven: false,
                 };
-                let cortical_data = FeagiAdvancedModelCorticalData::new(
+                // TODO derive cortical data from the request/genome instead of hardcoding "feagi advanced, standard quant"
+                let cortical_data: FeagiAdvancedModelCorticalData<FeagiAdvancedModelStandardQuant> = FeagiAdvancedModelCorticalData::new(
                     PercentageUnsigned::HUNDRED_PERCENT,
                     RefractoryPeriodLimit::QUANT_ONE,
                     NeuronMembranePotential::QUANT_ONE,
@@ -54,8 +56,12 @@ impl DynamicNPU {
                     SnoozePeriod::QUANT_ONE,
                     DegeneracyConstant::QUANT_ONE
                 );
-                
-                self.rayon_burst_engine.add_cortical_area(number_neurons, cortical_props, cortical_data, ());
+
+                let cortical_engine_index = self.rayon_burst_engine.add_cortical_area::<
+                    FeagiAdvancedModelStandardQuant,
+                    FeagiAdvancedModel<FeagiGlobalQuantizationAbsurd, FeagiAdvancedModelStandardQuant>,
+                >(number_neurons, cortical_props, cortical_data, ());
+                self.cortical_id_engine_mapping.insert(cortical_id, cortical_engine_index);
             }
             ConnectomeRequestType::CorticalAreaAddFormless(_) => {}
             ConnectomeRequestType::CorticalAreaDelete(_) => {}
@@ -64,6 +70,10 @@ impl DynamicNPU {
             }
         }
         
+    }
+
+    pub fn execute_single_burst(&mut self) {
+        self.rayon_burst_engine.execute_single_burst();
     }
     
     

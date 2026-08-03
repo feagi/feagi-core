@@ -2,7 +2,7 @@ use rayon::prelude::*;
 use feagi_data::collections::linear::bitpacked::{BitPackedMutTrait, BitPackedParMutTrait};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
-use feagi_models::neuron::model_and_quantization::PackedNeuronModelTypeAndQuantization;
+use feagi_models::neuron::model_generated::model_type_and_quantization::NeuronModelTypeAndQuantizationPacked;
 use feagi_models::neuron::model_capabilities::neuron_layout_implementations::DimensionalNeuronModel;
 use feagi_models::neuron::models::feagi_advanced::FeagiAdvancedModel;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, NeuronEngineByteIndex, NeuronEngineIndex};
@@ -10,7 +10,7 @@ use feagi_models::wrapped_indexes::BurstIndex;
 use crate::engines::rayon::data::RayonEngineData;
 use crate::engines::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
 
-fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
+pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
 {
     let burst_index = data.burst_index;
 
@@ -68,7 +68,7 @@ fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
 #[inline(always)]
 unsafe fn neuron_dynamics<FIQ: FeagiIndexQuantization>(
     data: &RayonEngineData<FIQ>,
-    model: PackedNeuronModelTypeAndQuantization,
+    model: NeuronModelTypeAndQuantizationPacked,
     burst_index: BurstIndex<FIQ::GlobalBurstIndexQuant>,
     cortical_lookup_table: &CorticalIndexLookupTable<FIQ>,
     neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant>,
@@ -76,7 +76,7 @@ unsafe fn neuron_dynamics<FIQ: FeagiIndexQuantization>(
 {
 
     match model {
-        PackedNeuronModelTypeAndQuantization::FeagiAdvanced_Standard => {
+        NeuronModelTypeAndQuantizationPacked::FeagiAdvanced_Standard => {
             // has per neuron data, full history, dimension layout
             
             let cortical_model_index = cortical_lookup_table.cortical_model_index;

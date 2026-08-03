@@ -10,8 +10,8 @@ homepage.workspace = true
 documentation.workspace = true
 
 [dependencies]
-feagi-logging-and-errors = {path = "../../feagi-logging-and-errors"}
-feagi-data = {path = "../../feagi-data"}
+feagi-logging-and-errors = {path = "../feagi-logging-and-errors" }
+feagi-data = {path = "../feagi-data" }
 
 [lints]
 workspace = true

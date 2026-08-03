@@ -20,6 +20,15 @@ pub struct SynapseModelData<FIQ: FeagiIndexQuantization> {
 }
 
 
+impl<FIQ: FeagiIndexQuantization> Default for SynapseModelData<FIQ> {
+    fn default() -> Self {
+        Self {
+            uniform: Default::default(),
+        }
+    }
+}
+
+
 
 
 #[doc(hidden)]

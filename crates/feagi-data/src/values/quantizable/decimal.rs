@@ -425,7 +425,7 @@ macro_rules! create_wrapped_quantized_decimal {
         impl<Q: $crate::values::quantizable::QuantizedDecimalTrait> From<&Q> for &$struct_name<Q> {
             fn from(value: &Q) -> Self {
                 // tRust me bro
-                unsafe { &*(value as *const Q as *const Self) }
+                unsafe { &*(value as *const Q as *const $struct_name<Q>) }
             }
         }
 

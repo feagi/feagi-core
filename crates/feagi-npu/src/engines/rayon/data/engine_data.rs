@@ -5,6 +5,7 @@ use crate::flags::cortical_runtime_flags::CorticalRuntimeFlags;
 use crate::flags::neuron_runtime_flags::NeuronRuntimeFlags;
 use feagi_data::collections::linear::bitpacked::BitPackedVector;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::values::quantizable::{QuantizedElementBase, QuantizedIndexCountTrait};
 use feagi_models::neuron::cortical_area_layout::CorticalAreaLayoutDimensional;
 use feagi_models::neuron::model_capabilities::neuron_history::NeuronModelFullNeuronHistory;
 use feagi_models::neuron::model_generated::model_type_and_quantization::NeuronModelTypeAndQuantizationPacked;
@@ -77,4 +78,30 @@ pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
     //endregion
 }
 
+// Not `#[derive(Default)]`: that would require `FIQ: Default`, but `FIQ` is only ever used
+// through its associated types here (it's a zero-sized quantization-level marker). Every field
+// below already has its own `Default` impl that doesn't require `FIQ: Default`.
+impl<FIQ: FeagiIndexQuantization> Default for RayonEngineData<FIQ> {
+    fn default() -> Self {
+        Self {
+            burst_index: Default::default(),
+            cortical_engine_indexes: Default::default(),
+            neuron_model_data: Default::default(),
+            neuron_membrane_data: Default::default(),
+            cortical_neuron_model_and_quant_and_neuron_properties: Default::default(),
+            cortical_index_lookup_table: Default::default(),
+            cortical_neuron_count: Default::default(),
+            cortical_neuron_index_lookup_table: Default::default(),
+            cortical_layout_dimensional_data: Default::default(),
+            neuron_runtime_flags: Default::default(),
+            neuron_voxel_is_firing: BitPackedVector::new_uniform(FIQ::NeuronIndexQuant::QUANT_ZERO, false),
+            neuron_history_data: Default::default(),
+            cortical_mapping_entry_indexes: Default::default(),
+            synapse_model_data: Default::default(),
+            cortical_mapping_entry_properties: Default::default(),
+            cortical_mapping_index_lookup_table: Default::default(),
+            synapse_source_destination_mp_neuron_indexes: Default::default(),
+        }
+    }
+}
 

@@ -12,8 +12,8 @@ description = "Contains the definitions and math behind the neuron and synapse m
 
 [dependencies]
 feagi-data = {path = "../feagi-data" }
+feagi-genomic-context = {path = "../feagi-genomic-context"}
 
 paste = {workspace = true}
-enum_delegate = {workspace = true}
 half = {workspace = true}
 

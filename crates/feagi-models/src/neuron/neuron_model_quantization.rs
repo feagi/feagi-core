@@ -12,6 +12,8 @@ pub trait NeuronModelQuantization: MembranePotentialQuantization + Default + Clo
     /// The type of enum that can denote the quantization level of this neuron model
     type QuantLevelType: NeuronModelQuantizationLevel;
 
+    //type CorticalSpawnerConfigurator:
+
     /// A flat enum value denoting the quantization level of this neuron model instance
     const NEURON_QUANTIZATION: Self::QuantLevelType;
 

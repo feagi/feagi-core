@@ -1,6 +1,6 @@
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
-
+use feagi_genomic_context::cortical_area::CorticalID;
 
 pub struct ConnectomeRequest {
     pub index_level: FeagiIndexQuantizationLevel,
@@ -10,10 +10,10 @@ pub struct ConnectomeRequest {
 
 // TODO define model and quantization
 pub enum ConnectomeRequestType {
-    CorticalAreaAddDimensional(u64, DimensionalCorticalArea4DDimensions<u64>),
-    CorticalAreaAddFormless(u64),
-    CorticalAreaDelete(u64),
-    MappingEntryAdd(u64, u64, )
+    CorticalAreaAddDimensional(CorticalID, DimensionalCorticalArea4DDimensions<u64>),
+    CorticalAreaAddFormless(CorticalID, u64),
+    CorticalAreaDelete(CorticalID),
+//    MappingEntryAdd(CorticalID, CorticalID, )
     
 }
 

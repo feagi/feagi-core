@@ -157,11 +157,10 @@ members = [
     "crates/feagi-logging-and-errors/feagi-logging-and-errors-derive",
     "crates/feagi-data",
     "crates/feagi-models",
-    "crates/feagi-genomic",
-    "crates/feagi-genomic/feagi-genomic-context",
-    "crates/feagi-genomic/feagi-genomic-data",
+    "crates/feagi-genomic-context",
+    "crates/feagi-genomic-data",
     "crates/feagi-npu",
-    "crates/feagi-serialization"
+    "crates/feagi-serialization",
 ]
 
 [workspace.package]
