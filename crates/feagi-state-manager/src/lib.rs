@@ -623,11 +623,12 @@ impl StateManager {
     /// # Example
     ///
     /// ```rust
-    /// use feagi_state_manager::StateManager;
+    /// use feagi_state_manager::{BurstEngineState, StateManager};
     ///
     /// let state = StateManager::instance();
     /// let manager = state.read();
-    /// manager.set_fatigue_index(85);
+    /// // Setters take `&self` because the state is held in atomics, so a read guard suffices.
+    /// manager.set_burst_engine_state(BurstEngineState::Running);
     /// ```
     pub fn instance() -> Arc<RwLock<StateManager>> {
         // Force initialization by accessing the Lazy value
@@ -717,7 +718,9 @@ mod tests {
         assert_eq!(snapshot.burst_engine_state, BurstEngineState::Running as u8);
         assert_eq!(snapshot.agent_count, 1);
 
-        let temp_path = std::path::Path::new("/tmp/feagi_state_manager_test.bin");
+        // Platform temp dir rather than a hardcoded `/tmp`, which does not exist on Windows.
+        let temp_path = std::env::temp_dir().join("feagi_state_manager_test.bin");
+        let temp_path = temp_path.as_path();
         state.save_to_file(temp_path).unwrap();
 
         let loaded = StateManager::load_from_file(temp_path).unwrap();

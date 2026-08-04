@@ -161,6 +161,34 @@ members = [
     "crates/feagi-genomic-data",
     "crates/feagi-npu",
     "crates/feagi-serialization",
+    "crates/feagi-io",
+    "crates/feagi-config",
+    "crates/feagi-observability",
+    "crates/feagi-state-manager",
+
+    # ---- Not yet buildable ------------------------------------------------------------------
+    # Every member's manifest has to resolve for any cargo command to run, so these stay
+    # commented out until migrated. Re-add each one as it starts compiling.
+    #
+    # Mid-refactor onto crate names that were never created: imports `feagi_genome_definitions`
+    # and `feagi_potential_voxels` (neither exists here) through a `::::` typo left by an
+    # interrupted rename, plus macros and `FeagiDataError` variants from the deleted
+    # feagi-structures crate.
+    # "crates/feagi-sensorimotor",
+    #
+    # Blocked only by feagi-sensorimotor, which it depends on. Its own remaining gaps are small:
+    # `FeagiJSON` moved to feagi-serialization, and `FeagiDataError` needs replacing with
+    # FeagiAgentError variants since feagi-data's version has a different shape.
+    # "crates/feagi-agent",
+    #
+    # Still on the pre-rewrite architecture: manifests point at the old split NPU sub-crates
+    # (feagi-npu/{neural,burst-engine,plasticity,runtime}), pin version 0.0.13 against a 0.0.12
+    # workspace, inherit the deleted feagi-structures, and call NPU APIs that DynamicNPU does not
+    # expose yet.
+    # "crates/feagi-api",
+    # "crates/feagi-brain-development",
+    # "crates/feagi-evolutionary",
+    # "crates/feagi-services",
 ]
 
 [workspace.package]
@@ -175,6 +203,9 @@ documentation = "https://docs.rs/feagi"
 
 
 [workspace.dependencies] # Contains dependencies that several crates use
+# Workspace member crates that other members inherit rather than re-declare.
+feagi-observability = { path = "crates/feagi-observability" }
+
 rayon = {version = "1.12.0", default-features = false}
 ndarray = { version = "0.17.2", default-features = false}
 serde = { version = "1.0.228", default-features = false}

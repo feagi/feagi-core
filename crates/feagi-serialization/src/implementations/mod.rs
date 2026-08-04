@@ -2,4 +2,4 @@
 
 // These modules contain trait implementations that need to be compiled
 // even though they're not directly exported
-//pub mod feagi_json;
+pub mod feagi_json;

@@ -15,10 +15,9 @@ use feagi_io::protocol_implementations::zmq::{
     FeagiZmqClientPusherProperties, FeagiZmqServerPullerProperties,
 };
 use feagi_io::traits_and_enums::client::FeagiClientPusherProperties;
-use feagi_io::traits_and_enums::server::FeagiServerPullerProperties;
+use feagi_io::traits_and_enums::server::{FeagiServerPuller, FeagiServerPullerProperties};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
-use feagi_serialization::FeagiByteContainer;
-use feagi_structures::FeagiJSON;
+use feagi_serialization::{FeagiByteContainer, FeagiJSON};
 
 fn reserve_free_tcp_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to reserve free TCP port");
@@ -37,6 +36,41 @@ fn wait_until(timeout: Duration, mut predicate: impl FnMut() -> bool) {
         thread::sleep(Duration::from_millis(1));
     }
     panic!("Timed out waiting for condition");
+}
+
+/// Drains the puller until it goes quiet, returning the newest frame it produced.
+///
+/// A single `poll()` only drains a bounded window of queued frames, and it stops as soon as it
+/// captures one, so a burst larger than that window is delivered over several poll/consume
+/// cycles. Cycling until nothing arrives for `idle` therefore yields the newest frame overall,
+/// which is what latest-wins means to a real consumer.
+fn drain_newest_frame(
+    server: &mut dyn FeagiServerPuller,
+    idle: Duration,
+    timeout: Duration,
+) -> Option<Vec<u8>> {
+    let start = Instant::now();
+    let mut newest: Option<Vec<u8>> = None;
+    let mut last_seen = Instant::now();
+
+    while start.elapsed() < timeout {
+        if matches!(server.poll(), FeagiEndpointState::ActiveHasData) {
+            newest = Some(
+                server
+                    .consume_retrieved_data()
+                    .expect("Server failed to consume retrieved data")
+                    .to_vec(),
+            );
+            last_seen = Instant::now();
+            continue;
+        }
+        if newest.is_some() && last_seen.elapsed() >= idle {
+            break;
+        }
+        thread::sleep(Duration::from_millis(1));
+    }
+
+    newest
 }
 
 fn make_valid_frame_with_marker(marker: u8) -> Vec<u8> {
@@ -119,13 +153,12 @@ fn zmq_puller_keeps_latest_valid_frame_in_burst_with_noise() {
 
     let expected_marker = last_sent_valid_marker.expect("No valid frame was sent");
 
-    wait_until(Duration::from_secs(2), || {
-        matches!(server.poll(), FeagiEndpointState::ActiveHasData)
-    });
-
-    let consumed = server
-        .consume_retrieved_data()
-        .expect("Server failed to consume retrieved data");
+    let consumed = drain_newest_frame(
+        server.as_mut(),
+        Duration::from_millis(200),
+        Duration::from_secs(5),
+    )
+    .expect("Server never produced a frame");
 
     assert!(
         consumed.len()

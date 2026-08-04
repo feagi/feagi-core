@@ -31,7 +31,8 @@ js-bridge-wasm = [] # WASM javascript bridge implementation
 
 
 [dependencies]
-feagi-serialization = { workspace = true }
+feagi-data = { path = "../feagi-data" }
+feagi-serialization = { path = "../feagi-serialization" }
 serde = { workspace = true }
 
 
@@ -45,7 +46,6 @@ getrandom = "0.2.17"
 base64 = "0.22.1" # Using an older version for now
 
 [dev-dependencies]
-feagi-structures = { workspace = true }
 serde_json = { workspace = true }
 
 

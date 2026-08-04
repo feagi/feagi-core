@@ -9,8 +9,9 @@ use feagi_models::neuron::models::feagi_advanced::{FeagiAdvancedModelCorticalDat
 use feagi_models::neuron::neuron_model::NeuronModel;
 use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_models::neuron::properties::NeuronProperties;
-use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryEngineIndex};
+use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryEngineIndex, NeuronEngineIndexedVector};
 use feagi_models::wrapped_indexes::BurstIndex;
+use crate::flags::neuron_runtime_flags::NeuronRuntimeFlags;
 
 pub struct RayonBurstEngine<FIQ: FeagiIndexQuantization> {
     data: RayonEngineData<FIQ>,
@@ -36,8 +37,8 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
         todo!()
     }
 
-    pub fn get_visualization_data(&self) {
-        todo!()
+    pub fn get_visualization_data(&self) -> &NeuronEngineIndexedVector<FIQ::NeuronIndexQuant, NeuronRuntimeFlags> {
+        &self.data.neuron_runtime_flags
     }
 
     pub fn execute_single_burst(&mut self) {

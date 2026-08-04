@@ -88,7 +88,9 @@ mod tests {
             timestamp: 123456789,
         };
 
-        let temp_path = std::path::Path::new("/tmp/feagi_test_snapshot.bin");
+        // Platform temp dir rather than a hardcoded `/tmp`, which does not exist on Windows.
+        let temp_path = std::env::temp_dir().join("feagi_test_snapshot.bin");
+        let temp_path = temp_path.as_path();
         snapshot.save_to_file(temp_path).unwrap();
 
         let loaded = StateSnapshot::load_from_file(temp_path).unwrap();

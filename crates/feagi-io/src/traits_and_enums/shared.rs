@@ -144,8 +144,15 @@ pub enum TransportProtocolEndpoint {
 
 impl From<TransportProtocolEndpoint> for TransportProtocolImplementation {
     fn from(t: TransportProtocolEndpoint) -> Self {
+        // Arms are gated to match the variants, so builds that enable only one transport still
+        // compile.
         match t {
+            #[cfg(feature = "zmq-transport")]
             TransportProtocolEndpoint::Zmq(_) => TransportProtocolImplementation::Zmq,
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             TransportProtocolEndpoint::WebSocket(_) => TransportProtocolImplementation::WebSocket,
         }
     }
@@ -347,6 +354,9 @@ pub fn create_default_boxed_server_publisher_properties(
                     agent_remote.as_str(),
                 )?))
             }
+            // Only reachable when another transport is compiled in; without one the match above
+            // is already exhaustive.
+            #[cfg(feature = "zmq-transport")]
             _ => Err(FeagiNetworkError::InvalidSocketProperties(
                 "Server bind and Agent remote cannot use different protocols!".to_string(),
             )),
@@ -359,6 +369,10 @@ pub fn create_default_boxed_server_publisher_properties(
                     agent_endpoint.as_str(),
                 )?))
             }
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             _ => Err(FeagiNetworkError::InvalidSocketProperties(
                 "Server bind and Agent remote cannot use different protocols!".to_string(),
             )),
@@ -382,6 +396,7 @@ pub fn create_default_boxed_server_puller_properties(
                     agent_remote.as_str(),
                 )?,
             )),
+            #[cfg(feature = "zmq-transport")]
             _ => Err(FeagiNetworkError::InvalidSocketProperties(
                 "Server bind and Agent remote cannot use different protocols!".to_string(),
             )),
@@ -391,6 +406,10 @@ pub fn create_default_boxed_server_puller_properties(
             TransportProtocolEndpoint::Zmq(agent_endpoint) => Ok(Box::new(
                 FeagiZmqServerPullerProperties::new(server_bind.as_str(), agent_endpoint.as_str())?,
             )),
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             _ => Err(FeagiNetworkError::InvalidSocketProperties(
                 "Server bind and Agent remote cannot use different protocols!".to_string(),
             )),
@@ -414,6 +433,7 @@ pub fn create_default_boxed_server_router_properties(
                     agent_remote.as_str(),
                 )?,
             )),
+            #[cfg(feature = "zmq-transport")]
             _ => Err(FeagiNetworkError::InvalidSocketProperties(
                 "Server bind and Agent remote cannot use different protocols!".to_string(),
             )),
@@ -423,6 +443,10 @@ pub fn create_default_boxed_server_router_properties(
             TransportProtocolEndpoint::Zmq(agent_endpoint) => Ok(Box::new(
                 FeagiZmqServerRouterProperties::new(server_bind.as_str(), agent_endpoint.as_str())?,
             )),
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             _ => Err(FeagiNetworkError::InvalidSocketProperties(
                 "Server bind and Agent remote cannot use different protocols!".to_string(),
             )),

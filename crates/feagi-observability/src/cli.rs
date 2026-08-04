@@ -15,7 +15,9 @@ use crate::KNOWN_CRATES;
 ///
 /// # Example
 /// ```rust
-/// let flags = CrateDebugFlags::from_args(std::env::args().collect());
+/// use feagi_observability::CrateDebugFlags;
+///
+/// let flags = CrateDebugFlags::from_args(std::env::args());
 /// if flags.is_enabled("feagi-api") {
 ///     // Enable debug logging for feagi-api crate
 /// }
