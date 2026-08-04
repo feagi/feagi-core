@@ -42,7 +42,9 @@ impl DynamicNPU {
                     CorticalWriterByModelQuant::FeagiAdvanced(quant) => {
                         match quant {
                             FeagiAdvancedModelWriter::Standard(writer) => {
-                                self.rayon_burst_engine.add_cortical_area(&writer);
+                                self.rayon_burst_engine.add_cortical_area::<
+                                    FeagiAdvancedModel<FeagiIndexQuantizationGenomic, FeagiAdvancedModelStandardQuant>,
+                                >(writer);
                             }
                         }
                     }

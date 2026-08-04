@@ -1,5 +1,6 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::neuron::cortical_writer::NeuronModelCorticalWriter;
+use feagi_models::neuron::models::feagi_advanced::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData, FeagiAdvancedModelStandardQuant};
 use feagi_models::neuron::neuron_model::NeuronModel;
 use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryEngineIndex, NeuronEngineIndex};
@@ -8,10 +9,20 @@ use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryE
 pub trait EditableEngine<FIQ: FeagiIndexQuantization> {
     // TODO: `neuron_data_writer` should become a real `NeuronDataWriter` trait bound once per-neuron
     // initial-value seeding is designed; for now callers just pass `()`.
-    fn add_cortical_area<NMQ: NeuronModelQuantization, NM: NeuronModel<FIQ, NMQ>>(
+    // TODO the engine only allocates `FeagiAdvanced` / standard quant storage for now, so the
+    // quantization and the model data types are pinned to that pair. Restore the generic `NMQ` once
+    // storage exists for every model / quantization combination.
+    fn add_cortical_area<NM>(
         &mut self,
-        neuron_data_writer: impl NeuronModelCorticalWriter<NMQ, NM::CorticalData, NM::NeuronData>,
-    ) -> CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>;
+        neuron_data_writer: impl NeuronModelCorticalWriter<FeagiAdvancedModelStandardQuant, NM::CorticalData, NM::NeuronData>,
+    ) -> CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>
+    where
+        NM: NeuronModel<
+            FIQ,
+            FeagiAdvancedModelStandardQuant,
+            CorticalData = FeagiAdvancedModelCorticalData<FeagiAdvancedModelStandardQuant>,
+            NeuronData = FeagiAdvancedModelNeuronData<FeagiAdvancedModelStandardQuant>,
+        >;
 
     fn edit_cortical_area_cortical_flags(
         &mut self,

@@ -297,50 +297,40 @@ impl FeagiByteContainer {
 
     //region Extracting Struct Data
 
-    /// Creates a new structure instance from the data at the specified index.
+    /// Creates a new structure instance of type `T` from the data at the specified index.
     ///
-    /// Deserializes the structure data at the given index and returns a boxed
-    /// trait object. The structure type is determined from the stored metadata.
+    /// The caller names the concrete type to deserialize into, and the stored type tag at
+    /// that index is checked against it before any data is read.
     ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::FeagiByteContainer;
-    ///
-    /// let container = FeagiByteContainer::new_empty();
-    /// // This will fail since there are no structures
-    /// assert!(container.try_create_new_struct_from_index(0).is_err());
-    /// ```
-    pub fn try_create_new_struct_from_index(
+    /// Returns an error if the index is out of bounds, the stored structure is not of type
+    /// `T`, or the data fails to deserialize.
+    pub fn try_create_new_struct_from_index<T: FeagiSerializable + Default>(
         &self,
         index: StructureIndex,
-    ) -> Result<Box<dyn FeagiSerializable>, ()> {
+    ) -> Result<T, ()> {
         self.verify_structure_index_valid(index)?;
         let relevant_slice =
             self.contained_struct_references[index as usize].get_as_byte_slice(&self.bytes);
-        let mut boxed_struct: Box<dyn FeagiSerializable> = self.contained_struct_references
-            [index as usize]
-            .structure_type
-            .create_new_struct_of_type();
-        boxed_struct.try_deserialize_and_update_self_from_byte_slice(relevant_slice)?;
-        Ok(boxed_struct)
+        let mut new_struct = T::default();
+        new_struct.verify_byte_slice_is_of_correct_type(relevant_slice)?;
+        new_struct.try_deserialize_and_update_self_from_byte_slice(relevant_slice)?;
+        Ok(new_struct)
     }
 
-    /// Creates a new structure from the first instance of the given type.
+    /// Creates a new structure of type `T` from the first contained instance of that type.
     ///
-    /// Searches for the first structure matching the specified type and deserializes it.
-    /// Returns None if no structure of that type is found.
-    pub fn try_create_struct_from_first_found_struct_of_type(
+    /// The type searched for is taken from `T` itself. Returns None if no structure of that
+    /// type is present in the container.
+    pub fn try_create_struct_from_first_found_struct_of_type<T: FeagiSerializable + Default>(
         &self,
-        structure_type: FeagiByteStructureType,
-    ) -> Result<Option<Box<dyn FeagiSerializable>>, ()> {
-        let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
-        if getting_slice.is_none() {
+    ) -> Result<Option<T>, ()> {
+        let mut new_struct = T::default();
+        let getting_slice = self.try_get_first_structure_slice_of_type(new_struct.get_type());
+        let Some(relevant_slice) = getting_slice else {
             return Ok(None);
-        }
-        let mut boxed_struct: Box<dyn FeagiSerializable> =
-            structure_type.create_new_struct_of_type();
-        boxed_struct.try_deserialize_and_update_self_from_byte_slice(getting_slice.unwrap())?;
-        Ok(Some(boxed_struct))
+        };
+        new_struct.try_deserialize_and_update_self_from_byte_slice(relevant_slice)?;
+        Ok(Some(new_struct))
     }
 
     /// Updates an existing structure with data from the specified index.
@@ -668,7 +658,7 @@ impl FeagiByteContainer {
         let mut structure_data_byte_index: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
             + Self::AGENT_ID_BYTE_COUNT
             + structure_lookup_header_size_in_bytes;
-        for contained_structure_index in 0..number_contained_structs {
+        for _contained_structure_index in 0..number_contained_structs {
             let structure_length = LittleEndian::read_u32(
                 &self.bytes[structure_header_byte_index..structure_header_byte_index + 4],
             );

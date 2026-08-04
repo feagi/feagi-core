@@ -1,4 +1,3 @@
-use crate::FeagiSerializable;
 use std::fmt::{Display, Formatter};
 
 /// Represents different types of serializable data structures in the FEAGI system.
@@ -60,44 +59,16 @@ impl FeagiByteStructureType {
     
      */
 
-    /*
-    /// Creates a new empty instance of the serializable structure for this type.
-    ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::FeagiByteStructureType;
-    ///
-    /// let json_type = FeagiByteStructureType::JSON;
-    /// let json_struct = json_type.create_new_struct_of_type();
-    /// assert_eq!(json_struct.get_type(), FeagiByteStructureType::JSON);
-    ///
-    /// let neuron_type = FeagiByteStructureType::NeuronCategoricalXYZP;
-    /// let neuron_struct = neuron_type.create_new_struct_of_type();
-    /// assert_eq!(neuron_struct.get_type(), FeagiByteStructureType::NeuronCategoricalXYZP);
-    /// ```
-    pub fn create_new_struct_of_type(&self) -> Box<dyn FeagiSerializable> {
-        match self {
-            FeagiByteStructureType::NeuronCategoricalXYZP => {
-                Box::new(CorticalMappedXYZPNeuronVoxels::new())
-            }
-            FeagiByteStructureType::JSON => Box::new(FeagiJSON::new_empty()),
-        }
-    }
-    
-     */
 }
 
-/*
 impl TryFrom<u8> for FeagiByteStructureType {
-    type Error = FeagiDataError;
-    fn try_from(value: u8) -> Result<Self, FeagiDataError> {
+    type Error = ();
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             1 => Ok(FeagiByteStructureType::JSON),
             11 => Ok(FeagiByteStructureType::NeuronCategoricalXYZP),
-            _ => Err(FeagiDataError::DeserializationError(format!(
-                "Unknown FeagiByteStructure type {}",
-                value
-            ))),
+            _ => Err(()),
+            //_ => Err(FeagiDataError::DeserializationError(format!("Unknown FeagiByteStructure type {}", value))),
         }
     }
 }
@@ -111,5 +82,3 @@ impl Display for FeagiByteStructureType {
         write!(f, "{name}")
     }
 }
-
- */
