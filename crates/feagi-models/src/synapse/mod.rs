@@ -1,5 +1,4 @@
 pub mod models;
-pub mod genome_interface;
 pub mod synapse_model_quantization;
 pub mod synapse_model_data;
 pub mod synapse_model;

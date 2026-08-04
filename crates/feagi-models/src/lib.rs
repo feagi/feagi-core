@@ -5,4 +5,5 @@ pub mod neuron;
 pub mod synapse;
 pub mod wrapped_index_collections;
 pub mod connectome_requests;
+pub mod doublet;
 
