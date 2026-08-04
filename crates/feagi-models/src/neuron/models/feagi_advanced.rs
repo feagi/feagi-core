@@ -195,7 +195,7 @@ where
         }
     }
 
-    fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(self, cortical_data: &mut FeagiAdvancedModelCorticalData<NMQ>, neuron_data: &mut [FeagiAdvancedModelNeuronData<NMQ>]) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties, impl Iterator<Item=NeuronProperties>), ()> {
+    fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(self, cortical_data: &mut FeagiAdvancedModelCorticalData<NMQ>, neuron_data: &mut [FeagiAdvancedModelNeuronData<NMQ>], neuron_properties_out: &mut [NeuronProperties]) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties), ()> {
 
         match self {
             FeagiAdvancedModelCorticalWriter::DefaultNewDimensional { dimensions, _p } => {
@@ -232,13 +232,14 @@ where
                     probe_force_firing: false,
                 };
 
-                let dimensions: DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexQuant> = dimensions.try_to_quantization().unwrap(); // TODO ERROR CHECKING
-                let number_neurons = dimensions.number_contained_elements().quant_to_usize();
+                // `dimensions` is already in genomic quantization, which is exactly what the
+                // genomic-parameterized layout expects, so use it directly (no re-quantization).
                 let layout = CorticalAreaLayoutNested::Dimensional(CorticalAreaLayoutDimensional{dimensions});
 
                 *cortical_data = new_cortical;
                 neuron_data.fill(new_uniform_neuron);
-                Ok((layout, new_cortical_properties, core::iter::repeat(new_uniform_neuron_properties).take(number_neurons)))
+                neuron_properties_out.fill(new_uniform_neuron_properties);
+                Ok((layout, new_cortical_properties))
             }
         }
     }

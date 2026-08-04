@@ -17,7 +17,8 @@ where
         self,
         cortical_data: &mut NMCD,
         neuron_data: &mut [NMND],
-    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties, impl Iterator<Item = NeuronProperties>), ()>;
+        neuron_properties: &mut [NeuronProperties],
+    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties), ()>;
 }
 
 /// Root enum used to defining how a cortical area can be created. Enforces some universal methods.
@@ -66,7 +67,8 @@ where
         self,
         current_cortical_data: &mut NMCD,
         current_neuron_data: &mut [NMND],
-    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties, impl Iterator<Item = NeuronProperties>), ()> { // TODO Error handling!
+        neuron_properties_out: &mut [NeuronProperties],
+    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties), ()> { // TODO Error handling!
         match self {
             RootNeuronModelCorticalWriter::CompleteRawData {
                 _p,
@@ -78,10 +80,13 @@ where
             } => {
                 *current_cortical_data = cortical_data;
                 current_neuron_data.copy_from_slice(neuron_data.as_slice());
-                Ok((neuron_layout, cortical_properties, neuron_properties.iter().cloned())) // TODO cloning nu bueno
+                for (dst, src) in neuron_properties_out.iter_mut().zip(neuron_properties.into_iter()) {
+                    *dst = src;
+                }
+                Ok((neuron_layout, cortical_properties))
             }
             RootNeuronModelCorticalWriter::ModelSpecific(model) => {
-                model.write_to_cortical_area::<FIQ>(current_cortical_data, current_neuron_data)
+                model.write_to_cortical_area::<FIQ>(current_cortical_data, current_neuron_data, neuron_properties_out)
             }
         }
     }

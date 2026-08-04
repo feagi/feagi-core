@@ -1,4 +1,3 @@
-use crate::neuron::model_generated::cortical_area_request_builder::CorticalAreaRequestBuilder;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
 use crate::synapse::model_generated::cortical_mapping_request_builder::CorticalMappingRequestBuilder;
 
@@ -16,11 +15,7 @@ impl ConnectomeRequestBuilder {
     pub fn new(index_level: FeagiIndexQuantizationLevel) -> Self {
         Self { index_level }
     }
-
-    /// Make a request related to cortical areas
-    pub fn cortical_area(self) -> CorticalAreaRequestBuilder {
-        CorticalAreaRequestBuilder::new(self.index_level)
-    }
+    
 
     pub fn cortical_mapping(self) -> CorticalMappingRequestBuilder {
         CorticalMappingRequestBuilder::new(self.index_level)

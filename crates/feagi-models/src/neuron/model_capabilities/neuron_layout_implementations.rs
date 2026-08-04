@@ -4,8 +4,6 @@
 
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::connectome_requests::properties::{UniversalCorticalAreaProperties, UniversalNeuronProperties};
-use crate::neuron::cortical_area_layout::CorticalAreaLayoutDimensional;
 use crate::wrapped_indexes::BurstIndex;
 use crate::neuron::neuron_model::NeuronModel;
 use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
@@ -31,29 +29,6 @@ where // NOTE: These all should be extended for the given neuron model!
         this_neuron_potential: &mut NeuronMembranePotential<NMQ::MembranePotentialQuant>,
     ) -> bool;
 }
-
-/// This is the trait that all cortical area creators have to be able to export. Not directly creatable
-/// from the outside, but instead from the inside
-trait DimensionalNewCorticalAreaWriter<FIQ, NMQ, DNM>
-where
-    FIQ: FeagiIndexQuantization,
-    NMQ: NeuronModelQuantization,
-    DNM: DimensionalNeuronModel<FIQ, NMQ>,
-{
-    /// Get what the properties of the cortical area itself should be for writing
-    fn get_cortical_area_properties(&self) -> &UniversalCorticalAreaProperties;
-
-    /// For each neuron, what should the
-    fn get_per_neuron_properties(&self, dimensional_data: &CorticalAreaLayoutDimensional<FIQ>) -> impl Iterator<Item=UniversalNeuronProperties>;
-
-    /// Set cortical values to write
-    fn set_cortical_model_data_values(&self, dimensional_data: &CorticalAreaLayoutDimensional<FIQ>, write_target: &mut DNM::CorticalData);
-
-    /// Write neuron data for cortical area
-    fn set_per_neuron_model_data_values(&self, dimensional_data: &CorticalAreaLayoutDimensional<FIQ>, write_target: &mut [DNM::CorticalData]);
-
-}
-
 
 
 
