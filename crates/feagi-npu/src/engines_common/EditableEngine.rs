@@ -1,5 +1,4 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::connectome_requests::properties::UniversalCorticalAreaProperties;
 use feagi_models::neuron::cortical_writer::NeuronModelCorticalWriter;
 use feagi_models::neuron::neuron_model::NeuronModel;
 use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;

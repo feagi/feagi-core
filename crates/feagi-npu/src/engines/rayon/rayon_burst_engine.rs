@@ -3,6 +3,7 @@ use crate::engines::rayon::kernels_neurons;
 use crate::engines::rayon::kernels_synapses;
 use crate::engines_common::EditableEngine::EditableEngine;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 use feagi_models::neuron::cortical_writer::NeuronModelCorticalWriter;
 use feagi_models::neuron::models::feagi_advanced::{FeagiAdvancedModel, FeagiAdvancedModelStandardQuant};
 use feagi_models::neuron::neuron_model::NeuronModel;
@@ -51,15 +52,15 @@ impl<FIQ: FeagiIndexQuantization> EditableEngine<FIQ> for RayonBurstEngine<FIQ> 
         &mut self,
         neuron_data_writer: impl NeuronModelCorticalWriter<NMQ, NM::CorticalData, NM::NeuronData>,
     ) -> CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant> {
-        let number_neurons = neuron_data_writer.number_neurons_needed().unwrap(); // TODO ERROR CHECKING
+        let number_neurons: FIQ::NeuronIndexQuant = neuron_data_writer.number_neurons_needed().unwrap(); // TODO ERROR CHECKING
         let mut neuron_properties = vec![NeuronProperties::default(); number_neurons.quant_to_usize()];
 
         let (cortical_data, neuron_data) = self.data.neuron_model_data.allocate_for_new_area::<FeagiAdvancedModelStandardQuant, FeagiAdvancedModel<FIQ, FeagiAdvancedModelStandardQuant> >(number_neurons);
 
         let (layout, cortical_properties) = neuron_data_writer.write_to_cortical_area(cortical_data, neuron_data, neuron_properties.as_mut_slice()).unwrap(); // TODO ERROR HANDLING
-
-        
-
+        let ret = self.latest_cortical_index.clone();
+        self.latest_cortical_index += CorticalEngineIndex::QUANT_ONE;
+        ret
     }
 
     fn edit_cortical_area_cortical_flags(

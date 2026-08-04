@@ -2,7 +2,6 @@ use feagi_data::index_range_managers::index_manager::IndexManager;
 use feagi_data::index_range_managers::index_range_mapping_manager::IndexRangeMappingManager;
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::neuron::genome_interface::cortical_area_spawners::DimensionalCorticalAreaSpawner;
 use feagi_models::neuron::model_capabilities::neuron_layout_implementations::DimensionalNeuronModel;
 use feagi_models::neuron::neuron_model::NeuronModel;
 use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;

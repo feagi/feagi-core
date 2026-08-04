@@ -1,7 +1,7 @@
 use ahash::HashMap;
 use feagi_data::neurons::NeuronMembranePotential;
 use crate::engines::rayon::rayon_burst_engine::RayonBurstEngine;
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantizationGenomic};
+use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 use feagi_data::values::quantizable::PercentageUnsigned;
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::connectome_requests::connectome_request::{ConnectomeRequest};
@@ -14,8 +14,8 @@ use crate::engines_common::EditableEngine::EditableEngine;
 
 // TODO Genomic level quantization isnt really meant to be used, but we will use it here for now
 
-type CorticalQuant = FeagiIndexQuantizationGenomic::CorticalAreaIndexCountQuant;
-type NeuronQuant = FeagiIndexQuantizationGenomic::NeuronIndexQuant;
+type CorticalQuant = <FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::CorticalAreaIndexCountQuant;
+type NeuronQuant = <FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant;
 
 pub struct DynamicNPU {
     // TODO support multi burst engine setups

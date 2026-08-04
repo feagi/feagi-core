@@ -84,10 +84,8 @@ unsafe fn synapse_dynamics<FIQ: FeagiIndexQuantization> (
                 &NeuronFireHistoryNone::new());
         }
 
-        }
+        _ => {}
     }
-    
-    
 }
 unsafe fn source_to_junction<FIQ: FeagiIndexQuantization, JunctionQuant: QuantizedDecimalTrait>(data: &RayonEngineData<FIQ>, source_quant: &DecimalQuantizationLevel, source_index: NeuronMPIndex<FIQ::NeuronIndexQuant>) -> NeuronMembranePotential<JunctionQuant> {
     match source_quant {
