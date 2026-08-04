@@ -1,5 +1,10 @@
 /// Helper structs to make dealing with multiple quantizations / models less annoying
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_models::neuron::model_generated::model_type_and_quantization::{NeuronModelType, NeuronModelTypeAndQuantizationNested};
+use feagi_models::neuron::models::feagi_advanced::FeagiAdvancedModelQuantizationLevel;
+use feagi_models::neuron::neuron_model::NeuronModel;
+use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;
+use feagi_models::wrapped_index_collections::{CorticalModelIndex, NeuronModelIndex};
 use crate::engines::rayon::data::neuron::model_quantized_data::feagi_advanced_model::ModelFeagiAdvanced;
 
 macro_rules! quant_default_with_neurons {
@@ -26,6 +31,29 @@ pub struct NeuronModelData<FIQ: FeagiIndexQuantization> {
     // TODO this should be macroized and expanded!
 }
 
+impl<FIQ: FeagiIndexQuantization> NeuronModelData<FIQ> {
+
+    pub fn allocate_for_new_area<NMQ: NeuronModelQuantization, NM: NeuronModel<FIQ, NMQ>>(&mut self, number_neurons: FIQ::NeuronIndexQuant) -> (&mut NM::CorticalData, &mut NM::NeuronData){
+        match NM::NEURON_MODEL_AND_QUANTIZATION {
+            NeuronModelTypeAndQuantizationNested::FeagiAdvanced(quant) => {
+                match quant {
+                    FeagiAdvancedModelQuantizationLevel::Standard => {
+                        // some functions may need to be added
+                        // append to end of vector, return mut reference to it
+                        let cortical_ref: &mut NM::CorticalData  = self.feagi_advanced.quantization_standard.cortical_data.append_single_mut(NM::CorticalData::default());
+                        //self.feagi_advanced.quantization_standard.psp_uniformity.extend(CorticalModelIndex::QUANT_ONE, 0.0);
+                        // TODO PSP uniformity
+                        // append to end of vector, return mut slice to it
+                        let neuron_slice: &mut [NM::NeuronData] = self.feagi_advanced.quantization_standard.neuron_data.extend_mut(NeuronModelIndex::from(number_neurons), NM::NeuronData::default());
+                        (cortical_ref, neuron_slice)
+                    }
+                }
+            }
+        }
+    }
+
+}
+
 impl<FIQ: FeagiIndexQuantization> Default for NeuronModelData<FIQ> {
     fn default() -> Self {
         Self {
@@ -33,6 +61,7 @@ impl<FIQ: FeagiIndexQuantization> Default for NeuronModelData<FIQ> {
         }
     }
 }
+
 
 
 

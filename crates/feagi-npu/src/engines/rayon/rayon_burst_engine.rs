@@ -1,22 +1,21 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::connectome_requests::properties::UniversalCorticalAreaProperties;
-use feagi_models::neuron::neuron_model::NeuronModel;
-use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;
-use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryEngineIndex};
-use feagi_models::wrapped_indexes::BurstIndex;
 use crate::engines::rayon::data::RayonEngineData;
 use crate::engines::rayon::kernels_neurons;
 use crate::engines::rayon::kernels_synapses;
 use crate::engines_common::EditableEngine::EditableEngine;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_models::neuron::cortical_writer::NeuronModelCorticalWriter;
+use feagi_models::neuron::models::feagi_advanced::{FeagiAdvancedModel, FeagiAdvancedModelStandardQuant};
+use feagi_models::neuron::neuron_model::NeuronModel;
+use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;
+use feagi_models::neuron::properties::NeuronProperties;
+use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryEngineIndex};
+use feagi_models::wrapped_indexes::BurstIndex;
 
 pub struct RayonBurstEngine<FIQ: FeagiIndexQuantization> {
     data: RayonEngineData<FIQ>,
     // dyn stuff
-
     latest_cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
     latest_mapping_entry_index: MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant>,
-
-
 }
 
 impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
@@ -39,7 +38,7 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
     pub fn get_visualization_data(&self) {
         todo!()
     }
-    
+
     pub fn execute_single_burst(&mut self) {
         kernels_neurons::process_neurons(&self.data);
         kernels_synapses::process_synapses(&self.data);
@@ -48,17 +47,25 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
 }
 
 impl<FIQ: FeagiIndexQuantization> EditableEngine<FIQ> for RayonBurstEngine<FIQ> {
-    fn add_cortical_area<NMQ: NeuronModelQuantization, NM: NeuronModel<FIQ, NMQ>>(&mut self, number_neurons: FIQ::NeuronIndexQuant, cortical_flags: UniversalCorticalAreaProperties , cortical_data: NM::CorticalData, neuron_data_writer: ()) -> CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant> {
+    fn add_cortical_area<NMQ: NeuronModelQuantization, NM: NeuronModel<FIQ, NMQ>>(
+        &mut self,
+        neuron_data_writer: impl NeuronModelCorticalWriter<NMQ, NM::CorticalData, NM::NeuronData>,
+    ) -> CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant> {
+        let number_neurons = neuron_data_writer.number_neurons_needed().unwrap(); // TODO ERROR CHECKING
+        let mut neuron_properties = vec![NeuronProperties::default(); number_neurons.quant_to_usize()];
 
+        let (cortical_data, neuron_data) = self.data.neuron_model_data.allocate_for_new_area::<FeagiAdvancedModelStandardQuant, FeagiAdvancedModel<FIQ, FeagiAdvancedModelStandardQuant> >(number_neurons);
 
+        let (layout, cortical_properties) = neuron_data_writer.write_to_cortical_area(cortical_data, neuron_data, neuron_properties.as_mut_slice()).unwrap(); // TODO ERROR HANDLING
 
+        
 
-        let returning = self.latest_cortical_index.clone();
-        self.latest_cortical_index += CorticalEngineIndex::QUANT_ONE;
-        returning
     }
 
-    fn edit_cortical_area_cortical_flags(&mut self, cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>, cortical_flags: UniversalCorticalAreaProperties) {
+    fn edit_cortical_area_cortical_flags(
+        &mut self,
+        cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
+    ) {
         todo!()
     }
 
@@ -100,6 +107,4 @@ impl<FIQ: FeagiIndexQuantization> EditableEngine<FIQ> for RayonBurstEngine<FIQ> 
     }
 
      */
-
-
 }

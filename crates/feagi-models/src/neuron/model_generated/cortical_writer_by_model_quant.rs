@@ -9,6 +9,7 @@ pub enum CorticalWriterByModelQuant {
     FeagiAdvanced(FeagiAdvancedModelWriter),
 }
 
+
 pub enum FeagiAdvancedModelWriter {
     Standard(FeagiAdvancedModelCorticalWriter<FeagiAdvancedModelStandardQuant>),
 }

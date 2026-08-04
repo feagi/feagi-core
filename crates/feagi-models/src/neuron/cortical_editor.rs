@@ -3,38 +3,34 @@ use crate::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuro
 use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 use crate::neuron::properties::{CorticalAreaProperties, NeuronProperties};
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
 
-/// Trait for writing the data of newly created cortical areas, used both by the root and model
-/// specific enums
-pub trait NeuronModelCorticalWriter<NMQ, NMCD, NMND>
+// TODO rethink interface a bit more
+
+/// Trait used to define both the root and model specific implementations for editing a cortical
+/// area
+pub trait NeuronModelCorticalEditor<NMQ, NMCD, NMND>
 where
     NMQ: NeuronModelQuantization,
     NMCD: NeuronModelCorticalData<NMQ>,
     NMND: NeuronModelNeuronData<NMQ>,
 {
-    /// Number of neurons needed
-    fn number_neurons_needed<FIQ: FeagiIndexQuantization>(&self) -> Result<FIQ::NeuronIndexQuant, ()>; // TODO error!
-
-    /// Handles writing the per neuron data and creating the properties. 
-    /// ALL MEMBERS are to be overwritten!
-    fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(
+    fn edit_cortical_area_inplace<FIQ: FeagiIndexQuantization>(
         self,
         cortical_data: &mut NMCD,
         neuron_data: &mut [NMND],
-        neuron_properties: &mut [NeuronProperties], // TODO this is messy, we should find a way to get the 'impl iterator' thing to work
+        neuron_properties: &mut [NeuronProperties],
     ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties), ()>;
 }
 
 /// Root enum used to defining how a cortical area can be created. Enforces some universal methods.
 /// By constraining model specific implementations to a generic sub enum, we can statically
 /// create this easily!
-pub enum RootNeuronModelCorticalWriter<NMQ, NMCD, NMND, SE>
+pub enum RootNeuronModelCorticalEditor<NMQ, NMCD, NMND, SE>
 where
     NMQ: NeuronModelQuantization,
     NMCD: NeuronModelCorticalData<NMQ>,
     NMND: NeuronModelNeuronData<NMQ>,
-    SE: NeuronModelCorticalWriter<NMQ, NMCD, NMND>,
+    SE: NeuronModelCorticalEditor<NMQ, NMCD, NMND>,
 {
     /// In the case that we have a full set of data (IE from connectome loading), load the full
     /// data directly! Useful for overwriting / creating a new area
@@ -49,34 +45,24 @@ where
     ModelSpecific(SE),
 }
 
-impl<NMQ, NMCD, NMND, SE> NeuronModelCorticalWriter<NMQ, NMCD, NMND>
-    for RootNeuronModelCorticalWriter<NMQ, NMCD, NMND, SE>
+impl<NMQ, NMCD, NMND, SE> NeuronModelCorticalEditor<NMQ, NMCD, NMND>
+    for RootNeuronModelCorticalEditor<NMQ, NMCD, NMND, SE>
 where
     NMQ: NeuronModelQuantization,
     NMCD: NeuronModelCorticalData<NMQ>,
     NMND: NeuronModelNeuronData<NMQ>,
-    SE: NeuronModelCorticalWriter<NMQ, NMCD, NMND>,
+    SE: NeuronModelCorticalEditor<NMQ, NMCD, NMND>,
 {
-    fn number_neurons_needed<FIQ: FeagiIndexQuantization>(&self) -> Result<FIQ::NeuronIndexQuant, ()> {
-        match self {
-            RootNeuronModelCorticalWriter::CompleteRawData { neuron_layout, .. } => {
-                let u = neuron_layout.get_total_number_neurons();
-                let r: FIQ::NeuronIndexQuant = u.try_to_quantization().unwrap(); // TODO error handling!
-                Ok(r)
-            }
-            RootNeuronModelCorticalWriter::ModelSpecific(SE) => SE.number_neurons_needed::<FIQ>(),
-        }
-    }
 
-    
-    fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(
+
+    fn edit_cortical_area_inplace<FIQ: FeagiIndexQuantization>(
         self,
         current_cortical_data: &mut NMCD,
         current_neuron_data: &mut [NMND],
         neuron_properties_out: &mut [NeuronProperties],
     ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties), ()> { // TODO Error handling!
         match self {
-            RootNeuronModelCorticalWriter::CompleteRawData {
+            RootNeuronModelCorticalEditor::CompleteRawData {
                 _p,
                 cortical_data,
                 cortical_properties,
@@ -91,8 +77,8 @@ where
                 }
                 Ok((neuron_layout, cortical_properties))
             }
-            RootNeuronModelCorticalWriter::ModelSpecific(model) => {
-                model.write_to_cortical_area::<FIQ>(current_cortical_data, current_neuron_data, neuron_properties_out)
+            RootNeuronModelCorticalEditor::ModelSpecific(model) => {
+                model.edit_cortical_area_inplace::<FIQ>(current_cortical_data, current_neuron_data, neuron_properties_out)
             }
         }
     }

@@ -1,23 +1,18 @@
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
 use feagi_genomic_context::cortical_area::CorticalID;
+use crate::neuron::model_generated::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
 
-pub struct ConnectomeRequest {
-    pub index_level: FeagiIndexQuantizationLevel,
-    pub request_type: ConnectomeRequestType,
 
-}
-
-// TODO define model and quantization
-pub enum ConnectomeRequestType {
-    CorticalAreaAddDimensional(CorticalID, DimensionalCorticalArea4DDimensions<u64>),
-    CorticalAreaAddFormless(CorticalID, u64),
-    CorticalAreaDelete(CorticalID),
-//    MappingEntryAdd(CorticalID, CorticalID, )
-    
+pub enum ConnectomeRequest {
+    CorticalAreaAdd(CorticalID, CorticalWriterByModelQuant), // TODO we really shouldnt be taking in a new cortical ID for this
+    // CorticalAreaEdit
+    // CorticalAreaDelete
+    // CorticalMappingEntryAdd
 }
 
 
+// TODO this should be a higher level, will be handled by future 'BDU'
 /*
 /// What effects on the connectome would the request have?
 #[repr(u8)]
@@ -44,7 +39,6 @@ pub enum NPURequestConnectomeConsequences {
     InPlaceValueUpdates,
     /// No consequence to the connectome at all (cosmetic change only)
     NoConnectomeChange,
-
 }
 
  */

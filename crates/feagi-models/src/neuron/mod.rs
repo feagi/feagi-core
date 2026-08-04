@@ -10,4 +10,5 @@ pub mod neuron_model_quantization;
 pub mod cortical_area_layout;
 pub mod model_generated;
 pub mod cortical_writer;
+pub mod cortical_editor;
 pub mod properties;
