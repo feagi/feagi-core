@@ -382,6 +382,25 @@ macro_rules! create_wrapped_contiguous_vector {
             pub fn extend(&mut self, number_values: $index<Q>, extend_with: V) {
                 self.0.extend(number_values.const_deref(), extend_with)
             }
+
+            /// Appends a single element to the end of the vector, returning a
+            /// mutable reference to the newly appended element.
+            pub fn append_single_mut(&mut self, value: V) -> &mut V {
+                use $crate::collections::linear::contiguous_data::{QuantizedContiguousTrait, QuantizedContiguousMutTrait};
+                let new_index = self.0.as_slice().len();
+                self.0.extend(Q::QUANT_ONE, value);
+                &mut self.0.as_mut_slice()[new_index]
+            }
+
+            /// Appends `number_values` copies of `extend_with` to the end of the
+            /// vector, returning a mutable slice over just the newly appended
+            /// elements.
+            pub fn extend_mut(&mut self, number_values: $index<Q>, extend_with: V) -> &mut [V] {
+                use $crate::collections::linear::contiguous_data::{QuantizedContiguousTrait, QuantizedContiguousMutTrait};
+                let start_index = self.0.as_slice().len();
+                self.0.extend(number_values.const_deref(), extend_with);
+                &mut self.0.as_mut_slice()[start_index..]
+            }
             
             /// Wraps the underlying (unwrapped) collection type.
             pub fn from_inner(

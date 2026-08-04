@@ -55,7 +55,9 @@ impl<FIQ: FeagiIndexQuantization> EditableEngine<FIQ> for RayonBurstEngine<FIQ> 
         let number_neurons: FIQ::NeuronIndexQuant = neuron_data_writer.number_neurons_needed().unwrap(); // TODO ERROR CHECKING
         let mut neuron_properties = vec![NeuronProperties::default(); number_neurons.quant_to_usize()];
 
-        let (cortical_data, neuron_data) = self.data.neuron_model_data.allocate_for_new_area::<FeagiAdvancedModelStandardQuant, FeagiAdvancedModel<FIQ, FeagiAdvancedModelStandardQuant> >(number_neurons);
+        // TODO for now fixate ona specific quantization
+        let cortical_data = self.data.neuron_model_data.feagi_advanced.quantization_standard.cortical_data.append_single_mut(Default::default());
+        let neuron_data = self.data.neuron_model_data.feagi_advanced.quantization_standard.neuron_data.extend_mut(number_neurons.into(), Default::default());
 
         let (layout, cortical_properties) = neuron_data_writer.write_to_cortical_area(cortical_data, neuron_data, neuron_properties.as_mut_slice()).unwrap(); // TODO ERROR HANDLING
         let ret = self.latest_cortical_index.clone();
