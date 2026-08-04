@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod wrapped_indexes;
 pub mod neuron;
 pub mod synapse;

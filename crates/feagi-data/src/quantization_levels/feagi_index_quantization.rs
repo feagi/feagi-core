@@ -4,6 +4,8 @@
 use std::hash::Hash;
 use crate::values::quantizable::QuantizedIndexCountTrait;
 
+// TODO we may want more granular options?
+
 /// Global Indexing across an instance of FEAGI, primarily NPU. Controlled by NPU primarily
 pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq {
     const QUANTIZATION_LEVEL: FeagiIndexQuantizationLevel;
@@ -34,21 +36,20 @@ pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq {
 /// Enum that describes what `FeagiGlobalQuantization` implementation (quantization preset) to
 /// follow
 pub enum FeagiIndexQuantizationLevel {
-    // 4b Neurons, 4b Synapses, 4b FCLC Entries, 2b Burst index, 32k Cortical Areas, 32k Cortical Mapping Entries
-    Standard = 0,
-    Absurd = 1,
     /// Used throughout genome contexts. fits everything
     #[default] 
-    Genomic = 2,
+    Genomic = 0,
+    // 4b Neurons, 4b Synapses, 4b FCLC Entries, 2b Burst index, 32k Cortical Areas, 32k Cortical Mapping Entries
+    Standard = 1,
     // TODO tiny, mini, big, absurd
 }
 
 /// The default quantization level for most deployments. Practical balance between speed and
 /// indexing size. The only level supported by some platforms
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
-pub struct FeagiGlobalQuantizationStandard;
+pub struct FeagiIndexQuantizationStandard;
 
-impl FeagiIndexQuantization for FeagiGlobalQuantizationStandard {
+impl FeagiIndexQuantization for FeagiIndexQuantizationStandard {
     const QUANTIZATION_LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::Standard;
     type GlobalBurstIndexQuant = u32;
     type NeuronIndexQuant = u32;
@@ -57,25 +58,12 @@ impl FeagiIndexQuantization for FeagiGlobalQuantizationStandard {
     type CorticalMappingEntryIndexCountQuant = u16;
 }
 
-/// The largest index quantization. everything is 64bit
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
-pub struct FeagiGlobalQuantizationAbsurd;
-
-impl FeagiIndexQuantization for FeagiGlobalQuantizationAbsurd {
-    const QUANTIZATION_LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::Absurd;
-    type GlobalBurstIndexQuant = u64;
-    type NeuronIndexQuant = u64;
-    type SynapseIndexCountQuant = u64;
-    type CorticalAreaIndexCountQuant = u64;
-    type CorticalMappingEntryIndexCountQuant = u64;
-}
-
 /// Everything is 64 bit to ensure any data type can be stored, as we are not as concerned about data
 /// size with genomes
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
-pub struct FeagiGlobalQuantizationGenomic;
+pub struct FeagiIndexQuantizationGenomic;
 
-impl FeagiIndexQuantization for FeagiGlobalQuantizationGenomic {
+impl FeagiIndexQuantization for FeagiIndexQuantizationGenomic {
     const QUANTIZATION_LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::Genomic;
     type GlobalBurstIndexQuant = u64;
     type NeuronIndexQuant = u64;

@@ -2,10 +2,10 @@ use ahash::HashMap;
 use feagi_data::neurons::NeuronMembranePotential;
 use crate::engines::rayon::rayon_burst_engine::RayonBurstEngine;
 use feagi_data::quantization_levels::feagi_index_quantization::{
-    FeagiGlobalQuantizationAbsurd, FeagiIndexQuantization,
+    FeagiIndexQuantizationAbsurd, FeagiIndexQuantization,
 };
 use feagi_data::values::quantizable::PercentageUnsigned;
-use feagi_genomic::feagi_genomic_context::cortical_area::CorticalID;
+use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::connectome_requests::connectome_request::{ConnectomeRequest, ConnectomeRequestType};
 use feagi_models::connectome_requests::connectome_request_builder::ConnectomeRequestBuilder;
 use feagi_models::connectome_requests::properties::UniversalCorticalAreaProperties;
@@ -15,21 +15,21 @@ use crate::engines_common::EditableEngine::EditableEngine;
 
 pub struct DynamicNPU {
     // TODO support multi burst engine setups
-    rayon_burst_engine: RayonBurstEngine<FeagiGlobalQuantizationAbsurd>,
+    rayon_burst_engine: RayonBurstEngine<FeagiIndexQuantizationAbsurd>,
     cortical_id_engine_mapping: HashMap<CorticalID, CorticalEngineIndex<u64>>,
 }
 
 impl DynamicNPU {
     pub fn new() -> Self {
         Self {
-            rayon_burst_engine: RayonBurstEngine::<FeagiGlobalQuantizationAbsurd>::new(),
+            rayon_burst_engine: RayonBurstEngine::<FeagiIndexQuantizationAbsurd>::new(),
             cortical_id_engine_mapping: Default::default(),
         }
     }
     
     pub fn request_builder(&self) -> ConnectomeRequestBuilder
     {
-        ConnectomeRequestBuilder::new(FeagiGlobalQuantizationAbsurd::QUANTIZATION_LEVEL)
+        ConnectomeRequestBuilder::new(FeagiIndexQuantizationAbsurd::QUANTIZATION_LEVEL)
     }
     
     pub fn request(&mut self, request: ConnectomeRequest) {
@@ -59,7 +59,7 @@ impl DynamicNPU {
 
                 let cortical_engine_index = self.rayon_burst_engine.add_cortical_area::<
                     FeagiAdvancedModelStandardQuant,
-                    FeagiAdvancedModel<FeagiGlobalQuantizationAbsurd, FeagiAdvancedModelStandardQuant>,
+                    FeagiAdvancedModel<FeagiIndexQuantizationAbsurd, FeagiAdvancedModelStandardQuant>,
                 >(number_neurons, cortical_props, cortical_data, ());
                 self.cortical_id_engine_mapping.insert(cortical_id, cortical_engine_index);
             }

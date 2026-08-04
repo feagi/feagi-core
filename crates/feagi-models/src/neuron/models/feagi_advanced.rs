@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use crate::neuron::model_capabilities::neuron_burst_index_rollover_handling::NeuronModelNoSpecialBurstIndexRolloverHandling;
 use crate::neuron::model_capabilities::neuron_history::NeuronModelFullNeuronHistory;
 use crate::neuron::model_capabilities::neuron_layout_implementations::DimensionalNeuronModel;
@@ -6,12 +7,16 @@ use crate::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuro
 use crate::neuron::neuron_model_quantization::{NeuronModelQuantization, NeuronModelQuantizationLevel};
 use crate::wrapped_indexes::BurstIndex;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, PercentageUnsigned, QuantizedDecimalTrait, QuantizedIndexCountTrait};
+use feagi_data::values::quantizable::{DecimalQuantizationLevel, PercentageUnsigned, QuantizedDecimalTrait, QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
 use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
 use half::bf16;
+use crate::neuron::cortical_area_layout::CorticalAreaLayoutDimensional;
+use crate::neuron::cortical_writer::NeuronModelCorticalWriter;
+use crate::neuron::model_generated::cortical_layout::CorticalAreaLayoutNested;
 use crate::neuron::model_generated::model_type_and_quantization::{NeuronModelType, NeuronModelTypeAndQuantizationNested};
+use crate::neuron::properties::{CorticalAreaProperties, NeuronProperties};
 // TODO a lot of this is honestly proc macro work
 //region Quantization
 
@@ -88,7 +93,7 @@ create_wrapped_quantized_decimal!(pub LeakCoefficient);
 create_wrapped_quantized_index!(pub RefractoryCountdown);
 create_wrapped_quantized_index!(pub ConsecutiveFireCountdown);
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct FeagiAdvancedModelCorticalData<NMQ>
 where
     NMQ: FeagiAdvancedModelQuantization,
@@ -132,7 +137,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct FeagiAdvancedModelNeuronData<NMQ>
 where
     NMQ: FeagiAdvancedModelQuantization,
@@ -163,6 +168,83 @@ where
         }
     }
 }
+
+//endregion
+
+//region Cortical Writer
+
+#[derive(Debug, Clone, Copy)]
+pub enum FeagiAdvancedModelCorticalWriter<NMQ>
+where
+    NMQ: FeagiAdvancedModelQuantization,
+{
+    DefaultNewDimensional {dimensions: DimensionalCorticalArea4DDimensions<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>, _p: PhantomData<NMQ>},
+}
+
+impl<NMQ> NeuronModelCorticalWriter<NMQ, FeagiAdvancedModelCorticalData<NMQ>, FeagiAdvancedModelNeuronData<NMQ>> for FeagiAdvancedModelCorticalWriter<NMQ>
+where
+    NMQ: FeagiAdvancedModelQuantization,
+{
+    fn number_neurons_needed<FIQ: FeagiIndexQuantization>(&self) -> Result<FIQ::NeuronIndexQuant, ()> {
+        match self {
+            FeagiAdvancedModelCorticalWriter::DefaultNewDimensional { dimensions, _p: _ } => {
+                let u = dimensions.number_contained_elements();
+                let r: FIQ::NeuronIndexQuant = u.try_to_quantization().unwrap(); // TODO error handling!
+                Ok(r)
+            }
+        }
+    }
+
+    fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(self, cortical_data: &mut FeagiAdvancedModelCorticalData<NMQ>, neuron_data: &mut [FeagiAdvancedModelNeuronData<NMQ>]) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties, impl Iterator<Item=NeuronProperties>), ()> {
+
+        match self {
+            FeagiAdvancedModelCorticalWriter::DefaultNewDimensional { dimensions, _p } => {
+
+                // TODO check dimensions
+
+                // Uniform
+                let new_cortical: FeagiAdvancedModelCorticalData<NMQ> = FeagiAdvancedModelCorticalData {
+                    excitability: PercentageUnsigned::ZERO_PERCENT,
+                    refractory_period_limit: RefractoryPeriodLimit::QUANT_ONE,
+                    fire_threshold_limit: NeuronMembranePotential::QUANT_ONE,
+                    consecutive_fire_limit: ConsecutiveFireLimit::QUANT_ONE,
+                    snooze_period: SnoozePeriod::QUANT_ONE,
+                    degeneracy_constant: DegeneracyConstant::QUANT_ONE,
+                };
+
+                let new_cortical_properties = CorticalAreaProperties {
+                    non_mp_psp: 0.0,
+                    probe_cortical_area_input_disabled: false,
+                    probe_cortical_area_output_disabled: false,
+                    is_psp_uniform: false,
+                    is_psp_mp_driven: false,
+                };
+
+                let new_uniform_neuron: FeagiAdvancedModelNeuronData<NMQ> = FeagiAdvancedModelNeuronData {
+                    neuron_fire_threshold: NeuronMembranePotential::QUANT_ONE,
+                    neuron_leak_coefficient: LeakCoefficient::QUANT_ONE,
+                    neuron_refractory_countdown: RefractoryCountdown::QUANT_ONE,
+                    neuron_consecutive_fire_countdown: ConsecutiveFireCountdown::QUANT_ONE,
+                };
+
+                let new_uniform_neuron_properties = NeuronProperties {
+                    probe_force_disabled: false,
+                    probe_force_firing: false,
+                };
+
+                let dimensions: DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexQuant> = dimensions.try_to_quantization().unwrap(); // TODO ERROR CHECKING
+                let number_neurons = dimensions.number_contained_elements().quant_to_usize();
+                let layout = CorticalAreaLayoutNested::Dimensional(CorticalAreaLayoutDimensional{dimensions});
+
+                *cortical_data = new_cortical;
+                neuron_data.fill(new_uniform_neuron);
+                Ok((layout, new_cortical_properties, core::iter::repeat(new_uniform_neuron_properties).take(number_neurons)))
+            }
+        }
+    }
+}
+
+
 
 //endregion
 

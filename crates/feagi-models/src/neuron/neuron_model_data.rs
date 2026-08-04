@@ -5,7 +5,7 @@ use crate::neuron::neuron_model_quantization::NeuronModelQuantization;
 /// by all neurons in a cortical_area area of a given neuron model. This should be extended with only
 /// the cortical_area level data. Note that the "default" trait is used for memory purposes and any
 /// values specified in default will not actually be used.
-pub trait NeuronModelCorticalData<NMQ>: Clone + Default
+pub trait NeuronModelCorticalData<NMQ>: Clone + Default + Copy
 where
     NMQ: NeuronModelQuantization,
 {
@@ -23,7 +23,7 @@ where
 /// Root trait for all neuron data implementation, essentially per neuron data for a given
 /// neuron model. This should be extended with only the per neuron data. Note that the "default" trait is used for memory purposes and any
 /// values specified in default will not actually be used.
-pub trait NeuronModelNeuronData<NMQ>: Clone + Default
+pub trait NeuronModelNeuronData<NMQ>: Clone + Default + Copy
 where
     NMQ: NeuronModelQuantization,
 {

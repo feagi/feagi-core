@@ -14,3 +14,4 @@
 pub mod cortical_layout;
 pub mod model_type_and_quantization;
 pub mod cortical_area_request_builder;
+pub mod cortical_writer_by_model_quant;

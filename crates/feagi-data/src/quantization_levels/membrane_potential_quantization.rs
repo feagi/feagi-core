@@ -52,4 +52,6 @@ impl MembranePotentialQuantization for CorticalMembranePotentialQuantizationFloa
     type MembranePotentialQuant = f64;
 }
 
+pub type CorticalMembranePotentialQuantizationGenomic = CorticalMembranePotentialQuantizationFloat64;
+
 //endregion
