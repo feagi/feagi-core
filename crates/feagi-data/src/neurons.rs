@@ -25,15 +25,15 @@ create_wrapped_quantized_index!(
 create_wrapped_quantized_index_coordinate!(
     /// Represents a 4D coordinate of a neuron within a dimensional cortical_area area, with the
     /// 4th dimension being the density index
-    pub DimensionCorticalArea4DCoordinate,
+    pub DimensionalCorticalArea4DCoordinate,
     QuantizedIndexCoord4D,
     (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis), (3, d, NeuronVoxelDensityIndex)
 );
 
-impl<Q: QuantizedIndexCountTrait> DimensionCorticalArea4DCoordinate<Q>
+impl<Q: QuantizedIndexCountTrait> DimensionalCorticalArea4DCoordinate<Q>
 {
     pub fn new_from_voxel_and_density(voxel_coord: NeuronVoxelCoordinate<Q>, density: NeuronVoxelDensityIndex<Q>) -> Self {
-        DimensionCorticalArea4DCoordinate::new(
+        DimensionalCorticalArea4DCoordinate::new(
             *voxel_coord.get_x(),
             *voxel_coord.get_y(),
             *voxel_coord.get_z(),
@@ -46,7 +46,7 @@ create_wrapped_quantized_index_dimension!(
     /// Represents the dimensions and density of a dimensional cortical_area area
     pub DimensionalCorticalArea4DDimensions,
     QuantizedIndexDimension4D,
-    DimensionCorticalArea4DCoordinate,
+    DimensionalCorticalArea4DCoordinate,
     NeuronCorticalLocalIndex,
     (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis), (3, d, NeuronVoxelDensityIndex)
 );

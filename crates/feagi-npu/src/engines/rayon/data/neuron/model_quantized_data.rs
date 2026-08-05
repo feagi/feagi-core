@@ -1,9 +1,9 @@
 /// Helper structs to make dealing with multiple quantizations / models less annoying
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::neuron::model_generated::model_type_and_quantization::{NeuronModelType, NeuronModelTypeAndQuantizationNested};
-use feagi_models::neuron::models::feagi_advanced::FeagiAdvancedModelQuantizationLevel;
-use feagi_models::neuron::neuron_model::NeuronModel;
-use feagi_models::neuron::neuron_model_quantization::NeuronModelQuantization;
+use feagi_models::cortical_area::neuron::model_generated::model_type_and_quantization::{NeuronModelType, NeuronModelTypeAndQuantizationNested};
+use feagi_models::cortical_area::neuron::models::feagi_advanced::FeagiAdvancedModelQuantizationLevel;
+use feagi_models::cortical_area::neuron::neuron_model::NeuronModel;
+use feagi_models::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
 use feagi_models::wrapped_index_collections::{CorticalModelIndex, NeuronModelIndex};
 use crate::engines::rayon::data::neuron::model_quantized_data::feagi_advanced_model::ModelFeagiAdvanced;
 
@@ -49,7 +49,7 @@ impl<FIQ: FeagiIndexQuantization> Default for NeuronModelData<FIQ> {
 #[doc(hidden)]
 mod feagi_advanced_model {
     use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-    use feagi_models::neuron::models::feagi_advanced::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData, FeagiAdvancedModelStandardQuant};
+    use feagi_models::cortical_area::neuron::models::feagi_advanced::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData, FeagiAdvancedModelStandardQuant};
     use feagi_models::wrapped_index_collections::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 
     #[doc(hidden)]

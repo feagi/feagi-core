@@ -11,7 +11,6 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_genomic_data::cortical_area::CorticalArea;
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_genomic_context::brain_region::BrainRegion;
 use serde::{Deserialize, Serialize};

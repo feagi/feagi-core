@@ -1,5 +1,5 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
-use crate::synapse::model_generated::cortical_mapping_request_builder::CorticalMappingRequestBuilder;
+use crate::cortical_mapping_entry::synapse_model::model_generated::cortical_mapping_request_builder::CorticalMappingRequestBuilder;
 
 /// Endpoint emitted from an NPU that lets you construct requests to edit the connectome of the
 /// NPU with strong compile time typed checking. Rust FTW. Can only be constructed by the NPU

@@ -16,6 +16,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
 use crate::types::EvoError;
 use feagi_genomic_context::cortical_area::CorticalAreaType;
 use std::collections::HashMap;

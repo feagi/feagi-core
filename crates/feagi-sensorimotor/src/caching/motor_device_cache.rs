@@ -1,26 +1,20 @@
 use crate::configuration::jsonable::JSONInputOutputDefinition;
 use crate::data_pipeline::per_channel_stream_caches::MotorCorticalUnitCache;
-use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_pipeline::{PipelineStageProperties};
 use crate::data_types::descriptors::*;
 use crate::data_types::*;
 use crate::neuron_voxel_coding::xyzp::decoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_serialization::FeagiByteContainer;
-use feagi_genomic_context::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
-};
 use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning, PoseSchema,
 };
-use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_genomic_context::cortical_unit::MotorCorticalUnit;
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use feagi_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
-use serde_json::json;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
+use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
+use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
 
 macro_rules! motor_unit_functions {
     (

@@ -13,8 +13,8 @@ crate-type = ["rlib"]
 name = "feagi_evolutionary"
 
 [dependencies]
-feagi-genomic-context = { version = "0.0.14", path = "../feagi-genomic-context" }
-feagi-genomic-data = { version = "0.0.14", path = "../feagi-genomic-data" }
+feagi-genomic-context = {  path = "../feagi-genomic-context" }
+feagi-genomic-data = {  path = "../feagi-genomic-data" }
 
 
 # Serialization

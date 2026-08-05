@@ -175,25 +175,30 @@ feagi-io = { path = "crates/feagi-io" }
 [workspace]
 resolver = "2"
 members = [
-    "crates/feagi-logging-and-errors",
-    "crates/feagi-logging-and-errors/feagi-logging-and-errors-derive",
+    "crates/feagi-agent",
+    "crates/feagi-api",
+    "crates/feagi-brain-development",
+    "crates/feagi-config",
     "crates/feagi-data",
-    "crates/feagi-models",
+    #"crates/feagi-dataset-contracts",
+    "crates/feagi-evolutionary",
     "crates/feagi-genomic-context",
     "crates/feagi-genomic-data",
-    "crates/feagi-npu",
-    "crates/feagi-serialization",
     "crates/feagi-io",
-    "crates/feagi-config",
+    "crates/feagi-logging-and-errors",
+    "crates/feagi-logging-and-errors/feagi-logging-and-errors-derive",
+    "crates/feagi-models",
+    "crates/feagi-npu",
     "crates/feagi-observability",
+    "crates/feagi-sensorimotor",
+    "crates/feagi-serialization",
+    "crates/feagi-services",
     "crates/feagi-state-manager",
-    "crates/feagi-evolutionary",
-
-
+    #"crates/feagi-trainer",
 ]
 
 [workspace.package]
-version = "0.0.14"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.75"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
@@ -224,7 +229,7 @@ syn = { version = "2.0.117", features = ["full"] } # TODO Review this
 
 thiserror = "1.0.50" # TODO migrate away from this and use our own error trait!
 tracing = "0.1"  # Structured logging and diagnostics # TODO shouldnt this only be in the error subcrate?
-defmt = {version = "1.1.0"} # only used in embedded contexts # TODO shouldnt this only be in the error subcrate?
+defmt = {version = "1.1.1"} # only used in embedded contexts # TODO shouldnt this only be in the error subcrate?
 
 uuid = { version = "1.11", features = ["v7", "serde", "js"] }  # js feature for WASM supporto
 

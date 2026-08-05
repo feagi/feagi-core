@@ -37,9 +37,9 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 
 # FEAGI internal crates (core)
-feagi-io = { version = "0.0.14", path = "../feagi-io" }
-feagi-serialization = { version = "0.0.14", path = "../feagi-serialization" }
-feagi-sensorimotor = { version = "0.0.14", path = "../feagi-sensorimotor" }
+feagi-io = {  path = "../feagi-io" }
+feagi-serialization = {  path = "../feagi-serialization" }
+feagi-sensorimotor = {  path = "../feagi-sensorimotor" }
 base64 = "0.22.1"
 
 # Conditional Dependencies

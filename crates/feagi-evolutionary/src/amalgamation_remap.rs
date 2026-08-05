@@ -162,10 +162,7 @@ mod tests {
     use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, PhysiologyConfig};
     use crate::MorphologyRegistry;
     use crate::RuntimeGenome;
-    use feagi_genomic_context::cortical_area::descriptors::CorticalAreaDimensions;
-    use feagi_genomic_data::cortical_area::CorticalArea;
     use feagi_genomic_context::cortical_area::CustomCorticalType;
-    use feagi_genome_definitions::descriptors::GenomeCoordinate3D;
 
     fn sample_custom_cortical_id() -> CorticalID {
         let mut bytes = [0u8; CorticalID::CORTICAL_ID_LENGTH];

@@ -6,9 +6,9 @@ use feagi_data::values::quantizable::PercentageUnsigned;
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::connectome_requests::connectome_request::{ConnectomeRequest};
 use feagi_models::connectome_requests::connectome_request_builder::ConnectomeRequestBuilder;
-use feagi_models::neuron::cortical_writer::NeuronModelCorticalWriter;
-use feagi_models::neuron::model_generated::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
-use feagi_models::neuron::models::feagi_advanced::{ConsecutiveFireLimit, DegeneracyConstant, FeagiAdvancedModel, FeagiAdvancedModelCorticalData, FeagiAdvancedModelStandardQuant, RefractoryPeriodLimit, SnoozePeriod};
+use feagi_models::cortical_area::cortical_writer::NeuronModelCorticalWriter;
+use feagi_models::cortical_area::neuron::model_generated::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
+use feagi_models::cortical_area::neuron::models::feagi_advanced::{ConsecutiveFireLimit, DegeneracyConstant, FeagiAdvancedModel, FeagiAdvancedModelCorticalData, FeagiAdvancedModelStandardQuant, RefractoryPeriodLimit, SnoozePeriod};
 use feagi_models::wrapped_index_collections::CorticalEngineIndex;
 use crate::engines_common::EditableEngine::EditableEngine;
 
