@@ -73,6 +73,9 @@ pub struct FeagiAgentHandler {
     agent_id_by_descriptor: HashMap<AgentDescriptor, String>,
     /// Device registrations by AgentID (active connections)
     device_registrations_by_agent: HashMap<AgentID, serde_json::Value>,
+    /// Device registration payloads received via AgentConfiguration and awaiting
+    /// immediate FEAGI runtime processing (e.g., IO cortical auto-create).
+    pending_agent_configurations: Vec<(AgentID, serde_json::Value)>,
 }
 
 impl FeagiAgentHandler {
@@ -150,6 +153,7 @@ impl FeagiAgentHandler {
             device_registrations_by_descriptor: HashMap::new(),
             agent_id_by_descriptor: HashMap::new(),
             device_registrations_by_agent: HashMap::new(),
+            pending_agent_configurations: Vec::new(),
         }
     }
 
@@ -254,6 +258,14 @@ impl FeagiAgentHandler {
     ) {
         self.device_registrations_by_agent
             .insert(agent_id, device_registrations);
+    }
+
+    /// Drain and return queued AgentConfiguration payloads received from agents.
+    ///
+    /// FEAGI runtime can use this to perform deterministic follow-up processing
+    /// immediately after command/control ingestion.
+    pub fn drain_pending_agent_configurations(&mut self) -> Vec<(AgentID, serde_json::Value)> {
+        std::mem::take(&mut self.pending_agent_configurations)
     }
 
     // TODO redudant, you can simply check if a AgentID has the capability hash?
@@ -821,9 +833,11 @@ impl FeagiAgentHandler {
                     self.set_device_registrations_by_descriptor(
                         agent_id.to_base64(),
                         descriptor.clone(),
-                        device_regs,
+                        device_regs.clone(),
                     );
                 }
+                self.pending_agent_configurations
+                    .push((agent_id, device_regs.clone()));
                 debug!(
                     target: "feagi-agent",
                     "Stored device registrations for agent {}",

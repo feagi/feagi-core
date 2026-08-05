@@ -581,6 +581,15 @@ impl SynapticPropagationEngine {
         let metadata_start = profile_enabled.then(std::time::Instant::now);
         let source_metadata: AHashMap<NeuronId, SourceNeuronMetadata> = synapse_indices
             .par_iter()
+            // CRITICAL: `synapse_indices` comes from `self.synapse_index`, which is only rebuilt
+            // via an explicit `rebuild_synapse_index()` call (see `remove_synapse` /
+            // `remove_synapses_between` / `remove_synapses_from_sources_to_targets` docs). Between
+            // a deletion and the next rebuild, stale (invalid) indices remain in the index. The
+            // contribution loop below already skips invalid synapses via `valid_mask`, but this
+            // outgoing-synapse count feeds the `psp_uniform_distribution = false` divisor, so it
+            // must also exclude invalid synapses or surviving synapses get short-changed (PSP
+            // divided by a stale, inflated count).
+            .filter(|&&syn_idx| synapse_storage.valid_mask()[syn_idx])
             .map(|&syn_idx| NeuronId(synapse_storage.source_neurons()[syn_idx]))
             .fold(
                 AHashMap::<NeuronId, (Option<CorticalID>, usize)>::new,
