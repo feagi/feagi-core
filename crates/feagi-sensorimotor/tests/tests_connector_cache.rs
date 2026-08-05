@@ -7,10 +7,10 @@
 //! - Display implementation
 
 use feagi_sensorimotor::ConnectorCache;
-use feagi_genome_definitions::::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalUnitIndex,
 };
-use feagi_genome_definitions::::io_cortical_area_configuration_flag::{
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 
@@ -105,7 +105,7 @@ mod test_export_import {
                     CorticalUnitIndex::from(0u8),
                     CorticalChannelCount::new(1).unwrap(),
                     FrameChangeHandling::Absolute,
-                    feagi_genome_definitions::::descriptors::NeuronDepth::new(10)
+                    feagi_structures::genomic::cortical_area::descriptors::NeuronDepth::new(10)
                         .unwrap(),
                     PercentageNeuronPositioning::Linear,
                 )
@@ -137,9 +137,9 @@ mod test_export_import {
 
             motor_cache
                 .simple_vision_output_register(
-                    feagi_genome_definitions::::descriptors::CorticalUnitIndex::from(0u8),
-                    feagi_genome_definitions::::descriptors::CorticalChannelCount::new(1).unwrap(),
-                    feagi_genome_definitions::::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute,
+                    feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex::from(0u8),
+                    feagi_structures::genomic::cortical_area::descriptors::CorticalChannelCount::new(1).unwrap(),
+                    feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute,
                     image_props,
                 )
                 .unwrap();
@@ -163,7 +163,7 @@ mod test_export_import {
                     CorticalUnitIndex::from(0u8),
                     CorticalChannelCount::new(2).unwrap(),
                     FrameChangeHandling::Absolute,
-                    feagi_genome_definitions::::descriptors::NeuronDepth::new(8)
+                    feagi_structures::genomic::cortical_area::descriptors::NeuronDepth::new(8)
                         .unwrap(),
                     PercentageNeuronPositioning::Fractional,
                 )
@@ -231,7 +231,7 @@ mod test_imu_register_write_contract {
         Percentage, RawIMU, SignedPercentage, SignedPercentage3D, SignedPercentage4D,
     };
     use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
-    use feagi_genome_definitions::::descriptors::{
+    use feagi_structures::genomic::cortical_area::descriptors::{
         CorticalChannelIndex, NeuronDepth,
     };
 

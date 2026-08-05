@@ -195,7 +195,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
 /// Convert a single cortical_area area to flat format keys
 fn convert_area_to_flat(
     cortical_id_base64: &str,
-    area: &feagi_genome_definitions::::CorticalArea,
+    area: &feagi_structures::genomic::cortical_area::CorticalArea,
     flat_blueprint: &mut serde_json::Map<String, Value>,
 ) -> EvoResult<()> {
     let prefix = format!("_____10c-{}", cortical_id_base64);
@@ -234,7 +234,7 @@ fn convert_area_to_flat(
     // Without this, areas default to "CUSTOM" regardless of their actual type.
     let mut properties_with_group = area.properties.clone();
     if !properties_with_group.contains_key("cortical_group") {
-        use feagi_genome_definitions::::CorticalAreaType;
+        use feagi_structures::genomic::cortical_area::CorticalAreaType;
         let cortical_group = match area.cortical_type {
             CorticalAreaType::BrainInput(_) => "IPU",
             CorticalAreaType::BrainOutput(_) => "OPU",
@@ -529,7 +529,7 @@ mod tests {
 
     #[test]
     fn test_cortical_group_derived_from_type() {
-        use feagi_genome_definitions::::{
+        use feagi_genome_definitions::{
             io_cortical_area_configuration_flag::FrameChangeHandling, CorticalArea,
             CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
         };
@@ -610,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_memory_twin_reference_saved_to_flat() {
-        use feagi_genome_definitions::::{
+        use feagi_genome_definitions::{
             CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
             IOCorticalAreaConfigurationFlag,
         };
@@ -663,7 +663,7 @@ mod tests {
     /// still emit `2dcorx-i` / `2dcory-i` or reload loses circuit-builder positions.
     #[test]
     fn test_coordinate_2d_from_api_exports_to_flat_2dcor() {
-        use feagi_genome_definitions::::{
+        use feagi_genome_definitions::{
             CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
             IOCorticalAreaConfigurationFlag,
         };

@@ -9,7 +9,7 @@
 //! current workspace. Two independent reasons:
 //!
 //! 1. The imports below reference `feagi_genome_definitions`, `feagi_structures`, and
-//!    `feagi_potential_voxels`, none of which exist any more, and several carry `::::` typos left
+//!    `feagi_potential_voxels`, none of which exist any more, and several carry `::` typos left
 //!    over from a rename. These are parse errors, so `#[cfg(...)]` gating cannot suppress them —
 //!    the file has to be excluded from the target list instead.
 //! 2. It exercises `CorticalMappedXYZPNeuronVoxels`, whose `FeagiSerializable` implementation in
@@ -22,15 +22,15 @@
 //! need it.
 
 use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType};
-use feagi_genome_definitions::::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalAreaDimensions, CorticalUnitIndex,
 };
-use feagi_genome_definitions::::io_cortical_area_configuration_flag::{
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_genome_definitions::::{CoreCorticalType, CorticalID};
+use feagi_genome_definitions::{CoreCorticalType, CorticalID};
 use feagi_structures::genomic::SensoryCorticalUnit;
-use feagi_potential_voxels::::coord_potential::{
+use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
 };
 

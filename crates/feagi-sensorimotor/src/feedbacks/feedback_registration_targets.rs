@@ -1,5 +1,5 @@
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
-use feagi_genome_definitions::::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelIndex, CorticalUnitIndex,
 };
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};

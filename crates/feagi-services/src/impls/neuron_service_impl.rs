@@ -12,7 +12,7 @@ use crate::traits::NeuronService;
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_brain_development::ConnectomeManager;
-use feagi_genome_definitions::::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::debug;

@@ -6,11 +6,11 @@ use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_genome_definitions::::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
 };
 use feagi_structures::genomic::MotorCorticalUnit;
-use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use rayon::prelude::*;
 use std::time::Instant;

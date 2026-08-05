@@ -15,7 +15,7 @@ use std::sync::Arc;
 use ahash::AHashSet;
 use async_trait::async_trait;
 use feagi_npu_burst_engine::BurstLoopRunner;
-use feagi_genome_definitions::::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use tracing::{debug, info, warn};
 

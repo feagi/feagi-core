@@ -20,15 +20,15 @@ use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_serialization::FeagiByteContainer;
-use feagi_genome_definitions::::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
-use feagi_genome_definitions::::io_cortical_area_configuration_flag::{
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_genome_definitions::::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::SensoryCorticalUnit;
-use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use serde_json::json;
 use std::collections::HashMap;

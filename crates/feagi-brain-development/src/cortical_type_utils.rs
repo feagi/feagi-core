@@ -17,10 +17,10 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_genome_definitions::::io_cortical_area_configuration_flag::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 #[cfg(test)]
-use feagi_genome_definitions::::CoreCorticalType;
-use feagi_genome_definitions::::{
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_genome_definitions::{
     CorticalArea, CorticalAreaType, IOCorticalAreaConfigurationFlag,
 };
 
@@ -212,12 +212,12 @@ pub fn validate_connectivity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_genome_definitions::::descriptors::CorticalAreaDimensions;
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaDimensions;
 
     #[test]
     fn test_get_io_data_type() {
         // Create area with BrainInput type using Boolean data
-        use feagi_genome_definitions::::{
+        use feagi_genome_definitions::{
             CoreCorticalType, CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         let cortical_id = CoreCorticalType::Power.to_cortical_id();

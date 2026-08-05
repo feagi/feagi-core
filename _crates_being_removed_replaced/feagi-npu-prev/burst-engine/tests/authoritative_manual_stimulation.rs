@@ -6,7 +6,7 @@
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_runtime::StdRuntime;
-use feagi_genome_definitions::::{CoreCorticalType, CorticalID};
+use feagi_genome_definitions::{CoreCorticalType, CorticalID};
 
 #[test]
 fn authoritative_force_fire_includes_neuron_despite_zero_excitability() {

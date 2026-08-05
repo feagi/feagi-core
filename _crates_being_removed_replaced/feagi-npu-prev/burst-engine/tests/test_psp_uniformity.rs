@@ -11,7 +11,7 @@ use ahash::AHashMap;
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::StdRuntime;
-use feagi_genome_definitions::::CoreCorticalType;
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
 #[test]
 fn test_psp_uniformity_false_divides_psp() {

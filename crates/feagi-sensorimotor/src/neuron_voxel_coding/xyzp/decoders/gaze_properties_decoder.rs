@@ -9,12 +9,12 @@ use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
 };
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_genome_definitions::::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
 };
-use feagi_genome_definitions::::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-use feagi_genome_definitions::::CorticalID;
-use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
@@ -274,8 +274,8 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_genome_definitions::::CoreCorticalType;
-    use feagi_potential_voxels::::coord_potential::{
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_structures::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
     };
 

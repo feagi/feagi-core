@@ -11,9 +11,9 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_genome_definitions::::CorticalArea;
-use feagi_genome_definitions::::CorticalID;
-use feagi_genome_definitions::::brain_region::BrainRegion;
+use feagi_structures::genomic::cortical_area::CorticalArea;
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::brain_region::BrainRegion;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

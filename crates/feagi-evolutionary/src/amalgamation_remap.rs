@@ -14,9 +14,9 @@ Licensed under the Apache License, Version 2.0
 
 use crate::random::random_bytes;
 use crate::runtime::RuntimeGenome;
-use feagi_genome_definitions::::CorticalArea;
-use feagi_genome_definitions::::CorticalAreaType;
-use feagi_genome_definitions::::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalArea;
+use feagi_structures::genomic::cortical_area::CorticalAreaType;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::BrainRegion;
 use feagi_structures::FeagiDataError;
 use serde_json::Value;
@@ -162,9 +162,9 @@ mod tests {
     use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, PhysiologyConfig};
     use crate::MorphologyRegistry;
     use crate::RuntimeGenome;
-    use feagi_genome_definitions::::descriptors::CorticalAreaDimensions;
-    use feagi_genome_definitions::::CorticalArea;
-    use feagi_genome_definitions::::CustomCorticalType;
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaDimensions;
+    use feagi_structures::genomic::cortical_area::CorticalArea;
+    use feagi_structures::genomic::cortical_area::CustomCorticalType;
     use feagi_genome_definitions::descriptors::GenomeCoordinate3D;
 
     fn sample_custom_cortical_id() -> CorticalID {

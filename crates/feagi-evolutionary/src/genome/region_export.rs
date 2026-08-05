@@ -14,8 +14,8 @@ Copyright 2025 Neuraville Inc.
 
 use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, RuntimeGenome};
 use crate::{EvoError, EvoResult};
-use feagi_genome_definitions::::brain_region::BrainRegion;
-use feagi_genome_definitions::::{CorticalArea, CorticalID};
+use feagi_structures::genomic::brain_region::BrainRegion;
+use feagi_genome_definitions::{CorticalArea, CorticalID};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -178,11 +178,11 @@ mod tests {
         GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig,
         RuntimeGenome,
     };
-    use feagi_genome_definitions::::RegionID;
+    use feagi_structures::genomic::brain_region::RegionID;
     use serde_json::json;
     use std::collections::HashMap;
-    use feagi_genome_definitions::::brain_region::BrainRegion;
-    use feagi_genome_definitions::::region_type::RegionType;
+    use feagi_structures::genomic::brain_region::BrainRegion;
+    use feagi_structures::genomic::brain_region::RegionType;
 
     fn runtime_parent_and_child() -> (RuntimeGenome, String, String) {
         let parent_rid = RegionID::new();

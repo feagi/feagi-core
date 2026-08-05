@@ -46,7 +46,7 @@ use ahash::AHashMap;
 use ahash::AHashSet;
 use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
 use feagi_npu_neural::types::*;
-use feagi_genome_definitions::::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use roaring::RoaringBitmap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -5912,7 +5912,7 @@ impl<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_genome_definitions::::CoreCorticalType;
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
     // ═══════════════════════════════════════════════════════════
     // Core NPU Creation & Initialization

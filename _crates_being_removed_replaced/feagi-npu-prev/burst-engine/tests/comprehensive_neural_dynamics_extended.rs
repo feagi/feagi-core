@@ -8,7 +8,7 @@
 use feagi_npu_burst_engine::{backend::CPUBackend, RustNPU};
 use feagi_npu_neural::NeuronId;
 use feagi_npu_runtime::StdRuntime;
-use feagi_genome_definitions::::CoreCorticalType;
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
 /// Create a standard NPU for testing
 fn create_test_npu() -> RustNPU<StdRuntime, f32, CPUBackend> {
