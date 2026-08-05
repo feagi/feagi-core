@@ -299,3 +299,106 @@ fn test_psp_uniformity_default_is_false() {
     println!("  PSP defaults to divided mode (uniformity = false)");
     println!("  Each synapse will receive PSP/2 = 10/2 = 5 during propagation");
 }
+
+#[test]
+fn test_psp_uniform_false_divisor_ignores_stale_removed_synapses() {
+    // Regression test: removing outgoing synapses via `remove_synapse()` marks them invalid
+    // immediately but intentionally does NOT rebuild `SynapticPropagationEngine::synapse_index`
+    // (see doc comments on `remove_synapse` / `remove_synapses_between`). Before this fix, the
+    // `psp_uniform_distribution = false` divisor was computed from the (stale) synapse_index
+    // instead of live valid synapses, so surviving synapses received less PSP than intended.
+    let runtime = StdRuntime;
+    let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
+    let mut npu = RustNPU::new(runtime, backend, 100, 100, 5).expect("Failed to create NPU");
+
+    let area_a = CoreCorticalType::Power.to_cortical_id();
+    let area_b = CoreCorticalType::Death.to_cortical_id();
+    npu.register_cortical_area(2, area_a.as_base_64());
+    npu.register_cortical_area(3, area_b.as_base_64());
+
+    let source_neuron = npu
+        .add_neuron(
+            1.0,      // threshold
+            f32::MAX, // threshold_limit
+            0.0,      // leak
+            0.0,      // resting
+            0,        // neuron_type
+            0,        // refractory
+            1.0,      // excitability
+            u16::MAX, // consecutive_fire_limit
+            0,        // snooze
+            true,     // mp_charge_accumulation
+            2,        // cortical_area (area A)
+            0,
+            0,
+            0,
+        )
+        .expect("Failed to add source neuron");
+
+    let mut target_neurons = Vec::new();
+    for i in 0..5 {
+        let target = npu
+            .add_neuron(
+                1.0,  // threshold
+                0.0,  // threshold_limit (0 = no limit)
+                0.0,  // leak
+                0.0,  // resting
+                0,    // neuron_type
+                0,    // refractory
+                1.0,  // excitability
+                0,    // consecutive_fire_limit
+                0,    // snooze
+                true, // mp_charge_accumulation
+                3,    // cortical_area (area B)
+                i, 0, 0,
+            )
+            .expect("Failed to add target neuron");
+        target_neurons.push(target);
+    }
+
+    for &target in &target_neurons {
+        npu.add_synapse(
+            source_neuron,
+            target,
+            SynapticWeight(1.0),
+            SynapticPsp(10.0),
+            SynapseType::Excitatory,
+            0,
+            1,
+        )
+        .expect("Failed to add synapse");
+    }
+    npu.rebuild_synapse_index();
+
+    let mut flags = AHashMap::new();
+    flags.insert(area_a, false); // psp_uniform_distribution = false (divide)
+    npu.set_psp_uniform_distribution_flags(flags);
+
+    // Remove 3 of the 5 outgoing synapses WITHOUT rebuilding the synapse index, mirroring the
+    // real cortical-mapping-update / synaptogenesis flow before the next explicit
+    // rebuild_synapse_index() call.
+    for &target in &target_neurons[0..3] {
+        assert!(npu.remove_synapse(source_neuron, target));
+    }
+
+    npu.inject_sensory_with_potentials(&[(source_neuron, 20.0)]);
+    let r1 = npu.process_burst().unwrap();
+    assert!(
+        r1.fired_neurons.contains(&source_neuron),
+        "Source neuron should fire from injection"
+    );
+
+    npu.process_burst().unwrap();
+
+    for &target in &target_neurons[3..5] {
+        let mp = npu
+            .get_neuron_property_by_index(target.0 as usize, "membrane_potential")
+            .expect("Should have MP");
+        // Correct: PSP(10) / LIVE outgoing count (2 remaining synapses) = 5.0
+        // Bug (fixed by this test): PSP(10) / stale index count (5) = 2.0
+        assert!(
+            (mp - 5.0).abs() < 1e-6,
+            "Expected PSP divided by live synapse count (2) => 5.0, got {mp}"
+        );
+    }
+}
