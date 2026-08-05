@@ -21,6 +21,12 @@ pub(crate) struct MotorCorticalUnitCache {
     io_configuration_flags: serde_json::Map<String, serde_json::Value>,
     pipeline_runners: Vec<MotorPipelineStageRunner>,
     has_channel_been_updated: Vec<bool>,
+    /// Channels that received a decode update on the most recent
+    /// [`Self::try_read_neuron_data_to_cache_and_do_callbacks`] call.
+    ///
+    /// Retained after ``has_channel_been_updated`` is cleared so snapshot
+    /// readers can expose one-shot (updated-only) motor commands.
+    channels_updated_last_decode: Vec<bool>,
     value_updated_callbacks: Vec<FeagiSignal<WrappedIOData>>,
     device_friendly_name: Option<String>,
 }
@@ -50,6 +56,7 @@ impl MotorCorticalUnitCache {
             io_configuration_flags,
             pipeline_runners,
             has_channel_been_updated: vec![false; *number_channels as usize],
+            channels_updated_last_decode: vec![false; *number_channels as usize],
             value_updated_callbacks: callbacks,
             device_friendly_name: None,
         })
@@ -138,6 +145,14 @@ impl MotorCorticalUnitCache {
             Some(flag) if flag.eq_ignore_ascii_case("incremental") => "incremental",
             _ => "absolute",
         }
+    }
+
+    /// True when ``channel`` was decoded/updated on the previous motor decode tick.
+    pub(crate) fn channel_updated_last_decode(&self, channel: usize) -> bool {
+        self.channels_updated_last_decode
+            .get(channel)
+            .copied()
+            .unwrap_or(false)
     }
 
     #[allow(dead_code)]
@@ -383,6 +398,10 @@ impl MotorCorticalUnitCache {
     ) -> Result<(), FeagiDataError> {
         self.try_read_neuron_data_to_wrapped_io_data(neuron_data, time_of_decode)?;
         self.try_run_callbacks_on_changed_channels()?;
+        // Preserve per-channel update flags for snapshot consumers that want
+        // one-shot command semantics (apply only channels that fired this tick).
+        self.channels_updated_last_decode
+            .copy_from_slice(&self.has_channel_been_updated);
         self.has_channel_been_updated.fill(false);
         Ok(())
     }

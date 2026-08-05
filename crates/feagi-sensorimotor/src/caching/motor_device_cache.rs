@@ -839,6 +839,19 @@ impl MotorDeviceCache {
     /// downstream clients without needing per-unit typed reads. Multi-axis units are
     /// flattened (see [`DecodedMotorValue`]); non-scalar payloads are skipped.
     pub fn read_decoded_motor_snapshot(&self) -> Vec<DecodedMotorValue> {
+        self.read_decoded_motor_snapshot_filtered(false)
+    }
+
+    /// Like [`Self::read_decoded_motor_snapshot`], but only includes channels that
+    /// were updated on the most recent decode tick.
+    ///
+    /// Controllers use this for one-shot absolute/incremental command semantics:
+    /// apply the decoded value when present, otherwise hold the current pose.
+    pub fn read_decoded_motor_snapshot_updated_only(&self) -> Vec<DecodedMotorValue> {
+        self.read_decoded_motor_snapshot_filtered(true)
+    }
+
+    fn read_decoded_motor_snapshot_filtered(&self, updated_only: bool) -> Vec<DecodedMotorValue> {
         let mut snapshot: Vec<DecodedMotorValue> = Vec::new();
         for ((_motor_unit, cortical_unit_index), unit_cache) in
             self.motor_cortical_unit_caches.iter()
@@ -846,6 +859,9 @@ impl MotorDeviceCache {
             let group = cortical_unit_index.get() as u32;
             let mode = unit_cache.frame_change_mode_str();
             for channel in 0..unit_cache.channel_count_usize() {
+                if updated_only && !unit_cache.channel_updated_last_decode(channel) {
+                    continue;
+                }
                 let channel_index: CorticalChannelIndex = (channel as u32).into();
                 let decoded = match unit_cache.get_postprocessed_motor_value(channel_index) {
                     Ok(value) => value,

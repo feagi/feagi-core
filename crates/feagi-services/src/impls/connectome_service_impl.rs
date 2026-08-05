@@ -487,6 +487,12 @@ fn replace_morphology_id_in_value(
                     *replaced_count += 1;
                 }
             }
+            if let Some(mapper_morphology) = obj.get_mut("mapper_morphology") {
+                if mapper_morphology.as_str() == Some(old_id) {
+                    *mapper_morphology = Value::String(new_id.to_string());
+                    *replaced_count += 1;
+                }
+            }
             for child in obj.values_mut() {
                 replace_morphology_id_in_value(child, old_id, new_id, replaced_count);
             }
@@ -1232,29 +1238,32 @@ impl ConnectomeService for ConnectomeServiceImpl {
             visible: area.visible(),
             sub_group: area.sub_group(),
             neurons_per_voxel: area.neurons_per_voxel(),
-            postsynaptic_current: area.postsynaptic_current() as f64,
-            postsynaptic_current_max: area.postsynaptic_current_max() as f64,
-            plasticity_constant: area.plasticity_constant() as f64,
-            degeneration: area.degeneration() as f64,
+            // Use get_f64_property to avoid f32 precision loss on the API response path.
+            // The f32 trait methods (firing_threshold(), leak_coefficient(), etc.) are kept
+            // for the NPU burst-engine path where f32 performance matters.
+            postsynaptic_current: area.get_f64_property("postsynaptic_current", 1.0),
+            postsynaptic_current_max: area.get_f64_property("postsynaptic_current_max", 0.0),
+            plasticity_constant: area.get_f64_property("plasticity_constant", 0.0),
+            degeneration: area.get_f64_property("degeneration", 0.0),
             psp_uniform_distribution: area.psp_uniform_distribution(),
             mp_driven_psp: area.mp_driven_psp(),
-            firing_threshold: area.firing_threshold() as f64,
+            firing_threshold: area.get_f64_property("firing_threshold", 1.0),
             firing_threshold_increment: [
-                area.firing_threshold_increment_x() as f64,
-                area.firing_threshold_increment_y() as f64,
-                area.firing_threshold_increment_z() as f64,
+                area.get_f64_property("firing_threshold_increment_x", 0.0),
+                area.get_f64_property("firing_threshold_increment_y", 0.0),
+                area.get_f64_property("firing_threshold_increment_z", 0.0),
             ],
-            firing_threshold_limit: area.firing_threshold_limit() as f64,
+            firing_threshold_limit: area.get_f64_property("firing_threshold_limit", 0.0),
             consecutive_fire_count: area.consecutive_fire_count(),
             snooze_period: area.snooze_period() as u32,
             refractory_period: area.refractory_period() as u32,
-            leak_coefficient: area.leak_coefficient() as f64,
-            leak_variability: area.leak_variability() as f64,
+            leak_coefficient: area.get_f64_property("leak_coefficient", 0.0),
+            leak_variability: area.get_f64_property("leak_variability", 0.0),
             mp_charge_accumulation: area.mp_charge_accumulation(),
-            neuron_excitability: area.neuron_excitability() as f64,
+            neuron_excitability: area.get_f64_property("neuron_excitability", 1.0),
             burst_engine_active: area.burst_engine_active(),
             init_lifespan: area.init_lifespan(),
-            lifespan_growth_rate: area.lifespan_growth_rate() as f64,
+            lifespan_growth_rate: area.get_f64_property("lifespan_growth_rate", 0.0),
             longterm_mem_threshold: area.longterm_mem_threshold(),
             temporal_depth: memory_props.as_ref().map(|p| p.temporal_depth.max(1)),
             mp_learning_enabled: memory_props.as_ref().map(|p| p.mp_learning_enabled),
@@ -2239,12 +2248,36 @@ impl ConnectomeService for ConnectomeServiceImpl {
         manager.remove_morphology(old_id);
         manager.upsert_morphology(new_id.to_string(), morphology);
 
+        // Update morphology references in ConnectomeManager's cortical area properties so
+        // that API endpoints reading from the ConnectomeManager (e.g. cortical_map_detailed)
+        // immediately reflect the new name without requiring a genome reload.
+        let cortical_ids: Vec<feagi_structures::genomic::cortical_area::CorticalID> = manager
+            .get_cortical_area_ids()
+            .into_iter()
+            .cloned()
+            .collect();
+        let mut connectome_replaced_count: usize = 0;
+        for cortical_id in &cortical_ids {
+            if let Some(area) = manager.get_cortical_area_mut(cortical_id) {
+                for prop_value in area.properties.values_mut() {
+                    replace_morphology_id_in_value(
+                        prop_value,
+                        old_id,
+                        new_id,
+                        &mut connectome_replaced_count,
+                    );
+                }
+            }
+        }
+        manager.refresh_cortical_mappings_hash();
+
         info!(
             target: "feagi-services",
-            "Renamed morphology '{}' to '{}' ({} references updated)",
+            "Renamed morphology '{}' to '{}' ({} genome refs + {} connectome refs updated)",
             old_id,
             new_id,
-            replaced_count
+            replaced_count,
+            connectome_replaced_count
         );
 
         Ok(())
@@ -2256,7 +2289,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         dst_area_id: String,
         mapping_data: Vec<serde_json::Value>,
     ) -> ServiceResult<usize> {
-        info!(target: "feagi-services", "Updating cortical mapping: {} -> {} with {} connections",
+        debug!(target: "feagi-services", "Updating cortical mapping: {} -> {} with {} connections",
               src_area_id, dst_area_id, mapping_data.len());
 
         // Convert String to CorticalID
@@ -2381,7 +2414,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     &dst_area_id,
                     &normalized_mapping_data,
                 )?;
-                info!(
+                debug!(
                     target: "feagi-services",
                     "[GENOME-UPDATE] Updated cortical_mapping_dst for {} -> {} (connections={})",
                     src_area_id,
@@ -2936,6 +2969,8 @@ mod tests {
         {
             let mut manager = connectome.write();
             manager.upsert_morphology("m_old".to_string(), morph);
+            manager.add_cortical_area(src_area.clone()).unwrap();
+            manager.add_cortical_area(dst_area.clone()).unwrap();
         }
 
         let current_genome = Arc::new(RwLock::new(Some(genome)));
@@ -2980,6 +3015,20 @@ mod tests {
             let mgr = connectome.read();
             assert!(!mgr.get_morphologies().contains("m_old"));
             assert!(mgr.get_morphologies().contains("m_new"));
+            let conn_src = mgr.get_cortical_area(&src_id).expect("connectome src");
+            let conn_dstmap = conn_src
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+                .expect("connectome cortical_mapping_dst");
+            let conn_rules = conn_dstmap
+                .get(&dst_id.as_base_64())
+                .and_then(|v| v.as_array())
+                .expect("connectome rules");
+            assert_eq!(
+                conn_rules[0].get("morphology_id").and_then(|v| v.as_str()),
+                Some("m_new")
+            );
         }
 
         Ok(())

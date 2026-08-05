@@ -31,7 +31,7 @@ use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tracing::{info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
 
@@ -327,7 +327,7 @@ impl GenomeServiceImpl {
             let burst_runner_write = burst_runner.write();
             burst_runner_write.refresh_cortical_id_mappings(mappings);
             burst_runner_write.refresh_visualization_granularities(chunk_sizes);
-            info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
+            debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
 
@@ -630,6 +630,27 @@ impl GenomeService for GenomeServiceImpl {
         }
         if let Some(root_id) = root_region_id {
             genome.metadata.brain_regions_root = Some(root_id);
+        }
+
+        // Align morphology registry and cortical mappings with the live connectome before export.
+        // Runtime edits (including morphology rename) are applied through ConnectomeManager first.
+        {
+            let manager = self.connectome.read();
+            genome.morphologies = manager.get_morphologies().clone();
+            for cortical_id in manager.get_cortical_area_ids() {
+                let Some(conn_area) = manager.get_cortical_area(cortical_id) else {
+                    continue;
+                };
+                let Some(genome_area) = genome.cortical_areas.get_mut(cortical_id) else {
+                    continue;
+                };
+                if let Some(dstmap) = conn_area.properties.get("cortical_mapping_dst") {
+                    genome_area.properties.insert(
+                        "cortical_mapping_dst".to_string(),
+                        dstmap.clone(),
+                    );
+                }
+            }
         }
 
         // Use the full RuntimeGenome saver (produces flat format v3.0)
@@ -3863,7 +3884,7 @@ impl GenomeServiceImpl {
             let mappings = manager.get_all_cortical_idx_to_id_mappings();
             let mapping_count = mappings.len();
             burst_runner.write().refresh_cortical_id_mappings(mappings);
-            info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
+            debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
 
         // CRITICAL PERFORMANCE: For large areas, skip expensive get_synapse_count_in_area

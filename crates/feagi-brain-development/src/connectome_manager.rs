@@ -434,7 +434,7 @@ impl ConnectomeManager {
     }
 
     /// Refresh the cortical mappings hash.
-    fn refresh_cortical_mappings_hash(&self) {
+    pub fn refresh_cortical_mappings_hash(&self) {
         let hash = self.compute_cortical_mappings_hash();
         self.update_state_hashes(None, None, None, None, Some(hash));
     }
@@ -1130,7 +1130,7 @@ impl ConnectomeManager {
             };
 
             let Some(src_region_id) = self.brain_regions.find_region_containing_area(src_id) else {
-                warn!(
+                debug!(
                     target: "feagi-bdu",
                     "Skipping region IO for source area {} (not in any region)",
                     src_id.as_base_64()
@@ -1432,8 +1432,8 @@ impl ConnectomeManager {
                 let src_value = serde_json::json!(src_cortical_idx);
                 if !arr.contains(&src_value) {
                     arr.push(src_value);
-                    info!(target: "feagi-bdu",
-                        "✓ Added upstream area idx={} to cortical area '{}'",
+                    debug!(target: "feagi-bdu",
+                        "Added upstream area idx={} to cortical area '{}'",
                         src_cortical_idx, target_cortical_id.as_base_64()
                     );
                 }
@@ -1904,7 +1904,7 @@ impl ConnectomeManager {
             &mapping_data,
         )?;
 
-        info!(target: "feagi-bdu", "Updating cortical mapping: {} -> {}", src_area_id, dst_area_id);
+        debug!(target: "feagi-bdu", "Updating cortical mapping: {} -> {}", src_area_id, dst_area_id);
 
         {
             // Get source area (must exist)
@@ -1946,7 +1946,7 @@ impl ConnectomeManager {
                     dst_area_id.as_base_64(),
                     serde_json::Value::Array(mapping_data.clone()),
                 );
-                info!(target: "feagi-bdu", "Updated mapping from {} to {} with {} connections",
+                debug!(target: "feagi-bdu", "Updated mapping from {} to {} with {} connections",
                       src_area_id, dst_area_id, mapping_data.len());
             }
         }
@@ -1975,7 +1975,7 @@ impl ConnectomeManager {
     ) -> BduResult<usize> {
         use tracing::info;
 
-        info!(target: "feagi-bdu", "Regenerating synapses: {} -> {}", src_area_id, dst_area_id);
+        debug!(target: "feagi-bdu", "Regenerating synapses: {} -> {}", src_area_id, dst_area_id);
 
         let mapping_rules_len = self
             .cortical_areas
@@ -2196,7 +2196,7 @@ impl ConnectomeManager {
             .and_then(|map| map.get(&dst_area_id.as_base_64()))
             .is_some();
 
-        info!(target: "feagi-bdu",
+        debug!(target: "feagi-bdu",
             "Mapping result: {} synapses, {} -> {} (mapping_exists={}, will {}update upstream)",
             synapse_count,
             src_area_id.as_base_64(),
@@ -2329,7 +2329,7 @@ impl ConnectomeManager {
             let _was_registered = npu.unregister_stdp_mapping(src_idx, dst_idx);
         }
 
-        info!(
+        debug!(
             target: "feagi-bdu",
             "Created {} new synapses: {} -> {}",
             synapse_count,
@@ -2351,7 +2351,7 @@ impl ConnectomeManager {
                 synapse_count
             );
         } else {
-            info!(
+            debug!(
                 target: "feagi-bdu",
                 "Skipped synapse index rebuild for mapping {} -> {} (created={}, pruned=0; index rebuilt during synaptogenesis)",
                 src_area_id,
@@ -3587,9 +3587,9 @@ impl ConnectomeManager {
 
             match morphology.morphology_type {
                 feagi_evolutionary::MorphologyType::Functions => {
-                    tracing::warn!(
+                    tracing::debug!(
                         target: "feagi-bdu",
-                        "🔍 DEBUG apply_single_morphology_rule: Functions type, morphology_id={}, calling apply_function_morphology",
+                        "apply_single_morphology_rule: Functions type, morphology_id={}, calling apply_function_morphology",
                         morphology_id
                     );
                     // Function-based morphologies (projector, memory, block_to_block, etc.)
