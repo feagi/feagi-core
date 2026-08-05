@@ -96,14 +96,10 @@ impl MortonSpatialHash {
 
         let morton_code = morton_encode_3d(x, y, z);
 
-        // Check if coordinate exists in bitmap
         {
             let bitmaps = self.cortical_bitmaps.read().unwrap();
-            if let Some(bitmap) = bitmaps.get(cortical_area) {
-                if !bitmap.contains(morton_code as u32) {
-                    return None;
-                }
-            } else {
+            let bitmap = bitmaps.get(cortical_area)?;
+            if !bitmap.contains(morton_code as u32) {
                 return None;
             }
         }
