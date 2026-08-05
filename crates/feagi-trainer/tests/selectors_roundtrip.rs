@@ -18,13 +18,13 @@ use feagi_trainer::contracts::prediction_record::TypedPrediction;
 use feagi_sensorimotor::data_types::Percentage;
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 use feagi_sensorimotor::ConnectorCache;
-use feagi_structures::genomic::cortical_area::descriptors::{
+use feagi_genomic_context::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
 const BINS: u32 = 10;
@@ -56,7 +56,7 @@ fn population_profile(channels: u32) -> EncoderBindingProfile {
     }
 }
 
-fn count_input_id() -> feagi_structures::genomic::cortical_area::CorticalID {
+fn count_input_id() -> feagi_genomic_context::cortical_area::CorticalID {
     SensoryCorticalUnit::get_cortical_ids_array_for_count_input_with_parameters(
         FrameChangeHandling::Absolute,
         PercentageNeuronPositioning::Linear,
@@ -64,7 +64,7 @@ fn count_input_id() -> feagi_structures::genomic::cortical_area::CorticalID {
     )[0]
 }
 
-fn count_output_id() -> feagi_structures::genomic::cortical_area::CorticalID {
+fn count_output_id() -> feagi_genomic_context::cortical_area::CorticalID {
     MotorCorticalUnit::get_cortical_ids_array_for_count_output_with_parameters(
         FrameChangeHandling::Absolute,
         PercentageNeuronPositioning::Linear,

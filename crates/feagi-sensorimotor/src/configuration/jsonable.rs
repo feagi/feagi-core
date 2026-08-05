@@ -21,14 +21,14 @@ use crate::neuron_voxel_coding::xyzp::encoders::{
 };
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::WrappedIOData;
-use feagi_structures::genomic::cortical_area::descriptors::{
+use feagi_genomic_context::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
 };
-use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

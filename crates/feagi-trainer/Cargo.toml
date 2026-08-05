@@ -39,6 +39,7 @@ feagi-dataset-contracts = { workspace = true }
 # FEAGI substrate: neuron-voxel data types and the coder/ConnectorCache layer.
 # The encoder/decoder plugins are selectors over these (ADR-006, Appendix B.1).
 feagi-sensorimotor = { path = "../feagi-sensorimotor" }
+feagi-genomic-context = { path = "../feagi-genomic-context" }
 
 # Remote/ZMQ runtime path (optional; behind `remote-runtime`). The open crate stays a pure
 # ZMQ/`feagi-agent` client — no Composer/REST coupling (ADR-006).

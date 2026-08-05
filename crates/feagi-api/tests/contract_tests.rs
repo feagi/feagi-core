@@ -63,13 +63,13 @@ use feagi_services::types::CreateCorticalAreaParams;
 #[cfg(feature = "feagi-agent")]
 use feagi_services::RuntimeService;
 #[cfg(feature = "feagi-agent")]
-use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
 #[cfg(feature = "feagi-agent")]
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 #[cfg(feature = "feagi-agent")]
-use feagi_structures::genomic::SensoryCorticalUnit;
+use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::collections::HashMap;

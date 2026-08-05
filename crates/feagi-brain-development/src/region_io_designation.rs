@@ -13,8 +13,8 @@ use std::collections::HashSet;
 
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::{BduError, BduResult};
-use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::brain_region::BrainRegion;
+use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_genomic_context::brain_region::BrainRegion;
 
 /// Genome / API property: cortical_area areas (base64) intended as region inputs (integration contract).
 pub const DESIGNATED_INPUTS_KEY: &str = "designated_inputs";
@@ -197,12 +197,12 @@ pub fn validate_cross_region_mapping_proposal(
 mod tests {
     use super::*;
     use crate::connectome_manager::ConnectomeManager;
-    use feagi_structures::genomic::brain_region::RegionID;
+    use feagi_genomic_context::brain_region::RegionID;
     use feagi_genome_definitions::{
         CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
     };
-    use feagi_structures::genomic::brain_region::BrainRegion;
-    use feagi_structures::genomic::brain_region::RegionType;
+    use feagi_genomic_context::brain_region::BrainRegion;
+    use feagi_genomic_context::brain_region::RegionType;
 
     fn projector_rule() -> serde_json::Value {
         serde_json::json!({

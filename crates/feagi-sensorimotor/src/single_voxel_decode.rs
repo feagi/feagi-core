@@ -486,7 +486,7 @@ fn decode_pose_estimation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, PercentageNeuronPositioning,
     };
 

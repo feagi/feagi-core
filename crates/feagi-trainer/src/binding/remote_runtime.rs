@@ -34,7 +34,7 @@ use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscribe
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
-use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
+use feagi_genomic_context::cortical_area::{CoreCorticalType, CorticalID};
 use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
 };

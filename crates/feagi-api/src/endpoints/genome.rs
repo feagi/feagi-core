@@ -512,8 +512,8 @@ pub async fn post_amalgamation_destination(
         })?;
 
         let target_parent_region_id = match area_type {
-            feagi_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)
-            | feagi_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_) => {
+            feagi_genomic_context::cortical_area::CorticalAreaType::BrainInput(_)
+            | feagi_genomic_context::cortical_area::CorticalAreaType::BrainOutput(_) => {
                 // IPU/OPU areas go to root region
                 match root_region_id.as_ref() {
                     Some(root_id) => {
@@ -1695,10 +1695,10 @@ pub async fn get_amalgamation_history_exact(
 pub async fn get_cortical_template(
     State(_state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
     };
-    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+    use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
     use serde_json::json;
 
     let mut templates = HashMap::new();
@@ -1768,7 +1768,7 @@ pub async fn get_cortical_template(
         //   (frame_change_handling, percentage_neuron_positioning) combination
         // - extracting the IO configuration flag from each cortical_area ID
         // - grouping supported_data_types per subunit index
-        use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+        use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
         use serde_json::{Map, Value};
         use std::collections::HashMap as StdHashMap;
 
@@ -1886,7 +1886,7 @@ pub async fn get_cortical_template(
         let num_areas = sensory_unit.get_number_cortical_areas();
         let topology = sensory_unit.get_unit_default_topology();
 
-        use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+        use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
         use serde_json::{Map, Value};
         use std::collections::HashMap as StdHashMap;
 

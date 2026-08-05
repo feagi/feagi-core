@@ -45,10 +45,10 @@ use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAre
 use crate::types::{BduError, BduResult};
 use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
 use feagi_npu_neural::types::NeuronId;
-use feagi_structures::genomic::cortical_area::{
+use feagi_genomic_context::cortical_area::{
     CoreCorticalType, CorticalAreaType, CorticalID, CustomCorticalType,
 };
-use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+use feagi_genomic_context::positioning::GenomeCoordinate3D;
 
 // State manager access for fatigue calculation
 // Note: feagi-state-manager is always available when std is enabled (it's a default feature)
@@ -697,7 +697,7 @@ impl ConnectomeManager {
 
         // CRITICAL: Reserve cortical_idx 0..=6 for invariant core areas.
         // Use feagi-data-processing types as single source of truth
-        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_genomic_context::cortical_area::CoreCorticalType;
 
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
@@ -5175,7 +5175,7 @@ impl ConnectomeManager {
     pub fn ensure_core_cortical_areas(&mut self) -> BduResult<()> {
         info!(target: "feagi-bdu", "🔧 [CORE-AREA] Ensuring core cortical areas exist...");
 
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalAreaType,
         };
 
@@ -6400,7 +6400,7 @@ impl ConnectomeManager {
                     if let Some(type_str) = value.as_str() {
                         // Note: RegionType is currently a placeholder (Undefined only)
                         // Specific region types will be added in the future
-                        region.region_type = feagi_structures::genomic::RegionType::Undefined;
+                        region.region_type = feagi_genomic_context::brain_region::RegionType::Undefined;
                         debug!(target: "feagi-bdu", "Updated brain region {} type = {}", region_id, type_str);
                     }
                 }
@@ -6973,7 +6973,7 @@ impl std::fmt::Debug for ConnectomeManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_genomic_context::cortical_area::CoreCorticalType;
 
     #[test]
     fn test_singleton_instance() {
@@ -6991,7 +6991,7 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         let cortical_id = CorticalID::try_from_bytes(b"cst_add_").unwrap(); // Use unique custom ID
@@ -7021,7 +7021,7 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         let cortical_id = CorticalID::try_from_bytes(b"cst_look").unwrap(); // Use unique custom ID
@@ -7056,7 +7056,7 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
@@ -7093,7 +7093,7 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         // Use a unique ID only for this test to avoid collisions with other tests (e.g. Power)
@@ -7133,12 +7133,12 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        let region_id = feagi_structures::genomic::brain_regions::RegionID::new();
+        let region_id = feagi_genomic_context::brain_region::RegionID::new();
         let region_id_str = region_id.to_string();
         let root = BrainRegion::new(
             region_id,
             "Root".to_string(),
-            feagi_structures::genomic::brain_regions::RegionType::Undefined,
+            feagi_genomic_context::brain_region::RegionType::Undefined,
         )
         .unwrap();
 
@@ -7168,7 +7168,7 @@ mod tests {
         let mut manager = ConnectomeManager::new_for_testing_with_npu(npu.clone());
 
         // First create a cortical area to add neurons to
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         let cortical_id = CorticalID::try_from_bytes(b"cst_syn_").unwrap(); // Use unique custom ID
@@ -7252,7 +7252,7 @@ mod tests {
         // synapse regeneration treats "no mapping rules" as an error.
         let mut manager = ConnectomeManager::new_for_testing();
 
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
 
@@ -7331,7 +7331,7 @@ mod tests {
         use feagi_npu_burst_engine::RustNPU;
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         use std::sync::Arc;
@@ -7393,7 +7393,7 @@ mod tests {
         use feagi_npu_burst_engine::RustNPU;
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         use std::sync::Arc;
@@ -7485,7 +7485,7 @@ mod tests {
         use feagi_npu_burst_engine::RustNPU;
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         use std::sync::Arc;
@@ -7600,7 +7600,7 @@ mod tests {
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, CorticalID,
         };
 
@@ -7624,7 +7624,7 @@ mod tests {
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
             CorticalAreaType::Custom(
-                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
             ),
         )
         .unwrap();
@@ -7639,7 +7639,7 @@ mod tests {
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
             CorticalAreaType::Custom(
-                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
             ),
         )
         .unwrap();
@@ -7704,7 +7704,7 @@ mod tests {
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
         };
         use std::sync::Arc;
@@ -7728,7 +7728,7 @@ mod tests {
             CorticalAreaDimensions::new(1, 1, 1).unwrap(),
             (0, 0, 0).into(),
             CorticalAreaType::Custom(
-                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
             ),
         )
         .unwrap();
@@ -7739,7 +7739,7 @@ mod tests {
             CorticalAreaDimensions::new(1, 1, 1).unwrap(),
             (0, 0, 0).into(),
             CorticalAreaType::Custom(
-                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
             ),
         )
         .unwrap();
@@ -7886,7 +7886,7 @@ mod tests {
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
             MemoryCorticalType,
         };
@@ -7995,7 +7995,7 @@ mod tests {
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
         };
         use std::sync::Arc;
@@ -8088,7 +8088,7 @@ mod tests {
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
             MemoryCorticalType,
         };
@@ -8142,7 +8142,7 @@ mod tests {
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
             CorticalAreaType::Custom(
-                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
             ),
         )
         .unwrap();
@@ -8211,7 +8211,7 @@ mod tests {
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genomic_context::cortical_area::{
             CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
 
@@ -8245,14 +8245,14 @@ mod tests {
                 reward,
                 "reward",
                 CorticalAreaType::Custom(
-                    feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                    feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
                 ),
             ),
             (
                 pain,
                 "pain",
                 CorticalAreaType::Custom(
-                    feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                    feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
                 ),
             ),
         ] {

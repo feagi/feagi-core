@@ -7,13 +7,14 @@ use crate::common::ApiState;
 use base64::{engine::general_purpose, Engine as _};
 use feagi_config::load_config;
 use feagi_services::types::CreateCorticalAreaParams;
-use feagi_structures::genomic::cortical_area::descriptors::{
+use feagi_genomic_context::cortical_area::descriptors::{
     CorticalSubUnitIndex, CorticalUnitIndex,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit, UnitTopology};
+use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_genomic_context::cortical_unit::sensor_cortical_unit::UnitTopology;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use tracing::{info, warn};
@@ -1446,8 +1447,8 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
 #[cfg(test)]
 mod count_output_registration_tests {
     use super::per_channel_motor_dimensions_for_registration;
-    use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
-    use feagi_structures::genomic::MotorCorticalUnit;
+    use feagi_genomic_context::cortical_area::descriptors::CorticalSubUnitIndex;
+    use feagi_genomic_context::cortical_unit::MotorCorticalUnit;
     use serde_json::json;
 
     #[test]
@@ -1543,11 +1544,11 @@ mod count_output_registration_tests {
 #[cfg(test)]
 mod sensory_registration_frame_mode_tests {
     use super::derive_sensory_cortical_ids_from_device_registrations;
-    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
-    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
+    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, PercentageNeuronPositioning,
     };
-    use feagi_structures::genomic::SensoryCorticalUnit;
+    use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
     use serde_json::json;
 
     #[test]

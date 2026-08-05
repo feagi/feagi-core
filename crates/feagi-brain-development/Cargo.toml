@@ -16,6 +16,7 @@ name = "feagi_brain_development"
 # Core types from existing FEAGI crates
 feagi-npu-neural = { version = "0.0.14", path = "../feagi-npu/neural" } # For types (CorticalArea, Dimensions, etc.)
 feagi-evolutionary = { version = "0.0.14", path = "../feagi-evolutionary" }
+feagi-genomic-context = { version = "0.0.14", path = "../feagi-genomic-context" }
 feagi-npu-plasticity = { version = "0.0.14", path = "../feagi-npu/plasticity", optional = true }
 feagi-state-manager = { version = "0.0.14", path = "../feagi-state-manager", default-features = false }
 

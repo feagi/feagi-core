@@ -8,7 +8,7 @@ use crate::data_types::{GazeProperties, ImageFilteringSettings};
 use crate::feedbacks::feedback_registrar::FeedbackRegistrar;
 use crate::feedbacks::feedback_registration_targets::FeedbackRegistrationTargets;
 use crate::wrapped_io_data::WrappedIOData;
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::{FeagiDataError, FeagiSignalIndex};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};

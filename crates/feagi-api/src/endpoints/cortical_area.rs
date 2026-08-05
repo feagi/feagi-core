@@ -12,9 +12,9 @@ use std::collections::HashMap;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use feagi_evolutionary::extract_memory_properties;
-use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
-use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_genomic_context::cortical_area::descriptors::CorticalSubUnitIndex;
+use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
 use utoipa::{IntoParams, ToSchema};
 
 // ============================================================================
@@ -801,7 +801,7 @@ pub async fn post_cortical_area(
     Json(request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<serde_json::Value>> {
     use feagi_services::types::CreateCorticalAreaParams;
-    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+    use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
 
     // ARCHITECTURE: Use genome_service (proper entry point) instead of connectome_service
     let genome_service = state.genome_service.as_ref();
@@ -1459,7 +1459,7 @@ pub async fn post_clone(
 ) -> ApiResult<Json<HashMap<String, String>>> {
     use base64::{engine::general_purpose, Engine as _};
     use feagi_services::types::CreateCorticalAreaParams;
-    use feagi_structures::genomic::cortical_area::CorticalID;
+    use feagi_genomic_context::cortical_area::CorticalID;
     use serde_json::Value;
     use std::time::{SystemTime, UNIX_EPOCH};
 

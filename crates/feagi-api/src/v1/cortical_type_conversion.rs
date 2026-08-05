@@ -12,8 +12,8 @@ Licensed under the Apache License, Version 2.0
 
 use super::cortical_area_dtos::CorticalTypeInfo;
 use feagi_brain_development::models::CorticalAreaExt;
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
-use feagi_structures::genomic::cortical_area::CorticalArea;
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+use feagi_genomic_data::cortical_area::CorticalArea;
 use feagi_genome_definitions::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
 // Note: CorticalTypeAdapter removed - use feagi_structures::CorticalID directly
 
@@ -148,9 +148,9 @@ fn frame_handling_to_string(frame_handling: &FrameChangeHandling) -> String {
 
 /// Convert PercentageNeuronPositioning enum to string
 fn positioning_to_string(
-    positioning: &feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning,
+    positioning: &feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning,
 ) -> String {
-    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 
     match positioning {
         PercentageNeuronPositioning::Linear => "Linear".to_string(),

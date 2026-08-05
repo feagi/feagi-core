@@ -6,11 +6,11 @@ use crate::data_types::Percentage;
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::decode_unsigned_percentage_from_linear_neurons;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::genomic::cortical_area::descriptors::{
+use feagi_genomic_context::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
@@ -260,10 +260,10 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
 mod tests {
     use super::*;
     use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
-    use feagi_structures::genomic::cortical_area::descriptors::{
+    use feagi_genomic_context::cortical_area::descriptors::{
         CorticalChannelCount, CorticalSubUnitIndex, CorticalUnitIndex,
     };
-    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
     };
     use feagi_structures::neuron_voxels::xyzp::{

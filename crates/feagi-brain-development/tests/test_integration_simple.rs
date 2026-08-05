@@ -7,7 +7,7 @@
 use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_burst_engine::TracingMutex;
-use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
+use feagi_genomic_context::cortical_area::CorticalAreaDimensions;
 use std::sync::Arc;
 
 /// Helper to create an isolated test manager with NPU

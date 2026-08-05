@@ -27,9 +27,9 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{debug, error, info, trace, warn};
 // Build brain region structure following Python's normalize_brain_region_membership()
-use feagi_structures::genomic::brain_region::BrainRegion;
+use feagi_genomic_context::brain_region::BrainRegion;
 // Build brain region structure following Python's normalize_brain_region_membership()
-use feagi_structures::genomic::brain_region::RegionType;
+use feagi_genomic_context::brain_region::RegionType;
 
 /// Label for the CUSTOM/MEMORY subregion when the genome JSON has no `brain_regions` and
 /// neuroembryogenesis must synthesize one. Prefer `metadata.genome_title` so Hub replace/upload
@@ -197,7 +197,7 @@ impl Neuroembryogenesis {
 
         // Stage 2: Create neurons for each area (Neurogenesis)
         // CRITICAL: Create core area neurons FIRST to ensure deterministic IDs
-        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_genomic_context::cortical_area::CoreCorticalType;
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
@@ -504,7 +504,7 @@ impl Neuroembryogenesis {
                     "CORE"
                 } else if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
                     // Use cortical_area type from CorticalID
-                    use feagi_structures::genomic::cortical_area::CorticalAreaType;
+                    use feagi_genomic_context::cortical_area::CorticalAreaType;
                     match cortical_type {
                         CorticalAreaType::Core(_) => "CORE",
                         CorticalAreaType::BrainInput(_) => "IPU",
@@ -843,7 +843,7 @@ impl Neuroembryogenesis {
         info!(target: "feagi-bdu","  Expected innate neurons from genome: {}", expected_neurons);
 
         // CRITICAL: Identify core areas first to ensure deterministic neuron IDs
-        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_genomic_context::cortical_area::CoreCorticalType;
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
@@ -1249,7 +1249,7 @@ impl Neuroembryogenesis {
         &mut self,
         genome: &RuntimeGenome,
     ) -> BduResult<()> {
-        use feagi_structures::genomic::cortical_area::CorticalAreaType;
+        use feagi_genomic_context::cortical_area::CorticalAreaType;
         let mut repaired = 0usize;
 
         for (memory_id, memory_area) in genome.cortical_areas.iter() {
@@ -1480,7 +1480,7 @@ impl Neuroembryogenesis {
     /// - OUTPUT: Any area in the region that connects to an area OUTSIDE the region
     /// - INPUT: Any area in the region that receives connection from OUTSIDE the region
     fn analyze_region_io(
-        region_area_ids: &[feagi_structures::genomic::cortical_area::CorticalID],
+        region_area_ids: &[feagi_genomic_context::cortical_area::CorticalID],
         all_cortical_areas: &std::collections::HashMap<CorticalID, CorticalArea>,
     ) -> (Vec<String>, Vec<String>) {
         let area_set: std::collections::HashSet<_> = region_area_ids.iter().cloned().collect();
@@ -1559,7 +1559,7 @@ impl Neuroembryogenesis {
 mod tests {
     use super::*;
     use feagi_evolutionary::create_genome_with_core_morphologies;
-    use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
+    use feagi_genomic_context::cortical_area::CorticalAreaDimensions;
 
     #[test]
     fn test_neuroembryogenesis_creation() {

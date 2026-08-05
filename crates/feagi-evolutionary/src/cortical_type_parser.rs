@@ -17,7 +17,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::types::EvoError;
-use feagi_structures::genomic::cortical_area::CorticalAreaType;
+use feagi_genomic_context::cortical_area::CorticalAreaType;
 use std::collections::HashMap;
 
 /// Parse CorticalAreaType from genome properties
@@ -43,23 +43,23 @@ pub fn parse_cortical_type(
     // Parse base type from cortical_group
     let cortical_type = match cortical_group.to_uppercase().as_str() {
         "IPU" => CorticalAreaType::BrainInput(
-            feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::CartesianPlane(
-                feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
+            feagi_genomic_context::cortical_area::IOCorticalAreaConfigurationFlag::CartesianPlane(
+                feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
             )
         ),
         "OPU" => CorticalAreaType::BrainOutput(
-            feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::CartesianPlane(
-                feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
+            feagi_genomic_context::cortical_area::IOCorticalAreaConfigurationFlag::CartesianPlane(
+                feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
             )
         ),
         "CORE" => CorticalAreaType::Core(
-            feagi_structures::genomic::cortical_area::CoreCorticalType::Death
+            feagi_genomic_context::cortical_area::CoreCorticalType::Death
         ),
         "CUSTOM" => CorticalAreaType::Custom(
-            feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire
+            feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire
         ),
         "MEMORY" => CorticalAreaType::Memory(
-            feagi_structures::genomic::cortical_area::MemoryCorticalType::Memory
+            feagi_genomic_context::cortical_area::MemoryCorticalType::Memory
         ),
         _ => return Err(EvoError::InvalidGenome(format!("Unknown cortical_group: {}", cortical_group))),
     };

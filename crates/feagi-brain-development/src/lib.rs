@@ -65,7 +65,7 @@ pub use types::{AreaId, BduError, BduResult, Weight};
 pub use feagi_genome_definitions::{
     CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
 };
-pub use feagi_structures::genomic::brain_region::BrainRegion;
+pub use feagi_genomic_context::brain_region::BrainRegion;
 pub mod models;
 pub use models::{BrainRegionHierarchy, CorticalAreaExt};
 
@@ -86,7 +86,7 @@ pub use cortical_type_utils::{
     describe_cortical_type, get_io_data_type, uses_absolute_frames, uses_cartesian_encoding,
     uses_incremental_frames, uses_percentage_encoding, validate_connectivity,
 };
-pub use feagi_structures::genomic::brain_region::RegionType;
+pub use feagi_genomic_context::brain_region::RegionType;
 
 #[cfg(test)]
 mod tests {

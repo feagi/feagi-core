@@ -4,11 +4,11 @@ use crate::data_types::descriptors::SpatialPointerProperties;
 use crate::data_types::{Percentage, Percentage3D, SignedPercentage, SignedPercentage3D};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+use feagi_genomic_context::cortical_area::descriptors::CorticalChannelCount;
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, IOCorticalAreaConfigurationFlag,
 };
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
 };
@@ -460,13 +460,13 @@ mod tests {
     use crate::data_types::descriptors::SpatialPointerProperties;
     use crate::data_types::{Percentage3D, SignedPercentage3D};
     use crate::wrapped_io_data::WrappedIOData;
-    use feagi_structures::genomic::cortical_area::descriptors::{
+    use feagi_genomic_context::cortical_area::descriptors::{
         CorticalChannelCount, CorticalSubUnitIndex, CorticalUnitIndex,
     };
-    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         spatial_pointer_io_flag, FrameChangeHandling, PercentageNeuronPositioning,
     };
-    use feagi_structures::genomic::cortical_area::CorticalID;
+    use feagi_genomic_context::cortical_area::CorticalID;
     use feagi_structures::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
     };

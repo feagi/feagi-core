@@ -14,10 +14,10 @@ use std::time::Instant;
 use feagi_sensorimotor::data_types::Percentage;
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 use feagi_sensorimotor::ConnectorCache;
-use feagi_structures::genomic::cortical_area::descriptors::{
+use feagi_genomic_context::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;

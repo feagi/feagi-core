@@ -278,14 +278,14 @@ impl CorticalAreaExt for CorticalArea {
     fn is_input_area(&self) -> bool {
         matches!(
             self.cortical_type,
-            feagi_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)
+            feagi_genomic_context::cortical_area::CorticalAreaType::BrainInput(_)
         )
     }
 
     fn is_output_area(&self) -> bool {
         matches!(
             self.cortical_type,
-            feagi_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_)
+            feagi_genomic_context::cortical_area::CorticalAreaType::BrainOutput(_)
         )
     }
 
@@ -296,7 +296,7 @@ impl CorticalAreaExt for CorticalArea {
             .map(|s| s.to_string())
             .or_else(|| {
                 // Derive from cortical_type if not in properties
-                use feagi_structures::genomic::cortical_area::CorticalAreaType;
+                use feagi_genomic_context::cortical_area::CorticalAreaType;
                 match self.cortical_type {
                     CorticalAreaType::BrainInput(_) => Some("IPU".to_string()),
                     CorticalAreaType::BrainOutput(_) => Some("OPU".to_string()),
@@ -329,7 +329,7 @@ impl CorticalAreaExt for CorticalArea {
     fn psp_uniform_distribution(&self) -> bool {
         let default = matches!(
             self.cortical_type,
-            feagi_structures::genomic::cortical_area::CorticalAreaType::Memory(_)
+            feagi_genomic_context::cortical_area::CorticalAreaType::Memory(_)
         );
         self.get_bool_property("psp_uniform_distribution", default)
     }

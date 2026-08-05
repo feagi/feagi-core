@@ -20,7 +20,7 @@ path for more realistic integration tests.
 
 use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
-use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
+use feagi_genomic_context::cortical_area::CorticalAreaDimensions;
 use serde_json::json;
 use std::sync::Arc;
 

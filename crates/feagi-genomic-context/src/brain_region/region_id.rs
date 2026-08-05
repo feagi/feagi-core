@@ -35,7 +35,7 @@ impl RegionID {
     /// # Examples
     ///
     /// ```
-    /// use feagi_structures::genomic::brain_regions::RegionID;
+    /// use feagi_genomic_context::brain_region::RegionID;
     ///
     /// let region_id = RegionID::new();
     /// assert_ne!(region_id.to_string(), "");
@@ -51,7 +51,7 @@ impl RegionID {
     /// # Examples
     ///
     /// ```
-    /// use feagi_structures::genomic::brain_regions::RegionID;
+    /// use feagi_genomic_context::brain_region::RegionID;
     /// use uuid::Uuid;
     ///
     /// let uuid = Uuid::now_v7();
@@ -69,7 +69,7 @@ impl RegionID {
     /// # Examples
     ///
     /// ```
-    /// use feagi_structures::genomic::brain_regions::RegionID;
+    /// use feagi_genomic_context::brain_region::RegionID;
     ///
     /// let region_id = RegionID::from_string("550e8400-e29b-41d4-a716-446655440000").unwrap();
     /// assert_eq!(region_id.to_string(), "550e8400-e29b-41d4-a716-446655440000");
@@ -87,7 +87,7 @@ impl RegionID {
     /// # Examples
     ///
     /// ```
-    /// use feagi_structures::genomic::brain_regions::RegionID;
+    /// use feagi_genomic_context::brain_region::RegionID;
     ///
     /// let region_id = RegionID::new();
     /// let uuid = region_id.as_uuid();
@@ -101,7 +101,7 @@ impl RegionID {
     /// # Examples
     ///
     /// ```
-    /// use feagi_structures::genomic::brain_regions::RegionID;
+    /// use feagi_genomic_context::brain_region::RegionID;
     ///
     /// let region_id = RegionID::new();
     /// let bytes = region_id.as_bytes();

@@ -596,6 +596,8 @@ version = "0.0.14"
 dependencies = [
  "chrono",
  "env_logger",
+ "feagi-genomic-context",
+ "feagi-genomic-data",
  "feagi-observability",
  "js-sys",
  "rand",

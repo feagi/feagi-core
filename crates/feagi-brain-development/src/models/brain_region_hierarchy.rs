@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 use crate::types::{BduError, BduResult};
-use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::brain_region::BrainRegion;
+use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_genomic_context::brain_region::BrainRegion;
 
 /// Hierarchical tree structure for brain regions
 ///
@@ -422,8 +422,8 @@ impl Default for BrainRegionHierarchy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_structures::genomic::brain_region::RegionID;
-    use feagi_structures::genomic::brain_region::RegionType;
+    use feagi_genomic_context::brain_region::RegionID;
+    use feagi_genomic_context::brain_region::RegionType;
 
     #[test]
     fn test_hierarchy_creation() {

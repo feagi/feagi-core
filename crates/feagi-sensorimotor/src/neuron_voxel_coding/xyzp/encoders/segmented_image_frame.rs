@@ -6,10 +6,10 @@ use crate::data_types::descriptors::SegmentedImageFrameProperties;
 use crate::data_types::SegmentedImageFrame;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::genomic::cortical_area::descriptors::{
+use feagi_genomic_context::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex,
 };
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
 };

@@ -15,6 +15,8 @@ feagi-services = { version = "0.0.14", path = "../feagi-services", default-featu
 feagi-npu-neural = { version = "0.0.14", path = "../feagi-npu/neural", default-features = false } # For types
 feagi-npu-plasticity = { version = "0.0.14", path = "../feagi-npu/plasticity", optional = true } # For memory stats cache
 feagi-evolutionary = { version = "0.0.14", path = "../feagi-evolutionary" } # For embedded default genomes
+feagi-genomic-context = { version = "0.0.14", path = "../feagi-genomic-context" }
+feagi-genomic-data = { version = "0.0.14", path = "../feagi-genomic-data" }
 feagi-io = { version = "0.0.14", path = "../feagi-io", optional = true, features = ["zmq-transport", "websocket-transport-std"] } # For transport primitives and domain logic
 feagi-brain-development = { version = "0.0.14", path = "../feagi-brain-development", optional = true } # For examples
 feagi-npu-burst-engine = { version = "0.0.14", path = "../feagi-npu/burst-engine", default-features = false, optional = true } # For examples

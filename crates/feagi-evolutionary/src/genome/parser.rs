@@ -46,14 +46,14 @@ use std::collections::HashMap;
 use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
-use feagi_structures::genomic::brain_region::RegionID;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genomic_context::brain_region::RegionID;
+use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_genome_definitions::{
     CorticalArea, CorticalAreaDimensions as Dimensions,
 };
 use feagi_genome_definitions::descriptors::GenomeCoordinate3D;
-use feagi_structures::genomic::brain_region::BrainRegion;
-use feagi_structures::genomic::brain_region::RegionType;
+use feagi_genomic_context::brain_region::BrainRegion;
+use feagi_genomic_context::brain_region::RegionType;
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]
@@ -210,7 +210,7 @@ fn convert_dstmap_keys_to_base64(dstmap: &Value) -> Value {
 /// Handles both old 6-char format and new base64 format
 /// CRITICAL: Uses feagi-data-processing types as single source of truth for core areas
 pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
-    use feagi_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_genomic_context::cortical_area::CoreCorticalType;
 
     // Try base64 first (new format)
     if let Ok(cortical_id) = CorticalID::try_from_base_64(id_str) {
@@ -897,7 +897,7 @@ mod tests {
     fn test_string_to_cortical_id_legacy_power_shorthand() {
         // Older FEAGI genomes may encode the power core area as "___pwr" (6-char shorthand).
         // Migration must map this deterministically to the core Power cortical_area ID.
-        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_genomic_context::cortical_area::CoreCorticalType;
         let id = string_to_cortical_id("___pwr").unwrap();
         assert_eq!(
             id.as_base_64(),
@@ -908,7 +908,7 @@ mod tests {
     #[test]
     fn test_string_to_cortical_id_legacy_power_padded() {
         // 8-char padded form ___pwr__ (from 6-char padding in legacy flat genomes).
-        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_genomic_context::cortical_area::CoreCorticalType;
         let id = string_to_cortical_id("___pwr__").unwrap();
         assert_eq!(
             id.as_base_64(),
@@ -939,7 +939,7 @@ mod tests {
         let area = &parsed.cortical_areas[0];
 
         // Old type system (deprecated)
-        use feagi_structures::genomic::cortical_area::CorticalAreaType;
+        use feagi_genomic_context::cortical_area::CorticalAreaType;
         assert!(matches!(area.cortical_type, CorticalAreaType::Memory(_)));
 
         // Properties stored correctly
@@ -953,7 +953,7 @@ mod tests {
             "cortical_id should be parseable to cortical_type"
         );
         if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
-            use feagi_structures::genomic::cortical_area::CorticalAreaType;
+            use feagi_genomic_context::cortical_area::CorticalAreaType;
             assert!(
                 matches!(cortical_type, CorticalAreaType::Memory(_)),
                 "Should be classified as MEMORY type"
@@ -1020,7 +1020,7 @@ mod tests {
     fn test_cortical_type_new_population() {
         // Test that cortical_type_new field is populated during parsing (Phase 2)
         // This tests that parsing works with valid cortical_area IDs and populates types correctly
-        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_genomic_context::cortical_area::CoreCorticalType;
         let power_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
         let json = format!(
             r#"{{

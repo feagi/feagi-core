@@ -53,7 +53,7 @@ let decoded = FeagiByteContainer::from_bytes(&bytes)?;
 
 ```rust
 use feagi_serialization::implementations::cortical_mapped_xyzp_neuron_data::CorticalMappedXYZPNeuronVoxels;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genomic_context::cortical_area::CorticalID;
 
 // Create neuron data mapped to cortical_area areas
 let cortical_id = CorticalID::from_base_64("aXB1MDAw")?;

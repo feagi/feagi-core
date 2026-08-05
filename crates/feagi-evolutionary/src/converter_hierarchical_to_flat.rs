@@ -195,7 +195,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
 /// Convert a single cortical_area area to flat format keys
 fn convert_area_to_flat(
     cortical_id_base64: &str,
-    area: &feagi_structures::genomic::cortical_area::CorticalArea,
+    area: &feagi_genomic_data::cortical_area::CorticalArea,
     flat_blueprint: &mut serde_json::Map<String, Value>,
 ) -> EvoResult<()> {
     let prefix = format!("_____10c-{}", cortical_id_base64);
@@ -234,7 +234,7 @@ fn convert_area_to_flat(
     // Without this, areas default to "CUSTOM" regardless of their actual type.
     let mut properties_with_group = area.properties.clone();
     if !properties_with_group.contains_key("cortical_group") {
-        use feagi_structures::genomic::cortical_area::CorticalAreaType;
+        use feagi_genomic_context::cortical_area::CorticalAreaType;
         let cortical_group = match area.cortical_type {
             CorticalAreaType::BrainInput(_) => "IPU",
             CorticalAreaType::BrainOutput(_) => "OPU",
