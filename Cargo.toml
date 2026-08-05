@@ -14,7 +14,7 @@
 
 [package]
 name = "feagi"
-version = "0.0.14"
+version = "0.1.1"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
@@ -29,13 +29,13 @@ workspace = true
 
 [features]
 default = ["default-config-feagi-server"]
+legacy-tools = []
 
 # ========================= Common Configuration Sets ========================= #
 # Common classes of FEAGI Applications using the crates of this library
 
 # Default features for compiling the FEAGI Server
 default-config-feagi-server = [
-    #"feagi-agent/agent-server",
     "agent-transport-zmq",
     "agent-transport-websocket-std",
     "agent-transport-shm",
@@ -135,50 +135,38 @@ alloc = [
 
 ]
 
-# TODO do we need wasm specifically? we may need a feature for wasm anyways due to wasm_sync of rayon and others
+# TODO WASM specific flags
+# TODO Embedded specific flags (different features for things like embedded)
 
 
 [dependencies]
-# Foundation (vendored into feagi-core when published)
-feagi-evolutionary = { version = "=0.0.14", path = "crates/feagi-evolutionary" }
-feagi-npu-neural = { version = "=0.0.14", path = "crates/feagi-npu/neural" }
-serde_json = "1.0"
-feagi-structures = { version = "=0.0.14", path = "crates/feagi-structures" }
-feagi-serialization = { version = "=0.0.14", path = "crates/feagi-serialization" }
-ndarray = { workspace = true }
+# FEAGI
+feagi-npu = { path = "crates/feagi-npu" }
+feagi-models = { path = "crates/feagi-models" }
+feagi-serialization = { path = "crates/feagi-serialization" }
 feagi-logging-and-errors = {path = "crates/feagi-logging-and-errors"}
 feagi-data = {path = "crates/feagi-data"}
+feagi-state-manager = { path = "crates/feagi-state-manager", optional = true }
+feagi-io = { path = "crates/feagi-io", optional = true }
 
-# Infrastructure (vendored)
-feagi-state-manager = { version = "=0.0.14", path = "crates/feagi-state-manager", optional = true }
 
-# Algorithms (vendored)
-feagi-npu-burst-engine = { version = "=0.0.14", path = "crates/feagi-npu/burst-engine", optional = true }
-feagi-brain-development = { version = "=0.0.14", path = "crates/feagi-brain-development", optional = true }
-feagi-sensorimotor = { version = "=0.0.14", path = "crates/feagi-sensorimotor", optional = true }
-feagi-npu-plasticity = { version = "=0.0.14", path = "crates/feagi-npu/plasticity", optional = true }
+ndarray = { workspace = true }
+serde_json = "1.0"
 
-# I/O (vendored)
-feagi-io = { version = "=0.0.14", path = "crates/feagi-io", optional = true }
-feagi-agent = { version = "=0.0.14", path = "crates/feagi-agent", optional = true }
-feagi-services = { version = "=0.0.14", path = "crates/feagi-services", optional = true }
-
-# Async runtime is now a feature of feagi-data-structures
 
 [dev-dependencies]
 # For integration tests that need GenomeService
-feagi-services = { version = "=0.0.14", path = "crates/feagi-services" }
-feagi-npu-runtime = { version = "=0.0.14", path = "crates/feagi-npu/runtime", features = ["std"] }
+feagi-npu = { path = "crates/feagi-npu", features = ["std"] }
 ahash = { workspace = true }
-feagi-config = { version = "=0.0.14", path = "crates/feagi-config" }
+feagi-config = { path = "crates/feagi-config" }
 parking_lot = "0.12"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
 # Optional crates needed by root integration tests
-feagi-sensorimotor = { version = "=0.0.14", path = "crates/feagi-sensorimotor" }
-feagi-brain-development = { version = "=0.0.14", path = "crates/feagi-brain-development" }
-feagi-npu-plasticity = { version = "=0.0.14", path = "crates/feagi-npu/plasticity" }
-feagi-io = { version = "=0.0.14", path = "crates/feagi-io" }
-feagi-agent = { version = "=0.0.14", path = "crates/feagi-agent" }
+feagi-io = { path = "crates/feagi-io" }
+
+
+
+
 
 # ============================================================================
 #                             WORKSPACE CONFIGURATION
@@ -199,30 +187,9 @@ members = [
     "crates/feagi-config",
     "crates/feagi-observability",
     "crates/feagi-state-manager",
+    "crates/feagi-evolutionary",
 
-    # ---- Not yet buildable ------------------------------------------------------------------
-    # Every member's manifest has to resolve for any cargo command to run, so these stay
-    # commented out until migrated. Re-add each one as it starts compiling.
-    #
-    # Mid-refactor onto crate names that were never created: imports `feagi_genome_definitions`
-    # and `feagi_potential_voxels` (neither exists here) through a `::::` typo left by an
-    # interrupted rename, plus macros and `FeagiDataError` variants from the deleted
-    # feagi-structures crate.
-    # "crates/feagi-sensorimotor",
-    #
-    # Blocked only by feagi-sensorimotor, which it depends on. Its own remaining gaps are small:
-    # `FeagiJSON` moved to feagi-serialization, and `FeagiDataError` needs replacing with
-    # FeagiAgentError variants since feagi-data's version has a different shape.
-    # "crates/feagi-agent",
-    #
-    # Still on the pre-rewrite architecture: manifests point at the old split NPU sub-crates
-    # (feagi-npu/{neural,burst-engine,plasticity,runtime}), pin version 0.0.13 against a 0.0.12
-    # workspace, inherit the deleted feagi-structures, and call NPU APIs that DynamicNPU does not
-    # expose yet.
-    # "crates/feagi-api",
-    # "crates/feagi-brain-development",
-    # "crates/feagi-evolutionary",
-    # "crates/feagi-services",
+
 ]
 
 [workspace.package]
@@ -237,13 +204,11 @@ documentation = "https://docs.rs/feagi"
 
 
 [workspace.dependencies] # Contains dependencies that several crates use
-# Workspace member crates that other members inherit rather than re-declare.
-feagi-observability = { path = "crates/feagi-observability" }
 
 rayon = {version = "1.12.0", default-features = false}
 ndarray = { version = "0.17.2", default-features = false}
-serde = { version = "1.0.228", default-features = false}
-serde_json = { version = "1.0.150", default-features = false}
+serde = { version = "1.0.229", default-features = false}
+serde_json = { version = "1.0.151", default-features = false}
 paste = { version =  "1.0.15" , default-features = false}
 ahash = { version = "0.8.12", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM) # TODO remove features
 enum_delegate  = {version = "0.2.0"}
@@ -253,24 +218,23 @@ futures = {version = "0.3.33"}
 
 # TODO update and review below
 image = { version = "0.25.10" } # TODO this shouldnt be here, this should be in the feagi sensiomotor specifically
-proc-macro2 = "1.0.106"
-quote = "1.0.45"
-syn = { version = "2.0.117", features = ["full"] }
-thiserror = "1.0.50" # TODO migrate away from this and use our own error trait!
+proc-macro2 = "1.0.107"
+quote = "1.0.47"
+syn = { version = "2.0.117", features = ["full"] } # TODO Review this
 
+thiserror = "1.0.50" # TODO migrate away from this and use our own error trait!
 tracing = "0.1"  # Structured logging and diagnostics # TODO shouldnt this only be in the error subcrate?
 defmt = {version = "1.1.0"} # only used in embedded contexts # TODO shouldnt this only be in the error subcrate?
 
 uuid = { version = "1.11", features = ["v7", "serde", "js"] }  # js feature for WASM supporto
 
+# Workspace-internal crates
+feagi-observability = { path = "crates/feagi-observability" }
+feagi-dataset-contracts = { path = "crates/feagi-dataset-contracts" }
+
 
 [workspace.lints.rust]
-# TODO for Phase 2
-
-# Workspace-internal crates
-feagi-npu-neural = { version = "=0.0.14", path = "crates/feagi-npu/neural" }
-feagi-observability = { version = "=0.0.14", path = "crates/feagi-observability" }
-feagi-dataset-contracts = { version = "=0.0.14", path = "crates/feagi-dataset-contracts" }
+unused_variables = "warn"
 
 [profile.release]
 lto = true           # Link-time optimization
@@ -301,9 +265,9 @@ debug = true
 [[bin]]
 name = "migrate_genome"
 path = "tools/migrate_genome.rs"
-required-features = []
+required-features = ["legacy-tools"]
 
 [[bin]]
 name = "perf_compare"
 path = "tools/perf_compare.rs"
-required-features = []
+required-features = ["legacy-tools"]

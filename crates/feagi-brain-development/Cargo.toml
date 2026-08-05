@@ -17,8 +17,6 @@ name = "feagi_brain_development"
 feagi-npu-neural = { version = "0.0.14", path = "../feagi-npu/neural" } # For types (CorticalArea, Dimensions, etc.)
 feagi-evolutionary = { version = "0.0.14", path = "../feagi-evolutionary" }
 feagi-npu-plasticity = { version = "0.0.14", path = "../feagi-npu/plasticity", optional = true }
-# feagi-burst-engine configured per-platform below
-feagi-structures = { workspace = true }
 feagi-state-manager = { version = "0.0.14", path = "../feagi-state-manager", default-features = false }
 
 # Performance (using workspace versions)

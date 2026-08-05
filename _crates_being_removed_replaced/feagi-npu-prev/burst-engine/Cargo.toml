@@ -42,7 +42,6 @@ feagi-state-manager = { version = "0.0.14", path = "../../feagi-state-manager" }
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
 feagi-serialization = { workspace = true }  # For decoding sensory data
-feagi-structures = { workspace = true, features = [] }
 thiserror.workspace = true
 rayon.workspace = true
 ndarray.workspace = true
