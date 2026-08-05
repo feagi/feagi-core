@@ -478,14 +478,14 @@ impl FeagiAgentHandler {
     }
 
     pub fn poll_agent_motors(&mut self) -> Result<(), FeagiAgentError> {
-        for (_id, translator) in self.motors.iter_mut() {
+        for translator in self.motors.values_mut() {
             translator.poll_motor_server()?;
         }
         Ok(())
     }
 
     pub fn poll_agent_visualizers(&mut self) -> Result<(), FeagiAgentError> {
-        for (_id, translator) in self.visualizations.iter_mut() {
+        for translator in self.visualizations.values_mut() {
             translator.poll_visualization_server()?;
         }
         Ok(())
