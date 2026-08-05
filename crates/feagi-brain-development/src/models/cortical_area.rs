@@ -62,8 +62,13 @@ pub trait CorticalAreaExt {
     /// Get property as u16 with default
     fn get_u16_property(&self, key: &str, default: u16) -> u16;
 
-    /// Get property as f32 with default
+    /// Get property as f32 with default.
+    /// NOTE: Incurs precision loss. Use `get_f64_property` when building API responses.
     fn get_f32_property(&self, key: &str, default: f32) -> f32;
+
+    /// Get property as f64 with default, preserving full precision from the stored JSON value.
+    /// Prefer this over `get_f32_property() as f64` when building DTOs / API responses.
+    fn get_f64_property(&self, key: &str, default: f64) -> f64;
 
     /// Get property as bool with default
     fn get_bool_property(&self, key: &str, default: bool) -> bool;
@@ -253,6 +258,13 @@ impl CorticalAreaExt for CorticalArea {
             .get(key)
             .and_then(|v| v.as_f64())
             .map(|v| v as f32)
+            .unwrap_or(default)
+    }
+
+    fn get_f64_property(&self, key: &str, default: f64) -> f64 {
+        self.properties
+            .get(key)
+            .and_then(|v| v.as_f64())
             .unwrap_or(default)
     }
 

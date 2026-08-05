@@ -16,13 +16,13 @@ use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_npu_burst_engine::{BurstLoopRunner, ParameterUpdateQueue};
-use feagi_genome_definitions::::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalSubUnitIndex, CorticalUnitIndex,
 };
-use feagi_genome_definitions::::io_cortical_area_configuration_flag::{
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_genome_definitions::::{
+use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
     IOCorticalAreaConfigurationFlag,
 };
@@ -31,7 +31,7 @@ use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tracing::{info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
 
@@ -137,7 +137,7 @@ fn resolve_non_overlapping_position(
     let step_usize = width_for_gap.saturating_add(gap);
     let step = i32::try_from(step_usize).map_err(|_| {
         ServiceError::InvalidInput(format!(
-            "Unable to place cortical_area area: width {} creates horizontal step {} outside i32 range",
+            "Unable to place cortical area: width {} creates horizontal step {} outside i32 range",
             area_width, step_usize
         ))
     })?;
@@ -146,7 +146,7 @@ fn resolve_non_overlapping_position(
     while occupied_positions.contains(&candidate) {
         candidate.0 = candidate.0.checked_add(step).ok_or_else(|| {
             ServiceError::InvalidInput(format!(
-                "Unable to place cortical_area area: overflow while shifting x from {} by {}",
+                "Unable to place cortical area: overflow while shifting x from {} by {}",
                 candidate.0, step
             ))
         })?;
@@ -276,7 +276,7 @@ pub struct GenomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
     parameter_queue: Option<ParameterUpdateQueue>,
     /// Currently loaded genome (source of truth for structural changes)
-    /// This is updated when genome is loaded or when cortical_area areas are modified
+    /// This is updated when genome is loaded or when cortical areas are modified
     current_genome: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
     /// Counter tracking how many genomes have been loaded (increments on each load)
     genome_load_counter: Arc<RwLock<i32>>,
@@ -327,7 +327,7 @@ impl GenomeServiceImpl {
             let burst_runner_write = burst_runner.write();
             burst_runner_write.refresh_cortical_id_mappings(mappings);
             burst_runner_write.refresh_visualization_granularities(chunk_sizes);
-            info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical_area areas", mapping_count);
+            debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
 
@@ -384,7 +384,7 @@ impl GenomeService for GenomeServiceImpl {
         info!(target: "feagi-services", "Genome simulation_timestep: {} seconds", simulation_timestep);
 
         // Store genome for future updates (source of truth for structural changes)
-        info!(target: "feagi-services", "Storing RuntimeGenome with {} cortical_area areas, {} morphologies",
+        info!(target: "feagi-services", "Storing RuntimeGenome with {} cortical areas, {} morphologies",
             genome.cortical_areas.len(), genome.morphologies.iter().count());
         *self.current_genome.write() = Some(genome.clone());
 
@@ -488,13 +488,13 @@ impl GenomeService for GenomeServiceImpl {
                 };
                 develop_result?;
 
-                // Ensure core cortical_area areas exist after neuroembryogenesis
+                // Ensure core cortical areas exist after neuroembryogenesis
                 // (they may have been added during corticogenesis, but we ensure they exist)
                 {
                     let mut manager = manager_arc.write();
                     manager.ensure_core_cortical_areas().map_err(|e| {
                         tracing::error!(target: "feagi-services", "ensure_core_cortical_areas failed: {}", e);
-                        ServiceError::Backend(format!("Failed to ensure core cortical_area areas: {}", e))
+                        ServiceError::Backend(format!("Failed to ensure core cortical areas: {}", e))
                     })?;
                 }
 
@@ -536,7 +536,7 @@ impl GenomeService for GenomeServiceImpl {
 
         info!(
             target: "feagi-services",
-            "Genome loaded: {} cortical_area areas, {} neurons, {} synapses created",
+            "Genome loaded: {} cortical areas, {} neurons, {} synapses created",
             progress.cortical_areas_created,
             progress.neurons_created,
             progress.synapses_created
@@ -632,6 +632,26 @@ impl GenomeService for GenomeServiceImpl {
             genome.metadata.brain_regions_root = Some(root_id);
         }
 
+        // Align morphology registry and cortical mappings with the live connectome before export.
+        // Runtime edits (including morphology rename) are applied through ConnectomeManager first.
+        {
+            let manager = self.connectome.read();
+            genome.morphologies = manager.get_morphologies().clone();
+            for cortical_id in manager.get_cortical_area_ids() {
+                let Some(conn_area) = manager.get_cortical_area(cortical_id) else {
+                    continue;
+                };
+                let Some(genome_area) = genome.cortical_areas.get_mut(cortical_id) else {
+                    continue;
+                };
+                if let Some(dstmap) = conn_area.properties.get("cortical_mapping_dst") {
+                    genome_area
+                        .properties
+                        .insert("cortical_mapping_dst".to_string(), dstmap.clone());
+                }
+            }
+        }
+
         // Use the full RuntimeGenome saver (produces flat format v3.0)
         let json_str = feagi_evolutionary::save_genome_to_json(&genome)
             .map_err(|e| ServiceError::Internal(format!("Failed to save genome: {}", e)))?;
@@ -671,7 +691,7 @@ impl GenomeService for GenomeServiceImpl {
             let brain_region_count = brain_region_ids.len();
             trace!(
                 target: "feagi-services",
-                "Reading genome info: {} cortical_area areas, {} brain regions",
+                "Reading genome info: {} cortical areas, {} brain regions",
                 cortical_area_count,
                 brain_region_count
             );
@@ -758,7 +778,7 @@ impl GenomeService for GenomeServiceImpl {
         &self,
         params: Vec<CreateCorticalAreaParams>,
     ) -> ServiceResult<Vec<CorticalAreaInfo>> {
-        info!(target: "feagi-services", "Creating {} new cortical_area areas via GenomeService", params.len());
+        info!(target: "feagi-services", "Creating {} new cortical areas via GenomeService", params.len());
 
         // IO areas (IPU/OPU) must always be in root region; get root ID for default
         let root_region_id = self.connectome.read().get_root_region_id();
@@ -779,11 +799,11 @@ impl GenomeService for GenomeServiceImpl {
         for param in &params {
             // Convert String to CorticalID
             let cortical_id_typed = CorticalID::try_from_base_64(&param.cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
-            // Get cortical_area area type from the cortical_area ID
+            // Get cortical area type from the cortical ID
             let area_type = cortical_id_typed.as_cortical_type().map_err(|e| {
-                ServiceError::InvalidInput(format!("Failed to determine cortical_area area type: {}", e))
+                ServiceError::InvalidInput(format!("Failed to determine cortical area type: {}", e))
             })?;
 
             let requested_position = param.position;
@@ -795,7 +815,7 @@ impl GenomeService for GenomeServiceImpl {
             if resolved_position != requested_position {
                 info!(
                     target: "feagi-services",
-                    "Adjusted cortical_area area position to avoid overlap: id={} requested=({},{},{}) resolved=({},{},{}) width={} gap_rule=20pct",
+                    "Adjusted cortical area position to avoid overlap: id={} requested=({},{},{}) resolved=({},{},{}) width={} gap_rule=20pct",
                     param.cortical_id,
                     requested_position.0,
                     requested_position.1,
@@ -944,7 +964,7 @@ impl GenomeService for GenomeServiceImpl {
                     {
                         let region = genome.brain_regions.get_mut(parent).ok_or_else(|| {
                             ServiceError::InvalidInput(format!(
-                                "Unknown parent_region_id '{}' for new cortical_area area {}",
+                                "Unknown parent_region_id '{}' for new cortical area {}",
                                 parent,
                                 area.cortical_id.as_base_64()
                             ))
@@ -979,7 +999,7 @@ impl GenomeService for GenomeServiceImpl {
         };
 
         info!(target: "feagi-services",
-              "✅ Created {} cortical_area areas: {} neurons, {} synapses",
+              "✅ Created {} cortical areas: {} neurons, {} synapses",
               params.len(), neurons_created, synapses_created);
 
         // Refresh burst runner cache after creating areas
@@ -1008,18 +1028,18 @@ impl GenomeService for GenomeServiceImpl {
         cortical_id: &str,
         changes: HashMap<String, Value>,
     ) -> ServiceResult<CorticalAreaInfo> {
-        info!(target: "feagi-services", "Updating cortical_area area: {} with {} changes", cortical_id, changes.len());
+        info!(target: "feagi-services", "Updating cortical area: {} with {} changes", cortical_id, changes.len());
 
         // Convert String to CorticalID (supports legacy core aliases)
         let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
         let mut changes = changes;
         let mut effective_cortical_id = cortical_id_typed;
         let mut effective_cortical_id_str = cortical_id.to_string();
 
-        // Verify cortical_area area exists.
-        // If not found, best-effort resolve IO cortical_area IDs that were recently remapped
+        // Verify cortical area exists.
+        // If not found, best-effort resolve IO cortical IDs that were recently remapped
         // by coding changes (Absolute/Incremental, Linear/Fractional), where bytes 4-5
         // change but the unit identifier + group/subunit stay the same.
         {
@@ -1035,7 +1055,7 @@ impl GenomeService for GenomeServiceImpl {
                         c[0] == target_bytes[0] // i/o namespace
                             && c[1] == target_bytes[1]
                             && c[2] == target_bytes[2]
-                            && c[3] == target_bytes[3] // cortical_area unit identifier
+                            && c[3] == target_bytes[3] // cortical unit identifier
                             && c[6] == target_bytes[6] // sub-unit index
                             && c[7] == target_bytes[7] // unit(group) index
                     })
@@ -1044,7 +1064,7 @@ impl GenomeService for GenomeServiceImpl {
                     let resolved = candidates.remove(0);
                     info!(
                         target: "feagi-services",
-                        "[GENOME-UPDATE] Resolved remapped cortical_area ID '{}' -> '{}'",
+                        "[GENOME-UPDATE] Resolved remapped cortical ID '{}' -> '{}'",
                         cortical_id,
                         resolved.as_base_64()
                     );
@@ -1153,8 +1173,8 @@ impl GenomeServiceImpl {
 
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
-        // Get cortical_area index for NPU updates
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        // Get cortical index for NPU updates
         let cortical_idx = {
             let manager = self.connectome.read();
             manager
@@ -1215,7 +1235,7 @@ impl GenomeServiceImpl {
         // reflect the same values that are applied to the NPU.
         //
         // IMPORTANT: The parameter queue updates runtime neuron state; ConnectomeManager is the
-        // source-of-truth for cortical_area-area *reported* properties.
+        // source-of-truth for cortical-area *reported* properties.
         {
             let mut manager = self.connectome.write();
             if let Some(area) = manager.get_cortical_area_mut(&cortical_id_typed) {
@@ -2216,7 +2236,7 @@ impl GenomeServiceImpl {
         self.get_cortical_area_info(cortical_id).await
     }
 
-    /// Update IO coding parameters and remap the cortical_area ID.
+    /// Update IO coding parameters and remap the cortical ID.
     ///
     /// This updates both RuntimeGenome and ConnectomeManager, preserving cortical_idx.
     fn apply_io_coding_update(
@@ -2245,13 +2265,13 @@ impl GenomeServiceImpl {
         let is_output = bytes[0] == b'o';
         if !is_input && !is_output {
             return Err(ServiceError::InvalidInput(
-                "IO coding updates only apply to IPU/OPU cortical_area areas".to_string(),
+                "IO coding updates only apply to IPU/OPU cortical areas".to_string(),
             ));
         }
 
         let current_flag = cortical_id.extract_io_data_flag().map_err(|e| {
             ServiceError::InvalidInput(format!(
-                "Unable to decode IO configuration from cortical_area ID '{}': {}",
+                "Unable to decode IO configuration from cortical ID '{}': {}",
                 cortical_id_str, e
             ))
         })?;
@@ -2485,7 +2505,7 @@ impl GenomeServiceImpl {
         }
         info!(
             target: "feagi-services",
-            "[IO-CODING] Remapping cortical_area ID {} -> {}",
+            "[IO-CODING] Remapping cortical ID {} -> {}",
             cortical_id.as_base_64(),
             computed_id.as_base_64()
         );
@@ -2546,7 +2566,7 @@ impl GenomeServiceImpl {
         Ok(computed_id)
     }
 
-    /// Update the unit index (group_id) for an IO cortical_area area and remap the cortical_area ID.
+    /// Update the unit index (group_id) for an IO cortical area and remap the cortical ID.
     ///
     /// This updates both RuntimeGenome and ConnectomeManager, preserving cortical_idx.
     fn apply_unit_index_update(
@@ -2587,13 +2607,13 @@ impl GenomeServiceImpl {
         let is_output = bytes[0] == b'o';
         if !is_input && !is_output {
             return Err(ServiceError::InvalidInput(
-                "Unit index updates only apply to IPU/OPU cortical_area areas".to_string(),
+                "Unit index updates only apply to IPU/OPU cortical areas".to_string(),
             ));
         }
 
         let current_flag = cortical_id.extract_io_data_flag().map_err(|e| {
             ServiceError::InvalidInput(format!(
-                "Unable to decode IO configuration from cortical_area ID '{}': {}",
+                "Unable to decode IO configuration from cortical ID '{}': {}",
                 cortical_id_str, e
             ))
         })?;
@@ -2630,7 +2650,7 @@ impl GenomeServiceImpl {
 
         info!(
             target: "feagi-services",
-            "[UNIT-INDEX] Remapping cortical_area ID {} -> {}",
+            "[UNIT-INDEX] Remapping cortical ID {} -> {}",
             cortical_id.as_base_64(),
             computed_id.as_base_64()
         );
@@ -2691,7 +2711,7 @@ impl GenomeServiceImpl {
         Ok(computed_id)
     }
 
-    /// Regenerate incoming/outgoing synapses for a cortical_area area without rebuilding neurons.
+    /// Regenerate incoming/outgoing synapses for a cortical area without rebuilding neurons.
     fn regenerate_mappings_for_area(&self, cortical_id: &CorticalID) -> ServiceResult<()> {
         let mut manager = self.connectome.write();
         let cortical_id_str = cortical_id.as_base_64();
@@ -2808,7 +2828,7 @@ impl GenomeServiceImpl {
         // Convert cortical_id to CorticalID
         let cortical_id_typed =
             feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
-                ServiceError::InvalidInput(format!("Invalid cortical_area ID '{}': {}", cortical_id, e))
+                ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
             })?;
         let mut effective_cortical_id = cortical_id_typed;
         let mut effective_cortical_id_str = cortical_id.to_string();
@@ -3061,7 +3081,7 @@ impl GenomeServiceImpl {
     /// 1. Deleting all neurons in the area
     /// 2. Deleting all incoming/outgoing synapses (automatic via neuron deletion)
     /// 3. Recreating neurons with new dimensions/density
-    /// 4. Rebuilding synapses via cortical_area mapping
+    /// 4. Rebuilding synapses via cortical mapping
     async fn update_with_localized_rebuild(
         &self,
         cortical_id: &str,
@@ -3069,9 +3089,9 @@ impl GenomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "[STRUCTURAL-REBUILD] Localized rebuild for {}", cortical_id);
 
-        // Validate cortical_area ID format
+        // Validate cortical ID format
         let _cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
         if changes.contains_key("group_id") && changes.len() == 1 {
             let new_id =
@@ -3115,7 +3135,7 @@ impl GenomeServiceImpl {
         // Convert cortical_id to CorticalID
         let cortical_id_typed =
             feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
-                ServiceError::InvalidInput(format!("Invalid cortical_area ID '{}': {}", cortical_id, e))
+                ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
             })?;
 
         // Step 1: Update RuntimeGenome dimensions/density
@@ -3348,7 +3368,7 @@ impl GenomeServiceImpl {
             );
         }
 
-        // Step 2: Delete all neurons in the cortical_area area
+        // Step 2: Delete all neurons in the cortical area
         let neurons_to_delete = {
             let manager = connectome.read();
             manager.get_neurons_in_area(&cortical_id_typed)
@@ -3369,7 +3389,7 @@ impl GenomeServiceImpl {
 
         info!("[STRUCTURAL-REBUILD] Deleted {} neurons", deleted_count);
 
-        // Step 3: Update cortical_area area dimensions and properties in ConnectomeManager
+        // Step 3: Update cortical area dimensions and properties in ConnectomeManager
         {
             let mut manager = connectome.write();
             manager
@@ -3863,7 +3883,7 @@ impl GenomeServiceImpl {
             let mappings = manager.get_all_cortical_idx_to_id_mappings();
             let mapping_count = mappings.len();
             burst_runner.write().refresh_cortical_id_mappings(mappings);
-            info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical_area areas", mapping_count);
+            debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
 
         // CRITICAL PERFORMANCE: For large areas, skip expensive get_synapse_count_in_area
@@ -4062,14 +4082,14 @@ impl GenomeServiceImpl {
         }
     }
 
-    /// Helper to get cortical_area area info (blocking version for spawn_blocking contexts)
+    /// Helper to get cortical area info (blocking version for spawn_blocking contexts)
     fn get_cortical_area_info_blocking(
         cortical_id: &str,
         connectome: &Arc<RwLock<ConnectomeManager>>,
     ) -> ServiceResult<CorticalAreaInfo> {
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
         let manager = connectome.read();
 
@@ -4257,11 +4277,11 @@ impl GenomeServiceImpl {
         })
     }
 
-    /// Helper to get cortical_area area info
+    /// Helper to get cortical area info
     async fn get_cortical_area_info(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
         let manager = self.connectome.read();
 

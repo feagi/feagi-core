@@ -495,7 +495,7 @@ mod tests {
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
         );
-        flag.as_io_cortical_id(false, [b'o', b'm', b'o'], 0.into(), 0.into())
+        flag.as_io_cortical_id(false, *b"omo", 0.into(), 0.into())
     }
 
     fn make_percentage_fractional_id() -> CorticalID {
@@ -503,7 +503,7 @@ mod tests {
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Fractional,
         );
-        flag.as_io_cortical_id(false, [b'o', b'm', b'o'], 0.into(), 0.into())
+        flag.as_io_cortical_id(false, *b"omo", 0.into(), 0.into())
     }
 
     #[test]

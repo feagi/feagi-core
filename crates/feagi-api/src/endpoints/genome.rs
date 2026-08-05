@@ -797,7 +797,7 @@ pub async fn post_amalgamation_destination(
                 Ok(synapse_count) => {
                     tracing::debug!(
                         target: "feagi-api",
-                        "🧬 [AMALGAMATION] Imported mapping {} -> {} ({} synapses)",
+                        "[AMALGAMATION] Imported mapping {} -> {} ({} synapses)",
                         src_area_id,
                         dst_area_id,
                         synapse_count
@@ -807,7 +807,7 @@ pub async fn post_amalgamation_destination(
                 Err(e) => {
                     tracing::warn!(
                         target: "feagi-api",
-                        "🧬 [AMALGAMATION] Failed to import mapping {} -> {}: {}",
+                        "[AMALGAMATION] Failed to import mapping {} -> {}: {}",
                         src_area_id,
                         dst_area_id,
                         e
