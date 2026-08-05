@@ -645,10 +645,9 @@ impl GenomeService for GenomeServiceImpl {
                     continue;
                 };
                 if let Some(dstmap) = conn_area.properties.get("cortical_mapping_dst") {
-                    genome_area.properties.insert(
-                        "cortical_mapping_dst".to_string(),
-                        dstmap.clone(),
-                    );
+                    genome_area
+                        .properties
+                        .insert("cortical_mapping_dst".to_string(), dstmap.clone());
                 }
             }
         }
