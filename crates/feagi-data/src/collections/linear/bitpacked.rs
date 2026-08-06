@@ -2,7 +2,6 @@ use core::ops::{Index, IndexMut, Range};
 use crate::values::quantizable::QuantizedIndexCountTrait;
 use crate::collections::feagi_data_collections_error::{FeagiDataCollectionError, FeagiFailCollectionInvalidIndex};
 
-
 macro_rules! impl_bitpacked_range_read {
     ($self_ty:ty, $qi:ty, [$($generics:tt)*]) => {
         impl<$($generics)*> Index<Range<$qi>> for $self_ty {
@@ -661,21 +660,4 @@ impl<QI: QuantizedIndexCountTrait, const N: usize> From<[u8; N]> for BitPackedAr
 }
 
 //endregion
-
-
-
-
-
-
-
-
-
-
-/*
-pub fn byte_index_to_first_bit_index(byte_index: usize) -> usize {
-    byte_index << 3
-}
-
- */
-
 
