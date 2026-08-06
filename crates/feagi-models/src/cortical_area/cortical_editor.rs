@@ -5,6 +5,7 @@ use crate::cortical_area::neuron::neuron_model::neuron_data::NeuronModelNeuronDa
 use crate::cortical_area::neuron::neuron_model::quantization::NeuronModelQuantization;
 // TODO rethink interface a bit more
 
+/*
 /// Trait used to define both the root and model specific implementations for editing a cortical
 /// area
 pub trait NeuronModelCorticalEditor<NMQ, NMCD, NMND>
@@ -82,3 +83,6 @@ where
         }
     }
 }
+
+
+ */

@@ -1,9 +1,11 @@
-use crate::cortical_area::neuron::model_generated::cortical_layout::CorticalAreaLayoutNested;
-use crate::cortical_area::neuron::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
-use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
-use crate::cortical_area::neuron::neuron::{CorticalAreaProperties, NeuronProperties};
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
+use feagi_data::values::quantizable::{QuantizedIndexCountTrait};
+use crate::cortical_area::cortical_area_layout::enums::CorticalAreaLayoutNested;
+use crate::cortical_area::CorticalAreaProperties;
+use crate::cortical_area::neuron::neuron_model::cortical_data::NeuronModelCorticalData;
+use crate::cortical_area::neuron::neuron_model::neuron_data::NeuronModelNeuronData;
+use crate::cortical_area::neuron::neuron_model::quantization::NeuronModelQuantization;
+use crate::cortical_area::neuron::NeuronProperties;
 
 /// Trait for writing the data of newly created cortical areas, used both by the root and model
 /// specific enums
@@ -23,7 +25,7 @@ where
         cortical_data: &mut NMCD,
         neuron_data: &mut [NMND],
         neuron_properties: &mut [NeuronProperties], // TODO this is messy, we should find a way to get the 'impl iterator' thing to work
-    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties), ()>;
+    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties<NMQ>), ()>;
 }
 
 /// Root enum used to defining how a cortical area can be created. Enforces some universal methods.
@@ -41,7 +43,7 @@ where
     CompleteRawData {
         _p: core::marker::PhantomData<NMQ>,
         cortical_data: NMCD,
-        cortical_properties: CorticalAreaProperties,
+        cortical_properties: CorticalAreaProperties<NMQ>,
         neuron_data: Vec<NMND>, // len should match what layout defines and properties
         neuron_properties: Vec<NeuronProperties>,
         neuron_layout: CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>,
@@ -74,7 +76,7 @@ where
         current_cortical_data: &mut NMCD,
         current_neuron_data: &mut [NMND],
         neuron_properties_out: &mut [NeuronProperties],
-    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties), ()> { // TODO Error handling!
+    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties<NMQ>), ()> { // TODO Error handling!
         match self {
             RootNeuronModelCorticalWriter::CompleteRawData {
                 _p,

@@ -13,6 +13,7 @@ use feagi_models::wrapped_index_collections::{CorticalEngineIndex, CorticalEngin
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::engines::rayon::data::synapse::model_quantized_data::SynapseModelData;
 use crate::engines::rayon::data::synapse::synapse_sub_data::{CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties};
+use crate::engines_common::common_cpu_structs::multi_bitpacked_vector::MultiBitPackedVectorManager;
 
 pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
     /// The current burst index
@@ -47,7 +48,7 @@ pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
     pub neuron_runtime_flags: NeuronEngineIndexedVector<FIQ::NeuronIndexQuant, NeuronRuntimeFlags>,
 
     /// Indexed by `NeuronEngineByteIndex` (indirectly) and `NeuronEngineByteIndex`, bitpacked information for if a VOXEL is firing in this burst
-    pub neuron_voxel_is_firing: BitPackedVector<FIQ::NeuronIndexQuant>,
+    pub neuron_voxel_is_firing: MultiBitPackedVectorManager<FIQ::CorticalAreaIndexCountQuant, FIQ::NeuronIndexQuant>,
 
     /// Indexed by `NeuronHistoryIndex`, for neurons wth it, is the per neuron history of that neuron
     pub neuron_history_data: NeuronHistoryIndexedVector<FIQ::NeuronIndexQuant, NeuronModelFullNeuronHistory<FIQ>>,
@@ -94,7 +95,7 @@ impl<FIQ: FeagiIndexQuantization> Default for RayonEngineData<FIQ> {
             cortical_neuron_index_lookup_table: Default::default(),
             cortical_layout_dimensional_data: Default::default(),
             neuron_runtime_flags: Default::default(),
-            neuron_voxel_is_firing: BitPackedVector::new_uniform(FIQ::NeuronIndexQuant::QUANT_ZERO, false),
+            neuron_voxel_is_firing: MultiBitPackedVectorManager::new(),
             neuron_history_data: Default::default(),
             cortical_mapping_entry_indexes: Default::default(),
             synapse_model_data: Default::default(),

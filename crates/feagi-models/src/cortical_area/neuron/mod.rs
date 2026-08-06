@@ -6,7 +6,7 @@ use feagi_data::quantization_levels::membrane_potential_quantization::MembranePo
 
 /// Per neuron properties that all neurons have that can be configured
 #[derive(Clone, Copy, Debug)]
-pub struct Neuron {
+pub struct NeuronProperties {
     pub probe_force_disabled: bool,
     pub probe_force_firing: bool,
 }

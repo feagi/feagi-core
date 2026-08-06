@@ -1,8 +1,7 @@
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
 use feagi_genomic_context::cortical_area::CorticalID;
-use crate::cortical_area::neuron::model_generated::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
-
+use crate::cortical_area::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
 
 pub enum ConnectomeRequest {
     CorticalAreaAdd(CorticalID, CorticalWriterByModelQuant), // TODO we really shouldnt be taking in a new cortical ID for this

@@ -1,9 +1,9 @@
 use crate::cortical_mapping_entry::doublet::doublet_iterator::DoubletIterator;
-use crate::cortical_area::cortical_area_layout::CorticalAreaLayoutDimensional;
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
 use feagi_data::neurons::{DimensionalCorticalArea4DCoordinate, NeuronCorticalLocalIndex, NeuronVoxelDensityIndex};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
+use crate::cortical_area::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 
 /// Maps every neuron of a single source voxel (its full density column) to every neuron of the
 /// destination cortical area.

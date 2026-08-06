@@ -13,7 +13,7 @@ pub mod implementations;
 
 /// Defines a cortical area
 #[derive(Clone, Copy, Debug)]
-pub struct CorticalArea<MPQ: MembranePotentialQuantization> {
+pub struct CorticalAreaProperties<MPQ: MembranePotentialQuantization> {
     /// Defines how potential is defined for a firing neurons
     pub post_cortical_potential: PostCorticalPotential<MPQ::MembranePotentialQuant>,
     /// Defines if the neuron output will be uniform across all outgoing synapses

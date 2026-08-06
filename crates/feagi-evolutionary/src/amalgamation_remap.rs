@@ -18,7 +18,6 @@ use feagi_genomic_data::cortical_area::CorticalArea;
 use feagi_genomic_context::cortical_area::CorticalAreaType;
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_genomic_context::brain_region::BrainRegion;
-use feagi_structures::FeagiDataError;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
