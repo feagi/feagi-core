@@ -58,6 +58,14 @@ Copy
 + core::ops::SubAssign
 + core::ops::MulAssign
 + core::ops::DivAssign
++ core::ops::BitAnd<Output=Self>
++ core::ops::BitOr<Output=Self>
++ core::ops::BitXor<Output=Self>
++ core::ops::Shl<Output=Self>
++ core::ops::Shr<Output=Self>
++ core::ops::BitAndAssign
++ core::ops::BitOrAssign
++ core::ops::BitXorAssign
 + core::cmp::PartialOrd
 + core::cmp::Ord
 + core::iter::Sum
@@ -85,6 +93,9 @@ Copy
     const QUANT_CLAMPED_U32: u32;
     const QUANT_CLAMPED_U64: u64;
     const QUANT_CLAMPED_USIZE: usize;
+
+    /// Mask for the first 3 bits
+    const QUANT_BYTE_BIT_MASK: Self;
 
     /// Tries to convert from usize, does NOT check bounds!
     fn quant_from_usize(value: usize) -> Self;
@@ -157,6 +168,8 @@ impl QuantizedIndexCountTrait for u8 {
     const QUANT_CLAMPED_U32: u32 = u8::MAX as u32;
     const QUANT_CLAMPED_U64: u64 = u8::MAX as u64;
     const QUANT_CLAMPED_USIZE: usize = u8::MAX as usize;
+
+    const QUANT_BYTE_BIT_MASK: Self = 0b0000_0111;
 
     fn quant_from_usize(value: usize) -> Self {
         value as u8
@@ -240,6 +253,8 @@ impl QuantizedIndexCountTrait for u16 {
     const QUANT_CLAMPED_U32: u32 = u16::MAX as u32;
     const QUANT_CLAMPED_U64: u64 = u16::MAX as u64;
     const QUANT_CLAMPED_USIZE: usize = u16::MAX as usize;
+
+    const QUANT_BYTE_BIT_MASK: Self = 0b0000_0000_0000_0111;
 
     fn quant_from_usize(value: usize) -> Self {
         value as u16
@@ -326,6 +341,8 @@ impl QuantizedIndexCountTrait for u32 {
     const QUANT_CLAMPED_U64: u64 = u32::MAX as u64;
     const QUANT_CLAMPED_USIZE: usize = u32::MAX as usize;
 
+    const QUANT_BYTE_BIT_MASK: Self = 7;
+
     fn quant_from_usize(value: usize) -> Self {
         value as u32
     }
@@ -408,6 +425,8 @@ impl QuantizedIndexCountTrait for u64 {
     const QUANT_CLAMPED_U32: u32 = u32::MAX;
     const QUANT_CLAMPED_U64: u64 = u64::MAX;
     const QUANT_CLAMPED_USIZE: usize = usize::MAX;
+
+    const QUANT_BYTE_BIT_MASK: Self = 7;
 
     fn quant_from_usize(value: usize) -> Self {
         value as u64

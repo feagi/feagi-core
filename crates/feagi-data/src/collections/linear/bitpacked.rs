@@ -369,6 +369,33 @@ impl<QI: QuantizedIndexCountTrait> BitPackedVector<QI> {
     pub fn into_vec(self) -> Vec<u8> {
         self.data
     }
+
+    /// Appends `number_bits` new bits to the end of the vector, initializing all
+    /// appended bits to `initial_state`.
+    pub fn append_bits(&mut self, number_bits: QI, initial_state: bool) {
+        let additional_bits = number_bits.quant_to_usize();
+        if additional_bits == 0 {
+            return;
+        }
+
+        let previous_bits = self.number_bits.quant_to_usize();
+        let new_total_bits = previous_bits + additional_bits;
+        let needed_bytes = number_bits_to_number_bytes(new_total_bits);
+
+        if needed_bytes > self.data.len() {
+            self.data.resize(needed_bytes, 0);
+        }
+
+        if initial_state {
+            for bit_index in previous_bits..new_total_bits {
+                let byte_index = bit_index >> 3;
+                let bit_offset = bit_index & 0b00000111;
+                self.data[byte_index] |= 1 << bit_offset;
+            }
+        }
+
+        self.number_bits = QI::quant_from_usize(new_total_bits);
+    }
 }
 
 impl<QI: QuantizedIndexCountTrait> BitPackedTrait<QI> for BitPackedVector<QI> {
