@@ -12,16 +12,8 @@ Licensed under the Apache License, Version 2.0
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
-
+use feagi_genomic_context::cortical_area::CorticalID;
 use crate::types::{EvoError, EvoResult};
-#[cfg(test)]
-use feagi_genomic_context::brain_region::RegionID;
-use feagi_genome_definitions::{CorticalArea, CorticalID};
-#[cfg(test)]
-use feagi_genome_definitions::{
-    CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
-};
-use feagi_genomic_context::brain_region::BrainRegion;
 
 /// Genome saver
 pub struct GenomeSaver;

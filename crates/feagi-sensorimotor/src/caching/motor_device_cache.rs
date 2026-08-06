@@ -18,7 +18,8 @@ use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
 use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
+use feagi_genomic_context::motor_cortical_units;
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());

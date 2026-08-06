@@ -2,18 +2,10 @@ use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
 };
-use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_genomic_context::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex,
-};
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
-};
-use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
 

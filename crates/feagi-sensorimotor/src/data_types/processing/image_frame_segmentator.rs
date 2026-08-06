@@ -2,7 +2,6 @@ use crate::data_types::descriptors::{
     ColorChannelLayout, ImageFrameProperties, SegmentedImageFrameProperties,
 };
 use crate::data_types::{GazeProperties, ImageFrame, ImageFrameProcessor, SegmentedImageFrame};
-use feagi_structures::FeagiDataError;
 
 
 use feagi_data::feagi_data_error::FeagiFailDataEtc;

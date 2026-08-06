@@ -3,7 +3,6 @@
 //! This module provides data structures and enums for describing dat properties
 
 use super::{ImageFrame, SegmentedImageFrame};
-use feagi_genomic_context::cortical_area::descriptors::CorticalChannelDimensions;
 
 use feagi_data::feagi_data_error::FeagiFailDataEtc;
 
@@ -13,10 +12,6 @@ fn feagi_data_etc_error(message: String) -> FeagiDataError {
 }
 
 // NeuronDepth is used in macro expansion
-use feagi_structures::FeagiDataError;
-use feagi_structures::{
-    define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping,
-};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 //region Images

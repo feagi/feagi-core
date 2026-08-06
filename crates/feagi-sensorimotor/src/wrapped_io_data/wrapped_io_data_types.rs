@@ -3,7 +3,6 @@ use crate::data_types::{
     Percentage3D, Percentage4D, PoseEstimationData, RawIMU, SegmentedImageFrame, SignedPercentage,
     SignedPercentage2D, SignedPercentage3D, SignedPercentage4D,
 };
-use feagi_structures::FeagiDataError;
 
 
 use feagi_data::feagi_data_error::FeagiFailDataEtc;

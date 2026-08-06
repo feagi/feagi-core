@@ -2,10 +2,7 @@ use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner
 use crate::configuration::jsonable::JSONDeviceProperties;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
-use crate::data_pipeline::PipelineStagePropertyIndex;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_genomic_context::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
 

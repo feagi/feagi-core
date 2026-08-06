@@ -133,7 +133,6 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
         fixes_applied += 1;
     } else {
         // Normalize to canonical format
-        use feagi_npu_neural::types::Precision;
         match Precision::from_str(&genome.physiology.quantization_precision) {
             Ok(precision) => {
                 let canonical = precision.as_str().to_string();

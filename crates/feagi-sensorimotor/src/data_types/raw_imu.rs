@@ -21,7 +21,6 @@
 //! see `SensoryCorticalUnit::SmartIMU` (a 4-D signed percentage) for that.
 
 use super::{SignedPercentage, SignedPercentage3D};
-use feagi_structures::FeagiDataError;
 
 /// Number of sub-cortical_area-areas backing a Raw IMU reading: accel, gyro, mag.
 pub const RAW_IMU_SUBUNIT_COUNT: usize = 3;

@@ -17,7 +17,9 @@ Licensed under the Apache License, Version 2.0
 use crate::{EvoError, EvoResult};
 use serde_json::Value;
 use std::collections::HashMap;
-
+use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
+use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
+use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
 use super::parser::string_to_cortical_id;
 
 fn is_legacy_io_shorthand(id: &str) -> bool {
@@ -238,10 +240,8 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         // We only apply this when we can deterministically infer the intended SegmentedVision tile
         // from the cortical_area area's name (vision_LL/LM/LR/ML/C/MR/TL/TM/TR). This avoids guessing.
         {
-            use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
             use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
             use feagi_genomic_context::cortical_area::CorticalID;
-            use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
 
             let name_opt: Option<&str> = if is_flat {
                 let name_key = format!("_____10c-{}-cx-__name-t", id);
@@ -414,13 +414,10 @@ fn legacy_io_to_custom_base64(old_id: &str) -> EvoResult<String> {
     } else {
         old_id.to_string()
     };
-    let cid = CorticalID::try_from_legacy_ascii(&custom_str).map_err(|e| {
-        EvoError::InvalidGenome(format!(
-            "Failed to convert legacy IO '{}' to custom: {}",
-            old_id, e
-        ))
-    })?;
-    Ok(cid.as_base_64())
+    Err(EvoError::InvalidGenome(format!(
+        "Failed to convert legacy IO '{}' to custom",
+        old_id,
+    )))
 }
 
 fn apply_legacy_io_shorthand_migration(
@@ -428,9 +425,7 @@ fn apply_legacy_io_shorthand_migration(
     used_base64: &mut std::collections::HashSet<String>,
     result: &mut MigrationResult,
 ) -> EvoResult<()> {
-    use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
     use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
-    use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
 
     // Rule set:
     // - Special-case known legacy segmented-vision shorthands iv00?? → SegmentedVision tile.
@@ -636,11 +631,9 @@ fn needs_migration(id: &str) -> bool {
 /// NOTE: Old format doesn't encode frame handling, so we default to Absolute.
 /// This function is public so it can be used by string_to_cortical_id for individual ID conversions.
 pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
-    use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
     use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, PercentageNeuronPositioning,
     };
-    use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
 
     // IPU: iicXYZ → Proper 8-byte SegmentedVision ID
     if old_id.starts_with("iic") && old_id.len() >= 6 {
@@ -670,7 +663,6 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
     }
 
     // OPU: omot00 → Proper 8-byte Motor ID (Absolute + Linear, priority)
-    use feagi_genomic_context::cortical_unit::MotorCorticalUnit;
     if old_id.starts_with("omot") && old_id.len() >= 6 {
         if let Some(index_chars) = old_id.get(4..6) {
             if let Ok(unit_index) = index_chars.parse::<u8>() {
@@ -959,12 +951,9 @@ mod tests {
 
     #[test]
     fn test_map_old_id_to_new() {
-        use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
         use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
         use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
         use feagi_genomic_context::cortical_area::CoreCorticalType;
-        use feagi_genomic_context::cortical_unit::MotorCorticalUnit;
-        use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
 
         // IPU migrations - should return base64 IDs with Absolute frame handling
         let group_index: CorticalUnitIndex = 0.into();
@@ -1244,9 +1233,7 @@ mod tests {
         let result = migrate_genome(&genome).unwrap();
 
         // iv00_C → SegmentedVision center (index 4), Absolute frame handling, group 0.
-        use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
         use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
-        use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
         let expected_center =
             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                 FrameChangeHandling::Absolute,
@@ -1286,10 +1273,8 @@ mod tests {
         });
 
         let result = migrate_genome(&genome).unwrap();
-
-        use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
+        
         use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
-        use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
         let expected =
             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                 FrameChangeHandling::Absolute,

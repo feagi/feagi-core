@@ -1,4 +1,3 @@
-use feagi_structures::FeagiDataError;
 
 
 use feagi_data::feagi_data_error::FeagiFailDataEtc;

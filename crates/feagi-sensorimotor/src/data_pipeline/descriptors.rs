@@ -1,4 +1,3 @@
-use feagi_structures::define_index;
 
 define_index!(
     PipelineStagePropertyIndex,

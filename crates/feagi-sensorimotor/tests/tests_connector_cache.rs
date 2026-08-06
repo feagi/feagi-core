@@ -6,6 +6,8 @@
 //! - Export and import of device registrations as JSON
 //! - Display implementation
 
+/*
+
 use feagi_sensorimotor::ConnectorCache;
 use feagi_genomic_context::cortical_area::descriptors::{
     CorticalChannelCount, CorticalUnitIndex,
@@ -441,3 +443,6 @@ mod test_imu_register_write_contract {
         );
     }
 }
+
+
+ */

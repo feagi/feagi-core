@@ -1,8 +1,4 @@
 use crate::data_pipeline::PipelineStageProperties;
-use crate::data_types::descriptors::{
-    ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality,
-    PoseEstimationProperties, SegmentedImageFrameProperties, SpatialPointerProperties,
-};
 use crate::data_types::{
     GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
     Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
@@ -21,20 +17,15 @@ use crate::neuron_voxel_coding::xyzp::encoders::{
 };
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::WrappedIOData;
-use feagi_genomic_context::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
-};
 use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
 };
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
-use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());

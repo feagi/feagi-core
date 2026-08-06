@@ -118,6 +118,7 @@ pub fn validate_cortical_type(
 mod tests {
     use super::*;
     use serde_json::json;
+    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 
     #[test]
     fn test_parse_ipu_type() {
@@ -165,11 +166,6 @@ mod tests {
 
     #[test]
     fn test_validate_ipu_type() {
-        use feagi_genome_definitions::{
-            io_cortical_area_configuration_flag::FrameChangeHandling,
-            IOCorticalAreaConfigurationFlag,
-        };
-
         let cortical_type = CorticalAreaType::BrainInput(
             IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute),
         );

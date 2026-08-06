@@ -1,7 +1,4 @@
-use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
-use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPSparseVectors;
-use feagi_structures::FeagiDataError;
 
 
 use feagi_data::feagi_data_error::FeagiFailDataEtc;

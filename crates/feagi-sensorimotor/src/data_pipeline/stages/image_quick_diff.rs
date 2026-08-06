@@ -3,7 +3,6 @@ use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_types::descriptors::ImageFrameProperties;
 use crate::data_types::{ImageFrame, Percentage};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::FeagiDataError;
 use ndarray::{Array3, Zip};
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;

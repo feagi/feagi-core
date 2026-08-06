@@ -1,8 +1,4 @@
-use super::descriptors::MiscDataDimensions;
 use super::ImageFrame;
-use feagi_genomic_context::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPSparseVectors;
-use feagi_structures::FeagiDataError;
 use ndarray::{Array3, Zip};
 
 

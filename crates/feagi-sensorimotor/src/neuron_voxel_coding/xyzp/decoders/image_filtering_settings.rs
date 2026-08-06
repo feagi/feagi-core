@@ -9,13 +9,8 @@ use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
 };
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_genomic_context::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
-};
 use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
 const CHANNEL_Y_HEIGHT: u32 = 1;

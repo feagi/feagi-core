@@ -15,10 +15,8 @@ Licensed under the Apache License, Version 2.0
 
 use crate::random::random_bytes;
 use crate::runtime::RuntimeGenome;
-use feagi_genomic_data::cortical_area::CorticalArea;
 use feagi_genomic_context::cortical_area::CorticalAreaType;
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_genomic_context::brain_region::BrainRegion;
 use feagi_data::feagi_data_error::FeagiDataError;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};

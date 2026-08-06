@@ -12,7 +12,6 @@ Licensed under the Apache License, Version 2.0
 */
 
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_genomic_context::brain_region::BrainRegion;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

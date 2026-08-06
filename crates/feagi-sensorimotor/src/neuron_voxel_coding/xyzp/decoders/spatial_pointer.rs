@@ -4,15 +4,10 @@ use crate::data_types::descriptors::SpatialPointerProperties;
 use crate::data_types::{Percentage, Percentage3D, SignedPercentage, SignedPercentage3D};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_genomic_context::cortical_area::descriptors::CorticalChannelCount;
 use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, IOCorticalAreaConfigurationFlag,
 };
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
-};
-use feagi_structures::FeagiDataError;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 

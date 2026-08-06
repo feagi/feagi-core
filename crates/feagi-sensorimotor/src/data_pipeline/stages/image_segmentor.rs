@@ -4,7 +4,6 @@ use crate::data_types::descriptors::{ImageFrameProperties, SegmentedImageFramePr
 use crate::data_types::ImageFrameSegmentator;
 use crate::data_types::{ImageFrame, SegmentedImageFrame};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::FeagiDataError;
 use std::any::Any;
 use std::fmt::Display;
 use std::time::Instant;

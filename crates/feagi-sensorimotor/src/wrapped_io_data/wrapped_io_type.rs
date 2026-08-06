@@ -1,14 +1,9 @@
-use crate::data_types::descriptors::{
-    ImageFrameProperties, MiscDataDimensions, PoseEstimationProperties,
-    SegmentedImageFrameProperties,
-};
 use crate::data_types::{
     GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
     Percentage3D, Percentage4D, PoseEstimationData, RawIMU, SegmentedImageFrame, SignedPercentage,
     SignedPercentage2D, SignedPercentage3D, SignedPercentage4D,
 };
 use crate::wrapped_io_data::WrappedIOData;
-use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::mem::discriminant;
 
