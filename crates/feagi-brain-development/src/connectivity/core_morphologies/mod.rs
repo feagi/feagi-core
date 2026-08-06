@@ -8,19 +8,21 @@ Each core morphology is implemented in its own module, making them
 independent and easier to maintain.
 */
 
+
+/*
 mod bitmask;
 mod block_connection;
 mod centered_projector;
-mod common;
+
 mod expander;
 mod first_to_last;
 mod last_to_first;
-mod patterns;
-mod projector;
+
 mod rotator_z;
 mod sweeper;
 mod tile;
-mod vectors;
+
+
 
 pub use bitmask::apply_bitmask_morphology_with_dimensions;
 pub use bitmask::{BitmaskAxis, BitmaskMode};
@@ -30,10 +32,20 @@ pub use centered_projector::apply_centered_projector_morphology_with_dimensions;
 pub use expander::apply_expander_morphology;
 pub use first_to_last::apply_first_to_last_morphology_with_dimensions;
 pub use last_to_first::apply_last_to_first_morphology_with_dimensions;
-pub use patterns::apply_patterns_morphology;
-pub use projector::apply_projector_morphology;
-pub use projector::apply_projector_morphology_with_dimensions;
+
 pub use rotator_z::apply_rotator_z_morphology_with_dimensions;
 pub use sweeper::apply_sweeper_morphology_with_dimensions;
 pub use tile::apply_tile_morphology_with_dimensions;
+
+
+
+ */
+mod common;
+mod patterns;
+mod projector;
+mod vectors;
+
+pub use projector::apply_projector_morphology;
+pub use projector::apply_projector_morphology_with_dimensions;
+pub use patterns::apply_patterns_morphology;
 pub use vectors::{apply_vectors_morphology, apply_vectors_morphology_with_dimensions};
