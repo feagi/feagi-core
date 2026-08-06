@@ -10,7 +10,7 @@ use feagi_serialization::FeagiByteContainer;
 use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning, PoseSchema,
 };
-use feagi_structures::FeagiDataError;
+
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;

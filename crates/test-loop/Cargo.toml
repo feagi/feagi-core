@@ -1,0 +1,18 @@
+[package]
+name = "test-loop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+
+[dependencies]
+rand = "0.9.5"
+rayon = {workspace = true}
+
+
+[lints]
+workspace = true

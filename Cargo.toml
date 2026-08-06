@@ -195,6 +195,7 @@ members = [
     "crates/feagi-services",
     "crates/feagi-state-manager",
     #"crates/feagi-trainer",
+    "crates/test-loop",
 ]
 
 [workspace.package]
