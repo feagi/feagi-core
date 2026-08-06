@@ -133,58 +133,13 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
         fixes_applied += 1;
     } else {
         // Normalize to canonical format
-        match Precision::from_str(&genome.physiology.quantization_precision) {
-            Ok(precision) => {
-                let canonical = precision.as_str().to_string();
-                if genome.physiology.quantization_precision != canonical {
-                    info!(
-                        "🔧 AUTO-FIX: Quantization precision '{}' → '{}' (normalized)",
-                        genome.physiology.quantization_precision, canonical
-                    );
-                    genome.physiology.quantization_precision = canonical;
-                    fixes_applied += 1;
-                }
-            }
-            Err(_) => {
-                // Invalid precision - will be caught by validator
-                let default_precision = crate::runtime::default_quantization_precision();
-                info!(
-                    "🔧 AUTO-FIX: Invalid quantization_precision '{}' → '{}' (default)",
-                    genome.physiology.quantization_precision, default_precision
-                );
-                genome.physiology.quantization_precision = default_precision;
-                fixes_applied += 1;
-            }
-        }
+
     }
 
     for (cortical_id, area) in &mut genome.cortical_areas {
         let cortical_id_display = cortical_id.to_string();
         // Fix zero dimensions
-        if area.dimensions.width == 0 {
-            info!(
-                "🔧 AUTO-FIX: Cortical area '{}' width 0 → 1",
-                cortical_id_display
-            );
-            area.dimensions.width = 1;
-            fixes_applied += 1;
-        }
-        if area.dimensions.height == 0 {
-            info!(
-                "🔧 AUTO-FIX: Cortical area '{}' height 0 → 1",
-                cortical_id_display
-            );
-            area.dimensions.height = 1;
-            fixes_applied += 1;
-        }
-        if area.dimensions.depth == 0 {
-            info!(
-                "🔧 AUTO-FIX: Cortical area '{}' depth 0 → 1",
-                cortical_id_display
-            );
-            area.dimensions.depth = 1;
-            fixes_applied += 1;
-        }
+        
 
         // Fix zero neurons_per_voxel (stored in properties)
         let neurons_per_voxel = area
@@ -244,14 +199,7 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
         // CRITICAL: Validate cortical_area ID format and compliance with feagi-data-processing cortical_units
         validate_cortical_id_format(cortical_id, &cortical_id_display, result);
 
-        // Validate dimensions - AUTO-FIX zeros to 1
-        if area.dimensions.width == 0 || area.dimensions.height == 0 || area.dimensions.depth == 0 {
-            result.add_warning(format!(
-                "AUTO-FIX: Cortical area '{}' has zero dimension(s): {}x{}x{} - will be corrected to minimum (1,1,1)",
-                cortical_id_display, area.dimensions.width, area.dimensions.height, area.dimensions.depth
-            ));
-            // Note: Auto-fix happens in auto_fix_genome() - this just detects the issue
-        }
+
 
         // Validate neurons_per_voxel (stored in properties)
         let neurons_per_voxel = area
@@ -266,14 +214,6 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
             ));
         }
 
-        // Warn about very large dimensions
-        let total_voxels = area.dimensions.width * area.dimensions.height * area.dimensions.depth;
-        if total_voxels > 1_000_000 {
-            result.add_warning(format!(
-                "Cortical area '{}' has very large dimensions: {} total voxels",
-                cortical_id_display, total_voxels
-            ));
-        }
 
         // Validate name
         if area.name.is_empty() {
@@ -556,34 +496,8 @@ fn validate_physiology(genome: &RuntimeGenome, result: &mut ValidationResult) {
         result.add_warning("plasticity_queue_depth is 0 (no plasticity history)".to_string());
     }
 
-    // Validate quantization_precision
-    validate_quantization_precision(&phys.quantization_precision, result);
 }
 
-/// Validate quantization precision value
-fn validate_quantization_precision(precision: &str, result: &mut ValidationResult) {
-    use feagi_npu_neural::types::Precision;
-
-    // Try to parse the precision string
-    match Precision::from_str(precision) {
-        Ok(parsed_precision) => {
-            // Valid - log what was selected
-            if precision != parsed_precision.as_str() {
-                result.add_warning(format!(
-                    "Quantization precision '{}' normalized to '{}'",
-                    precision,
-                    parsed_precision.as_str()
-                ));
-            }
-        }
-        Err(_) => {
-            result.add_error(format!(
-                "Invalid quantization_precision: '{}' (must be 'fp32', 'fp16', or 'int8')",
-                precision
-            ));
-        }
-    }
-}
 
 /// Cross-validate references between genome sections
 fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
@@ -724,23 +638,7 @@ mod tests {
             stats: GenomeStats::default(),
         };
 
-        // Add a valid cortical_area area (use CoreCorticalType::Power)
-        use feagi_genomic_context::cortical_area::CustomCorticalType;
-        use feagi_genome_definitions::{
-            CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalAreaType,
-        };
-        let test_id = CoreCorticalType::Power.to_cortical_id();
-        let area = CorticalArea::new(
-            test_id,
-            0,
-            "Test Area".to_string(),
-            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
-            (0, 0, 0).into(),
-            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
-        )
-        .expect("Failed to create cortical_area area");
-
-        genome.cortical_areas.insert(test_id, area);
+        
 
         let result = validate_genome(&genome);
 

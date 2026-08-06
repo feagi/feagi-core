@@ -1,11 +1,10 @@
-use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
+//use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::agent_registration_message::AgentRegistrationMessage;
 use crate::command_and_control::health_check_message::HealthCheckMessage;
 use crate::command_and_control::messages::burst_engine::BurstEnginesMessage;
 use crate::FeagiAgentError;
 use feagi_io::AgentID;
-use feagi_serialization::FeagiByteContainer;
-use feagi_structures::FeagiJSON;
+use feagi_serialization::{FeagiByteContainer, FeagiJSON};
 use serde::{Deserialize, Serialize};
 
 // All Command and Control messages are within this nested enum.
@@ -16,7 +15,7 @@ pub enum FeagiMessage {
     HeartBeat,
     AgentRegistration(AgentRegistrationMessage),
     HealthCheck(HealthCheckMessage),
-    AgentConfiguration(AgentEmbodimentConfigurationMessage),
+    //AgentConfiguration(AgentEmbodimentConfigurationMessage),
     BurstEngine(BurstEnginesMessage),
 }
 
@@ -40,11 +39,11 @@ impl FeagiMessage {
 impl TryFrom<&FeagiByteContainer> for FeagiMessage {
     type Error = FeagiAgentError;
     fn try_from(value: &FeagiByteContainer) -> Result<Self, Self::Error> {
-        let serialized_data = value.try_create_new_struct_from_index(0)?;
-        let feagi_json: FeagiJSON = serialized_data.try_into()?;
+        let mut feagi_json = FeagiJSON::new_empty();
+        value.try_update_struct_from_index(0, &mut feagi_json)?;
         let json = feagi_json.borrow_json_value().clone();
         serde_json::from_value(json)
-            .map_err(|err| FeagiAgentError::UnableToDecodeReceivedData(err.to_string()))
+            .map_err(|err| FeagiAgentError::unable_to_decode_received_data(err.to_string()))
     }
 }
 

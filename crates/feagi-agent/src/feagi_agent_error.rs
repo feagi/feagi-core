@@ -1,70 +1,108 @@
 //! Unified error types for the FEAGI agent (client and server).
 
+use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
 use feagi_io::FeagiNetworkError;
-use feagi_structures::FeagiDataError;
-use std::error::Error;
-use std::fmt::{Display, Formatter};
 
-/// Errors that can occur in FEAGI agent operations (both client and server).
-#[derive(Debug, Clone)]
-pub enum FeagiAgentError {
-    /// Unable to initialize/start (typically server-side)
-    InitFail(String),
-    /// Failed to connect
-    ConnectionFailed(String),
-    /// Authentication failed (invalid credentials, expired token, etc.)
-    AuthenticationFailed(String),
-    /// Cannot understand what the remote endpoint sent
-    UnableToDecodeReceivedData(String),
-    /// Failed to send data to the remote endpoint
-    UnableToSendData(String),
-    /// Something went wrong with the server network socket and it should be restarted
-    SocketFailure(String),
-    /// Other/uncategorized error
-    Other(String),
-}
-
-impl Display for FeagiAgentError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FeagiAgentError::InitFail(msg) => {
-                write!(f, "FeagiAgentError: Init failed: {}", msg)
-            }
-            FeagiAgentError::ConnectionFailed(msg) => {
-                write!(f, "FeagiAgentError: Connection failed: {}", msg)
-            }
-            FeagiAgentError::AuthenticationFailed(msg) => {
-                write!(f, "FeagiAgentError: Authentication failed: {}", msg)
-            }
-            FeagiAgentError::UnableToDecodeReceivedData(msg) => {
-                write!(
-                    f,
-                    "FeagiAgentError: Unable to decode received data: {}",
-                    msg
-                )
-            }
-            FeagiAgentError::UnableToSendData(msg) => {
-                write!(f, "FeagiAgentError: Unable to send data: {}", msg)
-            }
-            FeagiAgentError::SocketFailure(msg) => {
-                write!(f, "FeagiAgentError: Socket failure: {}", msg)
-            }
-            FeagiAgentError::Other(msg) => {
-                write!(f, "FeagiAgentError: {}", msg)
-            }
+macro_rules! define_feagi_agent_error_key {
+    ($(#[$meta:meta])* $name:ident) => {
+        $(#[$meta])*
+        #[derive(FeagiErrorKey)]
+        pub struct $name {
+            context: &'static str,
+            pub message: String,
         }
-    }
+    };
 }
 
-impl Error for FeagiAgentError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
+define_feagi_agent_error_key!(
+    /// Unable to initialize/start (typically server-side)
+    FeagiAgentInitFailErrKey
+);
+define_feagi_agent_error_key!(
+    /// Failed to connect
+    FeagiAgentConnectionFailedErrKey
+);
+define_feagi_agent_error_key!(
+    /// Authentication failed (invalid credentials, expired token, etc.)
+    FeagiAgentAuthenticationFailedErrKey
+);
+define_feagi_agent_error_key!(
+    /// Cannot understand what the remote endpoint sent
+    FeagiAgentUnableToDecodeReceivedDataErrKey
+);
+define_feagi_agent_error_key!(
+    /// Failed to send data to the remote endpoint
+    FeagiAgentUnableToSendDataErrKey
+);
+define_feagi_agent_error_key!(
+    /// Something went wrong with the server network socket and it should be restarted
+    FeagiAgentSocketFailureErrKey
+);
+define_feagi_agent_error_key!(
+    /// Other/uncategorized error
+    FeagiAgentOtherErrKey
+);
+
+generate_feagi_error! {
+    /// Errors that can occur in FEAGI agent operations (both client and server).
+    FeagiAgentError,
+    keys: {
+        InitFail: FeagiAgentInitFailErrKey,
+        ConnectionFailed: FeagiAgentConnectionFailedErrKey,
+        AuthenticationFailed: FeagiAgentAuthenticationFailedErrKey,
+        UnableToDecodeReceivedData: FeagiAgentUnableToDecodeReceivedDataErrKey,
+        UnableToSendData: FeagiAgentUnableToSendDataErrKey,
+        SocketFailure: FeagiAgentSocketFailureErrKey,
+        Other: FeagiAgentOtherErrKey,
+    },
+    sub_errors: {
+
+    },
 }
 
-impl From<FeagiDataError> for FeagiAgentError {
-    fn from(err: FeagiDataError) -> Self {
-        FeagiAgentError::Other(err.to_string())
+impl FeagiAgentError {
+    pub fn init_fail(message: impl Into<String>) -> Self {
+        FeagiAgentInitFailErrKey::new("FeagiAgentError: Init failed", message.into()).into()
+    }
+
+    pub fn connection_failed(message: impl Into<String>) -> Self {
+        FeagiAgentConnectionFailedErrKey::new("FeagiAgentError: Connection failed", message.into()).into()
+    }
+
+    pub fn authentication_failed(message: impl Into<String>) -> Self {
+        FeagiAgentAuthenticationFailedErrKey::new("FeagiAgentError: Authentication failed", message.into()).into()
+    }
+
+    pub fn unable_to_decode_received_data(message: impl Into<String>) -> Self {
+        FeagiAgentUnableToDecodeReceivedDataErrKey::new(
+            "FeagiAgentError: Unable to decode received data",
+            message.into(),
+        )
+        .into()
+    }
+
+    pub fn unable_to_send_data(message: impl Into<String>) -> Self {
+        FeagiAgentUnableToSendDataErrKey::new("FeagiAgentError: Unable to send data", message.into()).into()
+    }
+
+    pub fn socket_failure(message: impl Into<String>) -> Self {
+        FeagiAgentSocketFailureErrKey::new("FeagiAgentError: Socket failure", message.into()).into()
+    }
+
+    pub fn other(message: impl Into<String>) -> Self {
+        FeagiAgentOtherErrKey::new("FeagiAgentError", message.into()).into()
+    }
+
+    pub fn message(&self) -> &str {
+        match self {
+            FeagiAgentError::InitFail(key) => &key.message,
+            FeagiAgentError::ConnectionFailed(key) => &key.message,
+            FeagiAgentError::AuthenticationFailed(key) => &key.message,
+            FeagiAgentError::UnableToDecodeReceivedData(key) => &key.message,
+            FeagiAgentError::UnableToSendData(key) => &key.message,
+            FeagiAgentError::SocketFailure(key) => &key.message,
+            FeagiAgentError::Other(key) => &key.message,
+        }
     }
 }
 
@@ -74,10 +112,9 @@ impl From<FeagiDataError> for FeagiAgentError {
 /// Used by callers and telemetry to avoid treating transient backpressure like a session failure.
 pub fn is_transient_zmq_send_would_block(err: &FeagiAgentError) -> bool {
     match err {
-        FeagiAgentError::UnableToSendData(msg) | FeagiAgentError::SocketFailure(msg) => {
-            msg.contains("Socket would block")
-        }
-        _ => err.to_string().contains("Socket would block"),
+        FeagiAgentError::UnableToSendData(key) => key.message.contains("Socket would block"),
+        FeagiAgentError::SocketFailure(key) => key.message.contains("Socket would block"),
+        _ => err.message().contains("Socket would block"),
     }
 }
 
@@ -90,31 +127,37 @@ impl From<FeagiNetworkError> for FeagiAgentError {
     fn from(err: FeagiNetworkError) -> Self {
         match err {
             FeagiNetworkError::CannotBind(msg) => {
-                FeagiAgentError::InitFail(format!("Cannot bind: {}", msg))
+                FeagiAgentError::init_fail(format!("Cannot bind: {}", msg))
             }
             FeagiNetworkError::CannotUnbind(msg) => {
-                FeagiAgentError::SocketFailure(format!("Cannot unbind: {}", msg))
+                FeagiAgentError::socket_failure(format!("Cannot unbind: {}", msg))
             }
             FeagiNetworkError::CannotConnect(msg) => {
-                FeagiAgentError::ConnectionFailed(format!("Cannot connect: {}", msg))
+                FeagiAgentError::connection_failed(format!("Cannot connect: {}", msg))
             }
             FeagiNetworkError::CannotDisconnect(msg) => {
-                FeagiAgentError::SocketFailure(format!("Cannot disconnect: {}", msg))
+                FeagiAgentError::socket_failure(format!("Cannot disconnect: {}", msg))
             }
-            FeagiNetworkError::SendFailed(msg) => FeagiAgentError::UnableToSendData(msg),
+            FeagiNetworkError::SendFailed(msg) => FeagiAgentError::unable_to_send_data(msg),
             FeagiNetworkError::ReceiveFailed(msg) => {
-                FeagiAgentError::UnableToDecodeReceivedData(format!("Receive failed: {}", msg))
+                FeagiAgentError::unable_to_decode_received_data(format!("Receive failed: {}", msg))
             }
             FeagiNetworkError::InvalidSocketProperties(msg) => {
-                FeagiAgentError::InitFail(format!("Invalid socket properties: {}", msg))
+                FeagiAgentError::init_fail(format!("Invalid socket properties: {}", msg))
             }
             FeagiNetworkError::SocketCreationFailed(msg) => {
-                FeagiAgentError::SocketFailure(format!("Socket creation failed: {}", msg))
+                FeagiAgentError::socket_failure(format!("Socket creation failed: {}", msg))
             }
             FeagiNetworkError::GeneralFailure(msg) => {
-                FeagiAgentError::Other(format!("General failure: {}", msg))
+                FeagiAgentError::other(format!("General failure: {}", msg))
             }
         }
+    }
+}
+
+impl From<()> for FeagiAgentError {
+    fn from(_: ()) -> Self {
+        FeagiAgentError::other("operation failed")
     }
 }
 
@@ -124,14 +167,13 @@ mod transient_send_tests {
 
     #[test]
     fn detects_would_block_in_unable_to_send() {
-        let e = FeagiAgentError::UnableToSendData("Socket would block".to_string());
+        let e = FeagiAgentError::unable_to_send_data("Socket would block");
         assert!(is_transient_zmq_send_would_block(&e));
     }
 
     #[test]
     fn ignores_other_unable_to_send() {
-        let e =
-            FeagiAgentError::UnableToSendData("Cannot send to inactive sensory socket".to_string());
+        let e = FeagiAgentError::unable_to_send_data("Cannot send to inactive sensory socket");
         assert!(!is_transient_zmq_send_would_block(&e));
     }
 

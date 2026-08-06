@@ -27,7 +27,7 @@ use crate::types::{EvoError, EvoResult};
 pub fn detect_schema_version(genome: &Value) -> EvoResult<GenomeSchemaVersion> {
     if let Some(integer) = genome.get("genome_schema_version").and_then(|v| v.as_u64()) {
         let narrowed: u32 = integer.try_into().map_err(|_| {
-            EvoError::InvalidGenome(format!(
+            EvoError::invalid_genome(format!(
                 "genome_schema_version {} exceeds u32 range",
                 integer
             ))
@@ -44,11 +44,11 @@ pub fn detect_schema_version(genome: &Value) -> EvoResult<GenomeSchemaVersion> {
         // module's README, every accepted minor variant is listed by hand.
         Some("2.0") | Some("2.1") => Ok(GenomeSchemaVersion(2)),
         Some("3.0") => Ok(GenomeSchemaVersion(3)),
-        Some(other) => Err(EvoError::InvalidGenome(format!(
+        Some(other) => Err(EvoError::invalid_genome(format!(
             "Unsupported legacy genome version string '{other}'. Expected '2.0', '2.1', or \
              '3.0', or an explicit integer `genome_schema_version` field."
         ))),
-        None => Err(EvoError::InvalidGenome(
+        None => Err(EvoError::invalid_genome(
             "Genome is missing both `genome_schema_version` (integer) and `version` (legacy \
              string)"
                 .to_string(),

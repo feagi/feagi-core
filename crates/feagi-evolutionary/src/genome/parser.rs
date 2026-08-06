@@ -44,16 +44,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
-
+use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateGenomic, NeuronVoxelDimensionsGenomic};
 use crate::types::{EvoError, EvoResult};
 use feagi_genomic_context::brain_region::RegionID;
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_genome_definitions::{
-    CorticalArea, CorticalAreaDimensions as Dimensions,
-};
-use feagi_genome_definitions::descriptors::GenomeCoordinate3D;
 use feagi_genomic_context::brain_region::BrainRegion;
 use feagi_genomic_context::brain_region::RegionType;
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]
@@ -293,17 +290,10 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
         return Ok(CoreCorticalType::Hope.to_cortical_id());
     }
 
-    // For non-core areas, use CorticalID's legacy ASCII parser (6-char and 8-char)
-    if id_str.len() == 6 || id_str.len() == 8 {
-        CorticalID::try_from_legacy_ascii(id_str).map_err(|e| {
-            EvoError::InvalidArea(format!("Failed to convert cortical_id '{}': {}", id_str, e))
-        })
-    } else {
-        Err(EvoError::InvalidArea(format!(
-            "Invalid cortical_id length: '{}' (expected 6 or 8 ASCII chars, or base64)",
-            id_str
-        )))
-    }
+    Err(EvoError::invalid_area(format!(
+        "Invalid cortical_id length: '{}' (expected 6 or 8 ASCII chars, or base64)",
+        id_str
+    )))
 }
 
 /// Genome parser
@@ -361,11 +351,11 @@ impl GenomeParser {
     pub fn parse(json_str: &str) -> EvoResult<ParsedGenome> {
         // Deserialize raw genome
         let raw: RawGenome = serde_json::from_str(json_str)
-            .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
+            .map_err(|e| EvoError::invalid_genome(format!("Failed to parse JSON: {}", e)))?;
 
         // Validate version - support 2.x and 3.x (3.0 is flat format with base64 IDs)
         if !raw.version.starts_with("2.") && !raw.version.starts_with("3.") && raw.version != "3" {
-            return Err(EvoError::InvalidGenome(format!(
+            return Err(EvoError::invalid_genome(format!(
                 "Unsupported genome version: {}. Expected 2.x or 3.x",
                 raw.version
             )));
@@ -418,40 +408,37 @@ impl GenomeParser {
 
             let dimensions = if let Some(boundaries) = &raw_area.block_boundaries {
                 if boundaries.len() != 3 {
-                    return Err(EvoError::InvalidArea(format!(
+                    return Err(EvoError::invalid_area(format!(
                         "Invalid block_boundaries for {}: expected 3 values, got {}",
                         cortical_id_str,
                         boundaries.len()
                     )));
                 }
-                Dimensions::new(boundaries[0], boundaries[1], boundaries[2])
-                    .map_err(|e| EvoError::InvalidArea(format!("Invalid dimensions: {}", e)))?
+                NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(boundaries[0] as usize, boundaries[1] as usize, boundaries[2] as usize)
             } else {
                 // Default to 1x1x1 if not specified (should not happen in valid genomes)
                 warn!(target: "feagi-evo","Cortical area {} missing block_boundaries, defaulting to 1x1x1", cortical_id_str);
-                Dimensions::new(1, 1, 1).map_err(|e| {
-                    EvoError::InvalidArea(format!("Invalid default dimensions: {}", e))
-                })?
+                NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1)
             };
 
             let position = if let Some(coords) = &raw_area.relative_coordinate {
                 if coords.len() != 3 {
-                    return Err(EvoError::InvalidArea(format!(
+                    return Err(EvoError::invalid_area(format!(
                         "Invalid relative_coordinate for {}: expected 3 values, got {}",
                         cortical_id_str,
                         coords.len()
                     )));
                 }
-                GenomeCoordinate3D::new(coords[0], coords[1], coords[2])
+                NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(coords[0].try_into().unwrap(), coords[1].try_into().unwrap(), coords[2].try_into().unwrap())
             } else {
                 // Default to origin if not specified
                 warn!(target: "feagi-evo","Cortical area {} missing relative_coordinate, defaulting to (0,0,0)", cortical_id_str);
-                GenomeCoordinate3D::new(0, 0, 0)
+                NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0.try_into().unwrap(), 0.try_into().unwrap(), 0.try_into().unwrap())
             };
 
             // Determine cortical_area type from cortical_id
             let cortical_type = cortical_id.as_cortical_type().map_err(|e| {
-                EvoError::InvalidArea(format!(
+                EvoError::invalid_area(format!(
                     "Failed to determine cortical_area type from ID {}: {}",
                     cortical_id_str, e
                 ))
@@ -674,7 +661,7 @@ impl GenomeParser {
 
             let region_type = RegionType::Undefined; // Default to Undefined
 
-            let mut region = BrainRegion::new(region_id, title, region_type)?;
+            let mut region = BrainRegion::new(region_id, title, region_type).unwrap();
 
             // v3 RuntimeGenome sections nest IO under `properties`; merge before list fields.
             if let Some(props) = &raw_region.properties {

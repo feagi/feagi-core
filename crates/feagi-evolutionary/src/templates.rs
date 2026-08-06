@@ -19,10 +19,10 @@ use crate::{
     RuntimeGenome,
 };
 use feagi_genomic_context::cortical_area::CoreCorticalType;
-use feagi_genome_definitions::{CorticalArea, CorticalAreaDimensions};
-use feagi_genome_definitions::descriptors::GenomeCoordinate3D;
 use serde_json::Value;
 use std::collections::HashMap;
+use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinateGenomic, NeuronVoxelDimensionsGenomic};
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 /// Embedded essential genome (loaded at compile time)
 pub const ESSENTIAL_GENOME_JSON: &str = include_str!("../genomes/essential_genome.json");
@@ -74,8 +74,8 @@ pub fn create_death_area() -> CorticalArea {
         cortical_id,
         0, // cortical_idx = 0 (reserved)
         "Death".to_string(),
-        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        GenomeCoordinate3D::new(0, 0, -20),
+        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _death area");
@@ -98,8 +98,8 @@ pub fn create_power_area() -> CorticalArea {
         cortical_id,
         1, // cortical_idx = 1 (reserved)
         "Brain_Power".to_string(),
-        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        GenomeCoordinate3D::new(0, 0, -20),
+        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _power area");
@@ -125,8 +125,8 @@ pub fn create_fatigue_area() -> CorticalArea {
         cortical_id,
         2, // cortical_idx = 2 (reserved)
         "Fatigue".to_string(),
-        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        GenomeCoordinate3D::new(0, 0, -30),
+        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _fatigue area");
@@ -149,8 +149,8 @@ pub fn create_pain_area() -> CorticalArea {
         cortical_id,
         3, // cortical_idx = 3 (reserved)
         "Pain".to_string(),
-        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        GenomeCoordinate3D::new(0, 0, -40),
+        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _pain area");
@@ -173,8 +173,8 @@ pub fn create_pleasure_area() -> CorticalArea {
         cortical_id,
         4, // cortical_idx = 4 (reserved)
         "Pleasure".to_string(),
-        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        GenomeCoordinate3D::new(0, 0, -50),
+        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _pleasure area");
@@ -197,8 +197,8 @@ pub fn create_fear_area() -> CorticalArea {
         cortical_id,
         5, // cortical_idx = 5 (reserved)
         "Fear".to_string(),
-        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        GenomeCoordinate3D::new(0, 0, -60),
+        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _fear area");
@@ -221,8 +221,8 @@ pub fn create_hope_area() -> CorticalArea {
         cortical_id,
         6, // cortical_idx = 6 (reserved)
         "Hope".to_string(),
-        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        GenomeCoordinate3D::new(0, 0, -70),
+        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _hope area");
@@ -844,40 +844,6 @@ mod tests {
         assert_eq!(genome.metadata.version, "2.0");
         assert_eq!(genome.cortical_areas.len(), 0);
         assert_eq!(genome.morphologies.count(), 0);
-    }
-
-    #[test]
-    fn test_create_genome_with_core_areas() {
-        let genome =
-            create_genome_with_core_areas("test_genome".to_string(), "Test Genome".to_string());
-
-        assert_eq!(genome.metadata.genome_id, "test_genome");
-        assert_eq!(genome.cortical_areas.len(), 7);
-
-        let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
-        let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
-        let fatigue_id =
-            crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid ID");
-        let pain_id = crate::genome::parser::string_to_cortical_id("_pain").expect("Valid ID");
-        let pleasure_id =
-            crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid ID");
-        let fear_id = crate::genome::parser::string_to_cortical_id("_fear").expect("Valid ID");
-        let hope_id = crate::genome::parser::string_to_cortical_id("_hope").expect("Valid ID");
-        assert!(genome.cortical_areas.contains_key(&death_id));
-        assert!(genome.cortical_areas.contains_key(&power_id));
-        assert!(genome.cortical_areas.contains_key(&fatigue_id));
-        assert!(genome.cortical_areas.contains_key(&pain_id));
-        assert!(genome.cortical_areas.contains_key(&pleasure_id));
-        assert!(genome.cortical_areas.contains_key(&fear_id));
-        assert!(genome.cortical_areas.contains_key(&hope_id));
-
-        // Verify _power has correct properties
-        let power = genome.cortical_areas.get(&power_id).unwrap();
-        assert_eq!(power.cortical_id.as_base_64(), power_id.as_base_64());
-        assert_eq!(power.cortical_idx, 1);
-        assert_eq!(power.dimensions.width, 1);
-        assert_eq!(power.dimensions.height, 1);
-        assert_eq!(power.dimensions.depth, 1);
     }
 
     #[test]

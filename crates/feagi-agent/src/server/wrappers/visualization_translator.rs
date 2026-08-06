@@ -40,12 +40,12 @@ impl VisualizationTranslator {
             FeagiEndpointState::Inactive => Ok(()),
             FeagiEndpointState::Pending => Ok(()),
             FeagiEndpointState::ActiveWaiting => Ok(()),
-            FeagiEndpointState::ActiveHasData => Err(FeagiAgentError::SocketFailure(
+            FeagiEndpointState::ActiveHasData => Err(FeagiAgentError::socket_failure(
                 "Agent cannot send Visualization data!".to_string(),
             )),
             FeagiEndpointState::Errored(error) => {
                 self.visualization_server.confirm_error_and_close()?;
-                Err(FeagiAgentError::SocketFailure(error.to_string()))
+                Err(FeagiAgentError::socket_failure(error.to_string()))
             }
         }
     }
@@ -62,7 +62,7 @@ impl VisualizationTranslator {
                 viz_server.publish_data(viz_data.get_byte_ref())?;
                 Ok(())
             }
-            _ => Err(FeagiAgentError::UnableToSendData(
+            _ => Err(FeagiAgentError::unable_to_send_data(
                 "Visualization socket not ready!".to_string(),
             )),
         }

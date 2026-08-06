@@ -296,7 +296,7 @@ mod tests {
             &mut session,
             &mut watcher,
             &mut policy,
-            Err(FeagiAgentError::ConnectionFailed("down".to_string())),
+            Err(FeagiAgentError::connection_failed("down".to_string())),
             false,
             10,
         );
@@ -315,8 +315,8 @@ mod tests {
     #[test]
     fn rebuild_failure_increments_counter() {
         let mut session = FakeSession::with_results(vec![
-            Err(FeagiAgentError::ConnectionFailed("a".to_string())),
-            Err(FeagiAgentError::ConnectionFailed("b".to_string())),
+            Err(FeagiAgentError::connection_failed("a".to_string())),
+            Err(FeagiAgentError::connection_failed("b".to_string())),
         ]);
         let mut watcher = HealthWatcher::new();
         let mut policy = ReconnectPolicy::new(cfg());

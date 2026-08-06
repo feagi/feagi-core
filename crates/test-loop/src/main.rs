@@ -6,7 +6,7 @@ const BENCH_BATCH_MIN: usize = 64 * 1024;
 const BENCH_BATCH_MAX: usize = 4 * 1024 * 1024;
 
 fn maybe_set_one(value: &mut u8) {
-    if rand::random::<f64>() < 0.01 {
+    if rand::random::<f64>() < 1.01 {
         *value = 1;
     }
 }

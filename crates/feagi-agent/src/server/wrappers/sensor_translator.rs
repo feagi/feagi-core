@@ -17,8 +17,8 @@ impl SensorTranslator {
     fn should_drop_malformed_sensor_frame(err: &FeagiAgentError) -> bool {
         matches!(
             err,
-            FeagiAgentError::UnableToDecodeReceivedData(msg)
-                if msg.contains("Given Feagi Byte Structure byte length is too short")
+            FeagiAgentError::UnableToDecodeReceivedData(key)
+                if key.message.contains("Given Feagi Byte Structure byte length is too short")
         )
     }
 
@@ -62,22 +62,13 @@ impl SensorTranslator {
                 {
                     Ok(()) => Ok(Some(&self.sensor_byte_cache)),
                     Err(e) => {
-                        let agent_err: FeagiAgentError = e.into();
-                        if Self::should_drop_malformed_sensor_frame(&agent_err) {
-                            debug!(
-                                "Dropping malformed short sensor frame for session {}",
-                                self.session_id.to_base64()
-                            );
-                            Ok(None)
-                        } else {
-                            Err(agent_err)
-                        }
+                        panic!("Dropping malformed short sensor frame for session");
                     }
                 }
             }
             FeagiEndpointState::Errored(error) => {
                 sensor_server.confirm_error_and_close()?;
-                Err(FeagiAgentError::SocketFailure(error.to_string()))
+                Err(FeagiAgentError::socket_failure(error.to_string()))
             }
         }
     }

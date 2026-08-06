@@ -39,7 +39,7 @@ pub fn parse_cortical_type(
     let cortical_group = properties
         .get("cortical_group")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| EvoError::InvalidGenome("Missing cortical_group property".to_string()))?;
+        .ok_or_else(|| EvoError::invalid_genome("Missing cortical_group property".to_string()))?;
 
     // Parse base type from cortical_group
     let cortical_type = match cortical_group.to_uppercase().as_str() {
@@ -62,7 +62,7 @@ pub fn parse_cortical_type(
         "MEMORY" => CorticalAreaType::Memory(
             feagi_genomic_context::cortical_area::MemoryCorticalType::Memory
         ),
-        _ => return Err(EvoError::InvalidGenome(format!("Unknown cortical_group: {}", cortical_group))),
+        _ => return Err(EvoError::invalid_genome(format!("Unknown cortical_group: {}", cortical_group))),
     };
 
     Ok(cortical_type)

@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
-use crate::genomic::brain_regions::{RegionID, RegionType};
-use crate::genomic::cortical_area::CorticalID;
-use crate::genomic::FeagiStructuresGenomicError;
+use crate::brain_region::{RegionID, RegionType};
+use crate::cortical_area::CorticalID;
+use crate::feagi_genome_context_error::{FeagiBrainRegionErrKey, FeagiGenomeContextError};
 
 /// Brain region metadata (genome representation)
 ///
@@ -55,11 +55,9 @@ impl BrainRegion {
         region_id: RegionID,
         name: String,
         region_type: RegionType,
-    ) -> Result<Self, FeagiStructuresGenomicError> {
+    ) -> Result<Self, FeagiGenomeContextError> {
         if name.trim().is_empty() {
-            return Err(FeagiStructuresGenomicError::BrainRegionError {
-                context: "brain region name cannot be empty",
-            });
+            return Err(FeagiBrainRegionErrKey::new("brain region name cannot be empty").into());
         }
 
         Ok(Self {

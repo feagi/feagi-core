@@ -3236,7 +3236,7 @@ mod tests {
         use feagi_genomic_context::cortical_area::{
             CoreCorticalType, CorticalArea, CorticalAreaDimensions,
         };
-        use feagi_genomic_context::positioning::GenomeCoordinate3D;
+        use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
         use parking_lot::RwLock;
         use std::collections::HashMap;
         use std::sync::Arc;
@@ -3336,7 +3336,7 @@ mod tests {
         use feagi_genomic_context::cortical_area::{
             CoreCorticalType, CorticalArea, CorticalAreaDimensions,
         };
-        use feagi_genomic_context::positioning::GenomeCoordinate3D;
+        use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
         use parking_lot::RwLock;
         use std::collections::HashMap;
         use std::sync::Arc;

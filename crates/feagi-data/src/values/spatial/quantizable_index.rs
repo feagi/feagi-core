@@ -82,6 +82,7 @@ macro_rules! create_coordinate {
     ) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(serde::Serialize, serde::Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
             pub(crate) inner: [Q; $num_dimensions],
         }
@@ -250,6 +251,7 @@ macro_rules! create_dimension {
     ) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(serde::Serialize, serde::Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
             pub(crate) inner: [Q; $num_dimensions],
         }
@@ -550,6 +552,11 @@ macro_rules! create_wrapped_quantized_index_coordinate {
     ) => {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(serde::Serialize, serde::Deserialize)]
+        #[serde(bound(
+            serialize = "Q: serde::Serialize",
+            deserialize = "Q: serde::Deserialize<'de>"
+        ))]
         $vis struct $wrapper_struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait>($quant_index_coord_to_wrap<Q>);
 
         ::paste::paste! {
@@ -718,6 +725,11 @@ macro_rules! create_wrapped_quantized_index_dimension {
     ) => {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(serde::Serialize, serde::Deserialize)]
+        #[serde(bound(
+            serialize = "Q: serde::Serialize",
+            deserialize = "Q: serde::Deserialize<'de>"
+        ))]
         $vis struct $wrapper_struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait>($quant_index_dim_to_wrap<Q>);
 
         ::paste::paste! {

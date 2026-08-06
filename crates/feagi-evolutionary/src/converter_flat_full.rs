@@ -106,10 +106,10 @@ fn create_area_template() -> serde_json::Map<String, Value> {
 pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value> {
     let flat_blueprint = if let Some(bp) = flat_genome.get("blueprint") {
         bp.as_object().ok_or_else(|| {
-            EvoError::InvalidGenome("Flat genome blueprint must be an object".to_string())
+            EvoError::invalid_genome("Flat genome blueprint must be an object".to_string())
         })?
     } else {
-        return Err(EvoError::InvalidGenome(
+        return Err(EvoError::invalid_genome(
             "Flat genome missing blueprint section".to_string(),
         ));
     };

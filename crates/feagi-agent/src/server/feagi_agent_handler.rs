@@ -1,4 +1,4 @@
-use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
+//use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::agent_registration_message::{
     AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse,
 };
@@ -379,7 +379,7 @@ impl FeagiAgentHandler {
             .get(&agent_id)
         {
             None => {
-                return Err(FeagiAgentError::Other(
+                return Err(FeagiAgentError::other(
                     "No such Agent ID exists!".to_string(),
                 ))
             }
@@ -410,7 +410,7 @@ impl FeagiAgentHandler {
             .command_control_servers
             .get_mut(command_server_index)
             .ok_or_else(|| {
-                FeagiAgentError::Other("Missing command control server index".to_string())
+                FeagiAgentError::other("Missing command control server index".to_string())
             })?;
         command_translator.send_message(session_id, message, increment_counter)
     }
@@ -423,7 +423,7 @@ impl FeagiAgentHandler {
         let motor_translator = self
             .motors
             .get_mut(&agent_id)
-            .ok_or_else(|| FeagiAgentError::Other("No Agent ID exists!".to_string()))?;
+            .ok_or_else(|| FeagiAgentError::other("No Agent ID exists!".to_string()))?;
         motor_translator.poll_and_send_buffered_motor_data(data)?;
         self.refresh_agent_activity(agent_id);
         Ok(())
@@ -437,7 +437,7 @@ impl FeagiAgentHandler {
         let visualization_translator = self
             .visualizations
             .get_mut(&agent_id)
-            .ok_or_else(|| FeagiAgentError::Other("No Agent ID exists!".to_string()))?;
+            .ok_or_else(|| FeagiAgentError::other("No Agent ID exists!".to_string()))?;
         visualization_translator.poll_and_send_visualization_data(data)?;
         self.refresh_agent_activity(agent_id);
         Ok(())
@@ -503,7 +503,7 @@ impl FeagiAgentHandler {
                 self.refresh_agent_activity(agent_id);
                 Ok(())
             }
-            None => Err(FeagiAgentError::UnableToSendData(
+            None => Err(FeagiAgentError::unable_to_send_data(
                 "Nonexistant Agent ID!".to_string(),
             )),
         }
@@ -522,7 +522,7 @@ impl FeagiAgentHandler {
                 self.refresh_agent_activity(agent_id);
                 Ok(())
             }
-            None => Err(FeagiAgentError::UnableToSendData(
+            None => Err(FeagiAgentError::unable_to_send_data(
                 "Nonexistant Agent ID!".to_string(),
             )),
         }
@@ -552,7 +552,7 @@ impl FeagiAgentHandler {
                 return Ok(i);
             }
         }
-        Err(FeagiAgentError::InitFail(
+        Err(FeagiAgentError::init_fail(
             "Missing required protocol puller".to_string(),
         ))
     }
@@ -571,7 +571,7 @@ impl FeagiAgentHandler {
                 return Ok(i);
             }
         }
-        Err(FeagiAgentError::InitFail(
+        Err(FeagiAgentError::init_fail(
             "Missing required protocol publisher".to_string(),
         ))
     }
@@ -588,7 +588,7 @@ impl FeagiAgentHandler {
                 return Ok(i);
             }
         }
-        Err(FeagiAgentError::InitFail(
+        Err(FeagiAgentError::init_fail(
             "Missing required protocol publisher".to_string(),
         ))
     }
@@ -818,6 +818,7 @@ impl FeagiAgentHandler {
                 self.send_message_to_agent(agent_id, FeagiMessage::HeartBeat, 0)?;
                 Ok(None)
             }
+            /*
             FeagiMessage::AgentConfiguration(
                 AgentEmbodimentConfigurationMessage::AgentConfigurationDetails(device_def),
             ) => {
@@ -847,6 +848,8 @@ impl FeagiAgentHandler {
                 self.send_message_to_agent(agent_id, FeagiMessage::HeartBeat, 0)?;
                 Ok(None)
             }
+            
+             */
             _ => {
                 // Throw up anything else
                 Ok(Some((agent_id, message)))
@@ -869,7 +872,7 @@ impl FeagiAgentHandler {
         // TODO prevent duplicate registration
         /*
         if self.all_registered_agents.contains_key(&agent_id) {
-            return Err(FeagiAgentError::ConnectionFailed(
+            return Err(FeagiAgentError::connection_failed(
                 "Agent Already registered".to_string(),
             ));
         }

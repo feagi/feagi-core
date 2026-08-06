@@ -88,7 +88,7 @@ fn migrate_morphology_ids(result: &mut MigrationResult) -> EvoResult<()> {
     let genome = result
         .genome
         .as_object_mut()
-        .ok_or_else(|| EvoError::InvalidGenome("Genome is not an object".to_string()))?;
+        .ok_or_else(|| EvoError::invalid_genome("Genome is not an object".to_string()))?;
 
     for section_key in ["morphologies", "neuron_morphologies"] {
         if let Some(Value::Object(section)) = genome.get_mut(section_key) {
@@ -147,7 +147,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
     let blueprint = genome_json
         .get("blueprint")
         .and_then(|v| v.as_object())
-        .ok_or_else(|| EvoError::InvalidGenome("Missing or invalid blueprint".to_string()))?;
+        .ok_or_else(|| EvoError::invalid_genome("Missing or invalid blueprint".to_string()))?;
 
     // Check if genome is in flat format (keys like "_____10c-iic000-cx-...")
     let is_flat = blueprint.keys().any(|k| k.starts_with("_____10c-"));
@@ -329,7 +329,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
 
                         // If we didn't insert a mapping, we ran out of group IDs.
                         if !result.id_mapping.contains_key(id) {
-                            return Err(EvoError::InvalidGenome(
+                            return Err(EvoError::invalid_genome(
                                 "Unable to allocate unique MiscData IPU group ID for legacy base64 vision cortical_area IDs".to_string(),
                             ));
                         }
@@ -414,7 +414,7 @@ fn legacy_io_to_custom_base64(old_id: &str) -> EvoResult<String> {
     } else {
         old_id.to_string()
     };
-    Err(EvoError::InvalidGenome(format!(
+    Err(EvoError::invalid_genome(format!(
         "Failed to convert legacy IO '{}' to custom",
         old_id,
     )))
@@ -767,12 +767,12 @@ fn migrate_blueprint(result: &mut MigrationResult) -> EvoResult<()> {
     let genome = result
         .genome
         .as_object_mut()
-        .ok_or_else(|| EvoError::InvalidGenome("Genome is not an object".to_string()))?;
+        .ok_or_else(|| EvoError::invalid_genome("Genome is not an object".to_string()))?;
 
     let old_blueprint = genome
         .get("blueprint")
         .and_then(|v| v.as_object())
-        .ok_or_else(|| EvoError::InvalidGenome("Missing or invalid blueprint".to_string()))?
+        .ok_or_else(|| EvoError::invalid_genome("Missing or invalid blueprint".to_string()))?
         .clone();
 
     // Check if genome is in flat format
@@ -814,7 +814,7 @@ fn migrate_brain_regions(result: &mut MigrationResult) -> EvoResult<()> {
     let genome = result
         .genome
         .as_object_mut()
-        .ok_or_else(|| EvoError::InvalidGenome("Genome is not an object".to_string()))?;
+        .ok_or_else(|| EvoError::invalid_genome("Genome is not an object".to_string()))?;
 
     if let Some(brain_regions_value) = genome.get_mut("brain_regions") {
         if brain_regions_value.is_null() {
@@ -913,7 +913,7 @@ fn migrate_cortical_mappings(result: &mut MigrationResult) -> EvoResult<()> {
     let genome = result
         .genome
         .as_object_mut()
-        .ok_or_else(|| EvoError::InvalidGenome("Genome is not an object".to_string()))?;
+        .ok_or_else(|| EvoError::invalid_genome("Genome is not an object".to_string()))?;
 
     if let Some(blueprint_value) = genome.get_mut("blueprint") {
         if let Some(blueprint) = blueprint_value.as_object_mut() {

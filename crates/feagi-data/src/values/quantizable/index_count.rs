@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
 use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
 
@@ -78,6 +79,7 @@ Copy
 + Sized
 + 'static
 + QuantizedElementBase
++ Serialize
 {
     const LEVEL: IndexCountQuantizationLevel;
     const QUANT_MAX: Self;

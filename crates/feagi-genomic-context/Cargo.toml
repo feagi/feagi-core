@@ -41,6 +41,7 @@ ahash = { workspace = true}
 base64 = "0.22.1" # TODO remove this!
 serde = { workspace = true, optional = true}
 serde_json = { workspace = true, optional = true}
+uuid = { version = "1.24.0", features = ["v4", "v7"] }
 
 
 [lints]

@@ -1287,8 +1287,10 @@ dependencies = [
  "base64 0.22.1",
  "feagi-data",
  "feagi-io",
+ "feagi-logging-and-errors",
  "feagi-sensorimotor",
  "feagi-serialization",
+ "paste",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -1404,8 +1406,10 @@ dependencies = [
  "feagi-data",
  "feagi-genomic-context",
  "feagi-genomic-data",
+ "feagi-logging-and-errors",
  "feagi-observability",
  "js-sys",
+ "paste",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1429,6 +1433,7 @@ dependencies = [
  "paste",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -1436,7 +1441,10 @@ name = "feagi-genomic-data"
 version = "0.1.1"
 dependencies = [
  "feagi-data",
+ "feagi-genomic-context",
  "feagi-logging-and-errors",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -5163,9 +5171,9 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.23.0"
+version = "1.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ac8b6f42ead25368cf5b098aeb3dc8a1a2c05a3eee8a9a1a68c640edbfc79d9"
+checksum = "bf3923a6f5c4c6382e0b653c4117f48d631ea17f38ed86e2a828e6f7412f5239"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",

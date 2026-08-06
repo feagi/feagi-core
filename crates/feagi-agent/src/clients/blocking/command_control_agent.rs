@@ -43,7 +43,7 @@ impl CommandControlAgent {
 
     pub fn request_connect(&mut self) -> Result<(), FeagiAgentError> {
         if self.registration_status != AgentRegistrationStatus::NotRegistered {
-            return Err(FeagiAgentError::ConnectionFailed(
+            return Err(FeagiAgentError::connection_failed(
                 "Agent already connected and registered!".to_string(),
             ));
         }
@@ -62,7 +62,7 @@ impl CommandControlAgent {
             }
             _ => {
                 self.requester = Some(requester);
-                Err(FeagiAgentError::ConnectionFailed(
+                Err(FeagiAgentError::connection_failed(
                     "Socket is already active!".to_string(),
                 ))
             }
@@ -80,7 +80,7 @@ impl CommandControlAgent {
                 .get_endpoint_target()
                 .as_transport_protocol_implementation()
         } else {
-            return Err(FeagiAgentError::ConnectionFailed(
+            return Err(FeagiAgentError::connection_failed(
                 "Cannot register to endpoint when not connected!".to_string(),
             ));
         };
@@ -132,7 +132,7 @@ impl CommandControlAgent {
     /// orchestration to ensure sockets are torn down deterministically.
     pub fn request_disconnect(&mut self) -> Result<(), FeagiAgentError> {
         let requester = self.requester.as_mut().ok_or_else(|| {
-            FeagiAgentError::ConnectionFailed("No socket is active to disconnect!".to_string())
+            FeagiAgentError::connection_failed("No socket is active to disconnect!".to_string())
         })?;
         requester.request_disconnect()?;
         Ok(())
@@ -147,7 +147,7 @@ impl CommandControlAgent {
     ) -> Result<(&FeagiEndpointState, Option<FeagiMessage>), FeagiAgentError> {
         let maybe_message = {
             let requester = self.requester.as_mut().ok_or_else(|| {
-                FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string())
+                FeagiAgentError::connection_failed("No socket is active to poll!".to_string())
             })?;
 
             let state_snapshot = requester.poll().clone();
@@ -166,7 +166,7 @@ impl CommandControlAgent {
                         FeagiMessage::AgentRegistration(registration_message) => {
                             match registration_message {
                                 AgentRegistrationMessage::ClientRequestRegistration(_) => {
-                                    Err(FeagiAgentError::ConnectionFailed(
+                                    Err(FeagiAgentError::connection_failed(
                                         "Client cannot register agents!".to_string(),
                                     ))
                                 }
@@ -174,17 +174,17 @@ impl CommandControlAgent {
                                     registration_response,
                                 ) => match registration_response {
                                     RegistrationResponse::FailedInvalidRequest => {
-                                        Err(FeagiAgentError::ConnectionFailed(
+                                        Err(FeagiAgentError::connection_failed(
                                             "Invalid server responses!".to_string(),
                                         ))
                                     }
                                     RegistrationResponse::FailedInvalidAuth => {
-                                        Err(FeagiAgentError::ConnectionFailed(
+                                        Err(FeagiAgentError::connection_failed(
                                             "Invalid auth token!".to_string(),
                                         ))
                                     }
                                     RegistrationResponse::AlreadyRegistered => {
-                                        Err(FeagiAgentError::ConnectionFailed(
+                                        Err(FeagiAgentError::connection_failed(
                                             "Client already registered!".to_string(),
                                         ))
                                     }
@@ -198,7 +198,7 @@ impl CommandControlAgent {
                                     }
                                 },
                                 AgentRegistrationMessage::ClientRequestDeregistration(_) => {
-                                    Err(FeagiAgentError::ConnectionFailed(
+                                    Err(FeagiAgentError::connection_failed(
                                         "Client cannot receive deregistration request from server!"
                                             .to_string(),
                                     ))
@@ -223,7 +223,7 @@ impl CommandControlAgent {
                 }
                 FeagiEndpointState::Errored(_) => {
                     requester.confirm_error_and_close()?;
-                    Err(FeagiAgentError::ConnectionFailed(
+                    Err(FeagiAgentError::connection_failed(
                         "Error occurred".to_string(),
                     ))
                 }
@@ -234,7 +234,7 @@ impl CommandControlAgent {
             .requester
             .as_mut()
             .ok_or_else(|| {
-                FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string())
+                FeagiAgentError::connection_failed("No socket is active to poll!".to_string())
             })?
             .poll();
 
@@ -256,7 +256,7 @@ impl CommandControlAgent {
                         AgentRegistrationMessage::ClientRequestRegistration(_),
                     ) => AgentID::new_blank(),
                     _ => {
-                        return Err(FeagiAgentError::UnableToSendData(
+                        return Err(FeagiAgentError::unable_to_send_data(
                             "Nonregistered agent cannot send message!".to_string(),
                         ));
                     }

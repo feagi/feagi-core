@@ -16,6 +16,8 @@ name = "feagi_evolutionary"
 feagi-genomic-context = {  path = "../feagi-genomic-context" }
 feagi-genomic-data = {  path = "../feagi-genomic-data" }
 feagi-data = { path = "../feagi-data" }
+feagi-logging-and-errors = { path = "../feagi-logging-and-errors" }
+paste = "1"
 
 
 # Serialization

@@ -23,6 +23,8 @@ use std::collections::{HashMap, HashSet};
 
 
 use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_genomic_context::brain_region::BrainRegion;
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -164,6 +166,7 @@ pub fn remap_guest_custom_memory_cortical_ids_for_amalgamation(
 
 #[cfg(test)]
 mod tests {
+    use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinateGenomic, NeuronVoxelDimensionsGenomic};
     use super::*;
     use crate::random::random_bytes;
     use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, PhysiologyConfig};
@@ -185,8 +188,8 @@ mod tests {
             old_id,
             0,
             "test-area".to_string(),
-            CorticalAreaDimensions::new(1, 1, 1).expect("dims"),
-            GenomeCoordinate3D::new(0, 0, 0),
+            NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+            NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 0),
             CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
         )
         .expect("area");

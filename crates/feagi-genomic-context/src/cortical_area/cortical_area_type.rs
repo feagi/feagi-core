@@ -37,6 +37,14 @@ pub enum CoreCorticalType {
     Power,
     /// Brain fatigue indicator - activates when neuron/synapse arrays exceed 85% capacity
     Fatigue,
+    /// Pain signal processing
+    Pain,
+    /// Pleasure signal processing
+    Pleasure,
+    /// Fear signal processing
+    Fear,
+    /// Hope signal processing
+    Hope,
 }
 
 impl CoreCorticalType {
@@ -47,6 +55,10 @@ impl CoreCorticalType {
             b"___death" => Ok(CoreCorticalType::Death),
             b"___power" => Ok(CoreCorticalType::Power),
             b"___fatig" => Ok(CoreCorticalType::Fatigue),
+            b"___pain_" => Ok(CoreCorticalType::Pain),
+            b"___pleas" => Ok(CoreCorticalType::Pleasure),
+            b"___fear_" => Ok(CoreCorticalType::Fear),
+            b"___hope_" => Ok(CoreCorticalType::Hope),
             _ => Err(FeagiCorticalTypeErrKey::new("cortical_area ID bytes do not match a known core cortical_area type").into()),
         }
     }
@@ -56,6 +68,10 @@ impl CoreCorticalType {
             Self::Death => CorticalID { bytes: *b"___death" },
             Self::Power => CorticalID { bytes: *b"___power" },
             Self::Fatigue => CorticalID { bytes: *b"___fatig" },
+            Self::Pain => CorticalID { bytes: *b"___pain_" },
+            Self::Pleasure => CorticalID { bytes: *b"___pleas" },
+            Self::Fear => CorticalID { bytes: *b"___fear_" },
+            Self::Hope => CorticalID { bytes: *b"___hope_" },
         }
     }
 }
@@ -66,6 +82,10 @@ impl core::fmt::Display for CoreCorticalType {
             CoreCorticalType::Death => "Death",
             CoreCorticalType::Power => "Power",
             CoreCorticalType::Fatigue => "Fatigue",
+            CoreCorticalType::Pain => "Pain",
+            CoreCorticalType::Pleasure => "Pleasure",
+            CoreCorticalType::Fear => "Fear",
+            CoreCorticalType::Hope => "Hope",
         };
         write!(f, "CoreCorticalType({})", ch)
     }

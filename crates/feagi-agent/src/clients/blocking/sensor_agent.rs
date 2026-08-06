@@ -34,7 +34,7 @@ impl SensorAgent {
                 pusher.request_connect()?;
                 Ok(())
             }
-            _ => Err(FeagiAgentError::ConnectionFailed(
+            _ => Err(FeagiAgentError::connection_failed(
                 "Socket is already active!".to_string(),
             )),
         }
@@ -42,34 +42,34 @@ impl SensorAgent {
 
     pub fn send_buffer(&mut self, buffer: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
         let pusher = self.pusher.as_mut().ok_or_else(|| {
-            FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string())
+            FeagiAgentError::connection_failed("No socket is active to poll!".to_string())
         })?;
 
         let state_snapshot = pusher.poll().clone();
         match state_snapshot {
-            FeagiEndpointState::Inactive => Err(FeagiAgentError::UnableToSendData(
+            FeagiEndpointState::Inactive => Err(FeagiAgentError::unable_to_send_data(
                 "Cannot send to inactive socket".to_string(),
             )),
-            FeagiEndpointState::Pending => Err(FeagiAgentError::UnableToSendData(
+            FeagiEndpointState::Pending => Err(FeagiAgentError::unable_to_send_data(
                 "Cannot send to pending socket".to_string(),
             )),
             FeagiEndpointState::ActiveWaiting => {
                 pusher.publish_data(buffer.get_byte_ref())?;
                 Ok(())
             }
-            FeagiEndpointState::ActiveHasData => Err(FeagiAgentError::UnableToSendData(
+            FeagiEndpointState::ActiveHasData => Err(FeagiAgentError::unable_to_send_data(
                 "Socket has data!".to_string(),
             )),
             FeagiEndpointState::Errored(err) => {
                 pusher.confirm_error_and_close()?;
-                Err(FeagiAgentError::ConnectionFailed(err.to_string()))
+                Err(FeagiAgentError::connection_failed(err.to_string()))
             }
         }
     }
 
     pub fn poll(&mut self) -> Result<(), FeagiAgentError> {
         let pusher = self.pusher.as_mut().ok_or_else(|| {
-            FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string())
+            FeagiAgentError::connection_failed("No socket is active to poll!".to_string())
         })?;
 
         let state = pusher.poll().clone();
@@ -80,12 +80,12 @@ impl SensorAgent {
                 // Do nothing
                 Ok(())
             }
-            FeagiEndpointState::ActiveHasData => Err(FeagiAgentError::UnableToSendData(
+            FeagiEndpointState::ActiveHasData => Err(FeagiAgentError::unable_to_send_data(
                 "Sensor Socket has recieved data!".to_string(),
             )),
             FeagiEndpointState::Errored(_) => {
                 pusher.confirm_error_and_close()?;
-                Err(FeagiAgentError::ConnectionFailed(
+                Err(FeagiAgentError::connection_failed(
                     "Connection failed".to_string(),
                 ))
             }

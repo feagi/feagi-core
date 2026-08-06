@@ -43,7 +43,7 @@ impl MotorAgent {
                 subscriber.request_connect()?;
                 Ok(())
             }
-            _ => Err(FeagiAgentError::ConnectionFailed(
+            _ => Err(FeagiAgentError::connection_failed(
                 "Socket is already active!".to_string(),
             )),
         }
@@ -51,18 +51,18 @@ impl MotorAgent {
 
     pub fn receive_into_buffer(&mut self) -> Result<(), FeagiAgentError> {
         let subscriber = self.subscriber.as_mut().ok_or_else(|| {
-            FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string())
+            FeagiAgentError::connection_failed("No socket is active to poll!".to_string())
         })?;
 
         let state_snapshot = subscriber.poll().clone();
         match state_snapshot {
-            FeagiEndpointState::Inactive => Err(FeagiAgentError::UnableToDecodeReceivedData(
+            FeagiEndpointState::Inactive => Err(FeagiAgentError::unable_to_decode_received_data(
                 "Cannot receive from inactive socket".to_string(),
             )),
-            FeagiEndpointState::Pending => Err(FeagiAgentError::UnableToDecodeReceivedData(
+            FeagiEndpointState::Pending => Err(FeagiAgentError::unable_to_decode_received_data(
                 "Cannot receive from pending socket".to_string(),
             )),
-            FeagiEndpointState::ActiveWaiting => Err(FeagiAgentError::UnableToDecodeReceivedData(
+            FeagiEndpointState::ActiveWaiting => Err(FeagiAgentError::unable_to_decode_received_data(
                 "No motor data available".to_string(),
             )),
             FeagiEndpointState::ActiveHasData => {
@@ -73,14 +73,14 @@ impl MotorAgent {
             }
             FeagiEndpointState::Errored(err) => {
                 subscriber.confirm_error_and_close()?;
-                Err(FeagiAgentError::ConnectionFailed(err.to_string()))
+                Err(FeagiAgentError::connection_failed(err.to_string()))
             }
         }
     }
 
     pub fn poll_for_motor_data(&mut self) -> Result<Option<&FeagiByteContainer>, FeagiAgentError> {
         let subscriber = self.subscriber.as_mut().ok_or_else(|| {
-            FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string())
+            FeagiAgentError::connection_failed("No socket is active to poll!".to_string())
         })?;
 
         let state = subscriber.poll().clone();
@@ -96,13 +96,13 @@ impl MotorAgent {
             }
             FeagiEndpointState::ActiveHasData => {
                 // Not Possible
-                Err(FeagiAgentError::UnableToSendData(
+                Err(FeagiAgentError::unable_to_send_data(
                     "Sensor Socket has recieved data!".to_string(),
                 ))
             }
             FeagiEndpointState::Errored(_) => {
                 subscriber.confirm_error_and_close()?;
-                Err(FeagiAgentError::ConnectionFailed(
+                Err(FeagiAgentError::connection_failed(
                     "Connection failed".to_string(),
                 ))
             }

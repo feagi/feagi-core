@@ -9,12 +9,9 @@ Provides type safety and global uniqueness for brain region identifiers.
 
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use uuid::Uuid;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-use crate::genomic::FeagiStructuresGenomicError;
-
-
+use uuid::Uuid;
+use crate::feagi_genome_context_error::{FeagiBrainRegionErrKey, FeagiGenomeContextError};
 
 /// Unique identifier for a brain region, based on UUID v7.
 ///
@@ -74,12 +71,10 @@ impl RegionID {
     /// let region_id = RegionID::from_string("550e8400-e29b-41d4-a716-446655440000").unwrap();
     /// assert_eq!(region_id.to_string(), "550e8400-e29b-41d4-a716-446655440000");
     /// ```
-    pub fn from_string(s: &str) -> Result<Self, FeagiStructuresGenomicError> {
+    pub fn from_string(s: &str) -> Result<Self, FeagiGenomeContextError> {
         Uuid::parse_str(s)
             .map(RegionID::from_uuid)
-            .map_err(|_| FeagiStructuresGenomicError::BrainRegionError {
-                context: "invalid region ID string",
-            })
+            .map_err(|_| FeagiBrainRegionErrKey::new("invalid region ID string").into())
     }
 
     /// Returns the underlying UUID.
@@ -125,7 +120,7 @@ impl Display for RegionID {
 }
 
 impl FromStr for RegionID {
-    type Err = FeagiStructuresGenomicError;
+    type Err = FeagiGenomeContextError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         RegionID::from_string(s)

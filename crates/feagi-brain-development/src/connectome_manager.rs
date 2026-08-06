@@ -48,7 +48,7 @@ use feagi_npu_neural::types::NeuronId;
 use feagi_genomic_context::cortical_area::{
     CoreCorticalType, CorticalAreaType, CorticalID, CustomCorticalType,
 };
-use feagi_genomic_context::positioning::GenomeCoordinate3D;
+use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 
 // State manager access for fatigue calculation
 // Note: feagi-state-manager is always available when std is enabled (it's a default feature)

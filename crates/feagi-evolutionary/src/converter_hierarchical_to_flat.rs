@@ -14,6 +14,7 @@ Licensed under the Apache License, Version 2.0
 use crate::{EvoResult, RuntimeGenome};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 /// Convert hierarchical genome (RuntimeGenome) to flat format (3.0)
 ///
@@ -157,7 +158,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
 
         // Serialize all properties from the BrainRegion
         let region_json =
-            serde_json::to_value(region).map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
+            serde_json::to_value(region).map_err(|e| crate::EvoError::json_error(e.to_string()))?;
 
         if let Value::Object(mut props) = region_json {
             // Convert cortical_area ID arrays to base64
@@ -195,7 +196,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
 /// Convert a single cortical_area area to flat format keys
 fn convert_area_to_flat(
     cortical_id_base64: &str,
-    area: &feagi_genomic_data::cortical_area::CorticalArea,
+    area: &CorticalArea,
     flat_blueprint: &mut serde_json::Map<String, Value>,
 ) -> EvoResult<()> {
     let prefix = format!("_____10c-{}", cortical_id_base64);
@@ -206,21 +207,21 @@ fn convert_area_to_flat(
     // Dimensions (block_boundaries) - always write from struct
     flat_blueprint.insert(
         format!("{}-cx-___bbx-i", prefix),
-        json!(area.dimensions.width),
+        json!(area.dimensions.get_x().deref()),
     );
     flat_blueprint.insert(
         format!("{}-cx-___bby-i", prefix),
-        json!(area.dimensions.height),
+        json!(area.dimensions.get_y().deref()),
     );
     flat_blueprint.insert(
         format!("{}-cx-___bbz-i", prefix),
-        json!(area.dimensions.depth),
+        json!(area.dimensions.get_z().deref()),
     );
 
     // Position (relative_coordinate) - always write from struct
-    flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), json!(area.position.x));
-    flat_blueprint.insert(format!("{}-cx-rcordy-i", prefix), json!(area.position.y));
-    flat_blueprint.insert(format!("{}-cx-rcordz-i", prefix), json!(area.position.z));
+    flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), json!(area.position.get_x().deref()));
+    flat_blueprint.insert(format!("{}-cx-rcordy-i", prefix), json!(area.position.get_y().deref()));
+    flat_blueprint.insert(format!("{}-cx-rcordz-i", prefix), json!(area.position.get_z().deref()));
 
     // Name - always write from struct (unless overridden in properties)
     if !area.properties.contains_key("cortical_name") {

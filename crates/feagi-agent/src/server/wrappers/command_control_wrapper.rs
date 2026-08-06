@@ -49,39 +49,39 @@ impl CommandControlWrapper {
                 match error {
                     FeagiNetworkError::CannotBind(err) => {
                         self.router.confirm_error_and_close()?;
-                        Err(FeagiAgentError::SocketFailure(err.clone()))
+                        Err(FeagiAgentError::socket_failure(err.clone()))
                     }
                     FeagiNetworkError::CannotUnbind(err) => {
                         self.router.confirm_error_and_close()?;
-                        Err(FeagiAgentError::SocketFailure(err.clone()))
+                        Err(FeagiAgentError::socket_failure(err.clone()))
                     }
                     FeagiNetworkError::CannotConnect(err) => {
                         // Only occurs if sending a command / response, and the agent dies. No need to close
-                        Err(FeagiAgentError::UnableToSendData(err.clone()))
+                        Err(FeagiAgentError::unable_to_send_data(err.clone()))
                     }
                     FeagiNetworkError::CannotDisconnect(err) => {
                         self.router.confirm_error_and_close()?;
-                        Err(FeagiAgentError::SocketFailure(err.clone()))
+                        Err(FeagiAgentError::socket_failure(err.clone()))
                     }
                     FeagiNetworkError::SendFailed(err) => {
                         // Only occurs if sending a command / response, and the agent dies. No need to close
-                        Err(FeagiAgentError::UnableToSendData(err.clone()))
+                        Err(FeagiAgentError::unable_to_send_data(err.clone()))
                     }
                     FeagiNetworkError::ReceiveFailed(err) => {
                         // Client sent weird data
-                        Err(FeagiAgentError::UnableToDecodeReceivedData(err.clone()))
+                        Err(FeagiAgentError::unable_to_decode_received_data(err.clone()))
                     }
                     FeagiNetworkError::InvalidSocketProperties(err) => {
                         self.router.confirm_error_and_close()?;
-                        Err(FeagiAgentError::SocketFailure(err.clone()))
+                        Err(FeagiAgentError::socket_failure(err.clone()))
                     }
                     FeagiNetworkError::SocketCreationFailed(err) => {
                         self.router.confirm_error_and_close()?;
-                        Err(FeagiAgentError::SocketFailure(err.clone()))
+                        Err(FeagiAgentError::socket_failure(err.clone()))
                     }
                     FeagiNetworkError::GeneralFailure(err) => {
                         self.router.confirm_error_and_close()?;
-                        Err(FeagiAgentError::SocketFailure(err.clone()))
+                        Err(FeagiAgentError::socket_failure(err.clone()))
                     }
                 }
             }
@@ -137,7 +137,7 @@ impl CommandControlWrapper {
         }
 
         self.request_buffer
-            .try_write_data_by_copy_and_verify(incoming_data)?; // Load in data
+            .try_write_data_by_copy_and_verify(incoming_data); // Load in data
         let feagi_message: FeagiMessage = (&self.request_buffer).try_into()?;
 
         // WARNING: It is possible for an agent to request registration a second time. Be wary!

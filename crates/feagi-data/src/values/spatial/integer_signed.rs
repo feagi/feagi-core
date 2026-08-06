@@ -4,6 +4,9 @@
 
 // Yes this is mostly a duplicate but I don't care (no quantization here)
 
+use serde::{Serialize, Deserialize};
+
+#[macro_export]
 macro_rules! create_signed_coordinate {
     (
         $(#[$meta:meta])*
@@ -12,6 +15,7 @@ macro_rules! create_signed_coordinate {
         $( ($index:tt, $field:ident) ),+ $(,)?
     ) => {
         $(#[$meta])*
+        #[derive(Clone, Debug, Serialize, Deserialize)]
         pub struct $struct_name {
             inner: [i32; $num_dimensions],
         }

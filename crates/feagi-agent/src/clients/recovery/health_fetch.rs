@@ -45,17 +45,17 @@ pub async fn fetch_health_snapshot(
         .timeout(config.timeout)
         .build()
         .map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("failed to build http client: {e}"))
+            FeagiAgentError::connection_failed(format!("failed to build http client: {e}"))
         })?;
     let response = client
         .get(config.url())
         .send()
         .await
-        .map_err(|e| FeagiAgentError::ConnectionFailed(format!("health_check request: {e}")))?;
+        .map_err(|e| FeagiAgentError::connection_failed(format!("health_check request: {e}")))?;
     let parsed: HealthCheckResponse = response
         .json()
         .await
-        .map_err(|e| FeagiAgentError::ConnectionFailed(format!("health_check parse: {e}")))?;
+        .map_err(|e| FeagiAgentError::connection_failed(format!("health_check parse: {e}")))?;
     Ok(HealthSnapshot::from_response(&parsed))
 }
 
@@ -68,15 +68,15 @@ pub fn fetch_health_snapshot_blocking(
         .timeout(config.timeout)
         .build()
         .map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("failed to build http client: {e}"))
+            FeagiAgentError::connection_failed(format!("failed to build http client: {e}"))
         })?;
     let response = client
         .get(config.url())
         .send()
-        .map_err(|e| FeagiAgentError::ConnectionFailed(format!("health_check request: {e}")))?;
+        .map_err(|e| FeagiAgentError::connection_failed(format!("health_check request: {e}")))?;
     let parsed: HealthCheckResponse = response
         .json()
-        .map_err(|e| FeagiAgentError::ConnectionFailed(format!("health_check parse: {e}")))?;
+        .map_err(|e| FeagiAgentError::connection_failed(format!("health_check parse: {e}")))?;
     Ok(HealthSnapshot::from_response(&parsed))
 }
 

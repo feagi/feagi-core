@@ -9,11 +9,13 @@ Transformation methods live in feagi-bdu.
 Moved from feagi-core/crates/feagi-bdu/src/models/cortical_area.rs
 */
 
-use super::{CorticalAreaDimensions, CorticalAreaType, CorticalID};
-use crate::genomic::descriptors::GenomeCoordinate3D;
-use crate::genomic::FeagiStructuresGenomicError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinateGenomic, NeuronVoxelDimensions, NeuronVoxelDimensionsGenomic};
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
+use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
+use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
+use feagi_genomic_context::cortical_area::{CorticalAreaType, CorticalID};
 
 /// Cortical area metadata (genome representation)
 ///
@@ -33,10 +35,10 @@ pub struct CorticalArea {
     pub name: String,
 
     /// 3D dimensions (width, height, depth in voxels)
-    pub dimensions: CorticalAreaDimensions,
+    pub dimensions: NeuronVoxelDimensionsGenomic,
 
     /// 3D position in genome space
-    pub position: GenomeCoordinate3D,
+    pub position: NeuronVoxelCoordinateGenomic,
 
     /// Cortical area type (encoding method and functional classification)
     pub cortical_type: CorticalAreaType,
@@ -67,15 +69,13 @@ impl CorticalArea {
         cortical_id: CorticalID,
         cortical_idx: u32,
         name: String,
-        dimensions: CorticalAreaDimensions,
-        position: GenomeCoordinate3D,
+        dimensions: NeuronVoxelDimensionsGenomic,
+        position: NeuronVoxelCoordinateGenomic,
         cortical_type: CorticalAreaType,
-    ) -> Result<Self, FeagiStructuresGenomicError> {
+    ) -> Result<Self, ()> {
         // Validate name
         if name.trim().is_empty() {
-            return Err(FeagiStructuresGenomicError::CorticalAreaError {
-                context: "cortical_area area name cannot be empty",
-            });
+            panic!("cortical_area area name cannot be empty")
         }
 
         // Note: CorticalID validation happens in CorticalID constructors
@@ -99,6 +99,6 @@ impl CorticalArea {
 
     /// Get the total number of voxels in this area
     pub fn total_voxels(&self) -> u32 {
-        self.dimensions.total_voxels()
+        self.dimensions.number_contained_elements().quant_to_u32()
     }
 }

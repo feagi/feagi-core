@@ -43,13 +43,13 @@ impl MotorTranslator {
             FeagiEndpointState::ActiveHasData => {
                 // Not possible, a motor should never send data!
                 // TODO proper way to close this socket
-                Err(FeagiAgentError::SocketFailure(
+                Err(FeagiAgentError::socket_failure(
                     "Agent cannot send Motor data!".to_string(),
                 ))
             }
             FeagiEndpointState::Errored(error) => {
                 self.motor_server.confirm_error_and_close()?;
-                Err(FeagiAgentError::SocketFailure(error.to_string()))
+                Err(FeagiAgentError::socket_failure(error.to_string()))
             }
         }
     }
@@ -68,7 +68,7 @@ impl MotorTranslator {
             }
             _ => {
                 // Socket is not in a state to handle incoming data
-                Err(FeagiAgentError::UnableToSendData(
+                Err(FeagiAgentError::unable_to_send_data(
                     "Socket is not in a state to send data!".to_string(),
                 ))
             }

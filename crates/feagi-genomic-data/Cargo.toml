@@ -12,6 +12,9 @@ documentation.workspace = true
 [dependencies]
 feagi-logging-and-errors = {path = "../feagi-logging-and-errors" }
 feagi-data = {path = "../feagi-data" }
+feagi-genomic-context = {path = "../feagi-genomic-context"}
+serde = { workspace = true, features = ["derive"] }
+serde_json = {workspace = true}
 
 [lints]
 workspace = true

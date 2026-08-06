@@ -13,14 +13,12 @@
 
 use std::time::{Duration, Instant};
 
-use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
+//use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::FeagiMessage;
 use feagi_io::traits_and_enums::client::FeagiClientRequesterProperties;
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::FeagiNetworkError;
-use feagi_sensorimotor::configuration::jsonable::JSONInputOutputDefinition;
-use feagi_sensorimotor::ConnectorCache;
 
 use crate::clients::{
     NowMs, SessionAction, SessionEvent, SessionInit, SessionPhase, SessionStateMachine,
@@ -107,11 +105,12 @@ fn publish_sensor_payload_with_transient_retry(
         );
         return Ok(false);
     }
-    Err(FeagiAgentError::Other(
+    Err(FeagiAgentError::other(
         "Sensory publish retry exhausted unexpectedly".to_string(),
     ))
 }
 
+/*
 /// Tokio adapter over the runtime-agnostic session state machine.
 ///
 /// This type is appropriate for desktop/server apps (e.g., Tauri) that already run Tokio.
@@ -182,7 +181,7 @@ impl TokioEmbodimentAgent {
                     return Ok(());
                 }
                 SessionPhase::Failed => {
-                    return Err(FeagiAgentError::ConnectionFailed(
+                    return Err(FeagiAgentError::connection_failed(
                         self.sm.last_error().unwrap_or("session failed").to_string(),
                     ));
                 }
@@ -223,7 +222,7 @@ impl TokioEmbodimentAgent {
                     return Ok(agent);
                 }
                 SessionPhase::Failed => {
-                    return Err(FeagiAgentError::ConnectionFailed(
+                    return Err(FeagiAgentError::connection_failed(
                         agent
                             .sm
                             .last_error()
@@ -257,7 +256,7 @@ impl TokioEmbodimentAgent {
             .export_device_registrations_as_config_json()?;
         let device_definition: JSONInputOutputDefinition = serde_json::from_value(device_regs_json)
             .map_err(|e| {
-                FeagiAgentError::UnableToSendData(format!(
+                FeagiAgentError::unable_to_send_data(format!(
                     "Failed to serialize connector cache device registrations: {}",
                     e
                 ))
@@ -276,7 +275,7 @@ impl TokioEmbodimentAgent {
 
             if let Some(deadline_ms) = self.driver.timing.registration_deadline_ms {
                 if self.now_ms().saturating_sub(start_ms) >= deadline_ms {
-                    return Err(FeagiAgentError::ConnectionFailed(
+                    return Err(FeagiAgentError::connection_failed(
                         "Timed out waiting for FEAGI acknowledgment of AgentConfigurationDetails"
                             .to_string(),
                     ));
@@ -307,28 +306,28 @@ impl TokioEmbodimentAgent {
         self.tick()?;
 
         let Some(pusher) = self.sensor_pusher.as_mut() else {
-            return Err(FeagiAgentError::ConnectionFailed(
+            return Err(FeagiAgentError::connection_failed(
                 "No sensory channel active".to_string(),
             ));
         };
         let session_id = self.sm.session_id().ok_or_else(|| {
-            FeagiAgentError::ConnectionFailed("No session id available".to_string())
+            FeagiAgentError::connection_failed("No session id available".to_string())
         })?;
 
         match pusher.poll() {
             FeagiEndpointState::ActiveWaiting => {}
             FeagiEndpointState::Inactive => {
-                return Err(FeagiAgentError::UnableToSendData(
+                return Err(FeagiAgentError::unable_to_send_data(
                     "Cannot send to inactive sensory socket".to_string(),
                 ));
             }
             FeagiEndpointState::Pending => {
-                return Err(FeagiAgentError::UnableToSendData(
+                return Err(FeagiAgentError::unable_to_send_data(
                     "Cannot send to pending sensory socket".to_string(),
                 ));
             }
             FeagiEndpointState::ActiveHasData => {
-                return Err(FeagiAgentError::UnableToSendData(
+                return Err(FeagiAgentError::unable_to_send_data(
                     "Sensory socket unexpectedly has data".to_string(),
                 ));
             }
@@ -446,7 +445,7 @@ impl TokioEmbodimentAgent {
                         .unwrap_or("deregistration failed")
                         .to_string();
                     self.force_disconnect_transports()?;
-                    return Err(FeagiAgentError::ConnectionFailed(msg));
+                    return Err(FeagiAgentError::connection_failed(msg));
                 }
                 _ => {}
             }
@@ -454,7 +453,7 @@ impl TokioEmbodimentAgent {
             if let Some(limit_ms) = deadline_ms {
                 if self.now_ms().saturating_sub(start_ms) >= limit_ms {
                     self.force_disconnect_transports()?;
-                    return Err(FeagiAgentError::ConnectionFailed(
+                    return Err(FeagiAgentError::connection_failed(
                         "deregistration deadline exceeded".to_string(),
                     ));
                 }
@@ -505,7 +504,7 @@ impl TokioEmbodimentAgent {
                     message, teardown_error
                 );
             }
-            FeagiAgentError::ConnectionFailed(message)
+            FeagiAgentError::connection_failed(message)
         })?;
 
         *self = replacement;
@@ -666,12 +665,12 @@ impl TokioEmbodimentAgent {
             .get("simulation_timestep")
             .and_then(serde_json::Value::as_f64)
             .ok_or_else(|| {
-                FeagiAgentError::ConnectionFailed(
+                FeagiAgentError::connection_failed(
                     "FEAGI health_check missing simulation_timestep".to_string(),
                 )
             })?;
         if !timestep.is_finite() || timestep <= 0.0 {
-            return Err(FeagiAgentError::ConnectionFailed(format!(
+            return Err(FeagiAgentError::connection_failed(format!(
                 "FEAGI health_check returned invalid simulation_timestep={}",
                 timestep
             )));
@@ -697,7 +696,7 @@ impl TokioEmbodimentAgent {
             return Ok(());
         }
         match config.policy {
-            SensoryRateNegotiationPolicy::Strict => Err(FeagiAgentError::ConnectionFailed(
+            SensoryRateNegotiationPolicy::Strict => Err(FeagiAgentError::connection_failed(
                 format!(
                     "FEAGI denied requested sensory rate increase. requested={:.2}Hz effective={:.2}Hz",
                     config.requested_sensory_rate_hz, effective_rate_hz
@@ -721,7 +720,7 @@ impl TokioEmbodimentAgent {
         };
         if !config.requested_sensory_rate_hz.is_finite() || config.requested_sensory_rate_hz <= 0.0
         {
-            return Err(FeagiAgentError::ConnectionFailed(format!(
+            return Err(FeagiAgentError::connection_failed(format!(
                 "Invalid requested_sensory_rate_hz={}",
                 config.requested_sensory_rate_hz
             )));
@@ -731,17 +730,17 @@ impl TokioEmbodimentAgent {
             .timeout(config.api_timeout)
             .build()
             .map_err(|e| {
-                FeagiAgentError::ConnectionFailed(format!("HTTP client init failed: {e}"))
+                FeagiAgentError::connection_failed(format!("HTTP client init failed: {e}"))
             })?;
         let health_url = Self::health_check_url(&config);
         let health_response = client.get(&health_url).send().await.map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("health_check request failed: {e}"))
+            FeagiAgentError::connection_failed(format!("health_check request failed: {e}"))
         })?;
         let health_json = health_response
             .json::<serde_json::Value>()
             .await
             .map_err(|e| {
-                FeagiAgentError::ConnectionFailed(format!("health_check parse failed: {e}"))
+                FeagiAgentError::connection_failed(format!("health_check parse failed: {e}"))
             })?;
         let current_rate_hz = Self::parse_effective_rate_hz_from_health(&health_json)?;
 
@@ -768,13 +767,13 @@ impl TokioEmbodimentAgent {
         }
 
         let health_after = client.get(&health_url).send().await.map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("post-update health_check failed: {e}"))
+            FeagiAgentError::connection_failed(format!("post-update health_check failed: {e}"))
         })?;
         let health_after_json = health_after
             .json::<serde_json::Value>()
             .await
             .map_err(|e| {
-                FeagiAgentError::ConnectionFailed(format!(
+                FeagiAgentError::connection_failed(format!(
                     "post-update health_check parse failed: {e}"
                 ))
             })?;
@@ -788,7 +787,7 @@ impl TokioEmbodimentAgent {
         };
         if !config.requested_sensory_rate_hz.is_finite() || config.requested_sensory_rate_hz <= 0.0
         {
-            return Err(FeagiAgentError::ConnectionFailed(format!(
+            return Err(FeagiAgentError::connection_failed(format!(
                 "Invalid requested_sensory_rate_hz={}",
                 config.requested_sensory_rate_hz
             )));
@@ -802,7 +801,7 @@ impl TokioEmbodimentAgent {
             std::thread::spawn(move || Self::negotiate_effective_rate_blocking_http(&cfg))
                 .join()
                 .map_err(|_| {
-                    FeagiAgentError::ConnectionFailed(
+                    FeagiAgentError::connection_failed(
                         "sensory rate negotiation thread panicked".to_string(),
                     )
                 })??
@@ -820,14 +819,14 @@ impl TokioEmbodimentAgent {
             .timeout(config.api_timeout)
             .build()
             .map_err(|e| {
-                FeagiAgentError::ConnectionFailed(format!("HTTP client init failed: {e}"))
+                FeagiAgentError::connection_failed(format!("HTTP client init failed: {e}"))
             })?;
         let health_url = Self::health_check_url(config);
         let health_response = client.get(&health_url).send().map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("health_check request failed: {e}"))
+            FeagiAgentError::connection_failed(format!("health_check request failed: {e}"))
         })?;
         let health_json = health_response.json::<serde_json::Value>().map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("health_check parse failed: {e}"))
+            FeagiAgentError::connection_failed(format!("health_check parse failed: {e}"))
         })?;
         let current_rate_hz = Self::parse_effective_rate_hz_from_health(&health_json)?;
 
@@ -852,12 +851,15 @@ impl TokioEmbodimentAgent {
         }
 
         let health_after = client.get(&health_url).send().map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("post-update health_check failed: {e}"))
+            FeagiAgentError::connection_failed(format!("post-update health_check failed: {e}"))
         })?;
         let health_after_json = health_after.json::<serde_json::Value>().map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("post-update health_check parse failed: {e}"))
+            FeagiAgentError::connection_failed(format!("post-update health_check parse failed: {e}"))
         })?;
         let updated_rate_hz = Self::parse_effective_rate_hz_from_health(&health_after_json)?;
         Ok(updated_rate_hz)
     }
 }
+
+
+ */

@@ -58,7 +58,7 @@ pub fn peek_quantization_precision<P: AsRef<Path>>(path: P) -> EvoResult<String>
     let json_str = fs::read_to_string(path)?;
 
     let json_value: Value = serde_json::from_str(&json_str)
-        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
+        .map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to parse JSON: {e}")))?;
 
     let precision = json_value
         .get("genome_physiology")
@@ -110,7 +110,7 @@ pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
 /// to return at all.
 pub fn load_genome_with_report(json_str: &str) -> EvoResult<(RuntimeGenome, ChainResult)> {
     let json_value: Value = serde_json::from_str(json_str)
-        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
+        .map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to parse JSON: {e}")))?;
 
     let hierarchical_json = if is_flat_format(&json_value) {
         crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value).map_err(|e| {
@@ -124,7 +124,7 @@ pub fn load_genome_with_report(json_str: &str) -> EvoResult<(RuntimeGenome, Chai
     let (migrated_json, report) = run_default_chain(hierarchical_json)?;
 
     let migrated_json_str = serde_json::to_string(&migrated_json).map_err(|e| {
-        crate::types::EvoError::InvalidGenome(format!("Failed to serialize migrated genome: {e}"))
+        crate::types::EvoError::invalid_genome(format!("Failed to serialize migrated genome: {e}"))
     })?;
 
     let parsed = GenomeParser::parse(&migrated_json_str).map_err(|e| {
@@ -155,7 +155,7 @@ fn run_default_chain(mut hierarchical_json: Value) -> EvoResult<(Value, ChainRes
 
     let result = runner
         .run_to(&mut hierarchical_json, CURRENT_SCHEMA_VERSION)
-        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Genome chain failed: {e}")))?;
+        .map_err(|e| crate::types::EvoError::invalid_genome(format!("Genome chain failed: {e}")))?;
 
     if !result.migrators_applied.is_empty() {
         tracing::info!(

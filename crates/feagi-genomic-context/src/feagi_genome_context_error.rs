@@ -15,12 +15,18 @@ pub struct FeagiCorticalConfigurationFlagErrKey {
     context: &'static str,
 }
 
+#[derive(FeagiErrorKey)]
+pub struct FeagiBrainRegionErrKey {
+    context: &'static str,
+}
+
 generate_feagi_error! {
     FeagiGenomeContextError,
     keys: {
         CorticalID: FeagiCorticalIDErrKey,
         CorticalType: FeagiCorticalTypeErrKey,
         ConfigurationFlag: FeagiCorticalConfigurationFlagErrKey,
+        BrainRegion: FeagiBrainRegionErrKey,
     },
     sub_errors: {
 
