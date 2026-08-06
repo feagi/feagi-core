@@ -43,7 +43,30 @@ impl QuantizationLevelPacking for SignedIntegerQuantizationLevel {
 }
 
 /// Trait designed to hold Sint data values in a quantized form
-pub trait QuantizedSignedIntegerTrait: QuantizedElementBase {
+pub trait QuantizedSignedIntegerTrait:
+Copy
++ Clone
++ Send
++ Sync
++ Default
++ core::ops::Add<Output=Self>
++ core::ops::Sub<Output=Self>
++ core::ops::Mul<Output=Self>
++ core::ops::Div<Output=Self>
++ core::ops::AddAssign
++ core::ops::SubAssign
++ core::ops::MulAssign
++ core::ops::DivAssign
++ core::cmp::PartialOrd
++ core::fmt::Debug
++ core::fmt::Display
++ core::ops::Rem<Output=Self>
++ core::ops::RemAssign
++ core::cmp::Eq
++ core::hash::Hash
++ Sized
++ 'static
++ QuantizedElementBase {
     fn is_negative(&self) -> bool;
     fn is_zero_or_negative(&self) -> bool;
 }
@@ -108,3 +131,5 @@ impl QuantizedSignedIntegerTrait for i64 {
         *self <= 0
     }
 }
+
+// TODO sint wrapper!

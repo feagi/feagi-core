@@ -1,7 +1,7 @@
-use serde_json::Value;
 use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
 use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
 
+///
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum IndexCountQuantizationLevel {
@@ -89,6 +89,9 @@ Copy
     /// Tries to convert from usize, does NOT check bounds!
     fn quant_from_usize(value: usize) -> Self;
 
+    /// Will wrap whatever quant this is to an `IndexCountEnum`
+    fn quant_to_enum(value: Self) -> IndexCountEnum;
+
     /// Tries converting from usize, returns an error if out of bounds
     fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError>;
 
@@ -159,9 +162,13 @@ impl QuantizedIndexCountTrait for u8 {
         value as u8
     }
 
+    fn quant_to_enum(value: Self) -> IndexCountEnum {
+        IndexCountEnum::U8(value)
+    }
+
     fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
         if value > u8::MAX as usize {
-            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", value as usize).into());
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", value).into());
         }
         Ok(value as u8)
     }
@@ -238,9 +245,13 @@ impl QuantizedIndexCountTrait for u16 {
         value as u16
     }
 
+    fn quant_to_enum(value: Self) -> IndexCountEnum {
+        IndexCountEnum::U16(value)
+    }
+
     fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
         if value > u16::MAX as usize {
-            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u16!", value as usize).into());
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u16!", value).into());
         }
         Ok(value as u16)
     }
@@ -319,9 +330,13 @@ impl QuantizedIndexCountTrait for u32 {
         value as u32
     }
 
+    fn quant_to_enum(value: Self) -> IndexCountEnum {
+        IndexCountEnum::U32(value)
+    }
+
     fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
         if value > u32::MAX as usize {
-            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u32!", value as usize).into());
+            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u32!", value).into());
         }
         Ok(value as u32)
     }
@@ -398,6 +413,10 @@ impl QuantizedIndexCountTrait for u64 {
         value as u64
     }
 
+    fn quant_to_enum(value: Self) -> IndexCountEnum {
+        IndexCountEnum::U64(value)
+    }
+
     fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
         // never fails
         Ok(value as u64)
@@ -458,6 +477,61 @@ impl QuantizedIndexCountTrait for u64 {
 
 // Note: Specifically we will not support usize directly since it can vary in size depending on
 // backend, which could cause some issues with device interoperability
+
+/// Allows storing all quantized index types under a single enum
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub enum IndexCountEnum {
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+}
+
+impl IndexCountEnum {
+    pub fn new_from_quantized<FromQuant: QuantizedIndexCountTrait>(value: FromQuant) -> Self {
+        FromQuant::quant_to_enum(value)
+    }
+
+    pub fn get_level(&self) -> IndexCountQuantizationLevel {
+        match self {
+            IndexCountEnum::U8(_) => { IndexCountQuantizationLevel::U8 }
+            IndexCountEnum::U16(_) => { IndexCountQuantizationLevel::U16 }
+            IndexCountEnum::U32(_) => { IndexCountQuantizationLevel::U32 }
+            IndexCountEnum::U64(_) => { IndexCountQuantizationLevel::U64 }
+        }
+    }
+
+    pub fn try_into_quant<Quant: QuantizedIndexCountTrait>(self) -> Result<Quant, FeagiDataValueQuantizationError> {
+        // TODO assert Debug Check!
+        match self {
+            IndexCountEnum::U8(value) => {value.try_to_quantization()}
+            IndexCountEnum::U16(value) => {value.try_to_quantization()}
+            IndexCountEnum::U32(value) => {value.try_to_quantization()}
+            IndexCountEnum::U64(value) => {value.try_to_quantization()}
+        }
+    }
+
+    pub fn into_quant<Quant: QuantizedIndexCountTrait>(self) -> Quant {
+        match self {
+            IndexCountEnum::U8(value) => {value.to_quantization()}
+            IndexCountEnum::U16(value) => {value.to_quantization()}
+            IndexCountEnum::U32(value) => {value.to_quantization()}
+            IndexCountEnum::U64(value) => {value.to_quantization()}
+        }
+    }
+
+    pub fn to_usize(self) -> usize {
+        match self {
+            IndexCountEnum::U8(value) => value as usize,
+            IndexCountEnum::U16(value) => value as usize,
+            IndexCountEnum::U32(value) => value as usize,
+            IndexCountEnum::U64(value) => value as usize,
+        }
+    }
+
+    // TODO from usize that is CPU dependent to be either 32 bit or 64 bit
+}
+
 
 /// Shared behaviour implemented by every strongly-typed wrapper generated by
 /// [`create_wrapped_quantized_index`].
