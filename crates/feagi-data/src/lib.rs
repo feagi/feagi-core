@@ -6,4 +6,3 @@ pub mod values;
 pub mod ui_parameters;
 pub mod feagi_data_error;
 pub mod index_range_managers;
-pub mod channels;
