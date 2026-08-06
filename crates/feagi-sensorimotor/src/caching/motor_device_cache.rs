@@ -10,11 +10,20 @@ use feagi_serialization::FeagiByteContainer;
 use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning, PoseSchema,
 };
+use feagi_structures::FeagiDataError;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
 use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
+
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
 
 macro_rules! motor_unit_functions {
     (
@@ -262,7 +271,7 @@ macro_rules! motor_unit_functions {
                         )?
                     }
                     _ => {
-                        return Err(FeagiDataError::InternalError(
+                        return Err(feagi_data_etc_error(
                             "Expected at least one cortical_area ID for Percentage motor unit".to_string()
                         ));
                     }
@@ -790,7 +799,7 @@ impl MotorDeviceCache {
                     .motor_cortical_unit_caches
                     .contains_key(&(*motor_unit, unit_definition.cortical_unit_index))
                 {
-                    return Err(FeagiDataError::DeserializationError(format!(
+                    return Err(feagi_data_etc_error(format!(
                         "Already registered motor {} of unit index {}!",
                         *motor_unit, unit_definition.cortical_unit_index
                     )));
@@ -922,7 +931,7 @@ impl MotorDeviceCache {
             .motor_cortical_unit_caches
             .contains_key(&(motor_type, unit_index))
         {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Already registered motor {} of unit index {}!",
                 motor_type, unit_index
             )));
@@ -1107,7 +1116,7 @@ impl MotorDeviceCache {
             .motor_cortical_unit_caches
             .get(&(motor_type, unit_index));
         if check.is_none() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Unable to find {} of cortical_area unit index {} in registered motor's list!",
                 motor_type, unit_index
             )));
@@ -1125,7 +1134,7 @@ impl MotorDeviceCache {
             .motor_cortical_unit_caches
             .get_mut(&(motor_type, unit_index));
         if check.is_none() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Unable to find {} of cortical_area unit index {} in registered motor's list!",
                 motor_type, unit_index
             )));

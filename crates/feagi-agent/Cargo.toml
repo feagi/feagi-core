@@ -40,6 +40,7 @@ tracing = { workspace = true }
 feagi-io = {  path = "../feagi-io" }
 feagi-serialization = {  path = "../feagi-serialization" }
 feagi-sensorimotor = {  path = "../feagi-sensorimotor" }
+feagi-data = { path = "../feagi-data" }
 base64 = "0.22.1"
 
 # Conditional Dependencies

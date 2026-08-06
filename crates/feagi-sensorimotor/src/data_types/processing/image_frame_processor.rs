@@ -5,6 +5,14 @@ use crate::data_types::ImageFrame;
 use feagi_structures::FeagiDataError;
 use ndarray::{s, ArrayView3, Zip};
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ImageFrameProcessor {
     /// Properties that the input image must match (resolution, color space, channel layout)
@@ -94,7 +102,7 @@ impl ImageFrameProcessor {
                 definition.convert_to_grayscale = true;
             } else {
                 // unsupported
-                return Err(FeagiDataError::BadParameters(
+                return Err(feagi_data_etc_error(
                     "Given Color Conversion not possible!".into(),
                 ));
             }
@@ -171,7 +179,7 @@ impl ImageFrameProcessor {
                 let w = src.shape()[1];
                 let c = src.shape()[2];
                 if dst.shape() != src.shape() {
-                    return Err(FeagiDataError::InternalError(format!(
+                    return Err(feagi_data_etc_error(format!(
                         "ImageFrameProcessor(pass-through) shape mismatch: src={:?}, dst={:?}",
                         src.shape(),
                         dst.shape()
@@ -188,7 +196,7 @@ impl ImageFrameProcessor {
                 ];
                 for (y, x, ch) in sentinel_points {
                     if src[[y, x, ch]] != dst[[y, x, ch]] {
-                        return Err(FeagiDataError::InternalError(format!(
+                        return Err(feagi_data_etc_error(format!(
                             "ImageFrameProcessor(pass-through) copy mismatch at (y={}, x={}, c={}): src={}, dst={}",
                             y, x, ch, src[[y, x, ch]], dst[[y, x, ch]]
                         )));
@@ -314,7 +322,7 @@ impl ImageFrameProcessor {
                     None => {
                         // Do Nothing
                     }
-                    Some(_color_space) => return Err(FeagiDataError::NotImplemented),
+                    Some(_color_space) => return Err(feagi_data_etc_error("NotImplemented".to_string())),
                 }
 
                 match self.offset_brightness_by {
@@ -336,7 +344,7 @@ impl ImageFrameProcessor {
                 }
 
                 if self.convert_to_grayscale {
-                    return Err(FeagiDataError::NotImplemented);
+                    return Err(feagi_data_etc_error("NotImplemented".to_string()));
                 }
 
                 // Copy ONLY pixel data into the pre-allocated destination buffer.
@@ -414,7 +422,7 @@ impl ImageFrameProcessor {
         convert_to_grayscale: bool,
     ) -> Result<&mut Self, FeagiDataError> {
         if self.input_image_properties.get_color_channel_layout() == ColorChannelLayout::RG {
-            return Err(FeagiDataError::NotImplemented);
+            return Err(feagi_data_etc_error("NotImplemented".to_string()));
         }
         self.convert_to_grayscale = convert_to_grayscale;
         Ok(self)

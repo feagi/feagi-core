@@ -5,6 +5,14 @@ use feagi_structures::FeagiDataError;
 use std::cmp;
 use std::fmt::Display;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// Properties defining the center region of a segmented vision frame
 ///
 /// This structure defines the coordinates and size of the central region
@@ -49,7 +57,7 @@ impl GazeProperties {
         destination_segmented_center_cortical_dimensions: CorticalAreaDimensions,
     ) -> Result<[CornerPoints; 9], FeagiDataError> {
         if source_frame_resolution.width < 3 || source_frame_resolution.height < 3 {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Source frame width and height must be at least 3!".into(),
             ));
         }

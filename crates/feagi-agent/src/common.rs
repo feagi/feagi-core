@@ -2,6 +2,14 @@ use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 //region Auth Token
 /// Fixed length for authentication tokens (32 bytes = 256 bits)
 pub const AUTH_TOKEN_LENGTH: usize = 32;
@@ -213,10 +221,10 @@ impl AgentDescriptor {
         use base64::Engine;
         let decoded = base64::engine::general_purpose::STANDARD
             .decode(agent_id_b64)
-            .map_err(|e| FeagiDataError::DeserializationError(format!("Invalid base64: {}", e)))?;
+            .map_err(|e| feagi_data_etc_error(format!("Invalid base64: {}", e)))?;
 
         if decoded.len() != Self::SIZE_BYTES {
-            return Err(FeagiDataError::DeserializationError(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Invalid agent_id length: expected {} bytes, got {}",
                 Self::SIZE_BYTES,
                 decoded.len()
@@ -263,31 +271,31 @@ impl AgentDescriptor {
         agent_version: u32,
     ) -> Result<(), FeagiDataError> {
         if !manufacturer.is_ascii() {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Manufacturer must contain ASCII characters only!".to_string(),
             ));
         }
         if !agent_name.is_ascii() {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Agent name must contain ASCII characters only!".to_string(),
             ));
         }
         if manufacturer.len() > Self::MAX_MANUFACTURER_NAME_BYTE_COUNT {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Manufacturer is too long! Max length is {} bytes, got {}",
                 Self::MAX_MANUFACTURER_NAME_BYTE_COUNT,
                 manufacturer.len()
             )));
         }
         if agent_name.len() > Self::MAX_AGENT_NAME_BYTE_COUNT {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Agent name is too long! Max length is {} bytes, got {}",
                 Self::MAX_AGENT_NAME_BYTE_COUNT,
                 agent_name.len()
             )));
         }
         if agent_version == 0 {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Agent version cannot be zero!".to_string(),
             ));
         }

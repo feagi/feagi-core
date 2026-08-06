@@ -4,6 +4,14 @@
 
 use super::{ImageFrame, SegmentedImageFrame};
 use feagi_genomic_context::cortical_area::descriptors::CorticalChannelDimensions;
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 // NeuronDepth is used in macro expansion
 use feagi_structures::FeagiDataError;
 use feagi_structures::{
@@ -189,7 +197,7 @@ impl TryFrom<usize> for ColorChannelLayout {
             2 => Ok(ColorChannelLayout::RG),
             3 => Ok(ColorChannelLayout::RGB),
             4 => Ok(ColorChannelLayout::RGBA),
-            _ => Err(FeagiDataError::BadParameters(format!(
+            _ => Err(feagi_data_etc_error(format!(
                 "No Channel Layout has {} channels! Acceptable values are 1,2,3,4!",
                 value
             ))),
@@ -205,7 +213,7 @@ impl TryFrom<image::ColorType> for ColorChannelLayout {
             image::ColorType::La8 => Ok(ColorChannelLayout::RG),
             image::ColorType::Rgb8 => Ok(ColorChannelLayout::RGB),
             image::ColorType::Rgba8 => Ok(ColorChannelLayout::RGBA),
-            _ => Err(FeagiDataError::BadParameters(
+            _ => Err(feagi_data_etc_error(
                 "Unsupported image color!".to_string(),
             )),
         }
@@ -315,19 +323,19 @@ impl ImageFrameProperties {
         image_frame: &ImageFrame,
     ) -> Result<(), FeagiDataError> {
         if image_frame.get_xy_resolution() != self.image_resolution {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 format! {"Expected resolution of {} but received an image with resolution of {}!",
                 self.image_resolution, image_frame.get_xy_resolution()},
             ));
         }
         if image_frame.get_color_space() != &self.color_space {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Expected color space of {}, but got image with color space of {}!",
                 self.color_space, self.color_space
             )));
         }
         if image_frame.get_channel_layout() != &self.color_channel_layout {
-            return Err(FeagiDataError::BadParameters(format!("Expected color channel layout of {}, but got image with color channel layout of {}!", self.color_channel_layout, self.color_channel_layout)));
+            return Err(feagi_data_etc_error(format!("Expected color channel layout of {}, but got image with color channel layout of {}!", self.color_channel_layout, self.color_channel_layout)));
         }
         Ok(())
     }
@@ -427,7 +435,7 @@ impl SegmentedImageFrameProperties {
         segmented_image_frame: &SegmentedImageFrame,
     ) -> Result<(), FeagiDataError> {
         if self != &segmented_image_frame.get_segmented_image_frame_properties() {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Segmented image frame does not match the expected segmented frame properties!"
                     .into(),
             ));
@@ -458,7 +466,7 @@ impl CornerPoints {
         lower_right: ImageXYPoint,
     ) -> Result<Self, FeagiDataError> {
         if lower_right.x <= upper_left.x || lower_right.y <= upper_left.y {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Given Points are not forming a proper rectangle!".into(),
             ));
         }
@@ -492,7 +500,7 @@ impl CornerPoints {
         resolution: ImageXYResolution,
     ) -> Result<(), FeagiDataError> {
         if self.lower_right.x > resolution.width || self.lower_right.y > resolution.height {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Corner Points {} do not fit in given resolution {}!",
                 self, resolution
             )));
@@ -561,7 +569,7 @@ pub struct PoseEstimationProperties {
 impl PoseEstimationProperties {
     pub fn new(width: u32, height: u32, depth: u32) -> Result<Self, FeagiDataError> {
         if width == 0 || height == 0 || depth == 0 {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "PoseEstimationProperties dimensions must all be non-zero".into(),
             ));
         }
@@ -657,12 +665,12 @@ impl SpatialPointerProperties {
     /// uses Incremental frame-change handling.
     pub fn require_incremental_parameters(&self) -> Result<(u32, f32), FeagiDataError> {
         let window_ms = self.window_ms.ok_or_else(|| {
-            FeagiDataError::BadParameters(
+            feagi_data_etc_error(
                 "Incremental SpatialPointer requires 'window_ms' in decoder properties".into(),
             )
         })?;
         let max_axis_velocity = self.max_axis_velocity.ok_or_else(|| {
-            FeagiDataError::BadParameters(
+            feagi_data_etc_error(
                 "Incremental SpatialPointer requires 'max_axis_velocity' in decoder properties"
                     .into(),
             )
@@ -674,7 +682,7 @@ impl SpatialPointerProperties {
 
     fn validate_dimensions(width: u32, height: u32, depth: u32) -> Result<(), FeagiDataError> {
         if width == 0 || height == 0 || depth == 0 {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "SpatialPointerProperties dimensions must all be non-zero".into(),
             ));
         }
@@ -683,7 +691,7 @@ impl SpatialPointerProperties {
 
     fn validate_window_ms(window_ms: u32) -> Result<(), FeagiDataError> {
         if window_ms == 0 {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "SpatialPointer 'window_ms' must be greater than zero".into(),
             ));
         }
@@ -692,7 +700,7 @@ impl SpatialPointerProperties {
 
     fn validate_max_axis_velocity(max_axis_velocity: f32) -> Result<(), FeagiDataError> {
         if !max_axis_velocity.is_finite() || max_axis_velocity <= 0.0 {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "SpatialPointer 'max_axis_velocity' must be a finite, positive value".into(),
             ));
         }

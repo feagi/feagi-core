@@ -12,6 +12,14 @@ use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::mem::discriminant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// Type descriptor for wrapped I/O data.
 ///
 /// Describes the variant of data stored in a [`WrappedIOData`] enum without holding
@@ -115,7 +123,7 @@ impl WrappedIOType {
 
             WrappedIOType::ImageFrame(image_properties) => {
                 if image_properties.is_none() {
-                    return Err(FeagiDataError::BadParameters(
+                    return Err(feagi_data_etc_error(
                         "Image frame properties is None! Cannot Created Default Wrapped Data!"
                             .into(),
                     ));
@@ -126,7 +134,7 @@ impl WrappedIOType {
             }
             WrappedIOType::SegmentedImageFrame(segmented_image_properties) => {
                 if segmented_image_properties.is_none() {
-                    return Err(FeagiDataError::BadParameters("Segmented Image frame properties is None! Cannot Created Default Wrapped Data!".into()));
+                    return Err(feagi_data_etc_error("Segmented Image frame properties is None! Cannot Created Default Wrapped Data!".into()));
                 }
                 Ok(WrappedIOData::SegmentedImageFrame(
                     SegmentedImageFrame::from_segmented_image_frame_properties(
@@ -137,7 +145,7 @@ impl WrappedIOType {
             WrappedIOType::RawIMU => Ok(WrappedIOData::RawIMU(RawIMU::new_zero())),
             WrappedIOType::MiscData(misc_dimensions) => {
                 if misc_dimensions.is_none() {
-                    return Err(FeagiDataError::BadParameters(
+                    return Err(feagi_data_etc_error(
                         "Misc Dimensions is None! Cannot Created Default Wrapped Data!".into(),
                     ));
                 }
@@ -153,7 +161,7 @@ impl WrappedIOType {
             )),
             WrappedIOType::PoseEstimationData(pose_properties) => {
                 if pose_properties.is_none() {
-                    return Err(FeagiDataError::BadParameters(
+                    return Err(feagi_data_etc_error(
                         "PoseEstimation properties is None! Cannot create default Wrapped Data!"
                             .into(),
                     ));

@@ -15,6 +15,14 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// Manages multiple sensory data streams with independent processing pipelines per channel.
 ///
 /// This structure maintains a collection of processing pipelines, one for each cortical_area channel,
@@ -455,7 +463,7 @@ impl SensoryCorticalUnitCache {
     ) -> Result<&SensoryPipelineStageRunner, FeagiDataError> {
         match self.pipeline_runners.get(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
-            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
+            None => Err(feagi_data_etc_error(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
                                                               cortical_channel_index, self.pipeline_runners.len())))
         }
     }
@@ -479,7 +487,7 @@ impl SensoryCorticalUnitCache {
         let runner_count = self.pipeline_runners.len();
         match self.pipeline_runners.get_mut(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
-            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
+            None => Err(feagi_data_etc_error(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
                                                               cortical_channel_index, runner_count)))
         }
     }

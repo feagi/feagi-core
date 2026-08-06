@@ -3,6 +3,14 @@ use crate::data_types::MiscData;
 use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPSparseVectors;
 use feagi_structures::FeagiDataError;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// A single token ID transported through FEAGI as a Z-bitplane value at (x=0,y=0).
 ///
 /// Encoding contract (shared across clients):
@@ -56,12 +64,12 @@ pub fn decode_token_id_from_xyzp_bitplanes(
     depth: u32,
 ) -> Result<Option<u32>, FeagiDataError> {
     if depth == 0 {
-        return Err(FeagiDataError::BadParameters(
+        return Err(feagi_data_etc_error(
             "TextToken depth must be > 0".into(),
         ));
     }
     if depth > 32 {
-        return Err(FeagiDataError::BadParameters(
+        return Err(feagi_data_etc_error(
             "TextToken depth must be <= 32 (u32 bit-width)".into(),
         ));
     }
@@ -97,12 +105,12 @@ pub fn encode_token_id_to_xyzp_bitplanes(
     depth: u32,
 ) -> Result<NeuronVoxelXYZPSparseVectors, FeagiDataError> {
     if depth == 0 {
-        return Err(FeagiDataError::BadParameters(
+        return Err(feagi_data_etc_error(
             "TextToken depth must be > 0".into(),
         ));
     }
     if depth > 32 {
-        return Err(FeagiDataError::BadParameters(
+        return Err(feagi_data_etc_error(
             "TextToken depth must be <= 32 (u32 bit-width)".into(),
         ));
     }
@@ -110,11 +118,11 @@ pub fn encode_token_id_to_xyzp_bitplanes(
     // Offset encoding: store token_id+1 so value=0 is reserved for gaps.
     let value = token_id
         .checked_add(1)
-        .ok_or_else(|| FeagiDataError::BadParameters("TextToken token_id overflow".into()))?;
+        .ok_or_else(|| feagi_data_etc_error("TextToken token_id overflow".into()))?;
 
     // Ensure representable with the provided bit depth.
     if depth < 32 && value >= (1u32 << depth) {
-        return Err(FeagiDataError::BadParameters(format!(
+        return Err(feagi_data_etc_error(format!(
             "TextToken token_id out of range for depth={depth} (value={value})"
         )));
     }
@@ -146,7 +154,7 @@ pub fn encode_token_id_to_xyzp_bitplanes(
 pub fn decode_token_id_from_misc_data(misc: &MiscData) -> Result<Option<u32>, FeagiDataError> {
     let dims = misc.get_dimensions();
     if dims.width != 1 || dims.height != 1 {
-        return Err(FeagiDataError::BadParameters(format!(
+        return Err(feagi_data_etc_error(format!(
             "TextToken MiscData must be 1x1xdepth, got {}x{}x{}",
             dims.width, dims.height, dims.depth
         )));
@@ -160,12 +168,12 @@ pub fn decode_token_id_from_misc_data_with_depth(
     depth: u32,
 ) -> Result<Option<u32>, FeagiDataError> {
     if depth == 0 {
-        return Err(FeagiDataError::BadParameters(
+        return Err(feagi_data_etc_error(
             "TextToken depth must be > 0".into(),
         ));
     }
     if depth > 32 {
-        return Err(FeagiDataError::BadParameters(
+        return Err(feagi_data_etc_error(
             "TextToken depth must be <= 32 (u32 bit-width)".into(),
         ));
     }
@@ -189,12 +197,12 @@ pub fn decode_token_id_from_misc_data_with_depth(
 /// Encode a token id into a 1x1x`depth` `MiscData` bitplane buffer (see [`TextToken`] contract).
 pub fn encode_token_id_to_misc_data(token_id: u32, depth: u32) -> Result<MiscData, FeagiDataError> {
     if depth == 0 {
-        return Err(FeagiDataError::BadParameters(
+        return Err(feagi_data_etc_error(
             "TextToken depth must be > 0".into(),
         ));
     }
     if depth > 32 {
-        return Err(FeagiDataError::BadParameters(
+        return Err(feagi_data_etc_error(
             "TextToken depth must be <= 32 (u32 bit-width)".into(),
         ));
     }
@@ -202,9 +210,9 @@ pub fn encode_token_id_to_misc_data(token_id: u32, depth: u32) -> Result<MiscDat
     // Validate representability (same rule as XYZP codec).
     let value = token_id
         .checked_add(1)
-        .ok_or_else(|| FeagiDataError::BadParameters("TextToken token_id overflow".into()))?;
+        .ok_or_else(|| feagi_data_etc_error("TextToken token_id overflow".into()))?;
     if depth < 32 && value >= (1u32 << depth) {
-        return Err(FeagiDataError::BadParameters(format!(
+        return Err(feagi_data_etc_error(format!(
             "TextToken token_id out of range for depth={depth} (value={value})"
         )));
     }

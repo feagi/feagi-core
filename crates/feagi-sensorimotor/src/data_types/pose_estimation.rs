@@ -1,6 +1,14 @@
 use super::descriptors::PoseEstimationProperties;
 use feagi_structures::FeagiDataError;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// A single decoded joint position with confidence.
 ///
 /// Represents one keypoint in a skeleton after centroid extraction from neuron activations.
@@ -31,7 +39,7 @@ pub struct PoseEstimationData {
 impl PoseEstimationData {
     pub fn new(properties: &PoseEstimationProperties) -> Result<Self, FeagiDataError> {
         if properties.depth == 0 || properties.width == 0 || properties.height == 0 {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "PoseEstimationData dimensions must all be non-zero".into(),
             ));
         }

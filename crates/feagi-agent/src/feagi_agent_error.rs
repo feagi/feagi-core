@@ -64,28 +64,7 @@ impl Error for FeagiAgentError {
 
 impl From<FeagiDataError> for FeagiAgentError {
     fn from(err: FeagiDataError) -> Self {
-        match err {
-            FeagiDataError::DeserializationError(msg) => {
-                FeagiAgentError::UnableToDecodeReceivedData(msg)
-            }
-            FeagiDataError::SerializationError(msg) => FeagiAgentError::UnableToSendData(msg),
-            FeagiDataError::BadParameters(msg) => {
-                FeagiAgentError::Other(format!("Bad parameters: {}", msg))
-            }
-            FeagiDataError::NeuronError(msg) => {
-                FeagiAgentError::Other(format!("Neuron error: {}", msg))
-            }
-            FeagiDataError::InternalError(msg) => {
-                FeagiAgentError::Other(format!("Internal error: {}", msg))
-            }
-            FeagiDataError::ResourceLockedWhileRunning(msg) => {
-                FeagiAgentError::Other(format!("Resource locked: {}", msg))
-            }
-            FeagiDataError::ConstError(msg) => {
-                FeagiAgentError::Other(format!("Const error: {}", msg))
-            }
-            FeagiDataError::NotImplemented => FeagiAgentError::Other("Not implemented".to_string()),
-        }
+        FeagiAgentError::Other(err.to_string())
     }
 }
 

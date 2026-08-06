@@ -9,6 +9,14 @@ use std::any::Any;
 use std::fmt::Display;
 use std::time::Instant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 #[derive(Debug, Clone)]
 pub struct ImageFrameSegmentatorStage {
     input_image_properties: ImageFrameProperties,
@@ -77,7 +85,7 @@ impl PipelineStage for ImageFrameSegmentatorStage {
                 self.image_segmentator.update_gaze(&segmentation_gaze)?; // TODO for only updating gaze, we dont need to change this much!
                 Ok(())
             }
-            _ => Err(FeagiDataError::BadParameters(
+            _ => Err(feagi_data_etc_error(
                 "load_properties called with incompatible properties type for ImageFrameSegmentatorStage".into()
             ))
         }

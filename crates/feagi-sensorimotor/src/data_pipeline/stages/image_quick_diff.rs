@@ -12,6 +12,14 @@ use std::fmt::Display;
 use std::ops::RangeInclusive;
 use std::time::Instant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 #[derive(Debug, Clone)]
 pub struct ImageFrameQuickDiffStage {
     /// The output buffer containing the computed difference image
@@ -91,11 +99,11 @@ impl PipelineStage for ImageFrameQuickDiffStage {
                 ..
             } => {
                 if per_pixel_allowed_range.is_empty() {
-                    return Err(FeagiDataError::BadParameters("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
+                    return Err(feagi_data_etc_error("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
                 }
 
                 if acceptable_amount_of_activity_in_image.is_empty() {
-                    return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
+                    return Err(feagi_data_etc_error("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
                 }
 
                 // no point running checks here for change
@@ -112,7 +120,7 @@ impl PipelineStage for ImageFrameQuickDiffStage {
 
                 Ok(())
             }
-            _ => Err(FeagiDataError::BadParameters(
+            _ => Err(feagi_data_etc_error(
                 "load_properties called with incompatible properties type for ImageFrameQuickDiffStage".into()
             ))
         }
@@ -126,13 +134,13 @@ impl ImageFrameQuickDiffStage {
         acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
     ) -> Result<Self, FeagiDataError> {
         if per_pixel_allowed_range.is_empty() {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "per_pixel_allowed_range appears to be empty! Are your bounds correct?".into(),
             ));
         }
 
         if acceptable_amount_of_activity_in_image.is_empty() {
-            return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
+            return Err(feagi_data_etc_error("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
         }
 
         let cache_image = ImageFrame::new_from_image_frame_properties(&image_properties)?;

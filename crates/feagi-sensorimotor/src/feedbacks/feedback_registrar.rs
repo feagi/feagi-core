@@ -5,6 +5,14 @@ use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct FeedbackRegistrar {
     registered_feedbacks: Vec<(FeedbackRegistrationTargets, FeedBackRegistration)>,
@@ -57,7 +65,7 @@ impl FeedbackRegistrar {
     ) -> Result<(), FeagiDataError> {
         let compare = &(targets.clone(), registration.clone());
         if self.registered_feedbacks.contains(compare) {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Feedback {} already registered to motor unit {} channel {}, and sensor unit {} channel {}!",
                 compare.1,
                 compare.0.get_motor_unit_index(),

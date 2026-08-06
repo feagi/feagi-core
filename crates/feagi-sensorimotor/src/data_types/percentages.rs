@@ -1,5 +1,13 @@
 use feagi_structures::FeagiDataError;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 //region 1D Percentage Types
 
 /// A validated percentage value constrained to [0.0, 1.0].
@@ -42,7 +50,7 @@ impl Percentage {
     /// Creates a percentage from a value in [0.0, 1.0] with validation.
     pub fn new_from_0_1(value: f32) -> Result<Percentage, FeagiDataError> {
         if !(0.0..=1.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Percentage Value must be between 0 and 1!".into(),
             ));
         }
@@ -51,7 +59,7 @@ impl Percentage {
 
     pub fn new_from_interp_m1_1(value: f32) -> Result<Percentage, FeagiDataError> {
         if !(-1.0..=1.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Signed Percentage Value to interp from must be between -1 and 1!".into(),
             ));
         }
@@ -72,7 +80,7 @@ impl Percentage {
 
     pub fn new_from_0_100(value: f32) -> Result<Percentage, FeagiDataError> {
         if !(0.0..=100.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Percentage Value must be between 0 and 100!".into(),
             ));
         }
@@ -86,7 +94,7 @@ impl Percentage {
         range: &std::ops::Range<f32>,
     ) -> Result<Percentage, FeagiDataError> {
         if value < range.start || value > range.end {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Given value {} is out of range {:?}!",
                 value, range
             )));
@@ -106,7 +114,7 @@ impl Percentage {
 
     pub fn inplace_update_from_0_1(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if !(0.0..=1.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Percentage Value must be between 0 and 1!".into(),
             ));
         }
@@ -120,7 +128,7 @@ impl Percentage {
 
     pub fn inplace_update_0_100(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if !(0.0..=100.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Percentage Value must be between 0 and 100!".into(),
             ));
         }
@@ -134,7 +142,7 @@ impl Percentage {
         range: &std::ops::Range<f32>,
     ) -> Result<(), FeagiDataError> {
         if value < range.start || value > range.end {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Given value {} is out of range {:?}!",
                 value, range
             )));
@@ -224,7 +232,7 @@ impl SignedPercentage {
 
     pub fn new_from_m1_1(value: f32) -> Result<SignedPercentage, FeagiDataError> {
         if !(-1.0..=1.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Signed Percentage Value must be between -1 and 1!".into(),
             ));
         }
@@ -233,7 +241,7 @@ impl SignedPercentage {
 
     pub fn new_scaled_from_0_1(value: f32) -> Result<SignedPercentage, FeagiDataError> {
         if !(0.0..=1.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Percentage Value to interp from must be between 0 and 1!".into(),
             ));
         }
@@ -250,7 +258,7 @@ impl SignedPercentage {
 
     pub fn new_from_m100_100(value: f32) -> Result<SignedPercentage, FeagiDataError> {
         if !(-100.0..=100.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Signed Percentage Value must be between -100 and 100!".into(),
             ));
         }
@@ -264,7 +272,7 @@ impl SignedPercentage {
         range: &std::ops::Range<f32>,
     ) -> Result<SignedPercentage, FeagiDataError> {
         if value < range.start || value > range.end {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Given value {} is out of range {:?}!",
                 value, range
             )));
@@ -292,7 +300,7 @@ impl SignedPercentage {
 
     pub fn inplace_update_from_m1_1(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if !(-1.0..=1.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Percentage Value must be between -1 and 1!".into(),
             ));
         }
@@ -302,7 +310,7 @@ impl SignedPercentage {
 
     pub fn inplace_update_m100_100(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if !(-100.0..=100.0).contains(&value) {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Percentage Value must be between -100 and 100!".into(),
             ));
         }
@@ -316,7 +324,7 @@ impl SignedPercentage {
         range: &std::ops::Range<f32>,
     ) -> Result<(), FeagiDataError> {
         if value < range.start || value > range.end {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Given value {} is out of range {:?}!",
                 value, range
             )));

@@ -6,6 +6,14 @@ use feagi_structures::FeagiDataError;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 // TODO this file may be redudant, we may want to clear it
 
 fn lock_recover<'a, T>(mutex: &'a Mutex<T>) -> MutexGuard<'a, T> {
@@ -83,7 +91,7 @@ impl ConnectorCache {
             .export_to_output_definition(&mut output)?;
         output.set_feedbacks(self.feedback_registrar.clone());
         serde_json::to_value(output)
-            .map_err(|err| FeagiDataError::SerializationError(err.to_string()))
+            .map_err(|err| feagi_data_etc_error(err.to_string()))
     }
 
     pub fn import_device_registrations_as_config_json(
@@ -92,7 +100,7 @@ impl ConnectorCache {
     ) -> Result<(), FeagiDataError> {
         // NOTE: Wipes all registered devices
         let definition: JSONInputOutputDefinition = serde_json::from_value(json)
-            .map_err(|err| FeagiDataError::DeserializationError(err.to_string()))?;
+            .map_err(|err| feagi_data_etc_error(err.to_string()))?;
         self.get_motor_cache()
             .import_from_output_definition(&definition)?;
         self.get_sensor_cache()

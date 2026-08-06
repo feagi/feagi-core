@@ -15,6 +15,7 @@ name = "feagi_evolutionary"
 [dependencies]
 feagi-genomic-context = {  path = "../feagi-genomic-context" }
 feagi-genomic-data = {  path = "../feagi-genomic-data" }
+feagi-data = { path = "../feagi-data" }
 
 
 # Serialization

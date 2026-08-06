@@ -5,6 +5,14 @@ use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPSparseVectors;
 use feagi_structures::FeagiDataError;
 use ndarray::{Array3, Zip};
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// A 3D array container for miscellaneous floating-point data.
 ///
 /// Used for storing arbitrary 3D data structures with width, height, and depth dimensions.
@@ -43,7 +51,7 @@ impl MiscData {
     pub fn new_with_data(data: Array3<f32>) -> Result<MiscData, FeagiDataError> {
         let shape = data.shape();
         if shape[0] == 0 || shape[1] == 0 || shape[2] == 0 {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Misc Data cannot be empty!".into(),
             ));
         }

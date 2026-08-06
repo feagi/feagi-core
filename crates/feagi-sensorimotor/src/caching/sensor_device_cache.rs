@@ -5,6 +5,14 @@ use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 // Several of these symbols are referenced only from inside the
 // `sensor_unit_functions!` macro after `@generate_similar_functions`
 // expansion; the compiler sees them as required only when at least one
@@ -734,7 +742,7 @@ impl SensorDeviceCache {
         self.byte_data
             .overwrite_byte_data_with_single_struct_data(&self.neuron_data, 0)
             .map_err(|e| {
-                FeagiDataError::BadParameters(format!(
+                feagi_data_etc_error(format!(
                     "Failed to encode neuron data to bytes: {:?}",
                     e
                 ))
@@ -762,7 +770,7 @@ impl SensorDeviceCache {
                     .sensor_cortical_unit_caches
                     .contains_key(&(*sensory_unit, unit_definition.cortical_unit_index))
                 {
-                    return Err(FeagiDataError::DeserializationError(format!(
+                    return Err(feagi_data_etc_error(format!(
                         "Already registered sensor {} of unit index {}!",
                         *sensory_unit, unit_definition.cortical_unit_index
                     )));
@@ -819,7 +827,7 @@ impl SensorDeviceCache {
             .sensor_cortical_unit_caches
             .contains_key(&(sensor_type, unit_index))
         {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Already registered sensor {} of unit index {}!",
                 sensor_type, unit_index
             )));
@@ -1026,7 +1034,7 @@ impl SensorDeviceCache {
             .sensor_cortical_unit_caches
             .get(&(sensor_type, unit_index));
         if check.is_none() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Unable to find {} of cortical_area unit index {} in registered sensor's list!",
                 sensor_type, unit_index
             )));
@@ -1044,7 +1052,7 @@ impl SensorDeviceCache {
             .sensor_cortical_unit_caches
             .get_mut(&(sensor_type, unit_index));
         if check.is_none() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Unable to find {} of cortical_area unit index {} in registered sensor's list!",
                 sensor_type, unit_index
             )));

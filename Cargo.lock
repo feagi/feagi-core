@@ -1285,6 +1285,7 @@ name = "feagi-agent"
 version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
+ "feagi-data",
  "feagi-io",
  "feagi-sensorimotor",
  "feagi-serialization",
@@ -1400,6 +1401,7 @@ version = "0.1.1"
 dependencies = [
  "chrono",
  "env_logger",
+ "feagi-data",
  "feagi-genomic-context",
  "feagi-genomic-data",
  "feagi-observability",
@@ -1521,6 +1523,7 @@ name = "feagi-sensorimotor"
 version = "0.1.1"
 dependencies = [
  "clap",
+ "feagi-data",
  "feagi-genomic-context",
  "feagi-serialization",
  "image",

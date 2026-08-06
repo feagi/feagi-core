@@ -18,6 +18,14 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 const ECCENTRICITY_CHANNEL_WIDTH: u32 = 2;
 const MODULARITY_CHANNEL_WIDTH: u32 = 1;
 
@@ -145,7 +153,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
                     .z_depth_eccentricity_scratch_space
                     .get_mut(neuron.coordinate.x as usize)
                     .ok_or_else(|| {
-                        FeagiDataError::InternalError(
+                        feagi_data_etc_error(
                             "Eccentricity scratch space indexing error".into(),
                         )
                     })?;
@@ -171,7 +179,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
                     .z_depth_modularity_scratch_space
                     .get_mut(neuron.coordinate.x as usize)
                     .ok_or_else(|| {
-                        FeagiDataError::InternalError(
+                        feagi_data_etc_error(
                             "Modularity scratch space indexing error".into(),
                         )
                     })?;
@@ -194,19 +202,19 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
                 .z_depth_eccentricity_scratch_space
                 .get(eccentricity_z_row_a_index)
                 .ok_or_else(|| {
-                    FeagiDataError::InternalError("Eccentricity scratch space read error".into())
+                    feagi_data_etc_error("Eccentricity scratch space read error".into())
                 })?;
             let eccentricity_z_b_vector = self
                 .z_depth_eccentricity_scratch_space
                 .get(eccentricity_z_row_b_index)
                 .ok_or_else(|| {
-                    FeagiDataError::InternalError("Eccentricity scratch space read error".into())
+                    feagi_data_etc_error("Eccentricity scratch space read error".into())
                 })?;
             let modularity_z_vector = self
                 .z_depth_modularity_scratch_space
                 .get(modularity_z_row_index)
                 .ok_or_else(|| {
-                    FeagiDataError::InternalError("Modularity scratch space read error".into())
+                    feagi_data_etc_error("Modularity scratch space read error".into())
                 })?;
 
             if eccentricity_z_a_vector.is_empty()

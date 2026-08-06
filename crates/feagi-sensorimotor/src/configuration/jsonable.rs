@@ -33,6 +33,14 @@ use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// Top level JSON representation of registered devices and feedbacks
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
@@ -71,7 +79,7 @@ impl JSONInputOutputDefinition {
             for unit in units_and_encoders {
                 unit.0.verify_valid_structure()?;
                 if unit_indexes.contains(&unit.0.cortical_unit_index) {
-                    return Err(FeagiDataError::DeserializationError(
+                    return Err(feagi_data_etc_error(
                         "Duplicate cortical_area unit indexes found!".into(),
                     ));
                 }
@@ -83,7 +91,7 @@ impl JSONInputOutputDefinition {
             for unit in units_and_decoders {
                 unit.0.verify_valid_structure()?;
                 if unit_indexes.contains(&unit.0.cortical_unit_index) {
-                    return Err(FeagiDataError::DeserializationError(
+                    return Err(feagi_data_etc_error(
                         "Duplicate cortical_area unit indexes found!".into(),
                     ));
                 }
@@ -159,7 +167,7 @@ pub struct JSONUnitDefinition {
 impl JSONUnitDefinition {
     pub fn verify_valid_structure(&self) -> Result<(), FeagiDataError> {
         if self.device_grouping.is_empty() {
-            return Err(FeagiDataError::DeserializationError(
+            return Err(feagi_data_etc_error(
                 "Cannot have a cortical_area unit of 0 device grouping!".to_string(),
             ));
         }
@@ -167,7 +175,7 @@ impl JSONUnitDefinition {
         for device_grouping in &self.device_grouping {
             if let Some(channel_override) = device_grouping.channel_index_override {
                 if *channel_override > number_channels {
-                    return Err(FeagiDataError::DeserializationError(
+                    return Err(feagi_data_etc_error(
                         "Device has invalid channel override!".to_string(),
                     ));
                 }
@@ -219,7 +227,7 @@ impl JSONEncoderProperties {
         match self {
             JSONEncoderProperties::Boolean => {
                 if cortical_ids.len() != 1 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected one cortical_area id!".to_string(),
                     ));
                 }
@@ -230,7 +238,7 @@ impl JSONEncoderProperties {
             }
             JSONEncoderProperties::CartesianPlane(image_frame) => {
                 if cortical_ids.len() != 1 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected one cortical_area id!".to_string(),
                     ));
                 }
@@ -242,7 +250,7 @@ impl JSONEncoderProperties {
             }
             JSONEncoderProperties::MiscData(misc_data_dimensions) => {
                 if cortical_ids.len() != 1 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected one cortical_area id!".to_string(),
                     ));
                 }
@@ -259,7 +267,7 @@ impl JSONEncoderProperties {
                 number_dimensions,
             ) => {
                 if cortical_ids.len() != 1 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected one cortical_area id!".to_string(),
                     ));
                 }
@@ -274,12 +282,12 @@ impl JSONEncoderProperties {
             }
             JSONEncoderProperties::SegmentedImageFrame(segmented_properties) => {
                 if cortical_ids.len() != 9 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected nine cortical_area ids!".to_string(),
                     ));
                 }
                 let cortical_ids: [CorticalID; 9] = (*cortical_ids).try_into().map_err(|_| {
-                    FeagiDataError::InternalError("Unable to get cortical_area ids!".to_string())
+                    feagi_data_etc_error("Unable to get cortical_area ids!".to_string())
                 })?;
                 SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(
                     cortical_ids,
@@ -386,7 +394,7 @@ impl JSONDecoderProperties {
         match self {
             JSONDecoderProperties::CartesianPlane(image_frame_properties) => {
                 if cortical_ids.len() != 1 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected one cortical_area id!".to_string(),
                     ));
                 }
@@ -398,7 +406,7 @@ impl JSONDecoderProperties {
             }
             JSONDecoderProperties::MiscData(misc_data_dimensions) => {
                 if cortical_ids.len() != 1 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected one cortical_area id!".to_string(),
                     ));
                 }
@@ -415,7 +423,7 @@ impl JSONDecoderProperties {
                 dimension_count,
             ) => {
                 if cortical_ids.len() != 1 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected one cortical_area id!".to_string(),
                     ));
                 }
@@ -430,7 +438,7 @@ impl JSONDecoderProperties {
             }
             JSONDecoderProperties::PositionalServo(neuron_depth, percentage_neuron_positioning) => {
                 if cortical_ids.len() != 2 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected two cortical_area ids for PositionalServo!".to_string(),
                     ));
                 }
@@ -448,7 +456,7 @@ impl JSONDecoderProperties {
                 percentage_neuron_positioning,
             ) => {
                 if cortical_ids.len() != 2 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected two cortical_area ids!".to_string(),
                     ));
                 }
@@ -468,7 +476,7 @@ impl JSONDecoderProperties {
                 percentage_neuron_positioning,
             ) => {
                 if cortical_ids.len() != 3 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected three cortical_area ids for ImageFilteringSettings!".to_string(),
                     ));
                 }
@@ -485,7 +493,7 @@ impl JSONDecoderProperties {
             }
             JSONDecoderProperties::PoseEstimation(pose_properties) => {
                 if cortical_ids.len() != 1 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected one cortical_area id for PoseEstimation!".to_string(),
                     ));
                 }
@@ -497,7 +505,7 @@ impl JSONDecoderProperties {
             }
             JSONDecoderProperties::SpatialPointer(pointer_properties) => {
                 if cortical_ids.len() != 1 {
-                    return Err(FeagiDataError::InternalError(
+                    return Err(feagi_data_etc_error(
                         "Expected one cortical_area id for SpatialPointer!".to_string(),
                     ));
                 }
@@ -602,7 +610,7 @@ impl JSONDecoderProperties {
                 // unsigned position (Percentage3D); Incremental decodes a signed motion
                 // vector (SignedPercentage3D).
                 let cortical_id = cortical_ids.first().ok_or_else(|| {
-                    FeagiDataError::InternalError(
+                    feagi_data_etc_error(
                         "Expected one cortical_area id for SpatialPointer!".to_string(),
                     )
                 })?;

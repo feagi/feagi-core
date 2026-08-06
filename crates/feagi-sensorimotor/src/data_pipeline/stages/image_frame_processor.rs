@@ -14,6 +14,14 @@ use std::any::Any;
 use std::fmt::Display;
 use std::time::Instant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// A stream processor that applies image transformations to incoming frames.
 ///
 /// This processor wraps an `ImageFrameTransformerDefinition` to provide streaming
@@ -110,7 +118,7 @@ impl PipelineStage for ImageFrameProcessorStage {
                 self.transformer_definition = transformer_definition;
                 Ok(())
             }
-            _ => Err(FeagiDataError::BadParameters(
+            _ => Err(feagi_data_etc_error(
                 "load_properties called with incompatible properties type for ImageFrameProcessorStage".into()
             ))
         }

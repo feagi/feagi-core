@@ -5,6 +5,14 @@ use crate::data_types::{
 };
 use feagi_structures::FeagiDataError;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// Internal macro to define the WrappedIOData enum with automatic trait implementations.
 ///
 /// Generates the enum and From/TryFrom conversions for all variants.
@@ -56,7 +64,7 @@ macro_rules! define_wrapped_io_data_enum {
             fn try_from(value: WrappedIOData) -> Result<Self, Self::Error> {
                 match value {
                     WrappedIOData::$enum_type(data) => Ok(data),
-                    _ => Err(FeagiDataError::BadParameters(format!("This variable is not a {}!", $friendly_name)).into()),
+                    _ => Err(feagi_data_etc_error(format!("This variable is not a {}!", $friendly_name)).into()),
                 }
             }
         }
@@ -67,7 +75,7 @@ macro_rules! define_wrapped_io_data_enum {
             fn try_from(value: &WrappedIOData) -> Result<Self, Self::Error> {
                 match value {
                     WrappedIOData::$enum_type(data) => Ok(data.clone()),
-                    _ => Err(FeagiDataError::BadParameters(format!("This variable is not a {}!", $friendly_name)).into()),
+                    _ => Err(feagi_data_etc_error(format!("This variable is not a {}!", $friendly_name)).into()),
                 }
             }
         }
@@ -78,7 +86,7 @@ macro_rules! define_wrapped_io_data_enum {
             fn try_from(value: &'a WrappedIOData) -> Result<Self, Self::Error> {
                 match value {
                     WrappedIOData::$enum_type(data) => Ok(data),
-                    _ => Err(FeagiDataError::BadParameters(format!("This variable is not a {}!", $friendly_name)).into()),
+                    _ => Err(feagi_data_etc_error(format!("This variable is not a {}!", $friendly_name)).into()),
                 }
             }
         }
@@ -89,7 +97,7 @@ macro_rules! define_wrapped_io_data_enum {
             fn try_from(value: &'a mut WrappedIOData) -> Result<Self, Self::Error> {
                 match value {
                     WrappedIOData::$enum_type(data) => Ok(data),
-                    _ => Err(FeagiDataError::BadParameters(format!("This variable is not a {}!", $friendly_name)).into()),
+                    _ => Err(feagi_data_etc_error(format!("This variable is not a {}!", $friendly_name)).into()),
                 }
             }
         }

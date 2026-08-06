@@ -2,6 +2,15 @@ use crate::data_types::descriptors::{
     ColorChannelLayout, ImageFrameProperties, SegmentedImageFrameProperties,
 };
 use crate::data_types::{GazeProperties, ImageFrame, ImageFrameProcessor, SegmentedImageFrame};
+use feagi_structures::FeagiDataError;
+
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
 
 #[derive(Debug, Clone)]
 pub struct ImageFrameSegmentator {
@@ -63,21 +72,21 @@ impl ImageFrameSegmentator {
         target: &mut SegmentedImageFrame,
     ) -> Result<(), FeagiDataError> {
         if input.get_xy_resolution() != self.input_properties.get_image_resolution() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Expected Image Resolution of {}, but got {}!",
                 self.input_properties.get_image_resolution(),
                 input.get_xy_resolution()
             )));
         }
         if *input.get_channel_layout() != self.input_properties.get_color_channel_layout() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Expected Image Color Channels of {} but got {}!",
                 self.input_properties.get_color_channel_layout(),
                 input.get_channel_layout()
             )));
         }
         if target.get_segmented_image_frame_properties() != self.output_properties {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "Write Target SegmentedImageFrame does not have expected properties!".into(),
             ));
         }

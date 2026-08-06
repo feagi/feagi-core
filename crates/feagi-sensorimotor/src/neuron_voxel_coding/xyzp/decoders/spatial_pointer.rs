@@ -16,6 +16,14 @@ use feagi_structures::FeagiDataError;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// Decodes one cortical_area area's activity into a normalized XYZ spatial pointer.
 ///
 /// The decoder supports two mechanisms, selected by the owning area's
@@ -119,7 +127,7 @@ impl SpatialPointerNeuronVoxelXYZPDecoder {
             IOCorticalAreaConfigurationFlag::Percentage3D(frame, _) => frame,
             IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame, _) => frame,
             other => {
-                return Err(FeagiDataError::InternalError(format!(
+                return Err(feagi_data_etc_error(format!(
                     "SpatialPointer decoder expected a Percentage3D or SignedPercentage3D \
                      cortical_area area flag, got {}",
                     other

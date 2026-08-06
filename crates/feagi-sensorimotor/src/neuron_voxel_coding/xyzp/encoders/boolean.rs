@@ -13,6 +13,14 @@ use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 const NEURON_TRUE_VAL: f32 = 1.0;
 const NEURON_FALSE_VAL: f32 = 0.0;
 
@@ -84,7 +92,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
                 match changed {
                     BoolState::Unchanged => {
                         // Not possible
-                        return Err(FeagiDataError::InternalError(
+                        return Err(feagi_data_etc_error(
                             "Unable to send unchanged boolean as a changed!".into(),
                         ));
                     }

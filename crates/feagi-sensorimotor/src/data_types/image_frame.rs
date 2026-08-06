@@ -8,6 +8,14 @@ use feagi_structures::FeagiDataError;
 use image::{DynamicImage, GenericImageView};
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 // Named constants for sRGB / linear conversions
 const SRGB_THRESHOLD: f32 = 0.04045;
 const LINEAR_THRESHOLD: f32 = 0.0031308;
@@ -335,7 +343,7 @@ impl ImageFrame {
                 }
                 let img_buffer = image::GrayImage::from_raw(width as u32, height as u32, buffer)
                     .ok_or_else(|| {
-                        FeagiDataError::InternalError(
+                        feagi_data_etc_error(
                             "Failed to create grayscale image".to_string(),
                         )
                     })?;
@@ -352,7 +360,7 @@ impl ImageFrame {
                 let img_buffer =
                     image::GrayAlphaImage::from_raw(width as u32, height as u32, buffer)
                         .ok_or_else(|| {
-                            FeagiDataError::InternalError(
+                            feagi_data_etc_error(
                                 "Failed to create grayscale+alpha image".to_string(),
                             )
                         })?;
@@ -369,7 +377,7 @@ impl ImageFrame {
                 }
                 let img_buffer = image::RgbImage::from_raw(width as u32, height as u32, buffer)
                     .ok_or_else(|| {
-                        FeagiDataError::InternalError("Failed to create RGB image".to_string())
+                        feagi_data_etc_error("Failed to create RGB image".to_string())
                     })?;
                 Ok(DynamicImage::ImageRgb8(img_buffer))
             }
@@ -385,7 +393,7 @@ impl ImageFrame {
                 }
                 let img_buffer = image::RgbaImage::from_raw(width as u32, height as u32, buffer)
                     .ok_or_else(|| {
-                        FeagiDataError::InternalError("Failed to create RGBA image".to_string())
+                        feagi_data_etc_error("Failed to create RGBA image".to_string())
                     })?;
                 Ok(DynamicImage::ImageRgba8(img_buffer))
             }
@@ -405,7 +413,7 @@ impl ImageFrame {
                 &mut std::io::Cursor::new(&mut buffer),
                 image::ImageFormat::Png,
             )
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode PNG: {}", e)))?;
+            .map_err(|e| feagi_data_etc_error(format!("Failed to encode PNG: {}", e)))?;
         Ok(buffer)
     }
 
@@ -422,7 +430,7 @@ impl ImageFrame {
                 &mut std::io::Cursor::new(&mut buffer),
                 image::ImageFormat::Bmp,
             )
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode BMP: {}", e)))?;
+            .map_err(|e| feagi_data_etc_error(format!("Failed to encode BMP: {}", e)))?;
         Ok(buffer)
     }
 
@@ -448,7 +456,7 @@ impl ImageFrame {
                 &mut std::io::Cursor::new(&mut buffer),
                 image::ImageFormat::Jpeg,
             )
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode JPEG: {}", e)))?;
+            .map_err(|e| feagi_data_etc_error(format!("Failed to encode JPEG: {}", e)))?;
         Ok(buffer)
     }
 
@@ -465,7 +473,7 @@ impl ImageFrame {
                 &mut std::io::Cursor::new(&mut buffer),
                 image::ImageFormat::Tiff,
             )
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode TIFF: {}", e)))?;
+            .map_err(|e| feagi_data_etc_error(format!("Failed to encode TIFF: {}", e)))?;
         Ok(buffer)
     }
 

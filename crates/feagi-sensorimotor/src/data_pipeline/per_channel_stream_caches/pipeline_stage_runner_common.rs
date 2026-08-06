@@ -9,6 +9,14 @@ use feagi_structures::FeagiDataError;
 use std::cmp::PartialEq;
 use std::time::Instant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 /// Represents the direction of data flow in the pipeline, which affects validation logic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PipelineDirection {
@@ -129,7 +137,7 @@ pub(crate) trait PipelineStageRunner {
                 return Ok((i as u32).into());
             }
         }
-        Err(FeagiDataError::BadParameters(format!(
+        Err(feagi_data_etc_error(format!(
             "No stage of type {} found!",
             updated_properties.variant_name()
         )))
@@ -152,7 +160,7 @@ pub(crate) trait PipelineStageRunner {
         new_pipeline_stage_properties: Vec<PipelineStageProperties>,
     ) -> Result<(), FeagiDataError> {
         if new_pipeline_stage_properties.len() != self.get_stages().len() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Unable to update {} contained stages with {} properties!",
                 self.get_stages().len(),
                 new_pipeline_stage_properties.len()
@@ -250,13 +258,13 @@ pub(crate) trait PipelineStageRunner {
         stage_index: PipelineStagePropertyIndex,
     ) -> Result<(), FeagiDataError> {
         if self.get_stages().is_empty() {
-            return Err(FeagiDataError::BadParameters(
+            return Err(feagi_data_etc_error(
                 "No stages are defined, ergo no indexing is possible!".into(),
             ));
         }
 
         if *stage_index >= self.get_stages().len() as u32 {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "New stage index {} is out of range! Max allowed is {}!",
                 *stage_index,
                 self.get_stages().len() - 1
@@ -298,7 +306,7 @@ pub(crate) fn verify_pipeline_stage_properties(
                 .get_input_data_type()
                 != fixed_type
             {
-                return Err(FeagiDataError::BadParameters(
+                return Err(feagi_data_etc_error(
                     "Given stages not compatible!".into(),
                 ));
             }
@@ -311,7 +319,7 @@ pub(crate) fn verify_pipeline_stage_properties(
                 .get_output_data_type()
                 != fixed_type
             {
-                return Err(FeagiDataError::BadParameters(
+                return Err(feagi_data_etc_error(
                     "Given stages not compatible!".into(),
                 ));
             }
@@ -324,7 +332,7 @@ pub(crate) fn verify_pipeline_stage_properties(
         let second = &pipeline_stage_properties[stage_index + 1];
         if first.get_output_data_type() != second.get_input_data_type() {
             // TODO there may be some cases where one side doesn't care about things like resolution and stuff. Use those checks instead of this!
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Given stage runner at index {} has output type {}, which does not match the input type of stage runner at index {} or type {}!",
                 stage_index,
                 first.get_output_data_type(),
@@ -404,7 +412,7 @@ pub(crate) fn verify_replacing_stage_properties(
     // Validate input compatibility
     if let Some(expected_input) = comparing_input {
         if expected_input != new_stage_properties.get_input_data_type() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Precursor to stage at index {} outputs data type {} but given stage accepts {}!",
                 *new_stage_index,
                 expected_input,
@@ -416,7 +424,7 @@ pub(crate) fn verify_replacing_stage_properties(
     // Validate output compatibility
     if let Some(expected_output) = comparing_output {
         if expected_output != new_stage_properties.get_output_data_type() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Postcursor to stage at index {} receives data type {} but given stage outputs {}!",
                 *new_stage_index,
                 expected_output,

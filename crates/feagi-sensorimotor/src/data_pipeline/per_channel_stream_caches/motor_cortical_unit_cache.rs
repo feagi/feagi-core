@@ -15,6 +15,14 @@ use feagi_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use rayon::prelude::*;
 use std::time::Instant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 #[derive(Debug)]
 pub(crate) struct MotorCorticalUnitCache {
     neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
@@ -330,7 +338,7 @@ impl MotorCorticalUnitCache {
         let callbacks_len = self.value_updated_callbacks.len();
         let runners_len = self.pipeline_runners.len();
         let signal = self.value_updated_callbacks.get_mut(idx).ok_or_else(|| {
-            FeagiDataError::BadParameters(format!(
+            feagi_data_etc_error(format!(
                 "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
                      This indicates an internal cache invariant violation.",
                 idx, callbacks_len, runners_len
@@ -350,7 +358,7 @@ impl MotorCorticalUnitCache {
         let callbacks_len = self.value_updated_callbacks.len();
         let runners_len = self.pipeline_runners.len();
         let signal = self.value_updated_callbacks.get_mut(idx).ok_or_else(|| {
-            FeagiDataError::BadParameters(format!(
+            feagi_data_etc_error(format!(
                 "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
                      This indicates an internal cache invariant violation.",
                 idx, callbacks_len, runners_len
@@ -375,7 +383,7 @@ impl MotorCorticalUnitCache {
                 .value_updated_callbacks
                 .get_mut(channel_index)
                 .ok_or_else(|| {
-                    FeagiDataError::BadParameters(format!(
+                    feagi_data_etc_error(format!(
                         "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
                          This indicates an internal cache invariant violation.",
                         channel_index,
@@ -440,7 +448,7 @@ impl MotorCorticalUnitCache {
     ) -> Result<&MotorPipelineStageRunner, FeagiDataError> {
         match self.pipeline_runners.get(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
-            None => Err(FeagiDataError::BadParameters(format!(
+            None => Err(feagi_data_etc_error(format!(
                 "Channel Index {} is out of bounds for MotorChannelStreamCaches with {} channels!",
                 cortical_channel_index,
                 self.pipeline_runners.len()
@@ -459,7 +467,7 @@ impl MotorCorticalUnitCache {
             .get_mut(*cortical_channel_index as usize)
         {
             Some(pipeline_runner) => Ok(pipeline_runner),
-            None => Err(FeagiDataError::BadParameters(format!(
+            None => Err(feagi_data_etc_error(format!(
                 "Channel Index {} is out of bounds for MotorChannelStreamCaches with {} channels!",
                 cortical_channel_index, num_runners
             ))),

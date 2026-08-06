@@ -8,6 +8,14 @@ use feagi_genomic_context::cortical_area::descriptors::CorticalChannelIndex;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
+
+use feagi_data::feagi_data_error::FeagiFailDataEtc;
+
+fn feagi_data_etc_error(message: String) -> FeagiDataError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
 #[derive(Debug)]
 pub struct SensoryPipelineStageRunner {
     expected_processed_sensor_type: WrappedIOType, // The type expected to be output by the stage runner
@@ -112,7 +120,7 @@ impl SensoryPipelineStageRunner {
     ) -> Result<(), FeagiDataError> {
         let incoming_type: WrappedIOType = incoming_data.into();
         if incoming_type != self.get_expected_type_to_input_and_process() {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(feagi_data_etc_error(format!(
                 "Expected input data type to be {} but got {incoming_type}!",
                 self.get_expected_type_to_input_and_process()
             )));
