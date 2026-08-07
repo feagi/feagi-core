@@ -49,12 +49,10 @@ where
 
         // Dumb temporary function
 
-        if incoming_potential > &NeuronMembranePotential::from_quantization(0.1 * (dimensional_cortical_dimensions.number_contained_elements().quant_to_u32() as f32))
+        if (burst_index.quant_to_usize() % 16) == 0
         {
-            *this_neuron_potential = NeuronMembranePotential::QUANT_ZERO;
             return true
         }
-        *this_neuron_potential += *incoming_potential; // - QuantizedDecimalTrait::QUANT_ZERO )); // TODO right now subtracting 0, but this is the resting potential
-        false
+        return false
     }
 }
