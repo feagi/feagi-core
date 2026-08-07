@@ -1,3 +1,4 @@
+
 use crate::cortical_area::cortical_area_layout::CorticalAreaLayout;
 use feagi_data::neurons::NeuronCorticalLocalIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
@@ -12,14 +13,26 @@ pub trait DoubletIterator<FIQ, SourceLayout, DestinationLayout>:
             NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
         ),
     >
++ ExactSizeIterator
++ Clone
++ PartialEq
++ core::hash::Hash
 where
     FIQ: FeagiIndexQuantization,
     SourceLayout: CorticalAreaLayout<FIQ>,
     DestinationLayout: CorticalAreaLayout<FIQ>,
 {
+    /// If true, the doublet can be recomputed to remap synapses if either cortical area resizes.
+    /// If false, this would mean this doublet would need to be replaced with another for the
+    /// given cortical mapping entry if a cortical area is being resized. This should be true
+    /// in most cases as having it be false is restrictive!
+    const CAN_BE_RECOMPUTED_FOR_CORTICAL_RESIZING: bool;
+
     /// How many synapses will need to be made with the given cortical pairings. This is the
     /// total for the pairing, and does not shrink as the iterator is consumed. Use
     /// [`Iterator::size_hint`] for the number of pairs still to come.
     fn get_number_of_synapses(&self) -> FIQ::NeuronIndexQuant;
 
+    // TODO function that recomputes, IE takes in another Self to replace itself, but returns also
+    // the previous number of doublets that this doublet iterator had
 }

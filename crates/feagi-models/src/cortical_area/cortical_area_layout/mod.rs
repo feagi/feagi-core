@@ -1,5 +1,7 @@
 use core::hash::Hash;
+use feagi_data::neurons::NeuronCorticalLocalIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
 use crate::cortical_area::cortical_area_layout::enums::{CorticalAreaLayoutNested, CorticalAreaLayoutTypePacked};
 
 pub mod enums;
@@ -15,5 +17,11 @@ pub trait CorticalAreaLayout<FIQ: FeagiIndexQuantization>: Clone + Hash + Partia
     /// As a `CorticalAreaLayoutNested` that also contains the data
     fn to_nested(self) -> CorticalAreaLayoutNested<FIQ>;
 
-    fn get_total_number_neurons(&self) -> FIQ::NeuronIndexQuant;
+    /// Returns the (max) number of neurons contained in this layout
+    fn get_max_total_number_neurons(&self) -> FIQ::NeuronIndexQuant;
+    
+    /// Returns true if a given neuron index fits in this layout
+    fn contains_given_neuron_index(&self, neuron_index: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>) -> bool {
+        neuron_index.deref() < self.get_max_total_number_neurons()
+    }
 }

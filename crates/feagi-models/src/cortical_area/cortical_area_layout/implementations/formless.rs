@@ -19,7 +19,7 @@ impl<FIQ: FeagiIndexQuantization> CorticalAreaLayout<FIQ> for CorticalAreaLayout
         CorticalAreaLayoutNested::Formless(self)
     }
 
-    fn get_total_number_neurons(&self) -> FIQ::NeuronIndexQuant {
+    fn get_max_total_number_neurons(&self) -> FIQ::NeuronIndexQuant {
         self.neuron_count
     }
 }

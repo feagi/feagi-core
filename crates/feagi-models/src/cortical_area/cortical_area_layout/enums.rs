@@ -24,8 +24,8 @@ impl<FIQ: FeagiIndexQuantization> CorticalAreaLayoutNested<FIQ> {
     /// Total number of neurons contained with the layout of neurons
     pub fn get_total_number_neurons(&self) -> FIQ::NeuronIndexQuant {
         match self {
-            CorticalAreaLayoutNested::Dimensional(d) => d.get_total_number_neurons(),
-            CorticalAreaLayoutNested::Formless(p) => p.get_total_number_neurons(),
+            CorticalAreaLayoutNested::Dimensional(d) => d.get_max_total_number_neurons(),
+            CorticalAreaLayoutNested::Formless(p) => p.get_max_total_number_neurons(),
         }
     }
 }

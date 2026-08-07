@@ -8,7 +8,7 @@ use crate::cortical_area::cortical_area_layout::implementations::dimensional::Co
 /// Maps every neuron of the source cortical area to every neuron of a single destination voxel
 /// (its full density column). The inverse of
 /// [`DoubletIteratorOneToAll`](crate::cortical_mapping_entry::doublet::implementations::one_to_all::DoubletIteratorOneToAll).
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct DoubletIteratorAllToOne<FIQ: FeagiIndexQuantization> {
     /// Linear index of the destination voxel at density 0
     destination_base_index: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
@@ -104,6 +104,8 @@ impl<FIQ: FeagiIndexQuantization> ExactSizeIterator for DoubletIteratorAllToOne<
 impl<FIQ: FeagiIndexQuantization> DoubletIterator<FIQ, CorticalAreaLayoutDimensional<FIQ>, CorticalAreaLayoutDimensional<FIQ>>
     for DoubletIteratorAllToOne<FIQ>
 {
+    const CAN_BE_RECOMPUTED_FOR_CORTICAL_RESIZING: bool = true;
+
     fn get_number_of_synapses(&self) -> FIQ::NeuronIndexQuant {
         (self.source_count * self.destination_density_count).deref()
     }
