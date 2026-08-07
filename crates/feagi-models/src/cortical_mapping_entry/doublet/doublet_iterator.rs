@@ -22,6 +22,12 @@ where
     SourceLayout: CorticalAreaLayout<FIQ>,
     DestinationLayout: CorticalAreaLayout<FIQ>,
 {
+    /// since we can chain simple doublet iterators to create more complex ones, we may make some
+    /// simple doublets for the purpose of being building blocks, but they themselves may not
+    /// be useful for genome developers. Set this flag to true to instruct UIs to not
+    /// show this as a UI option.
+    const ALWAYS_HIDDEN: bool = false;
+    
     /// If true, the doublet can be recomputed to remap synapses if either cortical area resizes.
     /// If false, this would mean this doublet would need to be replaced with another for the
     /// given cortical mapping entry if a cortical area is being resized. This should be true

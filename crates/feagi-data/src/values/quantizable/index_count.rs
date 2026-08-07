@@ -79,7 +79,7 @@ Copy
 + Sized
 + 'static
 + QuantizedElementBase
-+ Serialize
++ Serialize // TODO should be conditional
 {
     const LEVEL: IndexCountQuantizationLevel;
     const QUANT_MAX: Self;

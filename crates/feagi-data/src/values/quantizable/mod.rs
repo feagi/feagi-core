@@ -19,5 +19,11 @@ pub use feagi_data_value_quantization_error::FeagiDataValueQuantizationError;
 pub use index_count::{IndexCountEnum, IndexCountQuantizationLevel, QuantizedIndexCountTrait, WrappedQuantizedIndexCount, WrappedQuantizedIndexCountEnum};
 pub use percentage_unsigned::{PercentageUnsigned, WrappedPercentageUnsigned};
 pub use quantization_level_packing::QuantizationLevelPacking;
-pub use signed_integer::{QuantizedSignedIntegerTrait, SignedIntegerQuantizationLevel};
-pub use unsigned_integer::{QuantizedUnsignedIntegerTrait, UnsignedIntegerQuantizationLevel};
+pub use signed_integer::{
+    QuantizedSignedIntegerTrait, SignedIntegerEnum, SignedIntegerQuantizationLevel,
+    WrappedQuantizedSignedInteger, WrappedQuantizedSignedIntegerEnum,
+};
+pub use unsigned_integer::{
+    QuantizedUnsignedIntegerTrait, UnsignedIntegerEnum, UnsignedIntegerQuantizationLevel,
+    WrappedQuantizedUnsignedInteger, WrappedQuantizedUnsignedIntegerEnum,
+};
