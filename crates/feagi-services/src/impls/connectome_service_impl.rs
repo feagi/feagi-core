@@ -693,8 +693,18 @@ impl ConnectomeService for ConnectomeServiceImpl {
             );
         }
         if let Some(firing_threshold_increment) = params.firing_threshold_increment {
+            // Scalar value applies uniformly to all three spatial axes.
+            // Must be stored as _x/_y/_z so neuroembryogenesis can apply the gradient.
             area.add_property_mut(
-                "firing_threshold_increment".to_string(),
+                "firing_threshold_increment_x".to_string(),
+                serde_json::json!(firing_threshold_increment),
+            );
+            area.add_property_mut(
+                "firing_threshold_increment_y".to_string(),
+                serde_json::json!(firing_threshold_increment),
+            );
+            area.add_property_mut(
+                "firing_threshold_increment_z".to_string(),
                 serde_json::json!(firing_threshold_increment),
             );
         }

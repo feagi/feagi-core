@@ -876,8 +876,18 @@ impl GenomeService for GenomeServiceImpl {
                 );
             }
             if let Some(firing_threshold_increment) = param.firing_threshold_increment {
+                // Scalar value applies uniformly to all three spatial axes.
+                // Must be stored as _x/_y/_z so neuroembryogenesis can apply the gradient.
                 area.add_property_mut(
-                    "firing_threshold_increment".to_string(),
+                    "firing_threshold_increment_x".to_string(),
+                    serde_json::json!(firing_threshold_increment),
+                );
+                area.add_property_mut(
+                    "firing_threshold_increment_y".to_string(),
+                    serde_json::json!(firing_threshold_increment),
+                );
+                area.add_property_mut(
+                    "firing_threshold_increment_z".to_string(),
                     serde_json::json!(firing_threshold_increment),
                 );
             }
@@ -1320,6 +1330,20 @@ impl GenomeServiceImpl {
                                         serde_json::json!(z),
                                     );
                                 }
+                            } else if let Some(v) = value.as_f64() {
+                                // Scalar: apply uniformly to all three axes
+                                area.properties.insert(
+                                    "firing_threshold_increment_x".to_string(),
+                                    serde_json::json!(v),
+                                );
+                                area.properties.insert(
+                                    "firing_threshold_increment_y".to_string(),
+                                    serde_json::json!(v),
+                                );
+                                area.properties.insert(
+                                    "firing_threshold_increment_z".to_string(),
+                                    serde_json::json!(v),
+                                );
                             }
                         }
 
@@ -1833,6 +1857,20 @@ impl GenomeServiceImpl {
                                         serde_json::json!(z),
                                     );
                                 }
+                            } else if let Some(v) = value.as_f64() {
+                                // Scalar: apply uniformly to all three axes
+                                area.properties.insert(
+                                    "firing_threshold_increment_x".to_string(),
+                                    serde_json::json!(v),
+                                );
+                                area.properties.insert(
+                                    "firing_threshold_increment_y".to_string(),
+                                    serde_json::json!(v),
+                                );
+                                area.properties.insert(
+                                    "firing_threshold_increment_z".to_string(),
+                                    serde_json::json!(v),
+                                );
                             }
                         }
                         "burst_engine_active" => {
@@ -2065,18 +2103,13 @@ impl GenomeServiceImpl {
                         }
                     }
                     "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
-                        // Expect either array [x, y, z] or dict {x, y, z}
+                        // Accept array [x, y, z], object {x, y, z}, or scalar (uniform)
                         if let Some(arr) = value.as_array() {
                             if arr.len() == 3 {
                                 let x = arr[0].as_f64().unwrap_or(0.0);
                                 let y = arr[1].as_f64().unwrap_or(0.0);
                                 let z = arr[2].as_f64().unwrap_or(0.0);
 
-                                // Store both array format and individual x/y/z properties
-                                area.add_property_mut(
-                                    "firing_threshold_increment".to_string(),
-                                    serde_json::json!(arr),
-                                );
                                 area.add_property_mut(
                                     "firing_threshold_increment_x".to_string(),
                                     serde_json::json!(x),
@@ -2097,10 +2130,6 @@ impl GenomeServiceImpl {
                             let z = obj.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
                             area.add_property_mut(
-                                "firing_threshold_increment".to_string(),
-                                serde_json::json!([x, y, z]),
-                            );
-                            area.add_property_mut(
                                 "firing_threshold_increment_x".to_string(),
                                 serde_json::json!(x),
                             );
@@ -2111,6 +2140,20 @@ impl GenomeServiceImpl {
                             area.add_property_mut(
                                 "firing_threshold_increment_z".to_string(),
                                 serde_json::json!(z),
+                            );
+                        } else if let Some(v) = value.as_f64() {
+                            // Scalar: apply uniformly to all three axes
+                            area.add_property_mut(
+                                "firing_threshold_increment_x".to_string(),
+                                serde_json::json!(v),
+                            );
+                            area.add_property_mut(
+                                "firing_threshold_increment_y".to_string(),
+                                serde_json::json!(v),
+                            );
+                            area.add_property_mut(
+                                "firing_threshold_increment_z".to_string(),
+                                serde_json::json!(v),
                             );
                         }
                     }
