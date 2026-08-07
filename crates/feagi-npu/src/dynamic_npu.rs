@@ -33,8 +33,8 @@ impl DynamicNPU {
         // TODO check indexing quant
 
         match request {
-            ConnectomeRequest::CorticalAreaAdd(id, model_quant) => {
-                match model_quant {
+            ConnectomeRequest::CorticalAreaAdd{ TEMP_adding_id, writer } => {
+                match writer {
                     
                     CorticalWriterByModelQuant::FeagiAdvanced(quant) => {
                         match quant {
@@ -46,7 +46,8 @@ impl DynamicNPU {
                         }
                     }
                 }
-            }
+            },
+            ConnectomeRequest::CorticalMappingEntryAdd { .. } => panic!("Not supported writer!")
         }
 
 

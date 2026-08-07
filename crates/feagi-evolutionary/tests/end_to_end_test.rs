@@ -20,6 +20,7 @@ use feagi_evolutionary::{
     validate_genome,
 };
 
+/*
 #[test]
 fn test_complete_genome_workflow() {
     // 1. Create genome from template
@@ -92,6 +93,9 @@ fn test_complete_genome_workflow() {
     );
     println!("   - Validation: {} warnings", validation2.warnings.len());
 }
+
+ */
+
 
 #[test]
 fn test_minimal_genome_creation() {

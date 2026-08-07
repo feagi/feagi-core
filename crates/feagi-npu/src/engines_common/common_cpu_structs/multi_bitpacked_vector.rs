@@ -1,37 +1,50 @@
+use core::marker::PhantomData;
 use core::ops::Range;
 use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 
 #[derive(Debug, Clone)]
-pub struct MultiBitPackedVector<Q: QuantizedIndexCountTrait>(Vec<u8>);
+pub struct MultiBitPackedVector<Q: QuantizedIndexCountTrait> {
+    data: Vec<u8>,
+    phantom_data: PhantomData<Q>,
+}
 
 impl<Q: QuantizedIndexCountTrait> MultiBitPackedVector<Q>
 {
     pub fn new() -> Self {
-        MultiBitPackedVector(Vec::new())
+        Self {
+            data: Vec::new(),
+            phantom_data: PhantomData,
+        }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0
+        &self.data
     }
 
     pub fn as_mut_bytes(&mut self) -> &mut [u8] {
-        &mut self.0
+        &mut self.data
     }
 }
 
-pub struct MultiBitPackedSlice<'a, Q: QuantizedIndexCountTrait>(&'a [u8]);
+pub struct MultiBitPackedSlice<'a, Q: QuantizedIndexCountTrait> {
+    data: &'a [u8],
+    phantom_data: PhantomData<Q>,
+}
 
 impl<'a, Q: QuantizedIndexCountTrait> MultiBitPackedSlice<'a, Q> {
     pub fn new(data: &'a [u8]) -> Self {
-        Self(data)
+        Self {
+            data,
+            phantom_data: PhantomData,
+        }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        self.0
+        self.data
     }
 
     pub fn number_bytes(&self) -> Q {
-        Q::quant_from_usize(self.0.len())
+        Q::quant_from_usize(self.data.len())
     }
 
     /// Raw pointer to the first byte.
@@ -40,7 +53,7 @@ impl<'a, Q: QuantizedIndexCountTrait> MultiBitPackedSlice<'a, Q> {
     /// The returned pointer is valid for reads for as long as this slice is
     /// alive.
     pub unsafe fn as_byte_ptr(&self) -> *const u8 {
-        self.0.as_ptr()
+        self.data.as_ptr()
     }
 
     /// Returns a shared reference to a byte without bounds checks.
@@ -57,7 +70,7 @@ impl<'a, Q: QuantizedIndexCountTrait> MultiBitPackedSlice<'a, Q> {
     /// The caller must uphold exclusivity: writes through this pointer must not
     /// alias with any other references to the same bytes.
     pub unsafe fn as_mut_byte_ptr_par(&self) -> *mut u8 {
-        self.0.as_ptr() as *mut u8
+        self.data.as_ptr() as *mut u8
     }
 
     /// Returns a mutable reference to a byte through shared `&self`.
@@ -147,16 +160,17 @@ impl<QI: QuantizedIndexCountTrait, QV: QuantizedIndexCountTrait> MultiBitPackedV
 fn bit_index_to_dual_index<Q: QuantizedIndexCountTrait>(bit_index: Q) -> (Q, u8)
 {
     let byte_bits = bit_index & Q::QUANT_BYTE_BIT_MASK;
-    (bit_index >> 3, byte_bits.quant_to_u8())
+    (bit_index >> Q::quant_from_usize(3), byte_bits.quant_to_u8())
 }
 
 /// Return the smallest whole number of bytes needed to hold a number of bits and the number of dangling bits
 /// (divide by 8 rounding up)
 fn minimum_number_bytes<Q: QuantizedIndexCountTrait>(bit_count: Q) -> (Q, u8) {
+    
     let and = bit_count & Q::QUANT_BYTE_BIT_MASK;
     if and == Q::QUANT_ZERO
     {
-        return (bit_count >> 3, and.quant_to_u8())
+        return (bit_count >> Q::quant_from_usize(3), and.quant_to_u8())
     }
-    (Q::QUANT_ONE + (bit_count >> 3), and.quant_to_u8())
+    (Q::QUANT_ONE + (bit_count >> Q::quant_from_usize(3)), and.quant_to_u8())
 }

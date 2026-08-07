@@ -2,6 +2,10 @@ use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
 
+// TODO complete this after the changes as highlighted in https://github.com/feagi/feagi-core/issues/236
+// right now adding negative numbers is weird
+
+/*
 /// Maps all source dimensional neurons to destination dimensional neurons by coordinate + a linear
 /// offset
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -17,3 +21,5 @@ impl< FIQ: FeagiIndexQuantization> DoubleIteratorSingleCoordinateOffset<FIQ> {
 
 
 }
+
+ */

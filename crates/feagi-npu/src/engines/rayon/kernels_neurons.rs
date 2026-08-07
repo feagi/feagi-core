@@ -1,11 +1,10 @@
 use rayon::prelude::*;
-use feagi_data::collections::linear::bitpacked::{BitPackedMutTrait, BitPackedParMutTrait};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
-use feagi_models::cortical_area::neuron::model_generated::model_type_and_quantization::NeuronModelTypeAndQuantizationPacked;
-use feagi_models::cortical_area::neuron::neuron_model::neuron_layout_implementations::DimensionalNeuronModel;
-use feagi_models::cortical_area::neuron::models::feagi_advanced::FeagiAdvancedModel;
-use feagi_models::wrapped_index_collections::{CorticalEngineIndex, NeuronEngineByteIndex, NeuronEngineIndex};
+use feagi_models::cortical_area::implementations::feagi_advanced::model::FeagiAdvancedModel;
+use feagi_models::cortical_area::neuron::neuron_model::generated_enums::NeuronModelTypeAndQuantizationPacked;
+use feagi_models::cortical_area::neuron::neuron_model::layout_specific::dimensional::DimensionalNeuronModel;
+use feagi_models::wrapped_index_collections::NeuronEngineIndex;
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::engines::rayon::data::RayonEngineData;
 use crate::engines::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};

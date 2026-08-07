@@ -4,10 +4,11 @@ use feagi_genomic_context::cortical_area::CorticalID;
 use crate::cortical_area::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
 
 pub enum ConnectomeRequest {
-    CorticalAreaAdd(CorticalID, CorticalWriterByModelQuant), // TODO we really shouldnt be taking in a new cortical ID for this
+    CorticalAreaAdd{TEMP_adding_id: CorticalID, writer: CorticalWriterByModelQuant}, // TODO we really shouldnt be taking in a new cortical ID for this
     // CorticalAreaEdit
     // CorticalAreaDelete
-    // CorticalMappingEntryAdd
+    CorticalMappingEntryAdd{source_id: CorticalID, destination_id: CorticalID},
+    // TODO BDU cannot handle mapping IDs for now, so only expose an option to delete ALL mappings between 2 cortical areas
 }
 
 

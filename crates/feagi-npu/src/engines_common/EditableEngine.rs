@@ -1,8 +1,9 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::cortical_area::cortical_writer::NeuronModelCorticalWriter;
-use feagi_models::cortical_area::neuron::models::feagi_advanced::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData, FeagiAdvancedModelStandardQuant};
-use feagi_models::cortical_area::neuron::neuron_model::NeuronModel;
-use feagi_models::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
+use feagi_models::cortical_area::implementations::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
+use feagi_models::cortical_area::implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
+use feagi_models::cortical_area::neuron::neuron_model::neuron_model::NeuronModel;
+use feagi_models::cortical_area::neuron::neuron_model::quantization::NeuronModelQuantization;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryEngineIndex, NeuronEngineIndex};
 
 /// When a burst engine is stopped, these function calls
