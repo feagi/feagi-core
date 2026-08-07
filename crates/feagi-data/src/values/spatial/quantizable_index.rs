@@ -1,7 +1,3 @@
-// TODO check coordinate fit in dimension func in macro
-// TODO right now the linear / coordinate index uses integer division, which is rather slow. We may want to use iterators instead
-// TODO iter with coordinates within the dims
-
 //region Internal macros
 /// Shared behavior for enums that hide the quantization generic of spatial index
 /// structures (coordinates or dimensions).
