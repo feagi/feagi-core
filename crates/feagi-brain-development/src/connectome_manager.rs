@@ -1,6 +1,8 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
+
 /*!
 ConnectomeManager - Core brain connectivity manager.
 
@@ -37,6 +39,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error, info, trace, warn};
 use xxhash_rust::xxh64::Xxh64;
+use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 
 /// Merged region `inputs` / `outputs` (base64 cortical IDs) after `recompute_brain_region_io_registry`.
 pub type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
@@ -49,7 +52,11 @@ use feagi_genomic_context::cortical_area::{
     CoreCorticalType, CorticalAreaType, CorticalID, CustomCorticalType,
 };
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
-
+use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
+use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
+use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
+use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
+use feagi_npu::dynamic_npu::DynamicNPU;
 // State manager access for fatigue calculation
 // Note: feagi-state-manager is always available when std is enabled (it's a default feature)
 use feagi_state_manager::StateManager;
@@ -6948,6 +6955,23 @@ impl ConnectomeManager {
 //         // Note: The signature says Vec<NeuronId> but implementation returns Vec<u64>
 //         self.get_neurons_in_area(cortical_id)
 //     }
+
+    /// TEMPORARY example of adding a cortical area
+    pub fn NEW_add_cortical_area(npu: &mut DynamicNPU, using_cortical_id: &CorticalID, x: usize, y: usize, z: usize)
+    {
+        let request = ConnectomeRequest::CorticalAreaAdd {
+            TEMP_adding_id: &using_cortical_id,
+            writer: CorticalWriterByModelQuant::FeagiAdvanced(
+                FeagiAdvancedModelWriter::Standard(FeagiAdvancedModelCorticalWriter::DefaultNewDimensional {
+                    dimensions: DimensionalCorticalArea4DDimensions::new_from_usizes_unchecked(x, y, z, 1),
+                    _p: Default::default(),
+                })
+            ),
+        };
+
+        npu.request(request);
+    }
+
 }
 
 // Manual Debug implementation (RustNPU doesn't implement Debug)

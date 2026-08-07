@@ -16,7 +16,11 @@ name = "feagi_brain_development"
 # Core types from existing FEAGI crates
 feagi-evolutionary = {  path = "../feagi-evolutionary" }
 feagi-genomic-context = {  path = "../feagi-genomic-context" }
+feagi-genomic-data = { path = "../feagi-genomic-data"}
 feagi-state-manager = {  path = "../feagi-state-manager", default-features = false }
+feagi-models = {path = "../feagi-models"}
+feagi-npu = { path = "../feagi-npu"}
+feagi-data = {path = "../feagi-data"}
 
 # Performance (using workspace versions)
 rayon = { workspace = true, optional = true }  # Optional - not available in WASM
