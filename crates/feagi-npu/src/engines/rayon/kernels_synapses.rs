@@ -2,14 +2,13 @@ use rayon::prelude::*;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedIndexCount};
-use feagi_models::cortical_mapping_entry::synapse::model_capabilities::source_fire_history::NeuronFireHistoryNone;
-use feagi_models::cortical_mapping_entry::synapse::model_generated::model_type_and_quantization::SynapseModelTypeAndQuantizationPacked;
-use feagi_models::cortical_mapping_entry::synapse::models::uniform::{UniformSynapseModel, UniformSynapseModelStandardQuant};
-use feagi_models::cortical_mapping_entry::synapse::synapse_modelA::SynapseModel;
+use feagi_models::cortical_mapping_entry::synapse::synapse_model::SynapseModel;
 use feagi_models::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
-use feagi_models::wrapped_index_collections::{MappingEntryEngineIndex, MappingEntryModelIndex, NeuronMPIndex, SynapseEngineIndex};
+use feagi_models::cortical_mapping_entry::synapse_model_implementations::generated_enums::SynapseModelTypeAndQuantizationPacked;
+use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::model::UniformSynapseModel;
+use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelStandardQuant;
+use feagi_models::wrapped_index_collections::{MappingEntryModelIndex, NeuronMPIndex, SynapseEngineIndex};
 use crate::engines::rayon::data::RayonEngineData;
-use crate::engines::rayon::data::synapse::synapse_sub_data::CorticalMappingEntryProperties;
 
 pub(crate) fn process_synapses<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>)
 {
@@ -77,11 +76,6 @@ unsafe fn synapse_dynamics<FIQ: FeagiIndexQuantization> (
                 source_neuron_mp_index,
             );
             
-            // Uniform synapses ignore fire history; `NeuronFireHistoryNone` is a zero-sized placeholder.
-            let output_potential = UniformSynapseModel::<FIQ, UniformSynapseModelStandardQuant>::synapse_process_incoming_signal(
-                &input,
-                data.synapse_model_data.uniform.quantization_standard.mapping_entry_data.get_par(mapping_entry_index),
-                &NeuronFireHistoryNone::new());
         }
 
         _ => {}

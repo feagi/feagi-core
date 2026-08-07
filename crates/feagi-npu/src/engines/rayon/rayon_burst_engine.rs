@@ -5,11 +5,12 @@ use crate::engines_common::EditableEngine::EditableEngine;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 use feagi_models::cortical_area::genome_compose::cortical_writer::NeuronModelCorticalWriter;
+use feagi_models::cortical_area::neuron::neuron_model::NeuronModel;
+use feagi_models::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
+use feagi_models::cortical_area::neuron::neuron_properties::NeuronProperties;
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
-use feagi_models::cortical_area::neuron::neuron_model::neuron_model::NeuronModel;
-use feagi_models::cortical_area::neuron::neuron_model::quantization::NeuronModelQuantization;
-use feagi_models::cortical_area::neuron::NeuronProperties;
+use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::UniformWriter;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryEngineIndex, NeuronEngineIndexedVector};
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::flags::neuron_runtime_flags::NeuronRuntimeFlags;
@@ -96,8 +97,16 @@ impl<FIQ: FeagiIndexQuantization> EditableEngine<FIQ> for RayonBurstEngine<FIQ> 
         todo!()
     }
 
-    fn add_mapping_entry(&mut self) -> MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant> {
-        todo!()
+    fn add_mapping_entry<SM>(&mut self, writer: UniformWriter) -> MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant> {
+        /*
+        
+        let number_synapses = writer:
+        
+        
+         */
+
+        // TODO
+        MappingEntryEngineIndex::QUANT_ZERO
     }
 
     fn remap_mapping_entry(&mut self, mapping_entry: MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant>) {

@@ -120,7 +120,7 @@ impl<QI: QuantizedIndexCountTrait, QV: QuantizedIndexCountTrait> MultiBitPackedV
         let first_byte = if first.is_none() {
             QV::QUANT_ZERO
         } else {
-            first.unwrap().unwrap().0.end
+            first.unwrap().as_ref().unwrap().0.end
         };
 
         let end_byte = first_byte + number_bytes;

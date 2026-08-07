@@ -3,12 +3,10 @@ use crate::engines::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTa
 use crate::engines::rayon::data::neuron::potential_quantized_data::NeuronQuantizedData;
 use crate::flags::cortical_runtime_flags::CorticalRuntimeFlags;
 use crate::flags::neuron_runtime_flags::NeuronRuntimeFlags;
-use feagi_data::collections::linear::bitpacked::BitPackedVector;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::{QuantizedElementBase};
 use feagi_models::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use feagi_models::cortical_area::components::neuron_history::implementations::full::NeuronModelFullNeuronHistory;
-use feagi_models::cortical_area::neuron::neuron_model::generated_enums::NeuronModelTypeAndQuantizationPacked;
+use feagi_models::cortical_area::neuron_model_implementations::generated_enums::NeuronModelTypeAndQuantizationPacked;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, CorticalEngineIndexedVector, CorticalLayoutIndexedVector, MappingEntryEngineIndex, MappingEntryEngineIndexedVector, NeuronEngineIndexedVector, NeuronHistoryIndexedVector, NeuronMPIndex, SynapseEngineIndexedVector};
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::engines::rayon::data::synapse::model_quantized_data::SynapseModelData;
