@@ -1,9 +1,9 @@
 use rayon::prelude::*;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
-use feagi_models::cortical_area::implementations::feagi_advanced::model::FeagiAdvancedModel;
+use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
 use feagi_models::cortical_area::neuron::neuron_model::generated_enums::NeuronModelTypeAndQuantizationPacked;
-use feagi_models::cortical_area::neuron::neuron_model::layout_specific::dimensional::DimensionalNeuronModel;
+use feagi_models::cortical_area::neuron::neuron_model::layout_specific_implementations::dimensional::DimensionalNeuronModel;
 use feagi_models::wrapped_index_collections::NeuronEngineIndex;
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::engines::rayon::data::RayonEngineData;

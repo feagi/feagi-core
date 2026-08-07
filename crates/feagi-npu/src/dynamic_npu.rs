@@ -3,9 +3,9 @@ use crate::engines::rayon::rayon_burst_engine::RayonBurstEngine;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::connectome_requests::connectome_request::{ConnectomeRequest};
-use feagi_models::cortical_area::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
-use feagi_models::cortical_area::implementations::feagi_advanced::model::FeagiAdvancedModel;
-use feagi_models::cortical_area::implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
+use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
+use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
+use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
 use feagi_models::wrapped_index_collections::CorticalEngineIndex;
 use crate::engines_common::EditableEngine::EditableEngine;
 

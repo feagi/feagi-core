@@ -1,21 +1,9 @@
+pub mod cortical_data;
+pub mod neuron_data;
+pub mod neuron_model_quantization;
+pub mod neuron_model_quantization_level;
+pub mod layout_specific_implementations;
 pub mod neuron_model;
-
-pub mod neuron_history;
-
-
-/// Per neuron properties that all neurons have that can be configured
-#[derive(Clone, Copy, Debug)]
-pub struct NeuronProperties {
-    pub probe_force_disabled: bool,
-    pub probe_force_firing: bool,
-}
-
-impl Default for NeuronProperties {
-    fn default() -> Self {
-        Self {
-            probe_force_disabled: false,
-            probe_force_firing: false,
-        }
-    }
-}
+pub mod neuron_properties;
+pub mod cortical_area_properties;
 

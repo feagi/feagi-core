@@ -34,7 +34,7 @@ impl<FIQ: FeagiIndexQuantization> Default for SynapseModelData<FIQ> {
 #[doc(hidden)]
 mod uniform_model {
     use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-    use feagi_models::cortical_mapping_entry::synapse_model::models::uniform::{UniformSynapseModelCorticalMappingEntryData, UniformSynapseModelStandardQuant};
+    use feagi_models::cortical_mapping_entry::synapse::models::uniform::{UniformSynapseModelCorticalMappingEntryData, UniformSynapseModelStandardQuant};
     use feagi_models::wrapped_index_collections::MappingEntryModelIndexedVector;
 
     #[doc(hidden)]
