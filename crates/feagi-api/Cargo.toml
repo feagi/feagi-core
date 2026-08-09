@@ -104,6 +104,10 @@ services = ["feagi-services/std", "feagi-services/plasticity", "feagi-io", "feag
 # The bundled feagi-services implementations, used by this crate's examples and contract tests.
 # Not required by the library itself, which depends only on the service traits.
 builtin-impls = ["services", "feagi-services/builtin-impls"]
+
+# Response formatters for the neuron/synapse introspection endpoints, which still target the
+# pre-refactor ConnectomeManager. Off by default; those endpoints report 501 until it is ported.
+legacy-connectome = ["services", "feagi-brain-development/legacy-connectome"]
 zmq = ["feagi-io", "dep:zeromq", "services"]  # feagi-io provides transport primitives
 security = ["chacha20poly1305", "x25519-dalek", "jsonwebtoken", "argon2"]
 tls = ["rustls", "tokio-rustls"]

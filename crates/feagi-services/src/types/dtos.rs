@@ -54,7 +54,11 @@ pub struct CreateNeuronParams {
 
 /// Information about a cortical_area area
 /// This structure matches the Python FEAGI API for full compatibility
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// `Default` exists so producers can set the fields they actually know and leave the rest at their
+/// zero values, which keeps them compiling as optional fields are added. It does not change the
+/// serialized shape: `skip_serializing_if` still omits the empty optionals.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CorticalAreaInfo {
     pub cortical_id: String,
     pub cortical_id_s: String, // Human-readable ASCII string (e.g., "___power" instead of "X19fcG93ZXI=")

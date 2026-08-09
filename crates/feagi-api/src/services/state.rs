@@ -1,26 +1,34 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! ApiState builder for WASM
+//! `ApiState` builder for the genome-backed services.
 //!
-//! Creates ApiState from RuntimeGenome with WASM-specific service implementations.
+//! Every service shares the same [`SharedGenome`] handle, so a genome reload through
+//! `/v1/genome/*` is visible to all of them without rebuilding the router.
 
+use crate::services::*;
 use crate::transports::http::server::ApiState;
-use crate::transports::wasm::services::*;
-use feagi_evolutionary::RuntimeGenome;
 use std::sync::Arc;
 
-/// Create ApiState from RuntimeGenome
+/// Builds an [`ApiState`] whose services read from `genome` and drive `npu`.
 ///
-/// This function creates an ApiState instance with WASM-specific service
-/// implementations that extract data from the RuntimeGenome.
-pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
-    let connectome_service = Arc::new(WasmConnectomeService::new(Arc::clone(&genome)));
-    let genome_service = Arc::new(WasmGenomeService::new(Arc::clone(&genome)));
-    let analytics_service = Arc::new(WasmAnalyticsService::new(Arc::clone(&genome)));
-    let runtime_service = Arc::new(WasmRuntimeService::new());
-    let neuron_service = Arc::new(WasmNeuronService::new());
-    let system_service = Arc::new(WasmSystemService::new());
+/// `npu` is `None` for a server running without an engine, in which case engine-dependent
+/// endpoints report the NPU as unavailable. `version_info` is supplied by the caller because only
+/// the final binary knows which crate versions were linked into it.
+pub fn create_api_state_from_genome(
+    genome: SharedGenome,
+    npu: OptionalNpu,
+    version_info: feagi_services::types::VersionInfo,
+) -> ApiState {
+    let connectome_service = Arc::new(GenomeConnectomeService::new(
+        Arc::clone(&genome),
+        npu.clone(),
+    ));
+    let genome_service = Arc::new(GenomeGenomeService::new(Arc::clone(&genome), npu.clone()));
+    let analytics_service = Arc::new(GenomeAnalyticsService::new(Arc::clone(&genome)));
+    let runtime_service = Arc::new(GenomeRuntimeService::new(npu));
+    let neuron_service = Arc::new(GenomeNeuronService::new());
+    let system_service = Arc::new(GenomeSystemService::new(Arc::clone(&genome), version_info));
 
     let (genome_transition_lock, genome_transition_in_progress) =
         ApiState::init_genome_transition_controls();

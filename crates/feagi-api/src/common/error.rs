@@ -91,6 +91,22 @@ impl ApiError {
     pub fn not_implemented(message: impl Into<String>) -> Self {
         Self::new(message).with_code(ApiErrorCode::NotImplemented)
     }
+
+    /// Create a "not implemented" error for endpoints backed by per-neuron or per-synapse NPU
+    /// introspection.
+    ///
+    /// The NPU rewrite replaced individually addressable weighted synapses with cortical mapping
+    /// entries over quantized arrays, and the current engine exposes no equivalent enumeration
+    /// API. These routes keep their paths and response schemas so the published contract is
+    /// unchanged; they report 501 until the engine can supply the data.
+    pub fn npu_introspection_unavailable(capability: &str) -> Self {
+        Self::new(format!(
+            "{} is unavailable: the current NPU engine does not expose per-neuron/per-synapse \
+             introspection. This endpoint's path and response schema are unchanged and it will \
+             serve data once the engine provides it."
+        , capability))
+        .with_code(ApiErrorCode::NotImplemented)
+    }
 }
 
 /// Convert from service layer errors

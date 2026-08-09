@@ -4,33 +4,36 @@
 //! WASM Analytics Service (stub)
 
 use async_trait::async_trait;
-use feagi_evolutionary::RuntimeGenome;
 use feagi_services::traits::analytics_service::AnalyticsService;
 use feagi_services::types::errors::{ServiceError, ServiceResult};
 use feagi_services::types::*;
-use std::sync::Arc;
 
-pub struct WasmAnalyticsService {
-    genome: Arc<RuntimeGenome>,
+pub struct GenomeAnalyticsService {
+    genome: crate::services::SharedGenome,
 }
 
-impl WasmAnalyticsService {
-    pub fn new(genome: Arc<RuntimeGenome>) -> Self {
+impl GenomeAnalyticsService {
+    pub fn new(genome: crate::services::SharedGenome) -> Self {
         Self { genome }
     }
 }
 
 #[async_trait]
-impl AnalyticsService for WasmAnalyticsService {
+impl AnalyticsService for GenomeAnalyticsService {
     async fn get_system_health(&self) -> ServiceResult<SystemHealth> {
-        // Return minimal health check for WASM
+        // Genome-derived health; live counters come from the runtime services
+        let cortical_area_count =
+            crate::services::with_genome(&self.genome, |g| g.cortical_areas.len())?;
         Ok(SystemHealth {
             burst_engine_active: true,
-            brain_readiness: !self.genome.cortical_areas.is_empty(),
+            brain_readiness: cortical_area_count > 0,
+            // The validator verdict lives on the core state atomic, which a genome-backed
+            // service cannot see; `None` reports "no verdict recorded" rather than asserting one.
+            genome_validity: None,
             neuron_count: 0,     // TODO: Get from NPU if available
             neuron_capacity: 0,  // TODO: Get from runtime if available
             synapse_capacity: 0, // TODO: Get from runtime if available
-            cortical_area_count: self.genome.cortical_areas.len(),
+            cortical_area_count,
             burst_count: 0, // TODO: Get from NPU if available
         })
     }
@@ -79,7 +82,12 @@ impl AnalyticsService for WasmAnalyticsService {
     }
 
     async fn is_brain_initialized(&self) -> ServiceResult<bool> {
-        Ok(!self.genome.cortical_areas.is_empty())
+        // A brain is initialized once a genome with cortical areas is loaded; no genome loaded is
+        // a definite "not initialized" rather than an error.
+        Ok(crate::services::with_genome(&self.genome, |g| {
+            !g.cortical_areas.is_empty()
+        })
+        .unwrap_or(false))
     }
 
     async fn is_burst_engine_ready(&self) -> ServiceResult<bool> {

@@ -17,6 +17,7 @@ pub mod middleware;
 #[cfg(feature = "http")]
 pub mod openapi;
 pub mod security;
+pub mod services;
 pub mod transports;
 pub mod v1;
 pub mod v2;

@@ -12,7 +12,10 @@ use crate::FeagiNetworkError;
 ///
 /// Because those traits are consumed as `Box<dyn ...>` by their corresponding `*Properties`
 /// traits, every method here must be dyn compatible.
-pub trait FeagiServer {
+///
+/// `Send` is required because servers are owned by handler state that crosses threads: the HTTP
+/// transport stores them in `ApiState`, which axum requires to be `Send + Sync`.
+pub trait FeagiServer: Send {
     /// Advances the internal state machine and returns the current state.
     ///
     /// This method should be called regularly to:

@@ -1,76 +1,109 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! WASM Runtime Service (stub)
+//! Runtime service driving the injected NPU.
+//!
+//! Burst control and counters come straight from the engine. Fire-ledger sampling, sensory
+//! injection and subscription management have no counterpart in the current engine and report
+//! that rather than pretending to succeed.
 
+use crate::services::{npu_unavailable, OptionalNpu};
 use async_trait::async_trait;
 use feagi_services::traits::runtime_service::RuntimeService;
 use feagi_services::types::errors::{ServiceError, ServiceResult};
 use feagi_services::types::*;
-use std::sync::Arc;
 
-pub struct WasmRuntimeService {
-    // TODO: Add NPU reference if needed for burst count, etc.
+pub struct GenomeRuntimeService {
+    npu: OptionalNpu,
 }
 
-impl WasmRuntimeService {
-    pub fn new() -> Self {
-        Self {}
+impl GenomeRuntimeService {
+    /// Creates the service over an optional NPU handle.
+    pub fn new(npu: OptionalNpu) -> Self {
+        Self { npu }
+    }
+
+    /// The injected NPU, or an error naming the operation that needed it.
+    fn npu(&self, operation: &str) -> ServiceResult<&dyn crate::services::NpuAccess> {
+        self.npu
+            .as_deref()
+            .ok_or_else(|| npu_unavailable(operation))
     }
 }
 
 #[async_trait]
-impl RuntimeService for WasmRuntimeService {
+impl RuntimeService for GenomeRuntimeService {
     async fn get_status(&self) -> ServiceResult<RuntimeStatus> {
+        let npu = self.npu("burst engine status")?;
+        let frequency_hz = npu.burst_hz() as f64;
+        let is_running = npu.is_running();
+
         Ok(RuntimeStatus {
-            is_running: true,
+            is_running,
+            // The engine has a single running/stopped control; a distinct paused state does not
+            // exist, so a stopped engine is reported as stopped rather than paused.
             is_paused: false,
-            frequency_hz: 0.0,          // TODO: Get from NPU if available
-            burst_count: 0,             // TODO: Get from NPU if available
-            current_rate_hz: 0.0,       // TODO: Get from NPU if available
-            last_burst_neuron_count: 0, // TODO: Get from NPU if available
-            avg_burst_time_ms: 0.0,     // TODO: Get from NPU if available
+            frequency_hz,
+            burst_count: npu.burst_count(),
+            // The configured rate is the only rate the engine reports; it does not measure the
+            // achieved rate separately.
+            current_rate_hz: if is_running { frequency_hz } else { 0.0 },
+            last_burst_neuron_count: feagi_npu::runtime_taps::BurstTaps::instance()
+                .motor_activity_summary()
+                .total_fired_neurons as usize,
+            // No per-burst timing is recorded by the current engine.
+            avg_burst_time_ms: 0.0,
         })
     }
 
     async fn get_burst_count(&self) -> ServiceResult<u64> {
-        Ok(0) // TODO: Get from NPU if available
+        Ok(self.npu("burst count")?.burst_count())
     }
 
-    async fn set_frequency(&self, _frequency: f64) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode frequency control not yet implemented".to_string(),
-        ))
+    async fn set_frequency(&self, frequency: f64) -> ServiceResult<()> {
+        if !frequency.is_finite() || frequency <= 0.0 {
+            return Err(ServiceError::InvalidInput(format!(
+                "burst frequency must be a positive number, got {}",
+                frequency
+            )));
+        }
+
+        self.npu("burst frequency control")?
+            .set_burst_hz(frequency.round() as u64)
+            .map_err(ServiceError::InvalidInput)
     }
 
     async fn start(&self) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode runtime control not yet implemented".to_string(),
-        ))
+        self.npu("burst engine start")?.start();
+        Ok(())
     }
 
     async fn stop(&self) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode runtime control not yet implemented".to_string(),
-        ))
+        self.npu("burst engine stop")?.stop();
+        Ok(())
     }
 
     async fn pause(&self) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode runtime control not yet implemented".to_string(),
-        ))
+        // The engine exposes running/stopped only. Pause halts the loop; `resume` restarts it,
+        // and because the burst counter is never reset the two round-trip as callers expect.
+        self.npu("burst engine pause")?.stop();
+        Ok(())
     }
 
     async fn resume(&self) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode runtime control not yet implemented".to_string(),
-        ))
+        self.npu("burst engine resume")?.start();
+        Ok(())
     }
 
     async fn step(&self) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode runtime control not yet implemented".to_string(),
-        ))
+        let npu = self.npu("single burst")?;
+        if npu.is_running() {
+            return Err(ServiceError::InvalidInput(
+                "cannot step while the burst engine is running; stop it first".to_string(),
+            ));
+        }
+        npu.step_once();
+        Ok(())
     }
 
     async fn reset_burst_count(&self) -> ServiceResult<()> {
@@ -141,7 +174,7 @@ impl RuntimeService for WasmRuntimeService {
         &self,
         _cortical_id: &str,
         _xyzp_data: &[(u32, u32, u32, f32)],
-        _mode: feagi_services::traits::ManualStimulationMode,
+        _mode: feagi_services::traits::runtime_service::ManualStimulationMode,
     ) -> ServiceResult<usize> {
         Err(ServiceError::NotImplemented(
             "WASM mode sensory injection not yet implemented".to_string(),

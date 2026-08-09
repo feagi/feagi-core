@@ -1449,7 +1449,7 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
 mod count_output_registration_tests {
     use super::per_channel_motor_dimensions_for_registration;
     use feagi_genomic_context::cortical_unit::CorticalSubUnitIndex;
-    use feagi_genomic_context::cortical_unit::MotorCorticalUnit;
+    use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
     use serde_json::json;
 
     #[test]
@@ -1549,7 +1549,7 @@ mod sensory_registration_frame_mode_tests {
     use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, PercentageNeuronPositioning,
     };
-    use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
+    use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
     use serde_json::json;
 
     #[test]

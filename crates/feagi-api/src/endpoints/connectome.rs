@@ -6,10 +6,11 @@
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
+#[cfg(feature = "legacy-connectome")]
 use crate::endpoints::cortical_area::synapse_details_for_neuron;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::warn;
+use tracing::debug;
 use utoipa::{IntoParams, ToSchema};
 
 /// Query for [`get_memory_neuron`].
@@ -395,7 +396,6 @@ pub async fn get_cortical_area_neurons(
     State(state): State<ApiState>,
     Path(cortical_id): Path<String>,
 ) -> ApiResult<Json<Vec<u64>>> {
-    use tracing::debug;
 
     let neuron_service = state.neuron_service.as_ref();
 
@@ -431,7 +431,6 @@ pub async fn get_area_synapses(
     State(state): State<ApiState>,
     Path(area_id): Path<String>,
 ) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
-    use tracing::debug;
 
     let connectome_service = state.connectome_service.as_ref();
     let neuron_service = state.neuron_service.as_ref();
@@ -459,44 +458,12 @@ pub async fn get_area_synapses(
         neurons.len()
     );
 
-    // Collect all outgoing synapses from neurons in this area
-    // Access NPU through ConnectomeManager singleton
-    warn!(
-        "[API] /v1/connectome/cortical_area/{}/synapses endpoint called - this acquires NPU lock!",
-        area_id
-    );
-    let manager = feagi_brain_development::ConnectomeManager::instance();
-    let manager_lock = manager.read();
-    let npu_arc = manager_lock
-        .get_npu()
-        .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
-    let lock_start = std::time::Instant::now();
-    tracing::debug!("[NPU-LOCK] CONNECTOME-API: Acquiring NPU lock for synapse queries");
-    let npu_lock = npu_arc.lock().unwrap();
-    let lock_wait = lock_start.elapsed();
-    tracing::debug!(
-        "[NPU-LOCK] CONNECTOME-API: Lock acquired (waited {:.2}ms)",
-        lock_wait.as_secs_f64() * 1000.0
-    );
-
-    let mut all_synapses = Vec::new();
-    for neuron_info in &neurons {
-        let neuron_id = neuron_info.id as u32;
-        let outgoing = npu_lock.get_outgoing_synapses(neuron_id);
-
-        for (target_id, weight, psp, synapse_type) in outgoing {
-            let mut synapse_obj = HashMap::new();
-            synapse_obj.insert("source_neuron_id".to_string(), serde_json::json!(neuron_id));
-            synapse_obj.insert("target_neuron_id".to_string(), serde_json::json!(target_id));
-            synapse_obj.insert("weight".to_string(), serde_json::json!(weight));
-            synapse_obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
-            synapse_obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
-            all_synapses.push(synapse_obj);
-        }
-    }
-
-    debug!(target: "feagi-api", "Found {} synapses from area {}", all_synapses.len(), area_id);
-    Ok(Json(all_synapses))
+    // Enumerating efferent edges requires per-synapse addressing, which the current NPU engine
+    // does not expose. The area lookup above still runs so unknown areas keep returning 404.
+    let _ = &neurons;
+    Err(ApiError::npu_introspection_unavailable(
+        "Outgoing synapse enumeration",
+    ))
 }
 
 /// GET /v1/connectome/{cortical_area_id}/synapses/incoming
@@ -515,7 +482,6 @@ pub async fn get_area_synapses_incoming(
     State(state): State<ApiState>,
     Path(area_id): Path<String>,
 ) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
-    use tracing::debug;
 
     let connectome_service = state.connectome_service.as_ref();
     let neuron_service = state.neuron_service.as_ref();
@@ -537,40 +503,11 @@ pub async fn get_area_synapses_incoming(
         neurons.len()
     );
 
-    warn!(
-        "[API] /v1/connectome/cortical_area/{}/synapses/incoming - acquiring NPU lock",
-        area_id
-    );
-    let manager = feagi_brain_development::ConnectomeManager::instance();
-    let manager_lock = manager.read();
-    let npu_arc = manager_lock
-        .get_npu()
-        .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
-    let npu_lock = npu_arc.lock().unwrap();
-
-    let mut all_synapses = Vec::new();
-    for neuron_info in &neurons {
-        let neuron_id = neuron_info.id as u32;
-        let incoming = npu_lock.get_incoming_synapses(neuron_id);
-
-        for (source_id, weight, psp, synapse_type) in incoming {
-            let mut synapse_obj = HashMap::new();
-            synapse_obj.insert("source_neuron_id".to_string(), serde_json::json!(source_id));
-            synapse_obj.insert("target_neuron_id".to_string(), serde_json::json!(neuron_id));
-            synapse_obj.insert("weight".to_string(), serde_json::json!(weight));
-            synapse_obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
-            synapse_obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
-            all_synapses.push(synapse_obj);
-        }
-    }
-
-    debug!(
-        target: "feagi-api",
-        "Found {} incoming synapses to area {}",
-        all_synapses.len(),
-        area_id
-    );
-    Ok(Json(all_synapses))
+    // Afferent edges need the same per-synapse addressing as the outgoing variant above.
+    let _ = &neurons;
+    Err(ApiError::npu_introspection_unavailable(
+        "Incoming synapse enumeration",
+    ))
 }
 
 /// GET /v1/connectome/cortical_info/{cortical_area}
@@ -690,46 +627,12 @@ pub async fn get_neuron_properties_at_query(
         .await
         .map_err(|_| ApiError::not_found("CorticalArea", &cortical_id))?;
 
-    // Resolve neuron_id via NPU coordinate lookup (fast path).
-    //
-    // IMPORTANT (Axum): handler futures must be `Send`.
-    // Do NOT hold non-Send locks/guards across `.await`.
-    let neuron_id_u32: u32 = {
-        // Note: this uses the global ConnectomeManager singleton, consistent with existing connectome endpoints.
-        let manager = feagi_brain_development::ConnectomeManager::instance();
-        let manager_lock = manager.read();
-        let npu_arc = manager_lock
-            .get_npu()
-            .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
-        let npu_lock = npu_arc.lock().unwrap();
-
-        npu_lock
-            .get_neuron_id_at_coordinate(area.cortical_idx, x, y, z)
-            .ok_or_else(|| {
-                ApiError::not_found(
-                    "Neuron",
-                    &format!("cortical_id={} x={} y={} z={}", cortical_id, x, y, z),
-                )
-            })?
-    };
-
-    let mut props = connectome_service
-        .get_neuron_properties(neuron_id_u32 as u64)
-        .await
-        .map_err(ApiError::from)?;
-
-    // Always include resolved identity fields for clients.
-    props.insert(
-        "neuron_id".to_string(),
-        serde_json::json!(neuron_id_u32 as u64),
-    );
-    props.insert("cortical_id".to_string(), serde_json::json!(cortical_id));
-    props.insert(
-        "cortical_idx".to_string(),
-        serde_json::json!(area.cortical_idx),
-    );
-
-    Ok(Json(props))
+    // Resolving a voxel coordinate to a neuron id needs the NPU's coordinate index, which the
+    // current engine does not expose. The area lookup above still yields 404 for unknown areas.
+    let _ = (area, x, y, z);
+    Err(ApiError::npu_introspection_unavailable(
+        "Neuron lookup by voxel coordinate",
+    ))
 }
 
 /// GET /v1/connectome/area_neurons
@@ -960,56 +863,10 @@ pub async fn get_memory_neuron(
         )));
     }
 
-    let manager = feagi_brain_development::ConnectomeManager::instance();
-    let mgr = manager.read();
-
-    // CRITICAL: Only hold the plasticity executor mutex while reading MemoryNeuronArray.
-    // Never hold it while acquiring the NPU lock (synapse queries), or the burst thread can
-    // deadlock (NPU held → plasticity vs plasticity held → NPU).
-    let detail = {
-        let exec = mgr
-            .get_plasticity_executor()
-            .ok_or_else(|| ApiError::internal("Plasticity executor not available"))?;
-        let ex = exec
-            .lock()
-            .map_err(|_| ApiError::internal("Plasticity executor lock poisoned"))?;
-        ex.memory_neuron_detail(q.neuron_id)
-            .ok_or_else(|| ApiError::not_found("Memory neuron", &q.neuron_id.to_string()))?
-    };
-
-    let cortical_idx = detail.cortical_area_idx;
-    let (cortical_id, cortical_name) = mgr
-        .get_cortical_id(cortical_idx)
-        .and_then(|cid| {
-            mgr.get_cortical_area(cid)
-                .map(|a| (cid.as_base_64(), a.name.clone()))
-        })
-        .unwrap_or_else(|| (String::new(), String::new()));
-
-    let outgoing_full = mgr.get_outgoing_synapses(q.neuron_id as u64);
-    let incoming_full = mgr.get_incoming_synapses(q.neuron_id as u64);
-    let oc = outgoing_full.len();
-    let ic = incoming_full.len();
-    let (out_json, in_json) =
-        synapse_details_for_neuron(&mgr, q.neuron_id, &outgoing_full, &incoming_full);
-
-    Ok(Json(MemoryNeuronDetailResponse {
-        neuron_id: q.neuron_id as u64,
-        cortical_idx,
-        cortical_id,
-        cortical_name,
-        pattern_hash: detail.pattern_hash,
-        is_longterm_memory: detail.is_longterm_memory,
-        is_active: detail.is_active,
-        lifespan_current: detail.lifespan_current,
-        lifespan_initial: detail.lifespan_initial,
-        lifespan_growth_rate: detail.lifespan_growth_rate,
-        creation_burst: detail.creation_burst,
-        last_activation_burst: detail.last_activation_burst,
-        activation_count: detail.activation_count,
-        outgoing_synapse_count: oc,
-        incoming_synapse_count: ic,
-        outgoing_synapses: out_json,
-        incoming_synapses: in_json,
-    }))
+    // The record itself lives in the plasticity executor's MemoryNeuronArray, and the synapse
+    // lists need per-synapse addressing. Neither survives in the current engine. The id-range
+    // validation above still returns 400 for out-of-range ids.
+    Err(ApiError::npu_introspection_unavailable(
+        "Memory neuron detail",
+    ))
 }

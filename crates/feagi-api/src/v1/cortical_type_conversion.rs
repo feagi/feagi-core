@@ -160,11 +160,11 @@ fn positioning_to_string(
 
 #[cfg(test)]
 mod tests {
+    // `CorticalArea`, `CorticalAreaType` and `IOCorticalAreaConfigurationFlag` come in through the
+    // module's own imports, so the test uses exactly the paths the code under test uses.
     use super::*;
-    use feagi_brain_development::{CorticalArea, CorticalID, Dimensions};
-    use feagi_genome_definitions::{
-        CorticalAreaType, IOCorticalAreaConfigurationFlag,
-    };
+    use feagi_genomic_context::cortical_area::CorticalID;
+    use feagi_genomic_data::NeuronVoxelDimensionsGenomic as Dimensions;
 
     #[test]
     fn test_to_cortical_type_info_cartesian_plane() {
@@ -177,7 +177,7 @@ mod tests {
             cortical_id,
             0,
             "Vision Input".to_string(),
-            Dimensions::new(128, 128, 3).unwrap(),
+            Dimensions::try_new_from_usizes(128, 128, 3).unwrap(),
             (0, 0, 0).into(),
             CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
         )
@@ -217,7 +217,7 @@ mod tests {
             cortical_id,
             0,
             "Motor Output".to_string(),
-            Dimensions::new(10, 10, 1).unwrap(),
+            Dimensions::try_new_from_usizes(10, 10, 1).unwrap(),
             (0, 0, 0).into(),
             CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )
@@ -255,7 +255,7 @@ mod tests {
             cortical_id,
             0,
             "Motor Area".to_string(),
-            Dimensions::new(10, 10, 1).unwrap(),
+            Dimensions::try_new_from_usizes(10, 10, 1).unwrap(),
             (0, 0, 0).into(),
             CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )

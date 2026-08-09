@@ -254,13 +254,14 @@ pub async fn get_health_check(
             .collect::<HashMap<String, serde_json::Value>>()
     });
 
-    // Get root region ID from ConnectomeManager (only available when services feature is enabled)
-    #[cfg(feature = "services")]
-    let brain_regions_root = feagi_brain_development::ConnectomeManager::instance()
-        .read()
-        .get_root_region_id();
-    #[cfg(not(feature = "services"))]
-    let brain_regions_root = None; // WASM: Use connectome service instead
+    // Root region id comes from the connectome service, which both the native and WASM
+    // transports provide. This is plain brain-region metadata with no NPU involvement.
+    let brain_regions_root = state
+        .connectome_service
+        .as_ref()
+        .get_root_region_id()
+        .await
+        .unwrap_or(None);
 
     // Get fatigue information from state manager
     // Note: feagi-state-manager is included in the "services" feature

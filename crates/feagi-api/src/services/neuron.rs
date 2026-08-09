@@ -8,25 +8,25 @@ use feagi_services::traits::neuron_service::NeuronService;
 use feagi_services::types::errors::{ServiceError, ServiceResult};
 use feagi_services::types::*;
 
-pub struct WasmNeuronService;
+pub struct GenomeNeuronService;
 
-impl WasmNeuronService {
+impl GenomeNeuronService {
     pub fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
-impl NeuronService for WasmNeuronService {
+impl NeuronService for GenomeNeuronService {
     async fn create_neuron(&self, _params: CreateNeuronParams) -> ServiceResult<NeuronInfo> {
         Err(ServiceError::NotImplemented(
-            "WASM mode is read-only".to_string(),
+            "genome-backed service is read-only".to_string(),
         ))
     }
 
     async fn delete_neuron(&self, _neuron_id: u64) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented(
-            "WASM mode is read-only".to_string(),
+            "genome-backed service is read-only".to_string(),
         ))
     }
 

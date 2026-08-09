@@ -72,6 +72,9 @@ pub struct CorticalTypeMetadata {
 pub const VOXEL_NEURON_SYNAPSES_PER_DIRECTION_PER_PAGE: usize = 50;
 
 /// Returns `(range_start, range_end, has_more)` for a 0-based `page` over `total` items (`page_size` per page).
+///
+/// Paired with the synapse detail formatters, so it is gated the same way.
+#[cfg(feature = "legacy-connectome")]
 fn synapse_page_window(total: usize, page: u32) -> (usize, usize, bool) {
     let page = page as usize;
     let page_size = VOXEL_NEURON_SYNAPSES_PER_DIRECTION_PER_PAGE;
@@ -166,6 +169,10 @@ pub struct MemoryCorticalAreaResponse {
 }
 
 /// Per-peer cortical_area id (base64 string or null), genome cortical_area **name**, cortical_area index, and voxel `(x,y,z)` for the given neuron id.
+///
+/// Retained behind `legacy-connectome` for the eventual `ConnectomeManager` port; the endpoints
+/// that formatted their responses with it currently report 501.
+#[cfg(feature = "legacy-connectome")]
 pub(crate) fn peer_cortical_voxel_fields(
     mgr: &feagi_brain_development::ConnectomeManager,
     peer_id: u64,
@@ -199,6 +206,7 @@ pub(crate) fn peer_cortical_voxel_fields(
 
 /// Build JSON arrays for NPU synapse tuples, aligned with `/v1/connectome/{cortical_area_id}/synapses`,
 /// plus peer cortical_area id, `target_cortical_name` / `source_cortical_name` (genome name), and voxel for the **target** (outgoing) or **source** (incoming) neuron.
+#[cfg(feature = "legacy-connectome")]
 pub(crate) fn synapse_details_for_neuron(
     mgr: &feagi_brain_development::ConnectomeManager,
     neuron_id: u32,
@@ -272,104 +280,13 @@ async fn resolve_voxel_neurons(
         .await
         .map_err(ApiError::from)?;
 
-    let cortical_idx = area.cortical_idx;
-    let cortical_name = area.name.clone();
-
-    let matching_ids: Vec<u32> = {
-        let manager = feagi_brain_development::ConnectomeManager::instance();
-        let manager_lock = manager.read();
-        let npu_arc = manager_lock
-            .get_npu()
-            .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
-        let npu_lock = npu_arc.lock().map_err(|_| {
-            ApiError::internal("NPU mutex poisoned; restart FEAGI or wait for burst recovery")
-        })?;
-
-        let mut ids: Vec<u32> = npu_lock
-            .get_neurons_in_cortical_area(cortical_idx)
-            .into_iter()
-            .filter(|&nid| {
-                npu_lock
-                    .get_neuron_coordinates(nid)
-                    .map(|(nx, ny, nz)| nx == x && ny == y && nz == z)
-                    .unwrap_or(false)
-            })
-            .collect();
-        ids.sort_unstable();
-        ids
-    };
-
-    let mut neurons: Vec<serde_json::Value> = Vec::with_capacity(matching_ids.len());
-    for neuron_id in &matching_ids {
-        let nid = *neuron_id;
-        let mut props = connectome_service
-            .get_neuron_properties(nid as u64)
-            .await
-            .map_err(ApiError::from)?;
-        props.insert(
-            "cortical_id".to_string(),
-            serde_json::Value::String(cortical_id.clone()),
-        );
-        props.insert("cortical_idx".to_string(), serde_json::json!(cortical_idx));
-
-        let (
-            outgoing_synapse_count,
-            incoming_synapse_count,
-            out_json,
-            in_json,
-            outgoing_synapses_has_more,
-            incoming_synapses_has_more,
-        ) = {
-            let manager = feagi_brain_development::ConnectomeManager::instance();
-            let mgr = manager.read();
-            let outgoing_full = mgr.get_outgoing_synapses(nid as u64);
-            let incoming_full = mgr.get_incoming_synapses(nid as u64);
-            let oc = outgoing_full.len();
-            let ic = incoming_full.len();
-            let (o_start, o_end, out_has_more) = synapse_page_window(oc, synapse_page);
-            let (i_start, i_end, in_has_more) = synapse_page_window(ic, synapse_page);
-            let out_slice = &outgoing_full[o_start..o_end];
-            let in_slice = &incoming_full[i_start..i_end];
-            let (out_json, in_json) = synapse_details_for_neuron(&mgr, nid, out_slice, in_slice);
-            (oc, ic, out_json, in_json, out_has_more, in_has_more)
-        };
-        props.insert("synapse_page".to_string(), serde_json::json!(synapse_page));
-        props.insert(
-            "outgoing_synapse_count".to_string(),
-            serde_json::json!(outgoing_synapse_count),
-        );
-        props.insert(
-            "incoming_synapse_count".to_string(),
-            serde_json::json!(incoming_synapse_count),
-        );
-        props.insert(
-            "outgoing_synapses_has_more".to_string(),
-            serde_json::json!(outgoing_synapses_has_more),
-        );
-        props.insert(
-            "incoming_synapses_has_more".to_string(),
-            serde_json::json!(incoming_synapses_has_more),
-        );
-        props.insert("outgoing_synapses".to_string(), out_json);
-        props.insert("incoming_synapses".to_string(), in_json);
-
-        neurons.push(serde_json::to_value(&props).map_err(|e| {
-            ApiError::internal(format!("Failed to serialize neuron properties: {}", e))
-        })?);
-    }
-
-    Ok(VoxelNeuronsResponse {
-        cortical_id,
-        cortical_name,
-        cortical_idx,
-        voxel_coordinate: [x, y, z],
-        x,
-        y,
-        z,
-        synapse_page,
-        neuron_count: neurons.len(),
-        neurons,
-    })
+    // Selecting the neurons sitting at one voxel requires the NPU's per-neuron coordinate index,
+    // and each neuron's synapse page requires per-synapse addressing. The current engine exposes
+    // neither. The area lookup above still surfaces 404 for an unknown cortical id.
+    let _ = (area, x, y, z, synapse_page);
+    Err(ApiError::npu_introspection_unavailable(
+        "Voxel neuron inspection",
+    ))
 }
 
 // ============================================================================
@@ -2148,58 +2065,13 @@ pub async fn get_memory_cortical_area(
     let page_size = page_size_u32 as usize;
     let offset = (params.page as usize).saturating_mul(page_size);
 
-    let manager = feagi_brain_development::ConnectomeManager::instance();
-    let mgr = manager.read();
-
-    let upstream_cortical_area_indices = mgr.get_upstream_cortical_areas(&cid);
-    let upstream_cortical_area_count = upstream_cortical_area_indices.len();
-
-    let exec = mgr
-        .get_plasticity_executor()
-        .ok_or_else(|| ApiError::internal("Plasticity executor not available"))?;
-    let ex = exec
-        .lock()
-        .map_err(|_| ApiError::internal("Plasticity executor lock poisoned"))?;
-
-    let runtime = ex
-        .memory_cortical_area_runtime_info(cortical_idx)
-        .ok_or_else(|| ApiError::internal("Plasticity service not initialized"))?;
-
-    let (memory_neuron_ids_u32, total_memory_neuron_ids) = ex
-        .paginated_memory_neuron_ids_in_area(cortical_idx, offset, page_size)
-        .unwrap_or((Vec::new(), 0));
-
-    let has_more = offset.saturating_add(memory_neuron_ids_u32.len()) < total_memory_neuron_ids;
-
-    let memory_neuron_ids: Vec<u64> = memory_neuron_ids_u32
-        .into_iter()
-        .map(|id| id as u64)
-        .collect();
-
-    Ok(Json(MemoryCorticalAreaResponse {
-        cortical_id: params.cortical_id,
-        cortical_idx,
-        cortical_name,
-        short_term_neuron_count: runtime.short_term_neuron_count,
-        long_term_neuron_count: runtime.long_term_neuron_count,
-        memory_parameters: MemoryCorticalAreaParamsResponse {
-            temporal_depth: mem_props.temporal_depth,
-            longterm_mem_threshold: mem_props.longterm_threshold,
-            lifespan_growth_rate: mem_props.lifespan_growth_rate,
-            init_lifespan: mem_props.init_lifespan,
-            mp_learning_enabled: mem_props.mp_learning_enabled,
-        },
-        upstream_cortical_area_indices,
-        upstream_cortical_area_count,
-        upstream_pattern_cache_size: runtime.upstream_pattern_cache_size,
-        incoming_synapse_count: area.incoming_synapse_count,
-        outgoing_synapse_count: area.outgoing_synapse_count,
-        total_memory_neuron_ids,
-        page: params.page,
-        page_size: page_size_u32,
-        memory_neuron_ids,
-        has_more,
-    }))
+    // The short/long-term counts, upstream pattern cache and per-area memory neuron ids all come
+    // from the plasticity executor's runtime tables, which the current engine has no counterpart
+    // for. Validation above still yields 404 for unknown ids and 400 for non-memory areas.
+    let _ = (cid, cortical_idx, cortical_name, mem_props, offset, page_size);
+    Err(ApiError::npu_introspection_unavailable(
+        "Memory cortical area runtime detail",
+    ))
 }
 
 /// Get metadata for all available IPU types (vision, infrared, etc.). Includes encodings, formats, units, and topology.
@@ -2515,7 +2387,9 @@ pub async fn put_coord_3d(
     )])))
 }
 
-#[cfg(test)]
+// Exercises the synapse detail formatters, which target the pre-refactor ConnectomeManager and are
+// gated with them.
+#[cfg(all(test, feature = "legacy-connectome"))]
 mod voxel_neurons_dto_tests {
     use super::{
         synapse_details_for_neuron, synapse_page_window, VoxelNeuronsBody, VoxelNeuronsResponse,

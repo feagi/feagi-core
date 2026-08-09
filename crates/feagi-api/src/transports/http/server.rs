@@ -404,9 +404,9 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/capabilities/all",
             get(agent::get_all_agent_capabilities),
         )
-        .route("/agent/info/{agent_id}", get(agent::get_agent_info))
+        .route("/agent/info/:agent_id", get(agent::get_agent_info))
         .route(
-            "/agent/properties/{agent_id}",
+            "/agent/properties/:agent_id",
             get(agent::get_agent_properties_path),
         )
         .route(
@@ -414,7 +414,7 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(agent::post_configure),
         )
         .route(
-            "/agent/{agent_id}/device_registrations",
+            "/agent/:agent_id/device_registrations",
             get(agent::export_device_registrations).post(agent::import_device_registrations),
         )
         // ===== SYSTEM MODULE (21 endpoints) =====
