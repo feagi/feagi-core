@@ -27,6 +27,13 @@ fn i8_ltd_ltp_from_json_value(v: &serde_json::Value, field: &str) -> Result<i8, 
     })
 }
 
+/// Parse a numeric JSON value as f64 (accepts integer and float forms).
+fn f64_from_json_value(v: &serde_json::Value, field: &str) -> Result<f64, ApiError> {
+    v.as_f64()
+        .or_else(|| v.as_i64().map(|i| i as f64))
+        .ok_or_else(|| ApiError::invalid_input(format!("{field} must be numeric")))
+}
+
 /// POST /v1/cortical_mapping/afferents
 #[utoipa::path(
     post,
@@ -133,9 +140,7 @@ pub async fn post_mapping_properties(
                 .as_str()
                 .ok_or_else(|| ApiError::invalid_input("morphology_id must be a string"))?;
             let morphology_scalar = arr[1].clone();
-            let psc_multiplier = arr[2].as_i64().ok_or_else(|| {
-                ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
-            })?;
+            let psc_multiplier = f64_from_json_value(&arr[2], "postSynapticCurrent_multiplier")?;
             let plasticity_flag = arr[3]
                 .as_bool()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
@@ -183,12 +188,12 @@ pub async fn post_mapping_properties(
                 .get("morphology_scalar")
                 .cloned()
                 .ok_or_else(|| ApiError::invalid_input("morphology_scalar missing"))?;
-            let psc_multiplier = obj
-                .get("postSynapticCurrent_multiplier")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| {
-                    ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
-                })?;
+            let psc_multiplier = f64_from_json_value(
+                obj.get("postSynapticCurrent_multiplier").ok_or_else(|| {
+                    ApiError::invalid_input("postSynapticCurrent_multiplier missing")
+                })?,
+                "postSynapticCurrent_multiplier",
+            )?;
             let plasticity_flag = obj
                 .get("plasticity_flag")
                 .and_then(|v| v.as_bool())
@@ -555,6 +560,33 @@ pub async fn delete_mapping(
     );
 
     Ok(Json(response))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::f64_from_json_value;
+
+    #[test]
+    fn f64_parser_accepts_integer_and_float_json() {
+        let int_v = serde_json::json!(1);
+        let float_v = serde_json::json!(1.0);
+        assert_eq!(
+            f64_from_json_value(&int_v, "postSynapticCurrent_multiplier")
+                .expect("integer should parse"),
+            1.0
+        );
+        assert_eq!(
+            f64_from_json_value(&float_v, "postSynapticCurrent_multiplier")
+                .expect("float should parse"),
+            1.0
+        );
+    }
+
+    #[test]
+    fn f64_parser_rejects_non_numeric_json() {
+        let bad_v = serde_json::json!("1");
+        assert!(f64_from_json_value(&bad_v, "postSynapticCurrent_multiplier").is_err());
+    }
 }
 
 /// POST /v1/cortical_mapping/batch_update

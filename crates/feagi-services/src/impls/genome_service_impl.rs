@@ -271,6 +271,15 @@ fn io_coding_options_for_unit(cortical_id: &CorticalID) -> Option<IOCodingOption
     })
 }
 
+fn normalize_quantization_precision(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "fp32" | "f32" => "fp32".to_string(),
+        "fp16" | "f16" => "fp16".to_string(),
+        "int8" | "i8" => "int8".to_string(),
+        _ => "unknown".to_string(),
+    }
+}
+
 /// Default implementation of GenomeService
 pub struct GenomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
@@ -338,6 +347,25 @@ impl GenomeServiceImpl {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::normalize_quantization_precision;
+
+    #[test]
+    fn normalize_quantization_precision_handles_aliases() {
+        assert_eq!(normalize_quantization_precision("fp32"), "fp32");
+        assert_eq!(normalize_quantization_precision("F32"), "fp32");
+        assert_eq!(normalize_quantization_precision("int8"), "int8");
+        assert_eq!(normalize_quantization_precision("i8"), "int8");
+        assert_eq!(normalize_quantization_precision("fp16"), "fp16");
+    }
+
+    #[test]
+    fn normalize_quantization_precision_marks_unknown_values() {
+        assert_eq!(normalize_quantization_precision("weird"), "unknown");
+    }
+}
+
 #[async_trait]
 impl GenomeService for GenomeServiceImpl {
     async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
@@ -382,6 +410,32 @@ impl GenomeService for GenomeServiceImpl {
         // Extract simulation_timestep from genome physiology (will be returned in GenomeInfo)
         let simulation_timestep = genome.physiology.simulation_timestep;
         info!(target: "feagi-services", "Genome simulation_timestep: {} seconds", simulation_timestep);
+
+        // Guard against silent precision mismatch between runtime NPU and incoming genome.
+        // Mismatches can cause threshold/limit quantization behavior that diverges from genome intent.
+        let requested_precision =
+            normalize_quantization_precision(&genome.physiology.quantization_precision);
+        let active_precision = {
+            let npu_arc = self
+                .connectome
+                .read()
+                .get_npu()
+                .cloned()
+                .ok_or_else(|| ServiceError::Backend("NPU not initialized".to_string()))?;
+            let npu_guard = npu_arc
+                .lock()
+                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+            match &*npu_guard {
+                feagi_npu_burst_engine::DynamicNPU::F32(_) => "fp32",
+                feagi_npu_burst_engine::DynamicNPU::INT8(_) => "int8",
+            }
+        };
+        if requested_precision != "unknown" && requested_precision != active_precision {
+            return Err(ServiceError::InvalidInput(format!(
+                "Genome quantization precision '{}' does not match active NPU precision '{}'. Restart FEAGI with matching precision (e.g. --precision {}).",
+                genome.physiology.quantization_precision, active_precision, requested_precision
+            )));
+        }
 
         // Store genome for future updates (source of truth for structural changes)
         info!(target: "feagi-services", "Storing RuntimeGenome with {} cortical areas, {} morphologies",
