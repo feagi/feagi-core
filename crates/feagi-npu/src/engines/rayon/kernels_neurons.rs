@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
+use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
 use feagi_models::cortical_area::neuron::layout_specific_implementations::dimensional::DimensionalNeuronModel;
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
 use feagi_models::cortical_area::neuron_model_implementations::generated_enums::NeuronModelTypeAndQuantizationPacked;
@@ -62,6 +62,64 @@ pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineDat
     return;
 
 }
+/// Packs each area's per-neuron firing flags into its run of the firing bitmap.
+///
+/// Runs after [`process_neurons`] has settled every neuron's firing state, and turns the byte per
+/// neuron the kernel writes into the bit per neuron that readers consume. Keeping this a separate
+/// pass rather than folding it into the dynamics loop is what makes it race-free: the dynamics
+/// loop is parallel over neurons, and eight neurons share a bitmap byte, so it cannot write bits
+/// without a read-modify-write race. Here the parallelism is over bytes instead, and each worker
+/// owns its byte outright.
+///
+/// Each byte is written whole rather than or-ed in, so last burst's bits are cleared by the same
+/// store that sets this burst's.
+pub(crate) fn pack_firing_bitmap<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>) {
+    let neuron_counts = data.cortical_neuron_count.as_slice();
+    let neuron_index_lookups = data.cortical_neuron_index_lookup_table.as_slice();
+    let neuron_runtime_flags = data.neuron_runtime_flags.as_slice();
+
+    (0..neuron_counts.len())
+        .into_par_iter()
+        .for_each(|cortical_area| {
+            let neuron_count = neuron_counts[cortical_area].quant_to_usize();
+            let first_neuron = neuron_index_lookups[cortical_area]
+                .cortical_first_neuron_engine_index
+                .deref()
+                .quant_to_usize();
+
+            let bitmap_index = FIQ::CorticalAreaIndexCountQuant::quant_from_usize(cortical_area);
+            let Some((bitmap, _)) = data.neuron_voxel_is_firing.get_slice_by_index(bitmap_index)
+            else {
+                return;
+            };
+
+            (0..bitmap.number_bytes().quant_to_usize())
+                .into_par_iter()
+                .for_each(|byte_index| {
+                    let first_local_neuron = byte_index * 8;
+                    // The final byte of an area whose neuron count is not a multiple of eight is
+                    // only partly populated; its remaining bits stay zero.
+                    let bits_in_byte = (neuron_count - first_local_neuron).min(8);
+
+                    let mut packed: u8 = 0;
+                    for bit in 0..bits_in_byte {
+                        if neuron_runtime_flags[first_neuron + first_local_neuron + bit].get_firing()
+                        {
+                            packed |= 1 << bit;
+                        }
+                    }
+
+                    // SAFETY: byte indexes are produced by a range, so each is visited by exactly
+                    // one worker, and areas own disjoint byte ranges of the shared buffer. No
+                    // other reference to this byte exists for the duration of the write.
+                    unsafe {
+                        *bitmap.get_byte_mut_par(FIQ::NeuronIndexQuant::quant_from_usize(byte_index)) =
+                            packed;
+                    }
+                });
+        });
+}
+
 // TODO this should be macro generated potentially (maybe from the models crate?)
 
 #[inline(always)]

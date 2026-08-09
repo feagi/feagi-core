@@ -12,9 +12,10 @@ use std::collections::HashMap;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use feagi_evolutionary::extract_memory_properties;
-use feagi_genomic_context::cortical_area::descriptors::CorticalSubUnitIndex;
+use feagi_genomic_context::cortical_unit::CorticalSubUnitIndex;
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
+use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
 use utoipa::{IntoParams, ToSchema};
 
 // ============================================================================
@@ -801,7 +802,8 @@ pub async fn post_cortical_area(
     Json(request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<serde_json::Value>> {
     use feagi_services::types::CreateCorticalAreaParams;
-    use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
+    use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
+    use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
 
     // ARCHITECTURE: Use genome_service (proper entry point) instead of connectome_service
     let genome_service = state.genome_service.as_ref();
@@ -2255,7 +2257,7 @@ pub async fn get_ipu_types(
             .into_iter()
             .map(|(idx, topo)| {
                 (
-                    *idx as usize,
+                    idx.deref() as usize,
                     UnitTopologyData {
                         relative_position: topo.relative_position,
                         dimensions: topo.channel_dimensions_default,
@@ -2326,7 +2328,7 @@ pub async fn get_opu_types(
             .into_iter()
             .map(|(idx, topo)| {
                 (
-                    *idx as usize,
+                    idx.deref() as usize,
                     UnitTopologyData {
                         relative_position: topo.relative_position,
                         dimensions: topo.channel_dimensions_default,

@@ -62,6 +62,9 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
 
     pub fn execute_single_burst(&mut self) {
         kernels_neurons::process_neurons(&self.data);
+        // Firing state is settled by neuron dynamics and is what visualization reads, so it is
+        // packed before synapses run and start consuming it.
+        kernels_neurons::pack_firing_bitmap(&self.data);
         kernels_synapses::process_synapses(&self.data);
         self.data.burst_index += BurstIndex::QUANT_ONE;
     }
@@ -137,6 +140,15 @@ impl<FIQ: FeagiIndexQuantization> EditableEngine<FIQ> for RayonBurstEngine<FIQ> 
             .cortical_index_lookup_table
             .append_single_mut(CorticalIndexLookupTable::new(cortical_model_index, cortical_layout_index));
         self.data.cortical_neuron_count.append_single_mut(number_neurons);
+
+        // One firing bit per neuron. Allocated in the same order as every other per-area vector,
+        // so the run id the manager hands back is this area's `CorticalEngineIndex`.
+        let firing_bitmap_index = self.data.neuron_voxel_is_firing.get_new_range(number_neurons);
+        debug_assert_eq!(
+            firing_bitmap_index,
+            cortical_index.deref(),
+            "firing bitmap runs must stay aligned with cortical engine indexes"
+        );
         self.data
             .cortical_neuron_index_lookup_table
             .append_single_mut(NeuronIndexLookupTable::new(

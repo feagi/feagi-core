@@ -812,7 +812,7 @@ pub async fn post_upload_connectome(
     Json(data): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // Deserialize snapshot from JSON
-    let snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot =
+    let snapshot: feagi_services::types::ConnectomeSnapshot =
         serde_json::from_value(data).map_err(|e| {
             ApiError::invalid_input(format!("Invalid connectome snapshot format: {}", e))
         })?;
@@ -952,11 +952,11 @@ pub async fn get_memory_neuron(
     State(_state): State<ApiState>,
     Query(q): Query<MemoryNeuronQuery>,
 ) -> ApiResult<Json<MemoryNeuronDetailResponse>> {
-    if !feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(q.neuron_id) {
+    if !feagi_npu::memory_neuron_ids::NeuronIdManager::is_memory_neuron_id(q.neuron_id) {
         return Err(ApiError::invalid_input(format!(
             "neuron_id must be a memory neuron id in range {}..={}",
-            feagi_npu_plasticity::MEMORY_NEURON_ID_START,
-            feagi_npu_plasticity::MEMORY_NEURON_ID_MAX
+            feagi_npu::memory_neuron_ids::MEMORY_NEURON_ID_START,
+            feagi_npu::memory_neuron_ids::MEMORY_NEURON_ID_MAX
         )));
     }
 

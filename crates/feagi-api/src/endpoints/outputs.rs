@@ -135,7 +135,7 @@ pub struct MotorTapAgent {
 /// Additive convenience derived from the same per-area data already returned in `areas`,
 /// so benchmark/diagnostic clients (encoder/substrate experiments) can read spike-cost and
 /// activity-intensity summaries without re-deriving them. Mirrors
-/// [`feagi_npu_burst_engine::BurstActivitySummary`].
+/// [`feagi_npu::runtime_taps::BurstActivitySummary`].
 #[derive(Serialize, Clone, Debug, utoipa::ToSchema)]
 pub struct ActivitySummary {
     /// Number of areas that fired at least one neuron this burst (after any filter).
@@ -152,8 +152,8 @@ pub struct ActivitySummary {
     pub peak_sample_potential: f32,
 }
 
-impl From<feagi_npu_burst_engine::BurstActivitySummary> for ActivitySummary {
-    fn from(s: feagi_npu_burst_engine::BurstActivitySummary) -> Self {
+impl From<feagi_npu::runtime_taps::BurstActivitySummary> for ActivitySummary {
+    fn from(s: feagi_npu::runtime_taps::BurstActivitySummary) -> Self {
         ActivitySummary {
             active_area_count: s.active_area_count,
             total_fired_neurons: s.total_fired_neurons,
@@ -213,7 +213,7 @@ pub async fn get_motor_snapshot_last(
     State(_state): State<ApiState>,
     axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
 ) -> ApiResult<Json<MotorSnapshotResponse>> {
-    let snap = feagi_npu_burst_engine::BurstTaps::instance().motor_snapshot();
+    let snap = feagi_npu::runtime_taps::BurstTaps::instance().motor_snapshot();
     let agent_filter = query.get("agent_id").cloned();
     let area_filter = query.get("cortical_id").cloned();
 
@@ -227,7 +227,7 @@ pub async fn get_motor_snapshot_last(
     }
 
     let activity_summary: ActivitySummary =
-        feagi_npu_burst_engine::BurstActivitySummary::from_areas(
+        feagi_npu::runtime_taps::BurstActivitySummary::from_areas(
             snap.burst_num,
             snap.timestamp_ms,
             &raw_areas,
@@ -291,10 +291,10 @@ pub async fn get_motor_snapshot_last(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_npu_burst_engine::{BurstActivitySummary, TapAreaActivity, TapSample};
+    use feagi_npu::runtime_taps::{BurstActivitySummary, AreaActivity, TapSample};
 
-    fn area(cortical_id: &str, neuron_count: usize, potentials: &[f32]) -> TapAreaActivity {
-        TapAreaActivity {
+    fn area(cortical_id: &str, neuron_count: usize, potentials: &[f32]) -> AreaActivity {
+        AreaActivity {
             cortical_id: cortical_id.to_string(),
             cortical_idx: 0,
             neuron_count,
@@ -342,7 +342,7 @@ mod tests {
             area("BBBB", 3, &[0.5, 0.5, 0.5]),
         ];
 
-        let filtered: Vec<TapAreaActivity> = raw
+        let filtered: Vec<AreaActivity> = raw
             .iter()
             .filter(|a| a.cortical_id == "BBBB")
             .cloned()

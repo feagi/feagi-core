@@ -122,7 +122,7 @@ pub async fn get_sensor_snapshot_last(
     State(_state): State<ApiState>,
     axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
 ) -> ApiResult<Json<SensorSnapshotResponse>> {
-    let snap = feagi_npu_burst_engine::BurstTaps::instance().sensor_snapshot();
+    let snap = feagi_npu::runtime_taps::BurstTaps::instance().sensor_snapshot();
     let cortical_filter = query.get("cortical_id").cloned();
 
     let mut areas: Vec<SensorTapArea> = snap

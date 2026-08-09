@@ -84,13 +84,13 @@ pub fn compute_circuit_size_from_runtime_genome(
     let mut max_z: i32 = 0;
 
     for area in genome.cortical_areas.values() {
-        let x0 = area.position.x;
-        let y0 = area.position.y;
-        let z0 = area.position.z;
+        let x0 = area.position.x();
+        let y0 = area.position.y();
+        let z0 = area.position.z();
 
-        let x1 = x0.saturating_add(area.dimensions.width as i32);
-        let y1 = y0.saturating_add(area.dimensions.height as i32);
-        let z1 = z0.saturating_add(area.dimensions.depth as i32);
+        let x1 = x0.saturating_add(*area.dimensions.get_x().as_ref() as i32);
+        let y1 = y0.saturating_add(*area.dimensions.get_y().as_ref() as i32);
+        let z1 = z0.saturating_add(*area.dimensions.get_z().as_ref() as i32);
 
         if !any {
             any = true;

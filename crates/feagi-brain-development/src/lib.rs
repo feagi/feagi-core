@@ -79,9 +79,9 @@ pub use types::{AreaId, BduError, BduResult, Weight};
 pub use feagi_genomic_context::cortical_area::CorticalID;
 pub use feagi_genomic_data::cortical_area_prev::CorticalArea;
 pub use feagi_genomic_context::brain_region::BrainRegion;
-#[cfg(feature = "legacy-connectome")]
+// `models` only re-homes core types and provides the `CorticalAreaExt` business-logic trait. It
+// has no dependency on `connectome_manager` or the pre-refactor NPU crates, so it is not gated.
 pub mod models;
-#[cfg(feature = "legacy-connectome")]
 pub use models::{BrainRegionHierarchy, CorticalAreaExt};
 
 // Re-export Position from local types

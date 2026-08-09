@@ -206,7 +206,7 @@ pub async fn get_health_check(
         .memory_stats_cache
         .as_ref()
         .map(|cache| {
-            let snapshot = feagi_npu_plasticity::memory_stats_cache::get_stats_snapshot(cache);
+            let snapshot = feagi_services::types::memory_stats::get_stats_snapshot(cache);
             let total = snapshot
                 .values()
                 .map(|s| s.neuron_count as i64)

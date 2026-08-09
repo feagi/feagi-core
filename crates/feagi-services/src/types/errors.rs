@@ -64,28 +64,12 @@ pub type ServiceResult<T> = Result<T, ServiceError>;
 // ERROR CONVERSIONS FROM BACKEND
 // ============================================================================
 
-impl From<feagi_npu_neural::types::FeagiError> for ServiceError {
-    fn from(err: feagi_npu_neural::types::FeagiError) -> Self {
-        match err {
-            feagi_npu_neural::types::FeagiError::CorticalAreaNotFound(_) => {
-                ServiceError::NotFound {
-                    resource: "CorticalArea".to_string(),
-                    id: err.to_string(),
-                }
-            }
-            feagi_npu_neural::types::FeagiError::InvalidArea(msg) => {
-                ServiceError::InvalidInput(msg)
-            }
-            feagi_npu_neural::types::FeagiError::InvalidRegion(msg) => {
-                ServiceError::InvalidInput(msg)
-            }
-            _ => ServiceError::Backend(err.to_string()),
-        }
-    }
-}
+// The `feagi_npu_neural::types::FeagiError` conversion was dropped with that crate in the NPU
+// rewrite. The current NPU does not expose an error enum, so nothing can produce the source type.
+// Reinstate a conversion here once `feagi-npu` defines its public error type.
 
-impl From<feagi_structures::FeagiDataError> for ServiceError {
-    fn from(err: feagi_structures::FeagiDataError) -> Self {
+impl From<feagi_data::feagi_data_error::FeagiDataError> for ServiceError {
+    fn from(err: feagi_data::feagi_data_error::FeagiDataError) -> Self {
         ServiceError::InvalidInput(err.to_string())
     }
 }
@@ -110,9 +94,15 @@ impl From<feagi_brain_development::BduError> for ServiceError {
 
 impl From<feagi_evolutionary::EvoError> for ServiceError {
     fn from(err: feagi_evolutionary::EvoError) -> Self {
-        match err {
-            feagi_evolutionary::EvoError::InvalidGenome(msg) => ServiceError::InvalidInput(msg),
-            feagi_evolutionary::EvoError::InvalidArea(msg) => ServiceError::InvalidInput(msg),
+        // Variants carry error-key structs rather than `String` since the error rework, so the
+        // message is read back off the error instead of being moved out of the variant.
+        match &err {
+            feagi_evolutionary::EvoError::InvalidGenome(_) => {
+                ServiceError::InvalidInput(err.message().to_string())
+            }
+            feagi_evolutionary::EvoError::InvalidArea(_) => {
+                ServiceError::InvalidInput(err.message().to_string())
+            }
             _ => ServiceError::Backend(err.to_string()),
         }
     }

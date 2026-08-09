@@ -30,10 +30,10 @@ Licensed under the Apache License, Version 2.0
 pub mod brain_region_hierarchy;
 pub mod cortical_area;
 
-// Re-export CorticalArea types from feagi_data_structures (single source of truth)
-pub use feagi_genome_definitions::{
-    CorticalArea, CorticalAreaDimensions, CorticalID,
-};
+// Re-export CorticalArea types from their post-split homes (single source of truth)
+pub use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic as CorticalAreaDimensions;
+pub use feagi_genomic_context::cortical_area::CorticalID;
+pub use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 // Re-export extension trait for business logic
 pub use cortical_area::CorticalAreaExt;

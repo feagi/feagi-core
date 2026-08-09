@@ -554,14 +554,14 @@ pub async fn post_amalgamation_destination(
             cortical_id,
             name: area.name.clone(),
             dimensions: (
-                area.dimensions.width as usize,
-                area.dimensions.height as usize,
-                area.dimensions.depth as usize,
+                *area.dimensions.get_x().as_ref() as usize,
+                *area.dimensions.get_y().as_ref() as usize,
+                *area.dimensions.get_z().as_ref() as usize,
             ),
             position: (
-                origin_x.saturating_add(area.position.x),
-                origin_y.saturating_add(area.position.y),
-                origin_z.saturating_add(area.position.z),
+                origin_x.saturating_add(area.position.x()),
+                origin_y.saturating_add(area.position.y()),
+                origin_z.saturating_add(area.position.z()),
             ),
             area_type: "Custom".to_string(),
             visible: Some(true),
@@ -1698,7 +1698,8 @@ pub async fn get_cortical_template(
     use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
     };
-    use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
+    use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
+    use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
     use serde_json::json;
 
     let mut templates = HashMap::new();
@@ -1768,7 +1769,7 @@ pub async fn get_cortical_template(
         //   (frame_change_handling, percentage_neuron_positioning) combination
         // - extracting the IO configuration flag from each cortical_area ID
         // - grouping supported_data_types per subunit index
-        use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
+        use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
         use serde_json::{Map, Value};
         use std::collections::HashMap as StdHashMap;
 
@@ -1777,7 +1778,7 @@ pub async fn get_cortical_template(
         // Initialize subunits with topology-derived properties.
         for (sub_idx, topo) in topology {
             subunits.insert(
-                sub_idx.get().to_string(),
+                sub_idx.deref().to_string(),
                 json!({
                     "relative_position": topo.relative_position,
                     "channel_dimensions_default": topo.channel_dimensions_default,
@@ -1886,7 +1887,7 @@ pub async fn get_cortical_template(
         let num_areas = sensory_unit.get_number_cortical_areas();
         let topology = sensory_unit.get_unit_default_topology();
 
-        use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
+        use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
         use serde_json::{Map, Value};
         use std::collections::HashMap as StdHashMap;
 
@@ -1894,7 +1895,7 @@ pub async fn get_cortical_template(
 
         for (sub_idx, topo) in topology {
             subunits.insert(
-                sub_idx.get().to_string(),
+                sub_idx.deref().to_string(),
                 json!({
                     "relative_position": topo.relative_position,
                     "channel_dimensions_default": topo.channel_dimensions_default,

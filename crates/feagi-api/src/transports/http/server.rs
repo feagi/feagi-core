@@ -71,7 +71,7 @@ pub struct ApiState {
     /// [`ApiState::filesystem_data_root_from_config`]).
     pub filesystem_data_root: PathBuf,
     /// Memory area stats cache (updated by plasticity service, read by health check)
-    pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
+    pub memory_stats_cache: Option<feagi_services::types::MemoryStatsCache>,
     /// In-memory amalgamation state (pending request + history), surfaced via health_check.
     pub amalgamation_state: amalgamation::SharedAmalgamationState,
     /// Exclusive lock for genome transition operations (load/upload/reload).

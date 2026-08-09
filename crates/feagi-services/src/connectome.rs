@@ -4,7 +4,7 @@
 //! # FEAGI Connectome I/O
 //!
 //! File I/O and serialization for connectome snapshots.
-//! Types are defined in `feagi-npu-neural::types::connectome`.
+//! Types are defined in `crate::types::connectome_snapshot`.
 //!
 //! This module provides:
 //! - File I/O (`save_connectome`, `load_connectome`)
@@ -13,7 +13,7 @@
 //! ## Usage
 //! ```ignore
 //! use feagi_services::connectome::{load_connectome, save_connectome};
-//! use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
+//! use feagi_services::types::ConnectomeSnapshot;
 //!
 //! // Save connectome
 //! let snapshot = ConnectomeSnapshot { /* ... */ };
@@ -23,7 +23,7 @@
 //! let snapshot = load_connectome("brain.connectome")?;
 //! ```
 
-use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
+use crate::types::ConnectomeSnapshot;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -225,9 +225,7 @@ fn calculate_checksum(data: &[u8]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_npu_neural::types::connectome::{
-        ConnectomeMetadata, SerializableNeuronArray, SerializableSynapseArray,
-    };
+    use crate::types::{ConnectomeMetadata, SerializableNeuronArray, SerializableSynapseArray};
     use tempfile::NamedTempFile;
 
     #[test]

@@ -21,6 +21,8 @@ feagi-state-manager = {  path = "../feagi-state-manager", default-features = fal
 feagi-serialization = {  path = "../feagi-serialization" }
 feagi-agent = {  path = "../feagi-agent", optional = true, default-features = false, features = ["agent-client", "agent-client-asynchelper-tokio"] }
 feagi-config = {  path = "../feagi-config" }
+# Burst-loop introspection taps behind the input/output diagnostic endpoints.
+feagi-npu = {  path = "../feagi-npu", optional = true }
 
 # HTTP/REST (optional - not needed for WASM)
 axum = { version = "0.7", optional = true, features = ["multipart"] }
@@ -98,7 +100,10 @@ tokio-test = "0.4"
 [features]
 default = ["http", "services"]
 http = ["axum", "tower", "tower-http", "hyper", "http-body-util", "tokio", "utoipa-swagger-ui", "services"]
-services = ["feagi-services/std", "feagi-services/plasticity", "feagi-io", "feagi-brain-development", "feagi-state-manager/std", "feagi-agent"]
+services = ["feagi-services/std", "feagi-services/plasticity", "feagi-io", "feagi-brain-development", "feagi-state-manager/std", "feagi-agent", "feagi-npu"]
+# The bundled feagi-services implementations, used by this crate's examples and contract tests.
+# Not required by the library itself, which depends only on the service traits.
+builtin-impls = ["services", "feagi-services/builtin-impls"]
 zmq = ["feagi-io", "dep:zeromq", "services"]  # feagi-io provides transport primitives
 security = ["chacha20poly1305", "x25519-dalek", "jsonwebtoken", "argon2"]
 tls = ["rustls", "tokio-rustls"]

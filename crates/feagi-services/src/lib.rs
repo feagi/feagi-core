@@ -89,9 +89,13 @@ Licensed under the Apache License, Version 2.0
 
 #[cfg(feature = "connectome-serialization")]
 pub mod connectome;
-#[cfg(feature = "std")]
+// The bundled service implementations still target the pre-refactor crate layout and are gated
+// behind `builtin-impls` until they are migrated, following the same convention as
+// `feagi-brain-development/legacy-connectome`. Adapters supply their own implementations of the
+// `traits` module in the meantime. `genome` is gated with them because `impls` is its only consumer.
+#[cfg(all(feature = "std", feature = "builtin-impls"))]
 pub mod genome;
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", feature = "builtin-impls"))]
 pub mod impls;
 pub mod traits;
 pub mod types;
@@ -136,10 +140,15 @@ pub use types::{
 };
 
 // Re-export cortical_area area helpers for adapter crates.
+//
+// `feagi-brain-development::models` still targets the pre-refactor crate layout and is gated
+// behind `legacy-connectome` there, so this re-export follows the same gate until that module is
+// migrated to the current NPU.
+#[cfg(feature = "legacy-connectome")]
 pub use feagi_brain_development::models::CorticalAreaExt;
 
 // Re-export implementations (optional - adapters can use their own)
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", feature = "builtin-impls"))]
 pub use impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     RuntimeServiceImpl, SnapshotServiceImpl,

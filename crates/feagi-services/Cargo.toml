@@ -17,6 +17,7 @@ name = "feagi_services"
 feagi-evolutionary = {  path = "../feagi-evolutionary" }
 feagi-brain-development = {  path = "../feagi-brain-development", default-features = false }
 feagi-genomic-context = {  path = "../feagi-genomic-context" }
+feagi-data = {  path = "../feagi-data" }
 feagi-state-manager = {  path = "../feagi-state-manager", default-features = false }
 # feagi-io dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
@@ -55,6 +56,12 @@ std = ["tokio", "feagi-brain-development/async-tokio"]  # Enable async for serve
 no_std = []      # Disable async for embedded/RTOS
 wasm = ["feagi-brain-development/wasm"]  # WASM builds without tokio
 connectome-io = []  # Connectome export/import wiring moved off split NPU crates
+# Pass-through for the feagi-brain-development modules that still target the pre-refactor crate
+# layout. Off by default; enabling it pulls in code that does not yet build against the current NPU.
+legacy-connectome = ["feagi-brain-development/legacy-connectome"]
+# The bundled `impls` (and the `genome` helpers they use). Off by default for the same reason:
+# they have not been migrated to the current NPU. The `traits` contract is unaffected.
+builtin-impls = ["std", "legacy-connectome"]
 connectome-serialization = ["bincode", "connectome-compression"]  # Connectome file I/O
 connectome-compression = ["lz4"]  # LZ4 compression for connectome files
 plasticity = ["feagi-brain-development/plasticity"]  # Enable plasticity features (memory neurons, STDP)

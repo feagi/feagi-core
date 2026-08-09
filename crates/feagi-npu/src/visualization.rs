@@ -54,17 +54,15 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
     pub fn fire_queue_snapshot(&self) -> Vec<CorticalAreaFireSnapshot<FIQ>> {
         let data = self.engine_data();
 
-        let neuron_counts = data.cortical_neuron_count.as_slice();
+        let number_areas = data.cortical_neuron_count.as_slice().len();
         let index_lookups = data.cortical_neuron_index_lookup_table.as_slice();
         let cortical_lookups = data.cortical_index_lookup_table.as_slice();
         let layouts = data.cortical_layout_dimensional_data.as_slice();
-        let runtime_flags = data.neuron_runtime_flags.as_slice();
         let membrane_potentials = data.neuron_membrane_data.mp_f32.as_slice();
 
         let mut snapshots = Vec::new();
 
-        for (area, neuron_count) in neuron_counts.iter().enumerate() {
-            let neuron_count = neuron_count.quant_to_usize();
+        for area in 0..number_areas {
             let index_lookup = &index_lookups[area];
             let layout_index = cortical_lookups[area].cortical_layout_index.deref().quant_to_usize();
             let dimensions = layouts[layout_index].dimensions;
@@ -74,19 +72,28 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
                 .deref()
                 .quant_to_usize();
 
-            let mut coords_x = Vec::new();
-            let mut coords_y = Vec::new();
-            let mut coords_z = Vec::new();
-            let mut potentials = Vec::new();
+            // The burst packs firing state into a bit per neuron, so the set bits are exactly the
+            // neurons to draw. Reading them costs one pass over `neuron_count / 8` bytes with
+            // whole zero bytes skipped, rather than a test per neuron.
+            let bitmap_index = FIQ::CorticalAreaIndexCountQuant::quant_from_usize(area);
+            let Some((firing_bits, _)) = data.neuron_voxel_is_firing.get_slice_by_index(bitmap_index)
+            else {
+                continue;
+            };
 
-            for local in 0..neuron_count {
-                let engine_slot = first_neuron + local;
-                if !runtime_flags[engine_slot].get_firing() {
-                    continue;
-                }
+            let firing_count = firing_bits.count_set_bits();
+            if firing_count == 0 {
+                continue;
+            }
 
+            let mut coords_x = Vec::with_capacity(firing_count);
+            let mut coords_y = Vec::with_capacity(firing_count);
+            let mut coords_z = Vec::with_capacity(firing_count);
+            let mut potentials = Vec::with_capacity(firing_count);
+
+            firing_bits.for_each_set_bit(|local| {
                 let local_index: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant> =
-                    NeuronCorticalLocalIndex::quant_from_usize(local);
+                    NeuronCorticalLocalIndex::new(local);
                 // The 4th axis is the neuron's index within its voxel, which visualizers do not
                 // draw, so only the spatial axes are carried over.
                 let coordinate = dimensions.linear_index_to_coordinate_unchecked(local_index);
@@ -96,23 +103,21 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
                 coords_z.push(coordinate.get_z().deref().quant_to_usize() as u32);
 
                 let engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant> =
-                    NeuronEngineIndex::quant_from_usize(engine_slot);
+                    NeuronEngineIndex::quant_from_usize(first_neuron + local.quant_to_usize());
                 let mp_slot = index_lookup
                     .get_neuron_mp_index(&engine_index)
                     .deref()
                     .quant_to_usize();
                 potentials.push(membrane_potentials[mp_slot].deref());
-            }
+            });
 
-            if !potentials.is_empty() {
-                snapshots.push(CorticalAreaFireSnapshot {
-                    cortical_index: CorticalEngineIndex::quant_from_usize(area),
-                    coords_x,
-                    coords_y,
-                    coords_z,
-                    potentials,
-                });
-            }
+            snapshots.push(CorticalAreaFireSnapshot {
+                cortical_index: CorticalEngineIndex::quant_from_usize(area),
+                coords_x,
+                coords_y,
+                coords_z,
+                potentials,
+            });
         }
 
         snapshots

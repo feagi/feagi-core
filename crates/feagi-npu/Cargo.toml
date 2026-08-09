@@ -38,6 +38,7 @@ editable = [
 
 std = [
     "alloc",
+    "parking_lot",
     "serde/std", "serde_json/std", "ahash/std"
 ]
 
@@ -58,6 +59,8 @@ feagi-genomic-context = {path = "../feagi-genomic-context"}
 paste = { workspace = true}
 half = {workspace = true}
 ahash = { workspace = true}
+# Runtime taps only; std-gated along with the `runtime_taps` module.
+parking_lot = { version = "0.12", optional = true }
 serde = { workspace = true, optional = true}
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}

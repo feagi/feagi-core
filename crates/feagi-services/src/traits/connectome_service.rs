@@ -373,7 +373,7 @@ pub trait ConnectomeService: Send + Sync {
     #[cfg(feature = "connectome-io")]
     async fn export_connectome(
         &self,
-    ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot>;
+    ) -> ServiceResult<ConnectomeSnapshot>;
 
     /// Import a connectome snapshot
     ///
@@ -391,6 +391,6 @@ pub trait ConnectomeService: Send + Sync {
     #[cfg(feature = "connectome-io")]
     async fn import_connectome(
         &self,
-        snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+        snapshot: ConnectomeSnapshot,
     ) -> ServiceResult<()>;
 }

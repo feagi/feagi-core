@@ -13,10 +13,24 @@ use std::collections::HashMap;
 
 use crate::types::{BduError, BduResult, Position};
 
-// Import core types from feagi_data_structures
-pub use feagi_genome_definitions::{
-    CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalID,
-};
+// Core types, re-homed after `feagi-genome-definitions` was split up: the cortical type and ID
+// moved to feagi-genomic-context, the area struct to feagi-genomic-data, and the dimension type
+// became the genomic-quantized voxel dimensions in feagi-data.
+pub use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic as CorticalAreaDimensions;
+pub use feagi_genomic_context::cortical_area::{CoreCorticalType, CorticalID};
+pub use feagi_genomic_data::cortical_area_prev::CorticalArea;
+
+/// Voxel extents of an area as plain integers.
+///
+/// Dimensions are quantized index wrappers rather than bare fields, so the axes are read through
+/// the generated accessors and unwrapped once here instead of at every call site.
+fn dimension_extents(area: &CorticalArea) -> (u64, u64, u64) {
+    (
+        *area.dimensions.get_x().as_ref(),
+        *area.dimensions.get_y().as_ref(),
+        *area.dimensions.get_z().as_ref(),
+    )
+}
 
 /// Extension trait providing business logic methods for CorticalArea
 pub trait CorticalAreaExt {
@@ -161,33 +175,31 @@ impl CorticalAreaExt for CorticalArea {
 
     fn contains_position(&self, pos: (i32, i32, i32)) -> bool {
         let (x, y, z) = pos;
-        let ox = self.position.x;
-        let oy = self.position.y;
-        let oz = self.position.z;
+        let ox = self.position.x();
+        let oy = self.position.y();
+        let oz = self.position.z();
+        let (dx, dy, dz) = dimension_extents(self);
 
         x >= ox
             && y >= oy
             && z >= oz
-            && x < ox + self.dimensions.width as i32
-            && y < oy + self.dimensions.height as i32
-            && z < oz + self.dimensions.depth as i32
+            && x < ox + dx as i32
+            && y < oy + dy as i32
+            && z < oz + dz as i32
     }
 
     fn to_relative_position(&self, pos: (i32, i32, i32)) -> BduResult<Position> {
         if !self.contains_position(pos) {
+            let (dx, dy, dz) = dimension_extents(self);
             return Err(BduError::OutOfBounds {
                 pos: (pos.0 as u32, pos.1 as u32, pos.2 as u32),
-                dims: (
-                    self.dimensions.width as usize,
-                    self.dimensions.height as usize,
-                    self.dimensions.depth as usize,
-                ),
+                dims: (dx as usize, dy as usize, dz as usize),
             });
         }
 
-        let ox = self.position.x;
-        let oy = self.position.y;
-        let oz = self.position.z;
+        let ox = self.position.x();
+        let oy = self.position.y();
+        let oz = self.position.z();
         Ok((
             (pos.0 - ox) as u32,
             (pos.1 - oy) as u32,
@@ -196,20 +208,19 @@ impl CorticalAreaExt for CorticalArea {
     }
 
     fn to_absolute_position(&self, rel_pos: Position) -> BduResult<(i32, i32, i32)> {
-        if !self.dimensions.contains(rel_pos) {
+        let (dx, dy, dz) = dimension_extents(self);
+        let within_bounds =
+            (rel_pos.0 as u64) < dx && (rel_pos.1 as u64) < dy && (rel_pos.2 as u64) < dz;
+        if !within_bounds {
             return Err(BduError::OutOfBounds {
                 pos: rel_pos,
-                dims: (
-                    self.dimensions.width as usize,
-                    self.dimensions.height as usize,
-                    self.dimensions.depth as usize,
-                ),
+                dims: (dx as usize, dy as usize, dz as usize),
             });
         }
 
-        let ox = self.position.x;
-        let oy = self.position.y;
-        let oz = self.position.z;
+        let ox = self.position.x();
+        let oy = self.position.y();
+        let oz = self.position.z();
         Ok((
             ox + rel_pos.0 as i32,
             oy + rel_pos.1 as i32,
