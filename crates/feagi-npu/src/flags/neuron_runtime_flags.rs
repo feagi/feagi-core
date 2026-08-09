@@ -8,10 +8,10 @@
 
 /// Describes various genome level flags for a neuron, as well as if a neuron is actively firing
 /// as a result of dynamics
-/// bit 0 - IsFiring -> Is the neuron currently firing as a result of dynamics>
-/// bits 1-5 - Unused
-/// bit 6 - force fire -> neuron is forced to fire unless force off is enabled. Neuron Dynamics still runs!
-/// bit 7 - force off -> neuron is forced to not fire regardless of anything else. Neuron Dynamics still runs!
+/// bit 0 - force off -> neuron is forced to not fire regardless of anything else. Neuron Dynamics still runs!
+/// bit 1 - force fire -> neuron is forced to fire unless force off is enabled. Neuron Dynamics still runs!
+/// bits 2-6 - Unused
+/// bit 7 - IsFiring -> Is the neuron currently firing as a result of dynamics?
 #[derive(Clone, Copy)]
 pub struct NeuronRuntimeFlags(u8);
 
@@ -36,15 +36,22 @@ impl NeuronRuntimeFlags {
     }
     
     pub fn set_force_off(&mut self, value: bool) {
-        todo!()
+        self.set_bit(Self::BITMASK_NEURON_FORCE_OFF, value);
     }
 
     pub fn set_force_fire(&mut self, value: bool) {
-        todo!()
+        self.set_bit(Self::BITMASK_FORCE_FIRE, value);
     }
-    
+
     pub fn set_firing(&mut self, firing: bool) {
-        todo!()
+        self.set_bit(Self::BITMASK_FIRING, firing);
+    }
+
+    /// Branchless bit assignment. The burst kernel calls this once per neuron per burst, so it
+    /// sits on the hot path.
+    #[inline(always)]
+    fn set_bit(&mut self, bitmask: u8, value: bool) {
+        self.0 = (self.0 & !bitmask) | (bitmask * value as u8);
     }
 
     pub fn new(force_off: bool, force_fire: bool) -> NeuronRuntimeFlags {

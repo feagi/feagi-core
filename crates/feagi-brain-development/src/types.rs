@@ -60,36 +60,16 @@ pub enum BduError {
     RegionIoPolicyViolation(String),
 }
 
-// Convert from feagi_npu_neural::types::FeagiError
-impl From<feagi_npu_neural::types::FeagiError> for BduError {
-    fn from(err: feagi_npu_neural::types::FeagiError) -> Self {
-        match &err {
-            feagi_npu_neural::types::FeagiError::InvalidArea(msg) => {
-                BduError::InvalidArea(msg.clone())
-            }
-            feagi_npu_neural::types::FeagiError::InvalidRegion(msg) => {
-                BduError::InvalidArea(msg.clone())
-            }
-            _ => BduError::Internal(err.to_string()),
-        }
-    }
-}
-
-// Convert from feagi_structures::FeagiDataError
-impl From<feagi_structures::FeagiDataError> for BduError {
-    fn from(err: feagi_structures::FeagiDataError) -> Self {
-        BduError::Internal(err.to_string())
-    }
-}
-
 // Convert from feagi_evolutionary::EvoError
 impl From<feagi_evolutionary::EvoError> for BduError {
     fn from(err: feagi_evolutionary::EvoError) -> Self {
         match &err {
-            feagi_evolutionary::EvoError::InvalidGenome(msg) => {
-                BduError::InvalidGenome(msg.clone())
+            feagi_evolutionary::EvoError::InvalidGenome(_) => {
+                BduError::InvalidGenome(err.message().to_string())
             }
-            feagi_evolutionary::EvoError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
+            feagi_evolutionary::EvoError::InvalidArea(_) => {
+                BduError::InvalidArea(err.message().to_string())
+            }
             _ => BduError::Internal(err.to_string()),
         }
     }

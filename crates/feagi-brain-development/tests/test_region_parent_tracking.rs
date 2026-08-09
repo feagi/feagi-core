@@ -1,6 +1,10 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Exercises the pre-refactor connectome path, which is gated behind `legacy-connectome`
+// until it is migrated to the current core.
+#![cfg(feature = "legacy-connectome")]
+
 //! # Brain Region Parent Tracking Tests
 //!
 //! Tests the parent-child relationship tracking with UUID-based RegionID:

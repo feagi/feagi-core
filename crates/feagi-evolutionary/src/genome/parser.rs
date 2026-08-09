@@ -44,7 +44,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
-use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateGenomic, NeuronVoxelDimensionsGenomic};
+use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDimensionsGenomic};
+use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use crate::types::{EvoError, EvoResult};
 use feagi_genomic_context::brain_region::RegionID;
 use feagi_genomic_context::cortical_area::CorticalID;
@@ -429,11 +430,13 @@ impl GenomeParser {
                         coords.len()
                     )));
                 }
-                NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(coords[0].try_into().unwrap(), coords[1].try_into().unwrap(), coords[2].try_into().unwrap())
+                // Genome space is signed: areas are placed around an origin, so negative axes
+                // are ordinary and must survive the conversion intact.
+                GenomeCoordinate3D::new(coords[0], coords[1], coords[2])
             } else {
                 // Default to origin if not specified
                 warn!(target: "feagi-evo","Cortical area {} missing relative_coordinate, defaulting to (0,0,0)", cortical_id_str);
-                NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0.try_into().unwrap(), 0.try_into().unwrap(), 0.try_into().unwrap())
+                GenomeCoordinate3D::origin()
             };
 
             // Determine cortical_area type from cortical_id

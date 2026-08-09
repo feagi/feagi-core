@@ -11,11 +11,11 @@ Moved from feagi-core/crates/feagi-bdu/src/models/cortical_area.rs
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinateGenomic, NeuronVoxelDimensions, NeuronVoxelDimensionsGenomic};
+use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelDimensions, NeuronVoxelDimensionsGenomic};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
-use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
 use feagi_genomic_context::cortical_area::{CorticalAreaType, CorticalID};
+use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 
 /// Cortical area metadata (genome representation)
 ///
@@ -38,7 +38,7 @@ pub struct CorticalArea {
     pub dimensions: NeuronVoxelDimensionsGenomic,
 
     /// 3D position in genome space
-    pub position: NeuronVoxelCoordinateGenomic,
+    pub position: GenomeCoordinate3D,
 
     /// Cortical area type (encoding method and functional classification)
     pub cortical_type: CorticalAreaType,
@@ -70,7 +70,7 @@ impl CorticalArea {
         cortical_idx: u32,
         name: String,
         dimensions: NeuronVoxelDimensionsGenomic,
-        position: NeuronVoxelCoordinateGenomic,
+        position: GenomeCoordinate3D,
         cortical_type: CorticalAreaType,
     ) -> Result<Self, ()> {
         // Validate name

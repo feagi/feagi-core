@@ -219,9 +219,9 @@ fn convert_area_to_flat(
     );
 
     // Position (relative_coordinate) - always write from struct
-    flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), json!(area.position.get_x().deref()));
-    flat_blueprint.insert(format!("{}-cx-rcordy-i", prefix), json!(area.position.get_y().deref()));
-    flat_blueprint.insert(format!("{}-cx-rcordz-i", prefix), json!(area.position.get_z().deref()));
+    flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), json!(area.position.x()));
+    flat_blueprint.insert(format!("{}-cx-rcordy-i", prefix), json!(area.position.y()));
+    flat_blueprint.insert(format!("{}-cx-rcordz-i", prefix), json!(area.position.z()));
 
     // Name - always write from struct (unless overridden in properties)
     if !area.properties.contains_key("cortical_name") {

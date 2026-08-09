@@ -21,7 +21,8 @@ use crate::{
 use feagi_genomic_context::cortical_area::CoreCorticalType;
 use serde_json::Value;
 use std::collections::HashMap;
-use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinateGenomic, NeuronVoxelDimensionsGenomic};
+use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
+use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 /// Embedded essential genome (loaded at compile time)
@@ -75,7 +76,7 @@ pub fn create_death_area() -> CorticalArea {
         0, // cortical_idx = 0 (reserved)
         "Death".to_string(),
         NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
-        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
+        GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _death area");
@@ -99,7 +100,7 @@ pub fn create_power_area() -> CorticalArea {
         1, // cortical_idx = 1 (reserved)
         "Brain_Power".to_string(),
         NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
-        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
+        GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _power area");
@@ -126,7 +127,7 @@ pub fn create_fatigue_area() -> CorticalArea {
         2, // cortical_idx = 2 (reserved)
         "Fatigue".to_string(),
         NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
-        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
+        GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _fatigue area");
@@ -150,7 +151,7 @@ pub fn create_pain_area() -> CorticalArea {
         3, // cortical_idx = 3 (reserved)
         "Pain".to_string(),
         NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
-        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
+        GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _pain area");
@@ -174,7 +175,7 @@ pub fn create_pleasure_area() -> CorticalArea {
         4, // cortical_idx = 4 (reserved)
         "Pleasure".to_string(),
         NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
-        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
+        GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _pleasure area");
@@ -198,7 +199,7 @@ pub fn create_fear_area() -> CorticalArea {
         5, // cortical_idx = 5 (reserved)
         "Fear".to_string(),
         NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
-        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
+        GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _fear area");
@@ -222,7 +223,7 @@ pub fn create_hope_area() -> CorticalArea {
         6, // cortical_idx = 6 (reserved)
         "Hope".to_string(),
         NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
-        NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0, 0, 20),
+        GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
     .expect("Failed to create _hope area");

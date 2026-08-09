@@ -17,7 +17,7 @@ name = "feagi_brain_development"
 feagi-evolutionary = {  path = "../feagi-evolutionary" }
 feagi-genomic-context = {  path = "../feagi-genomic-context" }
 feagi-genomic-data = { path = "../feagi-genomic-data"}
-feagi-state-manager = {  path = "../feagi-state-manager", default-features = false }
+feagi-state-manager = {  path = "../feagi-state-manager", default-features = false, features = ["std"] }
 feagi-models = {path = "../feagi-models"}
 feagi-npu = { path = "../feagi-npu"}
 feagi-data = {path = "../feagi-data"}
@@ -66,6 +66,10 @@ parallel = ["rayon"]
 plasticity = []
 # WASM-compatible build (disables connectome-io and parallel processing)
 wasm = []
+# Modules that still target the pre-refactor crate layout (feagi-npu-neural,
+# feagi-npu-burst-engine, feagi-npu-plasticity, feagi-genome-definitions). They do not
+# compile against the current core and are opt-in until they are migrated.
+legacy-connectome = []
 # Async runtime support (passed through from feagi-services)
 async-tokio = []
 

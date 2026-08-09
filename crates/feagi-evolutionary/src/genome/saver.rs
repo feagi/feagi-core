@@ -14,7 +14,8 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use feagi_genomic_context::brain_region::BrainRegion;
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_genomic_data::cortical_area_prev::CorticalArea;
+use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
+        use feagi_genomic_data::cortical_area_prev::CorticalArea;
 use crate::types::{EvoError, EvoResult};
 
 /// Genome saver
@@ -67,7 +68,7 @@ impl GenomeSaver {
             );
             area_data.insert(
                 "relative_coordinate".to_string(),
-                json!([area.position.get_x().deref(), area.position.get_y().deref(), area.position.get_z().deref()]),
+                json!([area.position.x(), area.position.y(), area.position.z()]),
             );
 
             // Area type (from properties)
@@ -142,7 +143,7 @@ impl GenomeSaver {
 
 #[cfg(test)]
 mod tests {
-    use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinateGenomic, NeuronVoxelDimensionsGenomic};
+    use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
     use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
     use super::*;
     use feagi_genomic_context::brain_region::{RegionID, RegionType};
@@ -161,7 +162,7 @@ mod tests {
             0,
             "Test Area".to_string(),
             NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(10, 10, 10),
-            NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(0,0,0),
+            GenomeCoordinate3D::new(0,0,0),
             CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
@@ -207,7 +208,7 @@ mod tests {
             0,
             "Test Area".to_string(),
             NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(10, 10, 10),
-            NeuronVoxelCoordinateGenomic::new_from_usizes_unchecked(5,5,5),
+            GenomeCoordinate3D::new(5,5,5),
             CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
