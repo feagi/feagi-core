@@ -347,25 +347,6 @@ impl GenomeServiceImpl {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::normalize_quantization_precision;
-
-    #[test]
-    fn normalize_quantization_precision_handles_aliases() {
-        assert_eq!(normalize_quantization_precision("fp32"), "fp32");
-        assert_eq!(normalize_quantization_precision("F32"), "fp32");
-        assert_eq!(normalize_quantization_precision("int8"), "int8");
-        assert_eq!(normalize_quantization_precision("i8"), "int8");
-        assert_eq!(normalize_quantization_precision("fp16"), "fp16");
-    }
-
-    #[test]
-    fn normalize_quantization_precision_marks_unknown_values() {
-        assert_eq!(normalize_quantization_precision("weird"), "unknown");
-    }
-}
-
 #[async_trait]
 impl GenomeService for GenomeServiceImpl {
     async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
@@ -4571,5 +4552,24 @@ impl GenomeServiceImpl {
                     }
                 }),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_quantization_precision;
+
+    #[test]
+    fn normalize_quantization_precision_handles_aliases() {
+        assert_eq!(normalize_quantization_precision("fp32"), "fp32");
+        assert_eq!(normalize_quantization_precision("F32"), "fp32");
+        assert_eq!(normalize_quantization_precision("int8"), "int8");
+        assert_eq!(normalize_quantization_precision("i8"), "int8");
+        assert_eq!(normalize_quantization_precision("fp16"), "fp16");
+    }
+
+    #[test]
+    fn normalize_quantization_precision_marks_unknown_values() {
+        assert_eq!(normalize_quantization_precision("weird"), "unknown");
     }
 }
