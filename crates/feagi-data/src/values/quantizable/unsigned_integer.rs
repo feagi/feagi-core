@@ -551,7 +551,7 @@ impl UnsignedIntegerEnum {
 }
 
 /// Shared behaviour implemented by every strongly-typed wrapper for a uint
-pub trait WrappedQuantizedUnsignedInteger:
+pub trait WrappedQuantizedUnsignedInteger<Quant: QuantizedUnsignedIntegerTrait>:
     Copy
     + Clone
     + Send
@@ -573,17 +573,15 @@ pub trait WrappedQuantizedUnsignedInteger:
     + core::ops::MulAssign
     + core::ops::DivAssign
     + core::ops::RemAssign
-    + From<Self::Quant>
-    + AsRef<Self::Quant>
-    + AsMut<Self::Quant>
+    + From<Quant>
+    + AsRef<Quant>
+    + AsMut<Quant>
     + Sized
     + 'static
 {
-    /// The underlying quantized index / count value this wrapper stores.
-    type Quant: QuantizedUnsignedIntegerTrait;
 
     /// The quantization level of the underlying value.
-    const LEVEL: UnsignedIntegerQuantizationLevel = <Self::Quant as QuantizedUnsignedIntegerTrait>::LEVEL;
+    const LEVEL: UnsignedIntegerQuantizationLevel = Quant::LEVEL;
 
     /// Zero, expressed in the wrapper's own type.
     const QUANT_ZERO: Self;
@@ -596,28 +594,28 @@ pub trait WrappedQuantizedUnsignedInteger:
     const QUANT_MAX_U16: Self;
     const QUANT_MAX_U32: Self;
     const QUANT_MAX_U64: Self;
-    const QUANT_MAX_USIZE: usize = <Self::Quant as QuantizedUnsignedIntegerTrait>::QUANT_MAX_USIZE;
+    const QUANT_MAX_USIZE: usize = Quant::QUANT_MAX_USIZE;
 
-    const QUANT_CLAMPED_U8: u8 = <Self::Quant as QuantizedUnsignedIntegerTrait>::QUANT_CLAMPED_U8;
-    const QUANT_CLAMPED_U16: u16 = <Self::Quant as QuantizedUnsignedIntegerTrait>::QUANT_CLAMPED_U16;
-    const QUANT_CLAMPED_U32: u32 = <Self::Quant as QuantizedUnsignedIntegerTrait>::QUANT_CLAMPED_U32;
-    const QUANT_CLAMPED_U64: u64 = <Self::Quant as QuantizedUnsignedIntegerTrait>::QUANT_CLAMPED_U64;
-    const QUANT_CLAMPED_USIZE: usize = <Self::Quant as QuantizedUnsignedIntegerTrait>::QUANT_CLAMPED_USIZE;
+    const QUANT_CLAMPED_U8: u8 = Quant::QUANT_CLAMPED_U8;
+    const QUANT_CLAMPED_U16: u16 = Quant::QUANT_CLAMPED_U16;
+    const QUANT_CLAMPED_U32: u32 = Quant::QUANT_CLAMPED_U32;
+    const QUANT_CLAMPED_U64: u64 = Quant::QUANT_CLAMPED_U64;
+    const QUANT_CLAMPED_USIZE: usize = Quant::QUANT_CLAMPED_USIZE;
 
     /// Wraps a raw quantized value into this wrapper type.
-    fn new(value: Self::Quant) -> Self;
+    fn new(value: Quant) -> Self;
 
     /// Extracts the inner quantized index / count.
-    fn deref(self) -> Self::Quant;
+    fn deref(self) -> Quant;
 
     /// Tries to convert from usize, does NOT check bounds!
     fn quant_from_usize_unchecked(value: usize) -> Self {
-        Self::new(Self::Quant::quant_from_usize_unchecked(value))
+        Self::new(Quant::quant_from_usize_unchecked(value))
     }
 
     /// Tries converting from usize, returns an error if out of bounds
     fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
-        Ok(Self::new(Self::Quant::quant_try_from_usize(value)?))
+        Ok(Self::new(Quant::quant_try_from_usize(value)?))
     }
 
     /// Converts to usize. No need to check as we have no indexes that will exceed a usize on a
@@ -648,17 +646,17 @@ pub trait WrappedQuantizedUnsignedInteger:
 
     /// Creates from an index of another quantization. Does not check for validity of ranges!
     fn from_quantization_unchecked<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
-        Self::new(Self::Quant::from_quantization_unchecked(value))
+        Self::new(Quant::from_quantization_unchecked(value))
     }
 
     /// Creates from an index of another quantization, clamping its values to ensure it fits
     fn from_quantization_clamped<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
-        Self::new(Self::Quant::from_quantization_clamped(value))
+        Self::new(Quant::from_quantization_clamped(value))
     }
 
     /// Tries to create an index of another quantization, returns an error if it would break the bounds
     fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
-        Ok(Self::new(Self::Quant::try_from_quantization(value)?))
+        Ok(Self::new(Quant::try_from_quantization(value)?))
     }
 
     /// Converts to an index of another quantization. Does not check for validity of ranges!
@@ -694,18 +692,18 @@ pub trait WrappedQuantizedUnsignedInteger:
 //region Wrappers
 
 /// Denotes the wrapped uint as data (IE not for indexing)
-pub trait WrappedQuantizedUnsignedIntegerData: WrappedQuantizedUnsignedInteger {}
+pub trait WrappedQuantizedUnsignedIntegerData<Quant: QuantizedUnsignedIntegerTrait>: WrappedQuantizedUnsignedInteger<Quant> {}
 
 /// Denotes the wrapped uint as an index
-pub trait WrappedQuantizedUnsignedIntegerIndex: WrappedQuantizedUnsignedInteger {
+pub trait WrappedQuantizedUnsignedIntegerIndex<Quant: QuantizedUnsignedIntegerTrait>: WrappedQuantizedUnsignedInteger<Quant> {
     // NOTE: To avoid circular dependency coupling, this should have nothing dependent on count
 }
 
 /// Denotes the wrapped uint as a count / size of something. Also needs a definition of an index.
-pub trait WrappedQuantizedUnsignedIntegerCount: WrappedQuantizedUnsignedInteger {
+pub trait WrappedQuantizedUnsignedIntegerCount<Quant: QuantizedUnsignedIntegerTrait>: WrappedQuantizedUnsignedInteger<Quant> {
 
     /// The Index type corresponding to this count type
-    type Index: WrappedQuantizedUnsignedIntegerIndex;
+    type Index: WrappedQuantizedUnsignedIntegerIndex<Quant>;
 
     /// Returns true if the index can fit in this count (less than)
     fn can_contain_index(&self, index: &Self::Index) -> bool {
@@ -885,7 +883,7 @@ macro_rules! _create_wrapped_quantized_unsigned_integer {
             }
         }
 
-                impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> Default for $struct_name<Q> {
+        impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> Default for $struct_name<Q> {
             fn default() -> Self {
                 Self(Q::default())
             }
@@ -1024,7 +1022,9 @@ macro_rules! create_wrapped_quantized_unsigned_integer_data {
             $vis $struct_name,
         );
 
-        impl<Q: $crate::values::quantizable::WrappedQuantizedUnsignedIntegerData> for  $struct_name<Q> {}
+        impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
+        $crate::values::quantizable::WrappedQuantizedUnsignedIntegerData<Q>
+        for  $struct_name<Q> {}
     };
 }
 
@@ -1040,9 +1040,9 @@ macro_rules! create_wrapped_quantized_unsigned_integer_index {
             $vis $struct_index_name,
         );
 
-        impl<Q: $crate::values::quantizable::WrappedQuantizedUnsignedIntegerIndex> for  $struct_index_name<Q> {
-            type Count: $struct_count_name<Q>;
-        }
+        impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
+        $crate::values::quantizable::WrappedQuantizedUnsignedIntegerIndex<Q>
+        for  $struct_index_name<Q> {}
     };
 }
 
@@ -1059,7 +1059,9 @@ macro_rules! create_wrapped_quantized_unsigned_integer_count {
             $vis $struct_count_name,
         );
 
-        impl<Q: $crate::values::quantizable::WrappedQuantizedUnsignedIntegerCount> for  $struct_count_name<Q> {
+        impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
+        $crate::values::quantizable::WrappedQuantizedUnsignedIntegerCount<Q>
+        for  $struct_count_name<Q> {
             type Index: $struct_index_name<Q>;
         }
     };

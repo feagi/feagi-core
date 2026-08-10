@@ -1,10 +1,5 @@
 use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
-
-#[derive(FeagiErrorKey)]
-/// Attempted to interface with spatial data but used out of range or incorrect quantization
-pub struct FeagiFailInvalidSpatialQuantization {
-    context: &'static str,
-}
+use crate::values::quantizable::FeagiDataValueQuantizationError;
 
 #[derive(FeagiErrorKey)]
 /// Attempted to index using a coordinate but it was not in the given dimensions
@@ -27,12 +22,11 @@ pub struct FeagiFailSpatialQuantizationOutOfRange {
 generate_feagi_error! {
     FeagiDataValuesSpatialError,
     keys: {
-        InvalidSpatialQuantization: FeagiFailInvalidSpatialQuantization,
         InvalidSpatialIndex: FeagiFailInvalidSpatialIndex,
         DimensionsCannotBeZero: FeagiFailDimensionsCannotBeZero,
         SpatialQuantizationOutOfRange: FeagiFailSpatialQuantizationOutOfRange,
     },
     sub_errors: {
-
+        InvalidSpatialQuantization: FeagiDataValueQuantizationError
     },
 }
