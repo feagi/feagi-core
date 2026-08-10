@@ -1,13 +1,23 @@
-use crate::values::quantizable::{QuantizedUnsignedIntegerTrait, UnsignedIntegerQuantizationLevel};
+use crate::values::quantizable::{
+    FeagiDataValueQuantizationError, QuantizedUnsignedIntegerTrait, UnsignedIntegerQuantizationLevel,
+};
+
+macro_rules! spatial_getters_setters {
+    (
+        $struct_name:ident $enum_name:ident
+        $( ($spatial_struct_name:ident, $spatial_enum_name:ident) ),+ $(,)?
+    ) => {
+    };
+}
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct UnsignedIntegerCoordinate<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>
+pub struct UnsignedIntegerSpatial<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>
 {
     data: [Q; NUM_DIMS],
 }
 
 
-impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> UnsignedIntegerCoordinate<Q, NUM_DIMS>
+impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> UnsignedIntegerSpatial<Q, NUM_DIMS>
 {
     /// Create self from a correctly sized array in const context
     pub fn new_from_array_const(array: [Q; NUM_DIMS]) -> Self {
@@ -24,48 +34,121 @@ impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> UnsignedIntegerCoo
 
     /// Create self from a correctly sized usize array. Does NOT validate
     /// valid quantization bounds!
-    pub fn new_from_usize_array_unchecked(usize_array: [usize; NUM_DIMS]) -> Self<Q, NUM_DIMS> {
+    pub fn new_from_usize_array_unchecked(usize_array: [usize; NUM_DIMS]) -> Self {
         let mut data = [Q::QUANT_ZERO; NUM_DIMS];
-        data.iter_mut().zip(usize_array.iter()).for_each(
-            |q, u|
-                *q = Q::quant_from_usize_unchecked(u)
-        );
-        Self {
-            data
+        data.iter_mut()
+            .zip(usize_array.iter())
+            .for_each(|(q, u)| *q = Q::quant_from_usize_unchecked(*u));
+        Self { data }
+    }
+
+    /// Create self from a correctly sized usize array, returning an error if any axis value does
+    /// not fit in the current quantization.
+    pub fn new_from_usize_array(usize_array: [usize; NUM_DIMS]) -> Result<Self, FeagiDataValueQuantizationError> {
+        let mut data = [Q::QUANT_ZERO; NUM_DIMS];
+        for (q, &u) in data.iter_mut().zip(usize_array.iter()) {
+            *q = Q::quant_try_from_usize(u)?;
         }
+        Ok(Self { data })
     }
 
     /// Create self from a correctly sized array of some other quant. Does NOT validate
     /// valid quantization bounds!
-    pub fn new_from_quant_unchecked<FromQuant: QuantizedUnsignedIntegerTrait>(value_array: Self<FromQuant, NUM_DIMS>) -> Self<Q, NUM_DIMS> {
+    pub fn new_from_quant_unchecked<FromQuant: QuantizedUnsignedIntegerTrait>(
+        value_array: UnsignedIntegerSpatial<FromQuant, NUM_DIMS>,
+    ) -> Self {
         let mut data = [Q::QUANT_ZERO; NUM_DIMS];
-        data.iter_mut().zip(value_array.iter()).for_each(
-            |q, v|
-                *q = Q::from_quantization_unchecked(v)
-        );
-        Self {
-            data
-        }
+        data.iter_mut()
+            .zip(value_array.as_slice().iter())
+            .for_each(|(q, &v)| *q = Q::from_quantization_unchecked(v));
+        Self { data }
     }
 
-    // TODO try, bounded, enum, from quant
+    /// Create self from a correctly sized array of some other quant, returning an error if any
+    /// axis value does not fit in the current quantization.
+    pub fn new_from_quant<FromQuant: QuantizedUnsignedIntegerTrait>(
+        value_array: UnsignedIntegerSpatial<FromQuant, NUM_DIMS>,
+    ) -> Result<Self, FeagiDataValueQuantizationError> {
+        let mut data = [Q::QUANT_ZERO; NUM_DIMS];
+        for (q, &v) in data.iter_mut().zip(value_array.as_slice().iter()) {
+            *q = Q::try_from_quantization(v)?;
+        }
+        Ok(Self { data })
+    }
 
-    pub fn to_quantization_unchecked<ToQuant: QuantizedUnsignedIntegerTrait>(self) -> Self<ToQuant, NUM_DIMS>
-    {
+    /// Create self from a correctly sized array of some other quant, clamping each axis value to
+    /// fit in the current quantization.
+    pub fn new_from_quant_clamped<FromQuant: QuantizedUnsignedIntegerTrait>(
+        value_array: UnsignedIntegerSpatial<FromQuant, NUM_DIMS>,
+    ) -> Self {
+        let mut data = [Q::QUANT_ZERO; NUM_DIMS];
+        data.iter_mut()
+            .zip(value_array.as_slice().iter())
+            .for_each(|(q, &v)| *q = Q::from_quantization_clamped(v));
+        Self { data }
+    }
+
+    /// Converts this coordinate from its current quantization to another quantization without
+    /// checking if valid.
+    pub fn to_quantization_unchecked<ToQuant: QuantizedUnsignedIntegerTrait>(
+        self,
+    ) -> UnsignedIntegerSpatial<ToQuant, NUM_DIMS> {
         let mut out = [ToQuant::QUANT_ZERO; NUM_DIMS];
         out.iter_mut()
             .zip(self.data.iter())
-            .for_each(|(o, s)| *o = ToQuant::from_quantization_unchecked(s));
-        Self { data: out }
+            .for_each(|(o, &s)| *o = ToQuant::from_quantization_unchecked(s));
+        UnsignedIntegerSpatial { data: out }
+    }
+
+    /// Tries to convert this coordinate from its current quantization to another quantization,
+    /// returning an error if any axis value does not fit.
+    pub fn try_to_quantization<ToQuant: QuantizedUnsignedIntegerTrait>(
+        self,
+    ) -> Result<UnsignedIntegerSpatial<ToQuant, NUM_DIMS>, FeagiDataValueQuantizationError> {
+        let mut out = [ToQuant::QUANT_ZERO; NUM_DIMS];
+        for (o, &s) in out.iter_mut().zip(self.data.iter()) {
+            *o = s.try_to_quantization()?;
+        }
+        Ok(UnsignedIntegerSpatial { data: out })
+    }
+
+    /// Converts this coordinate from its current quantization to another quantization, clamping
+    /// each axis value to fit.
+    pub fn to_quantization_clamped<ToQuant: QuantizedUnsignedIntegerTrait>(
+        self,
+    ) -> UnsignedIntegerSpatial<ToQuant, NUM_DIMS> {
+        let mut out = [ToQuant::QUANT_ZERO; NUM_DIMS];
+        out.iter_mut()
+            .zip(self.data.iter())
+            .for_each(|(o, &s)| *o = s.to_quantization_clamped());
+        UnsignedIntegerSpatial { data: out }
+    }
+
+    /// Clamps each axis value for another quantization, but does not change the quantization
+    /// itself.
+    pub fn clamp_for_quantization<ClampFor: QuantizedUnsignedIntegerTrait>(self) -> Self {
+        let mut data = self.data;
+        data.iter_mut()
+            .for_each(|q| *q = q.clamp_for_quantization::<ClampFor>());
+        Self { data }
+    }
+
+    /// Clamps each axis value for a runtime-provided quantization level, but does not change the
+    /// quantization itself.
+    pub fn clamp_for_quantization_level_runtime(self, level: UnsignedIntegerQuantizationLevel) -> Self {
+        let mut data = self.data;
+        data.iter_mut()
+            .for_each(|q| *q = q.clamp_for_quantization_level_runtime(level));
+        Self { data }
     }
 
     /// Output to an `UnsignedIntegerCoordinateEnum` to abstract away quantization
-    pub fn to_enum(self) -> UnsignedIntegerCoordinateEnum<NUM_DIMS> {
+    pub fn to_enum(self) -> UnsignedIntegerSpatialEnum<NUM_DIMS> {
         match Q::LEVEL {
-            UnsignedIntegerQuantizationLevel::U8 => {UnsignedIntegerCoordinateEnum::U8(self)}
-            UnsignedIntegerQuantizationLevel::U16 => {UnsignedIntegerCoordinateEnum::U16(self)}
-            UnsignedIntegerQuantizationLevel::U32 => {UnsignedIntegerCoordinateEnum::U32(self)}
-            UnsignedIntegerQuantizationLevel::U64 => {UnsignedIntegerCoordinateEnum::U64(self)}
+            UnsignedIntegerQuantizationLevel::U8 => { UnsignedIntegerSpatialEnum::U8(self)}
+            UnsignedIntegerQuantizationLevel::U16 => { UnsignedIntegerSpatialEnum::U16(self)}
+            UnsignedIntegerQuantizationLevel::U32 => { UnsignedIntegerSpatialEnum::U32(self)}
+            UnsignedIntegerQuantizationLevel::U64 => { UnsignedIntegerSpatialEnum::U64(self)}
         }
     }
 
@@ -75,33 +158,75 @@ impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> UnsignedIntegerCoo
     }
 }
 
-/// Stores `UnsignedIntegerCoordinate` as an enum to erase the generic type and to make transport
+/// Stores `UnsignedIntegerSpatial` as an enum to erase the generic type and to make transport
 /// easier.
 ///
 /// NOTE that due to how enums work in Rust, memory allocation will always be at u64 quant
 /// levels!
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum UnsignedIntegerCoordinateEnum<const NUM_DIMS: usize>
+pub enum UnsignedIntegerSpatialEnum<const NUM_DIMS: usize>
 {
-    U8(UnsignedIntegerCoordinate<u8, NUM_DIMS>),
-    U16(UnsignedIntegerCoordinate<u16, NUM_DIMS>),
-    U32(UnsignedIntegerCoordinate<u32, NUM_DIMS>),
-    U64(UnsignedIntegerCoordinate<u64, NUM_DIMS>),
+    U8(UnsignedIntegerSpatial<u8, NUM_DIMS>),
+    U16(UnsignedIntegerSpatial<u16, NUM_DIMS>),
+    U32(UnsignedIntegerSpatial<u32, NUM_DIMS>),
+    U64(UnsignedIntegerSpatial<u64, NUM_DIMS>),
 }
 
-impl<const NUM_DIMS: usize> UnsignedIntegerCoordinateEnum<NUM_DIMS> {
+impl<const NUM_DIMS: usize> UnsignedIntegerSpatialEnum<NUM_DIMS> {
 
-    /// Get what level fo quantization is contained
+    /// Get what level of quantization is contained
     pub fn get_level(&self) -> UnsignedIntegerQuantizationLevel {
         match self {
-            UnsignedIntegerCoordinateEnum::U8(_) => UnsignedIntegerQuantizationLevel::U8,
-            UnsignedIntegerCoordinateEnum::U16(_) => UnsignedIntegerQuantizationLevel::U16,
-            UnsignedIntegerCoordinateEnum::U32(_) => UnsignedIntegerQuantizationLevel::U32,
-            UnsignedIntegerCoordinateEnum::U64(_) => UnsignedIntegerQuantizationLevel::U64,
+            UnsignedIntegerSpatialEnum::U8(_) => UnsignedIntegerQuantizationLevel::U8,
+            UnsignedIntegerSpatialEnum::U16(_) => UnsignedIntegerQuantizationLevel::U16,
+            UnsignedIntegerSpatialEnum::U32(_) => UnsignedIntegerQuantizationLevel::U32,
+            UnsignedIntegerSpatialEnum::U64(_) => UnsignedIntegerQuantizationLevel::U64,
+        }
+    }
+
+    /// Tries to convert to a coordinate of another quantization, returning an error if any axis
+    /// value does not fit.
+    pub fn try_into_quant<Quant: QuantizedUnsignedIntegerTrait>(
+        self,
+    ) -> Result<UnsignedIntegerSpatial<Quant, NUM_DIMS>, FeagiDataValueQuantizationError> {
+        match self {
+            Self::U8(value) => value.try_to_quantization(),
+            Self::U16(value) => value.try_to_quantization(),
+            Self::U32(value) => value.try_to_quantization(),
+            Self::U64(value) => value.try_to_quantization(),
+        }
+    }
+
+    /// Converts to a coordinate of another quantization without checking if valid.
+    pub fn into_quant<Quant: QuantizedUnsignedIntegerTrait>(
+        self,
+    ) -> UnsignedIntegerSpatial<Quant, NUM_DIMS> {
+        match self {
+            Self::U8(value) => value.to_quantization_unchecked(),
+            Self::U16(value) => value.to_quantization_unchecked(),
+            Self::U32(value) => value.to_quantization_unchecked(),
+            Self::U64(value) => value.to_quantization_unchecked(),
+        }
+    }
+
+    /// Converts to a coordinate of another quantization, clamping each axis value to fit.
+    pub fn into_quantization_clamped<Quant: QuantizedUnsignedIntegerTrait>(
+        self,
+    ) -> UnsignedIntegerSpatial<Quant, NUM_DIMS> {
+        match self {
+            Self::U8(value) => value.to_quantization_clamped(),
+            Self::U16(value) => value.to_quantization_clamped(),
+            Self::U32(value) => value.to_quantization_clamped(),
+            Self::U64(value) => value.to_quantization_clamped(),
         }
     }
 
 }
+
+
+
+
+
 
 
 /*

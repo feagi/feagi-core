@@ -1,3 +1,3 @@
 pub mod feagi_data_values_spatial_error;
 pub mod integer_signed;
-pub mod quantizable_index;
+pub mod unsigned_integer;

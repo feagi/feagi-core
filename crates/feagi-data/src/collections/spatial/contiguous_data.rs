@@ -1,4 +1,4 @@
-use crate::values::spatial::quantizable_index::{
+use crate::values::spatial::unsigned_integer::{
     QuantizedIndexCoord2D, QuantizedIndexCoord3D, QuantizedIndexCoord4D, QuantizedIndexDimension2D, QuantizedIndexDimension3D,
     QuantizedIndexDimension4D,
 };

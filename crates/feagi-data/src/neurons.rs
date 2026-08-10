@@ -1,7 +1,7 @@
 use crate::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateAxis, NeuronVoxelDimensions};
 use crate::values::quantizable::QuantizedIndexCountTrait;
 use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
-use crate::values::spatial::quantizable_index::{QuantizedIndexCoord4D, QuantizedIndexDimension4D};
+use crate::values::spatial::unsigned_integer::{QuantizedIndexCoord4D, QuantizedIndexDimension4D};
 use crate::{
     create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate,
     create_wrapped_quantized_index_dimension,

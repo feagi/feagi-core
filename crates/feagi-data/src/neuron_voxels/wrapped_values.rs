@@ -1,5 +1,5 @@
 use crate::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use crate::values::spatial::quantizable_index::{QuantizedIndexCoord3D, QuantizedIndexDimension3D};
+use crate::values::spatial::unsigned_integer::{QuantizedIndexCoord3D, QuantizedIndexDimension3D};
 use crate::{
     create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate,
     create_wrapped_quantized_index_dimension,
