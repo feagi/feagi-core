@@ -81,8 +81,8 @@ pub use storage::{GenomeStorage, StorageError};
 pub use templates::{
     add_core_morphologies, create_death_area, create_fatigue_area, create_fear_area, create_genome_with_core_areas,
     create_genome_with_core_morphologies, create_hope_area, create_minimal_genome, create_pain_area, create_pleasure_area, create_power_area,
-    ensure_core_components, get_default_neural_properties, load_barebones_genome, load_essential_genome, load_test_genome, load_vision_genome,
-    BAREBONES_GENOME_JSON, ESSENTIAL_GENOME_JSON, TEST_GENOME_JSON, VISION_GENOME_JSON,
+    ensure_core_components, ensure_root_brain_region, get_default_neural_properties, load_barebones_genome, load_essential_genome, load_test_genome,
+    load_vision_genome, BAREBONES_GENOME_JSON, ESSENTIAL_GENOME_JSON, SYNTHESIZED_ROOT_REGION_NAME, TEST_GENOME_JSON, VISION_GENOME_JSON,
 };
 pub use types::{EvoError, EvoResult};
 pub use validator::{validate_genome, ValidationResult};

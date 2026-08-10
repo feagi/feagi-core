@@ -16,11 +16,12 @@ Licensed under the Apache License, Version 2.0
 
 use crate::{GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig, RuntimeGenome};
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
-use feagi_genomic_context::cortical_area::CoreCorticalType;
+use feagi_genomic_context::brain_region::{BrainRegion, RegionID, RegionType};
+use feagi_genomic_context::cortical_area::{CoreCorticalType, CorticalID};
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Embedded essential genome (loaded at compile time)
 pub const ESSENTIAL_GENOME_JSON: &str = include_str!("../genomes/essential_genome.json");
@@ -401,6 +402,99 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
     }
 
     (areas_added, morphologies_added)
+}
+
+/// Name given to a root region created here because the genome document declared none.
+///
+/// Matches the name the pre-refactor development path used, so a genome that was saved with an
+/// auto-created root before this change still resolves to the same region rather than gaining a
+/// second one.
+pub const SYNTHESIZED_ROOT_REGION_NAME: &str = "Root Brain Region";
+
+/// Property under which a region records its parent, spelled as the genome document spells it.
+const PARENT_REGION_ID_KEY: &str = "parent_region_id";
+
+/// CRITICAL: Ensure a genome describes a brain region hierarchy with one reachable root
+///
+/// Every consumer of the hierarchy - the brain visualizer, the region endpoints, the health
+/// check's `brain_regions_root` - locates the root as the region that names no parent and walks
+/// downward from there. A genome document is not required to carry a `brain_regions` section at
+/// all (no v2 genome does, including the barebones and essential templates), so without this the
+/// hierarchy is empty, no cortical area can be placed in a region, and the visualizer cannot
+/// build its cache.
+///
+/// When no root is declared, one is created holding every cortical area no other region claims,
+/// and regions whose declared parent is absent from the genome are attached to it so the whole
+/// hierarchy stays reachable from the root.
+///
+/// # Arguments
+/// * `genome` - The genome to normalize; `metadata.brain_regions_root` is stamped with the result
+///
+/// # Returns
+/// A tuple of (root region ID, whether the root was created here rather than declared)
+pub fn ensure_root_brain_region(genome: &mut RuntimeGenome) -> (String, bool) {
+    if let Some(root_region_id) = declared_root_region_id(genome) {
+        genome.metadata.brain_regions_root = Some(root_region_id.clone());
+        return (root_region_id, false);
+    }
+
+    let declared_region_ids: HashSet<String> = genome.brain_regions.keys().cloned().collect();
+    let claimed_areas: HashSet<CorticalID> = genome
+        .brain_regions
+        .values()
+        .flat_map(|region| region.cortical_areas.iter().copied())
+        .collect();
+
+    let root_region_id = RegionID::new();
+    let root_region_id_str = root_region_id.to_string();
+    let root_region = BrainRegion::new(root_region_id, SYNTHESIZED_ROOT_REGION_NAME.to_string(), RegionType::Undefined)
+        .expect("the root region name is a non-empty constant")
+        .with_areas(genome.cortical_areas.keys().copied().filter(|area_id| !claimed_areas.contains(area_id)));
+    let root_area_count = root_region.cortical_areas.len();
+
+    // No region is parentless here, or the branch above would have returned, so every region left
+    // names a parent. One naming a parent this genome does not contain is unreachable from the
+    // root, and the hierarchy is only ever traversed downward from the root.
+    let mut reparented_regions = 0;
+    for region in genome.brain_regions.values_mut() {
+        let parent_is_present = region
+            .properties
+            .get(PARENT_REGION_ID_KEY)
+            .and_then(|parent_id| parent_id.as_str())
+            .is_some_and(|parent_id| declared_region_ids.contains(parent_id));
+        if parent_is_present {
+            continue;
+        }
+        region.add_property(PARENT_REGION_ID_KEY.to_string(), Value::String(root_region_id_str.clone()));
+        reparented_regions += 1;
+    }
+
+    genome.brain_regions.insert(root_region_id_str.clone(), root_region);
+    genome.metadata.brain_regions_root = Some(root_region_id_str.clone());
+
+    tracing::info!(
+        target: "feagi-evo",
+        "Genome declared no root brain region; created '{}' ({}) holding {} unclaimed cortical area(s), {} region(s) reparented under it",
+        SYNTHESIZED_ROOT_REGION_NAME,
+        root_region_id_str,
+        root_area_count,
+        reparented_regions
+    );
+
+    (root_region_id_str, true)
+}
+
+/// The ID of the region the genome declares as its root: the one that names no parent.
+///
+/// A genome with more than one parentless region is malformed, but reading it must still be
+/// repeatable, so the lowest ID wins rather than whichever the map happens to yield first.
+fn declared_root_region_id(genome: &RuntimeGenome) -> Option<String> {
+    genome
+        .brain_regions
+        .iter()
+        .filter(|(_, region)| !matches!(region.properties.get(PARENT_REGION_ID_KEY), Some(parent_id) if !parent_id.is_null()))
+        .map(|(region_id, _)| region_id.clone())
+        .min()
 }
 
 /// Add core morphologies to a registry
@@ -901,6 +995,93 @@ mod tests {
         assert!(genome.morphologies.contains("first_to_last"));
         assert!(genome.morphologies.contains("episodic_memory"));
         assert!(genome.morphologies.contains("lateral_+x"));
+    }
+
+    /// Builds a region that names `parent` as its parent, or none when `parent` is `None`.
+    fn region_with_parent(name: &str, parent: Option<&str>) -> (String, BrainRegion) {
+        let region_id = RegionID::new();
+        let mut region = BrainRegion::new(region_id, name.to_string(), RegionType::Undefined).expect("region name is non-empty");
+        if let Some(parent) = parent {
+            region.add_property(PARENT_REGION_ID_KEY.to_string(), Value::String(parent.to_string()));
+        }
+        (region_id.to_string(), region)
+    }
+
+    #[test]
+    fn test_ensure_root_brain_region_creates_root_holding_every_area() {
+        // A genome document is allowed to carry no regions at all; the areas still have to be
+        // placed somewhere or no reader can resolve them.
+        let mut genome = create_genome_with_core_areas("test".to_string(), "Test".to_string());
+        assert!(genome.brain_regions.is_empty());
+
+        let (root_region_id, root_was_created) = ensure_root_brain_region(&mut genome);
+
+        assert!(root_was_created);
+        assert_eq!(genome.brain_regions.len(), 1);
+        assert_eq!(genome.metadata.brain_regions_root.as_deref(), Some(root_region_id.as_str()));
+
+        let root = genome.brain_regions.get(&root_region_id).expect("root region is in the genome");
+        assert_eq!(root.name, SYNTHESIZED_ROOT_REGION_NAME);
+        assert!(root.properties.get(PARENT_REGION_ID_KEY).is_none());
+        assert_eq!(root.cortical_areas.len(), genome.cortical_areas.len());
+        for area_id in genome.cortical_areas.keys() {
+            assert!(root.contains_area(area_id), "core area {area_id} should be placed in the root region");
+        }
+    }
+
+    #[test]
+    fn test_ensure_root_brain_region_keeps_declared_root() {
+        // A genome that declares its hierarchy must be published as written.
+        let mut genome = create_genome_with_core_areas("test".to_string(), "Test".to_string());
+        let (declared_root_id, declared_root) = region_with_parent("Declared Root", None);
+        let (child_id, child) = region_with_parent("Child", Some(&declared_root_id));
+        genome.brain_regions.insert(declared_root_id.clone(), declared_root);
+        genome.brain_regions.insert(child_id.clone(), child);
+
+        let (root_region_id, root_was_created) = ensure_root_brain_region(&mut genome);
+
+        assert!(!root_was_created);
+        assert_eq!(root_region_id, declared_root_id);
+        assert_eq!(genome.brain_regions.len(), 2);
+        assert_eq!(genome.metadata.brain_regions_root.as_deref(), Some(declared_root_id.as_str()));
+        assert_eq!(
+            genome.brain_regions[&child_id].properties[PARENT_REGION_ID_KEY],
+            Value::String(declared_root_id)
+        );
+    }
+
+    #[test]
+    fn test_ensure_root_brain_region_claims_only_unclaimed_areas() {
+        let mut genome = create_genome_with_core_areas("test".to_string(), "Test".to_string());
+        let claimed_area = *genome.cortical_areas.keys().next().expect("genome has core areas");
+        let (orphan_id, orphan) = region_with_parent("Orphan", Some("a-region-this-genome-does-not-have"));
+        genome.brain_regions.insert(orphan_id.clone(), orphan.with_areas([claimed_area]));
+
+        let (root_region_id, root_was_created) = ensure_root_brain_region(&mut genome);
+
+        assert!(root_was_created);
+        let root = &genome.brain_regions[&root_region_id];
+        assert!(!root.contains_area(&claimed_area), "an area another region claims must not be duplicated");
+        assert_eq!(root.cortical_areas.len(), genome.cortical_areas.len() - 1);
+
+        // A region pointing at a parent outside the genome would be unreachable from the root.
+        assert_eq!(
+            genome.brain_regions[&orphan_id].properties[PARENT_REGION_ID_KEY],
+            Value::String(root_region_id)
+        );
+    }
+
+    #[test]
+    fn test_ensure_root_brain_region_idempotent() {
+        let mut genome = create_genome_with_core_areas("test".to_string(), "Test".to_string());
+
+        let (first_root_id, first_was_created) = ensure_root_brain_region(&mut genome);
+        let (second_root_id, second_was_created) = ensure_root_brain_region(&mut genome);
+
+        assert!(first_was_created);
+        assert!(!second_was_created, "a second pass must not add another root");
+        assert_eq!(first_root_id, second_root_id);
+        assert_eq!(genome.brain_regions.len(), 1);
     }
 
     #[test]

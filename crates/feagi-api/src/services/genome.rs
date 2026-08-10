@@ -58,6 +58,18 @@ pub fn realise_genome_json(json: &str, genome_handle: &SharedGenome, npu: &dyn N
         tracing::info!(target: "feagi-api", "Added {} missing core morphologies during genome load", morphologies_added);
     }
 
+    // Runs after the core areas are in place so they are placed in the hierarchy too. A genome
+    // document need not declare any region, and readers of the hierarchy have no way to place a
+    // cortical area without a root, so the root is settled before the genome is published.
+    let (root_region_id, root_was_created) = feagi_evolutionary::ensure_root_brain_region(&mut genome);
+    if root_was_created {
+        tracing::info!(
+            target: "feagi-api",
+            "Genome declared no root brain region; created {} during load",
+            root_region_id
+        );
+    }
+
     let (requests, report) = develop_connectome_requests(&genome).map_err(|e| ServiceError::Backend(format!("Corticogenesis failed: {}", e)))?;
 
     npu.submit_connectome_requests(requests);

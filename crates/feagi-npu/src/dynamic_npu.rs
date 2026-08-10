@@ -65,7 +65,7 @@ impl DynamicNPU {
                 match mapping_writer {
                     CorticalMappingEntryWriterByModelQuant::Uniform(quant) => {
                         match quant {
-                            UniformWriter::Standard(writer) => {
+                            UniformWriter::Standard { .. } => {
                                 //self.rayon_burst_engine.add_mapping_entry();
                             }
                         }
