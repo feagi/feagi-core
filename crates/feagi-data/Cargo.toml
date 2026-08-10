@@ -53,5 +53,10 @@ serde = { workspace = true, optional = true}
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 
+[dev-dependencies]
+# The wrapper generating macros expand to `::paste::paste!` in the caller, so integration tests
+# that invoke them need paste in their own scope.
+paste = { workspace = true }
+
 [lints]
 workspace = true

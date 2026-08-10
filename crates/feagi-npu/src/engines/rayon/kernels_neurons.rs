@@ -1,7 +1,7 @@
 use crate::engines::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
 use crate::engines::rayon::data::RayonEngineData;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
+use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedIndex};
 use feagi_models::cortical_area::neuron::layout_specific_implementations::dimensional::DimensionalNeuronModel;
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
 use feagi_models::cortical_area::neuron_model_implementations::generated_enums::NeuronModelTypeAndQuantizationPacked;

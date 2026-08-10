@@ -4,19 +4,19 @@
 pub trait QuantizedIndexSpatialEnum:
     Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
-    type Shape<Q: crate::values::quantizable::QuantizedIndexCountTrait>;
+    type Shape<Q: crate::values::quantizable::QuantizedUnsignedIntegerTrait>;
 
-    fn get_level(&self) -> crate::values::quantizable::IndexCountQuantizationLevel;
+    fn get_level(&self) -> crate::values::quantizable::UnsignedIntegerQuantizationLevel;
 
-    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedIndexCountTrait>(value: Self::Shape<FromQ>) -> Self;
+    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedUnsignedIntegerTrait>(value: Self::Shape<FromQ>) -> Self;
 
-    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Self::Shape<NewQ>;
+    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Self::Shape<NewQ>;
 
-    fn try_into_quantization<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(
+    fn try_into_quantization<NewQ: crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
         self,
     ) -> Result<Self::Shape<NewQ>, crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError>;
 
-    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Self::Shape<NewQ>;
+    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Self::Shape<NewQ>;
 }
 
 /// Shared behavior for enums that hide the quantization generic of wrapped spatial index
@@ -24,19 +24,19 @@ pub trait QuantizedIndexSpatialEnum:
 pub trait WrappedQuantizedIndexSpatialEnum:
     Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
-    type WrappedShape<Q: crate::values::quantizable::QuantizedIndexCountTrait>;
+    type WrappedShape<Q: crate::values::quantizable::QuantizedUnsignedIntegerTrait>;
 
-    fn get_level(&self) -> crate::values::quantizable::IndexCountQuantizationLevel;
+    fn get_level(&self) -> crate::values::quantizable::UnsignedIntegerQuantizationLevel;
 
-    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedIndexCountTrait>(value: Self::WrappedShape<FromQ>) -> Self;
+    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedUnsignedIntegerTrait>(value: Self::WrappedShape<FromQ>) -> Self;
 
-    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Self::WrappedShape<NewQ>;
+    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Self::WrappedShape<NewQ>;
 
-    fn try_into_quantization<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(
+    fn try_into_quantization<NewQ: crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
         self,
     ) -> Result<Self::WrappedShape<NewQ>, crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError>;
 
-    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Self::WrappedShape<NewQ>;
+    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Self::WrappedShape<NewQ>;
 }
 
 macro_rules! create_coordinate {
@@ -49,12 +49,12 @@ macro_rules! create_coordinate {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[derive(serde::Serialize, serde::Deserialize)]
-        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
+        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> {
             pub(crate) inner: [Q; $num_dimensions],
         }
 
         ::paste::paste! {
-            impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> $struct_name<Q> {
+            impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> $struct_name<Q> {
                 pub fn new( $( $field: Q ),+ ) -> Self {
                     $struct_name {
                         inner: [ $( $field ),+ ]
@@ -74,12 +74,12 @@ macro_rules! create_coordinate {
                 }
 
                 /// Converts this coordinate from its current quantization to another quantization (without checking if valid)
-                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $struct_name<NewQ> {
+                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> $struct_name<NewQ> {
                     $struct_name::new($( self.inner[$index].to_quantization() ),+)
                 }
 
                 /// Tries to convert this coordinate from its current quantization to another quantization, returning an error if any axis value does not fit
-                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     Ok($struct_name::new(
                         $(
                             self.inner[$index].try_to_quantization().map_err(|_| $crate::values::spatial::feagi_data_values_spatial_error::FeagiFailSpatialQuantizationOutOfRange::new("A coordinate axis value does not fit in the target quantization").into() )?
@@ -88,7 +88,7 @@ macro_rules! create_coordinate {
                 }
 
                 /// Converts this coordinate from its current quantization to another quantization, clamping each axis value to fit
-                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $struct_name<NewQ> {
+                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> $struct_name<NewQ> {
                     $struct_name::new($( self.inner[$index].to_quantization_clamped() ),+)
                 }
 
@@ -113,25 +113,25 @@ macro_rules! create_coordinate {
             }
 
             impl [<$struct_name Enum>] {
-                pub fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     value: $struct_name<FromQ>
                 ) -> Self {
                     <Self as $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum>::new_from_quantized(value)
                 }
 
-                pub fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $struct_name<NewQ> {
                     <Self as $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum>::into_quantization_unchecked(self)
                 }
 
-                pub fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     <Self as $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum>::try_into_quantization(self)
                 }
 
-                pub fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $struct_name<NewQ> {
                     <Self as $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum>::into_quantization_clamped(self)
@@ -139,38 +139,38 @@ macro_rules! create_coordinate {
             }
 
             impl $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum for [<$struct_name Enum>] {
-                type Shape<Q: $crate::values::quantizable::QuantizedIndexCountTrait> = $struct_name<Q>;
+                type Shape<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $struct_name<Q>;
 
-                fn get_level(&self) -> $crate::values::quantizable::IndexCountQuantizationLevel {
+                fn get_level(&self) -> $crate::values::quantizable::UnsignedIntegerQuantizationLevel {
                     match self {
-                        Self::U8(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U8,
-                        Self::U16(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U16,
-                        Self::U32(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U32,
-                        Self::U64(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U64,
+                        Self::U8(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8,
+                        Self::U16(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16,
+                        Self::U32(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U32,
+                        Self::U64(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64,
                     }
                 }
 
-                fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     value: $struct_name<FromQ>
                 ) -> Self {
                     match FromQ::LEVEL {
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U8 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8 => {
                             Self::U8(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U16 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16 => {
                             Self::U16(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U32 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U32 => {
                             Self::U32(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U64
-                        | $crate::values::quantizable::IndexCountQuantizationLevel::Usize => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64
+                        | $crate::values::quantizable::UnsignedIntegerQuantizationLevel::Usize => {
                             Self::U64(value.to_quantization_unchecked())
                         }
                     }
                 }
 
-                fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $struct_name<NewQ> {
                     match self {
@@ -181,7 +181,7 @@ macro_rules! create_coordinate {
                     }
                 }
 
-                fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     match self {
@@ -192,7 +192,7 @@ macro_rules! create_coordinate {
                     }
                 }
 
-                fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $struct_name<NewQ> {
                     match self {
@@ -218,12 +218,12 @@ macro_rules! create_dimension {
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[derive(serde::Serialize, serde::Deserialize)]
-        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
+        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> {
             pub(crate) inner: [Q; $num_dimensions],
         }
 
         ::paste::paste! {
-            impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> $struct_name<Q> {
+            impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> $struct_name<Q> {
                 pub fn try_new( $( $field: Q ),+ ) -> Result<Self, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     $(
                     if $field == Q::QUANT_ZERO {
@@ -256,12 +256,12 @@ macro_rules! create_dimension {
                 }
 
                 /// Converts this dimension from its current quantization to another quantization (without checking if valid)
-                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $struct_name<NewQ> {
+                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> $struct_name<NewQ> {
                     $struct_name::new_unchecked($( self.inner[$index].to_quantization() ),+)
                 }
 
                 /// Tries to convert this dimension from its current quantization to another quantization, returning an error if any axis value does not fit
-                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     Ok($struct_name::new_unchecked(
                         $(
                             self.inner[$index].try_to_quantization().map_err(|_| $crate::values::spatial::feagi_data_values_spatial_error::FeagiFailSpatialQuantizationOutOfRange::new("A dimension axis value does not fit in the target quantization").into() )?
@@ -270,7 +270,7 @@ macro_rules! create_dimension {
                 }
 
                 /// Converts this dimension from its current quantization to another quantization, clamping each axis value to fit
-                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $struct_name<NewQ> {
+                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> $struct_name<NewQ> {
                     $struct_name::new_unchecked($( self.inner[$index].to_quantization_clamped() ),+)
                 }
 
@@ -370,13 +370,13 @@ macro_rules! create_dimension {
             }
 
             #[doc = concat!("Iterator over every coordinate contained within a [`", stringify!($struct_name), "`], incrementing along the first axis (x) fastest.")]
-            $vis struct [<$struct_name CoordinateIter>]<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
+            $vis struct [<$struct_name CoordinateIter>]<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> {
                 dimensions: [Q; $num_dimensions],
                 current: [Q; $num_dimensions],
                 remaining: usize,
             }
 
-            impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> Iterator for [<$struct_name CoordinateIter>]<Q> {
+            impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> Iterator for [<$struct_name CoordinateIter>]<Q> {
                 type Item = $coord_impl<Q>;
 
                 fn next(&mut self) -> Option<Self::Item> {
@@ -403,7 +403,7 @@ macro_rules! create_dimension {
                 }
             }
 
-            impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> ExactSizeIterator for [<$struct_name CoordinateIter>]<Q> {}
+            impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> ExactSizeIterator for [<$struct_name CoordinateIter>]<Q> {}
 
             #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
             $vis enum [<$struct_name Enum>] {
@@ -414,25 +414,25 @@ macro_rules! create_dimension {
             }
 
             impl [<$struct_name Enum>] {
-                pub fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     value: $struct_name<FromQ>
                 ) -> Self {
                     <Self as $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum>::new_from_quantized(value)
                 }
 
-                pub fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $struct_name<NewQ> {
                     <Self as $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum>::into_quantization_unchecked(self)
                 }
 
-                pub fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     <Self as $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum>::try_into_quantization(self)
                 }
 
-                pub fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $struct_name<NewQ> {
                     <Self as $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum>::into_quantization_clamped(self)
@@ -440,38 +440,38 @@ macro_rules! create_dimension {
             }
 
             impl $crate::values::spatial::quantizable_index::QuantizedIndexSpatialEnum for [<$struct_name Enum>] {
-                type Shape<Q: $crate::values::quantizable::QuantizedIndexCountTrait> = $struct_name<Q>;
+                type Shape<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $struct_name<Q>;
 
-                fn get_level(&self) -> $crate::values::quantizable::IndexCountQuantizationLevel {
+                fn get_level(&self) -> $crate::values::quantizable::UnsignedIntegerQuantizationLevel {
                     match self {
-                        Self::U8(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U8,
-                        Self::U16(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U16,
-                        Self::U32(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U32,
-                        Self::U64(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U64,
+                        Self::U8(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8,
+                        Self::U16(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16,
+                        Self::U32(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U32,
+                        Self::U64(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64,
                     }
                 }
 
-                fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     value: $struct_name<FromQ>
                 ) -> Self {
                     match FromQ::LEVEL {
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U8 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8 => {
                             Self::U8(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U16 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16 => {
                             Self::U16(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U32 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U32 => {
                             Self::U32(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U64
-                        | $crate::values::quantizable::IndexCountQuantizationLevel::Usize => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64
+                        | $crate::values::quantizable::UnsignedIntegerQuantizationLevel::Usize => {
                             Self::U64(value.to_quantization_unchecked())
                         }
                     }
                 }
 
-                fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $struct_name<NewQ> {
                     match self {
@@ -482,7 +482,7 @@ macro_rules! create_dimension {
                     }
                 }
 
-                fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     match self {
@@ -493,7 +493,7 @@ macro_rules! create_dimension {
                     }
                 }
 
-                fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $struct_name<NewQ> {
                     match self {
@@ -523,10 +523,10 @@ macro_rules! create_wrapped_quantized_index_coordinate {
             serialize = "Q: serde::Serialize",
             deserialize = "Q: serde::Deserialize<'de>"
         ))]
-        $vis struct $wrapper_struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait>($quant_index_coord_to_wrap<Q>);
+        $vis struct $wrapper_struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>($quant_index_coord_to_wrap<Q>);
 
         ::paste::paste! {
-            impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> $wrapper_struct_name<Q> {
+            impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> $wrapper_struct_name<Q> {
                 pub fn new( $( $field_name: $field_wrapped_quant_index<Q> ),+ ) -> Self {
                     $wrapper_struct_name (
                         $quant_index_coord_to_wrap::new(
@@ -550,17 +550,17 @@ macro_rules! create_wrapped_quantized_index_coordinate {
                 }
 
                 /// Converts this coordinate from its current quantization to another quantization (without checking if valid)
-                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $wrapper_struct_name<NewQ> {
+                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> $wrapper_struct_name<NewQ> {
                     $wrapper_struct_name(self.0.to_quantization_unchecked())
                 }
 
                 /// Tries to convert this coordinate from its current quantization to another quantization, returning an error if any axis value does not fit
-                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     Ok($wrapper_struct_name(self.0.try_to_quantization()?))
                 }
 
                 /// Converts this coordinate from its current quantization to another quantization, clamping each axis value to fit
-                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $wrapper_struct_name<NewQ> {
+                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> $wrapper_struct_name<NewQ> {
                     $wrapper_struct_name(self.0.to_quantization_clamped())
                 }
 
@@ -585,25 +585,25 @@ macro_rules! create_wrapped_quantized_index_coordinate {
             }
 
             impl [<$wrapper_struct_name Enum>] {
-                pub fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     value: $wrapper_struct_name<FromQ>
                 ) -> Self {
                     <Self as $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum>::new_from_quantized(value)
                 }
 
-                pub fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $wrapper_struct_name<NewQ> {
                     <Self as $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum>::into_quantization_unchecked(self)
                 }
 
-                pub fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     <Self as $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum>::try_into_quantization(self)
                 }
 
-                pub fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $wrapper_struct_name<NewQ> {
                     <Self as $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum>::into_quantization_clamped(self)
@@ -611,38 +611,38 @@ macro_rules! create_wrapped_quantized_index_coordinate {
             }
 
             impl $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum for [<$wrapper_struct_name Enum>] {
-                type WrappedShape<Q: $crate::values::quantizable::QuantizedIndexCountTrait> = $wrapper_struct_name<Q>;
+                type WrappedShape<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $wrapper_struct_name<Q>;
 
-                fn get_level(&self) -> $crate::values::quantizable::IndexCountQuantizationLevel {
+                fn get_level(&self) -> $crate::values::quantizable::UnsignedIntegerQuantizationLevel {
                     match self {
-                        Self::U8(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U8,
-                        Self::U16(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U16,
-                        Self::U32(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U32,
-                        Self::U64(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U64,
+                        Self::U8(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8,
+                        Self::U16(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16,
+                        Self::U32(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U32,
+                        Self::U64(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64,
                     }
                 }
 
-                fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     value: $wrapper_struct_name<FromQ>
                 ) -> Self {
                     match FromQ::LEVEL {
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U8 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8 => {
                             Self::U8(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U16 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16 => {
                             Self::U16(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U32 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U32 => {
                             Self::U32(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U64
-                        | $crate::values::quantizable::IndexCountQuantizationLevel::Usize => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64
+                        | $crate::values::quantizable::UnsignedIntegerQuantizationLevel::Usize => {
                             Self::U64(value.to_quantization_unchecked())
                         }
                     }
                 }
 
-                fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $wrapper_struct_name<NewQ> {
                     match self {
@@ -653,7 +653,7 @@ macro_rules! create_wrapped_quantized_index_coordinate {
                     }
                 }
 
-                fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     match self {
@@ -664,7 +664,7 @@ macro_rules! create_wrapped_quantized_index_coordinate {
                     }
                 }
 
-                fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $wrapper_struct_name<NewQ> {
                     match self {
@@ -696,10 +696,10 @@ macro_rules! create_wrapped_quantized_index_dimension {
             serialize = "Q: serde::Serialize",
             deserialize = "Q: serde::Deserialize<'de>"
         ))]
-        $vis struct $wrapper_struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait>($quant_index_dim_to_wrap<Q>);
+        $vis struct $wrapper_struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>($quant_index_dim_to_wrap<Q>);
 
         ::paste::paste! {
-            impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> $wrapper_struct_name<Q> {
+            impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> $wrapper_struct_name<Q> {
                 pub fn try_new( $( $field_name: $field_wrapped_quant_index<Q> ),+ ) -> Result<Self, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     Ok($wrapper_struct_name(
                         $quant_index_dim_to_wrap::try_new(
@@ -733,17 +733,17 @@ macro_rules! create_wrapped_quantized_index_dimension {
                 }
 
                 /// Converts this dimension from its current quantization to another quantization (without checking if valid)
-                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $wrapper_struct_name<NewQ> {
+                pub fn to_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> $wrapper_struct_name<NewQ> {
                     $wrapper_struct_name(self.0.to_quantization_unchecked())
                 }
 
                 /// Tries to convert this dimension from its current quantization to another quantization, returning an error if any axis value does not fit
-                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     Ok($wrapper_struct_name(self.0.try_to_quantization()?))
                 }
 
                 /// Converts this dimension from its current quantization to another quantization, clamping each axis value to fit
-                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(self) -> $wrapper_struct_name<NewQ> {
+                pub fn to_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> $wrapper_struct_name<NewQ> {
                     $wrapper_struct_name(self.0.to_quantization_clamped())
                 }
 
@@ -816,25 +816,25 @@ macro_rules! create_wrapped_quantized_index_dimension {
             }
 
             impl [<$wrapper_struct_name Enum>] {
-                pub fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     value: $wrapper_struct_name<FromQ>
                 ) -> Self {
                     <Self as $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum>::new_from_quantized(value)
                 }
 
-                pub fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $wrapper_struct_name<NewQ> {
                     <Self as $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum>::into_quantization_unchecked(self)
                 }
 
-                pub fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     <Self as $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum>::try_into_quantization(self)
                 }
 
-                pub fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                pub fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $wrapper_struct_name<NewQ> {
                     <Self as $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum>::into_quantization_clamped(self)
@@ -842,38 +842,38 @@ macro_rules! create_wrapped_quantized_index_dimension {
             }
 
             impl $crate::values::spatial::quantizable_index::WrappedQuantizedIndexSpatialEnum for [<$wrapper_struct_name Enum>] {
-                type WrappedShape<Q: $crate::values::quantizable::QuantizedIndexCountTrait> = $wrapper_struct_name<Q>;
+                type WrappedShape<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $wrapper_struct_name<Q>;
 
-                fn get_level(&self) -> $crate::values::quantizable::IndexCountQuantizationLevel {
+                fn get_level(&self) -> $crate::values::quantizable::UnsignedIntegerQuantizationLevel {
                     match self {
-                        Self::U8(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U8,
-                        Self::U16(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U16,
-                        Self::U32(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U32,
-                        Self::U64(_) => $crate::values::quantizable::IndexCountQuantizationLevel::U64,
+                        Self::U8(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8,
+                        Self::U16(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16,
+                        Self::U32(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U32,
+                        Self::U64(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64,
                     }
                 }
 
-                fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn new_from_quantized<FromQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     value: $wrapper_struct_name<FromQ>
                 ) -> Self {
                     match FromQ::LEVEL {
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U8 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8 => {
                             Self::U8(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U16 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16 => {
                             Self::U16(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U32 => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U32 => {
                             Self::U32(value.to_quantization_unchecked())
                         }
-                        $crate::values::quantizable::IndexCountQuantizationLevel::U64
-                        | $crate::values::quantizable::IndexCountQuantizationLevel::Usize => {
+                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64
+                        | $crate::values::quantizable::UnsignedIntegerQuantizationLevel::Usize => {
                             Self::U64(value.to_quantization_unchecked())
                         }
                     }
                 }
 
-                fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn into_quantization_unchecked<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $wrapper_struct_name<NewQ> {
                     match self {
@@ -884,7 +884,7 @@ macro_rules! create_wrapped_quantized_index_dimension {
                     }
                 }
 
-                fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> Result<$wrapper_struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
                     match self {
@@ -895,7 +895,7 @@ macro_rules! create_wrapped_quantized_index_dimension {
                     }
                 }
 
-                fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedIndexCountTrait>(
+                fn into_quantization_clamped<NewQ: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> $wrapper_struct_name<NewQ> {
                     match self {

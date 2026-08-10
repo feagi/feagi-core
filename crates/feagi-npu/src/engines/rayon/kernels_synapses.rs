@@ -1,7 +1,7 @@
 use crate::engines::rayon::data::RayonEngineData;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedIndexCount};
+use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedIndex};
 use feagi_models::cortical_area::components::neuron_history::implementations::none::NeuronModelNoNeuronHistory;
 use feagi_models::cortical_mapping_entry::synapse::synapse_model::SynapseModel;
 use feagi_models::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;

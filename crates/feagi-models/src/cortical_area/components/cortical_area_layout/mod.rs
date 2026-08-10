@@ -2,7 +2,7 @@ use crate::cortical_area::components::cortical_area_layout::enums::{CorticalArea
 use core::hash::Hash;
 use feagi_data::neurons::NeuronCorticalLocalIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
+use feagi_data::values::quantizable::WrappedQuantizedIndex;
 
 pub mod enums;
 pub mod implementations;

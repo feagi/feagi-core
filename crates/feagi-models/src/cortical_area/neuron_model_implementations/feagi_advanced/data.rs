@@ -3,18 +3,19 @@ use crate::cortical_area::neuron::neuron_data::NeuronModelNeuronData;
 use crate::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::values::quantizable::PercentageUnsigned;
-use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
+use feagi_data::{create_wrapped_quantized_count, create_wrapped_quantized_decimal};
 
+// Limits and countdowns are all measured in bursts, so they are counts rather than indexes.
 //create_wrapped_quantized_decimal!(pub Excitation);
-create_wrapped_quantized_index!(pub RefractoryPeriodLimit);
+create_wrapped_quantized_count!(pub RefractoryPeriodLimit);
 // Fire threshold is just membrane potential
-create_wrapped_quantized_index!(pub ConsecutiveFireLimit);
-create_wrapped_quantized_index!(pub SnoozePeriod);
+create_wrapped_quantized_count!(pub ConsecutiveFireLimit);
+create_wrapped_quantized_count!(pub SnoozePeriod);
 create_wrapped_quantized_decimal!(pub DegeneracyConstant);
 
 create_wrapped_quantized_decimal!(pub LeakCoefficient);
-create_wrapped_quantized_index!(pub RefractoryCountdown);
-create_wrapped_quantized_index!(pub ConsecutiveFireCountdown);
+create_wrapped_quantized_count!(pub RefractoryCountdown);
+create_wrapped_quantized_count!(pub ConsecutiveFireCountdown);
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FeagiAdvancedModelCorticalData<NMQ>

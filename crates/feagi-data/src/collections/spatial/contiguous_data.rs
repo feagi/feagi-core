@@ -12,12 +12,12 @@ macro_rules! create_spatial_quantized_contiguous_vector {
         $num_dimensions:expr,
     ) => {
         $(#[$meta])*
-        $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy> {
+        $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedUnsignedIntegerTrait, V: Clone + Copy> {
             pub(crate) data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<QI, V>,
             pub(crate) dimensions: $dim_impl<QI>,
         }
 
-        impl<QI: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy> Clone for $struct_name<QI, V> {
+        impl<QI: $crate::values::quantizable::QuantizedUnsignedIntegerTrait, V: Clone + Copy> Clone for $struct_name<QI, V> {
             fn clone(&self) -> Self {
                 Self {
                     data: self.data.clone(),
@@ -26,7 +26,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             }
         }
 
-        impl<QI: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy> $struct_name<QI, V>
+        impl<QI: $crate::values::quantizable::QuantizedUnsignedIntegerTrait, V: Clone + Copy> $struct_name<QI, V>
         {
             /// Number of spatial axes this collection is addressed by.
             pub const NUM_DIMENSIONS: usize = $num_dimensions;
@@ -295,7 +295,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             //endregion
         }
 
-        impl<QI: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<QI: $crate::values::quantizable::QuantizedUnsignedIntegerTrait, V: Clone + Copy>
             core::ops::Index<$coord_impl<QI>> for $struct_name<QI, V>
         {
             type Output = V;
@@ -308,7 +308,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             }
         }
 
-        impl<QI: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone + Copy>
+        impl<QI: $crate::values::quantizable::QuantizedUnsignedIntegerTrait, V: Clone + Copy>
             core::ops::IndexMut<$coord_impl<QI>> for $struct_name<QI, V>
         {
             fn index_mut(&mut self, coordinate: $coord_impl<QI>) -> &mut V {

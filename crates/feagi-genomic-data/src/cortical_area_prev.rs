@@ -11,7 +11,7 @@ Moved from feagi-core/crates/feagi-bdu/src/models/cortical_area.rs
 
 use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelDimensions, NeuronVoxelDimensionsGenomic};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
-use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
+use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 use feagi_genomic_context::cortical_area::{CorticalAreaType, CorticalID};
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use serde::{Deserialize, Serialize};

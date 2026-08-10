@@ -12,7 +12,7 @@ use crate::flags::neuron_runtime_flags::NeuronRuntimeFlags;
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedIndexCountTrait};
+use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedUnsignedIntegerTrait};
 use feagi_models::cortical_area::components::cortical_area_layout::enums::CorticalAreaLayoutNested;
 use feagi_models::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use feagi_models::cortical_area::components::neuron_history::implementations::full::NeuronModelFullNeuronHistory;

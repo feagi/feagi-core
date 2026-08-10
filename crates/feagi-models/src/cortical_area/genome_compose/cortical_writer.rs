@@ -5,7 +5,7 @@ use crate::cortical_area::neuron::neuron_data::NeuronModelNeuronData;
 use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
 use crate::cortical_area::neuron::neuron_properties::NeuronProperties;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use feagi_data::values::quantizable::QuantizedIndexCountTrait;
+use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 /// Trait for writing the data of newly created cortical areas, used both by the root and model
 /// specific enums

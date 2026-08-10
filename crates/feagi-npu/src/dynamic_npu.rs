@@ -4,7 +4,7 @@ use crate::visualization::CorticalAreaFireSnapshot;
 use ahash::HashMap;
 use feagi_data::collections::BiDirectionHashmap;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
+use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedIndex};
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
 use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};

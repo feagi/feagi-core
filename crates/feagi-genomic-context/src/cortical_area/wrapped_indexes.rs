@@ -9,14 +9,14 @@ pub type CorticalChannelIndexCount = generics::CorticalChannelIndexCountQuant<St
 pub type CorticalChannelNeuronDepth = generics::CorticalChannelNeuronDepthQuant<StandardNeuronQuantization>;
 
 pub mod generics {
-    use feagi_data::create_wrapped_quantized_index;
+    use feagi_data::{create_wrapped_quantized_count, create_wrapped_quantized_index};
 
     create_wrapped_quantized_index!(
     /// Used for counting and indexing specific channels within an I/O cortical area.
     pub CorticalChannelIndexCountQuant
     );
 
-    create_wrapped_quantized_index!(
+    create_wrapped_quantized_count!(
         /// The number of neuron_collections deep of a sensor / motor channel. Generally used to define resolution
         pub CorticalChannelNeuronDepthQuant
     );
