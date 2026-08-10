@@ -284,7 +284,7 @@ impl GenomeConnectomeService {
             leak_variability: area.properties.get("leak_variability").and_then(|v| v.as_f64()).unwrap_or(0.0),
             mp_charge_accumulation,
             neuron_excitability,
-            burst_engine_active: true, // Always active in WASM
+            burst_engine_active: true, // The API is only served while the engine is present
             init_lifespan,
             lifespan_growth_rate,
             longterm_mem_threshold,

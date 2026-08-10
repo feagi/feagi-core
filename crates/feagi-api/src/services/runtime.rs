@@ -105,7 +105,7 @@ impl RuntimeService for GenomeRuntimeService {
     }
 
     async fn reset_burst_count(&self) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented("WASM mode runtime control not yet implemented".to_string()))
+        Err(ServiceError::NotImplemented("runtime control is not yet implemented".to_string()))
     }
 
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>> {
@@ -125,7 +125,7 @@ impl RuntimeService for GenomeRuntimeService {
     }
 
     async fn configure_fire_ledger_window(&self, _cortical_idx: u32, _window_size: usize) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented("WASM mode runtime control not yet implemented".to_string()))
+        Err(ServiceError::NotImplemented("runtime control is not yet implemented".to_string()))
     }
 
     async fn get_fcl_sampler_config(&self) -> ServiceResult<(f64, u32)> {
@@ -133,7 +133,7 @@ impl RuntimeService for GenomeRuntimeService {
     }
 
     async fn set_fcl_sampler_config(&self, _frequency: Option<f64>, _consumer: Option<u32>) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented("WASM mode runtime control not yet implemented".to_string()))
+        Err(ServiceError::NotImplemented("runtime control is not yet implemented".to_string()))
     }
 
     async fn get_area_fcl_sample_rate(&self, _area_id: u32) -> ServiceResult<f64> {
@@ -141,7 +141,7 @@ impl RuntimeService for GenomeRuntimeService {
     }
 
     async fn set_area_fcl_sample_rate(&self, _area_id: u32, _sample_rate: f64) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented("WASM mode runtime control not yet implemented".to_string()))
+        Err(ServiceError::NotImplemented("runtime control is not yet implemented".to_string()))
     }
 
     async fn inject_sensory_by_coordinates(
@@ -150,42 +150,36 @@ impl RuntimeService for GenomeRuntimeService {
         _xyzp_data: &[(u32, u32, u32, f32)],
         _mode: feagi_services::traits::runtime_service::ManualStimulationMode,
     ) -> ServiceResult<usize> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode sensory injection not yet implemented".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("sensory injection is not yet implemented".to_string()))
     }
 
     async fn register_motor_subscriptions(&self, _agent_id: &str, _cortical_ids: Vec<String>, _rate_hz: f64) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode motor subscription not yet implemented".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("motor subscription is not yet implemented".to_string()))
     }
 
     async fn register_visualization_subscriptions(&self, _agent_id: &str, _rate_hz: f64) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented(
-            "WASM mode visualization subscription not yet implemented".to_string(),
+            "visualization subscription is not yet implemented".to_string(),
         ))
     }
 
     fn unregister_motor_subscriptions(&self, _agent_id: &str) {
-        // No-op: WASM mode does not support agent subscriptions
+        // No-op: agent subscriptions are not supported without a running engine
     }
 
     fn unregister_visualization_subscriptions(&self, _agent_id: &str) {
-        // No-op: WASM mode does not support agent subscriptions
+        // No-op: agent subscriptions are not supported without a running engine
     }
 
     fn clear_all_motor_subscriptions(&self) {
-        // No-op: WASM mode does not support agent subscriptions
+        // No-op: agent subscriptions are not supported without a running engine
     }
 
     fn clear_all_visualization_subscriptions(&self) {
-        // No-op: WASM mode does not support agent subscriptions
+        // No-op: agent subscriptions are not supported without a running engine
     }
 
     async fn reset_cortical_area_states(&self, _cortical_indices: &[u32]) -> ServiceResult<Vec<(u32, usize)>> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode cortical_area reset not yet implemented".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("cortical area reset is not yet implemented".to_string()))
     }
 }

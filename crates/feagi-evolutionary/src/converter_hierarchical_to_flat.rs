@@ -230,10 +230,13 @@ fn convert_properties_to_flat(
     properties: &HashMap<String, Value>,
     flat_blueprint: &mut serde_json::Map<String, Value>,
 ) -> EvoResult<()> {
-    // Reverse property mapping: hierarchical_key -> (flat_suffix, scope)
-    // This MUST match converter_flat_full.rs PROPERTY_MAPPINGS exactly (reversed)
+    // Reverse property mapping: runtime_property_key -> (flat_suffix, scope)
+    // This mirrors converter_flat_full.rs PROPERTY_MAPPINGS, except where the parser gives a
+    // property a different runtime name than the genome document uses: the flat `_n_cnt-i` reads
+    // as `per_voxel_neuron_cnt` in a genome document but is held as `neurons_per_voxel` at
+    // runtime, and this map is keyed by what `area.properties` actually contains.
     let property_mapping: HashMap<&str, (&str, &str)> = [
-        ("per_voxel_neuron_cnt", ("_n_cnt-i", "cx")),
+        ("neurons_per_voxel", ("_n_cnt-i", "cx")),
         ("visualization", ("gd_vis-b", "cx")),
         ("cortical_name", ("__name-t", "cx")),
         ("synapse_attractivity", ("synatt-f", "cx")),
@@ -272,7 +275,7 @@ fn convert_properties_to_flat(
     // Define default values for ALL required properties
     // This ensures saved genomes always have complete property sets
     let required_defaults: HashMap<&str, Value> = [
-        ("per_voxel_neuron_cnt", json!(1)),
+        ("neurons_per_voxel", json!(1)),
         ("visualization", json!(true)),
         ("synapse_attractivity", json!(100.0)),
         ("postsynaptic_current", json!(1.0)),

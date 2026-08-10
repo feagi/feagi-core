@@ -35,9 +35,14 @@ pub const TEST_GENOME_JSON: &str = include_str!("../genomes/test_genome.json");
 pub const VISION_GENOME_JSON: &str = include_str!("../genomes/vision_genome.json");
 
 /// Default neural properties for all cortical_area areas
+///
+/// These populate a runtime [`CorticalArea::properties`] map, so they use the runtime property
+/// names the rest of the system reads. Where a genome file spells a property differently, the
+/// parser translates it on the way in; `per_voxel_neuron_cnt` in a genome document becomes
+/// `neurons_per_voxel` here.
 pub fn get_default_neural_properties() -> HashMap<String, Value> {
     let mut props = HashMap::new();
-    props.insert("per_voxel_neuron_cnt".to_string(), Value::from(1));
+    props.insert("neurons_per_voxel".to_string(), Value::from(1));
     props.insert("synapse_attractivity".to_string(), Value::from(100.0));
     props.insert("degeneration".to_string(), Value::from(0.0));
     props.insert("psp_uniform_distribution".to_string(), Value::from(true));

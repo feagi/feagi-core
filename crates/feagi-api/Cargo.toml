@@ -16,7 +16,8 @@ feagi-evolutionary = {  path = "../feagi-evolutionary" } # For embedded default 
 feagi-genomic-context = {  path = "../feagi-genomic-context" }
 feagi-genomic-data = {  path = "../feagi-genomic-data" }
 feagi-io = {  path = "../feagi-io", optional = true, features = ["zmq-transport", "websocket-transport-std"] } # For transport primitives and domain logic
-feagi-brain-development = {  path = "../feagi-brain-development", optional = true } # For examples
+feagi-brain-development = {  path = "../feagi-brain-development", optional = true } # Corticogenesis, for genome loading
+feagi-models = {  path = "../feagi-models", optional = true } # Connectome request vocabulary the NPU accepts
 feagi-state-manager = {  path = "../feagi-state-manager", default-features = false, optional = true }
 feagi-serialization = {  path = "../feagi-serialization" }
 feagi-agent = {  path = "../feagi-agent", optional = true, default-features = false, features = ["agent-client", "agent-client-asynchelper-tokio"] }
@@ -100,7 +101,7 @@ tokio-test = "0.4"
 [features]
 default = ["http", "services"]
 http = ["axum", "tower", "tower-http", "hyper", "http-body-util", "tokio", "utoipa-swagger-ui", "services"]
-services = ["feagi-services/std", "feagi-services/plasticity", "feagi-io", "feagi-brain-development", "feagi-state-manager/std", "feagi-agent", "feagi-npu"]
+services = ["feagi-services/std", "feagi-services/plasticity", "feagi-io", "feagi-brain-development", "feagi-models", "feagi-state-manager/std", "feagi-agent", "feagi-npu"]
 # The bundled feagi-services implementations, used by this crate's examples and contract tests.
 # Not required by the library itself, which depends only on the service traits.
 builtin-impls = ["services", "feagi-services/builtin-impls"]

@@ -27,7 +27,7 @@ pub fn create_api_state_from_genome(genome: SharedGenome, npu: OptionalNpu, vers
     let filesystem_data_root = ApiState::filesystem_data_root_from_config(std::path::Path::new(""));
     ApiState {
         network_connection_info_provider: None,
-        agent_service: None, // No agents in WASM standalone mode
+        agent_service: None, // Agent endpoints read the handler below rather than a service
         genome_service: genome_service as Arc<dyn feagi_services::traits::GenomeService + Send + Sync>,
         connectome_service: connectome_service as Arc<dyn feagi_services::traits::ConnectomeService + Send + Sync>,
         analytics_service: analytics_service as Arc<dyn feagi_services::traits::AnalyticsService + Send + Sync>,

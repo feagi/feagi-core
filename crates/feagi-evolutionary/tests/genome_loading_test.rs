@@ -8,7 +8,18 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_evolutionary::{ensure_core_components, load_genome_from_file};
+use feagi_evolutionary::{convert_hierarchical_to_flat, ensure_core_components, load_genome_from_file};
+
+/// The runtime name of the per-voxel neuron count. Genome documents spell it
+/// `per_voxel_neuron_cnt` (`_n_cnt-i` when flat) and the parser translates it to this on the way
+/// in, so everything reading a `RuntimeGenome` must agree on this spelling.
+const NEURONS_PER_VOXEL: &str = "neurons_per_voxel";
+
+fn barebones_genome_path() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("genomes")
+        .join("barebones_genome.json")
+}
 
 #[test]
 fn test_load_barebones_genome() {
@@ -61,6 +72,57 @@ fn test_load_barebones_genome() {
     println!("   - Cortical areas: {}", genome.cortical_areas.len());
     println!("   - Morphologies: {}", genome.morphologies.count());
     println!("   - Physiology timestep: {}", genome.physiology.simulation_timestep);
+}
+
+/// Areas injected by `ensure_core_components` come from templates rather than the genome
+/// document, so they bypass the parser that supplies the runtime property names. They must still
+/// arrive spelled the way every reader expects, or corticogenesis rejects them.
+#[test]
+fn injected_core_areas_carry_the_runtime_neuron_count_property() {
+    let mut genome = load_genome_from_file(barebones_genome_path()).expect("barebones genome should load");
+    let (areas_added, _) = ensure_core_components(&mut genome);
+
+    assert!(areas_added > 0, "the barebones genome should be missing at least one core area");
+
+    for area in genome.cortical_areas.values() {
+        let neurons_per_voxel = area
+            .properties
+            .get(NEURONS_PER_VOXEL)
+            .unwrap_or_else(|| panic!("cortical area '{}' is missing the '{NEURONS_PER_VOXEL}' property", area.name));
+
+        assert!(
+            neurons_per_voxel.as_u64().is_some_and(|count| count > 0),
+            "cortical area '{}' has a non-positive '{NEURONS_PER_VOXEL}': {neurons_per_voxel}",
+            area.name
+        );
+    }
+}
+
+/// Export reads the runtime property map, so a mismatch between the name written on load and the
+/// name read on save silently replaces every area's neuron count with the default.
+#[test]
+fn exporting_a_genome_preserves_the_per_voxel_neuron_count() {
+    let mut genome = load_genome_from_file(barebones_genome_path()).expect("barebones genome should load");
+
+    // A value no default could produce, so the assertion cannot pass by coincidence.
+    let distinctive_count = 7u64;
+    let (cortical_id, area) = genome.cortical_areas.iter_mut().next().expect("genome should have a cortical area");
+    area.properties
+        .insert(NEURONS_PER_VOXEL.to_string(), serde_json::json!(distinctive_count));
+    let exported_key = format!("_____10c-{}-cx-_n_cnt-i", cortical_id.as_base_64());
+
+    let flat = convert_hierarchical_to_flat(&genome).expect("genome should export to flat format");
+
+    let exported = flat
+        .get("blueprint")
+        .and_then(|blueprint| blueprint.get(&exported_key))
+        .unwrap_or_else(|| panic!("exported genome should carry '{exported_key}'"));
+
+    assert_eq!(
+        exported.as_u64(),
+        Some(distinctive_count),
+        "export should carry the area's own neuron count rather than a default"
+    );
 }
 
 #[test]

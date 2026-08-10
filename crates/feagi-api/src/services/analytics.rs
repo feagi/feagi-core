@@ -64,19 +64,15 @@ impl AnalyticsService for GenomeAnalyticsService {
     }
 
     async fn get_cortical_area_stats(&self, _cortical_id: &str) -> ServiceResult<CorticalAreaStats> {
-        Err(ServiceError::NotImplemented(
-            "Cortical area stats not yet implemented in WASM".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("cortical area stats are not yet implemented".to_string()))
     }
 
     async fn get_all_cortical_area_stats(&self) -> ServiceResult<Vec<CorticalAreaStats>> {
-        Err(ServiceError::NotImplemented(
-            "Cortical area stats not yet implemented in WASM".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("cortical area stats are not yet implemented".to_string()))
     }
 
     async fn get_connectivity_stats(&self, _source_area: &str, _target_area: &str) -> ServiceResult<ConnectivityStats> {
-        Err(ServiceError::NotImplemented("Connectivity stats not yet implemented in WASM".to_string()))
+        Err(ServiceError::NotImplemented("connectivity stats are not yet implemented".to_string()))
     }
 
     async fn get_total_neuron_count(&self) -> ServiceResult<usize> {
@@ -97,7 +93,7 @@ impl AnalyticsService for GenomeAnalyticsService {
     }
 
     async fn get_neuron_density(&self, _cortical_id: &str) -> ServiceResult<f32> {
-        Err(ServiceError::NotImplemented("Neuron density not yet implemented in WASM".to_string()))
+        Err(ServiceError::NotImplemented("neuron density is not yet implemented".to_string()))
     }
 
     async fn is_brain_initialized(&self) -> ServiceResult<bool> {

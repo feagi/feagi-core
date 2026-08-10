@@ -13,6 +13,7 @@
 //! record of what the engine can and cannot do today.
 
 use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
 
 /// A cortical area as the engine holds it.
 #[derive(Debug, Clone)]
@@ -40,6 +41,14 @@ pub trait NpuAccess: Send + Sync {
     /// Returns a human-readable message on rejection (duplicate id, zero or unrepresentable
     /// dimensions) so the service can surface it without knowing the engine's error type.
     fn add_cortical_area(&self, id: CorticalID, x: u64, y: u64, z: u64, density: u64) -> Result<NpuCorticalArea, String>;
+
+    /// Applies a batch of connectome requests, such as the sequence corticogenesis produces from a
+    /// genome.
+    ///
+    /// Submitted as one batch rather than one request at a time because the requests are ordered
+    /// by dependency: a mapping references areas created earlier in the same sequence, so a burst
+    /// must not observe the connectome midway through.
+    fn submit_connectome_requests(&self, requests: Vec<ConnectomeRequest>);
 
     /// Bursts completed since the engine started.
     fn burst_count(&self) -> u64;
