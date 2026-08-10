@@ -1,4 +1,4 @@
-use crate::engines::rayon::data::RayonEngineData;
+use crate::burst_engine::implementations::tokio_rayon::data::RayonEngineData;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedIndexCount};

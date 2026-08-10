@@ -1,14 +1,14 @@
-use crate::engines::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
-use crate::engines::rayon::data::synapse::synapse_sub_data::{
+use crate::burst_engine::implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
+use crate::burst_engine::implementations::tokio_rayon::data::synapse::synapse_sub_data::{
     CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties, SynapseMappingMPQuants,
 };
-use crate::engines::rayon::data::RayonEngineData;
-use crate::engines::rayon::kernels_neurons;
-use crate::engines::rayon::kernels_synapses;
+use crate::burst_engine::implementations::tokio_rayon::data::RayonEngineData;
+use crate::burst_engine::implementations::tokio_rayon::kernels_neurons;
+use crate::burst_engine::implementations::tokio_rayon::kernels_synapses;
 use crate::engines_common::EditableEngine::EditableEngine;
-use crate::flags::cortical_mapping_entry_runtime_flags::CorticalMappingEntryRuntimeFlags;
-use crate::flags::cortical_runtime_flags::CorticalRuntimeFlags;
-use crate::flags::neuron_runtime_flags::NeuronRuntimeFlags;
+use crate::burst_engine::common_cpu_structs::flags::cortical_mapping_entry_runtime_flags::CorticalMappingEntryRuntimeFlags;
+use crate::burst_engine::common_cpu_structs::flags::cortical_runtime_flags::CorticalRuntimeFlags;
+use crate::burst_engine::common_cpu_structs::flags::neuron_runtime_flags::NeuronRuntimeFlags;
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};

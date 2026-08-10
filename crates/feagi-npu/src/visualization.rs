@@ -17,7 +17,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantiz
 use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, NeuronEngineIndex};
 
-use crate::engines::rayon::rayon_burst_engine::RayonBurstEngine;
+use crate::burst_engine::implementations::tokio_rayon::tokio_rayon_burst_engine::RayonBurstEngine;
 
 /// The neurons that fired in one cortical area during the most recent burst.
 ///

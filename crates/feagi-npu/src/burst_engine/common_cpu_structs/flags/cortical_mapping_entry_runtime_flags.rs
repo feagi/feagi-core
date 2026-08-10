@@ -21,15 +21,15 @@ impl CorticalMappingEntryRuntimeFlags {
     }
 
     pub fn get_is_mapping_entry_disabled(&self) -> bool {
-        self.0 & Self::BITMASK_IS_MAPPING_ENTRY_DISABLED != 0
+        self.get_bit(Self::BITMASK_IS_MAPPING_ENTRY_DISABLED)
     }
 
     pub fn set_is_mapping_entry_disabled(&mut self, is_mapping_entry_disabled: bool) {
-        todo!()
+        self.set_bit(Self::BITMASK_IS_MAPPING_ENTRY_DISABLED, is_mapping_entry_disabled);
     }
 
     pub fn get_is_inhibitory(&self) -> bool {
-        self.0 & Self::BITMASK_IS_INHIBITORY != 0
+        self.get_bit(Self::BITMASK_IS_INHIBITORY)
     }
 
     /// The sign the destination accumulation applies, as a multiplier rather than a branch so the
@@ -40,5 +40,15 @@ impl CorticalMappingEntryRuntimeFlags {
         } else {
             1.0
         }
+    }
+
+    #[inline(always)]
+    fn set_bit(&mut self, bitmask: u8, value: bool) {
+        self.0 = (self.0 & !bitmask) | (bitmask * value as u8);
+    }
+
+    #[inline(always)]
+    fn get_bit(&self, bitmask: u8) -> bool {
+        (self.0 & bitmask) != 0
     }
 }

@@ -21,18 +21,28 @@ impl SynapseRuntimeFlags {
     }
 
     pub fn get_is_synapse_disabled(&self) -> bool {
-        self.0 & Self::BITMASK_SYNAPSE_DISABLED != 0
+        self.get_bit(Self::BITMASK_SYNAPSE_DISABLED)
     }
 
     pub fn get_is_synapse_killed(&self) -> bool {
-        self.0 & Self::BITMASK_SYNAPSE_KILLED != 0
+        self.get_bit(Self::BITMASK_SYNAPSE_KILLED)
     }
 
     pub fn set_is_synapse_disabled(&mut self, is_synapse_disabled: bool) {
-        todo!()
+        self.set_bit(Self::BITMASK_SYNAPSE_DISABLED, is_synapse_disabled);
     }
 
     pub fn set_is_synapse_killed(&mut self, is_synapse_killed: bool) {
-        todo!()
+        self.set_bit(Self::BITMASK_SYNAPSE_KILLED, is_synapse_killed);
+    }
+
+    #[inline(always)]
+    fn set_bit(&mut self, bitmask: u8, value: bool) {
+        self.0 = (self.0 & !bitmask) | (bitmask * value as u8);
+    }
+
+    #[inline(always)]
+    fn get_bit(&self, bitmask: u8) -> bool {
+        (self.0 & bitmask) != 0
     }
 }

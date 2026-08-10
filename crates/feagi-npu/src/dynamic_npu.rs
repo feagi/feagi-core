@@ -1,4 +1,4 @@
-use crate::engines::rayon::rayon_burst_engine::RayonBurstEngine;
+use crate::burst_engine::implementations::tokio_rayon::tokio_rayon_burst_engine::RayonBurstEngine;
 use crate::engines_common::EditableEngine::EditableEngine;
 use crate::visualization::CorticalAreaFireSnapshot;
 use ahash::HashMap;

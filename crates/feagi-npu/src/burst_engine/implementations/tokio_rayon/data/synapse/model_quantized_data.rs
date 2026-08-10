@@ -1,4 +1,4 @@
-use crate::engines::rayon::data::synapse::model_quantized_data::uniform_model::ModelUniform;
+use crate::burst_engine::implementations::tokio_rayon::data::synapse::model_quantized_data::uniform_model::ModelUniform;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 macro_rules! quant_default_without_synapses {

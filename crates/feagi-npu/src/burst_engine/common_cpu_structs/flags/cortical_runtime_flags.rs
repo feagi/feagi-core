@@ -17,26 +17,23 @@ impl CorticalRuntimeFlags {
     const BITMASK_MP_DRIVEN_PSP: u8 = 1 << 4;
 
     pub fn get_membrane_driven_psp(self) -> bool {
-        self.0 & Self::BITMASK_MP_DRIVEN_PSP != 0
+        self.get_bit(Self::BITMASK_MP_DRIVEN_PSP)
     }
 
     pub fn get_psp_uniformity(self) -> bool {
-        self.0 & Self::BITMASK_PSP_UNIFORMITY != 0
+        self.get_bit(Self::BITMASK_PSP_UNIFORMITY)
     }
 
     pub fn get_cortical_area_frozen_output(self) -> bool {
-        self.0 & Self::BITMASK_CORTICAL_AREA_FROZEN_OUTPUT != 0
+        self.get_bit(Self::BITMASK_CORTICAL_AREA_FROZEN_OUTPUT)
     }
 
     pub fn get_cortical_area_frozen_input(self) -> bool {
-        self.0 & Self::BITMASK_CORTICAL_AREA_FROZEN_INPUT != 0
+        self.get_bit(Self::BITMASK_CORTICAL_AREA_FROZEN_INPUT)
     }
 
     /// Packs the genome-level properties of a cortical area into the runtime flags the burst
-    /// kernels read.
-    ///
-    /// `post_cortical_potential` decides membrane-driven PSP: `MembraneDriven` means the
-    /// potential comes from the neuron, `Uniform` means it is a property of the cortical area.
+    /// kernels read
     pub fn from_cortical_area_properties<MPQ: MembranePotentialQuantization>(properties: &CorticalAreaProperties<MPQ>) -> Self {
         let mut flags = 0u8;
 
@@ -54,5 +51,15 @@ impl CorticalRuntimeFlags {
         }
 
         CorticalRuntimeFlags(flags)
+    }
+
+    #[inline(always)]
+    fn set_bit(&mut self, bitmask: u8, value: bool) {
+        self.0 = (self.0 & !bitmask) | (bitmask * value as u8);
+    }
+
+    #[inline(always)]
+    fn get_bit(&self, bitmask: u8) -> bool {
+        (self.0 & bitmask) != 0
     }
 }
