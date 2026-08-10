@@ -420,7 +420,7 @@ mod tests {
         let cortical_type = cortical_id
             .as_cortical_type()
             .expect("Failed to get cortical_area type");
-        let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
+        let dims = CorticalAreaDimensions::try_new_from_usizes(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -443,7 +443,7 @@ mod tests {
         let cortical_type = cortical_id
             .as_cortical_type()
             .expect("Failed to get cortical_area type");
-        let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
+        let dims = CorticalAreaDimensions::try_new_from_usizes(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -474,7 +474,7 @@ mod tests {
         let cortical_type = cortical_id
             .as_cortical_type()
             .expect("Failed to get cortical_area type");
-        let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
+        let dims = CorticalAreaDimensions::try_new_from_usizes(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
             0,
