@@ -1,18 +1,13 @@
-use crate::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateAxis, NeuronVoxelDimensions};
-use crate::values::quantizable::QuantizedIndexCountTrait;
+use crate::_create_wrapped_quantized_unsigned_integer;
 use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
-use crate::values::spatial::unsigned_integer::{QuantizedIndexCoord4D, QuantizedIndexDimension4D};
-use crate::{
-    create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate,
-    create_wrapped_quantized_index_dimension,
-};
+use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_index};
 
 create_wrapped_quantized_decimal!(
     /// The membrane potential of a single neuron (NOT VOXEL)
     pub NeuronMembranePotential
 );
 
-create_wrapped_quantized_index!(
+create_wrapped_quantized_unsigned_integer_index!(
     /// Index of a neuron within a voxel. Most voxels only have 1 neuron, but some have more
     pub NeuronVoxelDensityIndex
 );

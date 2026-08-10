@@ -1035,7 +1035,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer_index {
         $(#[$meta:meta])*
         $vis:vis $struct_index_name:ident
     ) => {
-        _create_wrapped_quantized_unsigned_integer!(
+        $crate:_create_wrapped_quantized_unsigned_integer!(
             $(#[$meta])*
             $vis $struct_index_name,
         );
