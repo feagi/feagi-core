@@ -100,8 +100,8 @@ where
     /// Since this is a static collection of pairs, we have no means of recomputing!
     const CAN_BE_RECOMPUTED_FOR_CORTICAL_RESIZING: bool = false;
 
-    fn get_number_of_synapses(&self) -> FIQ::NeuronIndexQuant {
+    fn get_number_of_synapses(&self) -> FIQ::SynapseIndexCountQuant {
         // We verified length beforehand
-        FIQ::NeuronIndexQuant::quant_from_usize(self.stored_pairs.len())
+        FIQ::SynapseIndexCountQuant::quant_from_usize(self.stored_pairs.len())
     }
 }

@@ -3,7 +3,7 @@ use crate::cortical_mapping_entry::components::doublet::doublet_iterator::Double
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
 use feagi_data::neurons::{DimensionalCorticalArea4DCoordinate, NeuronCorticalLocalIndex, NeuronVoxelDensityIndex};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
+use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
 
 /// Maps every neuron of a single source voxel (its full density column) to every neuron of a
 /// single destination voxel.
@@ -111,7 +111,8 @@ impl<FIQ: FeagiIndexQuantization> DoubletIterator<FIQ, CorticalAreaLayoutDimensi
 {
     const CAN_BE_RECOMPUTED_FOR_CORTICAL_RESIZING: bool = true;
 
-    fn get_number_of_synapses(&self) -> FIQ::NeuronIndexQuant {
-        (self.source_density_count * self.destination_density_count).deref()
+    fn get_number_of_synapses(&self) -> FIQ::SynapseIndexCountQuant {
+        // Multiplied in usize: the product of two neuron counts can exceed a neuron index.
+        FIQ::SynapseIndexCountQuant::quant_from_usize(self.source_density_count.quant_to_usize() * self.destination_density_count.quant_to_usize())
     }
 }

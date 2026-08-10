@@ -33,7 +33,11 @@ where
     /// How many synapses will need to be made with the given cortical pairings. This is the
     /// total for the pairing, and does not shrink as the iterator is consumed. Use
     /// [`Iterator::size_hint`] for the number of pairs still to come.
-    fn get_number_of_synapses(&self) -> FIQ::NeuronIndexQuant;
+    ///
+    /// Counted in the synapse quantization rather than the neuron one: a pairing multiplies two
+    /// neuron counts together, so the total can exceed what a single neuron index holds. This is
+    /// also the quantization the engine sizes its synapse region in.
+    fn get_number_of_synapses(&self) -> FIQ::SynapseIndexCountQuant;
 
     // TODO function that recomputes, IE takes in another Self to replace itself, but returns also
     // the previous number of doublets that this doublet iterator had
