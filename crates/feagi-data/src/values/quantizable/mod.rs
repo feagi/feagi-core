@@ -4,7 +4,6 @@
 
 mod base_traits;
 mod decimal;
-mod index_count;
 mod percentage_unsigned;
 mod quantization_level_packing;
 mod signed_integer;
@@ -16,9 +15,6 @@ pub mod feagi_data_value_quantization_error;
 pub use base_traits::QuantizedElementBase;
 pub use decimal::{DecimalEnum, DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedDecimalEnum};
 pub use feagi_data_value_quantization_error::FeagiDataValueQuantizationError;
-pub use index_count::{
-    IndexCountEnum, IndexCountQuantizationLevel, QuantizedIndexCountTrait, WrappedQuantizedIndexCount, WrappedQuantizedIndexCountEnum,
-};
 pub use percentage_unsigned::{PercentageUnsigned, WrappedPercentageUnsigned};
 pub use quantization_level_packing::QuantizationLevelPacking;
 pub use signed_integer::{
@@ -26,5 +22,5 @@ pub use signed_integer::{
 };
 pub use unsigned_integer::{
     QuantizedUnsignedIntegerTrait, UnsignedIntegerEnum, UnsignedIntegerQuantizationLevel, WrappedQuantizedUnsignedInteger,
-    WrappedQuantizedUnsignedIntegerEnum,
+    WrappedQuantizedUnsignedIntegerCount, WrappedQuantizedUnsignedIntegerData, WrappedQuantizedUnsignedIntegerIndex,
 };
