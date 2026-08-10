@@ -698,17 +698,10 @@ pub trait WrappedQuantizedUnsignedIntegerData: WrappedQuantizedUnsignedInteger {
 
 /// Denotes the wrapped uint as an index
 pub trait WrappedQuantizedUnsignedIntegerIndex: WrappedQuantizedUnsignedInteger {
-
-    /// The Count type corresponding to this Index type
-    type Count: WrappedQuantizedUnsignedIntegerCount;
-
-    /// Returns true if this index can fit in the given count (less than)
-    fn can_fit_in_count(&self, count: &Self::Count) -> bool {
-        self.deref() < count.deref()
-    }
+    // NOTE: To avoid circular dependency coupling, this should have nothing dependent on count
 }
 
-/// Denotes the wrapped uint as a count / size
+/// Denotes the wrapped uint as a count / size of something. Also needs a definition of an index.
 pub trait WrappedQuantizedUnsignedIntegerCount: WrappedQuantizedUnsignedInteger {
 
     /// The Index type corresponding to this count type
@@ -1035,9 +1028,27 @@ macro_rules! create_wrapped_quantized_unsigned_integer_data {
     };
 }
 
-/// Creates wrappers for a count and an index (as they have relation to each other)
+/// Creates wrappers for an index
 #[macro_export]
-macro_rules! create_wrapped_quantized_unsigned_integer_index_and_count {
+macro_rules! create_wrapped_quantized_unsigned_integer_index {
+    (
+        $(#[$meta:meta])*
+        $vis:vis $struct_index_name:ident
+    ) => {
+        _create_wrapped_quantized_unsigned_integer!(
+            $(#[$meta])*
+            $vis $struct_index_name,
+        );
+
+        impl<Q: $crate::values::quantizable::WrappedQuantizedUnsignedIntegerIndex> for  $struct_index_name<Q> {
+            type Count: $struct_count_name<Q>;
+        }
+    };
+}
+
+/// Creates wrappers for a count, which also needs to take in what index it uses
+#[macro_export]
+macro_rules! create_wrapped_quantized_unsigned_integer_count {
     (
         $(#[$meta:meta])*
         $vis:vis $struct_count_name:ident $struct_index_name:ident
@@ -1050,15 +1061,6 @@ macro_rules! create_wrapped_quantized_unsigned_integer_index_and_count {
 
         impl<Q: $crate::values::quantizable::WrappedQuantizedUnsignedIntegerCount> for  $struct_count_name<Q> {
             type Index: $struct_index_name<Q>;
-        }
-
-        _create_wrapped_quantized_unsigned_integer!(
-            $(#[$meta])*
-            $vis $struct_index_name,
-        );
-
-        impl<Q: $crate::values::quantizable::WrappedQuantizedUnsignedIntegerIndex> for  $struct_index_name<Q> {
-            type Count: $struct_count_name<Q>;
         }
     };
 }
