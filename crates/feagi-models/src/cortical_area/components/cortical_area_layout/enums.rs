@@ -1,10 +1,10 @@
-use feagi_data::neurons::NeuronCorticalLocalIndex;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
 use crate::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use crate::cortical_area::components::cortical_area_layout::implementations::formless::CorticalAreaLayoutFormless;
+use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
+use feagi_data::neurons::NeuronCorticalLocalIndex;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
-/// Describes Cortical area layout in a single nested enum, and also contains the data of the 
+/// Describes Cortical area layout in a single nested enum, and also contains the data of the
 /// layout itself
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub enum CorticalAreaLayoutNested<FIQ: FeagiIndexQuantization> {
@@ -63,7 +63,7 @@ impl CorticalAreaLayoutTypePacked {
     pub fn from_unmasked_byte(byte: u8) -> Self {
         // Since we have all 4 possibilities defined (even if they are marked as Unused), undefined
         // behavior is not possible, so we can wrap this in unsafe.
-        unsafe {core::mem::transmute(byte & Self::BITMASK)}
+        unsafe { core::mem::transmute(byte & Self::BITMASK) }
     }
 
     /// Directly tries casting a byte to this enum. Assumes byte is masked to expose only last

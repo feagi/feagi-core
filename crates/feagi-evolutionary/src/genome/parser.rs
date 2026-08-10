@@ -40,18 +40,18 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+use crate::types::{EvoError, EvoResult};
+use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDimensionsGenomic};
+use feagi_genomic_context::brain_region::BrainRegion;
+use feagi_genomic_context::brain_region::RegionID;
+use feagi_genomic_context::brain_region::RegionType;
+use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
-use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDimensionsGenomic};
-use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
-use crate::types::{EvoError, EvoResult};
-use feagi_genomic_context::brain_region::RegionID;
-use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_genomic_context::brain_region::BrainRegion;
-use feagi_genomic_context::brain_region::RegionType;
-use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]
@@ -187,11 +187,7 @@ fn convert_dstmap_keys_to_base64(dstmap: &Value) -> Value {
                 }
                 Err(e) => {
                     // If conversion fails, keep original and log warning
-                    tracing::warn!(
-                        "Failed to convert dstmap key '{}' to base64: {}, keeping original",
-                        dest_id_str,
-                        e
-                    );
+                    tracing::warn!("Failed to convert dstmap key '{}' to base64: {}, keeping original", dest_id_str, e);
                     converted.insert(dest_id_str.clone(), mapping_value.clone());
                 }
             }
@@ -351,8 +347,7 @@ impl GenomeParser {
     ///
     pub fn parse(json_str: &str) -> EvoResult<ParsedGenome> {
         // Deserialize raw genome
-        let raw: RawGenome = serde_json::from_str(json_str)
-            .map_err(|e| EvoError::invalid_genome(format!("Failed to parse JSON: {}", e)))?;
+        let raw: RawGenome = serde_json::from_str(json_str).map_err(|e| EvoError::invalid_genome(format!("Failed to parse JSON: {}", e)))?;
 
         // Validate version - support 2.x and 3.x (3.0 is flat format with base64 IDs)
         if !raw.version.starts_with("2.") && !raw.version.starts_with("3.") && raw.version != "3" {
@@ -380,9 +375,7 @@ impl GenomeParser {
     }
 
     /// Parse cortical_area areas from blueprint
-    fn parse_cortical_areas(
-        blueprint: &HashMap<String, RawCorticalArea>,
-    ) -> EvoResult<Vec<CorticalArea>> {
+    fn parse_cortical_areas(blueprint: &HashMap<String, RawCorticalArea>) -> EvoResult<Vec<CorticalArea>> {
         let mut areas = Vec::with_capacity(blueprint.len());
 
         for (cortical_id_str, raw_area) in blueprint.iter() {
@@ -402,10 +395,7 @@ impl GenomeParser {
             };
 
             // Extract required fields
-            let name = raw_area
-                .cortical_name
-                .clone()
-                .unwrap_or_else(|| cortical_id_str.clone());
+            let name = raw_area.cortical_name.clone().unwrap_or_else(|| cortical_id_str.clone());
 
             let dimensions = if let Some(boundaries) = &raw_area.block_boundaries {
                 if boundaries.len() != 3 {
@@ -440,12 +430,9 @@ impl GenomeParser {
             };
 
             // Determine cortical_area type from cortical_id
-            let cortical_type = cortical_id.as_cortical_type().map_err(|e| {
-                EvoError::invalid_area(format!(
-                    "Failed to determine cortical_area type from ID {}: {}",
-                    cortical_id_str, e
-                ))
-            })?;
+            let cortical_type = cortical_id
+                .as_cortical_type()
+                .map_err(|e| EvoError::invalid_area(format!("Failed to determine cortical_area type from ID {}: {}", cortical_id_str, e)))?;
 
             // Create cortical_area area with CorticalID object (zero-copy, type-safe)
             let mut area = CorticalArea::new(
@@ -459,85 +446,60 @@ impl GenomeParser {
 
             // Store cortical_type as cortical_group for new type system
             if let Some(ref cortical_type_str) = raw_area.cortical_type {
-                area.properties.insert(
-                    "cortical_group".to_string(),
-                    serde_json::json!(cortical_type_str),
-                );
+                area.properties.insert("cortical_group".to_string(), serde_json::json!(cortical_type_str));
             }
 
             // Store all properties in the properties HashMap
             // Neural properties
             if let Some(v) = raw_area.synapse_attractivity {
-                area.properties
-                    .insert("synapse_attractivity".to_string(), serde_json::json!(v));
+                area.properties.insert("synapse_attractivity".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.refractory_period {
-                area.properties
-                    .insert("refractory_period".to_string(), serde_json::json!(v));
+                area.properties.insert("refractory_period".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.firing_threshold {
-                area.properties
-                    .insert("firing_threshold".to_string(), serde_json::json!(v));
+                area.properties.insert("firing_threshold".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.firing_threshold_limit {
-                area.properties
-                    .insert("firing_threshold_limit".to_string(), serde_json::json!(v));
+                area.properties.insert("firing_threshold_limit".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.firing_threshold_increment_x {
-                area.properties.insert(
-                    "firing_threshold_increment_x".to_string(),
-                    serde_json::json!(v),
-                );
+                area.properties.insert("firing_threshold_increment_x".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.firing_threshold_increment_y {
-                area.properties.insert(
-                    "firing_threshold_increment_y".to_string(),
-                    serde_json::json!(v),
-                );
+                area.properties.insert("firing_threshold_increment_y".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.firing_threshold_increment_z {
-                area.properties.insert(
-                    "firing_threshold_increment_z".to_string(),
-                    serde_json::json!(v),
-                );
+                area.properties.insert("firing_threshold_increment_z".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.leak_coefficient {
-                area.properties
-                    .insert("leak_coefficient".to_string(), serde_json::json!(v));
+                area.properties.insert("leak_coefficient".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.leak_variability {
-                area.properties
-                    .insert("leak_variability".to_string(), serde_json::json!(v));
+                area.properties.insert("leak_variability".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.neuron_excitability {
-                area.properties
-                    .insert("neuron_excitability".to_string(), serde_json::json!(v));
+                area.properties.insert("neuron_excitability".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.postsynaptic_current {
-                area.properties
-                    .insert("postsynaptic_current".to_string(), serde_json::json!(v));
+                area.properties.insert("postsynaptic_current".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.postsynaptic_current_max {
-                area.properties
-                    .insert("postsynaptic_current_max".to_string(), serde_json::json!(v));
+                area.properties.insert("postsynaptic_current_max".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.degeneration {
-                area.properties
-                    .insert("degeneration".to_string(), serde_json::json!(v));
+                area.properties.insert("degeneration".to_string(), serde_json::json!(v));
             }
 
             // Boolean properties
             if let Some(v) = raw_area.psp_uniform_distribution {
-                area.properties
-                    .insert("psp_uniform_distribution".to_string(), serde_json::json!(v));
+                area.properties.insert("psp_uniform_distribution".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.mp_charge_accumulation {
-                area.properties
-                    .insert("mp_charge_accumulation".to_string(), serde_json::json!(v));
+                area.properties.insert("mp_charge_accumulation".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.mp_driven_psp {
-                area.properties
-                    .insert("mp_driven_psp".to_string(), serde_json::json!(v));
+                area.properties.insert("mp_driven_psp".to_string(), serde_json::json!(v));
                 tracing::info!(
                     target: "feagi-evo",
                     "[GENOME-LOAD] Loaded mp_driven_psp={} for area {}",
@@ -552,77 +514,60 @@ impl GenomeParser {
                 );
             }
             if let Some(v) = raw_area.visualization {
-                area.properties
-                    .insert("visualization".to_string(), serde_json::json!(v));
+                area.properties.insert("visualization".to_string(), serde_json::json!(v));
                 // Also store as "visible" for compatibility with getters
-                area.properties
-                    .insert("visible".to_string(), serde_json::json!(v));
+                area.properties.insert("visible".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.burst_engine_activation {
-                area.properties
-                    .insert("burst_engine_active".to_string(), serde_json::json!(v));
+                area.properties.insert("burst_engine_active".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.is_mem_type {
-                area.properties
-                    .insert("is_mem_type".to_string(), serde_json::json!(v));
+                area.properties.insert("is_mem_type".to_string(), serde_json::json!(v));
             }
 
             // Memory properties
             if let Some(v) = raw_area.longterm_mem_threshold {
-                area.properties
-                    .insert("longterm_mem_threshold".to_string(), serde_json::json!(v));
+                area.properties.insert("longterm_mem_threshold".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.lifespan_growth_rate {
-                area.properties
-                    .insert("lifespan_growth_rate".to_string(), serde_json::json!(v));
+                area.properties.insert("lifespan_growth_rate".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.init_lifespan {
-                area.properties
-                    .insert("init_lifespan".to_string(), serde_json::json!(v));
+                area.properties.insert("init_lifespan".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.temporal_depth {
-                area.properties
-                    .insert("temporal_depth".to_string(), serde_json::json!(v));
+                area.properties.insert("temporal_depth".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.mp_learning_enabled {
-                area.properties
-                    .insert("mp_learning_enabled".to_string(), serde_json::json!(v));
+                area.properties.insert("mp_learning_enabled".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.consecutive_fire_cnt_max {
-                area.properties
-                    .insert("consecutive_fire_cnt_max".to_string(), serde_json::json!(v));
+                area.properties.insert("consecutive_fire_cnt_max".to_string(), serde_json::json!(v));
                 // Also store as "consecutive_fire_limit" for getter compatibility
-                area.properties
-                    .insert("consecutive_fire_limit".to_string(), serde_json::json!(v));
+                area.properties.insert("consecutive_fire_limit".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.snooze_length {
-                area.properties
-                    .insert("snooze_period".to_string(), serde_json::json!(v));
+                area.properties.insert("snooze_period".to_string(), serde_json::json!(v));
             }
 
             // Other properties
             if let Some(v) = &raw_area.group_id {
-                area.properties
-                    .insert("group_id".to_string(), serde_json::json!(v));
+                area.properties.insert("group_id".to_string(), serde_json::json!(v));
             }
             if let Some(v) = &raw_area.sub_group_id {
-                area.properties
-                    .insert("sub_group_id".to_string(), serde_json::json!(v));
+                area.properties.insert("sub_group_id".to_string(), serde_json::json!(v));
             }
             // Store neurons_per_voxel in properties HashMap
             if let Some(v) = raw_area.per_voxel_neuron_cnt {
-                area.properties
-                    .insert("neurons_per_voxel".to_string(), serde_json::json!(v));
+                area.properties.insert("neurons_per_voxel".to_string(), serde_json::json!(v));
             }
             if let Some(v) = &raw_area.cortical_mapping_dst {
                 // Convert dstmap keys from old format to base64
                 let converted_dstmap = convert_dstmap_keys_to_base64(v);
-                area.properties
-                    .insert("cortical_mapping_dst".to_string(), converted_dstmap);
+                area.properties.insert("cortical_mapping_dst".to_string(), converted_dstmap);
             }
             if let Some(v) = &raw_area.coordinate_2d {
-                area.properties
-                    .insert("2d_coordinate".to_string(), serde_json::json!(v));
+                area.properties.insert("2d_coordinate".to_string(), serde_json::json!(v));
             }
 
             // Store any other custom properties
@@ -640,16 +585,11 @@ impl GenomeParser {
     }
 
     /// Parse brain regions
-    fn parse_brain_regions(
-        raw_regions: &HashMap<String, RawBrainRegion>,
-    ) -> EvoResult<Vec<(BrainRegion, Option<String>)>> {
+    fn parse_brain_regions(raw_regions: &HashMap<String, RawBrainRegion>) -> EvoResult<Vec<(BrainRegion, Option<String>)>> {
         let mut regions = Vec::with_capacity(raw_regions.len());
 
         for (region_id_str, raw_region) in raw_regions.iter() {
-            let title = raw_region
-                .title
-                .clone()
-                .unwrap_or_else(|| region_id_str.clone());
+            let title = raw_region.title.clone().unwrap_or_else(|| region_id_str.clone());
 
             // Convert string region_id to RegionID (UUID)
             // For now, try to parse as UUID if it's already a UUID, otherwise generate new one
@@ -774,24 +714,13 @@ impl GenomeParser {
                 }
             }
 
-            Self::normalize_brain_region_cortical_id_list_properties(
-                &mut region,
-                &[
-                    "inputs",
-                    "outputs",
-                    "designated_inputs",
-                    "designated_outputs",
-                ],
-            );
+            Self::normalize_brain_region_cortical_id_list_properties(&mut region, &["inputs", "outputs", "designated_inputs", "designated_outputs"]);
 
             // Store parent_id for hierarchy construction
             let parent_id = raw_region.parent_region_id.clone();
             if let Some(ref parent_id_str) = parent_id {
                 // Store as property for serialization
-                region.add_property(
-                    "parent_region_id".to_string(),
-                    serde_json::json!(parent_id_str),
-                );
+                region.add_property("parent_region_id".to_string(), serde_json::json!(parent_id_str));
             }
 
             regions.push((region, parent_id));
@@ -833,19 +762,13 @@ mod tests {
         assert_eq!(parsed.version, "2.1");
         assert_eq!(parsed.cortical_areas.len(), 1);
         // Input was "_power" (6 bytes), converted to "___power" (8 bytes, padded at start with underscores) then base64 encoded
-        assert_eq!(
-            parsed.cortical_areas[0].cortical_id.as_base_64(),
-            "X19fcG93ZXI="
-        );
+        assert_eq!(parsed.cortical_areas[0].cortical_id.as_base_64(), "X19fcG93ZXI=");
         assert_eq!(parsed.cortical_areas[0].name, "Test Area");
         assert_eq!(parsed.brain_regions.len(), 1);
 
         // Phase 2: Verify cortical_type_new is populated
         // Note: cortical_type_new field removed - type is encoded in cortical_id
-        assert!(parsed.cortical_areas[0]
-            .cortical_id
-            .as_cortical_type()
-            .is_ok());
+        assert!(parsed.cortical_areas[0].cortical_id.as_cortical_type().is_ok());
     }
 
     #[test]
@@ -889,10 +812,7 @@ mod tests {
         // Migration must map this deterministically to the core Power cortical_area ID.
         use feagi_genomic_context::cortical_area::CoreCorticalType;
         let id = string_to_cortical_id("___pwr").unwrap();
-        assert_eq!(
-            id.as_base_64(),
-            CoreCorticalType::Power.to_cortical_id().as_base_64()
-        );
+        assert_eq!(id.as_base_64(), CoreCorticalType::Power.to_cortical_id().as_base_64());
     }
 
     #[test]
@@ -900,10 +820,7 @@ mod tests {
         // 8-char padded form ___pwr__ (from 6-char padding in legacy flat genomes).
         use feagi_genomic_context::cortical_area::CoreCorticalType;
         let id = string_to_cortical_id("___pwr__").unwrap();
-        assert_eq!(
-            id.as_base_64(),
-            CoreCorticalType::Power.to_cortical_id().as_base_64()
-        );
+        assert_eq!(id.as_base_64(), CoreCorticalType::Power.to_cortical_id().as_base_64());
     }
 
     #[test]
@@ -1058,11 +975,7 @@ mod tests {
             );
 
             // Verify cortical_area group is consistent (avoid depending on feagi-brain-development)
-            if let Some(prop_group) = area
-                .properties
-                .get("cortical_group")
-                .and_then(|v| v.as_str())
-            {
+            if let Some(prop_group) = area.properties.get("cortical_group").and_then(|v| v.as_str()) {
                 assert!(
                     !prop_group.is_empty(),
                     "Area {} should have non-empty cortical_group property",

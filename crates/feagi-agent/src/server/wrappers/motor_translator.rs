@@ -13,10 +13,7 @@ pub struct MotorTranslator {
 
 impl MotorTranslator {
     pub fn new(session_id: AgentID, motor_server: Box<dyn FeagiServerPublisher>) -> Self {
-        MotorTranslator {
-            session_id,
-            motor_server,
-        }
+        MotorTranslator { session_id, motor_server }
     }
 
     #[allow(dead_code)]
@@ -43,9 +40,7 @@ impl MotorTranslator {
             FeagiEndpointState::ActiveHasData => {
                 // Not possible, a motor should never send data!
                 // TODO proper way to close this socket
-                Err(FeagiAgentError::socket_failure(
-                    "Agent cannot send Motor data!".to_string(),
-                ))
+                Err(FeagiAgentError::socket_failure("Agent cannot send Motor data!".to_string()))
             }
             FeagiEndpointState::Errored(error) => {
                 self.motor_server.confirm_error_and_close()?;
@@ -55,10 +50,7 @@ impl MotorTranslator {
     }
 
     /// Send motor byte data
-    pub fn poll_and_send_buffered_motor_data(
-        &mut self,
-        motor_data: &FeagiByteContainer,
-    ) -> Result<(), FeagiAgentError> {
+    pub fn poll_and_send_buffered_motor_data(&mut self, motor_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
         let motor_server = &mut self.motor_server;
         let state = motor_server.poll();
         match state {
@@ -68,9 +60,7 @@ impl MotorTranslator {
             }
             _ => {
                 // Socket is not in a state to handle incoming data
-                Err(FeagiAgentError::unable_to_send_data(
-                    "Socket is not in a state to send data!".to_string(),
-                ))
+                Err(FeagiAgentError::unable_to_send_data("Socket is not in a state to send data!".to_string()))
             }
         }
     }

@@ -25,12 +25,8 @@
 //! cargo run --example request_reply --features "zmq-transport ws-transport" -- --transport ws client
 //! ```
 
-use feagi_io::protocol_implementations::websocket::websocket_std::{
-    FeagiWebSocketClientRequesterProperties, FeagiWebSocketServerRouterProperties,
-};
-use feagi_io::protocol_implementations::zmq::{
-    FeagiZmqClientRequesterProperties, FeagiZmqServerRouterProperties,
-};
+use feagi_io::protocol_implementations::websocket::websocket_std::{FeagiWebSocketClientRequesterProperties, FeagiWebSocketServerRouterProperties};
+use feagi_io::protocol_implementations::zmq::{FeagiZmqClientRequesterProperties, FeagiZmqServerRouterProperties};
 use feagi_io::traits_and_enums::client::{FeagiClientRequester, FeagiClientRequesterProperties};
 use feagi_io::traits_and_enums::server::{FeagiServerRouter, FeagiServerRouterProperties};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
@@ -94,15 +90,14 @@ fn create_server(transport: Transport) -> Box<dyn FeagiServerRouter> {
         Transport::Zmq => {
             println!("=== Server Router Example (ZMQ Transport) ===\n");
             println!("Binding to {}", ZMQ_ADDRESS);
-            let props = FeagiZmqServerRouterProperties::new(ZMQ_ADDRESS, ZMQ_ADDRESS)
-                .expect("Failed to create ZMQ server properties");
+            let props = FeagiZmqServerRouterProperties::new(ZMQ_ADDRESS, ZMQ_ADDRESS).expect("Failed to create ZMQ server properties");
             props.as_boxed_server_router()
         }
         Transport::WebSocket => {
             println!("=== Server Router Example (WebSocket Transport) ===\n");
             println!("Binding to {}", WS_ADDRESS);
-            let props = FeagiWebSocketServerRouterProperties::new_with_remote(WS_ADDRESS, WS_URL)
-                .expect("Failed to create WebSocket server properties");
+            let props =
+                FeagiWebSocketServerRouterProperties::new_with_remote(WS_ADDRESS, WS_URL).expect("Failed to create WebSocket server properties");
             props.as_boxed_server_router()
         }
     }
@@ -115,15 +110,13 @@ fn create_client(transport: Transport) -> Box<dyn FeagiClientRequester> {
         Transport::Zmq => {
             println!("=== Client Requester Example (ZMQ Transport) ===\n");
             println!("Connecting to {}", ZMQ_ADDRESS);
-            let props = FeagiZmqClientRequesterProperties::new(ZMQ_ADDRESS)
-                .expect("Failed to create ZMQ client properties");
+            let props = FeagiZmqClientRequesterProperties::new(ZMQ_ADDRESS).expect("Failed to create ZMQ client properties");
             props.as_boxed_client_requester()
         }
         Transport::WebSocket => {
             println!("=== Client Requester Example (WebSocket Transport) ===\n");
             println!("Connecting to {}", WS_URL);
-            let props = FeagiWebSocketClientRequesterProperties::new(WS_URL)
-                .expect("Failed to create WebSocket client properties");
+            let props = FeagiWebSocketClientRequesterProperties::new(WS_URL).expect("Failed to create WebSocket client properties");
             props.as_boxed_client_requester()
         }
     }
@@ -175,17 +168,11 @@ fn run_server(mut server: Box<dyn FeagiServerRouter>) {
                 match server.consume_retrieved_request() {
                     Ok((session_id, request)) => {
                         let request_str = String::from_utf8_lossy(request);
-                        println!(
-                            "[SERVER] Received request from {:?}: {}",
-                            session_id, request_str
-                        );
+                        println!("[SERVER] Received request from {:?}: {}", session_id, request_str);
 
                         // Process the request and create a response
                         let response_str = format!("Server processed: '{}'", request_str);
-                        println!(
-                            "[SERVER] Sending response to {:?}: {}\n",
-                            session_id, response_str
-                        );
+                        println!("[SERVER] Sending response to {:?}: {}\n", session_id, response_str);
 
                         // Send the response back to the specific client
                         server
@@ -219,9 +206,7 @@ fn run_server(mut server: Box<dyn FeagiServerRouter>) {
 /// transport implementation.
 fn run_client(mut client: Box<dyn FeagiClientRequester>) {
     // Connect to the server
-    client
-        .request_connect()
-        .expect("Failed to request connection");
+    client.request_connect().expect("Failed to request connection");
     println!("Client connection requested...");
 
     // Wait for the connection to become active
@@ -253,9 +238,7 @@ fn run_client(mut client: Box<dyn FeagiClientRequester>) {
         println!("[CLIENT] Sending request: {}", request);
 
         // Send the request
-        client
-            .publish_request(request.as_bytes())
-            .expect("Failed to send request");
+        client.publish_request(request.as_bytes()).expect("Failed to send request");
 
         // Wait for and handle the response
         loop {

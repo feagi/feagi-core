@@ -87,63 +87,38 @@ fn normalize_physiology(genome: &mut Value, diag: &mut NormalizationDiagnostics)
         None => return,
     };
 
-    if let Some(ts) = physiology
-        .get("simulation_timestep")
-        .and_then(Value::as_f64)
-    {
+    if let Some(ts) = physiology.get("simulation_timestep").and_then(Value::as_f64) {
         if ts <= 0.0 {
-            physiology.insert(
-                "simulation_timestep".to_string(),
-                json!(DEFAULT_SIMULATION_TIMESTEP),
-            );
-            diag.record(format!(
-                "physiology.simulation_timestep {ts} -> {DEFAULT_SIMULATION_TIMESTEP} (default)"
-            ));
+            physiology.insert("simulation_timestep".to_string(), json!(DEFAULT_SIMULATION_TIMESTEP));
+            diag.record(format!("physiology.simulation_timestep {ts} -> {DEFAULT_SIMULATION_TIMESTEP} (default)"));
         }
     }
 
     if let Some(age) = physiology.get("max_age").and_then(Value::as_u64) {
         if age == 0 {
             physiology.insert("max_age".to_string(), json!(DEFAULT_MAX_AGE));
-            diag.record(format!(
-                "physiology.max_age 0 -> {DEFAULT_MAX_AGE} (default)"
-            ));
+            diag.record(format!("physiology.max_age 0 -> {DEFAULT_MAX_AGE} (default)"));
         }
     }
 
-    let precision_action = match physiology
-        .get("quantization_precision")
-        .and_then(Value::as_str)
-    {
-        Some("") => Some(PrecisionAction::ReplaceWithDefault {
-            previous: String::new(),
-        }),
+    let precision_action = match physiology.get("quantization_precision").and_then(Value::as_str) {
+        Some("") => Some(PrecisionAction::ReplaceWithDefault { previous: String::new() }),
         Some(other) => match canonicalize_precision(other) {
             Some(canonical) if canonical != other => Some(PrecisionAction::Normalize {
                 previous: other.to_string(),
                 canonical,
             }),
             Some(_) => None,
-            None => Some(PrecisionAction::ReplaceWithDefault {
-                previous: other.to_string(),
-            }),
+            None => Some(PrecisionAction::ReplaceWithDefault { previous: other.to_string() }),
         },
         None => None,
     };
 
     if let Some(action) = precision_action {
         match action {
-            PrecisionAction::Normalize {
-                previous,
-                canonical,
-            } => {
-                physiology.insert(
-                    "quantization_precision".to_string(),
-                    Value::String(canonical.clone()),
-                );
-                diag.record(format!(
-                    "physiology.quantization_precision '{previous}' -> '{canonical}' (normalized)"
-                ));
+            PrecisionAction::Normalize { previous, canonical } => {
+                physiology.insert("quantization_precision".to_string(), Value::String(canonical.clone()));
+                diag.record(format!("physiology.quantization_precision '{previous}' -> '{canonical}' (normalized)"));
             }
             PrecisionAction::ReplaceWithDefault { previous } => {
                 physiology.insert(
@@ -188,10 +163,7 @@ fn normalize_blueprint(genome: &mut Value, diag: &mut NormalizationDiagnostics) 
 
     let area_ids: Vec<String> = blueprint.keys().cloned().collect();
     for cortical_id in area_ids {
-        let area = match blueprint
-            .get_mut(&cortical_id)
-            .and_then(Value::as_object_mut)
-        {
+        let area = match blueprint.get_mut(&cortical_id).and_then(Value::as_object_mut) {
             Some(a) => a,
             None => continue,
         };
@@ -201,15 +173,8 @@ fn normalize_blueprint(genome: &mut Value, diag: &mut NormalizationDiagnostics) 
     }
 }
 
-fn normalize_block_boundaries(
-    area: &mut serde_json::Map<String, Value>,
-    cortical_id: &str,
-    diag: &mut NormalizationDiagnostics,
-) {
-    let boundaries = match area
-        .get_mut("block_boundaries")
-        .and_then(Value::as_array_mut)
-    {
+fn normalize_block_boundaries(area: &mut serde_json::Map<String, Value>, cortical_id: &str, diag: &mut NormalizationDiagnostics) {
+    let boundaries = match area.get_mut("block_boundaries").and_then(Value::as_array_mut) {
         Some(b) if b.len() == 3 => b,
         _ => return,
     };
@@ -218,24 +183,15 @@ fn normalize_block_boundaries(
     for (i, slot) in boundaries.iter_mut().enumerate() {
         if slot.as_u64() == Some(0) {
             *slot = json!(1u32);
-            diag.record(format!(
-                "blueprint['{cortical_id}'].block_boundaries[{i}] ({}) 0 -> 1",
-                AXIS_NAMES[i]
-            ));
+            diag.record(format!("blueprint['{cortical_id}'].block_boundaries[{i}] ({}) 0 -> 1", AXIS_NAMES[i]));
         }
     }
 }
 
-fn normalize_per_voxel_neuron_cnt(
-    area: &mut serde_json::Map<String, Value>,
-    cortical_id: &str,
-    diag: &mut NormalizationDiagnostics,
-) {
+fn normalize_per_voxel_neuron_cnt(area: &mut serde_json::Map<String, Value>, cortical_id: &str, diag: &mut NormalizationDiagnostics) {
     if area.get("per_voxel_neuron_cnt").and_then(Value::as_u64) == Some(0) {
         area.insert("per_voxel_neuron_cnt".to_string(), json!(1u32));
-        diag.record(format!(
-            "blueprint['{cortical_id}'].per_voxel_neuron_cnt 0 -> 1"
-        ));
+        diag.record(format!("blueprint['{cortical_id}'].per_voxel_neuron_cnt 0 -> 1"));
     }
 }
 
@@ -359,10 +315,7 @@ mod tests {
             }
         });
         let d = n.normalize(&mut g).unwrap();
-        assert_eq!(
-            g["blueprint"]["abc12345"]["block_boundaries"],
-            json!([1, 5, 1])
-        );
+        assert_eq!(g["blueprint"]["abc12345"]["block_boundaries"], json!([1, 5, 1]));
         assert_eq!(d.transformations.len(), 2);
     }
 

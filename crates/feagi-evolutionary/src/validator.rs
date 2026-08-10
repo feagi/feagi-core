@@ -125,44 +125,28 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
     // Fix missing or invalid quantization_precision
     if genome.physiology.quantization_precision.is_empty() {
         let default_precision = crate::runtime::default_quantization_precision();
-        info!(
-            "🔧 AUTO-FIX: Missing quantization_precision → '{}' (default)",
-            default_precision
-        );
+        info!("🔧 AUTO-FIX: Missing quantization_precision → '{}' (default)", default_precision);
         genome.physiology.quantization_precision = default_precision;
         fixes_applied += 1;
     } else {
         // Normalize to canonical format
-
     }
 
     for (cortical_id, area) in &mut genome.cortical_areas {
         let cortical_id_display = cortical_id.to_string();
         // Fix zero dimensions
-        
 
         // Fix zero neurons_per_voxel (stored in properties)
-        let neurons_per_voxel = area
-            .properties
-            .get("neurons_per_voxel")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
+        let neurons_per_voxel = area.properties.get("neurons_per_voxel").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         if neurons_per_voxel == 0 {
-            info!(
-                "🔧 AUTO-FIX: Cortical area '{}' neurons_per_voxel 0 → 1",
-                cortical_id_display
-            );
-            area.properties
-                .insert("neurons_per_voxel".to_string(), serde_json::json!(1));
+            info!("🔧 AUTO-FIX: Cortical area '{}' neurons_per_voxel 0 → 1", cortical_id_display);
+            area.properties.insert("neurons_per_voxel".to_string(), serde_json::json!(1));
             fixes_applied += 1;
         }
     }
 
     if fixes_applied > 0 {
-        info!(
-            "🔧 AUTO-FIX: Applied {} automatic corrections to genome",
-            fixes_applied
-        );
+        info!("🔧 AUTO-FIX: Applied {} automatic corrections to genome", fixes_applied);
     }
 
     fixes_applied
@@ -199,14 +183,8 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
         // CRITICAL: Validate cortical_area ID format and compliance with feagi-data-processing cortical_units
         validate_cortical_id_format(cortical_id, &cortical_id_display, result);
 
-
-
         // Validate neurons_per_voxel (stored in properties)
-        let neurons_per_voxel = area
-            .properties
-            .get("neurons_per_voxel")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
+        let neurons_per_voxel = area.properties.get("neurons_per_voxel").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         if neurons_per_voxel == 0 {
             result.add_warning(format!(
                 "AUTO-FIX: Cortical area '{}' has neurons_per_voxel=0 - will be corrected to 1",
@@ -214,23 +192,15 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
             ));
         }
 
-
         // Validate name
         if area.name.is_empty() {
-            result.add_warning(format!(
-                "Cortical area '{}' has empty name",
-                cortical_id_display
-            ));
+            result.add_warning(format!("Cortical area '{}' has empty name", cortical_id_display));
         }
     }
 }
 
 /// Validate cortical_area ID format and compliance with feagi-data-processing cortical_units
-fn validate_cortical_id_format(
-    _cortical_id: &CorticalID,
-    display: &str,
-    result: &mut ValidationResult,
-) {
+fn validate_cortical_id_format(_cortical_id: &CorticalID, display: &str, result: &mut ValidationResult) {
     // Base64 encoded 8-byte IDs are 12 characters (with padding)
     // Old format IDs are 8 characters
     // Accept both formats for backward compatibility
@@ -254,10 +224,7 @@ fn validate_cortical_id_format(
         // Custom areas: No strict validation yet, but should follow naming conventions
         // Just check that it's properly padded
         if !display.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            result.add_warning(format!(
-                "Custom cortical_area ID '{}' contains non-alphanumeric characters",
-                display
-            ));
+            result.add_warning(format!("Custom cortical_area ID '{}' contains non-alphanumeric characters", display));
         }
         return;
     }
@@ -272,13 +239,13 @@ fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
 
     // Generate valid CORE IDs from the authoritative source (feagi-data-processing)
     let valid_core_ids: Vec<String> = vec![
-        CoreCorticalType::Power.to_cortical_id().to_string(), // "___power"
-        CoreCorticalType::Death.to_cortical_id().to_string(), // "___death"
-        CoreCorticalType::Fatigue.to_cortical_id().to_string(), // "___fatig"
-        CoreCorticalType::Pain.to_cortical_id().to_string(),  // "___pain_"
+        CoreCorticalType::Power.to_cortical_id().to_string(),    // "___power"
+        CoreCorticalType::Death.to_cortical_id().to_string(),    // "___death"
+        CoreCorticalType::Fatigue.to_cortical_id().to_string(),  // "___fatig"
+        CoreCorticalType::Pain.to_cortical_id().to_string(),     // "___pain_"
         CoreCorticalType::Pleasure.to_cortical_id().to_string(), // "___pleas"
-        CoreCorticalType::Fear.to_cortical_id().to_string(),  // "___fear_"
-        CoreCorticalType::Hope.to_cortical_id().to_string(),  // "___hope_"
+        CoreCorticalType::Fear.to_cortical_id().to_string(),     // "___fear_"
+        CoreCorticalType::Hope.to_cortical_id().to_string(),     // "___hope_"
     ];
 
     if !valid_core_ids.contains(&display.to_string()) {
@@ -320,8 +287,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
 
     if !is_valid_ipu && !is_valid_opu {
         // Check for OLD invalid formats (old format didn't have i/o prefix)
-        if display.starts_with("iic") || display.starts_with("omot") || display.starts_with("ogaz")
-        {
+        if display.starts_with("iic") || display.starts_with("omot") || display.starts_with("ogaz") {
             result.add_error(format!(
                 "INVALID OLD-FORMAT cortical_area ID: '{}' - not compliant with feagi-data-processing cortical_units. \
                 Valid IPU format: 'i' + unit_prefix (e.g., 'isvi____'). \
@@ -378,10 +344,7 @@ fn validate_morphologies(genome: &RuntimeGenome, result: &mut ValidationResult) 
     let required_core = vec!["block_to_block", "projector"];
     for morph_id in required_core {
         if !genome.morphologies.contains(morph_id) {
-            result.add_warning(format!(
-                "Missing recommended core morphology: '{}'",
-                morph_id
-            ));
+            result.add_warning(format!("Missing recommended core morphology: '{}'", morph_id));
         }
     }
 
@@ -391,18 +354,11 @@ fn validate_morphologies(genome: &RuntimeGenome, result: &mut ValidationResult) 
 }
 
 /// Validate a single morphology
-fn validate_single_morphology(
-    morphology_id: &str,
-    morphology: &crate::Morphology,
-    result: &mut ValidationResult,
-) {
+fn validate_single_morphology(morphology_id: &str, morphology: &crate::Morphology, result: &mut ValidationResult) {
     match &morphology.parameters {
         MorphologyParameters::Vectors { vectors } => {
             if vectors.is_empty() {
-                result.add_error(format!(
-                    "Morphology '{}' (vectors) has no vectors defined",
-                    morphology_id
-                ));
+                result.add_error(format!("Morphology '{}' (vectors) has no vectors defined", morphology_id));
             }
 
             // Check for all-zero vectors (useless)
@@ -418,10 +374,7 @@ fn validate_single_morphology(
 
         MorphologyParameters::Patterns { patterns } => {
             if patterns.is_empty() {
-                result.add_error(format!(
-                    "Morphology '{}' (patterns) has no patterns defined",
-                    morphology_id
-                ));
+                result.add_error(format!("Morphology '{}' (patterns) has no patterns defined", morphology_id));
             }
 
             for (i, pattern) in patterns.iter().enumerate() {
@@ -453,10 +406,7 @@ fn validate_single_morphology(
 
             // Validate src_pattern
             if src_pattern.is_empty() {
-                result.add_error(format!(
-                    "Morphology '{}' (composite) has empty src_pattern",
-                    morphology_id
-                ));
+                result.add_error(format!("Morphology '{}' (composite) has empty src_pattern", morphology_id));
             }
 
             // Validate mapper_morphology reference
@@ -475,10 +425,7 @@ fn validate_physiology(genome: &RuntimeGenome, result: &mut ValidationResult) {
     let phys = &genome.physiology;
 
     if phys.simulation_timestep <= 0.0 {
-        result.add_error(format!(
-            "Invalid simulation_timestep: {} (must be > 0.0)",
-            phys.simulation_timestep
-        ));
+        result.add_error(format!("Invalid simulation_timestep: {} (must be > 0.0)", phys.simulation_timestep));
     }
 
     if phys.simulation_timestep > 1.0 {
@@ -495,15 +442,12 @@ fn validate_physiology(genome: &RuntimeGenome, result: &mut ValidationResult) {
     if phys.plasticity_queue_depth == 0 {
         result.add_warning("plasticity_queue_depth is 0 (no plasticity history)".to_string());
     }
-
 }
-
 
 /// Cross-validate references between genome sections
 fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
     // Build morphology ID set for quick lookup
-    let morphology_ids: HashSet<String> =
-        genome.morphologies.morphology_ids().into_iter().collect();
+    let morphology_ids: HashSet<String> = genome.morphologies.morphology_ids().into_iter().collect();
 
     // Check if cortical_area areas reference morphologies in their properties
     for (cortical_id, area) in &genome.cortical_areas {
@@ -511,9 +455,7 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
         if let Some(Value::Object(dstmap)) = area.properties.get("dstmap") {
             for (dest_area, rules) in dstmap {
                 // Check if destination area exists (convert string to CorticalID)
-                if let Ok(dest_cortical_id) =
-                    crate::genome::parser::string_to_cortical_id(dest_area)
-                {
+                if let Ok(dest_cortical_id) = crate::genome::parser::string_to_cortical_id(dest_area) {
                     if !genome.cortical_areas.contains_key(&dest_cortical_id) {
                         result.add_error(format!(
                             "Cortical area '{}' references non-existent destination area '{}' in dstmap",
@@ -561,10 +503,7 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
 
     // Validate composite morphology references
     for (morphology_id, morphology) in genome.morphologies.iter() {
-        if let MorphologyParameters::Composite {
-            mapper_morphology, ..
-        } = &morphology.parameters
-        {
+        if let MorphologyParameters::Composite { mapper_morphology, .. } = &morphology.parameters {
             if !morphology_ids.contains(mapper_morphology) {
                 result.add_error(format!(
                     "Composite morphology '{}' references undefined mapper morphology '{}'",
@@ -578,9 +517,7 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig,
-    };
+    use crate::{GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig};
     use std::collections::HashMap;
 
     #[test]
@@ -638,8 +575,6 @@ mod tests {
             stats: GenomeStats::default(),
         };
 
-        
-
         let result = validate_genome(&genome);
 
         // Should pass with only warnings (empty morphologies)
@@ -679,10 +614,7 @@ mod tests {
         let result = validate_genome(&genome);
         assert!(!result.errors.is_empty(), "invalid should produce error");
         assert!(
-            result
-                .errors
-                .iter()
-                .any(|e| e.contains("Invalid quantization_precision")),
+            result.errors.iter().any(|e| e.contains("Invalid quantization_precision")),
             "Should have quantization error"
         );
     }
@@ -695,26 +627,17 @@ mod tests {
 
         let fixes = auto_fix_genome(&mut genome);
         assert!(fixes > 0, "Should apply at least one fix");
-        assert_eq!(
-            genome.physiology.quantization_precision, "int8",
-            "Should default to int8"
-        );
+        assert_eq!(genome.physiology.quantization_precision, "int8", "Should default to int8");
 
         // Test 2: Non-canonical (i8 → int8)
         genome.physiology.quantization_precision = "i8".to_string();
         let _fixes = auto_fix_genome(&mut genome);
-        assert_eq!(
-            genome.physiology.quantization_precision, "int8",
-            "Should normalize i8 to int8"
-        );
+        assert_eq!(genome.physiology.quantization_precision, "int8", "Should normalize i8 to int8");
 
         // Test 3: Invalid → default
         genome.physiology.quantization_precision = "invalid".to_string();
         let _fixes = auto_fix_genome(&mut genome);
-        assert_eq!(
-            genome.physiology.quantization_precision, "int8",
-            "Invalid should default to int8"
-        );
+        assert_eq!(genome.physiology.quantization_precision, "int8", "Invalid should default to int8");
     }
 
     fn create_minimal_genome() -> RuntimeGenome {

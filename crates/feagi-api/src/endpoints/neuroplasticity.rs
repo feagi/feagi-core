@@ -10,26 +10,15 @@ use crate::common::{Json, Path, State};
 use std::collections::HashMap;
 
 /// Get the current plasticity queue depth (number of pending plasticity operations).
-#[utoipa::path(
-    get,
-    path = "/v1/neuroplasticity/plasticity_queue_depth",
-    tag = "neuroplasticity"
-)]
+#[utoipa::path(get, path = "/v1/neuroplasticity/plasticity_queue_depth", tag = "neuroplasticity")]
 pub async fn get_plasticity_queue_depth(State(_state): State<ApiState>) -> ApiResult<Json<i32>> {
     // TODO: Get from plasticity service
     Ok(Json(0))
 }
 
 /// Set the plasticity queue depth to control how many operations can be pending.
-#[utoipa::path(
-    put,
-    path = "/v1/neuroplasticity/plasticity_queue_depth",
-    tag = "neuroplasticity"
-)]
-pub async fn put_plasticity_queue_depth(
-    State(_state): State<ApiState>,
-    Json(depth): Json<i32>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+#[utoipa::path(put, path = "/v1/neuroplasticity/plasticity_queue_depth", tag = "neuroplasticity")]
+pub async fn put_plasticity_queue_depth(State(_state): State<ApiState>, Json(depth): Json<i32>) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Plasticity queue depth set to {}", depth);
 
     Ok(Json(HashMap::from([(
@@ -47,14 +36,9 @@ pub async fn put_plasticity_queue_depth(
         (status = 200, description = "Plasticity status", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_status(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let mut response = HashMap::new();
-    response.insert(
-        "global_plasticity_enabled".to_string(),
-        serde_json::json!(true),
-    );
+    response.insert("global_plasticity_enabled".to_string(), serde_json::json!(true));
     response.insert("transforming_areas".to_string(), serde_json::json!([]));
     response.insert("queue_depth".to_string(), serde_json::json!(0));
 
@@ -107,10 +91,7 @@ pub async fn post_configure(
         (status = 200, description = "Plasticity enabled", body = HashMap<String, String>)
     )
 )]
-pub async fn post_enable_area(
-    State(_state): State<ApiState>,
-    Path(area_id): Path<String>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_enable_area(State(_state): State<ApiState>, Path(area_id): Path<String>) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Enabling plasticity for area: {}", area_id);
 
     Ok(Json(HashMap::from([(
@@ -131,10 +112,7 @@ pub async fn post_enable_area(
         (status = 200, description = "Plasticity disabled", body = HashMap<String, String>)
     )
 )]
-pub async fn post_disable_area(
-    State(_state): State<ApiState>,
-    Path(area_id): Path<String>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_disable_area(State(_state): State<ApiState>, Path(area_id): Path<String>) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Disabling plasticity for area: {}", area_id);
 
     Ok(Json(HashMap::from([(

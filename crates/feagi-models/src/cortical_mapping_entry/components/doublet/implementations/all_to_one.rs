@@ -1,9 +1,9 @@
+use crate::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use crate::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
 use feagi_data::neurons::{DimensionalCorticalArea4DCoordinate, NeuronCorticalLocalIndex, NeuronVoxelDensityIndex};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
-use crate::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 
 /// Maps every neuron of the source cortical area to every neuron of a single destination voxel
 /// (its full density column). The inverse of
@@ -27,22 +27,17 @@ impl<FIQ: FeagiIndexQuantization> DoubletIteratorAllToOne<FIQ> {
         destination_layout: &CorticalAreaLayoutDimensional<FIQ>,
     ) -> Self {
         let destination_dimensions = destination_layout.dimensions;
-        let probe = DimensionalCorticalArea4DCoordinate::new_from_voxel_and_density(
-            destination_voxel_coordinate,
-            NeuronVoxelDensityIndex::QUANT_ZERO,
-        );
+        let probe =
+            DimensionalCorticalArea4DCoordinate::new_from_voxel_and_density(destination_voxel_coordinate, NeuronVoxelDensityIndex::QUANT_ZERO);
         let source_count = source_layout.dimensions.number_contained_elements();
-        if !destination_dimensions.contains_coordinate(&probe)
-            || source_count == NeuronCorticalLocalIndex::QUANT_ZERO
-        {
+        if !destination_dimensions.contains_coordinate(&probe) || source_count == NeuronCorticalLocalIndex::QUANT_ZERO {
             return Self::empty();
         }
 
         // Linear indexes increment along x fastest, so the neurons of a single voxel are a full
         // xyz plane apart from each other rather than being contiguous.
-        let destination_density_stride = destination_dimensions.get_x().deref()
-            * destination_dimensions.get_y().deref()
-            * destination_dimensions.get_z().deref();
+        let destination_density_stride =
+            destination_dimensions.get_x().deref() * destination_dimensions.get_y().deref() * destination_dimensions.get_z().deref();
 
         Self {
             destination_base_index: destination_dimensions.coordinate_to_linear_index_unchecked(probe),
@@ -93,8 +88,7 @@ impl<FIQ: FeagiIndexQuantization> Iterator for DoubletIteratorAllToOne<FIQ> {
         // Counted in usize rather than in the neuron quantization, as the total number of pairs
         // can exceed what a single neuron index is able to hold.
         let remaining_sources = self.source_count.quant_to_usize() - self.source_cursor.quant_to_usize();
-        let remaining = (remaining_sources * self.destination_density_count.quant_to_usize())
-            - self.destination_cursor.quant_to_usize();
+        let remaining = (remaining_sources * self.destination_density_count.quant_to_usize()) - self.destination_cursor.quant_to_usize();
         (remaining, Some(remaining))
     }
 }

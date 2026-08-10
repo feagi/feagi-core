@@ -155,11 +155,7 @@ impl BurstActivitySummary {
         } else {
             0.0
         };
-        let mean_sample_potential = if sample_count > 0 {
-            potential_sum / sample_count as f64
-        } else {
-            0.0
-        };
+        let mean_sample_potential = if sample_count > 0 { potential_sum / sample_count as f64 } else { 0.0 };
 
         Self {
             burst_num,
@@ -218,10 +214,7 @@ impl BurstTaps {
 /// Returns 0 when the system clock is misconfigured rather than panicking.
 pub fn now_unix_ms() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -342,10 +335,7 @@ mod tests {
 
     #[test]
     fn activity_summary_aggregates_counts_and_potentials() {
-        let areas = vec![
-            area("aaaaAA==", 3, &[0.2, 0.4, 0.6]),
-            area("bbbbAA==", 1, &[1.0]),
-        ];
+        let areas = vec![area("aaaaAA==", 3, &[0.2, 0.4, 0.6]), area("bbbbAA==", 1, &[1.0])];
         let summary = BurstActivitySummary::from_areas(5, 42, &areas);
 
         assert_eq!(summary.active_area_count, 2);

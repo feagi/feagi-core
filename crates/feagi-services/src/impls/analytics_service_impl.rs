@@ -12,9 +12,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use feagi_brain_development::ConnectomeManager;
+use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_state_manager::StateManager;
-use feagi_genomic_context::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use tracing::trace;
 
@@ -28,14 +28,8 @@ pub struct AnalyticsServiceImpl {
 }
 
 impl AnalyticsServiceImpl {
-    pub fn new(
-        connectome: Arc<RwLock<ConnectomeManager>>,
-        burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
-    ) -> Self {
-        Self {
-            connectome,
-            burst_runner,
-        }
+    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>, burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>) -> Self {
+        Self { connectome, burst_runner }
     }
 }
 
@@ -88,16 +82,13 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         let manager = self.connectome.read();
         let neuron_count = manager.get_neuron_count_in_area(
-            &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
+            &CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
         );
         let synapse_count = manager.get_synapse_count_in_area(
-            &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
+            &CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
         );
         let density = manager.get_neuron_density(
-            &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
+            &CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
         );
         let populated = neuron_count > 0;
 
@@ -117,25 +108,19 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         let stats: Vec<CorticalAreaStats> = all_stats
             .into_iter()
-            .map(
-                |(cortical_id, neuron_count, synapse_count, density)| CorticalAreaStats {
-                    cortical_id,
-                    neuron_count,
-                    synapse_count,
-                    density,
-                    populated: neuron_count > 0,
-                },
-            )
+            .map(|(cortical_id, neuron_count, synapse_count, density)| CorticalAreaStats {
+                cortical_id,
+                neuron_count,
+                synapse_count,
+                density,
+                populated: neuron_count > 0,
+            })
             .collect();
 
         Ok(stats)
     }
 
-    async fn get_connectivity_stats(
-        &self,
-        source_area: &str,
-        target_area: &str,
-    ) -> ServiceResult<ConnectivityStats> {
+    async fn get_connectivity_stats(&self, source_area: &str, target_area: &str) -> ServiceResult<ConnectivityStats> {
         trace!(target: "feagi-services",
             "Getting connectivity stats: {} -> {}",
             source_area,
@@ -143,12 +128,10 @@ impl AnalyticsService for AnalyticsServiceImpl {
         );
 
         // Convert String to CorticalID
-        let source_id = CorticalID::try_from_base_64(source_area).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid source cortical_area ID: {}", e))
-        })?;
-        let target_id = CorticalID::try_from_base_64(target_area).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid target cortical_area ID: {}", e))
-        })?;
+        let source_id =
+            CorticalID::try_from_base_64(source_area).map_err(|e| ServiceError::InvalidInput(format!("Invalid source cortical_area ID: {}", e)))?;
+        let target_id =
+            CorticalID::try_from_base_64(target_area).map_err(|e| ServiceError::InvalidInput(format!("Invalid target cortical_area ID: {}", e)))?;
 
         let manager = self.connectome.read();
 
@@ -181,9 +164,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
             for (target_neuron_id, weight, _psp, synapse_type) in outgoing {
                 // Check if target neuron is in target area
-                if let Some(target_cortical_id) =
-                    manager.get_neuron_cortical_id(target_neuron_id as u64)
-                {
+                if let Some(target_cortical_id) = manager.get_neuron_cortical_id(target_neuron_id as u64) {
                     if target_cortical_id.as_base_64() == target_area {
                         synapse_count += 1;
                         total_weight += weight as u64;
@@ -250,13 +231,10 @@ impl AnalyticsService for AnalyticsServiceImpl {
         trace!(target: "feagi-services", "Getting neuron density for area: {}", cortical_id);
 
         // Convert String to CorticalID
-        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
+        let cortical_id_typed =
+            CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
 
-        let density = self
-            .connectome
-            .read()
-            .get_neuron_density(&cortical_id_typed);
+        let density = self.connectome.read().get_neuron_density(&cortical_id_typed);
         Ok(density)
     }
 

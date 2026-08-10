@@ -9,9 +9,7 @@
 #[cfg(feature = "agent-client-asynchelper-tokio")]
 use crate::clients::recovery::health_fetch::HealthFetchConfig;
 use crate::clients::recovery::health_watcher::{HealthEvent, HealthWatcher};
-use crate::clients::recovery::reconnect_policy::{
-    ReconnectDecision, ReconnectPolicy, RecoveryTrigger,
-};
+use crate::clients::recovery::reconnect_policy::{ReconnectDecision, ReconnectPolicy, RecoveryTrigger};
 use crate::clients::recovery::session::RebuildableSession;
 use crate::FeagiAgentError;
 use serde::{Deserialize, Serialize};
@@ -54,16 +52,8 @@ pub fn run_recovery_tick_blocking<S: RebuildableSession>(
     transport_send_failed: bool,
     now_ms: u64,
 ) -> RecoveryTickReport {
-    let snapshot_result =
-        crate::clients::recovery::health_fetch::fetch_health_snapshot_blocking(fetch_config);
-    run_recovery_tick_with_snapshot(
-        session,
-        watcher,
-        policy,
-        snapshot_result,
-        transport_send_failed,
-        now_ms,
-    )
+    let snapshot_result = crate::clients::recovery::health_fetch::fetch_health_snapshot_blocking(fetch_config);
+    run_recovery_tick_with_snapshot(session, watcher, policy, snapshot_result, transport_send_failed, now_ms)
 }
 
 /// Async variant of [`run_recovery_tick_blocking`].
@@ -76,16 +66,8 @@ pub async fn run_recovery_tick<S: RebuildableSession>(
     transport_send_failed: bool,
     now_ms: u64,
 ) -> RecoveryTickReport {
-    let snapshot_result =
-        crate::clients::recovery::health_fetch::fetch_health_snapshot(fetch_config).await;
-    run_recovery_tick_with_snapshot(
-        session,
-        watcher,
-        policy,
-        snapshot_result,
-        transport_send_failed,
-        now_ms,
-    )
+    let snapshot_result = crate::clients::recovery::health_fetch::fetch_health_snapshot(fetch_config).await;
+    run_recovery_tick_with_snapshot(session, watcher, policy, snapshot_result, transport_send_failed, now_ms)
 }
 
 /// Pure-logic core that takes a pre-fetched snapshot result.
@@ -98,10 +80,7 @@ pub fn run_recovery_tick_with_snapshot<S: RebuildableSession>(
     session: &mut S,
     watcher: &mut HealthWatcher,
     policy: &mut ReconnectPolicy,
-    snapshot_result: Result<
-        crate::clients::recovery::health_watcher::HealthSnapshot,
-        FeagiAgentError,
-    >,
+    snapshot_result: Result<crate::clients::recovery::health_watcher::HealthSnapshot, FeagiAgentError>,
     transport_send_failed: bool,
     now_ms: u64,
 ) -> RecoveryTickReport {
@@ -110,11 +89,7 @@ pub fn run_recovery_tick_with_snapshot<S: RebuildableSession>(
         Err(_fetch_error) => watcher.observe_unreachable(),
     };
 
-    let mut triggers: Vec<RecoveryTrigger> = health_events
-        .iter()
-        .cloned()
-        .map(RecoveryTrigger::Health)
-        .collect();
+    let mut triggers: Vec<RecoveryTrigger> = health_events.iter().cloned().map(RecoveryTrigger::Health).collect();
     if transport_send_failed {
         triggers.push(RecoveryTrigger::TransportSendFailed);
     }
@@ -195,11 +170,7 @@ mod tests {
         }
     }
 
-    fn snapshot(
-        feagi_session: Option<i64>,
-        genome_num: Option<i32>,
-        genome_loading: bool,
-    ) -> HealthSnapshot {
+    fn snapshot(feagi_session: Option<i64>, genome_num: Option<i32>, genome_loading: bool) -> HealthSnapshot {
         HealthSnapshot {
             feagi_session,
             genome_num,
@@ -215,14 +186,7 @@ mod tests {
         let mut session = FakeSession::always_ok();
         let mut watcher = HealthWatcher::new();
         let mut policy = ReconnectPolicy::new(cfg());
-        let report = run_recovery_tick_with_snapshot(
-            &mut session,
-            &mut watcher,
-            &mut policy,
-            Ok(snapshot(Some(1), Some(1), false)),
-            false,
-            0,
-        );
+        let report = run_recovery_tick_with_snapshot(&mut session, &mut watcher, &mut policy, Ok(snapshot(Some(1), Some(1), false)), false, 0);
         assert!(report.health_events.is_empty());
         assert_eq!(report.decision, ReconnectDecision::Skip);
         assert!(!report.rebuild_succeeded);
@@ -234,22 +198,8 @@ mod tests {
         let mut session = FakeSession::always_ok();
         let mut watcher = HealthWatcher::new();
         let mut policy = ReconnectPolicy::new(cfg());
-        let _ = run_recovery_tick_with_snapshot(
-            &mut session,
-            &mut watcher,
-            &mut policy,
-            Ok(snapshot(Some(1), Some(1), true)),
-            false,
-            0,
-        );
-        let report = run_recovery_tick_with_snapshot(
-            &mut session,
-            &mut watcher,
-            &mut policy,
-            Ok(snapshot(Some(1), Some(2), false)),
-            false,
-            10,
-        );
+        let _ = run_recovery_tick_with_snapshot(&mut session, &mut watcher, &mut policy, Ok(snapshot(Some(1), Some(1), true)), false, 0);
+        let report = run_recovery_tick_with_snapshot(&mut session, &mut watcher, &mut policy, Ok(snapshot(Some(1), Some(2), false)), false, 10);
         assert!(report.rebuild_succeeded);
         assert_eq!(session.rebuilds.len(), 1);
     }
@@ -259,22 +209,8 @@ mod tests {
         let mut session = FakeSession::always_ok();
         let mut watcher = HealthWatcher::new();
         let mut policy = ReconnectPolicy::new(cfg());
-        let _ = run_recovery_tick_with_snapshot(
-            &mut session,
-            &mut watcher,
-            &mut policy,
-            Ok(snapshot(Some(1), Some(1), false)),
-            false,
-            0,
-        );
-        let report = run_recovery_tick_with_snapshot(
-            &mut session,
-            &mut watcher,
-            &mut policy,
-            Ok(snapshot(Some(1), Some(1), false)),
-            true,
-            10,
-        );
+        let _ = run_recovery_tick_with_snapshot(&mut session, &mut watcher, &mut policy, Ok(snapshot(Some(1), Some(1), false)), false, 0);
+        let report = run_recovery_tick_with_snapshot(&mut session, &mut watcher, &mut policy, Ok(snapshot(Some(1), Some(1), false)), true, 10);
         assert!(report.rebuild_succeeded);
         assert_eq!(session.rebuilds.len(), 1);
     }
@@ -284,14 +220,7 @@ mod tests {
         let mut session = FakeSession::always_ok();
         let mut watcher = HealthWatcher::new();
         let mut policy = ReconnectPolicy::new(cfg());
-        let _ = run_recovery_tick_with_snapshot(
-            &mut session,
-            &mut watcher,
-            &mut policy,
-            Ok(snapshot(Some(1), Some(1), false)),
-            false,
-            0,
-        );
+        let _ = run_recovery_tick_with_snapshot(&mut session, &mut watcher, &mut policy, Ok(snapshot(Some(1), Some(1), false)), false, 0);
         let _ = run_recovery_tick_with_snapshot(
             &mut session,
             &mut watcher,
@@ -300,14 +229,7 @@ mod tests {
             false,
             10,
         );
-        let report = run_recovery_tick_with_snapshot(
-            &mut session,
-            &mut watcher,
-            &mut policy,
-            Ok(snapshot(Some(1), Some(1), false)),
-            false,
-            20,
-        );
+        let report = run_recovery_tick_with_snapshot(&mut session, &mut watcher, &mut policy, Ok(snapshot(Some(1), Some(1), false)), false, 20);
         assert!(report.health_events.contains(&HealthEvent::FeagiBackOnline));
         assert!(report.rebuild_succeeded);
     }
@@ -320,22 +242,8 @@ mod tests {
         ]);
         let mut watcher = HealthWatcher::new();
         let mut policy = ReconnectPolicy::new(cfg());
-        let _ = run_recovery_tick_with_snapshot(
-            &mut session,
-            &mut watcher,
-            &mut policy,
-            Ok(snapshot(Some(1), Some(1), false)),
-            false,
-            0,
-        );
-        let _ = run_recovery_tick_with_snapshot(
-            &mut session,
-            &mut watcher,
-            &mut policy,
-            Ok(snapshot(Some(2), Some(1), false)),
-            false,
-            10,
-        );
+        let _ = run_recovery_tick_with_snapshot(&mut session, &mut watcher, &mut policy, Ok(snapshot(Some(1), Some(1), false)), false, 0);
+        let _ = run_recovery_tick_with_snapshot(&mut session, &mut watcher, &mut policy, Ok(snapshot(Some(2), Some(1), false)), false, 10);
         // Second attempt is past cooldown.
         let _ = run_recovery_tick_with_snapshot(
             &mut session,

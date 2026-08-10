@@ -1,6 +1,6 @@
-use half::{bf16, f16};
-use crate::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait};
 use crate::values::quantizable::custom_data_types::StorageF8;
+use crate::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait};
+use half::{bf16, f16};
 
 /// Defines the quantization of the neuron potential for a specific cortical area. All cortical
 /// areas must have this property. This quantization is set per cortical area, and
@@ -9,7 +9,7 @@ use crate::values::quantizable::custom_data_types::StorageF8;
 pub trait MembranePotentialQuantization: Clone + Copy {
     /// Defines the quantization of the membrane potential of a neuron within a cortical area.
     type MembranePotentialQuant: QuantizedDecimalTrait;
-    
+
     fn get_quantization_level() -> DecimalQuantizationLevel {
         Self::MembranePotentialQuant::LEVEL
     }

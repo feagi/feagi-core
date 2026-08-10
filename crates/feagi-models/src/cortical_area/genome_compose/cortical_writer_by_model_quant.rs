@@ -1,7 +1,7 @@
 // TODO this should be macro generated
 
-use crate::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
 use crate::cortical_area::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
+use crate::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
 
 /// This is the enum that is used to define what cortical area to create and how. All neuron models
 /// have a "raw" method defined that allows creating from data directly, but can also have their own
@@ -9,7 +9,6 @@ use crate::cortical_area::neuron_model_implementations::feagi_advanced::composer
 pub enum CorticalWriterByModelQuant {
     FeagiAdvanced(FeagiAdvancedModelWriter),
 }
-
 
 pub enum FeagiAdvancedModelWriter {
     Standard(FeagiAdvancedModelCorticalWriter<FeagiAdvancedModelStandardQuant>),

@@ -11,11 +11,11 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+use feagi_genomic_context::brain_region::BrainRegion;
 use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use feagi_genomic_context::brain_region::BrainRegion;
-use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 /// Complete runtime genome representation
 #[derive(Debug, Clone)]
@@ -146,9 +146,7 @@ pub enum MorphologyParameters {
     Vectors { vectors: Vec<[i32; 3]> },
 
     /// Pattern parameters: list of [source_pattern, dest_pattern] pairs
-    Patterns {
-        patterns: Vec<[Vec<PatternElement>; 2]>,
-    },
+    Patterns { patterns: Vec<[Vec<PatternElement>; 2]> },
 
     /// Function parameters: empty for built-in functions
     Functions {},
@@ -209,16 +207,8 @@ impl Serialize for PatternElement {
                 }
             }
             PatternElement::Range(lo, hi) => {
-                let lo_str = if *lo >= 0 {
-                    format!("?+{}", lo)
-                } else {
-                    format!("?{}", lo)
-                };
-                let hi_str = if *hi >= 0 {
-                    format!("?+{}", hi)
-                } else {
-                    format!("?{}", hi)
-                };
+                let lo_str = if *lo >= 0 { format!("?+{}", lo) } else { format!("?{}", lo) };
+                let hi_str = if *hi >= 0 { format!("?+{}", hi) } else { format!("?{}", hi) };
                 serializer.serialize_str(&format!("{}:{}", lo_str, hi_str))
             }
         }
@@ -237,16 +227,11 @@ impl<'de> Deserialize<'de> for PatternElement {
                 if let Some(i) = n.as_i64() {
                     Ok(PatternElement::Value(i as i32))
                 } else {
-                    Err(serde::de::Error::custom(
-                        "Pattern element must be an integer",
-                    ))
+                    Err(serde::de::Error::custom("Pattern element must be an integer"))
                 }
             }
-            serde_json::Value::String(s) => Self::parse_string(&s)
-                .ok_or_else(|| serde::de::Error::custom(format!("Unknown pattern element: {}", s))),
-            _ => Err(serde::de::Error::custom(
-                "Pattern element must be number or string",
-            )),
+            serde_json::Value::String(s) => Self::parse_string(&s).ok_or_else(|| serde::de::Error::custom(format!("Unknown pattern element: {}", s))),
+            _ => Err(serde::de::Error::custom("Pattern element must be number or string")),
         }
     }
 }

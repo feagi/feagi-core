@@ -12,9 +12,9 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{EvoResult, RuntimeGenome};
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 /// Convert hierarchical genome (RuntimeGenome) to flat format (3.0)
 ///
@@ -42,13 +42,10 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         if let Some(granularity_value) = area.properties.get("visualization_voxel_granularity") {
             if let Some(arr) = granularity_value.as_array() {
                 if arr.len() == 3 {
-                    if let (Some(x), Some(y), Some(z)) =
-                        (arr[0].as_u64(), arr[1].as_u64(), arr[2].as_u64())
-                    {
+                    if let (Some(x), Some(y), Some(z)) = (arr[0].as_u64(), arr[1].as_u64(), arr[2].as_u64()) {
                         // Only save if != 1x1x1 (default)
                         if x != 1 || y != 1 || z != 1 {
-                            visualization_overrides
-                                .insert(cortical_id_base64.clone(), json!([x, y, z]));
+                            visualization_overrides.insert(cortical_id_base64.clone(), json!([x, y, z]));
                         }
                     }
                 }
@@ -61,14 +58,8 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
 
     // Metadata
     flat_genome.insert("genome_id".to_string(), json!(genome.metadata.genome_id));
-    flat_genome.insert(
-        "genome_title".to_string(),
-        json!(genome.metadata.genome_title),
-    );
-    flat_genome.insert(
-        "genome_description".to_string(),
-        json!(genome.metadata.genome_description),
-    );
+    flat_genome.insert("genome_title".to_string(), json!(genome.metadata.genome_title));
+    flat_genome.insert("genome_description".to_string(), json!(genome.metadata.genome_description));
     flat_genome.insert("version".to_string(), json!("3.0"));
     flat_genome.insert(
         "genome_schema_version".to_string(),
@@ -112,10 +103,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
 
         morphologies_map.insert(morphology_id.clone(), Value::Object(morph_data));
     }
-    flat_genome.insert(
-        "neuron_morphologies".to_string(),
-        Value::Object(morphologies_map),
-    );
+    flat_genome.insert("neuron_morphologies".to_string(), Value::Object(morphologies_map));
 
     // Physiology
     let physiology = json!({
@@ -157,8 +145,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         let mut region_data = serde_json::Map::new();
 
         // Serialize all properties from the BrainRegion
-        let region_json =
-            serde_json::to_value(region).map_err(|e| crate::EvoError::json_error(e.to_string()))?;
+        let region_json = serde_json::to_value(region).map_err(|e| crate::EvoError::json_error(e.to_string()))?;
 
         if let Value::Object(mut props) = region_json {
             // Convert cortical_area ID arrays to base64
@@ -185,38 +172,22 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         brain_regions_map.insert(region_id.clone(), Value::Object(region_data));
     }
 
-    flat_genome.insert(
-        "brain_regions".to_string(),
-        Value::Object(brain_regions_map),
-    );
+    flat_genome.insert("brain_regions".to_string(), Value::Object(brain_regions_map));
 
     Ok(Value::Object(flat_genome))
 }
 
 /// Convert a single cortical_area area to flat format keys
-fn convert_area_to_flat(
-    cortical_id_base64: &str,
-    area: &CorticalArea,
-    flat_blueprint: &mut serde_json::Map<String, Value>,
-) -> EvoResult<()> {
+fn convert_area_to_flat(cortical_id_base64: &str, area: &CorticalArea, flat_blueprint: &mut serde_json::Map<String, Value>) -> EvoResult<()> {
     let prefix = format!("_____10c-{}", cortical_id_base64);
 
     // CRITICAL: Always write core fields first (dimensions, position, name) from CorticalArea struct
     // These are structural properties that MUST be present
 
     // Dimensions (block_boundaries) - always write from struct
-    flat_blueprint.insert(
-        format!("{}-cx-___bbx-i", prefix),
-        json!(area.dimensions.get_x().deref()),
-    );
-    flat_blueprint.insert(
-        format!("{}-cx-___bby-i", prefix),
-        json!(area.dimensions.get_y().deref()),
-    );
-    flat_blueprint.insert(
-        format!("{}-cx-___bbz-i", prefix),
-        json!(area.dimensions.get_z().deref()),
-    );
+    flat_blueprint.insert(format!("{}-cx-___bbx-i", prefix), json!(area.dimensions.get_x().deref()));
+    flat_blueprint.insert(format!("{}-cx-___bby-i", prefix), json!(area.dimensions.get_y().deref()));
+    flat_blueprint.insert(format!("{}-cx-___bbz-i", prefix), json!(area.dimensions.get_z().deref()));
 
     // Position (relative_coordinate) - always write from struct
     flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), json!(area.position.x()));
@@ -353,7 +324,9 @@ fn convert_properties_to_flat(
             if let Some(prop_value) = properties.get(*prop_key) {
                 tracing::debug!(
                     "[GENOME-CONVERT] Found {}={} in properties for area {}, writing to flat format",
-                    prop_key, prop_value, prefix
+                    prop_key,
+                    prop_value,
+                    prefix
                 );
             } else {
                 let default_val = required_defaults.get(*prop_key).unwrap_or(&json!(null));
@@ -421,12 +394,7 @@ fn morphology_parameters_to_json(params: &crate::MorphologyParameters) -> Value 
         crate::MorphologyParameters::Patterns { patterns } => {
             let patterns_json: Vec<Value> = patterns
                 .iter()
-                .map(|pattern| {
-                    json!([
-                        pattern_elements_to_json(&pattern[0]),
-                        pattern_elements_to_json(&pattern[1])
-                    ])
-                })
+                .map(|pattern| json!([pattern_elements_to_json(&pattern[0]), pattern_elements_to_json(&pattern[1])]))
                 .collect();
 
             json!({
@@ -471,16 +439,8 @@ fn pattern_elements_to_json(elements: &[crate::PatternElement]) -> Value {
                 }
             }
             crate::PatternElement::Range(lo, hi) => {
-                let lo_str = if *lo >= 0 {
-                    format!("?+{}", lo)
-                } else {
-                    format!("?{}", lo)
-                };
-                let hi_str = if *hi >= 0 {
-                    format!("?+{}", hi)
-                } else {
-                    format!("?{}", hi)
-                };
+                let lo_str = if *lo >= 0 { format!("?+{}", lo) } else { format!("?{}", lo) };
+                let hi_str = if *hi >= 0 { format!("?+{}", hi) } else { format!("?{}", hi) };
                 json!(format!("{}:{}", lo_str, hi_str))
             }
         })
@@ -527,7 +487,4 @@ mod tests {
         assert!(flat["neuron_morphologies"].is_object());
         assert!(flat["physiology"].is_object());
     }
-    
-
-
 }

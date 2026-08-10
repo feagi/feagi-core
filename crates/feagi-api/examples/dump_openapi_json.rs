@@ -24,10 +24,7 @@ fn main() {
 
     // Count tag definitions
     let tag_count = json.matches("\"name\"").count();
-    println!(
-        "\nTotal 'name' fields (approximate tag count): {}",
-        tag_count
-    );
+    println!("\nTotal 'name' fields (approximate tag count): {}", tag_count);
 
     // Write full JSON to file for inspection
     std::fs::write("/tmp/openapi_dump.json", &json).unwrap();

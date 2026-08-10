@@ -43,11 +43,7 @@ impl AuthContext {
 
     /// Create authenticated context (future)
     #[allow(dead_code)]
-    pub fn authenticated(
-        principal_id: impl Into<String>,
-        method: AuthMethod,
-        roles: Vec<String>,
-    ) -> Self {
+    pub fn authenticated(principal_id: impl Into<String>, method: AuthMethod, roles: Vec<String>) -> Self {
         Self {
             principal_id: principal_id.into(),
             auth_method: method,
@@ -80,9 +76,7 @@ pub struct AuthError {
 
 impl AuthError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
+        Self { message: message.into() }
     }
 }
 

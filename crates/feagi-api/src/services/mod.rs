@@ -31,16 +31,42 @@ pub fn empty_shared_genome() -> SharedGenome {
 ///
 /// The closure runs under a read guard, so it must not block or await. Callers clone or project
 /// what they need and return it.
-pub fn with_genome<T>(
-    genome: &SharedGenome,
-    f: impl FnOnce(&RuntimeGenome) -> T,
-) -> ServiceResult<T> {
+pub fn with_genome<T>(genome: &SharedGenome, f: impl FnOnce(&RuntimeGenome) -> T) -> ServiceResult<T> {
     match genome.read().as_ref() {
         Some(runtime_genome) => Ok(f(runtime_genome)),
         None => Err(ServiceError::NotFound {
             resource: "genome".to_string(),
             id: "current".to_string(),
         }),
+    }
+}
+
+/// Reads the current genome, answering with the default when none is loaded.
+///
+/// For questions of the form "what exists", a server with no genome holds nothing, and that is a
+/// reportable answer rather than a failure: an empty list, a zero count, `false`. Reserve
+/// [`with_genome`] for lookups of a specific item, where absence really is a miss.
+pub fn with_genome_or_default<T: Default>(genome: &SharedGenome, f: impl FnOnce(&RuntimeGenome) -> T) -> T {
+    match genome.read().as_ref() {
+        Some(runtime_genome) => f(runtime_genome),
+        None => T::default(),
+    }
+}
+
+/// Mutates the current genome, or reports that none is loaded.
+///
+/// Writes report [`ServiceError::InvalidState`] rather than the `NotFound` that reads use: asking
+/// about a genome that is not there is a lookup miss, whereas trying to change one is an operation
+/// the server is not in a position to perform. This matches the pre-refactor service behaviour.
+///
+/// The closure runs under a write guard, so it must not block or await.
+pub fn with_genome_mut<T>(genome: &SharedGenome, operation: &str, f: impl FnOnce(&mut RuntimeGenome) -> T) -> ServiceResult<T> {
+    match genome.write().as_mut() {
+        Some(runtime_genome) => Ok(f(runtime_genome)),
+        None => Err(ServiceError::InvalidState(format!(
+            "no genome is loaded, so {} cannot be performed",
+            operation
+        ))),
     }
 }
 
@@ -52,17 +78,14 @@ pub type OptionalNpu = Option<Arc<dyn npu_access::NpuAccess>>;
 
 /// Reports that no NPU was injected, for services asked to perform an engine operation.
 pub fn npu_unavailable(operation: &str) -> ServiceError {
-    ServiceError::NotImplemented(format!(
-        "{} requires a running NPU, which this server was started without",
-        operation
-    ))
+    ServiceError::NotImplemented(format!("{} requires a running NPU, which this server was started without", operation))
 }
 
 pub mod analytics;
 pub mod connectome;
-pub mod npu_access;
 pub mod genome;
 pub mod neuron;
+pub mod npu_access;
 pub mod runtime;
 pub mod state;
 pub mod system;
@@ -74,5 +97,5 @@ pub use connectome::GenomeConnectomeService;
 pub use genome::GenomeGenomeService;
 pub use neuron::GenomeNeuronService;
 pub use runtime::GenomeRuntimeService;
-pub use system::GenomeSystemService;
 pub use state::create_api_state_from_genome;
+pub use system::GenomeSystemService;

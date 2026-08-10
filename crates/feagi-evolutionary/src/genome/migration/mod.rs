@@ -189,9 +189,7 @@ impl ChainRegistry {
             )));
         }
         if self.migrators.contains_key(&from.as_u32()) {
-            return Err(MigrationError::InvalidRegistry(format!(
-                "duplicate migrator with from_version={from}"
-            )));
+            return Err(MigrationError::InvalidRegistry(format!("duplicate migrator with from_version={from}")));
         }
         self.migrators.insert(from.as_u32(), migrator);
         Ok(())
@@ -201,15 +199,10 @@ impl ChainRegistry {
     /// version. At most one normalizer per version is supported on
     /// purpose: composing multiple normalizers in a stable order is
     /// future work and not needed today.
-    pub fn register_normalizer(
-        &mut self,
-        normalizer: Box<dyn Normalizer>,
-    ) -> Result<(), MigrationError> {
+    pub fn register_normalizer(&mut self, normalizer: Box<dyn Normalizer>) -> Result<(), MigrationError> {
         let v = normalizer.schema_version();
         if self.normalizers.contains_key(&v.as_u32()) {
-            return Err(MigrationError::InvalidRegistry(format!(
-                "duplicate normalizer at schema_version={v}"
-            )));
+            return Err(MigrationError::InvalidRegistry(format!("duplicate normalizer at schema_version={v}")));
         }
         self.normalizers.insert(v.as_u32(), normalizer);
         Ok(())
@@ -332,11 +325,7 @@ pub(super) mod test_support {
                 });
             }
             let mut diag = MigrationStepDiagnostics::new(self.from, self.to);
-            let count = genome
-                .get("step_count")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0)
-                + 1;
+            let count = genome.get("step_count").and_then(|v| v.as_u64()).unwrap_or(0) + 1;
             genome
                 .as_object_mut()
                 .expect("test genome must be a JSON object")
@@ -364,8 +353,7 @@ mod tests {
     #[test]
     fn registry_accepts_a_well_formed_migrator() {
         let mut reg = ChainRegistry::new();
-        reg.register_migrator(SyntheticMigrator::ok(2, "v2_to_v3"))
-            .unwrap();
+        reg.register_migrator(SyntheticMigrator::ok(2, "v2_to_v3")).unwrap();
         assert_eq!(reg.migrator_count(), 1);
         assert!(reg.migrator_for(GenomeSchemaVersion(2)).is_some());
         assert!(reg.migrator_for(GenomeSchemaVersion(3)).is_none());
@@ -384,10 +372,7 @@ mod tests {
             fn name(&self) -> &'static str {
                 "skip"
             }
-            fn migrate(
-                &self,
-                _genome: &mut Value,
-            ) -> Result<MigrationStepDiagnostics, MigrationError> {
+            fn migrate(&self, _genome: &mut Value) -> Result<MigrationStepDiagnostics, MigrationError> {
                 unreachable!()
             }
         }
@@ -399,18 +384,14 @@ mod tests {
     #[test]
     fn registry_rejects_duplicate_from_version() {
         let mut reg = ChainRegistry::new();
-        reg.register_migrator(SyntheticMigrator::ok(2, "first"))
-            .unwrap();
-        let err = reg
-            .register_migrator(SyntheticMigrator::ok(2, "second"))
-            .unwrap_err();
+        reg.register_migrator(SyntheticMigrator::ok(2, "first")).unwrap();
+        let err = reg.register_migrator(SyntheticMigrator::ok(2, "second")).unwrap_err();
         assert!(matches!(err, MigrationError::InvalidRegistry(_)));
     }
 
     #[test]
     fn migration_step_diagnostics_records_transformations() {
-        let mut diag =
-            MigrationStepDiagnostics::new(GenomeSchemaVersion(2), GenomeSchemaVersion(3));
+        let mut diag = MigrationStepDiagnostics::new(GenomeSchemaVersion(2), GenomeSchemaVersion(3));
         diag.record("converted blueprint keys");
         diag.record("renamed legacy fields");
         assert_eq!(diag.transformations.len(), 2);

@@ -220,14 +220,8 @@ mod tests {
     #[test]
     fn test_neuron_type_classification() {
         assert_eq!(NeuronIdManager::get_neuron_type(1000), NeuronType::Regular);
-        assert_eq!(
-            NeuronIdManager::get_neuron_type(50_000_000),
-            NeuronType::Memory
-        );
-        assert_eq!(
-            NeuronIdManager::get_neuron_type(100_000_000),
-            NeuronType::Reserved
-        );
+        assert_eq!(NeuronIdManager::get_neuron_type(50_000_000), NeuronType::Memory);
+        assert_eq!(NeuronIdManager::get_neuron_type(100_000_000), NeuronType::Reserved);
     }
 
     #[test]

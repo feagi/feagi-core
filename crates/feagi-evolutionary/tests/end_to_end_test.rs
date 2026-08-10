@@ -15,10 +15,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_evolutionary::{
-    create_genome_with_core_morphologies, load_genome_from_json, save_genome_to_json,
-    validate_genome,
-};
+use feagi_evolutionary::{create_genome_with_core_morphologies, load_genome_from_json, save_genome_to_json, validate_genome};
 
 /*
 #[test]
@@ -96,7 +93,6 @@ fn test_complete_genome_workflow() {
 
  */
 
-
 #[test]
 fn test_minimal_genome_creation() {
     use feagi_evolutionary::create_minimal_genome;
@@ -153,10 +149,7 @@ fn test_flat_to_hierarchical_conversion() {
     // Verify conversion
     assert!(hierarchical.get("blueprint").is_some());
     let blueprint = hierarchical.get("blueprint").unwrap().as_object().unwrap();
-    assert!(
-        blueprint.contains_key("___power"),
-        "Blueprint should contain ___power area"
-    );
+    assert!(blueprint.contains_key("___power"), "Blueprint should contain ___power area");
 
     let area = blueprint.get("___power").unwrap().as_object().unwrap();
     assert_eq!(area.get("cortical_name").unwrap(), "Test Area");
@@ -227,17 +220,12 @@ fn test_flat_dstmap_object_rules_preserved() {
     });
 
     let json_str = serde_json::to_string_pretty(&flat).unwrap();
-    let genome =
-        feagi_evolutionary::load_genome_from_json(&json_str).expect("Failed to load genome");
+    let genome = feagi_evolutionary::load_genome_from_json(&json_str).expect("Failed to load genome");
 
-    let src_id =
-        feagi_evolutionary::string_to_cortical_id("aXN2aQkABAA=").expect("Valid base64 src id");
+    let src_id = feagi_evolutionary::string_to_cortical_id("aXN2aQkABAA=").expect("Valid base64 src id");
     let dst_id_b64 = "b2ltZwkAAAA=";
 
-    let src_area = genome
-        .cortical_areas
-        .get(&src_id)
-        .expect("Source area should exist");
+    let src_area = genome.cortical_areas.get(&src_id).expect("Source area should exist");
 
     let dstmap = src_area
         .properties
@@ -245,10 +233,7 @@ fn test_flat_dstmap_object_rules_preserved() {
         .and_then(|v| v.as_object())
         .expect("cortical_mapping_dst should be present and an object");
 
-    let rules = dstmap
-        .get(dst_id_b64)
-        .and_then(|v| v.as_array())
-        .expect("dst rules should be an array");
+    let rules = dstmap.get(dst_id_b64).and_then(|v| v.as_array()).expect("dst rules should be an array");
 
     assert_eq!(rules.len(), 1);
     assert_eq!(rules[0]["morphology_id"], "projector");

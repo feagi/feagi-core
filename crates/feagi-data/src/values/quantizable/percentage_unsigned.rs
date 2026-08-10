@@ -32,11 +32,11 @@ impl<D: QuantizedDecimalTrait> PercentageUnsigned<D> {
         );
         Self(value)
     }
-    
+
     pub fn from_quantization<FromQuant: QuantizedDecimalTrait>(value: PercentageUnsigned<FromQuant>) -> Self {
         Self(value.get_decimal().to_quantization::<D>())
     }
-    
+
     pub fn to_quantization<ToQuant: QuantizedDecimalTrait>(self) -> PercentageUnsigned<ToQuant> {
         PercentageUnsigned(self.0.to_quantization::<ToQuant>())
     }

@@ -56,9 +56,7 @@ pub async fn post_stimulation_upload(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_reset(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_reset(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Reset simulation state
 
     Ok(Json(HashMap::from([(
@@ -115,10 +113,7 @@ pub async fn get_stats(State(_state): State<ApiState>) -> ApiResult<Json<HashMap
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_config(
-    State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, Value>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_config(State(_state): State<ApiState>, Json(_request): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Apply simulation configuration
 
     Ok(Json(HashMap::from([(

@@ -25,9 +25,7 @@ impl GenomeRuntimeService {
 
     /// The injected NPU, or an error naming the operation that needed it.
     fn npu(&self, operation: &str) -> ServiceResult<&dyn crate::services::NpuAccess> {
-        self.npu
-            .as_deref()
-            .ok_or_else(|| npu_unavailable(operation))
+        self.npu.as_deref().ok_or_else(|| npu_unavailable(operation))
     }
 }
 
@@ -107,9 +105,7 @@ impl RuntimeService for GenomeRuntimeService {
     }
 
     async fn reset_burst_count(&self) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode runtime control not yet implemented".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("WASM mode runtime control not yet implemented".to_string()))
     }
 
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>> {
@@ -120,11 +116,7 @@ impl RuntimeService for GenomeRuntimeService {
         Ok(vec![]) // TODO: Get from NPU if available
     }
 
-    async fn get_fire_queue_sample(
-        &self,
-    ) -> ServiceResult<
-        std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
-    > {
+    async fn get_fire_queue_sample(&self) -> ServiceResult<std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
         Ok(std::collections::HashMap::new()) // TODO: Get from NPU if available
     }
 
@@ -132,42 +124,24 @@ impl RuntimeService for GenomeRuntimeService {
         Ok(vec![]) // TODO: Get from NPU if available
     }
 
-    async fn configure_fire_ledger_window(
-        &self,
-        _cortical_idx: u32,
-        _window_size: usize,
-    ) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode runtime control not yet implemented".to_string(),
-        ))
+    async fn configure_fire_ledger_window(&self, _cortical_idx: u32, _window_size: usize) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented("WASM mode runtime control not yet implemented".to_string()))
     }
 
     async fn get_fcl_sampler_config(&self) -> ServiceResult<(f64, u32)> {
         Ok((0.0, 0)) // TODO: Get from NPU if available
     }
 
-    async fn set_fcl_sampler_config(
-        &self,
-        _frequency: Option<f64>,
-        _consumer: Option<u32>,
-    ) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode runtime control not yet implemented".to_string(),
-        ))
+    async fn set_fcl_sampler_config(&self, _frequency: Option<f64>, _consumer: Option<u32>) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented("WASM mode runtime control not yet implemented".to_string()))
     }
 
     async fn get_area_fcl_sample_rate(&self, _area_id: u32) -> ServiceResult<f64> {
         Ok(0.0) // TODO: Get from NPU if available
     }
 
-    async fn set_area_fcl_sample_rate(
-        &self,
-        _area_id: u32,
-        _sample_rate: f64,
-    ) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "WASM mode runtime control not yet implemented".to_string(),
-        ))
+    async fn set_area_fcl_sample_rate(&self, _area_id: u32, _sample_rate: f64) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented("WASM mode runtime control not yet implemented".to_string()))
     }
 
     async fn inject_sensory_by_coordinates(
@@ -181,22 +155,13 @@ impl RuntimeService for GenomeRuntimeService {
         ))
     }
 
-    async fn register_motor_subscriptions(
-        &self,
-        _agent_id: &str,
-        _cortical_ids: Vec<String>,
-        _rate_hz: f64,
-    ) -> ServiceResult<()> {
+    async fn register_motor_subscriptions(&self, _agent_id: &str, _cortical_ids: Vec<String>, _rate_hz: f64) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented(
             "WASM mode motor subscription not yet implemented".to_string(),
         ))
     }
 
-    async fn register_visualization_subscriptions(
-        &self,
-        _agent_id: &str,
-        _rate_hz: f64,
-    ) -> ServiceResult<()> {
+    async fn register_visualization_subscriptions(&self, _agent_id: &str, _rate_hz: f64) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented(
             "WASM mode visualization subscription not yet implemented".to_string(),
         ))
@@ -218,10 +183,7 @@ impl RuntimeService for GenomeRuntimeService {
         // No-op: WASM mode does not support agent subscriptions
     }
 
-    async fn reset_cortical_area_states(
-        &self,
-        _cortical_indices: &[u32],
-    ) -> ServiceResult<Vec<(u32, usize)>> {
+    async fn reset_cortical_area_states(&self, _cortical_indices: &[u32]) -> ServiceResult<Vec<(u32, usize)>> {
         Err(ServiceError::NotImplemented(
             "WASM mode cortical_area reset not yet implemented".to_string(),
         ))

@@ -29,7 +29,6 @@ pub enum FeagiByteStructureType {
 }
 
 impl FeagiByteStructureType {
-    
     /*
     /// Determines the structure type from the first byte of a byte array.
     ///
@@ -51,14 +50,13 @@ impl FeagiByteStructureType {
             return Err(FeagiDataError::DeserializationError(
                 "Cannot ascertain type of empty bytes array!".into(),
             ));
-            
+
              */
         }
         FeagiByteStructureType::try_from(bytes[0])
     }
-    
-     */
 
+     */
 }
 
 impl TryFrom<u8> for FeagiByteStructureType {

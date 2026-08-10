@@ -1,10 +1,10 @@
-use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::cortical_area::components::neuron_history::implementations::none::NeuronModelNoNeuronHistory;
 use crate::cortical_mapping_entry::synapse::synapse_data::EmptyPerSynapseData;
 use crate::cortical_mapping_entry::synapse::synapse_model::SynapseModel;
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::data::UniformSynapseModelCorticalMappingEntryData;
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelQuantization;
+use feagi_data::neurons::NeuronMembranePotential;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub struct UniformSynapseModel<FIQ, SMQ>
 where
@@ -31,6 +31,6 @@ where
         let incoming = incoming_potential.deref();
         let multiplier = mapping_entry_data.post_synaptic_multiplier.deref();
 
-        NeuronMembranePotential::new(incoming *  multiplier)
+        NeuronMembranePotential::new(incoming * multiplier)
     }
 }

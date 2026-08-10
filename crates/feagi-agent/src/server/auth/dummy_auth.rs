@@ -7,10 +7,7 @@ use crate::FeagiAgentError;
 pub struct DummyAuth {}
 
 impl AgentAuth for DummyAuth {
-    fn verify_agent_allowed_to_connect(
-        &mut self,
-        _request: &RegistrationRequest,
-    ) -> Result<(), FeagiAgentError> {
+    fn verify_agent_allowed_to_connect(&mut self, _request: &RegistrationRequest) -> Result<(), FeagiAgentError> {
         Ok(()) // Do Nothing
     }
 }

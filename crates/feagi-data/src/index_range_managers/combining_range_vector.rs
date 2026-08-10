@@ -1,6 +1,6 @@
+use crate::index_range_managers::feagi_index_range_manager_error::{FeagiIndexRangeManagerError, FeagiIndexRangeVectorFailedMerge};
 use crate::values::quantizable::QuantizedIndexCountTrait;
 use core::ops::Range;
-use crate::index_range_managers::feagi_index_range_manager_error::{FeagiIndexRangeManagerError, FeagiIndexRangeVectorFailedMerge};
 
 /// Contains a vector of incrementing (by start / end index) ranges that are not overlapping, as well as indexes to those
 /// ranges in order of decrementing lengths of each range. Inserting a range will attempt to insert
@@ -137,9 +137,10 @@ impl<Q: QuantizedIndexCountTrait> CombiningRangeVector<Q> {
     /// this struct may be left in an invalid state
     pub fn undo_insert_range_merge(&mut self, undoing_range: Range<Q>) {
         // Locate the (possibly merged) range that now contains the inserted range and cut it back out.
-        let position = self.ranges.iter().position(|range| {
-            range.start <= undoing_range.start && undoing_range.end <= range.end
-        });
+        let position = self
+            .ranges
+            .iter()
+            .position(|range| range.start <= undoing_range.start && undoing_range.end <= range.end);
         let Some(position) = position else {
             return;
         };
@@ -205,9 +206,7 @@ impl<Q: QuantizedIndexCountTrait> CombiningRangeVector<Q> {
                 range.end - range.start
             };
             // Decrementing order: longest ranges first.
-            length_b
-                .partial_cmp(&length_a)
-                .expect("range lengths are always comparable")
+            length_b.partial_cmp(&length_a).expect("range lengths are always comparable")
         });
     }
 }

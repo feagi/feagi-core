@@ -32,13 +32,8 @@ impl<'a> ChainRunner<'a> {
     /// - `DowngradeRefused` if the genome is already past `target`.
     /// - `MissingMigrator` if the chain has a gap somewhere in the range.
     /// - `StepFailed` if any migrator returns an error.
-    pub fn run_to(
-        &self,
-        genome: &mut Value,
-        target: GenomeSchemaVersion,
-    ) -> Result<ChainResult, MigrationError> {
-        let from = detect_schema_version(genome)
-            .map_err(|e| MigrationError::DetectionFailed(e.to_string()))?;
+    pub fn run_to(&self, genome: &mut Value, target: GenomeSchemaVersion) -> Result<ChainResult, MigrationError> {
+        let from = detect_schema_version(genome).map_err(|e| MigrationError::DetectionFailed(e.to_string()))?;
 
         if from > target {
             return Err(MigrationError::DowngradeRefused { from, target });
@@ -54,24 +49,15 @@ impl<'a> ChainRunner<'a> {
         // normalize+validate pass at the starting (== target) version.
         // The post-hop branch below handles the migration case symmetrically.
         if from == target {
-            run_normalizer_if_present(
-                self.registry,
-                target,
-                genome,
-                &mut normalizers_applied,
-                &mut per_normalizer_diagnostics,
-            )?;
+            run_normalizer_if_present(self.registry, target, genome, &mut normalizers_applied, &mut per_normalizer_diagnostics)?;
         }
 
         let mut current = from;
         while current < target {
-            let migrator =
-                self.registry
-                    .migrator_for(current)
-                    .ok_or(MigrationError::MissingMigrator {
-                        from: current,
-                        target,
-                    })?;
+            let migrator = self
+                .registry
+                .migrator_for(current)
+                .ok_or(MigrationError::MissingMigrator { from: current, target })?;
 
             let next = migrator.to_version();
             debug_assert_eq!(
@@ -92,13 +78,7 @@ impl<'a> ChainRunner<'a> {
 
             // Normalizer (if any) cleans bad values within the new
             // version before that version's validator inspects the genome.
-            run_normalizer_if_present(
-                self.registry,
-                next,
-                genome,
-                &mut normalizers_applied,
-                &mut per_normalizer_diagnostics,
-            )?;
+            run_normalizer_if_present(self.registry, next, genome, &mut normalizers_applied, &mut per_normalizer_diagnostics)?;
 
             // Advisory validation between hops. Errors are demoted to
             // warnings here; only the final-target validator is blocking.
@@ -221,16 +201,11 @@ mod tests {
         let runner = ChainRunner::new(&reg);
         let mut genome = json!({ "genome_schema_version": 100 });
 
-        let result = runner
-            .run_to(&mut genome, GenomeSchemaVersion(103))
-            .unwrap();
+        let result = runner.run_to(&mut genome, GenomeSchemaVersion(103)).unwrap();
 
         assert_eq!(result.from_version, GenomeSchemaVersion(100));
         assert_eq!(result.to_version, GenomeSchemaVersion(103));
-        assert_eq!(
-            result.migrators_applied,
-            vec!["v100_to_v101_test", "v101_to_v102_test", "synthetic"]
-        );
+        assert_eq!(result.migrators_applied, vec!["v100_to_v101_test", "v101_to_v102_test", "synthetic"]);
         assert_eq!(result.per_step_diagnostics.len(), 3);
         assert_eq!(genome["genome_schema_version"], json!(103));
         assert_eq!(genome["step_count"], json!(3));
@@ -240,14 +215,11 @@ mod tests {
     fn missing_migrator_in_range_errors() {
         let mut reg = ChainRegistry::new();
         // Register only the second hop, not the first.
-        reg.register_migrator(make_ok(101, "v101_to_v102_test"))
-            .unwrap();
+        reg.register_migrator(make_ok(101, "v101_to_v102_test")).unwrap();
         let runner = ChainRunner::new(&reg);
         let mut genome = json!({ "genome_schema_version": 100 });
 
-        let err = runner
-            .run_to(&mut genome, GenomeSchemaVersion(102))
-            .unwrap_err();
+        let err = runner.run_to(&mut genome, GenomeSchemaVersion(102)).unwrap_err();
         assert!(matches!(
             err,
             MigrationError::MissingMigrator { from, target }
@@ -258,16 +230,12 @@ mod tests {
     #[test]
     fn step_failure_aborts_chain() {
         let mut reg = ChainRegistry::new();
-        reg.register_migrator(make_ok(100, "v100_to_v101_test"))
-            .unwrap();
-        reg.register_migrator(make_failing(101, "v101_to_v102_test"))
-            .unwrap();
+        reg.register_migrator(make_ok(100, "v100_to_v101_test")).unwrap();
+        reg.register_migrator(make_failing(101, "v101_to_v102_test")).unwrap();
         let runner = ChainRunner::new(&reg);
         let mut genome = json!({ "genome_schema_version": 100 });
 
-        let err = runner
-            .run_to(&mut genome, GenomeSchemaVersion(102))
-            .unwrap_err();
+        let err = runner.run_to(&mut genome, GenomeSchemaVersion(102)).unwrap_err();
         assert!(matches!(err, MigrationError::StepFailed { .. }));
 
         // The first hop did succeed and stamped its version, even though
@@ -281,9 +249,7 @@ mod tests {
         let reg = ChainRegistry::new();
         let runner = ChainRunner::new(&reg);
         let mut genome = json!({ "genome_schema_version": 5 });
-        let err = runner
-            .run_to(&mut genome, GenomeSchemaVersion(3))
-            .unwrap_err();
+        let err = runner.run_to(&mut genome, GenomeSchemaVersion(3)).unwrap_err();
         assert!(matches!(
             err,
             MigrationError::DowngradeRefused { from, target }
@@ -296,9 +262,7 @@ mod tests {
         let reg = ChainRegistry::new();
         let runner = ChainRunner::new(&reg);
         let mut genome = json!({});
-        let err = runner
-            .run_to(&mut genome, GenomeSchemaVersion(3))
-            .unwrap_err();
+        let err = runner.run_to(&mut genome, GenomeSchemaVersion(3)).unwrap_err();
         assert!(matches!(err, MigrationError::DetectionFailed(_)));
     }
 
@@ -317,10 +281,7 @@ mod tests {
         fn name(&self) -> &'static str {
             self.name
         }
-        fn normalize(
-            &self,
-            genome: &mut Value,
-        ) -> Result<crate::genome::normalizers::NormalizationDiagnostics, MigrationError> {
+        fn normalize(&self, genome: &mut Value) -> Result<crate::genome::normalizers::NormalizationDiagnostics, MigrationError> {
             let mut diag = crate::genome::normalizers::NormalizationDiagnostics::new(self.version);
             let arr = genome
                 .as_object_mut()
@@ -371,14 +332,9 @@ mod tests {
         let runner = ChainRunner::new(&reg);
         let mut genome = json!({ "genome_schema_version": 100 });
 
-        let result = runner
-            .run_to(&mut genome, GenomeSchemaVersion(103))
-            .unwrap();
+        let result = runner.run_to(&mut genome, GenomeSchemaVersion(103)).unwrap();
 
-        assert_eq!(
-            result.normalizers_applied,
-            vec!["v101_norm", "v102_norm", "v103_norm"]
-        );
+        assert_eq!(result.normalizers_applied, vec!["v101_norm", "v102_norm", "v103_norm"]);
         assert_eq!(genome["was_normalized_at"], json!([101, 102, 103]));
     }
 

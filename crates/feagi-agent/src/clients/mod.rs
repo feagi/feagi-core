@@ -12,7 +12,4 @@ pub mod recovery;
 mod session_state_machine;
 
 pub use blocking::command_control_agent::{AgentRegistrationStatus, CommandControlAgent};
-pub use session_state_machine::{
-    NowMs, SessionAction, SessionEvent, SessionInit, SessionPhase, SessionStateMachine,
-    SessionTimingConfig,
-};
+pub use session_state_machine::{NowMs, SessionAction, SessionEvent, SessionInit, SessionPhase, SessionStateMachine, SessionTimingConfig};

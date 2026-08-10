@@ -11,10 +11,9 @@
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, State};
 use crate::v1::{
-    ConnectionInfoApi, ConnectionInfoBluetooth, ConnectionInfoShm, ConnectionInfoStreamStatus,
-    ConnectionInfoUdp, ConnectionInfoWebSocket, ConnectionInfoWebSocketEndpoints,
-    ConnectionInfoWebSocketPorts, ConnectionInfoZmq, ConnectionInfoZmqEndpoints,
-    ConnectionInfoZmqPorts, NetworkConnectionInfo,
+    ConnectionInfoApi, ConnectionInfoBluetooth, ConnectionInfoShm, ConnectionInfoStreamStatus, ConnectionInfoUdp, ConnectionInfoWebSocket,
+    ConnectionInfoWebSocketEndpoints, ConnectionInfoWebSocketPorts, ConnectionInfoZmq, ConnectionInfoZmqEndpoints, ConnectionInfoZmqPorts,
+    NetworkConnectionInfo,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -53,14 +52,9 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_config(
-    State(_state): State<ApiState>,
-    Json(request): Json<HashMap<String, Value>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_config(State(_state): State<ApiState>, Json(request): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     // Validate config is provided
-    let _config = request
-        .get("config")
-        .ok_or_else(|| ApiError::invalid_input("Missing 'config' field"))?;
+    let _config = request.get("config").ok_or_else(|| ApiError::invalid_input("Missing 'config' field"))?;
 
     // TODO: Apply network configuration
     tracing::info!(target: "feagi-api", "Network configuration updated");
@@ -90,9 +84,7 @@ pub trait NetworkConnectionInfoProvider: Send + Sync {
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_connection_info(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<NetworkConnectionInfo>> {
+pub async fn get_connection_info(State(state): State<ApiState>) -> ApiResult<Json<NetworkConnectionInfo>> {
     let info = state
         .network_connection_info_provider
         .as_ref()
@@ -160,14 +152,14 @@ fn placeholder_connection_info() -> NetworkConnectionInfo {
         bluetooth: ConnectionInfoBluetooth {
             enabled: false,
             relay_port: None,
-            note: "Placeholder for future use. Bluetooth relay is provided by feagi-desktop for embodied controllers, not by FEAGI server".to_string(),
+            note: "Placeholder for future use. Bluetooth relay is provided by feagi-desktop for embodied controllers, not by FEAGI server"
+                .to_string(),
         },
         stream_status: ConnectionInfoStreamStatus {
             zmq_control_started: false,
             zmq_data_streams_started: false,
             websocket_started: false,
-            note: "Data streams start when genome is loaded and agents with matching capabilities are registered"
-                .to_string(),
+            note: "Data streams start when genome is loaded and agents with matching capabilities are registered".to_string(),
         },
     }
 }

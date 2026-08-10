@@ -138,11 +138,7 @@ pub trait RuntimeService: Send + Sync {
     /// # Returns
     /// * `HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>` - Area data
     ///
-    async fn get_fire_queue_sample(
-        &self,
-    ) -> ServiceResult<
-        std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
-    >;
+    async fn get_fire_queue_sample(&self) -> ServiceResult<std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>>;
 
     /// Get Fire Ledger window configurations for all cortical_area areas
     ///
@@ -157,11 +153,7 @@ pub trait RuntimeService: Send + Sync {
     /// * `cortical_idx` - Cortical area index
     /// * `window_size` - Number of bursts to retain in history
     ///
-    async fn configure_fire_ledger_window(
-        &self,
-        cortical_idx: u32,
-        window_size: usize,
-    ) -> ServiceResult<()>;
+    async fn configure_fire_ledger_window(&self, cortical_idx: u32, window_size: usize) -> ServiceResult<()>;
 
     /// Get FCL/FQ sampler configuration
     ///
@@ -176,11 +168,7 @@ pub trait RuntimeService: Send + Sync {
     /// * `frequency` - Optional sampling frequency in Hz
     /// * `consumer` - Optional consumer type (1=viz, 2=motor, 3=both)
     ///
-    async fn set_fcl_sampler_config(
-        &self,
-        frequency: Option<f64>,
-        consumer: Option<u32>,
-    ) -> ServiceResult<()>;
+    async fn set_fcl_sampler_config(&self, frequency: Option<f64>, consumer: Option<u32>) -> ServiceResult<()>;
 
     /// Get FCL sample rate for a specific cortical_area area
     ///
@@ -230,12 +218,7 @@ pub trait RuntimeService: Send + Sync {
     /// * `cortical_ids` - List of cortical_area IDs to subscribe to
     /// * `rate_hz` - Motor publish rate (Hz)
     ///
-    async fn register_motor_subscriptions(
-        &self,
-        agent_id: &str,
-        cortical_ids: Vec<String>,
-        rate_hz: f64,
-    ) -> ServiceResult<()>;
+    async fn register_motor_subscriptions(&self, agent_id: &str, cortical_ids: Vec<String>, rate_hz: f64) -> ServiceResult<()>;
 
     /// Register visualization subscriptions with per-agent rate limits.
     ///
@@ -243,11 +226,7 @@ pub trait RuntimeService: Send + Sync {
     /// * `agent_id` - Unique agent identifier
     /// * `rate_hz` - Visualization publish rate (Hz)
     ///
-    async fn register_visualization_subscriptions(
-        &self,
-        agent_id: &str,
-        rate_hz: f64,
-    ) -> ServiceResult<()>;
+    async fn register_visualization_subscriptions(&self, agent_id: &str, rate_hz: f64) -> ServiceResult<()>;
 
     /// Unregister motor subscriptions for a disconnected agent.
     ///
@@ -266,10 +245,7 @@ pub trait RuntimeService: Send + Sync {
     ///
     /// # Returns
     /// `(cortical_idx, neurons_reset)` per requested index.
-    async fn reset_cortical_area_states(
-        &self,
-        cortical_indices: &[u32],
-    ) -> ServiceResult<Vec<(u32, usize)>>;
+    async fn reset_cortical_area_states(&self, cortical_indices: &[u32]) -> ServiceResult<Vec<(u32, usize)>>;
 
     /// Remove all motor subscriptions.
     ///

@@ -60,10 +60,7 @@ pub trait GenomeStorage: Send + Sync {
     /// `Ok(String)` with genome JSON if found,
     /// `Err(StorageError::NotFound)` if genome doesn't exist,
     /// `Err(StorageError::IOError)` for I/O failures
-    fn load_genome(
-        &self,
-        genome_id: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<String, StorageError>> + Send + '_>>;
+    fn load_genome(&self, genome_id: &str) -> Pin<Box<dyn Future<Output = Result<String, StorageError>> + Send + '_>>;
 
     /// Save a genome by ID
     ///
@@ -77,11 +74,7 @@ pub trait GenomeStorage: Send + Sync {
     /// `Ok(())` on success,
     /// `Err(StorageError::IOError)` for I/O failures,
     /// `Err(StorageError::SerializationError)` for invalid JSON
-    fn save_genome(
-        &self,
-        genome_id: &str,
-        genome_json: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>>;
+    fn save_genome(&self, genome_id: &str, genome_json: &str) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>>;
 
     /// List all available genome IDs
     ///
@@ -89,9 +82,7 @@ pub trait GenomeStorage: Send + Sync {
     ///
     /// `Ok(Vec<String>)` with all genome IDs,
     /// `Err(StorageError::IOError)` for I/O failures
-    fn list_genomes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, StorageError>> + Send + '_>>;
+    fn list_genomes(&self) -> Pin<Box<dyn Future<Output = Result<Vec<String>, StorageError>> + Send + '_>>;
 
     /// Delete a genome by ID
     ///
@@ -104,10 +95,7 @@ pub trait GenomeStorage: Send + Sync {
     /// `Ok(())` on success,
     /// `Err(StorageError::NotFound)` if genome doesn't exist,
     /// `Err(StorageError::IOError)` for I/O failures
-    fn delete_genome(
-        &self,
-        genome_id: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>>;
+    fn delete_genome(&self, genome_id: &str) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>>;
 }
 
 // Re-export Pin for convenience
@@ -151,8 +139,7 @@ pub mod fs_storage {
             let path = base_path.as_ref().to_path_buf();
 
             // Create directory if it doesn't exist
-            std::fs::create_dir_all(&path)
-                .map_err(|e| StorageError::IOError(format!("Failed to create directory: {}", e)))?;
+            std::fs::create_dir_all(&path).map_err(|e| StorageError::IOError(format!("Failed to create directory: {}", e)))?;
 
             Ok(Self { base_path: path })
         }
@@ -171,10 +158,7 @@ pub mod fs_storage {
 
     #[cfg(feature = "async-tokio")]
     impl GenomeStorage for FileSystemStorage {
-        fn load_genome(
-            &self,
-            genome_id: &str,
-        ) -> Pin<Box<dyn Future<Output = Result<String, StorageError>> + Send + '_>> {
+        fn load_genome(&self, genome_id: &str) -> Pin<Box<dyn Future<Output = Result<String, StorageError>> + Send + '_>> {
             let path = self.genome_path(genome_id);
             Box::pin(async move {
                 tokio::fs::read_to_string(&path).await.map_err(|e| {
@@ -187,19 +171,13 @@ pub mod fs_storage {
             })
         }
 
-        fn save_genome(
-            &self,
-            genome_id: &str,
-            genome_json: &str,
-        ) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>> {
+        fn save_genome(&self, genome_id: &str, genome_json: &str) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>> {
             let path = self.genome_path(genome_id);
             let json = genome_json.to_string();
 
             Box::pin(async move {
                 // Validate JSON before saving
-                serde_json::from_str::<serde_json::Value>(&json).map_err(|e| {
-                    StorageError::SerializationError(format!("Invalid JSON: {}", e))
-                })?;
+                serde_json::from_str::<serde_json::Value>(&json).map_err(|e| StorageError::SerializationError(format!("Invalid JSON: {}", e)))?;
 
                 tokio::fs::write(&path, json)
                     .await
@@ -209,19 +187,19 @@ pub mod fs_storage {
             })
         }
 
-        fn list_genomes(
-            &self,
-        ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, StorageError>> + Send + '_>> {
+        fn list_genomes(&self) -> Pin<Box<dyn Future<Output = Result<Vec<String>, StorageError>> + Send + '_>> {
             let base_path = self.base_path.clone();
             Box::pin(async move {
-                let mut entries = tokio::fs::read_dir(&base_path).await.map_err(|e| {
-                    StorageError::IOError(format!("Failed to read directory: {}", e))
-                })?;
+                let mut entries = tokio::fs::read_dir(&base_path)
+                    .await
+                    .map_err(|e| StorageError::IOError(format!("Failed to read directory: {}", e)))?;
 
                 let mut genome_ids = Vec::new();
-                while let Some(entry) = entries.next_entry().await.map_err(|e| {
-                    StorageError::IOError(format!("Failed to read directory entry: {}", e))
-                })? {
+                while let Some(entry) = entries
+                    .next_entry()
+                    .await
+                    .map_err(|e| StorageError::IOError(format!("Failed to read directory entry: {}", e)))?
+                {
                     let path = entry.path();
                     if path.extension().and_then(|s| s.to_str()) == Some("json") {
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
@@ -234,10 +212,7 @@ pub mod fs_storage {
             })
         }
 
-        fn delete_genome(
-            &self,
-            genome_id: &str,
-        ) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>> {
+        fn delete_genome(&self, genome_id: &str) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>> {
             let path = self.genome_path(genome_id);
             Box::pin(async move {
                 tokio::fs::remove_file(&path).await.map_err(|e| {

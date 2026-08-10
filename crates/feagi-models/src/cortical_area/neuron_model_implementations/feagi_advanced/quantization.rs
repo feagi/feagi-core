@@ -1,9 +1,9 @@
-use half::bf16;
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedIndexCountTrait};
-use crate::cortical_area::neuron_model_implementations::generated_enums::{NeuronModelType, NeuronModelTypeAndQuantizationNested};
 use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
 use crate::cortical_area::neuron::neuron_model_quantization_level::NeuronModelQuantizationLevel;
+use crate::cortical_area::neuron_model_implementations::generated_enums::{NeuronModelType, NeuronModelTypeAndQuantizationNested};
+use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedIndexCountTrait};
+use half::bf16;
 
 pub trait FeagiAdvancedModelQuantization: NeuronModelQuantization {
     const MODEL_QUANTIZATION_LEVEL: FeagiAdvancedModelQuantizationLevel;
@@ -62,4 +62,3 @@ impl NeuronModelQuantizationLevel for FeagiAdvancedModelQuantizationLevel {
 
     // TODO copy some properties here
 }
-

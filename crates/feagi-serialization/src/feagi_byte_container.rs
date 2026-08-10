@@ -118,10 +118,7 @@ impl FeagiByteContainer {
     /// // This will fail validation since we're setting invalid data
     /// assert!(result.is_err());
     /// ```
-    pub fn try_write_data_to_container_and_verify<F>(
-        &mut self,
-        byte_writer: &mut F,
-    ) -> Result<(), ()>
+    pub fn try_write_data_to_container_and_verify<F>(&mut self, byte_writer: &mut F) -> Result<(), ()>
     where
         F: FnMut(&mut Vec<u8>) -> Result<(), ()>,
     {
@@ -143,10 +140,7 @@ impl FeagiByteContainer {
     /// // This will fail validation since we're setting invalid data
     /// assert!(result.is_err());
     /// ```
-    pub fn try_write_data_by_ownership_to_container_and_verify(
-        &mut self,
-        new_data: Vec<u8>,
-    ) -> Result<(), ()> {
+    pub fn try_write_data_by_ownership_to_container_and_verify(&mut self, new_data: Vec<u8>) -> Result<(), ()> {
         self.bytes = new_data;
         self.verify_container_valid_and_populate()
     }
@@ -165,10 +159,7 @@ impl FeagiByteContainer {
     /// // This will fail validation since we're setting invalid data
     /// assert!(result.is_err());
     /// ```
-    pub fn try_write_data_by_copy_and_verify(
-        &mut self,
-        new_data: &[u8],
-    ) -> Result<(), ()> {
+    pub fn try_write_data_by_copy_and_verify(&mut self, new_data: &[u8]) -> Result<(), ()> {
         self.bytes.clear();
         self.bytes.extend_from_slice(new_data);
         self.verify_container_valid_and_populate()
@@ -215,7 +206,7 @@ impl FeagiByteContainer {
         Err(()::DeserializationError(
             "Given Byte Container is invalid and thus cannot be read!".into(),
         ))
-        
+
          */
     }
 
@@ -270,18 +261,14 @@ impl FeagiByteContainer {
         Err(()::DeserializationError(
             "Given Byte Container is invalid and thus cannot be read!".into(),
         ))
-        
+
          */
     }
 
-    pub fn get_agent_identifier_bytes(
-        &self,
-    ) -> Result<&[u8; Self::AGENT_ID_BYTE_COUNT], ()> {
+    pub fn get_agent_identifier_bytes(&self) -> Result<&[u8; Self::AGENT_ID_BYTE_COUNT], ()> {
         if self.is_data_valid {
-            let session_id_bytes = &self.bytes[Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
-                ..Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT];
-            let session_id_bytes: &[u8; Self::AGENT_ID_BYTE_COUNT] =
-                session_id_bytes.try_into().unwrap();
+            let session_id_bytes = &self.bytes[Self::GLOBAL_BYTE_HEADER_BYTE_COUNT..Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT];
+            let session_id_bytes: &[u8; Self::AGENT_ID_BYTE_COUNT] = session_id_bytes.try_into().unwrap();
             return Ok(session_id_bytes);
         }
         return Err(());
@@ -289,7 +276,7 @@ impl FeagiByteContainer {
         Err(()::DeserializationError(
             "Given Byte Container is invalid and thus cannot be read!".into(),
         ))
-        
+
          */
     }
 
@@ -304,13 +291,9 @@ impl FeagiByteContainer {
     ///
     /// Returns an error if the index is out of bounds, the stored structure is not of type
     /// `T`, or the data fails to deserialize.
-    pub fn try_create_new_struct_from_index<T: FeagiSerializable + Default>(
-        &self,
-        index: StructureIndex,
-    ) -> Result<T, ()> {
+    pub fn try_create_new_struct_from_index<T: FeagiSerializable + Default>(&self, index: StructureIndex) -> Result<T, ()> {
         self.verify_structure_index_valid(index)?;
-        let relevant_slice =
-            self.contained_struct_references[index as usize].get_as_byte_slice(&self.bytes);
+        let relevant_slice = self.contained_struct_references[index as usize].get_as_byte_slice(&self.bytes);
         let mut new_struct = T::default();
         new_struct.verify_byte_slice_is_of_correct_type(relevant_slice)?;
         new_struct.try_deserialize_and_update_self_from_byte_slice(relevant_slice)?;
@@ -321,9 +304,7 @@ impl FeagiByteContainer {
     ///
     /// The type searched for is taken from `T` itself. Returns None if no structure of that
     /// type is present in the container.
-    pub fn try_create_struct_from_first_found_struct_of_type<T: FeagiSerializable + Default>(
-        &self,
-    ) -> Result<Option<T>, ()> {
+    pub fn try_create_struct_from_first_found_struct_of_type<T: FeagiSerializable + Default>(&self) -> Result<Option<T>, ()> {
         let mut new_struct = T::default();
         let getting_slice = self.try_get_first_structure_slice_of_type(new_struct.get_type());
         let Some(relevant_slice) = getting_slice else {
@@ -336,14 +317,9 @@ impl FeagiByteContainer {
     /// Updates an existing structure with data from the specified index.
     ///
     /// Deserializes data at the given index and updates the provided structure.
-    pub fn try_update_struct_from_index(
-        &self,
-        index: StructureIndex,
-        updating_boxed_struct: &mut dyn FeagiSerializable,
-    ) -> Result<(), ()> {
+    pub fn try_update_struct_from_index(&self, index: StructureIndex, updating_boxed_struct: &mut dyn FeagiSerializable) -> Result<(), ()> {
         self.verify_structure_index_valid(index)?;
-        let relevant_slice =
-            self.contained_struct_references[index as usize].get_as_byte_slice(&self.bytes);
+        let relevant_slice = self.contained_struct_references[index as usize].get_as_byte_slice(&self.bytes);
         updating_boxed_struct.verify_byte_slice_is_of_correct_type(relevant_slice)?;
         updating_boxed_struct.try_deserialize_and_update_self_from_byte_slice(relevant_slice)?;
         Ok(())
@@ -352,17 +328,13 @@ impl FeagiByteContainer {
     /// Updates a structure from the first found instance of its type.
     ///
     /// Returns true if a matching structure was found and updated, false otherwise.
-    pub fn try_update_struct_from_first_found_struct_of_type(
-        &self,
-        updating_boxed_struct: &mut dyn FeagiSerializable,
-    ) -> Result<bool, ()> {
+    pub fn try_update_struct_from_first_found_struct_of_type(&self, updating_boxed_struct: &mut dyn FeagiSerializable) -> Result<bool, ()> {
         let structure_type: FeagiByteStructureType = updating_boxed_struct.get_type();
         let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
         if getting_slice.is_none() {
             return Ok(false);
         }
-        updating_boxed_struct
-            .try_deserialize_and_update_self_from_byte_slice(getting_slice.unwrap())?;
+        updating_boxed_struct.try_deserialize_and_update_self_from_byte_slice(getting_slice.unwrap())?;
         Ok(true)
     }
 
@@ -380,8 +352,7 @@ impl FeagiByteContainer {
     /// assert_eq!(types.len(), 0); // Empty container
     /// ```
     pub fn get_contained_struct_types(&self) -> Vec<FeagiByteStructureType> {
-        let mut output: Vec<FeagiByteStructureType> =
-            Vec::with_capacity(self.contained_struct_references.len());
+        let mut output: Vec<FeagiByteStructureType> = Vec::with_capacity(self.contained_struct_references.len());
         for contained_struct_reference in &self.contained_struct_references {
             output.push(contained_struct_reference.structure_type);
         }
@@ -409,7 +380,7 @@ impl FeagiByteContainer {
                 MAX_NUMBER_OF_STRUCTS,
                 incoming_structs.len()
             )));
-            
+
              */
         }
 
@@ -426,12 +397,11 @@ impl FeagiByteContainer {
             let mut data_start_index = header_total_number_of_bytes;
             for incoming_struct in &incoming_structs {
                 let per_struct_number_bytes = incoming_struct.get_number_of_bytes_needed();
-                self.contained_struct_references
-                    .push(ContainedStructReference {
-                        structure_type: incoming_struct.get_type(),
-                        byte_start_index: data_start_index as u32,
-                        number_bytes_to_read: per_struct_number_bytes as u32,
-                    });
+                self.contained_struct_references.push(ContainedStructReference {
+                    structure_type: incoming_struct.get_type(),
+                    byte_start_index: data_start_index as u32,
+                    number_bytes_to_read: per_struct_number_bytes as u32,
+                });
                 data_start_index += per_struct_number_bytes;
             }
             data_start_index
@@ -451,23 +421,18 @@ impl FeagiByteContainer {
         // Skip Session ID section
 
         // Write Structure lookup header and Data bytes at the same time
-        let mut structure_size_header_byte_index =
-            Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT;
+        let mut structure_size_header_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT;
         for (struct_index, incoming_struct) in incoming_structs.iter().enumerate() {
             let contained_struct_reference = &self.contained_struct_references[struct_index];
 
             LittleEndian::write_u32(
-                &mut self.bytes[structure_size_header_byte_index
-                    ..structure_size_header_byte_index
-                        + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE],
+                &mut self.bytes
+                    [structure_size_header_byte_index..structure_size_header_byte_index + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE],
                 contained_struct_reference.number_bytes_to_read,
             );
-            incoming_struct.try_serialize_struct_to_byte_slice(
-                contained_struct_reference.get_as_byte_slice_mut(&mut self.bytes),
-            )?;
+            incoming_struct.try_serialize_struct_to_byte_slice(contained_struct_reference.get_as_byte_slice_mut(&mut self.bytes))?;
 
-            structure_size_header_byte_index +=
-                Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE;
+            structure_size_header_byte_index += Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE;
         }
 
         self.is_data_valid = true;
@@ -493,15 +458,13 @@ impl FeagiByteContainer {
             + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE
             + number_of_bytes_used_by_struct;
 
-        self.contained_struct_references
-            .push(ContainedStructReference {
-                structure_type: incoming_struct.get_type(),
-                byte_start_index: (Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
-                    + Self::AGENT_ID_BYTE_COUNT
-                    + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE)
-                    as u32, // First structure starts after header + session + length
-                number_bytes_to_read: number_of_bytes_used_by_struct as u32,
-            });
+        self.contained_struct_references.push(ContainedStructReference {
+            structure_type: incoming_struct.get_type(),
+            byte_start_index: (Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
+                + Self::AGENT_ID_BYTE_COUNT
+                + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE) as u32, // First structure starts after header + session + length
+            number_bytes_to_read: number_of_bytes_used_by_struct as u32,
+        });
 
         // Ensure exact payload length. Without truncation, stale trailing bytes from previous
         // larger payloads can leak into transport buffers and waste bandwidth.
@@ -525,9 +488,8 @@ impl FeagiByteContainer {
         );
 
         // Write data
-        let data_start_index: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
-            + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE
-            + Self::AGENT_ID_BYTE_COUNT; // first index is always here
+        let data_start_index: usize =
+            Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE + Self::AGENT_ID_BYTE_COUNT; // first index is always here
         let data_byte_slice = &mut self.bytes[data_start_index..]; // rest of the array
         incoming_struct.try_serialize_struct_to_byte_slice(data_byte_slice)?;
 
@@ -547,10 +509,7 @@ impl FeagiByteContainer {
     /// let mut container = FeagiByteContainer::new_empty();
     /// _ = container.set_increment_counter_state(42);
     /// ```
-    pub fn set_increment_counter_state(
-        &mut self,
-        new_increment_value: u16,
-    ) -> Result<(), ()> {
+    pub fn set_increment_counter_state(&mut self, new_increment_value: u16) -> Result<(), ()> {
         if !self.is_data_valid {
             return Err(());
             //return Err(()::DeserializationError("Given Byte Container is invalid and thus cannot have its increment counter changed!".into()));
@@ -559,10 +518,7 @@ impl FeagiByteContainer {
         Ok(())
     }
 
-    pub fn set_agent_identifier(
-        &mut self,
-        agent_identifier: impl AgentIdentifier,
-    ) -> Result<(), ()> {
+    pub fn set_agent_identifier(&mut self, agent_identifier: impl AgentIdentifier) -> Result<(), ()> {
         if !self.is_data_valid {
             return Err(());
             /*
@@ -570,11 +526,10 @@ impl FeagiByteContainer {
                 "Given Byte Container is invalid and thus cannot have its session id changed!"
                     .into(),
             ));
-            
+
              */
         }
-        self.bytes[Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
-            ..Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT]
+        self.bytes[Self::GLOBAL_BYTE_HEADER_BYTE_COUNT..Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT]
             .copy_from_slice(agent_identifier.get_identifier_bytes());
         Ok(())
     }
@@ -617,16 +572,15 @@ impl FeagiByteContainer {
         // Verify Global Header
         if byte_length < Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT {
             // If we cant even fit the global header + session ID, something is wrong
-            
+
             /*
             return Err(()::DeserializationError(
                 "Given Feagi Byte Structure byte length is too short! (Less than global header + 48-byte agent id)".into(),
             ));
-            
+
              */
         }
         if self.bytes[0] != Self::CURRENT_FBS_VERSION {
-
             return Err(());
             //return Err(()::DeserializationError(format!("Given FEAGI Byte Structure is using version {} when this application only supports version {}!", self.bytes[0], Self::CURRENT_FBS_VERSION)));
         }
@@ -637,47 +591,37 @@ impl FeagiByteContainer {
             // NOTE: It is possible due to an error, that there is data sent after this point. However, we are going to treat this FBC as empty and report it as such.
         }
 
-        let structure_lookup_header_size_in_bytes =
-            Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE * number_contained_structs;
-        let total_header_size = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
-            + Self::AGENT_ID_BYTE_COUNT
-            + structure_lookup_header_size_in_bytes;
+        let structure_lookup_header_size_in_bytes = Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE * number_contained_structs;
+        let total_header_size = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT + structure_lookup_header_size_in_bytes;
         if byte_length < total_header_size {
-            
+
             /*
             return Err(()::DeserializationError(format!(
                 "Feagi Byte Data specifies the existence of {} structures, but the given byte array is under the required {} byte length!",
                 structure_lookup_header_size_in_bytes, total_header_size
             )));
-            
+
              */
         }
 
-        let mut structure_header_byte_index: usize =
-            Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT;
-        let mut structure_data_byte_index: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
-            + Self::AGENT_ID_BYTE_COUNT
-            + structure_lookup_header_size_in_bytes;
+        let mut structure_header_byte_index: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT;
+        let mut structure_data_byte_index: usize =
+            Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT + structure_lookup_header_size_in_bytes;
         for _contained_structure_index in 0..number_contained_structs {
-            let structure_length = LittleEndian::read_u32(
-                &self.bytes[structure_header_byte_index..structure_header_byte_index + 4],
-            );
+            let structure_length = LittleEndian::read_u32(&self.bytes[structure_header_byte_index..structure_header_byte_index + 4]);
 
             if structure_data_byte_index + structure_length as usize > byte_length {
-
                 return Err(());
                 //return Err(()::DeserializationError(
                 //    format!("Structure of index {} goes out of bound reaching position {} when given byte length is only {} long!", contained_structure_index, structure_data_byte_index + structure_length as usize, byte_length)));
             }
 
-            let structure_type =
-                FeagiByteStructureType::try_from(self.bytes[structure_data_byte_index])?;
-            self.contained_struct_references
-                .push(ContainedStructReference {
-                    structure_type,
-                    byte_start_index: structure_data_byte_index as u32,
-                    number_bytes_to_read: structure_length,
-                });
+            let structure_type = FeagiByteStructureType::try_from(self.bytes[structure_data_byte_index])?;
+            self.contained_struct_references.push(ContainedStructReference {
+                structure_type,
+                byte_start_index: structure_data_byte_index as u32,
+                number_bytes_to_read: structure_length,
+            });
 
             structure_header_byte_index += 4; // Next u32
             structure_data_byte_index += structure_length as usize;
@@ -687,10 +631,7 @@ impl FeagiByteContainer {
     }
 
     /// Makes sure the given index is valid (not out of range given number of contained structs)
-    fn verify_structure_index_valid(
-        &self,
-        structure_index: StructureIndex,
-    ) -> Result<(), ()> {
+    fn verify_structure_index_valid(&self, structure_index: StructureIndex) -> Result<(), ()> {
         if structure_index as usize >= self.contained_struct_references.len() {
             return Err(());
             //return Err(()::BadParameters(format!("Structure index {} out of bounds! Feagi Byte Container only contains {} structures!", structure_index, self.contained_struct_references.len())));
@@ -699,15 +640,10 @@ impl FeagiByteContainer {
     }
 
     /// Tries to the get the first structure in the contained structure list that is of the requested type. If none are found, returns None.
-    fn try_get_first_structure_slice_of_type(
-        &self,
-        structure_type: FeagiByteStructureType,
-    ) -> Option<&[u8]> {
+    fn try_get_first_structure_slice_of_type(&self, structure_type: FeagiByteStructureType) -> Option<&[u8]> {
         for index in 0..self.contained_struct_references.len() {
             if self.contained_struct_references[index].structure_type == structure_type {
-                return Some(
-                    self.contained_struct_references[index].get_as_byte_slice(&self.bytes),
-                );
+                return Some(self.contained_struct_references[index].get_as_byte_slice(&self.bytes));
             }
         }
         None
@@ -745,14 +681,12 @@ struct ContainedStructReference {
 impl ContainedStructReference {
     /// Returns an immutable slice of the structure's bytes.
     pub fn get_as_byte_slice<'a>(&self, byte_source: &'a [u8]) -> &'a [u8] {
-        &byte_source[self.byte_start_index as usize
-            ..self.byte_start_index as usize + self.number_bytes_to_read as usize]
+        &byte_source[self.byte_start_index as usize..self.byte_start_index as usize + self.number_bytes_to_read as usize]
     }
 
     /// Returns a mutable slice of the structure's bytes.
     pub fn get_as_byte_slice_mut<'a>(&self, byte_source: &'a mut [u8]) -> &'a mut [u8] {
-        &mut byte_source[self.byte_start_index as usize
-            ..self.byte_start_index as usize + self.number_bytes_to_read as usize]
+        &mut byte_source[self.byte_start_index as usize..self.byte_start_index as usize + self.number_bytes_to_read as usize]
     }
 }
 

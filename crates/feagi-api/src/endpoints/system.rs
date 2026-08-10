@@ -100,9 +100,7 @@ pub struct HealthCheckResponse {
     ),
     tag = "system"
 )]
-pub async fn get_health_check(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HealthCheckResponse>> {
+pub async fn get_health_check(State(state): State<ApiState>) -> ApiResult<Json<HealthCheckResponse>> {
     let analytics_service = state.analytics_service.as_ref();
 
     // Get system health from analytics service
@@ -113,57 +111,33 @@ pub async fn get_health_check(
 
     // Get runtime status if available (source of truth for current burst frequency).
     let runtime_status = state.runtime_service.get_status().await.ok();
-    let burst_engine_active = runtime_status
-        .as_ref()
-        .map(|status| status.is_running)
-        .unwrap_or(false);
+    let burst_engine_active = runtime_status.as_ref().map(|status| status.is_running).unwrap_or(false);
 
     let _burst_count = state.runtime_service.get_burst_count().await.ok();
 
     // Get connected agents count from agent service
     let connected_agents = if let Some(agent_service) = state.agent_service.as_ref() {
-        agent_service
-            .list_agents()
-            .await
-            .ok()
-            .map(|agents| agents.len() as i32)
+        agent_service.list_agents().await.ok().map(|agents| agents.len() as i32)
     } else {
         None
     };
 
     // Get total synapse count from analytics service
-    let synapse_count = analytics_service
-        .get_total_synapse_count()
-        .await
-        .ok()
-        .map(|count| count as i64);
+    let synapse_count = analytics_service.get_total_synapse_count().await.ok().map(|count| count as i64);
 
     // Get regular and memory neuron counts
-    let regular_neuron_count = analytics_service
-        .get_regular_neuron_count()
-        .await
-        .ok()
-        .map(|count| count as i64);
+    let regular_neuron_count = analytics_service.get_regular_neuron_count().await.ok().map(|count| count as i64);
 
-    let memory_neuron_count = analytics_service
-        .get_memory_neuron_count()
-        .await
-        .ok()
-        .map(|count| count as i64);
+    let memory_neuron_count = analytics_service.get_memory_neuron_count().await.ok().map(|count| count as i64);
 
     // Get genome info for simulation_timestep, genome_num, and genome_timestamp
     let genome_info = state.genome_service.get_genome_info().await.ok();
 
     // Prefer runtime frequency-derived timestep to reflect the active simulation rate.
-    let runtime_timestep = runtime_status.as_ref().map(|status| {
-        if status.frequency_hz > 0.0 {
-            1.0 / status.frequency_hz
-        } else {
-            0.0
-        }
-    });
-    let simulation_timestep =
-        runtime_timestep.or_else(|| genome_info.as_ref().map(|info| info.simulation_timestep));
+    let runtime_timestep = runtime_status
+        .as_ref()
+        .map(|status| if status.frequency_hz > 0.0 { 1.0 / status.frequency_hz } else { 0.0 });
+    let simulation_timestep = runtime_timestep.or_else(|| genome_info.as_ref().map(|info| info.simulation_timestep));
     let genome_num = genome_info.as_ref().and_then(|info| info.genome_num);
     let genome_timestamp = genome_info.as_ref().and_then(|info| info.genome_timestamp);
 
@@ -207,30 +181,15 @@ pub async fn get_health_check(
         .as_ref()
         .map(|cache| {
             let snapshot = feagi_services::types::memory_stats::get_stats_snapshot(cache);
-            let total = snapshot
-                .values()
-                .map(|s| s.neuron_count as i64)
-                .sum::<i64>();
+            let total = snapshot.values().map(|s| s.neuron_count as i64).sum::<i64>();
             let per_area = snapshot
                 .into_iter()
                 .map(|(name, stats)| {
                     let mut inner_map = HashMap::new();
-                    inner_map.insert(
-                        "neuron_count".to_string(),
-                        serde_json::json!(stats.neuron_count),
-                    );
-                    inner_map.insert(
-                        "created_total".to_string(),
-                        serde_json::json!(stats.created_total),
-                    );
-                    inner_map.insert(
-                        "deleted_total".to_string(),
-                        serde_json::json!(stats.deleted_total),
-                    );
-                    inner_map.insert(
-                        "last_updated".to_string(),
-                        serde_json::json!(stats.last_updated),
-                    );
+                    inner_map.insert("neuron_count".to_string(), serde_json::json!(stats.neuron_count));
+                    inner_map.insert("created_total".to_string(), serde_json::json!(stats.created_total));
+                    inner_map.insert("deleted_total".to_string(), serde_json::json!(stats.deleted_total));
+                    inner_map.insert("last_updated".to_string(), serde_json::json!(stats.last_updated));
                     (name, inner_map)
                 })
                 .collect::<HashMap<String, HashMap<String, serde_json::Value>>>();
@@ -256,12 +215,7 @@ pub async fn get_health_check(
 
     // Root region id comes from the connectome service, which both the native and WASM
     // transports provide. This is plain brain-region metadata with no NPU involvement.
-    let brain_regions_root = state
-        .connectome_service
-        .as_ref()
-        .get_root_region_id()
-        .await
-        .unwrap_or(None);
+    let brain_regions_root = state.connectome_service.as_ref().get_root_region_id().await.unwrap_or(None);
 
     // Get fatigue information from state manager
     // Note: feagi-state-manager is included in the "services" feature
@@ -374,9 +328,7 @@ pub async fn get_health_check(
     ),
     tag = "system"
 )]
-pub async fn get_cortical_area_visualization_skip_rate(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<i32>> {
+pub async fn get_cortical_area_visualization_skip_rate(State(_state): State<ApiState>) -> ApiResult<Json<i32>> {
     // TODO: Get from visualization config service
     // For now return default value
     Ok(Json(1))
@@ -413,9 +365,7 @@ pub async fn set_cortical_area_visualization_skip_rate(
     ),
     tag = "system"
 )]
-pub async fn get_cortical_area_visualization_suppression_threshold(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<i32>> {
+pub async fn get_cortical_area_visualization_suppression_threshold(State(_state): State<ApiState>) -> ApiResult<Json<i32>> {
     // TODO: Get from visualization config service
     // For now return default value
     Ok(Json(0))
@@ -468,9 +418,7 @@ pub async fn get_version(State(_state): State<ApiState>) -> ApiResult<Json<Strin
         (status = 200, description = "Version information", body = HashMap<String, String>)
     )
 )]
-pub async fn get_versions(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn get_versions(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     // Use system service to get version information
     // The application (feagi-rust) provides this at startup with all crates it was compiled with
     match state.system_service.get_version().await {
@@ -485,15 +433,9 @@ pub async fn get_versions(
         }
         Err(e) => {
             // Fallback to minimal version info
-            tracing::warn!(
-                "Failed to get version from system service: {}, using fallback",
-                e
-            );
+            tracing::warn!("Failed to get version from system service: {}, using fallback", e);
             let mut versions = HashMap::new();
-            versions.insert(
-                "error".to_string(),
-                "system service unavailable".to_string(),
-            );
+            versions.insert("error".to_string(), "system service unavailable".to_string());
             Ok(Json(versions))
         }
     }
@@ -508,9 +450,7 @@ pub async fn get_versions(
         (status = 200, description = "System configuration", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_configuration(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_configuration(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // Get actual NPU capacity from analytics service
     let health = state
         .analytics_service
@@ -522,14 +462,8 @@ pub async fn get_configuration(
     config.insert("api_host".to_string(), serde_json::json!("0.0.0.0"));
     config.insert("api_port".to_string(), serde_json::json!(8000));
     // Use actual NPU capacity from system health (NOT hardcoded values)
-    config.insert(
-        "max_neurons".to_string(),
-        serde_json::json!(health.neuron_capacity),
-    );
-    config.insert(
-        "max_synapses".to_string(),
-        serde_json::json!(health.synapse_capacity),
-    );
+    config.insert("max_neurons".to_string(), serde_json::json!(health.neuron_capacity));
+    config.insert("max_synapses".to_string(), serde_json::json!(health.synapse_capacity));
 
     Ok(Json(config))
 }
@@ -543,16 +477,11 @@ pub async fn get_configuration(
         (status = 200, description = "User preferences", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_user_preferences(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_user_preferences(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let mut prefs = HashMap::new();
     prefs.insert("adv_mode".to_string(), serde_json::json!(false));
     prefs.insert("ui_magnification".to_string(), serde_json::json!(1.0));
-    prefs.insert(
-        "auto_pns_area_creation".to_string(),
-        serde_json::json!(true),
-    );
+    prefs.insert("auto_pns_area_creation".to_string(), serde_json::json!(true));
 
     Ok(Json(prefs))
 }
@@ -585,9 +514,7 @@ pub async fn put_user_preferences(
         (status = 200, description = "Cortical area types", body = Vec<String>)
     )
 )]
-pub async fn get_cortical_area_types_list(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<Vec<String>>> {
+pub async fn get_cortical_area_types_list(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     Ok(Json(vec![
         "Sensory".to_string(),
         "Motor".to_string(),
@@ -606,9 +533,7 @@ pub async fn get_cortical_area_types_list(
         (status = 200, description = "FQ sampler enabled", body = HashMap<String, String>)
     )
 )]
-pub async fn post_enable_visualization_fq_sampler(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_enable_visualization_fq_sampler(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     runtime_service
@@ -631,9 +556,7 @@ pub async fn post_enable_visualization_fq_sampler(
         (status = 200, description = "FQ sampler disabled", body = HashMap<String, String>)
     )
 )]
-pub async fn post_disable_visualization_fq_sampler(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_disable_visualization_fq_sampler(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     runtime_service
@@ -656,9 +579,7 @@ pub async fn post_disable_visualization_fq_sampler(
         (status = 200, description = "FCL status", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_fcl_status_system(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_fcl_status_system(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     let (frequency, consumer) = runtime_service
@@ -684,15 +605,10 @@ pub async fn get_fcl_status_system(
         (status = 200, description = "FCL reset", body = HashMap<String, String>)
     )
 )]
-pub async fn post_fcl_reset_system(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_fcl_reset_system(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "FCL reset requested");
 
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "FCL reset successfully".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "FCL reset successfully".to_string())])))
 }
 
 /// Get status of active system processes including burst engine and API server.
@@ -704,9 +620,7 @@ pub async fn post_fcl_reset_system(
         (status = 200, description = "Active processes", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_processes(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_processes(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     let status = runtime_service
@@ -722,10 +636,7 @@ pub async fn get_processes(
             "paused": status.is_paused
         }),
     );
-    processes.insert(
-        "api_server".to_string(),
-        serde_json::json!({"active": true}),
-    );
+    processes.insert("api_server".to_string(), serde_json::json!({"active": true}));
 
     Ok(Json(processes))
 }
@@ -739,9 +650,7 @@ pub async fn get_processes(
         (status = 200, description = "Unique logs", body = HashMap<String, Vec<String>>)
     )
 )]
-pub async fn get_unique_logs(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+pub async fn get_unique_logs(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
     let mut response = HashMap::new();
     response.insert("logs".to_string(), Vec::new());
 
@@ -860,10 +769,7 @@ pub async fn post_logs(
     State(_state): State<ApiState>,
     Json(_config): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Log configuration updated".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Log configuration updated".to_string())])))
 }
 
 /// Get list of all beacon subscribers currently monitoring system events.
@@ -875,9 +781,7 @@ pub async fn post_logs(
         (status = 200, description = "Beacon subscribers", body = Vec<String>)
     )
 )]
-pub async fn get_beacon_subscribers(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<Vec<String>>> {
+pub async fn get_beacon_subscribers(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     Ok(Json(Vec::new()))
 }
 
@@ -894,10 +798,7 @@ pub async fn post_beacon_subscribe(
     State(_state): State<ApiState>,
     Json(_request): Json<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Subscribed to beacon".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Subscribed to beacon".to_string())])))
 }
 
 /// Unsubscribe from system beacon to stop receiving event notifications.
@@ -913,10 +814,7 @@ pub async fn delete_beacon_unsubscribe(
     State(_state): State<ApiState>,
     Json(_request): Json<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Unsubscribed from beacon".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Unsubscribed from beacon".to_string())])))
 }
 
 /// Get global activity visualization configuration including enabled state and frequency.
@@ -928,9 +826,7 @@ pub async fn delete_beacon_unsubscribe(
         (status = 200, description = "Global activity viz status", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_global_activity_visualization(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_global_activity_visualization(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let mut response = HashMap::new();
     response.insert("enabled".to_string(), serde_json::json!(false));
     response.insert("frequency_hz".to_string(), serde_json::json!(30.0));
@@ -970,10 +866,7 @@ pub async fn post_circuit_library_path(
     State(_state): State<ApiState>,
     Json(_request): Json<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Circuit library path updated".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Circuit library path updated".to_string())])))
 }
 
 /// Test connectivity to InfluxDB database for time-series data storage.
@@ -985,9 +878,7 @@ pub async fn post_circuit_library_path(
         (status = 200, description = "Test result", body = HashMap<String, bool>)
     )
 )]
-pub async fn get_influxdb_test(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, bool>>> {
+pub async fn get_influxdb_test(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, bool>>> {
     let mut response = HashMap::new();
     response.insert("connected".to_string(), false);
     response.insert("available".to_string(), false);
@@ -1008,8 +899,5 @@ pub async fn post_register_system(
     State(_state): State<ApiState>,
     Json(_request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "System component registered".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "System component registered".to_string())])))
 }

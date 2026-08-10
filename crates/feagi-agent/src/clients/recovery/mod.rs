@@ -50,9 +50,7 @@ pub mod health_fetch;
 pub mod recovery_loop;
 
 pub use health_watcher::{HealthEvent, HealthSnapshot, HealthWatcher};
-pub use reconnect_policy::{
-    ReconnectDecision, ReconnectPolicy, ReconnectPolicyConfig, RecoveryTrigger,
-};
+pub use reconnect_policy::{ReconnectDecision, ReconnectPolicy, ReconnectPolicyConfig, RecoveryTrigger};
 pub use recovery_loop::{run_recovery_tick_with_snapshot, RecoveryTickReport};
 pub use session::RebuildableSession;
 

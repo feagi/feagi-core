@@ -29,10 +29,7 @@ pub struct AgentServiceImpl {
 }
 
 impl AgentServiceImpl {
-    pub fn new(
-        connectome_manager: Arc<RwLock<ConnectomeManager>>,
-        agent_registry: Arc<RwLock<AgentRegistry>>,
-    ) -> Self {
+    pub fn new(connectome_manager: Arc<RwLock<ConnectomeManager>>, agent_registry: Arc<RwLock<AgentRegistry>>) -> Self {
         Self {
             connectome_manager,
             agent_registry,
@@ -67,9 +64,7 @@ impl AgentServiceImpl {
         let mut guard = self.runtime_service.write();
         if let Some(existing) = guard.as_ref() {
             if Arc::ptr_eq(existing, &runtime_service) {
-                debug!(
-                    "🦀 [AGENT-SERVICE] Runtime service already connected; ignoring duplicate bind"
-                );
+                debug!("🦀 [AGENT-SERVICE] Runtime service already connected; ignoring duplicate bind");
                 return;
             }
             warn!("🦀 [AGENT-SERVICE] Runtime service replaced with a new instance");
@@ -82,10 +77,7 @@ impl AgentServiceImpl {
 
 #[async_trait]
 impl AgentService for AgentServiceImpl {
-    async fn register_agent(
-        &self,
-        registration: AgentRegistration,
-    ) -> AgentResult<AgentRegistrationResponse> {
+    async fn register_agent(&self, registration: AgentRegistration) -> AgentResult<AgentRegistrationResponse> {
         info!(
             "🦀 [AGENT-SERVICE] Registering agent: {} (type: {})",
             registration.agent_id, registration.agent_type
@@ -93,30 +85,23 @@ impl AgentService for AgentServiceImpl {
 
         // If we have a registration handler, use it (gets full transport info)
         if let Some(handler) = &self.registration_handler {
-            info!(
-                "📝 [AGENT-SERVICE] Using PNS registration handler for full transport negotiation"
-            );
+            info!("📝 [AGENT-SERVICE] Using PNS registration handler for full transport negotiation");
 
             // Build PNS registration request
             let pns_request = RegistrationRequest {
                 agent_id: registration.agent_id.clone(),
                 agent_type: registration.agent_type.clone(),
-                capabilities: serde_json::to_value(&registration.capabilities)
-                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+                capabilities: serde_json::to_value(&registration.capabilities).unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
                 chosen_transport: registration.chosen_transport.clone(), // Pass through the agent's transport choice
             };
 
             // Call registration handler - use spawn_blocking to avoid blocking the async runtime
             // The process_registration method is sync and may block, so we offload it to a blocking thread pool
             let handler_clone = handler.clone();
-            let pns_response = tokio::task::spawn_blocking(move || {
-                handler_clone.process_registration(pns_request)
-            })
-            .await
-            .map_err(|e| {
-                AgentError::RegistrationFailed(format!("Registration task panicked: {:?}", e))
-            })?
-            .map_err(AgentError::RegistrationFailed)?;
+            let pns_response = tokio::task::spawn_blocking(move || handler_clone.process_registration(pns_request))
+                .await
+                .map_err(|e| AgentError::RegistrationFailed(format!("Registration task panicked: {:?}", e)))?
+                .map_err(AgentError::RegistrationFailed)?;
 
             // Convert PNS transport configs to service transport configs
             let transports = pns_response.transports.map(|ts| {
@@ -131,20 +116,14 @@ impl AgentService for AgentServiceImpl {
             });
 
             // Serialize cortical_area areas with proper error handling (don't panic!)
-            let cortical_areas_json =
-                serde_json::to_value(&pns_response.cortical_areas).map_err(|e| {
-                    error!(
-                        "❌ [AGENT-SERVICE] Failed to serialize cortical_area areas: {}",
-                        e
-                    );
-                    AgentError::Internal(format!("Failed to serialize cortical_area areas: {}", e))
-                })?;
+            let cortical_areas_json = serde_json::to_value(&pns_response.cortical_areas).map_err(|e| {
+                error!("❌ [AGENT-SERVICE] Failed to serialize cortical_area areas: {}", e);
+                AgentError::Internal(format!("Failed to serialize cortical_area areas: {}", e))
+            })?;
 
             return Ok(AgentRegistrationResponse {
                 status: pns_response.status,
-                message: pns_response
-                    .message
-                    .unwrap_or_else(|| "Success".to_string()),
+                message: pns_response.message.unwrap_or_else(|| "Success".to_string()),
                 success: true,
                 transport: None,
                 rates: None,
@@ -171,11 +150,7 @@ impl AgentService for AgentServiceImpl {
             // Log diagnostic information when agent not found
             let all_agents: Vec<String> = {
                 let registry = self.agent_registry.read();
-                registry
-                    .get_all()
-                    .iter()
-                    .map(|a| a.agent_id.clone())
-                    .collect()
+                registry.get_all().iter().map(|a| a.agent_id.clone()).collect()
             };
             warn!(
                 "⚠️ [HEARTBEAT] Agent '{}' not found in registry. Registered agents ({}): {:?}",
@@ -191,16 +166,10 @@ impl AgentService for AgentServiceImpl {
         }
 
         // Agent exists - update heartbeat
-        self.agent_registry
-            .write()
-            .heartbeat(&request.agent_id)
-            .map_err(|e| {
-                error!(
-                    "❌ [HEARTBEAT] Failed to update heartbeat for '{}': {}",
-                    request.agent_id, e
-                );
-                AgentError::NotFound(e)
-            })?;
+        self.agent_registry.write().heartbeat(&request.agent_id).map_err(|e| {
+            error!("❌ [HEARTBEAT] Failed to update heartbeat for '{}': {}", request.agent_id, e);
+            AgentError::NotFound(e)
+        })?;
         Ok(())
     }
 
@@ -232,18 +201,9 @@ impl AgentService for AgentServiceImpl {
             .ok_or_else(|| AgentError::NotFound(format!("Agent {} not found", agent_id)))?;
 
         // Extract properties from agent info
-        let agent_ip = agent
-            .metadata
-            .get("agent_ip")
-            .and_then(|v| v.as_str())
-            .unwrap_or("127.0.0.1")
-            .to_string();
+        let agent_ip = agent.metadata.get("agent_ip").and_then(|v| v.as_str()).unwrap_or("127.0.0.1").to_string();
 
-        let agent_data_port = agent
-            .metadata
-            .get("agent_data_port")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u16;
+        let agent_data_port = agent.metadata.get("agent_data_port").and_then(|v| v.as_u64()).unwrap_or(0) as u16;
 
         let agent_version = agent
             .metadata
@@ -266,10 +226,7 @@ impl AgentService for AgentServiceImpl {
 
         // Add vision capability if present
         if let Some(ref vision) = agent.capabilities.vision {
-            capabilities.insert(
-                "vision".to_string(),
-                serde_json::to_value(vision).unwrap_or(serde_json::Value::Null),
-            );
+            capabilities.insert("vision".to_string(), serde_json::to_value(vision).unwrap_or(serde_json::Value::Null));
         }
 
         // Add output capability (feagi-sensorimotor format)
@@ -284,10 +241,7 @@ impl AgentService for AgentServiceImpl {
 
         // Add visualization capability if present
         if let Some(ref viz) = agent.capabilities.visualization {
-            capabilities.insert(
-                "visualization".to_string(),
-                serde_json::to_value(viz).unwrap_or(serde_json::Value::Null),
-            );
+            capabilities.insert("visualization".to_string(), serde_json::to_value(viz).unwrap_or(serde_json::Value::Null));
         }
 
         // Add input capability (feagi-sensorimotor format)
@@ -318,23 +272,15 @@ impl AgentService for AgentServiceImpl {
         })
     }
 
-    async fn get_shared_memory_info(
-        &self,
-    ) -> AgentResult<HashMap<String, HashMap<String, serde_json::Value>>> {
+    async fn get_shared_memory_info(&self) -> AgentResult<HashMap<String, HashMap<String, serde_json::Value>>> {
         // TODO: Implement shared memory tracking in agent registry
         Ok(HashMap::new())
     }
 
     async fn deregister_agent(&self, agent_id: &str) -> AgentResult<()> {
-        self.agent_registry
-            .write()
-            .deregister(agent_id)
-            .map_err(AgentError::NotFound)?;
+        self.agent_registry.write().deregister(agent_id).map_err(AgentError::NotFound)?;
 
-        info!(
-            "✅ [AGENT-SERVICE] Agent '{}' deregistered successfully",
-            agent_id
-        );
+        info!("✅ [AGENT-SERVICE] Agent '{}' deregistered successfully", agent_id);
         Ok(())
     }
 
@@ -353,11 +299,7 @@ impl AgentService for AgentServiceImpl {
             .runtime_service
             .read()
             .as_ref()
-            .ok_or_else(|| {
-                AgentError::Internal(
-                    "Runtime service not available - cannot inject stimuli".to_string(),
-                )
-            })?
+            .ok_or_else(|| AgentError::Internal("Runtime service not available - cannot inject stimuli".to_string()))?
             .clone();
 
         let mut result = HashMap::new();
@@ -394,10 +336,7 @@ impl AgentService for AgentServiceImpl {
 
                         for coord in coordinates {
                             if coord.len() != 3 {
-                                warn!(
-                                    "Invalid coordinate format: {:?} (expected [x, y, z])",
-                                    coord
-                                );
+                                warn!("Invalid coordinate format: {:?} (expected [x, y, z])", coord);
                                 coordinates_not_found += 1;
                                 continue;
                             }
@@ -425,11 +364,7 @@ impl AgentService for AgentServiceImpl {
         // Second pass: perform injections (no locks held)
         for (cortical_id, xyzp_data) in injection_requests {
             match runtime_service
-                .inject_sensory_by_coordinates(
-                    &cortical_id,
-                    &xyzp_data,
-                    crate::traits::runtime_service::ManualStimulationMode::ForceFire,
-                )
+                .inject_sensory_by_coordinates(&cortical_id, &xyzp_data, crate::traits::runtime_service::ManualStimulationMode::ForceFire)
                 .await
             {
                 Ok(injected_count) => {
@@ -439,10 +374,7 @@ impl AgentService for AgentServiceImpl {
                     }
                 }
                 Err(e) => {
-                    error!(
-                        "❌ [MANUAL-STIMULATION] Failed to inject for area {}: {}",
-                        cortical_id, e
-                    );
+                    error!("❌ [MANUAL-STIMULATION] Failed to inject for area {}: {}", cortical_id, e);
                     coordinates_not_found += xyzp_data.len();
                 }
             }
@@ -452,34 +384,16 @@ impl AgentService for AgentServiceImpl {
             "success".to_string(),
             serde_json::json!(failed_areas.is_empty() && coordinates_not_found == 0),
         );
-        result.insert(
-            "total_coordinates".to_string(),
-            serde_json::json!(total_stimulated),
-        );
-        result.insert(
-            "requested_coordinates".to_string(),
-            serde_json::json!(requested_coordinates),
-        );
-        result.insert(
-            "matched_coordinates".to_string(),
-            serde_json::json!(total_stimulated),
-        );
-        result.insert(
-            "unique_neuron_ids".to_string(),
-            serde_json::json!(total_stimulated),
-        );
+        result.insert("total_coordinates".to_string(), serde_json::json!(total_stimulated));
+        result.insert("requested_coordinates".to_string(), serde_json::json!(requested_coordinates));
+        result.insert("matched_coordinates".to_string(), serde_json::json!(total_stimulated));
+        result.insert("unique_neuron_ids".to_string(), serde_json::json!(total_stimulated));
         result.insert("mode".to_string(), serde_json::json!("force_fire"));
-        result.insert(
-            "successful_areas".to_string(),
-            serde_json::json!(successful_areas),
-        );
+        result.insert("successful_areas".to_string(), serde_json::json!(successful_areas));
         result.insert("failed_areas".to_string(), serde_json::json!(failed_areas));
 
         if coordinates_not_found > 0 {
-            result.insert(
-                "coordinates_not_found".to_string(),
-                serde_json::json!(coordinates_not_found),
-            );
+            result.insert("coordinates_not_found".to_string(), serde_json::json!(coordinates_not_found));
         }
 
         if !failed_areas.is_empty() {

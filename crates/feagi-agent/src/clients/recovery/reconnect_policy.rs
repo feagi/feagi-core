@@ -131,9 +131,7 @@ impl ReconnectPolicy {
             HealthEvent::GenomeLoadCompleted => self.config.trigger_on_genome_load_completed,
             HealthEvent::FeagiBackOnline => self.config.trigger_on_back_online,
             HealthEvent::BrainReady => self.config.trigger_on_brain_ready,
-            HealthEvent::FeagiUnreachable
-            | HealthEvent::GenomeLoadStarted
-            | HealthEvent::BrainLost => false,
+            HealthEvent::FeagiUnreachable | HealthEvent::GenomeLoadStarted | HealthEvent::BrainLost => false,
         }
     }
 
@@ -142,9 +140,7 @@ impl ReconnectPolicy {
     /// `now_ms` must be a monotonically non-decreasing millisecond clock
     /// supplied by the driver. The policy itself does not read time.
     pub fn decide(&mut self, triggers: &[RecoveryTrigger], now_ms: u64) -> ReconnectDecision {
-        if self.consecutive_failures >= self.config.max_consecutive_failures
-            && self.config.max_consecutive_failures != u32::MAX
-        {
+        if self.consecutive_failures >= self.config.max_consecutive_failures && self.config.max_consecutive_failures != u32::MAX {
             return ReconnectDecision::GiveUp {
                 consecutive_failures: self.consecutive_failures,
             };
@@ -243,10 +239,7 @@ mod tests {
     #[test]
     fn first_matching_trigger_attempts_now() {
         let mut p = ReconnectPolicy::new(cfg());
-        let decision = p.decide(
-            &[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)],
-            0,
-        );
+        let decision = p.decide(&[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)], 0);
         match decision {
             ReconnectDecision::AttemptNow { reason } => {
                 assert_eq!(reason, "genome load completed");
@@ -258,14 +251,8 @@ mod tests {
     #[test]
     fn cooldown_blocks_immediate_retry() {
         let mut p = ReconnectPolicy::new(cfg());
-        let _ = p.decide(
-            &[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)],
-            0,
-        );
-        let decision = p.decide(
-            &[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)],
-            500,
-        );
+        let _ = p.decide(&[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)], 0);
+        let decision = p.decide(&[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)], 500);
         match decision {
             ReconnectDecision::RetryAfter { wait_ms, .. } => assert_eq!(wait_ms, 500),
             other => panic!("expected RetryAfter, got {:?}", other),
@@ -286,14 +273,9 @@ mod tests {
         for _ in 0..5 {
             p.record_attempt_failed();
         }
-        let decision = p.decide(
-            &[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)],
-            10_000,
-        );
+        let decision = p.decide(&[RecoveryTrigger::Health(HealthEvent::GenomeLoadCompleted)], 10_000);
         match decision {
-            ReconnectDecision::GiveUp {
-                consecutive_failures,
-            } => assert_eq!(consecutive_failures, 5),
+            ReconnectDecision::GiveUp { consecutive_failures } => assert_eq!(consecutive_failures, 5),
             other => panic!("expected GiveUp, got {:?}", other),
         }
     }

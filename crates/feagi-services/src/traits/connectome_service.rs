@@ -48,10 +48,7 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::AlreadyExists` - Cortical area ID already exists
     /// * `ServiceError::InvalidInput` - Invalid parameters
     ///
-    async fn create_cortical_area(
-        &self,
-        params: CreateCorticalAreaParams,
-    ) -> ServiceResult<CorticalAreaInfo>;
+    async fn create_cortical_area(&self, params: CreateCorticalAreaParams) -> ServiceResult<CorticalAreaInfo>;
 
     /// Update a cortical_area area
     ///
@@ -70,11 +67,7 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::InvalidInput` - Invalid parameters
     /// * `ServiceError::NotImplemented` - Always returned (use GenomeService)
     ///
-    async fn update_cortical_area(
-        &self,
-        cortical_id: &str,
-        params: UpdateCorticalAreaParams,
-    ) -> ServiceResult<CorticalAreaInfo>;
+    async fn update_cortical_area(&self, cortical_id: &str, params: UpdateCorticalAreaParams) -> ServiceResult<CorticalAreaInfo>;
 
     /// Delete a cortical_area area
     ///
@@ -142,19 +135,14 @@ pub trait ConnectomeService: Send + Sync {
     /// # Errors
     /// * `ServiceError::NotFound` - Cortical area not found
     ///
-    async fn get_cortical_area_properties(
-        &self,
-        cortical_id: &str,
-    ) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>>;
+    async fn get_cortical_area_properties(&self, cortical_id: &str) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>>;
 
     /// Get properties of all cortical_area areas
     ///
     /// # Returns
     /// * `Vec<HashMap<String, serde_json::Value>>` - List of property maps for all areas
     ///
-    async fn get_all_cortical_area_properties(
-        &self,
-    ) -> ServiceResult<Vec<std::collections::HashMap<String, serde_json::Value>>>;
+    async fn get_all_cortical_area_properties(&self) -> ServiceResult<Vec<std::collections::HashMap<String, serde_json::Value>>>;
 
     // ========================================================================
     // NEURON INSPECTION (DEBUG/INTROSPECTION)
@@ -164,10 +152,7 @@ pub trait ConnectomeService: Send + Sync {
     ///
     /// This surfaces runtime state like membrane potential, threshold, refractory countdown,
     /// and consecutive fire tracking.
-    async fn get_neuron_properties(
-        &self,
-        neuron_id: u64,
-    ) -> ServiceResult<HashMap<String, serde_json::Value>>;
+    async fn get_neuron_properties(&self, neuron_id: u64) -> ServiceResult<HashMap<String, serde_json::Value>>;
 
     // ========================================================================
     // BRAIN REGION OPERATIONS
@@ -186,10 +171,7 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::InvalidInput` - Invalid parameters
     /// * `ServiceError::NotFound` - Parent region not found
     ///
-    async fn create_brain_region(
-        &self,
-        params: CreateBrainRegionParams,
-    ) -> ServiceResult<BrainRegionInfo>;
+    async fn create_brain_region(&self, params: CreateBrainRegionParams) -> ServiceResult<BrainRegionInfo>;
 
     /// Delete a brain region
     ///
@@ -273,9 +255,7 @@ pub trait ConnectomeService: Send + Sync {
     /// # Returns
     /// * `HashMap<String, MorphologyInfo>` - All morphology definitions
     ///
-    async fn get_morphologies(
-        &self,
-    ) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>>;
+    async fn get_morphologies(&self) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>>;
 
     /// Create a new morphology definition.
     ///
@@ -286,11 +266,7 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::InvalidState` - No genome loaded
     /// * `ServiceError::AlreadyExists` - Morphology already exists
     /// * `ServiceError::InvalidInput` - Invalid morphology payload
-    async fn create_morphology(
-        &self,
-        morphology_id: String,
-        morphology: feagi_evolutionary::Morphology,
-    ) -> ServiceResult<()>;
+    async fn create_morphology(&self, morphology_id: String, morphology: feagi_evolutionary::Morphology) -> ServiceResult<()>;
 
     /// Update an existing morphology definition.
     ///
@@ -301,11 +277,7 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::InvalidState` - No genome loaded
     /// * `ServiceError::NotFound` - Morphology does not exist
     /// * `ServiceError::InvalidInput` - Invalid morphology payload
-    async fn update_morphology(
-        &self,
-        morphology_id: String,
-        morphology: feagi_evolutionary::Morphology,
-    ) -> ServiceResult<()>;
+    async fn update_morphology(&self, morphology_id: String, morphology: feagi_evolutionary::Morphology) -> ServiceResult<()>;
 
     /// Delete a morphology definition by ID.
     ///
@@ -347,12 +319,7 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::NotFound` - Source or destination area not found
     /// * `ServiceError::InvalidInput` - Invalid mapping data
     ///
-    async fn update_cortical_mapping(
-        &self,
-        src_area_id: String,
-        dst_area_id: String,
-        mapping_data: Vec<serde_json::Value>,
-    ) -> ServiceResult<usize>;
+    async fn update_cortical_mapping(&self, src_area_id: String, dst_area_id: String, mapping_data: Vec<serde_json::Value>) -> ServiceResult<usize>;
 
     // ========================================================================
     // CONNECTOME I/O OPERATIONS
@@ -371,9 +338,7 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::NotImplemented` - Connectome I/O not available (feature disabled)
     ///
     #[cfg(feature = "connectome-io")]
-    async fn export_connectome(
-        &self,
-    ) -> ServiceResult<ConnectomeSnapshot>;
+    async fn export_connectome(&self) -> ServiceResult<ConnectomeSnapshot>;
 
     /// Import a connectome snapshot
     ///
@@ -389,8 +354,5 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::NotImplemented` - Connectome I/O not available (feature disabled)
     ///
     #[cfg(feature = "connectome-io")]
-    async fn import_connectome(
-        &self,
-        snapshot: ConnectomeSnapshot,
-    ) -> ServiceResult<()>;
+    async fn import_connectome(&self, snapshot: ConnectomeSnapshot) -> ServiceResult<()>;
 }

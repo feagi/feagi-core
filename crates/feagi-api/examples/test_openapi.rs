@@ -21,8 +21,7 @@ fn main() {
     path_list.sort();
 
     // Group by tags to see what Swagger will show
-    let mut tags_map: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
+    let mut tags_map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 
     for path in &path_list {
         let path_item = paths.paths.get(*path).unwrap();
@@ -30,16 +29,10 @@ fn main() {
         for operation in path_item.operations.values() {
             if let Some(tags) = &operation.tags {
                 for tag in tags {
-                    tags_map
-                        .entry(tag.clone())
-                        .or_default()
-                        .push((*path).clone());
+                    tags_map.entry(tag.clone()).or_default().push((*path).clone());
                 }
             } else {
-                tags_map
-                    .entry("untagged".to_string())
-                    .or_default()
-                    .push((*path).clone());
+                tags_map.entry("untagged".to_string()).or_default().push((*path).clone());
             }
         }
 

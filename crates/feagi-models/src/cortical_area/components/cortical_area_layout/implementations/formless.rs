@@ -1,6 +1,6 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
 use crate::cortical_area::components::cortical_area_layout::enums::{CorticalAreaLayoutNested, CorticalAreaLayoutTypePacked};
+use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Represents the layout of a cortical with no clear layout (IE memory). A neuron model targeting
 /// this cortical layout can use this layout but ALSO any other layout as it does not care about

@@ -212,8 +212,7 @@ impl MemoryMappedState {
 
     /// Set burst engine state (atomic write)
     pub fn set_burst_engine_state(&self, state: BurstEngineState) {
-        self.burst_engine_state
-            .store(state as u8, Ordering::Release);
+        self.burst_engine_state.store(state as u8, Ordering::Release);
         self.increment_version();
     }
 
@@ -268,8 +267,7 @@ impl MemoryMappedState {
 
     /// Set brain readiness (atomic write)
     pub fn set_brain_ready(&self, ready: bool) {
-        self.brain_readiness
-            .store(if ready { 1 } else { 0 }, Ordering::Release);
+        self.brain_readiness.store(if ready { 1 } else { 0 }, Ordering::Release);
         self.increment_version();
     }
 
@@ -325,12 +323,7 @@ impl MemoryMappedState {
         let mut current = self.agent_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(1);
-            match self.agent_count.compare_exchange_weak(
-                current,
-                next,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
+            match self.agent_count.compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire) {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -346,8 +339,7 @@ impl MemoryMappedState {
 
     /// Set burst frequency (atomic write)
     pub fn set_burst_frequency(&self, freq: f32) {
-        self.burst_frequency
-            .store(freq.to_bits(), Ordering::Release);
+        self.burst_frequency.store(freq.to_bits(), Ordering::Release);
         self.increment_version();
     }
 
@@ -375,12 +367,10 @@ impl MemoryMappedState {
         let mut current = self.neuron_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(delta);
-            match self.neuron_count.compare_exchange_weak(
-                current,
-                next,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
+            match self
+                .neuron_count
+                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
+            {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -413,12 +403,10 @@ impl MemoryMappedState {
         let mut current = self.synapse_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(delta);
-            match self.synapse_count.compare_exchange_weak(
-                current,
-                next,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
+            match self
+                .synapse_count
+                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
+            {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -488,12 +476,10 @@ impl MemoryMappedState {
         let mut current = self.regular_neuron_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(delta);
-            match self.regular_neuron_count.compare_exchange_weak(
-                current,
-                next,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
+            match self
+                .regular_neuron_count
+                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
+            {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -526,12 +512,10 @@ impl MemoryMappedState {
         let mut current = self.memory_neuron_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(delta);
-            match self.memory_neuron_count.compare_exchange_weak(
-                current,
-                next,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
+            match self
+                .memory_neuron_count
+                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
+            {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -562,8 +546,7 @@ impl MemoryMappedState {
 
     /// Set fatigue active state (atomic write)
     pub fn set_fatigue_active(&self, active: bool) {
-        self.fatigue_active
-            .store(if active { 1 } else { 0 }, Ordering::Release);
+        self.fatigue_active.store(if active { 1 } else { 0 }, Ordering::Release);
         self.increment_version();
     }
 
@@ -576,8 +559,7 @@ impl MemoryMappedState {
     /// Set regular neuron utilization percentage (atomic write)
     /// Value should be 0-100
     pub fn set_regular_neuron_util(&self, util: u8) {
-        self.regular_neuron_util
-            .store(util.min(100), Ordering::Release);
+        self.regular_neuron_util.store(util.min(100), Ordering::Release);
         self.increment_version();
     }
 
@@ -590,8 +572,7 @@ impl MemoryMappedState {
     /// Set memory neuron utilization percentage (atomic write)
     /// Value should be 0-100
     pub fn set_memory_neuron_util(&self, util: u8) {
-        self.memory_neuron_util
-            .store(util.min(100), Ordering::Release);
+        self.memory_neuron_util.store(util.min(100), Ordering::Release);
         self.increment_version();
     }
 
@@ -668,10 +649,7 @@ mod tests {
     #[test]
     fn test_burst_engine_state() {
         let state = MemoryMappedState::new();
-        assert_eq!(
-            state.get_burst_engine_state(),
-            BurstEngineState::Unavailable
-        );
+        assert_eq!(state.get_burst_engine_state(), BurstEngineState::Unavailable);
 
         state.set_burst_engine_state(BurstEngineState::Running);
         assert_eq!(state.get_burst_engine_state(), BurstEngineState::Running);
@@ -779,32 +757,16 @@ mod tests {
 
         // Subtract more than we have - must saturate at 0, not wrap
         state.subtract_neuron_count(5000);
-        assert_eq!(
-            state.get_neuron_count(),
-            0,
-            "neuron_count must not underflow"
-        );
+        assert_eq!(state.get_neuron_count(), 0, "neuron_count must not underflow");
 
         state.subtract_regular_neuron_count(5000);
-        assert_eq!(
-            state.get_regular_neuron_count(),
-            0,
-            "regular_neuron_count must not underflow"
-        );
+        assert_eq!(state.get_regular_neuron_count(), 0, "regular_neuron_count must not underflow");
 
         state.subtract_synapse_count(1000);
-        assert_eq!(
-            state.get_synapse_count(),
-            0,
-            "synapse_count must not underflow"
-        );
+        assert_eq!(state.get_synapse_count(), 0, "synapse_count must not underflow");
 
         state.subtract_memory_neuron_count(500);
-        assert_eq!(
-            state.get_memory_neuron_count(),
-            0,
-            "memory_neuron_count must not underflow"
-        );
+        assert_eq!(state.get_memory_neuron_count(), 0, "memory_neuron_count must not underflow");
 
         // Decrement agent from 0 - must stay 0
         state.decrement_agent_count();

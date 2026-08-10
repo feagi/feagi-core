@@ -22,9 +22,7 @@ impl FeagiJSON {
     /// assert_eq!(json.to_string(), "{}");
     /// ```
     pub fn new_empty() -> FeagiJSON {
-        FeagiJSON {
-            json: serde_json::json!({}),
-        }
+        FeagiJSON { json: serde_json::json!({}) }
     }
 
     /// Parses a JSON string into a `FeagiJSON` wrapper.

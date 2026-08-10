@@ -26,9 +26,7 @@ pub struct RenameMorphologyRequest {
 
 /// Get list of all morphology names in alphabetical order.
 #[utoipa::path(get, path = "/v1/morphology/morphology_list", tag = "morphology")]
-pub async fn get_morphology_list(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<MorphologyListResponse>> {
+pub async fn get_morphology_list(State(state): State<ApiState>) -> ApiResult<Json<MorphologyListResponse>> {
     let connectome_service = state.connectome_service.as_ref();
 
     let morphologies = connectome_service
@@ -40,26 +38,18 @@ pub async fn get_morphology_list(
     let mut names: Vec<String> = morphologies.keys().cloned().collect();
     names.sort();
 
-    Ok(Json(MorphologyListResponse {
-        morphology_list: names,
-    }))
+    Ok(Json(MorphologyListResponse { morphology_list: names }))
 }
 
 /// Get available morphology types (vectors, patterns, projector).
 #[utoipa::path(get, path = "/v1/morphology/morphology_types", tag = "morphology")]
 pub async fn get_morphology_types(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
-    Ok(Json(vec![
-        "vectors".to_string(),
-        "patterns".to_string(),
-        "projector".to_string(),
-    ]))
+    Ok(Json(vec!["vectors".to_string(), "patterns".to_string(), "projector".to_string()]))
 }
 
 /// Get morphologies categorized by type.
 #[utoipa::path(get, path = "/v1/morphology/list/types", tag = "morphology")]
-pub async fn get_list_types(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<BTreeMap<String, Vec<String>>>> {
+pub async fn get_list_types(State(_state): State<ApiState>) -> ApiResult<Json<BTreeMap<String, Vec<String>>>> {
     // TODO: Get actual morphology categorization
     // Use BTreeMap for alphabetical ordering in UI
     Ok(Json(BTreeMap::new()))
@@ -75,9 +65,7 @@ pub async fn get_list_types(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_morphologies(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<BTreeMap<String, serde_json::Value>>> {
+pub async fn get_morphologies(State(state): State<ApiState>) -> ApiResult<Json<BTreeMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
 
     // Get morphologies from connectome
@@ -135,37 +123,20 @@ pub async fn post_morphology(
         .ok_or_else(|| ApiError::invalid_input("Missing morphology_parameters"))?;
 
     let (morphology_type_enum, params_value) = match morphology_type.as_str() {
-        "vectors" => (
-            feagi_evolutionary::MorphologyType::Vectors,
-            morphology_parameters,
-        ),
-        "patterns" => (
-            feagi_evolutionary::MorphologyType::Patterns,
-            morphology_parameters,
-        ),
-        "functions" => (
-            feagi_evolutionary::MorphologyType::Functions,
-            morphology_parameters,
-        ),
+        "vectors" => (feagi_evolutionary::MorphologyType::Vectors, morphology_parameters),
+        "patterns" => (feagi_evolutionary::MorphologyType::Patterns, morphology_parameters),
+        "functions" => (feagi_evolutionary::MorphologyType::Functions, morphology_parameters),
         "composite" => {
             // BV payload wraps composite fields under {"composite": {...}}.
             // Accept that exact schema (and also accept the direct flat schema).
-            let composite_obj = morphology_parameters
-                .get("composite")
-                .cloned()
-                .unwrap_or(morphology_parameters);
+            let composite_obj = morphology_parameters.get("composite").cloned().unwrap_or(morphology_parameters);
             (feagi_evolutionary::MorphologyType::Composite, composite_obj)
         }
-        other => {
-            return Err(ApiError::invalid_input(format!(
-                "Unknown morphology_type '{}'",
-                other
-            )))
-        }
+        other => return Err(ApiError::invalid_input(format!("Unknown morphology_type '{}'", other))),
     };
 
-    let parameters: feagi_evolutionary::MorphologyParameters = serde_json::from_value(params_value)
-        .map_err(|e| ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e)))?;
+    let parameters: feagi_evolutionary::MorphologyParameters =
+        serde_json::from_value(params_value).map_err(|e| ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e)))?;
 
     let morphology = feagi_evolutionary::Morphology {
         morphology_type: morphology_type_enum,
@@ -179,10 +150,7 @@ pub async fn post_morphology(
         .await
         .map_err(ApiError::from)?;
 
-    Ok(Json(HashMap::from([(
-        "status".to_string(),
-        "success".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("status".to_string(), "success".to_string())])))
 }
 
 /// Update an existing morphology definition.
@@ -220,35 +188,18 @@ pub async fn put_morphology(
         .ok_or_else(|| ApiError::invalid_input("Missing morphology_parameters"))?;
 
     let (morphology_type_enum, params_value) = match morphology_type.as_str() {
-        "vectors" => (
-            feagi_evolutionary::MorphologyType::Vectors,
-            morphology_parameters,
-        ),
-        "patterns" => (
-            feagi_evolutionary::MorphologyType::Patterns,
-            morphology_parameters,
-        ),
-        "functions" => (
-            feagi_evolutionary::MorphologyType::Functions,
-            morphology_parameters,
-        ),
+        "vectors" => (feagi_evolutionary::MorphologyType::Vectors, morphology_parameters),
+        "patterns" => (feagi_evolutionary::MorphologyType::Patterns, morphology_parameters),
+        "functions" => (feagi_evolutionary::MorphologyType::Functions, morphology_parameters),
         "composite" => {
-            let composite_obj = morphology_parameters
-                .get("composite")
-                .cloned()
-                .unwrap_or(morphology_parameters);
+            let composite_obj = morphology_parameters.get("composite").cloned().unwrap_or(morphology_parameters);
             (feagi_evolutionary::MorphologyType::Composite, composite_obj)
         }
-        other => {
-            return Err(ApiError::invalid_input(format!(
-                "Unknown morphology_type '{}'",
-                other
-            )))
-        }
+        other => return Err(ApiError::invalid_input(format!("Unknown morphology_type '{}'", other))),
     };
 
-    let parameters: feagi_evolutionary::MorphologyParameters = serde_json::from_value(params_value)
-        .map_err(|e| ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e)))?;
+    let parameters: feagi_evolutionary::MorphologyParameters =
+        serde_json::from_value(params_value).map_err(|e| ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e)))?;
 
     let morphology = feagi_evolutionary::Morphology {
         morphology_type: morphology_type_enum,
@@ -274,10 +225,7 @@ pub async fn put_morphology(
         "[MORPH-AUDIT][API] update_morphology completed successfully"
     );
 
-    Ok(Json(HashMap::from([(
-        "status".to_string(),
-        "success".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("status".to_string(), "success".to_string())])))
 }
 
 /// Delete a morphology by name provided in request body.
@@ -301,10 +249,7 @@ pub async fn delete_morphology_by_name(
         .await
         .map_err(ApiError::from)?;
 
-    Ok(Json(HashMap::from([(
-        "status".to_string(),
-        "success".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("status".to_string(), "success".to_string())])))
 }
 
 /// Rename a morphology and update all references in the genome.
@@ -328,21 +273,13 @@ pub async fn put_rename_morphology(
     let new_id = req.new_morphology_id.trim();
 
     if old_id.is_empty() {
-        return Err(ApiError::invalid_input(
-            "old_morphology_id must be non-empty",
-        ));
+        return Err(ApiError::invalid_input("old_morphology_id must be non-empty"));
     }
     if new_id.is_empty() {
-        return Err(ApiError::invalid_input(
-            "new_morphology_id must be non-empty",
-        ));
+        return Err(ApiError::invalid_input("new_morphology_id must be non-empty"));
     }
 
-    state
-        .connectome_service
-        .rename_morphology(old_id, new_id)
-        .await
-        .map_err(ApiError::from)?;
+    state.connectome_service.rename_morphology(old_id, new_id).await.map_err(ApiError::from)?;
 
     Ok(Json(HashMap::from([
         ("status".to_string(), "success".to_string()),
@@ -387,18 +324,9 @@ pub async fn post_morphology_properties(
     // Return properties in expected format
     // Use BTreeMap for alphabetical ordering in UI
     let mut result = BTreeMap::new();
-    result.insert(
-        "morphology_name".to_string(),
-        serde_json::json!(morphology_name),
-    );
-    result.insert(
-        "type".to_string(),
-        serde_json::json!(morphology_info.morphology_type),
-    );
-    result.insert(
-        "class".to_string(),
-        serde_json::json!(morphology_info.class),
-    );
+    result.insert("morphology_name".to_string(), serde_json::json!(morphology_name));
+    result.insert("type".to_string(), serde_json::json!(morphology_info.morphology_type));
+    result.insert("class".to_string(), serde_json::json!(morphology_info.class));
     result.insert("parameters".to_string(), morphology_info.parameters.clone());
     result.insert("source".to_string(), serde_json::json!("genome"));
 
@@ -415,10 +343,7 @@ pub async fn post_morphology_properties(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_morphology_usage(
-    State(state): State<ApiState>,
-    Json(req): Json<HashMap<String, String>>,
-) -> ApiResult<Json<Vec<Vec<String>>>> {
+pub async fn post_morphology_usage(State(state): State<ApiState>, Json(req): Json<HashMap<String, String>>) -> ApiResult<Json<Vec<Vec<String>>>> {
     use tracing::debug;
 
     let morphology_name = req
@@ -453,8 +378,7 @@ pub async fn post_morphology_usage(
                             };
 
                             if morph_id == Some(morphology_name.as_str()) {
-                                usage_pairs
-                                    .push(vec![area_info.cortical_id.clone(), dst_id.clone()]);
+                                usage_pairs.push(vec![area_info.cortical_id.clone(), dst_id.clone()]);
                             }
                         }
                     }
@@ -502,19 +426,9 @@ pub async fn get_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<Strin
         (status = 200, description = "Morphology info", body = BTreeMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_info(
-    State(state): State<ApiState>,
-    Path(morphology_id): Path<String>,
-) -> ApiResult<Json<BTreeMap<String, serde_json::Value>>> {
+pub async fn get_info(State(state): State<ApiState>, Path(morphology_id): Path<String>) -> ApiResult<Json<BTreeMap<String, serde_json::Value>>> {
     // Delegate to post_morphology_properties (same logic)
-    post_morphology_properties(
-        State(state),
-        Json(HashMap::from([(
-            "morphology_name".to_string(),
-            morphology_id,
-        )])),
-    )
-    .await
+    post_morphology_properties(State(state), Json(HashMap::from([("morphology_name".to_string(), morphology_id)]))).await
 }
 
 /// Create a new morphology with specified parameters.
@@ -569,10 +483,7 @@ pub async fn put_update(
         (status = 200, description = "Morphology deleted", body = HashMap<String, String>)
     )
 )]
-pub async fn delete_morphology(
-    State(_state): State<ApiState>,
-    Path(morphology_id): Path<String>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn delete_morphology(State(_state): State<ApiState>, Path(morphology_id): Path<String>) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Implement morphology deletion
     tracing::info!(target: "feagi-api", "Delete morphology requested: {}", morphology_id);
 

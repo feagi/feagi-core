@@ -44,10 +44,7 @@ impl FCLWindowCache {
 
     pub fn get(&self, cortical_area: u32) -> usize {
         let cache = self.cache.read();
-        cache
-            .get(&cortical_area)
-            .copied()
-            .unwrap_or(self.default_window_size)
+        cache.get(&cortical_area).copied().unwrap_or(self.default_window_size)
     }
 
     pub fn set(&self, cortical_area: u32, window_size: usize) {
@@ -84,10 +81,7 @@ impl FCLWindowCache {
 
     pub fn get(&self, cortical_area: u32) -> usize {
         let cache = self.cache.read();
-        cache
-            .get(&cortical_area)
-            .copied()
-            .unwrap_or(self.default_window_size)
+        cache.get(&cortical_area).copied().unwrap_or(self.default_window_size)
     }
 
     pub fn set(&self, cortical_area: u32, window_size: usize) {
@@ -124,10 +118,7 @@ impl FCLWindowCache {
 
     pub fn get(&self, cortical_area: u32) -> usize {
         let cache = self.cache.borrow();
-        cache
-            .get(&cortical_area)
-            .copied()
-            .unwrap_or(self.default_window_size)
+        cache.get(&cortical_area).copied().unwrap_or(self.default_window_size)
     }
 
     pub fn set(&self, cortical_area: u32, window_size: usize) {
@@ -164,10 +155,7 @@ impl FCLWindowCache {
 
     pub fn get(&self, cortical_area: u32) -> usize {
         let cache = self.cache.lock().unwrap();
-        cache
-            .get(&cortical_area)
-            .copied()
-            .unwrap_or(self.default_window_size)
+        cache.get(&cortical_area).copied().unwrap_or(self.default_window_size)
     }
 
     pub fn set(&self, cortical_area: u32, window_size: usize) {

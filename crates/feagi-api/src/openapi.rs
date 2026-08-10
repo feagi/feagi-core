@@ -645,10 +645,7 @@ impl utoipa::Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         if let Some(components) = openapi.components.as_mut() {
             // API Key authentication (for future use)
-            components.add_security_scheme(
-                "api_key",
-                SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("X-API-Key"))),
-            );
+            components.add_security_scheme("api_key", SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("X-API-Key"))));
 
             // JWT Bearer authentication (for future use)
             components.add_security_scheme(
@@ -701,12 +698,8 @@ mod tests {
         assert!(components.schemas.contains_key("VoxelNeuronsBody"));
         assert!(components.schemas.contains_key("VoxelNeuronsResponse"));
         assert!(components.schemas.contains_key("VoxelNeuronsQuery"));
-        assert!(components
-            .schemas
-            .contains_key("MemoryCorticalAreaResponse"));
-        assert!(components
-            .schemas
-            .contains_key("MemoryNeuronDetailResponse"));
+        assert!(components.schemas.contains_key("MemoryCorticalAreaResponse"));
+        assert!(components.schemas.contains_key("MemoryNeuronDetailResponse"));
     }
 
     #[test]
@@ -714,8 +707,7 @@ mod tests {
         let openapi = ApiDoc::openapi();
         let json = serde_json::to_value(&openapi).expect("serialize openapi");
 
-        let content =
-            &json["paths"]["/v1/genome/amalgamation_by_upload"]["post"]["requestBody"]["content"];
+        let content = &json["paths"]["/v1/genome/amalgamation_by_upload"]["post"]["requestBody"]["content"];
 
         assert!(
             content.get("multipart/form-data").is_some(),

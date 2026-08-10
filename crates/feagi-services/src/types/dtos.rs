@@ -82,11 +82,7 @@ pub struct CorticalAreaInfo {
     /// Total number of outgoing synapses originating from neurons in this area.
     pub outgoing_synapse_count: usize,
     pub visible: bool,
-    #[serde(
-        rename = "cortical_sub_group",
-        alias = "sub_group",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "cortical_sub_group", alias = "sub_group", skip_serializing_if = "Option::is_none")]
     pub sub_group: Option<String>,
     pub neurons_per_voxel: u32,
     #[serde(rename = "neuron_post_synaptic_potential")]
@@ -135,10 +131,7 @@ pub struct CorticalAreaInfo {
     pub temporal_depth: Option<u32>,
     /// Whether membrane potential learning is enabled for this memory area.
     /// Omitted for non-memory areas.
-    #[serde(
-        rename = "mp_learning_enabled",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "mp_learning_enabled", skip_serializing_if = "Option::is_none")]
     pub mp_learning_enabled: Option<bool>,
     pub properties: HashMap<String, serde_json::Value>,
 
@@ -310,8 +303,8 @@ pub struct GenomeInfo {
     pub version: String,
     pub cortical_area_count: usize,
     pub brain_region_count: usize,
-    pub simulation_timestep: f64, // Simulation timestep in seconds from physiology
-    pub genome_num: Option<i32>,  // Genome version/generation number
+    pub simulation_timestep: f64,      // Simulation timestep in seconds from physiology
+    pub genome_num: Option<i32>,       // Genome version/generation number
     pub genome_timestamp: Option<i64>, // Unix timestamp when genome was loaded/created
 }
 

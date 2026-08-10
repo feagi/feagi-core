@@ -9,21 +9,17 @@
 ///
 /// Tests basic functionality without complex genome loading
 use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
+use feagi_genomic_context::cortical_area::CorticalAreaDimensions;
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_burst_engine::TracingMutex;
-use feagi_genomic_context::cortical_area::CorticalAreaDimensions;
 use std::sync::Arc;
 
 /// Helper to create an isolated test manager with NPU
 fn create_test_manager() -> ConnectomeManager {
     let runtime = feagi_npu_runtime::StdRuntime;
     let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
-    let npu_result =
-        RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).expect("Failed to create NPU");
-    let npu = Arc::new(TracingMutex::new(
-        feagi_npu_burst_engine::DynamicNPU::F32(npu_result),
-        "TestNPU",
-    ));
+    let npu_result = RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).expect("Failed to create NPU");
+    let npu = Arc::new(TracingMutex::new(feagi_npu_burst_engine::DynamicNPU::F32(npu_result), "TestNPU"));
     ConnectomeManager::new_for_testing_with_npu(npu)
 }
 
@@ -37,9 +33,7 @@ fn test_create_cortical_area() {
 
     // Create a cortical_area area
     let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
-    let cortical_type = cortical_id
-        .as_cortical_type()
-        .expect("Failed to get cortical_area type");
+    let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical_area type");
     let area = CorticalArea::new(
         cortical_id,
         0, // cortical_idx
@@ -51,9 +45,7 @@ fn test_create_cortical_area() {
     .expect("Failed to create cortical_area area");
 
     // Add to manager
-    manager
-        .add_cortical_area(area)
-        .expect("Failed to add cortical_area area");
+    manager.add_cortical_area(area).expect("Failed to add cortical_area area");
 
     // Verify it exists
     assert!(manager.cortical_area_exists(&CorticalID::try_from_base_64("cust000").unwrap()));
@@ -72,9 +64,7 @@ fn test_create_and_query_neurons() {
 
     // Create area
     let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
-    let cortical_type = cortical_id
-        .as_cortical_type()
-        .expect("Failed to get cortical_area type");
+    let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical_area type");
     let area = CorticalArea::new(
         cortical_id,
         0,
@@ -114,21 +104,17 @@ fn test_create_and_query_neurons() {
     assert!(manager.has_neuron(neuron_id));
 
     // Get neuron position
-    let position = manager
-        .get_neuron_position(neuron_id)
-        .expect("Neuron should have position");
+    let position = manager.get_neuron_position(neuron_id).expect("Neuron should have position");
     assert_eq!(position, (5, 5, 0));
 
     // Find neuron by coordinates
-//     let found_id = manager
-//         .get_neuron_by_coordinates(&neuron_cortical_id, 5, 5, 0)
-//         .expect("Should find neuron by coordinates");
-//     assert_eq!(found_id, neuron_id);
+    //     let found_id = manager
+    //         .get_neuron_by_coordinates(&neuron_cortical_id, 5, 5, 0)
+    //         .expect("Should find neuron by coordinates");
+    //     assert_eq!(found_id, neuron_id);
 
     // Get neuron properties
-    let props = manager
-        .get_neuron_properties(neuron_id)
-        .expect("Should get neuron properties");
+    let props = manager.get_neuron_properties(neuron_id).expect("Should get neuron properties");
 
     assert_eq!(props["x"], 5);
     assert_eq!(props["y"], 5);
@@ -503,9 +489,7 @@ fn test_delete_operations() {
         "Delete Test".to_string(),
         CorticalAreaDimensions::new(10, 10, 1).unwrap(),
         (0, 0, 0).into(),
-        cortical_id
-            .as_cortical_type()
-            .expect("Failed to get cortical_area type"),
+        cortical_id.as_cortical_type().expect("Failed to get cortical_area type"),
     )
     .expect("Failed to create area");
 
@@ -514,41 +498,11 @@ fn test_delete_operations() {
     // Create neurons
     let del_cortical_id = CorticalID::try_from_base_64("del001").unwrap();
     let neuron1 = manager
-        .add_neuron(
-            &del_cortical_id,
-            0,
-            0,
-            0,
-            1.0,
-            f32::MAX,
-            0.1,
-            0.0,
-            0,
-            2,
-            1.0,
-            3,
-            5,
-            false,
-        )
+        .add_neuron(&del_cortical_id, 0, 0, 0, 1.0, f32::MAX, 0.1, 0.0, 0, 2, 1.0, 3, 5, false)
         .expect("Failed to create neuron1");
 
     let neuron2 = manager
-        .add_neuron(
-            &del_cortical_id,
-            1,
-            1,
-            0,
-            1.0,
-            f32::MAX,
-            0.1,
-            0.0,
-            0,
-            2,
-            1.0,
-            3,
-            5,
-            false,
-        )
+        .add_neuron(&del_cortical_id, 1, 1, 0, 1.0, f32::MAX, 0.1, 0.0, 0, 2, 1.0, 3, 5, false)
         .expect("Failed to create neuron2");
 
     // Create synapse
@@ -556,22 +510,20 @@ fn test_delete_operations() {
         .create_synapse(neuron1, neuron2, 128.0, 200.0, 0)
         .expect("Failed to create synapse");
 
-//     // Verify synapse exists
-//     assert!(manager.get_synapse(neuron1, neuron2).is_some());
-//
-//     // Delete synapse
-//     let removed = manager
-//         .remove_synapse(neuron1, neuron2)
-//         .expect("Failed to remove synapse");
-//     assert!(removed);
-//
-//     // Verify synapse gone
-//     assert!(manager.get_synapse(neuron1, neuron2).is_none());
+    //     // Verify synapse exists
+    //     assert!(manager.get_synapse(neuron1, neuron2).is_some());
+    //
+    //     // Delete synapse
+    //     let removed = manager
+    //         .remove_synapse(neuron1, neuron2)
+    //         .expect("Failed to remove synapse");
+    //     assert!(removed);
+    //
+    //     // Verify synapse gone
+    //     assert!(manager.get_synapse(neuron1, neuron2).is_none());
 
     // Delete neuron
-    let deleted = manager
-        .delete_neuron(neuron1)
-        .expect("Failed to delete neuron");
+    let deleted = manager.delete_neuron(neuron1).expect("Failed to delete neuron");
     assert!(deleted);
 
     // Verify neuron gone

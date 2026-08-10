@@ -27,10 +27,7 @@ pub struct GenomeFileUploadForm {
     pub file: String,
 }
 
-fn queue_amalgamation_from_genome_json_str(
-    state: &ApiState,
-    genome_json: String,
-) -> Result<String, ApiError> {
+fn queue_amalgamation_from_genome_json_str(state: &ApiState, genome_json: String) -> Result<String, ApiError> {
     // Only one pending amalgamation is supported per FEAGI session (matches BV workflow).
     {
         let lock = state.amalgamation_state.read();
@@ -41,8 +38,8 @@ fn queue_amalgamation_from_genome_json_str(
         }
     }
 
-    let genome = feagi_evolutionary::load_genome_from_json(&genome_json)
-        .map_err(|e| ApiError::invalid_input(format!("Invalid genome payload: {}", e)))?;
+    let genome =
+        feagi_evolutionary::load_genome_from_json(&genome_json).map_err(|e| ApiError::invalid_input(format!("Invalid genome payload: {}", e)))?;
 
     let circuit_size = amalgamation::compute_circuit_size_from_runtime_genome(&genome);
 
@@ -144,19 +141,12 @@ impl Drop for GenomeTransitionStateLifecycle {
 /// - Runtime is quiesced before load starts.
 /// - Runtime frequency is updated from genome physiology.
 /// - Runtime is restored to running state if it was running before transition.
-async fn load_genome_with_priority(
-    state: &ApiState,
-    params: LoadGenomeParams,
-    source: &str,
-) -> ApiResult<GenomeInfo> {
-    let _transition_lock = state.genome_transition_lock.try_lock().map_err(|_| {
-        ApiError::conflict(
-            "Another genome transition is already in progress; wait for it to finish",
-        )
-    })?;
-    state
-        .genome_transition_in_progress
-        .store(true, Ordering::SeqCst);
+async fn load_genome_with_priority(state: &ApiState, params: LoadGenomeParams, source: &str) -> ApiResult<GenomeInfo> {
+    let _transition_lock = state
+        .genome_transition_lock
+        .try_lock()
+        .map_err(|_| ApiError::conflict("Another genome transition is already in progress; wait for it to finish"))?;
+    state.genome_transition_in_progress.store(true, Ordering::SeqCst);
     let _guard = GenomeTransitionFlagGuard {
         in_progress: Arc::clone(&state.genome_transition_in_progress),
     };
@@ -200,12 +190,10 @@ async fn load_genome_with_priority(
             target: "feagi-api",
             "Stopping burst engine before prioritized genome transition"
         );
-        runtime_service.stop().await.map_err(|e| {
-            ApiError::internal(format!(
-                "Failed to stop burst engine before genome transition: {}",
-                e
-            ))
-        })?;
+        runtime_service
+            .stop()
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to stop burst engine before genome transition: {}", e)))?;
     }
 
     let genome_service = state.genome_service.as_ref();
@@ -234,12 +222,10 @@ async fn load_genome_with_priority(
         .map_err(|e| ApiError::internal(format!("Failed to update burst frequency: {}", e)))?;
 
     if runtime_was_running {
-        runtime_service.start().await.map_err(|e| {
-            ApiError::internal(format!(
-                "Failed to restart burst engine after genome transition: {}",
-                e
-            ))
-        })?;
+        runtime_service
+            .start()
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to restart burst engine after genome transition: {}", e)))?;
     }
 
     tracing::info!(
@@ -261,11 +247,7 @@ async fn load_genome_with_priority(
                 .collect()
         };
         for device_regs in device_regs_list {
-            crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations(
-                state,
-                &device_regs,
-            )
-            .await;
+            crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations(state, &device_regs).await;
         }
     }
 
@@ -278,23 +260,13 @@ async fn load_genome_with_priority(
 /// Rationale: the burst engine timestep can be updated at runtime, but `GenomeService::save_genome()`
 /// serializes the stored `RuntimeGenome` (which may still have the older physiology value).
 /// This keeps exported/saved genomes consistent with the *current* FEAGI simulation state.
-fn inject_simulation_timestep_into_genome(
-    mut genome: serde_json::Value,
-    simulation_timestep_s: f64,
-) -> Result<serde_json::Value, ApiError> {
+fn inject_simulation_timestep_into_genome(mut genome: serde_json::Value, simulation_timestep_s: f64) -> Result<serde_json::Value, ApiError> {
     let physiology = genome
         .get_mut("physiology")
         .and_then(|v| v.as_object_mut())
-        .ok_or_else(|| {
-            ApiError::internal(
-                "Genome JSON missing required object key 'physiology' while saving".to_string(),
-            )
-        })?;
+        .ok_or_else(|| ApiError::internal("Genome JSON missing required object key 'physiology' while saving".to_string()))?;
 
-    physiology.insert(
-        "simulation_timestep".to_string(),
-        serde_json::Value::from(simulation_timestep_s),
-    );
+    physiology.insert("simulation_timestep".to_string(), serde_json::Value::from(simulation_timestep_s));
     Ok(genome)
 }
 
@@ -306,23 +278,14 @@ async fn get_current_runtime_simulation_timestep_s(state: &ApiState) -> Result<f
         .map_err(|e| ApiError::internal(format!("Failed to get runtime status: {}", e)))?;
 
     // Convert frequency (Hz) to timestep (seconds).
-    Ok(if status.frequency_hz > 0.0 {
-        1.0 / status.frequency_hz
-    } else {
-        0.0
-    })
+    Ok(if status.frequency_hz > 0.0 { 1.0 / status.frequency_hz } else { 0.0 })
 }
 
 /// Get the current genome file name.
 #[utoipa::path(get, path = "/v1/genome/file_name", tag = "genome")]
-pub async fn get_file_name(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn get_file_name(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Get current genome filename
-    Ok(Json(HashMap::from([(
-        "genome_file_name".to_string(),
-        "".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("genome_file_name".to_string(), "".to_string())])))
 }
 
 /// Get list of available circuit cortical_units from the circuit library.
@@ -367,10 +330,7 @@ pub async fn post_amalgamation_destination(
         .parse()
         .map_err(|_| ApiError::invalid_input("circuit_origin_z must be an integer"))?;
 
-    let rewire_mode = params
-        .get("rewire_mode")
-        .cloned()
-        .unwrap_or_else(|| "rewire_all".to_string());
+    let rewire_mode = params.get("rewire_mode").cloned().unwrap_or_else(|| "rewire_all".to_string());
 
     let parent_region_id = req
         .get("brain_region_id")
@@ -399,18 +359,9 @@ pub async fn post_amalgamation_destination(
     let connectome_service = state.connectome_service.as_ref();
 
     let mut region_properties: HashMap<String, serde_json::Value> = HashMap::new();
-    region_properties.insert(
-        "coordinate_3d".to_string(),
-        serde_json::json!([origin_x, origin_y, origin_z]),
-    );
-    region_properties.insert(
-        "amalgamation_id".to_string(),
-        serde_json::json!(pending.summary.amalgamation_id),
-    );
-    region_properties.insert(
-        "circuit_size".to_string(),
-        serde_json::json!(pending.summary.circuit_size),
-    );
+    region_properties.insert("coordinate_3d".to_string(), serde_json::json!([origin_x, origin_y, origin_z]));
+    region_properties.insert("amalgamation_id".to_string(), serde_json::json!(pending.summary.amalgamation_id));
+    region_properties.insert("circuit_size".to_string(), serde_json::json!(pending.summary.circuit_size));
     region_properties.insert("rewire_mode".to_string(), serde_json::json!(rewire_mode));
 
     connectome_service
@@ -422,9 +373,7 @@ pub async fn post_amalgamation_destination(
             properties: Some(region_properties),
         })
         .await
-        .map_err(|e| {
-            ApiError::internal(format!("Failed to create amalgamation brain region: {}", e))
-        })?;
+        .map_err(|e| ApiError::internal(format!("Failed to create amalgamation brain region: {}", e)))?;
 
     // 2) Import cortical_area areas into that region.
     //
@@ -436,12 +385,7 @@ pub async fn post_amalgamation_destination(
     //   they are not duplicated if they already exist on the host (`skipped_existing_areas`).
     // - We place areas at an offset relative to the chosen origin and set `parent_region_id`.
     let mut imported_genome = feagi_evolutionary::load_genome_from_json(&pending.genome_json)
-        .map_err(|e| {
-            ApiError::invalid_input(format!(
-                "Pending genome payload can no longer be parsed as a genome: {}",
-                e
-            ))
-        })?;
+        .map_err(|e| ApiError::invalid_input(format!("Pending genome payload can no longer be parsed as a genome: {}", e)))?;
 
     let host_cortical_ids: std::collections::HashSet<String> = connectome_service
         .get_cortical_area_ids()
@@ -451,16 +395,8 @@ pub async fn post_amalgamation_destination(
         .collect();
 
     let remapped_guest_custom_memory_ids =
-        feagi_evolutionary::remap_guest_custom_memory_cortical_ids_for_amalgamation(
-            &mut imported_genome,
-            &host_cortical_ids,
-        )
-        .map_err(|e| {
-            ApiError::internal(format!(
-                "Amalgamation guest cortical_area ID remapping failed: {}",
-                e
-            ))
-        })?;
+        feagi_evolutionary::remap_guest_custom_memory_cortical_ids_for_amalgamation(&mut imported_genome, &host_cortical_ids)
+            .map_err(|e| ApiError::internal(format!("Amalgamation guest cortical_area ID remapping failed: {}", e)))?;
     let guest_custom_memory_id_remap_count = remapped_guest_custom_memory_ids.len();
 
     if guest_custom_memory_id_remap_count > 0 {
@@ -486,12 +422,7 @@ pub async fn post_amalgamation_destination(
         let exists = connectome_service
             .cortical_area_exists(&cortical_id)
             .await
-            .map_err(|e| {
-                ApiError::internal(format!(
-                    "Failed to check existing cortical_area area {}: {}",
-                    cortical_id, e
-                ))
-            })?;
+            .map_err(|e| ApiError::internal(format!("Failed to check existing cortical_area area {}: {}", cortical_id, e)))?;
         if exists {
             skipped_existing.push(cortical_id);
             continue;
@@ -504,12 +435,10 @@ pub async fn post_amalgamation_destination(
 
         // Determine correct parent region based on area type
         // IPU/OPU areas MUST go to root region, all others go to the amalgamation region
-        let area_type = area.cortical_id.as_cortical_type().map_err(|e| {
-            ApiError::internal(format!(
-                "Failed to get cortical_area area type for {}: {}",
-                cortical_id, e
-            ))
-        })?;
+        let area_type = area
+            .cortical_id
+            .as_cortical_type()
+            .map_err(|e| ApiError::internal(format!("Failed to get cortical_area area type for {}: {}", cortical_id, e)))?;
 
         let target_parent_region_id = match area_type {
             feagi_genomic_context::cortical_area::CorticalAreaType::BrainInput(_)
@@ -541,14 +470,8 @@ pub async fn post_amalgamation_destination(
             }
         };
 
-        props.insert(
-            "parent_region_id".to_string(),
-            serde_json::json!(target_parent_region_id),
-        );
-        props.insert(
-            "amalgamation_source".to_string(),
-            serde_json::json!("amalgamation_by_payload"),
-        );
+        props.insert("parent_region_id".to_string(), serde_json::json!(target_parent_region_id));
+        props.insert("amalgamation_source".to_string(), serde_json::json!("amalgamation_by_payload"));
 
         to_create.push(feagi_services::types::CreateCorticalAreaParams {
             cortical_id,
@@ -566,56 +489,19 @@ pub async fn post_amalgamation_destination(
             area_type: "Custom".to_string(),
             visible: Some(true),
             sub_group: None,
-            neurons_per_voxel: area
-                .properties
-                .get("neurons_per_voxel")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32),
-            postsynaptic_current: area
-                .properties
-                .get("postsynaptic_current")
-                .and_then(|v| v.as_f64()),
-            plasticity_constant: area
-                .properties
-                .get("plasticity_constant")
-                .and_then(|v| v.as_f64()),
+            neurons_per_voxel: area.properties.get("neurons_per_voxel").and_then(|v| v.as_u64()).map(|v| v as u32),
+            postsynaptic_current: area.properties.get("postsynaptic_current").and_then(|v| v.as_f64()),
+            plasticity_constant: area.properties.get("plasticity_constant").and_then(|v| v.as_f64()),
             degeneration: area.properties.get("degeneration").and_then(|v| v.as_f64()),
-            psp_uniform_distribution: area
-                .properties
-                .get("psp_uniform_distribution")
-                .and_then(|v| v.as_bool()),
+            psp_uniform_distribution: area.properties.get("psp_uniform_distribution").and_then(|v| v.as_bool()),
             firing_threshold_increment: None,
-            firing_threshold_limit: area
-                .properties
-                .get("firing_threshold_limit")
-                .and_then(|v| v.as_f64()),
-            consecutive_fire_count: area
-                .properties
-                .get("consecutive_fire_limit")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32),
-            snooze_period: area
-                .properties
-                .get("snooze_period")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32),
-            refractory_period: area
-                .properties
-                .get("refractory_period")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32),
-            leak_coefficient: area
-                .properties
-                .get("leak_coefficient")
-                .and_then(|v| v.as_f64()),
-            leak_variability: area
-                .properties
-                .get("leak_variability")
-                .and_then(|v| v.as_f64()),
-            burst_engine_active: area
-                .properties
-                .get("burst_engine_active")
-                .and_then(|v| v.as_bool()),
+            firing_threshold_limit: area.properties.get("firing_threshold_limit").and_then(|v| v.as_f64()),
+            consecutive_fire_count: area.properties.get("consecutive_fire_limit").and_then(|v| v.as_u64()).map(|v| v as u32),
+            snooze_period: area.properties.get("snooze_period").and_then(|v| v.as_u64()).map(|v| v as u32),
+            refractory_period: area.properties.get("refractory_period").and_then(|v| v.as_u64()).map(|v| v as u32),
+            leak_coefficient: area.properties.get("leak_coefficient").and_then(|v| v.as_f64()),
+            leak_variability: area.properties.get("leak_variability").and_then(|v| v.as_f64()),
+            burst_engine_active: area.properties.get("burst_engine_active").and_then(|v| v.as_bool()),
             properties: Some(props),
         });
     }
@@ -639,8 +525,7 @@ pub async fn post_amalgamation_destination(
         .filter(|id| !skipped_existing.contains(id))
         .collect();
 
-    let mut required_morphologies: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
+    let mut required_morphologies: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     // Scan imported areas' mappings to collect required morphology IDs
     for area in imported_genome.cortical_areas.values() {
@@ -683,9 +568,10 @@ pub async fn post_amalgamation_destination(
 
     for morphology_id in &required_morphologies {
         // Check if morphology already exists
-        let morphologies = connectome_service.get_morphologies().await.map_err(|e| {
-            ApiError::internal(format!("Failed to get existing morphologies: {}", e))
-        })?;
+        let morphologies = connectome_service
+            .get_morphologies()
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to get existing morphologies: {}", e)))?;
 
         if morphologies.contains_key(morphology_id) {
             skipped_morphology_count += 1;
@@ -703,10 +589,7 @@ pub async fn post_amalgamation_destination(
         };
 
         // Import the morphology
-        match connectome_service
-            .create_morphology(morphology_id.clone(), morphology.clone())
-            .await
-        {
+        match connectome_service.create_morphology(morphology_id.clone(), morphology.clone()).await {
             Ok(_) => {
                 tracing::debug!(
                     target: "feagi-api",
@@ -764,10 +647,7 @@ pub async fn post_amalgamation_destination(
         // Import each mapping where destination exists in connectome
         for (dst_area_id, mapping_data) in dst_map {
             // Check if destination area exists in connectome (either newly imported or already existing)
-            let dst_exists = connectome_service
-                .cortical_area_exists(dst_area_id)
-                .await
-                .unwrap_or(false);
+            let dst_exists = connectome_service.cortical_area_exists(dst_area_id).await.unwrap_or(false);
 
             if !dst_exists {
                 // Skip external references to areas not in this brain
@@ -787,11 +667,7 @@ pub async fn post_amalgamation_destination(
 
             // Import the cortical_area mapping
             match connectome_service
-                .update_cortical_mapping(
-                    src_area_id.clone(),
-                    dst_area_id.clone(),
-                    mapping_array.clone(),
-                )
+                .update_cortical_mapping(src_area_id.clone(), dst_area_id.clone(), mapping_array.clone())
                 .await
             {
                 Ok(synapse_count) => {
@@ -881,20 +757,14 @@ pub async fn post_amalgamation_destination(
         let state_manager = state_manager.read();
 
         // Increment each relevant hash (adding 1 invalidates client cache)
-        state_manager
-            .set_brain_regions_hash(state_manager.get_brain_regions_hash().wrapping_add(1));
-        state_manager
-            .set_cortical_areas_hash(state_manager.get_cortical_areas_hash().wrapping_add(1));
-        state_manager
-            .set_brain_geometry_hash(state_manager.get_brain_geometry_hash().wrapping_add(1));
+        state_manager.set_brain_regions_hash(state_manager.get_brain_regions_hash().wrapping_add(1));
+        state_manager.set_cortical_areas_hash(state_manager.get_cortical_areas_hash().wrapping_add(1));
+        state_manager.set_brain_geometry_hash(state_manager.get_brain_geometry_hash().wrapping_add(1));
         if imported_morphology_count > 0 {
-            state_manager
-                .set_morphologies_hash(state_manager.get_morphologies_hash().wrapping_add(1));
+            state_manager.set_morphologies_hash(state_manager.get_morphologies_hash().wrapping_add(1));
         }
         if imported_mapping_count > 0 {
-            state_manager.set_cortical_mappings_hash(
-                state_manager.get_cortical_mappings_hash().wrapping_add(1),
-            );
+            state_manager.set_cortical_mappings_hash(state_manager.get_cortical_mappings_hash().wrapping_add(1));
         }
 
         tracing::info!(
@@ -935,12 +805,7 @@ pub async fn post_amalgamation_destination(
         .get_cortical_area_ids()
         .await
         .map(|ids| ids.len())
-        .map_err(|e| {
-            ApiError::internal(format!(
-                "Failed to count cortical_area areas after amalgamation: {}",
-                e
-            ))
-        })?;
+        .map_err(|e| ApiError::internal(format!("Failed to count cortical_area areas after amalgamation: {}", e)))?;
 
     let mut brain_regions: Vec<serde_json::Value> = Vec::new();
     for region in regions {
@@ -994,42 +859,18 @@ pub async fn post_amalgamation_destination(
     );
 
     Ok(Json(HashMap::from([
-        (
-            "message".to_string(),
-            serde_json::Value::String("Amalgamation confirmed".to_string()),
-        ),
-        (
-            "brain_regions".to_string(),
-            serde_json::Value::Array(brain_regions),
-        ),
-        (
-            "skipped_existing_areas".to_string(),
-            serde_json::json!(skipped_existing),
-        ),
-        (
-            "imported_new_area_count".to_string(),
-            serde_json::json!(imported_new_area_count),
-        ),
-        (
-            "guest_cortical_area_count".to_string(),
-            serde_json::json!(guest_cortical_area_count),
-        ),
+        ("message".to_string(), serde_json::Value::String("Amalgamation confirmed".to_string())),
+        ("brain_regions".to_string(), serde_json::Value::Array(brain_regions)),
+        ("skipped_existing_areas".to_string(), serde_json::json!(skipped_existing)),
+        ("imported_new_area_count".to_string(), serde_json::json!(imported_new_area_count)),
+        ("guest_cortical_area_count".to_string(), serde_json::json!(guest_cortical_area_count)),
         (
             "guest_custom_memory_id_remap_count".to_string(),
             serde_json::json!(guest_custom_memory_id_remap_count),
         ),
-        (
-            "imported_cortical_mappings".to_string(),
-            serde_json::json!(imported_mapping_count),
-        ),
-        (
-            "skipped_cortical_mappings".to_string(),
-            serde_json::json!(skipped_mapping_count),
-        ),
-        (
-            "imported_morphology_count".to_string(),
-            serde_json::json!(imported_morphology_count),
-        ),
+        ("imported_cortical_mappings".to_string(), serde_json::json!(imported_mapping_count)),
+        ("skipped_cortical_mappings".to_string(), serde_json::json!(skipped_mapping_count)),
+        ("imported_morphology_count".to_string(), serde_json::json!(imported_morphology_count)),
         (
             "skipped_morphology_existing_count".to_string(),
             serde_json::json!(skipped_morphology_count),
@@ -1047,9 +888,7 @@ pub async fn post_amalgamation_destination(
 
 /// Cancel a pending genome amalgamation operation.
 #[utoipa::path(delete, path = "/v1/genome/amalgamation_cancellation", tag = "genome")]
-pub async fn delete_amalgamation_cancellation(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn delete_amalgamation_cancellation(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     let mut lock = state.amalgamation_state.write();
     if let Some(pending) = lock.pending.take() {
         let now_ms = std::time::SystemTime::now()
@@ -1073,10 +912,7 @@ pub async fn delete_amalgamation_cancellation(
                 .unwrap_or_else(|| "<unknown>".to_string())
         );
     }
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Amalgamation cancelled".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Amalgamation cancelled".to_string())])))
 }
 
 /// Append additional structures to the current genome.
@@ -1098,9 +934,7 @@ pub async fn post_genome_append(
     ),
     tag = "genome"
 )]
-pub async fn post_upload_barebones_genome(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn post_upload_barebones_genome(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     tracing::debug!(target: "feagi-api", "📥 POST /v1/genome/upload/barebones - Request received");
     let result = load_default_genome(state, "barebones").await;
     match &result {
@@ -1124,17 +958,12 @@ pub async fn post_upload_barebones_genome(
     ),
     tag = "genome"
 )]
-pub async fn post_upload_essential_genome(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn post_upload_essential_genome(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     load_default_genome(state, "essential").await
 }
 
 /// Helper function to load a default genome by name from embedded Rust genomes
-async fn load_default_genome(
-    state: ApiState,
-    genome_name: &str,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+async fn load_default_genome(state: ApiState, genome_name: &str) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     tracing::info!(target: "feagi-api", "🔄 Loading {} genome from embedded Rust genomes", genome_name);
     tracing::debug!(target: "feagi-api", "   State components available: genome_service=true, runtime_service=true");
     // Load genome from embedded Rust cortical_units (no file I/O!)
@@ -1179,14 +1008,8 @@ async fn load_default_genome(
         "brain_region_count".to_string(),
         serde_json::Value::Number(genome_info.brain_region_count.into()),
     );
-    response.insert(
-        "genome_id".to_string(),
-        serde_json::Value::String(genome_info.genome_id),
-    );
-    response.insert(
-        "genome_title".to_string(),
-        serde_json::Value::String(genome_info.genome_title),
-    );
+    response.insert("genome_id".to_string(), serde_json::Value::String(genome_info.genome_id));
+    response.insert("genome_title".to_string(), serde_json::Value::String(genome_info.genome_title));
 
     Ok(Json(response))
 }
@@ -1229,10 +1052,7 @@ pub async fn get_timestamp(State(_state): State<ApiState>) -> ApiResult<Json<i64
         (status = 200, description = "Genome saved", body = HashMap<String, String>)
     )
 )]
-pub async fn post_save(
-    State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_save(State(state): State<ApiState>, Json(request): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
     use std::fs;
     use std::path::Path;
 
@@ -1244,10 +1064,7 @@ pub async fn post_save(
     let file_path = request.get("file_path").cloned();
 
     // Create save parameters
-    let params = feagi_services::SaveGenomeParams {
-        genome_id,
-        genome_title,
-    };
+    let params = feagi_services::SaveGenomeParams { genome_id, genome_title };
 
     // Call genome service to generate JSON
     let genome_service = state.genome_service.as_ref();
@@ -1258,21 +1075,18 @@ pub async fn post_save(
 
     // Ensure physiology.simulation_timestep reflects the *current* runtime timestep at save time.
     let simulation_timestep_s = get_current_runtime_simulation_timestep_s(&state).await?;
-    let genome_value: serde_json::Value = serde_json::from_str(&genome_json)
-        .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
+    let genome_value: serde_json::Value =
+        serde_json::from_str(&genome_json).map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
     let genome_value = inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
-    let genome_json = serde_json::to_string_pretty(&genome_value)
-        .map_err(|e| ApiError::internal(format!("Failed to serialize genome JSON: {}", e)))?;
+    let genome_json =
+        serde_json::to_string_pretty(&genome_value).map_err(|e| ApiError::internal(format!("Failed to serialize genome JSON: {}", e)))?;
 
     // Determine file path
     let save_path = if let Some(path) = file_path {
         std::path::PathBuf::from(path)
     } else {
         // Default: under configured data root (not cwd) so containers/read-only roots work.
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
         state
             .filesystem_data_root
             .join("cache")
@@ -1282,21 +1096,16 @@ pub async fn post_save(
 
     // Ensure parent directory exists
     if let Some(parent) = Path::new(&save_path).parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| ApiError::internal(format!("Failed to create directory: {}", e)))?;
+        fs::create_dir_all(parent).map_err(|e| ApiError::internal(format!("Failed to create directory: {}", e)))?;
     }
 
     // Write to file
-    fs::write(&save_path, genome_json)
-        .map_err(|e| ApiError::internal(format!("Failed to write file: {}", e)))?;
+    fs::write(&save_path, genome_json).map_err(|e| ApiError::internal(format!("Failed to write file: {}", e)))?;
 
     info!("✅ Genome saved successfully to: {}", save_path.display());
 
     Ok(Json(HashMap::from([
-        (
-            "message".to_string(),
-            "Genome saved successfully".to_string(),
-        ),
+        ("message".to_string(), "Genome saved successfully".to_string()),
         ("file_path".to_string(), save_path.display().to_string()),
     ])))
 }
@@ -1326,14 +1135,8 @@ pub async fn post_load(
     let genome_info = load_genome_with_priority(&state, params, "post_load").await?;
 
     let mut response = HashMap::new();
-    response.insert(
-        "message".to_string(),
-        serde_json::json!("Genome loaded successfully"),
-    );
-    response.insert(
-        "genome_title".to_string(),
-        serde_json::json!(genome_info.genome_title),
-    );
+    response.insert("message".to_string(), serde_json::json!("Genome loaded successfully"));
+    response.insert("genome_title".to_string(), serde_json::json!(genome_info.genome_title));
 
     Ok(Json(response))
 }
@@ -1352,26 +1155,16 @@ pub async fn post_upload(
     Json(genome_json): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // Convert to JSON string
-    let json_str = serde_json::to_string(&genome_json)
-        .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
+    let json_str = serde_json::to_string(&genome_json).map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
 
     let params = LoadGenomeParams { json_str };
     let genome_info = load_genome_with_priority(&state, params, "post_upload").await?;
 
     let mut response = HashMap::new();
     response.insert("success".to_string(), serde_json::json!(true));
-    response.insert(
-        "message".to_string(),
-        serde_json::json!("Genome uploaded successfully"),
-    );
-    response.insert(
-        "cortical_area_count".to_string(),
-        serde_json::json!(genome_info.cortical_area_count),
-    );
-    response.insert(
-        "brain_region_count".to_string(),
-        serde_json::json!(genome_info.brain_region_count),
-    );
+    response.insert("message".to_string(), serde_json::json!("Genome uploaded successfully"));
+    response.insert("cortical_area_count".to_string(), serde_json::json!(genome_info.cortical_area_count));
+    response.insert("brain_region_count".to_string(), serde_json::json!(genome_info.brain_region_count));
 
     Ok(Json(response))
 }
@@ -1402,17 +1195,14 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde
         })?;
 
     // Parse to Value for JSON response
-    let genome_value: serde_json::Value = serde_json::from_str(&genome_json_str)
-        .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
+    let genome_value: serde_json::Value =
+        serde_json::from_str(&genome_json_str).map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
 
     // Ensure physiology.simulation_timestep reflects the *current* runtime timestep at download time.
     let simulation_timestep_s = get_current_runtime_simulation_timestep_s(&state).await?;
     let genome_value = inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
 
-    info!(
-        "✅ Genome download complete, {} bytes",
-        genome_json_str.len()
-    );
+    info!("✅ Genome download complete, {} bytes", genome_json_str.len());
     Ok(Json(genome_value))
 }
 
@@ -1453,9 +1243,7 @@ mod tests {
         (status = 200, description = "Genome properties", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_properties(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_properties(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // TODO: Implement proper metadata retrieval from genome service
     Ok(Json(HashMap::new()))
 }
@@ -1497,10 +1285,7 @@ pub async fn post_transform(
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // TODO: Implement genome transformation
     let mut response = HashMap::new();
-    response.insert(
-        "message".to_string(),
-        serde_json::json!("Genome transformation not yet implemented"),
-    );
+    response.insert("message".to_string(), serde_json::json!("Genome transformation not yet implemented"));
 
     Ok(Json(response))
 }
@@ -1514,10 +1299,7 @@ pub async fn post_transform(
         (status = 200, description = "Genome cloned", body = HashMap<String, String>)
     )
 )]
-pub async fn post_clone(
-    State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_clone(State(_state): State<ApiState>, Json(_request): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Implement genome cloning
     Ok(Json(HashMap::from([(
         "message".to_string(),
@@ -1538,9 +1320,10 @@ pub async fn post_clone(
     )
 )]
 pub async fn post_reset(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
-    let _lock = state.genome_transition_lock.try_lock().map_err(|_| {
-        ApiError::conflict("Another genome transition is in progress; wait for it to finish")
-    })?;
+    let _lock = state
+        .genome_transition_lock
+        .try_lock()
+        .map_err(|_| ApiError::conflict("Another genome transition is in progress; wait for it to finish"))?;
 
     let genome_service = state.genome_service.as_ref();
     genome_service.reset_connectome().await.map_err(|e| {
@@ -1564,9 +1347,7 @@ pub async fn post_reset(State(state): State<ApiState>) -> ApiResult<Json<HashMap
         (status = 200, description = "Genome metadata", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_metadata(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_metadata(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     get_properties(State(state)).await
 }
 
@@ -1585,10 +1366,7 @@ pub async fn post_merge(
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // TODO: Implement genome merging
     let mut response = HashMap::new();
-    response.insert(
-        "message".to_string(),
-        serde_json::json!("Genome merging not yet implemented"),
-    );
+    response.insert("message".to_string(), serde_json::json!("Genome merging not yet implemented"));
 
     Ok(Json(response))
 }
@@ -1632,10 +1410,7 @@ pub async fn post_export_format(
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // TODO: Implement format-specific export
     let mut response = HashMap::new();
-    response.insert(
-        "message".to_string(),
-        serde_json::json!("Format export not yet implemented"),
-    );
+    response.insert("message".to_string(), serde_json::json!("Format export not yet implemented"));
 
     Ok(Json(response))
 }
@@ -1643,16 +1418,11 @@ pub async fn post_export_format(
 // EXACT Python paths:
 /// Get current amalgamation status and configuration.
 #[utoipa::path(get, path = "/v1/genome/amalgamation", tag = "genome")]
-pub async fn get_amalgamation(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_amalgamation(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let lock = state.amalgamation_state.read();
     let mut response = HashMap::new();
     if let Some(p) = lock.pending.as_ref() {
-        response.insert(
-            "pending".to_string(),
-            amalgamation::pending_summary_to_health_json(&p.summary),
-        );
+        response.insert("pending".to_string(), amalgamation::pending_summary_to_health_json(&p.summary));
     } else {
         response.insert("pending".to_string(), serde_json::Value::Null);
     }
@@ -1661,30 +1431,16 @@ pub async fn get_amalgamation(
 
 /// Get history of all genome amalgamation operations performed.
 #[utoipa::path(get, path = "/v1/genome/amalgamation_history", tag = "genome")]
-pub async fn get_amalgamation_history_exact(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
+pub async fn get_amalgamation_history_exact(State(state): State<ApiState>) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
     let lock = state.amalgamation_state.read();
     let mut out: Vec<HashMap<String, serde_json::Value>> = Vec::new();
     for entry in &lock.history {
         out.push(HashMap::from([
-            (
-                "amalgamation_id".to_string(),
-                serde_json::json!(entry.amalgamation_id),
-            ),
-            (
-                "genome_title".to_string(),
-                serde_json::json!(entry.genome_title),
-            ),
-            (
-                "circuit_size".to_string(),
-                serde_json::json!(entry.circuit_size),
-            ),
+            ("amalgamation_id".to_string(), serde_json::json!(entry.amalgamation_id)),
+            ("genome_title".to_string(), serde_json::json!(entry.genome_title)),
+            ("circuit_size".to_string(), serde_json::json!(entry.circuit_size)),
             ("status".to_string(), serde_json::json!(entry.status)),
-            (
-                "timestamp_ms".to_string(),
-                serde_json::json!(entry.timestamp_ms),
-            ),
+            ("timestamp_ms".to_string(), serde_json::json!(entry.timestamp_ms)),
         ]));
     }
     Ok(Json(out))
@@ -1692,9 +1448,7 @@ pub async fn get_amalgamation_history_exact(
 
 /// Get metadata about all available cortical_area types including supported encodings and configurations.
 #[utoipa::path(get, path = "/v1/genome/cortical_template", tag = "genome")]
-pub async fn get_cortical_template(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
     };
@@ -1710,25 +1464,15 @@ pub async fn get_cortical_template(
     // deterministic across platforms and runs. No fallbacks.
     let data_type_to_json = |dt: IOCorticalAreaConfigurationFlag| -> serde_json::Value {
         let (variant, frame, positioning) = match dt {
-            IOCorticalAreaConfigurationFlag::Boolean => {
-                ("Boolean", FrameChangeHandling::Absolute, None)
-            }
+            IOCorticalAreaConfigurationFlag::Boolean => ("Boolean", FrameChangeHandling::Absolute, None),
             IOCorticalAreaConfigurationFlag::Percentage(f, p) => ("Percentage", f, Some(p)),
             IOCorticalAreaConfigurationFlag::Percentage2D(f, p) => ("Percentage2D", f, Some(p)),
             IOCorticalAreaConfigurationFlag::Percentage3D(f, p) => ("Percentage3D", f, Some(p)),
             IOCorticalAreaConfigurationFlag::Percentage4D(f, p) => ("Percentage4D", f, Some(p)),
-            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => {
-                ("SignedPercentage", f, Some(p))
-            }
-            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => {
-                ("SignedPercentage2D", f, Some(p))
-            }
-            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => {
-                ("SignedPercentage3D", f, Some(p))
-            }
-            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => {
-                ("SignedPercentage4D", f, Some(p))
-            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => ("SignedPercentage", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => ("SignedPercentage2D", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => ("SignedPercentage3D", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => ("SignedPercentage4D", f, Some(p)),
             IOCorticalAreaConfigurationFlag::CartesianPlane(f) => ("CartesianPlane", f, None),
             IOCorticalAreaConfigurationFlag::Misc(f) => ("Misc", f, None),
             IOCorticalAreaConfigurationFlag::PoseEstimation(f, _) => ("PoseEstimation", f, None),
@@ -1793,38 +1537,24 @@ pub async fn get_cortical_template(
         let allowed_frames = motor_unit.get_allowed_frame_change_handling();
         let frames: Vec<FrameChangeHandling> = match allowed_frames {
             Some(allowed) => allowed.to_vec(),
-            None => vec![
-                FrameChangeHandling::Absolute,
-                FrameChangeHandling::Incremental,
-            ],
+            None => vec![FrameChangeHandling::Absolute, FrameChangeHandling::Incremental],
         };
 
-        let positionings = [
-            PercentageNeuronPositioning::Linear,
-            PercentageNeuronPositioning::Fractional,
-        ];
+        let positionings = [PercentageNeuronPositioning::Linear, PercentageNeuronPositioning::Fractional];
 
-        let mut per_subunit_dedup: StdHashMap<String, std::collections::HashSet<String>> =
-            StdHashMap::new();
+        let mut per_subunit_dedup: StdHashMap<String, std::collections::HashSet<String>> = StdHashMap::new();
 
         for frame in frames {
             for positioning in positionings {
                 let mut map: Map<String, Value> = Map::new();
-                map.insert(
-                    "frame_change_handling".to_string(),
-                    serde_json::to_value(frame).unwrap_or(Value::Null),
-                );
+                map.insert("frame_change_handling".to_string(), serde_json::to_value(frame).unwrap_or(Value::Null));
                 map.insert(
                     "percentage_neuron_positioning".to_string(),
                     serde_json::to_value(positioning).unwrap_or(Value::Null),
                 );
 
                 // Use unit index 0 for template enumeration (index does not affect IO flags).
-                let cortical_ids = motor_unit
-                    .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-                        CorticalUnitIndex::from(0u8),
-                        map,
-                    );
+                let cortical_ids = motor_unit.get_cortical_id_vector_from_index_and_serde_io_configuration_flags(CorticalUnitIndex::from(0u8), map);
 
                 if let Ok(ids) = cortical_ids {
                     for (i, id) in ids.into_iter().enumerate() {
@@ -1834,18 +1564,9 @@ pub async fn get_cortical_template(
 
                             let dedup_key = format!(
                                 "{}|{}|{}",
-                                dt_json
-                                    .get("variant")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or(""),
-                                dt_json
-                                    .get("frame_change_handling")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or(""),
-                                dt_json
-                                    .get("percentage_positioning")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
+                                dt_json.get("variant").and_then(|v| v.as_str()).unwrap_or(""),
+                                dt_json.get("frame_change_handling").and_then(|v| v.as_str()).unwrap_or(""),
+                                dt_json.get("percentage_positioning").and_then(|v| v.as_str()).unwrap_or("")
                             );
 
                             let seen = per_subunit_dedup.entry(subunit_key.clone()).or_default();
@@ -1854,10 +1575,7 @@ pub async fn get_cortical_template(
                             }
 
                             if let Some(subunit_obj) = subunits.get_mut(&subunit_key) {
-                                if let Some(arr) = subunit_obj
-                                    .get_mut("supported_data_types")
-                                    .and_then(|v| v.as_array_mut())
-                                {
+                                if let Some(arr) = subunit_obj.get_mut("supported_data_types").and_then(|v| v.as_array_mut()) {
                                     arr.push(dt_json);
                                 }
                             }
@@ -1909,37 +1627,23 @@ pub async fn get_cortical_template(
         let allowed_frames = sensory_unit.get_allowed_frame_change_handling();
         let frames: Vec<FrameChangeHandling> = match allowed_frames {
             Some(allowed) => allowed.to_vec(),
-            None => vec![
-                FrameChangeHandling::Absolute,
-                FrameChangeHandling::Incremental,
-            ],
+            None => vec![FrameChangeHandling::Absolute, FrameChangeHandling::Incremental],
         };
 
-        let positionings = [
-            PercentageNeuronPositioning::Linear,
-            PercentageNeuronPositioning::Fractional,
-        ];
+        let positionings = [PercentageNeuronPositioning::Linear, PercentageNeuronPositioning::Fractional];
 
-        let mut per_subunit_dedup: StdHashMap<String, std::collections::HashSet<String>> =
-            StdHashMap::new();
+        let mut per_subunit_dedup: StdHashMap<String, std::collections::HashSet<String>> = StdHashMap::new();
 
         for frame in frames {
             for positioning in positionings {
                 let mut map: Map<String, Value> = Map::new();
-                map.insert(
-                    "frame_change_handling".to_string(),
-                    serde_json::to_value(frame).unwrap_or(Value::Null),
-                );
+                map.insert("frame_change_handling".to_string(), serde_json::to_value(frame).unwrap_or(Value::Null));
                 map.insert(
                     "percentage_neuron_positioning".to_string(),
                     serde_json::to_value(positioning).unwrap_or(Value::Null),
                 );
 
-                let cortical_ids = sensory_unit
-                    .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-                        CorticalUnitIndex::from(0u8),
-                        map,
-                    );
+                let cortical_ids = sensory_unit.get_cortical_id_vector_from_index_and_serde_io_configuration_flags(CorticalUnitIndex::from(0u8), map);
 
                 if let Ok(ids) = cortical_ids {
                     for (i, id) in ids.into_iter().enumerate() {
@@ -1949,18 +1653,9 @@ pub async fn get_cortical_template(
 
                             let dedup_key = format!(
                                 "{}|{}|{}",
-                                dt_json
-                                    .get("variant")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or(""),
-                                dt_json
-                                    .get("frame_change_handling")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or(""),
-                                dt_json
-                                    .get("percentage_positioning")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
+                                dt_json.get("variant").and_then(|v| v.as_str()).unwrap_or(""),
+                                dt_json.get("frame_change_handling").and_then(|v| v.as_str()).unwrap_or(""),
+                                dt_json.get("percentage_positioning").and_then(|v| v.as_str()).unwrap_or("")
                             );
 
                             let seen = per_subunit_dedup.entry(subunit_key.clone()).or_default();
@@ -1969,10 +1664,7 @@ pub async fn get_cortical_template(
                             }
 
                             if let Some(subunit_obj) = subunits.get_mut(&subunit_key) {
-                                if let Some(arr) = subunit_obj
-                                    .get_mut("supported_data_types")
-                                    .and_then(|v| v.as_array_mut())
-                                {
+                                if let Some(arr) = subunit_obj.get_mut("supported_data_types").and_then(|v| v.as_array_mut()) {
                                     arr.push(dt_json);
                                 }
                             }
@@ -2011,22 +1703,14 @@ pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Jso
 
 /// Download a specific brain region from the genome.
 #[utoipa::path(get, path = "/v1/genome/download_region", tag = "genome")]
-pub async fn get_download_region(
-    State(state): State<ApiState>,
-    Query(params): Query<HashMap<String, String>>,
-) -> ApiResult<Json<serde_json::Value>> {
+pub async fn get_download_region(State(state): State<ApiState>, Query(params): Query<HashMap<String, String>>) -> ApiResult<Json<serde_json::Value>> {
     let region_id = params
         .get("region_id")
         .cloned()
         .ok_or_else(|| ApiError::invalid_input("region_id query parameter is required"))?;
-    let json_str = state
-        .genome_service
-        .export_region_genome(region_id)
-        .await
-        .map_err(ApiError::from)?;
-    let value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
-        ApiError::internal(format!("Exported region genome JSON is invalid: {}", e))
-    })?;
+    let json_str = state.genome_service.export_region_genome(region_id).await.map_err(ApiError::from)?;
+    let value: serde_json::Value =
+        serde_json::from_str(&json_str).map_err(|e| ApiError::internal(format!("Exported region genome JSON is invalid: {}", e)))?;
     Ok(Json(value))
 }
 
@@ -2078,8 +1762,7 @@ pub async fn post_amalgamation_by_payload(
     State(state): State<ApiState>,
     Json(req): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    let json_str = serde_json::to_string(&req)
-        .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
+    let json_str = serde_json::to_string(&req).map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
     let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, json_str)?;
 
     Ok(Json(HashMap::from([
@@ -2101,10 +1784,7 @@ pub async fn post_amalgamation_by_payload(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_amalgamation_by_upload(
-    State(state): State<ApiState>,
-    mut multipart: Multipart,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_amalgamation_by_upload(State(state): State<ApiState>, mut multipart: Multipart) -> ApiResult<Json<HashMap<String, String>>> {
     let mut genome_json: Option<String> = None;
 
     while let Some(field) = multipart
@@ -2113,23 +1793,19 @@ pub async fn post_amalgamation_by_upload(
         .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
     {
         if field.name() == Some("file") {
-            let bytes = field.bytes().await.map_err(|e| {
-                ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
-            })?;
+            let bytes = field
+                .bytes()
+                .await
+                .map_err(|e| ApiError::invalid_input(format!("Failed to read uploaded file: {}", e)))?;
 
-            let json_str = std::str::from_utf8(&bytes).map_err(|e| {
-                ApiError::invalid_input(format!(
-                    "Uploaded file must be UTF-8 encoded JSON (decode error: {})",
-                    e
-                ))
-            })?;
+            let json_str = std::str::from_utf8(&bytes)
+                .map_err(|e| ApiError::invalid_input(format!("Uploaded file must be UTF-8 encoded JSON (decode error: {})", e)))?;
             genome_json = Some(json_str.to_string());
             break;
         }
     }
 
-    let json_str =
-        genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
+    let json_str = genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
     let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, json_str)?;
 
     Ok(Json(HashMap::from([
@@ -2149,14 +1825,8 @@ pub async fn post_amalgamation_by_upload(
         (status = 200, description = "Append processed", body = HashMap<String, String>)
     )
 )]
-pub async fn post_append_file(
-    State(_state): State<ApiState>,
-    mut _multipart: Multipart,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+pub async fn post_append_file(State(_state): State<ApiState>, mut _multipart: Multipart) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
 /// Upload and load a genome from a file.
@@ -2172,10 +1842,7 @@ pub async fn post_append_file(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_upload_file(
-    State(state): State<ApiState>,
-    mut multipart: Multipart,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn post_upload_file(State(state): State<ApiState>, mut multipart: Multipart) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let mut genome_json: Option<String> = None;
 
     while let Some(field) = multipart
@@ -2184,42 +1851,27 @@ pub async fn post_upload_file(
         .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
     {
         if field.name() == Some("file") {
-            let bytes = field.bytes().await.map_err(|e| {
-                ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
-            })?;
+            let bytes = field
+                .bytes()
+                .await
+                .map_err(|e| ApiError::invalid_input(format!("Failed to read uploaded file: {}", e)))?;
 
-            let json_str = std::str::from_utf8(&bytes).map_err(|e| {
-                ApiError::invalid_input(format!(
-                    "Uploaded file must be UTF-8 encoded JSON (decode error: {})",
-                    e
-                ))
-            })?;
+            let json_str = std::str::from_utf8(&bytes)
+                .map_err(|e| ApiError::invalid_input(format!("Uploaded file must be UTF-8 encoded JSON (decode error: {})", e)))?;
             genome_json = Some(json_str.to_string());
             break;
         }
     }
 
-    let json_str =
-        genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
+    let json_str = genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
 
-    let genome_info =
-        load_genome_with_priority(&state, LoadGenomeParams { json_str }, "post_upload_file")
-            .await?;
+    let genome_info = load_genome_with_priority(&state, LoadGenomeParams { json_str }, "post_upload_file").await?;
 
     let mut response = HashMap::new();
     response.insert("success".to_string(), serde_json::json!(true));
-    response.insert(
-        "message".to_string(),
-        serde_json::json!("Genome uploaded successfully"),
-    );
-    response.insert(
-        "cortical_area_count".to_string(),
-        serde_json::json!(genome_info.cortical_area_count),
-    );
-    response.insert(
-        "brain_region_count".to_string(),
-        serde_json::json!(genome_info.brain_region_count),
-    );
+    response.insert("message".to_string(), serde_json::json!("Genome uploaded successfully"));
+    response.insert("cortical_area_count".to_string(), serde_json::json!(genome_info.cortical_area_count));
+    response.insert("brain_region_count".to_string(), serde_json::json!(genome_info.brain_region_count));
 
     Ok(Json(response))
 }
@@ -2235,24 +1887,12 @@ pub async fn post_upload_file(
         (status = 200, description = "Upload processed", body = HashMap<String, String>)
     )
 )]
-pub async fn post_upload_file_edit(
-    State(_state): State<ApiState>,
-    mut _multipart: Multipart,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+pub async fn post_upload_file_edit(State(_state): State<ApiState>, mut _multipart: Multipart) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
 /// Upload and load a genome from a JSON string.
 #[utoipa::path(post, path = "/v1/genome/upload/string", tag = "genome")]
-pub async fn post_upload_string(
-    State(_state): State<ApiState>,
-    Json(_req): Json<String>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+pub async fn post_upload_string(State(_state): State<ApiState>, Json(_req): Json<String>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }

@@ -1,16 +1,13 @@
+use crate::cortical_area::neuron::neuron_model_quantization_level::NeuronModelQuantizationLevel;
 use crate::cortical_area::neuron_model_implementations::generated_enums::{
     NeuronModelType, NeuronModelTypeAndQuantizationNested, NeuronModelTypeAndQuantizationPacked,
 };
-use crate::cortical_area::neuron::neuron_model_quantization_level::NeuronModelQuantizationLevel;
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_data::values::quantizable::DecimalQuantizationLevel;
 
 /// Common root trait shared by all Neuron Model Quantizations. This trait should be extended
 /// by the given neuron model to add any quantization parameters for their given data
 pub trait NeuronModelQuantization: MembranePotentialQuantization + Default + Clone {
-    
-
-    
     /// A flat enum value denoting what type of neuron model this neuron model instance is
     const NEURON_MODEL: NeuronModelType;
 

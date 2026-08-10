@@ -29,24 +29,17 @@ impl HealthFetchConfig {
     }
 
     pub fn url(&self) -> String {
-        format!(
-            "http://{}:{}/v1/system/health_check",
-            self.feagi_api_host, self.feagi_api_port
-        )
+        format!("http://{}:{}/v1/system/health_check", self.feagi_api_host, self.feagi_api_port)
     }
 }
 
 /// Async fetch of `/v1/system/health_check` -> [`HealthSnapshot`].
 #[cfg(feature = "agent-client-asynchelper-tokio")]
-pub async fn fetch_health_snapshot(
-    config: &HealthFetchConfig,
-) -> Result<HealthSnapshot, FeagiAgentError> {
+pub async fn fetch_health_snapshot(config: &HealthFetchConfig) -> Result<HealthSnapshot, FeagiAgentError> {
     let client = reqwest::Client::builder()
         .timeout(config.timeout)
         .build()
-        .map_err(|e| {
-            FeagiAgentError::connection_failed(format!("failed to build http client: {e}"))
-        })?;
+        .map_err(|e| FeagiAgentError::connection_failed(format!("failed to build http client: {e}")))?;
     let response = client
         .get(config.url())
         .send()
@@ -61,15 +54,11 @@ pub async fn fetch_health_snapshot(
 
 /// Blocking fetch of `/v1/system/health_check` -> [`HealthSnapshot`].
 #[cfg(feature = "agent-client-asynchelper-tokio")]
-pub fn fetch_health_snapshot_blocking(
-    config: &HealthFetchConfig,
-) -> Result<HealthSnapshot, FeagiAgentError> {
+pub fn fetch_health_snapshot_blocking(config: &HealthFetchConfig) -> Result<HealthSnapshot, FeagiAgentError> {
     let client = reqwest::blocking::Client::builder()
         .timeout(config.timeout)
         .build()
-        .map_err(|e| {
-            FeagiAgentError::connection_failed(format!("failed to build http client: {e}"))
-        })?;
+        .map_err(|e| FeagiAgentError::connection_failed(format!("failed to build http client: {e}")))?;
     let response = client
         .get(config.url())
         .send()
@@ -87,9 +76,6 @@ mod tests {
     #[test]
     fn url_formats_host_and_port() {
         let config = HealthFetchConfig::new("feagi.local", 8000, Duration::from_millis(500));
-        assert_eq!(
-            config.url(),
-            "http://feagi.local:8000/v1/system/health_check"
-        );
+        assert_eq!(config.url(), "http://feagi.local:8000/v1/system/health_check");
     }
 }

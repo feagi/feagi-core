@@ -1,7 +1,7 @@
+use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
 use crate::cortical_area::neuron_model_implementations::generated_enums::{
     NeuronModelType, NeuronModelTypeAndQuantizationNested, NeuronModelTypeAndQuantizationPacked,
 };
-use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
 
 /// Root trait for all neuron data implementation, essentially per neuron data for a given
 /// neuron model. This should be extended with only the per neuron data. Note that the "default" trait is used for memory purposes and any

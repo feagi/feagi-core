@@ -72,9 +72,7 @@ pub fn new_shared_state() -> SharedAmalgamationState {
 /// - size = max - min (per axis)
 ///
 /// If there are no cortical_area areas, size is [0,0,0].
-pub fn compute_circuit_size_from_runtime_genome(
-    genome: &feagi_evolutionary::RuntimeGenome,
-) -> [i32; 3] {
+pub fn compute_circuit_size_from_runtime_genome(genome: &feagi_evolutionary::RuntimeGenome) -> [i32; 3] {
     let mut any = false;
     let mut min_x: i32 = 0;
     let mut min_y: i32 = 0;
@@ -114,11 +112,7 @@ pub fn compute_circuit_size_from_runtime_genome(
         return [0, 0, 0];
     }
 
-    [
-        max_x.saturating_sub(min_x),
-        max_y.saturating_sub(min_y),
-        max_z.saturating_sub(min_z),
-    ]
+    [max_x.saturating_sub(min_x), max_y.saturating_sub(min_y), max_z.saturating_sub(min_z)]
 }
 
 /// Convert a pending summary to the `health_check` JSON shape.
@@ -136,8 +130,7 @@ mod tests {
 
     #[test]
     fn compute_circuit_size_empty_genome_is_zero() {
-        let genome =
-            feagi_evolutionary::templates::create_minimal_genome("g".to_string(), "t".to_string());
+        let genome = feagi_evolutionary::templates::create_minimal_genome("g".to_string(), "t".to_string());
         assert_eq!(compute_circuit_size_from_runtime_genome(&genome), [0, 0, 0]);
     }
 

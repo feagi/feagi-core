@@ -31,9 +31,7 @@ impl GenomeService for GenomeGenomeService {
 
     async fn save_genome(&self, _params: SaveGenomeParams) -> ServiceResult<String> {
         // TODO: Serialize RuntimeGenome to JSON
-        Err(ServiceError::NotImplemented(
-            "WASM mode genome saving not yet implemented".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("WASM mode genome saving not yet implemented".to_string()))
     }
 
     async fn export_region_genome(&self, region_id: String) -> ServiceResult<String> {
@@ -41,14 +39,10 @@ impl GenomeService for GenomeGenomeService {
             feagi_evolutionary::subset_runtime_genome_for_region_branch(g, &region_id)
         })?
         .map_err(|e| match e {
-            feagi_evolutionary::EvoError::InvalidRegion(key) => {
-                ServiceError::InvalidInput(key.message.to_string())
-            }
+            feagi_evolutionary::EvoError::InvalidRegion(key) => ServiceError::InvalidInput(key.message.to_string()),
             other => ServiceError::Internal(other.to_string()),
         })?;
-        feagi_evolutionary::save_genome_to_json(&subset).map_err(|e| {
-            ServiceError::Internal(format!("Failed to serialize region genome: {}", e))
-        })
+        feagi_evolutionary::save_genome_to_json(&subset).map_err(|e| ServiceError::Internal(format!("Failed to serialize region genome: {}", e)))
     }
 
     async fn get_genome_info(&self) -> ServiceResult<GenomeInfo> {
@@ -71,9 +65,7 @@ impl GenomeService for GenomeGenomeService {
     }
 
     async fn reset_connectome(&self) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented(
-            "genome-backed service is read-only".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("genome-backed service is read-only".to_string()))
     }
 
     async fn update_cortical_area(
@@ -81,15 +73,10 @@ impl GenomeService for GenomeGenomeService {
         _cortical_id: &str,
         _changes: std::collections::HashMap<String, serde_json::Value>,
     ) -> ServiceResult<CorticalAreaInfo> {
-        Err(ServiceError::NotImplemented(
-            "genome-backed service is read-only".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("genome-backed service is read-only".to_string()))
     }
 
-    async fn create_cortical_areas(
-        &self,
-        params: Vec<CreateCorticalAreaParams>,
-    ) -> ServiceResult<Vec<CorticalAreaInfo>> {
+    async fn create_cortical_areas(&self, params: Vec<CreateCorticalAreaParams>) -> ServiceResult<Vec<CorticalAreaInfo>> {
         let npu = self
             .npu
             .as_deref()

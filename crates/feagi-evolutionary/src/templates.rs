@@ -14,16 +14,13 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use crate::{
-    GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig,
-    RuntimeGenome,
-};
-use feagi_genomic_context::cortical_area::CoreCorticalType;
-use serde_json::Value;
-use std::collections::HashMap;
+use crate::{GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig, RuntimeGenome};
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
+use feagi_genomic_context::cortical_area::CoreCorticalType;
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
+use serde_json::Value;
+use std::collections::HashMap;
 
 /// Embedded essential genome (loaded at compile time)
 pub const ESSENTIAL_GENOME_JSON: &str = include_str!("../genomes/essential_genome.json");
@@ -57,19 +54,14 @@ pub fn get_default_neural_properties() -> HashMap<String, Value> {
     props.insert("neuron_excitability".to_string(), Value::from(1.0));
     props.insert("visualization".to_string(), Value::from(true));
     props.insert("memory_twin_of".to_string(), Value::Null);
-    props.insert(
-        "cortical_mapping_dst".to_string(),
-        Value::Object(serde_json::Map::new()),
-    );
+    props.insert("cortical_mapping_dst".to_string(), Value::Object(serde_json::Map::new()));
     props
 }
 
 /// Create _death cortical_area area (cortical_idx = 0) from template
 pub fn create_death_area() -> CorticalArea {
     let cortical_id = CoreCorticalType::Death.to_cortical_id();
-    let cortical_type = cortical_id
-        .as_cortical_type()
-        .expect("Death cortical_area ID should map to Core type");
+    let cortical_type = cortical_id.as_cortical_type().expect("Death cortical_area ID should map to Core type");
 
     let mut area = CorticalArea::new(
         cortical_id,
@@ -91,9 +83,7 @@ pub fn create_death_area() -> CorticalArea {
 /// Create _power cortical_area area (cortical_idx = 1) from template
 pub fn create_power_area() -> CorticalArea {
     let cortical_id = CoreCorticalType::Power.to_cortical_id();
-    let cortical_type = cortical_id
-        .as_cortical_type()
-        .expect("Power cortical_area ID should map to Core type");
+    let cortical_type = cortical_id.as_cortical_type().expect("Power cortical_area ID should map to Core type");
 
     let mut area = CorticalArea::new(
         cortical_id,
@@ -118,9 +108,7 @@ pub fn create_power_area() -> CorticalArea {
 /// Create _fatigue cortical_area area (cortical_idx = 2) from template
 pub fn create_fatigue_area() -> CorticalArea {
     let cortical_id = CoreCorticalType::Fatigue.to_cortical_id();
-    let cortical_type = cortical_id
-        .as_cortical_type()
-        .expect("Fatigue cortical_area ID should map to Core type");
+    let cortical_type = cortical_id.as_cortical_type().expect("Fatigue cortical_area ID should map to Core type");
 
     let mut area = CorticalArea::new(
         cortical_id,
@@ -142,9 +130,7 @@ pub fn create_fatigue_area() -> CorticalArea {
 /// Create _pain cortical_area area (cortical_idx = 3) from template
 pub fn create_pain_area() -> CorticalArea {
     let cortical_id = CoreCorticalType::Pain.to_cortical_id();
-    let cortical_type = cortical_id
-        .as_cortical_type()
-        .expect("Pain cortical_area ID should map to Core type");
+    let cortical_type = cortical_id.as_cortical_type().expect("Pain cortical_area ID should map to Core type");
 
     let mut area = CorticalArea::new(
         cortical_id,
@@ -166,9 +152,7 @@ pub fn create_pain_area() -> CorticalArea {
 /// Create _pleasure cortical_area area (cortical_idx = 4) from template
 pub fn create_pleasure_area() -> CorticalArea {
     let cortical_id = CoreCorticalType::Pleasure.to_cortical_id();
-    let cortical_type = cortical_id
-        .as_cortical_type()
-        .expect("Pleasure cortical_area ID should map to Core type");
+    let cortical_type = cortical_id.as_cortical_type().expect("Pleasure cortical_area ID should map to Core type");
 
     let mut area = CorticalArea::new(
         cortical_id,
@@ -190,9 +174,7 @@ pub fn create_pleasure_area() -> CorticalArea {
 /// Create _fear cortical_area area (cortical_idx = 5) from template
 pub fn create_fear_area() -> CorticalArea {
     let cortical_id = CoreCorticalType::Fear.to_cortical_id();
-    let cortical_type = cortical_id
-        .as_cortical_type()
-        .expect("Fear cortical_area ID should map to Core type");
+    let cortical_type = cortical_id.as_cortical_type().expect("Fear cortical_area ID should map to Core type");
 
     let mut area = CorticalArea::new(
         cortical_id,
@@ -214,9 +196,7 @@ pub fn create_fear_area() -> CorticalArea {
 /// Create _hope cortical_area area (cortical_idx = 6) from template
 pub fn create_hope_area() -> CorticalArea {
     let cortical_id = CoreCorticalType::Hope.to_cortical_id();
-    let cortical_type = cortical_id
-        .as_cortical_type()
-        .expect("Hope cortical_area ID should map to Core type");
+    let cortical_type = cortical_id.as_cortical_type().expect("Hope cortical_area ID should map to Core type");
 
     let mut area = CorticalArea::new(
         cortical_id,
@@ -243,10 +223,7 @@ pub fn create_minimal_genome(genome_id: String, genome_title: String) -> Runtime
             genome_title,
             genome_description: "Minimal genome template".to_string(),
             version: "2.0".to_string(),
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs_f64(),
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
             brain_regions_root: None, // Will be set after neuroembryogenesis
         },
         cortical_areas: HashMap::new(),
@@ -268,27 +245,19 @@ pub fn create_genome_with_core_areas(genome_id: String, genome_title: String) ->
     let mut genome = create_minimal_genome(genome_id, genome_title);
 
     // Add core areas (convert 6-char strings to CorticalID)
-    let death_id =
-        crate::genome::parser::string_to_cortical_id("_death").expect("Valid cortical_area ID");
-    let power_id =
-        crate::genome::parser::string_to_cortical_id("_power").expect("Valid cortical_area ID");
-    let fatigue_id =
-        crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid cortical_area ID");
+    let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid cortical_area ID");
+    let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid cortical_area ID");
+    let fatigue_id = crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid cortical_area ID");
     let pain_id = crate::genome::parser::string_to_cortical_id("_pain").expect("Valid cortical_area ID");
-    let pleasure_id =
-        crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid cortical_area ID");
+    let pleasure_id = crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid cortical_area ID");
     let fear_id = crate::genome::parser::string_to_cortical_id("_fear").expect("Valid cortical_area ID");
     let hope_id = crate::genome::parser::string_to_cortical_id("_hope").expect("Valid cortical_area ID");
 
     genome.cortical_areas.insert(death_id, create_death_area());
     genome.cortical_areas.insert(power_id, create_power_area());
-    genome
-        .cortical_areas
-        .insert(fatigue_id, create_fatigue_area());
+    genome.cortical_areas.insert(fatigue_id, create_fatigue_area());
     genome.cortical_areas.insert(pain_id, create_pain_area());
-    genome
-        .cortical_areas
-        .insert(pleasure_id, create_pleasure_area());
+    genome.cortical_areas.insert(pleasure_id, create_pleasure_area());
     genome.cortical_areas.insert(fear_id, create_fear_area());
     genome.cortical_areas.insert(hope_id, create_hope_area());
 
@@ -296,10 +265,7 @@ pub fn create_genome_with_core_areas(genome_id: String, genome_title: String) ->
 }
 
 /// Create a genome with core morphologies
-pub fn create_genome_with_core_morphologies(
-    genome_id: String,
-    genome_title: String,
-) -> RuntimeGenome {
+pub fn create_genome_with_core_morphologies(genome_id: String, genome_title: String) -> RuntimeGenome {
     let mut genome = create_minimal_genome(genome_id, genome_title);
 
     // Add core morphologies
@@ -327,15 +293,11 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
     let mut morphologies_added = 0;
 
     // Convert core area IDs
-    let death_id =
-        crate::genome::parser::string_to_cortical_id("_death").expect("Valid cortical_area ID");
-    let power_id =
-        crate::genome::parser::string_to_cortical_id("_power").expect("Valid cortical_area ID");
-    let fatigue_id =
-        crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid cortical_area ID");
+    let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid cortical_area ID");
+    let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid cortical_area ID");
+    let fatigue_id = crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid cortical_area ID");
     let pain_id = crate::genome::parser::string_to_cortical_id("_pain").expect("Valid cortical_area ID");
-    let pleasure_id =
-        crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid cortical_area ID");
+    let pleasure_id = crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid cortical_area ID");
     let fear_id = crate::genome::parser::string_to_cortical_id("_fear").expect("Valid cortical_area ID");
     let hope_id = crate::genome::parser::string_to_cortical_id("_hope").expect("Valid cortical_area ID");
 
@@ -445,9 +407,7 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         "block_to_block".to_string(),
         Morphology {
             morphology_type: MorphologyType::Vectors,
-            parameters: MorphologyParameters::Vectors {
-                vectors: vec![[0, 0, 0]],
-            },
+            parameters: MorphologyParameters::Vectors { vectors: vec![[0, 0, 0]] },
             class: "core".to_string(),
         },
     );
@@ -697,9 +657,7 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         "lateral_+x".to_string(),
         Morphology {
             morphology_type: MorphologyType::Vectors,
-            parameters: MorphologyParameters::Vectors {
-                vectors: vec![[1, 0, 0]],
-            },
+            parameters: MorphologyParameters::Vectors { vectors: vec![[1, 0, 0]] },
             class: "core".to_string(),
         },
     );
@@ -709,9 +667,7 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         "lateral_-x".to_string(),
         Morphology {
             morphology_type: MorphologyType::Vectors,
-            parameters: MorphologyParameters::Vectors {
-                vectors: vec![[-1, 0, 0]],
-            },
+            parameters: MorphologyParameters::Vectors { vectors: vec![[-1, 0, 0]] },
             class: "core".to_string(),
         },
     );
@@ -721,9 +677,7 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         "lateral_+y".to_string(),
         Morphology {
             morphology_type: MorphologyType::Vectors,
-            parameters: MorphologyParameters::Vectors {
-                vectors: vec![[0, 1, 0]],
-            },
+            parameters: MorphologyParameters::Vectors { vectors: vec![[0, 1, 0]] },
             class: "core".to_string(),
         },
     );
@@ -733,9 +687,7 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         "lateral_-y".to_string(),
         Morphology {
             morphology_type: MorphologyType::Vectors,
-            parameters: MorphologyParameters::Vectors {
-                vectors: vec![[0, -1, 0]],
-            },
+            parameters: MorphologyParameters::Vectors { vectors: vec![[0, -1, 0]] },
             class: "core".to_string(),
         },
     );
@@ -745,9 +697,7 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         "lateral_+z".to_string(),
         Morphology {
             morphology_type: MorphologyType::Vectors,
-            parameters: MorphologyParameters::Vectors {
-                vectors: vec![[0, 0, 1]],
-            },
+            parameters: MorphologyParameters::Vectors { vectors: vec![[0, 0, 1]] },
             class: "core".to_string(),
         },
     );
@@ -757,9 +707,7 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         "lateral_-z".to_string(),
         Morphology {
             morphology_type: MorphologyType::Vectors,
-            parameters: MorphologyParameters::Vectors {
-                vectors: vec![[0, 0, -1]],
-            },
+            parameters: MorphologyParameters::Vectors { vectors: vec![[0, 0, -1]] },
             class: "core".to_string(),
         },
     );
@@ -773,11 +721,7 @@ pub fn load_essential_genome() -> Result<RuntimeGenome, crate::types::EvoError> 
     let mut genome = load_genome_from_json(ESSENTIAL_GENOME_JSON)?;
     let (areas_added, morphs_added) = ensure_core_components(&mut genome);
     if areas_added > 0 || morphs_added > 0 {
-        tracing::info!(
-            "Essential genome: added {} core areas, {} core morphologies",
-            areas_added,
-            morphs_added
-        );
+        tracing::info!("Essential genome: added {} core areas, {} core morphologies", areas_added, morphs_added);
     }
     Ok(genome)
 }
@@ -790,11 +734,7 @@ pub fn load_barebones_genome() -> Result<RuntimeGenome, crate::types::EvoError> 
     let mut genome = load_genome_from_json(BAREBONES_GENOME_JSON)?;
     let (areas_added, morphs_added) = ensure_core_components(&mut genome);
     if areas_added > 0 || morphs_added > 0 {
-        tracing::info!(
-            "Barebones genome: added {} core areas, {} core morphologies",
-            areas_added,
-            morphs_added
-        );
+        tracing::info!("Barebones genome: added {} core areas, {} core morphologies", areas_added, morphs_added);
     }
     Ok(genome)
 }
@@ -807,11 +747,7 @@ pub fn load_test_genome() -> Result<RuntimeGenome, crate::types::EvoError> {
     let mut genome = load_genome_from_json(TEST_GENOME_JSON)?;
     let (areas_added, morphs_added) = ensure_core_components(&mut genome);
     if areas_added > 0 || morphs_added > 0 {
-        tracing::info!(
-            "Test genome: added {} core areas, {} core morphologies",
-            areas_added,
-            morphs_added
-        );
+        tracing::info!("Test genome: added {} core areas, {} core morphologies", areas_added, morphs_added);
     }
     Ok(genome)
 }
@@ -824,11 +760,7 @@ pub fn load_vision_genome() -> Result<RuntimeGenome, crate::types::EvoError> {
     let mut genome = load_genome_from_json(VISION_GENOME_JSON)?;
     let (areas_added, morphs_added) = ensure_core_components(&mut genome);
     if areas_added > 0 || morphs_added > 0 {
-        tracing::info!(
-            "Vision genome: added {} core areas, {} core morphologies",
-            areas_added,
-            morphs_added
-        );
+        tracing::info!("Vision genome: added {} core areas, {} core morphologies", areas_added, morphs_added);
     }
     Ok(genome)
 }
@@ -849,10 +781,7 @@ mod tests {
 
     #[test]
     fn test_create_genome_with_core_morphologies() {
-        let genome = create_genome_with_core_morphologies(
-            "test_genome".to_string(),
-            "Test Genome".to_string(),
-        );
+        let genome = create_genome_with_core_morphologies("test_genome".to_string(), "Test Genome".to_string());
 
         assert_eq!(genome.metadata.genome_id, "test_genome");
         assert!(genome.morphologies.count() > 0);
@@ -923,11 +852,9 @@ mod tests {
 
         let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
         let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
-        let fatigue_id =
-            crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid ID");
+        let fatigue_id = crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid ID");
         let pain_id = crate::genome::parser::string_to_cortical_id("_pain").expect("Valid ID");
-        let pleasure_id =
-            crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid ID");
+        let pleasure_id = crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid ID");
         let fear_id = crate::genome::parser::string_to_cortical_id("_fear").expect("Valid ID");
         let hope_id = crate::genome::parser::string_to_cortical_id("_hope").expect("Valid ID");
         assert!(genome.cortical_areas.contains_key(&death_id));
@@ -939,27 +866,11 @@ mod tests {
         assert!(genome.cortical_areas.contains_key(&hope_id));
 
         // Verify cortical_idx assignments
-        assert_eq!(
-            genome.cortical_areas.get(&death_id).unwrap().cortical_idx,
-            0
-        );
-        assert_eq!(
-            genome.cortical_areas.get(&power_id).unwrap().cortical_idx,
-            1
-        );
-        assert_eq!(
-            genome.cortical_areas.get(&fatigue_id).unwrap().cortical_idx,
-            2
-        );
+        assert_eq!(genome.cortical_areas.get(&death_id).unwrap().cortical_idx, 0);
+        assert_eq!(genome.cortical_areas.get(&power_id).unwrap().cortical_idx, 1);
+        assert_eq!(genome.cortical_areas.get(&fatigue_id).unwrap().cortical_idx, 2);
         assert_eq!(genome.cortical_areas.get(&pain_id).unwrap().cortical_idx, 3);
-        assert_eq!(
-            genome
-                .cortical_areas
-                .get(&pleasure_id)
-                .unwrap()
-                .cortical_idx,
-            4
-        );
+        assert_eq!(genome.cortical_areas.get(&pleasure_id).unwrap().cortical_idx, 4);
         assert_eq!(genome.cortical_areas.get(&fear_id).unwrap().cortical_idx, 5);
         assert_eq!(genome.cortical_areas.get(&hope_id).unwrap().cortical_idx, 6);
     }

@@ -1,14 +1,10 @@
-
-
-
 /// Per mapping entry flags that denote various properties
 /// bit 0 - IsMappingEntryDisabled -> If disabled, all synapses under this mapping will not execute or fire
 /// bit 1-7 - unused
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct CorticalMappingEntryRuntimeFlags(u8);
 
-impl CorticalMappingEntryRuntimeFlags
-{
+impl CorticalMappingEntryRuntimeFlags {
     const BITMASK_IS_MAPPING_ENTRY_DISABLED: u8 = 1 << 7;
 
     pub fn new(is_mapping_entry_disabled: bool) -> CorticalMappingEntryRuntimeFlags {

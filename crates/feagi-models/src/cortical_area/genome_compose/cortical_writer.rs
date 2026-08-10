@@ -1,11 +1,11 @@
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use feagi_data::values::quantizable::{QuantizedIndexCountTrait};
 use crate::cortical_area::components::cortical_area_layout::enums::CorticalAreaLayoutNested;
 use crate::cortical_area::neuron::cortical_area_properties::CorticalAreaProperties;
 use crate::cortical_area::neuron::cortical_data::NeuronModelCorticalData;
 use crate::cortical_area::neuron::neuron_data::NeuronModelNeuronData;
-use crate::cortical_area::neuron::neuron_properties::NeuronProperties;
 use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
+use crate::cortical_area::neuron::neuron_properties::NeuronProperties;
+use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
+use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 
 /// Trait for writing the data of newly created cortical areas, used both by the root and model
 /// specific enums
@@ -18,7 +18,7 @@ where
     /// Number of neurons needed
     fn number_neurons_needed<FIQ: FeagiIndexQuantization>(&self) -> Result<FIQ::NeuronIndexQuant, ()>; // TODO error!
 
-    /// Handles writing the per neuron data and creating the properties. 
+    /// Handles writing the per neuron data and creating the properties.
     /// ALL MEMBERS are to be overwritten!
     fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(
         self,
@@ -51,8 +51,7 @@ where
     ModelSpecific(SE),
 }
 
-impl<NMQ, NMCD, NMND, SE> NeuronModelCorticalWriter<NMQ, NMCD, NMND>
-    for RootNeuronModelCorticalWriter<NMQ, NMCD, NMND, SE>
+impl<NMQ, NMCD, NMND, SE> NeuronModelCorticalWriter<NMQ, NMCD, NMND> for RootNeuronModelCorticalWriter<NMQ, NMCD, NMND, SE>
 where
     NMQ: NeuronModelQuantization,
     NMCD: NeuronModelCorticalData<NMQ>,
@@ -70,13 +69,13 @@ where
         }
     }
 
-    
     fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(
         self,
         current_cortical_data: &mut NMCD,
         current_neuron_data: &mut [NMND],
         neuron_properties_out: &mut [NeuronProperties],
-    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties<NMQ>), ()> { // TODO Error handling!
+    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties<NMQ>), ()> {
+        // TODO Error handling!
         match self {
             RootNeuronModelCorticalWriter::CompleteRawData {
                 _p,

@@ -8,7 +8,7 @@ pub enum CorticalAreaClassFlat {
     Interconnect,
     Memory,
     Sensor,
-    Motor
+    Motor,
 }
 
 // TODO get from class what layouts are supported (return a static arr)

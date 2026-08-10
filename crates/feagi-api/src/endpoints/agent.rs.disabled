@@ -28,26 +28,18 @@ fn parse_auth_token(request: &AgentRegistrationRequest) -> ApiResult<AuthToken> 
         .auth_token
         .as_deref()
         .ok_or_else(|| ApiError::invalid_input("Missing auth_token for registration"))?;
-    AuthToken::from_base64(token_b64).ok_or_else(|| {
-        ApiError::invalid_input("Invalid auth_token (expected base64 32-byte token)")
-    })
+    AuthToken::from_base64(token_b64).ok_or_else(|| ApiError::invalid_input("Invalid auth_token (expected base64 32-byte token)"))
 }
 
 #[cfg(feature = "feagi-agent")]
 #[allow(dead_code)]
-fn derive_capabilities_from_device_registrations(
-    device_registrations: &serde_json::Value,
-) -> ApiResult<Vec<RegistrationCapabilities>> {
+fn derive_capabilities_from_device_registrations(device_registrations: &serde_json::Value) -> ApiResult<Vec<RegistrationCapabilities>> {
     let obj = device_registrations
         .as_object()
         .ok_or_else(|| ApiError::invalid_input("device_registrations must be a JSON object"))?;
 
-    let input_units = obj
-        .get("input_units_and_encoder_properties")
-        .and_then(|v| v.as_object());
-    let output_units = obj
-        .get("output_units_and_decoder_properties")
-        .and_then(|v| v.as_object());
+    let input_units = obj.get("input_units_and_encoder_properties").and_then(|v| v.as_object());
+    let output_units = obj.get("output_units_and_decoder_properties").and_then(|v| v.as_object());
     let feedbacks = obj.get("feedbacks").and_then(|v| v.as_object());
 
     let mut capabilities = Vec::new();
@@ -74,35 +66,25 @@ fn derive_capabilities_from_device_registrations(
 /// Requires `capabilities.visualization` with valid `rate_hz`. Auth is still required by caller.
 #[cfg(feature = "feagi-agent")]
 #[allow(dead_code)]
-fn derive_capabilities_from_visualization_capability(
-    request: &AgentRegistrationRequest,
-) -> ApiResult<Vec<RegistrationCapabilities>> {
+fn derive_capabilities_from_visualization_capability(request: &AgentRegistrationRequest) -> ApiResult<Vec<RegistrationCapabilities>> {
     let viz = request
         .capabilities
         .get("visualization")
         .and_then(|v| v.as_object())
-        .ok_or_else(|| {
-            ApiError::invalid_input(
-                "visualization-only registration requires capabilities.visualization object",
-            )
-        })?;
-    let rate_hz = viz.get("rate_hz").and_then(|v| v.as_f64()).ok_or_else(|| {
-        ApiError::invalid_input("capabilities.visualization must include rate_hz (number > 0)")
-    })?;
+        .ok_or_else(|| ApiError::invalid_input("visualization-only registration requires capabilities.visualization object"))?;
+    let rate_hz = viz
+        .get("rate_hz")
+        .and_then(|v| v.as_f64())
+        .ok_or_else(|| ApiError::invalid_input("capabilities.visualization must include rate_hz (number > 0)"))?;
     if rate_hz <= 0.0 {
-        return Err(ApiError::invalid_input(
-            "capabilities.visualization.rate_hz must be > 0",
-        ));
+        return Err(ApiError::invalid_input("capabilities.visualization.rate_hz must be > 0"));
     }
     Ok(vec![RegistrationCapabilities::ReceiveNeuronVisualizations])
 }
 
 #[cfg(feature = "feagi-agent")]
 #[allow(dead_code)]
-fn parse_capability_rate_hz(
-    capabilities: &HashMap<String, serde_json::Value>,
-    capability_key: &str,
-) -> ApiResult<Option<f64>> {
+fn parse_capability_rate_hz(capabilities: &HashMap<String, serde_json::Value>, capability_key: &str) -> ApiResult<Option<f64>> {
     let Some(capability_value) = capabilities.get(capability_key) else {
         return Ok(None);
     };
@@ -111,12 +93,9 @@ fn parse_capability_rate_hz(
         return Ok(None);
     };
 
-    let rate_hz = rate_value.as_f64().ok_or_else(|| {
-        ApiError::invalid_input(format!(
-            "Invalid rate_hz for capability '{}': expected number",
-            capability_key
-        ))
-    })?;
+    let rate_hz = rate_value
+        .as_f64()
+        .ok_or_else(|| ApiError::invalid_input(format!("Invalid rate_hz for capability '{}': expected number", capability_key)))?;
 
     if rate_hz <= 0.0 {
         return Err(ApiError::invalid_input(format!(
@@ -171,10 +150,7 @@ fn try_extract_agent_name_from_descriptor_bytes(agent_id: &str) -> Result<String
         return Err(());
     }
     let name_bytes = &decoded[AGENT_NAME_OFFSET..AGENT_NAME_OFFSET + AGENT_NAME_LEN];
-    let name = String::from_utf8_lossy(name_bytes)
-        .trim_end_matches('\0')
-        .trim()
-        .to_string();
+    let name = String::from_utf8_lossy(name_bytes).trim_end_matches('\0').trim().to_string();
     if name.is_empty() || !name.chars().all(|c| c.is_ascii() && !c.is_control()) {
         return Err(());
     }
@@ -182,9 +158,7 @@ fn try_extract_agent_name_from_descriptor_bytes(agent_id: &str) -> Result<String
 }
 
 #[cfg(feature = "feagi-agent")]
-fn registration_capabilities_to_map(
-    capabilities: &[RegistrationCapabilities],
-) -> HashMap<String, serde_json::Value> {
+fn registration_capabilities_to_map(capabilities: &[RegistrationCapabilities]) -> HashMap<String, serde_json::Value> {
     let mut out = HashMap::new();
     for capability in capabilities {
         match capability {
@@ -197,20 +171,11 @@ fn registration_capabilities_to_map(
                 out.insert("motor".to_string(), serde_json::json!(true));
             }
             RegistrationCapabilities::ReceiveNeuronVisualizations => {
-                out.insert(
-                    "receive_neuron_visualizations".to_string(),
-                    serde_json::json!(true),
-                );
-                out.insert(
-                    "visualization".to_string(),
-                    serde_json::json!({"rate_hz": 0.0}),
-                );
+                out.insert("receive_neuron_visualizations".to_string(), serde_json::json!(true));
+                out.insert("visualization".to_string(), serde_json::json!({"rate_hz": 0.0}));
             }
             RegistrationCapabilities::ReceiveSystemMessages => {
-                out.insert(
-                    "receive_system_messages".to_string(),
-                    serde_json::json!(true),
-                );
+                out.insert("receive_system_messages".to_string(), serde_json::json!(true));
             }
         }
     }
@@ -221,49 +186,32 @@ fn registration_capabilities_to_map(
 fn list_agent_ids_from_handler(state: &ApiState) -> Vec<String> {
     if let Some(handler) = &state.agent_handler {
         let handler_guard = handler.lock().unwrap();
-        return handler_guard
-            .get_all_registered_agents()
-            .keys()
-            .map(|id| id.to_base64())
-            .collect();
+        return handler_guard.get_all_registered_agents().keys().map(|id| id.to_base64()).collect();
     }
     Vec::new()
 }
 
 #[cfg(feature = "feagi-agent")]
-fn get_handler_capabilities_for_agent(
-    state: &ApiState,
-    agent_id: &str,
-) -> Option<HashMap<String, serde_json::Value>> {
+fn get_handler_capabilities_for_agent(state: &ApiState, agent_id: &str) -> Option<HashMap<String, serde_json::Value>> {
     let parsed_agent_id = parse_agent_id_base64(agent_id).ok()?;
     let handler = state.agent_handler.as_ref()?;
     let handler_guard = handler.lock().unwrap();
-    let (_, capabilities) = handler_guard
-        .get_all_registered_agents()
-        .get(&parsed_agent_id)?;
+    let (_, capabilities) = handler_guard.get_all_registered_agents().get(&parsed_agent_id)?;
     Some(registration_capabilities_to_map(capabilities))
 }
 
 #[cfg(feature = "feagi-agent")]
 fn parse_agent_id_base64(agent_id: &str) -> ApiResult<AgentID> {
-    AgentID::try_from_base64(agent_id).map_err(|e| {
-        ApiError::invalid_input(format!("Invalid agent_id (expected AgentID base64): {}", e))
-    })
+    AgentID::try_from_base64(agent_id).map_err(|e| ApiError::invalid_input(format!("Invalid agent_id (expected AgentID base64): {}", e)))
 }
 
 #[cfg(feature = "feagi-agent")]
-async fn auto_create_cortical_areas_from_device_registrations(
-    state: &ApiState,
-    device_registrations: &serde_json::Value,
-) {
+async fn auto_create_cortical_areas_from_device_registrations(state: &ApiState, device_registrations: &serde_json::Value) {
     auto_create_cortical_areas_shared(state, device_registrations).await;
 }
 
 #[cfg(not(feature = "feagi-agent"))]
-async fn auto_create_cortical_areas_from_device_registrations(
-    _state: &ApiState,
-    _device_registrations: &serde_json::Value,
-) {
+async fn auto_create_cortical_areas_from_device_registrations(_state: &ApiState, _device_registrations: &serde_json::Value) {
     // No-op when feature is disabled
 }
 
@@ -304,10 +252,7 @@ pub async fn register_agent(
                 let mut handler_guard = handler.lock().unwrap();
                 handler_guard.set_device_registrations_by_agent(agent_id, device_regs.clone());
             } // Drop guard before any await
-            info!(
-                "✅ [API] Stored device registrations for agent '{}'",
-                request.agent_id
-            );
+            info!("✅ [API] Stored device registrations for agent '{}'", request.agent_id);
             true
         } else {
             false
@@ -352,8 +297,7 @@ pub async fn register_agent(
     let transports_array = if state.agent_handler.is_some() {
         // Load config to get port numbers
         use feagi_config::load_config;
-        let config = load_config(None, None)
-            .map_err(|e| ApiError::internal(format!("Failed to load config: {}", e)))?;
+        let config = load_config(None, None).map_err(|e| ApiError::internal(format!("Failed to load config: {}", e)))?;
 
         let mut transport_configs = Vec::new();
         for transport in &config.transports.available {
@@ -365,24 +309,15 @@ pub async fn register_agent(
             // Build ports map from config
             let mut ports = HashMap::new();
             if transport_type == "websocket" || transport_type == "ws" {
-                ports.insert(
-                    "registration".to_string(),
-                    config.websocket.registration_port,
-                );
+                ports.insert("registration".to_string(), config.websocket.registration_port);
                 ports.insert("sensory".to_string(), config.websocket.sensory_port);
                 ports.insert("motor".to_string(), config.websocket.motor_port);
-                ports.insert(
-                    "visualization".to_string(),
-                    config.websocket.visualization_port,
-                );
+                ports.insert("visualization".to_string(), config.websocket.visualization_port);
             } else {
                 ports.insert("registration".to_string(), config.agent.registration_port);
                 ports.insert("sensory".to_string(), config.ports.zmq_sensory_port);
                 ports.insert("motor".to_string(), config.ports.zmq_motor_port);
-                ports.insert(
-                    "visualization".to_string(),
-                    config.ports.zmq_visualization_port,
-                );
+                ports.insert("visualization".to_string(), config.ports.zmq_visualization_port);
             }
 
             transport_configs.push(TransportConfig {
@@ -411,8 +346,7 @@ pub async fn register_agent(
 
     Ok(Json(AgentRegistrationResponse {
         status: "success".to_string(),
-        message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration"
-            .to_string(),
+        message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration".to_string(),
         success: true,
         transport: None, // Legacy field - deprecated
         rates: None,
@@ -435,10 +369,7 @@ pub async fn register_agent(
     ),
     tag = "agent"
 )]
-pub async fn heartbeat(
-    State(state): State<ApiState>,
-    Json(request): Json<HeartbeatRequest>,
-) -> ApiResult<Json<HeartbeatResponse>> {
+pub async fn heartbeat(State(state): State<ApiState>, Json(request): Json<HeartbeatRequest>) -> ApiResult<Json<HeartbeatResponse>> {
     let agent_service = state
         .agent_service
         .as_ref()
@@ -453,10 +384,7 @@ pub async fn heartbeat(
             message: "heartbeat_ok".to_string(),
             success: true,
         })),
-        Err(_) => Err(ApiError::not_found(
-            "agent",
-            &format!("Agent {} not in registry", request.agent_id),
-        )),
+        Err(_) => Err(ApiError::not_found("agent", &format!("Agent {} not in registry", request.agent_id))),
     }
 }
 
@@ -476,10 +404,7 @@ pub async fn list_agents(State(state): State<ApiState>) -> ApiResult<Json<Vec<St
             Ok(agent_ids) if !agent_ids.is_empty() => return Ok(Json(agent_ids)),
             Ok(_) => {}
             Err(e) => {
-                warn!(
-                    "⚠️ [API] AgentService list_agents failed ({}); falling back to agent_handler",
-                    e
-                );
+                warn!("⚠️ [API] AgentService list_agents failed ({}); falling back to agent_handler", e);
             }
         }
     }
@@ -549,9 +474,7 @@ pub async fn get_agent_properties(
     ),
     tag = "agent"
 )]
-pub async fn get_shared_memory(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, HashMap<String, serde_json::Value>>>> {
+pub async fn get_shared_memory(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, HashMap<String, serde_json::Value>>>> {
     let agent_service = state
         .agent_service
         .as_ref()
@@ -559,10 +482,7 @@ pub async fn get_shared_memory(
 
     match agent_service.get_shared_memory_info().await {
         Ok(shm_info) => Ok(Json(shm_info)),
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to get shared memory info: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to get shared memory info: {}", e))),
     }
 }
 
@@ -577,10 +497,7 @@ pub async fn get_shared_memory(
     ),
     tag = "agent"
 )]
-pub async fn deregister_agent(
-    State(state): State<ApiState>,
-    Json(request): Json<AgentDeregistrationRequest>,
-) -> ApiResult<Json<SuccessResponse>> {
+pub async fn deregister_agent(State(state): State<ApiState>, Json(request): Json<AgentDeregistrationRequest>) -> ApiResult<Json<SuccessResponse>> {
     let agent_service = state
         .agent_service
         .as_ref()
@@ -630,53 +547,21 @@ pub async fn manual_stimulation(
         }
     };
 
-    match agent_service
-        .manual_stimulation(request.stimulation_payload, mode)
-        .await
-    {
+    match agent_service.manual_stimulation(request.stimulation_payload, mode).await {
         Ok(result) => {
-            let success = result
-                .get("success")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let total_coordinates = result
-                .get("total_coordinates")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize;
-            let successful_areas = result
-                .get("successful_areas")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize;
-            let requested_coordinates = result
-                .get("requested_coordinates")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize;
-            let matched_coordinates = result
-                .get("matched_coordinates")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize;
-            let unique_neuron_ids = result
-                .get("unique_neuron_ids")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as usize;
-            let mode = result
-                .get("mode")
-                .and_then(|v| v.as_str())
-                .unwrap_or("candidate")
-                .to_string();
+            let success = result.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+            let total_coordinates = result.get("total_coordinates").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let successful_areas = result.get("successful_areas").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let requested_coordinates = result.get("requested_coordinates").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let matched_coordinates = result.get("matched_coordinates").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let unique_neuron_ids = result.get("unique_neuron_ids").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+            let mode = result.get("mode").and_then(|v| v.as_str()).unwrap_or("candidate").to_string();
             let failed_areas = result
                 .get("failed_areas")
                 .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                 .unwrap_or_default();
-            let error = result
-                .get("error")
-                .and_then(|v| v.as_str())
-                .map(String::from);
+            let error = result.get("error").and_then(|v| v.as_str()).map(String::from);
 
             Ok(Json(ManualStimulationResponse {
                 success,
@@ -704,9 +589,7 @@ pub async fn manual_stimulation(
     ),
     tag = "agent"
 )]
-pub async fn get_fq_sampler_status(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_fq_sampler_status(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let agent_service = state
         .agent_service
         .as_ref()
@@ -744,36 +627,21 @@ pub async fn get_fq_sampler_status(
     let mut fq_coordination = HashMap::new();
 
     let mut viz_sampler = HashMap::new();
-    viz_sampler.insert(
-        "enabled".to_string(),
-        serde_json::json!(!visualization_agents.is_empty()),
-    );
+    viz_sampler.insert("enabled".to_string(), serde_json::json!(!visualization_agents.is_empty()));
     viz_sampler.insert(
         "reason".to_string(),
         serde_json::json!(if visualization_agents.is_empty() {
             "No visualization agents connected".to_string()
         } else {
-            format!(
-                "{} visualization agent(s) connected",
-                visualization_agents.len()
-            )
+            format!("{} visualization agent(s) connected", visualization_agents.len())
         }),
     );
-    viz_sampler.insert(
-        "agents_requiring".to_string(),
-        serde_json::json!(visualization_agents),
-    );
+    viz_sampler.insert("agents_requiring".to_string(), serde_json::json!(visualization_agents));
     viz_sampler.insert("frequency_hz".to_string(), serde_json::json!(fcl_frequency));
-    fq_coordination.insert(
-        "visualization_fq_sampler".to_string(),
-        serde_json::json!(viz_sampler),
-    );
+    fq_coordination.insert("visualization_fq_sampler".to_string(), serde_json::json!(viz_sampler));
 
     let mut motor_sampler = HashMap::new();
-    motor_sampler.insert(
-        "enabled".to_string(),
-        serde_json::json!(!motor_agents.is_empty()),
-    );
+    motor_sampler.insert("enabled".to_string(), serde_json::json!(!motor_agents.is_empty()));
     motor_sampler.insert(
         "reason".to_string(),
         serde_json::json!(if motor_agents.is_empty() {
@@ -782,21 +650,12 @@ pub async fn get_fq_sampler_status(
             format!("{} motor agent(s) connected", motor_agents.len())
         }),
     );
-    motor_sampler.insert(
-        "agents_requiring".to_string(),
-        serde_json::json!(motor_agents),
-    );
+    motor_sampler.insert("agents_requiring".to_string(), serde_json::json!(motor_agents));
     motor_sampler.insert("frequency_hz".to_string(), serde_json::json!(100.0));
-    fq_coordination.insert(
-        "motor_fq_sampler".to_string(),
-        serde_json::json!(motor_sampler),
-    );
+    fq_coordination.insert("motor_fq_sampler".to_string(), serde_json::json!(motor_sampler));
 
     let mut response = HashMap::new();
-    response.insert(
-        "fq_sampler_coordination".to_string(),
-        serde_json::json!(fq_coordination),
-    );
+    response.insert("fq_sampler_coordination".to_string(), serde_json::json!(fq_coordination));
     response.insert(
         "agent_registry".to_string(),
         serde_json::json!({
@@ -804,14 +663,8 @@ pub async fn get_fq_sampler_status(
             "agent_ids": agent_ids
         }),
     );
-    response.insert(
-        "system_status".to_string(),
-        serde_json::json!("coordinated_via_registration_manager"),
-    );
-    response.insert(
-        "fcl_sampler_consumer".to_string(),
-        serde_json::json!(fcl_consumer),
-    );
+    response.insert("system_status".to_string(), serde_json::json!("coordinated_via_registration_manager"));
+    response.insert("fcl_sampler_consumer".to_string(), serde_json::json!(fcl_consumer));
 
     Ok(Json(response))
 }
@@ -826,9 +679,7 @@ pub async fn get_fq_sampler_status(
     ),
     tag = "agent"
 )]
-pub async fn get_capabilities(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+pub async fn get_capabilities(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
     let mut response = HashMap::new();
     response.insert(
         "agent_types".to_string(),
@@ -895,10 +746,7 @@ pub async fn get_all_agent_capabilities(
         match service.list_agents().await {
             Ok(ids) => agent_ids = ids,
             Err(e) => {
-                warn!(
-                    "⚠️ [API] AgentService list_agents failed ({}); falling back to agent_handler",
-                    e
-                );
+                warn!("⚠️ [API] AgentService list_agents failed ({}); falling back to agent_handler", e);
             }
         }
     }
@@ -951,9 +799,7 @@ pub async fn get_all_agent_capabilities(
         }
 
         if let Some(ref filters) = capability_filters {
-            let has_match = filters
-                .iter()
-                .any(|capability| capabilities_map.contains_key(capability));
+            let has_match = filters.iter().any(|capability| capabilities_map.contains_key(capability));
             if !has_match {
                 continue;
             }
@@ -965,10 +811,7 @@ pub async fn get_all_agent_capabilities(
                 match export_device_registrations_from_connector(&state, &agent_id) {
                     Ok(v) => Some(v),
                     Err(e) => {
-                        warn!(
-                            "⚠️ [API] Could not export device registrations for '{}': {:?}",
-                            agent_id, e
-                        );
+                        warn!("⚠️ [API] Could not export device registrations for '{}': {:?}", agent_id, e);
                         None
                     }
                 }
@@ -994,10 +837,7 @@ pub async fn get_all_agent_capabilities(
 }
 
 #[cfg(feature = "feagi-agent")]
-fn export_device_registrations_from_connector(
-    state: &ApiState,
-    agent_id: &str,
-) -> ApiResult<serde_json::Value> {
+fn export_device_registrations_from_connector(state: &ApiState, agent_id: &str) -> ApiResult<serde_json::Value> {
     let parsed_agent_id = parse_agent_id_base64(agent_id)?;
     if let Some(handler) = &state.agent_handler {
         let handler_guard = handler.lock().unwrap();
@@ -1026,10 +866,7 @@ fn export_device_registrations_from_connector(
     ),
     tag = "agent"
 )]
-pub async fn get_agent_info(
-    State(state): State<ApiState>,
-    Path(agent_id): Path<String>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_agent_info(State(state): State<ApiState>, Path(agent_id): Path<String>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let agent_service = state
         .agent_service
         .as_ref()
@@ -1042,34 +879,13 @@ pub async fn get_agent_info(
 
     let mut response = HashMap::new();
     response.insert("agent_id".to_string(), serde_json::json!(agent_id));
-    response.insert(
-        "agent_name".to_string(),
-        serde_json::json!(get_agent_name_from_id(&state, &agent_id)?),
-    );
-    response.insert(
-        "agent_type".to_string(),
-        serde_json::json!(properties.agent_type),
-    );
-    response.insert(
-        "agent_ip".to_string(),
-        serde_json::json!(properties.agent_ip),
-    );
-    response.insert(
-        "agent_data_port".to_string(),
-        serde_json::json!(properties.agent_data_port),
-    );
-    response.insert(
-        "capabilities".to_string(),
-        serde_json::json!(properties.capabilities),
-    );
-    response.insert(
-        "agent_version".to_string(),
-        serde_json::json!(properties.agent_version),
-    );
-    response.insert(
-        "controller_version".to_string(),
-        serde_json::json!(properties.controller_version),
-    );
+    response.insert("agent_name".to_string(), serde_json::json!(get_agent_name_from_id(&state, &agent_id)?));
+    response.insert("agent_type".to_string(), serde_json::json!(properties.agent_type));
+    response.insert("agent_ip".to_string(), serde_json::json!(properties.agent_ip));
+    response.insert("agent_data_port".to_string(), serde_json::json!(properties.agent_data_port));
+    response.insert("capabilities".to_string(), serde_json::json!(properties.capabilities));
+    response.insert("agent_version".to_string(), serde_json::json!(properties.agent_version));
+    response.insert("controller_version".to_string(), serde_json::json!(properties.controller_version));
     response.insert("status".to_string(), serde_json::json!("active"));
     if let Some(ref transport) = properties.chosen_transport {
         response.insert("chosen_transport".to_string(), serde_json::json!(transport));
@@ -1092,10 +908,7 @@ pub async fn get_agent_info(
     ),
     tag = "agent"
 )]
-pub async fn get_agent_properties_path(
-    State(state): State<ApiState>,
-    Path(agent_id): Path<String>,
-) -> ApiResult<Json<AgentPropertiesResponse>> {
+pub async fn get_agent_properties_path(State(state): State<ApiState>, Path(agent_id): Path<String>) -> ApiResult<Json<AgentPropertiesResponse>> {
     let agent_service = state
         .agent_service
         .as_ref()
@@ -1135,10 +948,7 @@ pub async fn post_configure(
     tracing::info!(target: "feagi-api", "Agent configuration requested: {} params", config.len());
 
     Ok(Json(HashMap::from([
-        (
-            "message".to_string(),
-            "Agent configuration updated".to_string(),
-        ),
+        ("message".to_string(), "Agent configuration updated".to_string()),
         ("status".to_string(), "not_yet_implemented".to_string()),
     ])))
 }
@@ -1166,10 +976,7 @@ pub async fn export_device_registrations(
     State(state): State<ApiState>,
     Path(agent_id): Path<String>,
 ) -> ApiResult<Json<DeviceRegistrationExportResponse>> {
-    info!(
-        "🦀 [API] Device registration export requested for agent '{}'",
-        agent_id
-    );
+    info!("🦀 [API] Device registration export requested for agent '{}'", agent_id);
 
     // Best-effort existence check via AgentService.
     // Do not fail hard here: ZMQ-only registrations can exist in agent_handler
@@ -1190,16 +997,10 @@ pub async fn export_device_registrations(
         if let Some(handler) = &state.agent_handler {
             let handler_guard = handler.lock().unwrap();
             if let Some(regs) = handler_guard.get_device_registrations_by_agent(parsed_agent_id) {
-                info!(
-                    "📤 [API] Found device registrations for agent '{}'",
-                    agent_id
-                );
+                info!("📤 [API] Found device registrations for agent '{}'", agent_id);
                 regs.clone()
             } else {
-                warn!(
-                    "⚠️ [API] No device registrations found for agent '{}'",
-                    agent_id
-                );
+                warn!("⚠️ [API] No device registrations found for agent '{}'", agent_id);
                 serde_json::json!({
                     "input_units_and_encoder_properties": {},
                     "output_units_and_decoder_properties": {},
@@ -1225,10 +1026,7 @@ pub async fn export_device_registrations(
         "feedbacks": []
     });
 
-    info!(
-        "✅ [API] Device registration export succeeded for agent '{}'",
-        agent_id
-    );
+    info!("✅ [API] Device registration export succeeded for agent '{}'", agent_id);
 
     Ok(Json(DeviceRegistrationExportResponse {
         device_registrations,
@@ -1265,10 +1063,7 @@ pub async fn import_device_registrations(
     Path(agent_id): Path<String>,
     Json(request): Json<DeviceRegistrationImportRequest>,
 ) -> ApiResult<Json<DeviceRegistrationImportResponse>> {
-    info!(
-        "🦀 [API] Device registration import requested for agent '{}'",
-        agent_id
-    );
+    info!("🦀 [API] Device registration import requested for agent '{}'", agent_id);
 
     // Best-effort existence check via AgentService.
     // Do not fail hard here: ZMQ-only registrations can be handled via agent_handler.
@@ -1284,9 +1079,7 @@ pub async fn import_device_registrations(
     // Validate the device registration JSON structure
     // Check that it has the expected fields
     if !request.device_registrations.is_object() {
-        return Err(ApiError::invalid_input(
-            "Device registrations must be a JSON object",
-        ));
+        return Err(ApiError::invalid_input("Device registrations must be a JSON object"));
     }
 
     // Validate required fields exist
@@ -1309,34 +1102,20 @@ pub async fn import_device_registrations(
             let device_regs = request.device_registrations.clone();
             handler_guard.set_device_registrations_by_agent(parsed_agent_id, device_regs.clone());
             // Also set by descriptor so feagi-rs motor subscription lookup finds it
-            let descriptor_opt = handler_guard
-                .get_all_registered_agents()
-                .get(&parsed_agent_id)
-                .map(|(d, _)| d.clone());
+            let descriptor_opt = handler_guard.get_all_registered_agents().get(&parsed_agent_id).map(|(d, _)| d.clone());
             if let Some(descriptor) = descriptor_opt {
-                handler_guard.set_device_registrations_by_descriptor(
-                    agent_id.clone(),
-                    descriptor,
-                    device_regs,
-                );
+                handler_guard.set_device_registrations_by_descriptor(agent_id.clone(), descriptor, device_regs);
             }
-            info!(
-                "📥 [API] Imported device registrations for agent '{}'",
-                agent_id
-            );
+            info!("📥 [API] Imported device registrations for agent '{}'", agent_id);
         } else {
             warn!("⚠️ [API] No agent_handler available to store device registrations");
         }
 
-        auto_create_cortical_areas_from_device_registrations(&state, &request.device_registrations)
-            .await;
+        auto_create_cortical_areas_from_device_registrations(&state, &request.device_registrations).await;
 
         Ok(Json(DeviceRegistrationImportResponse {
             success: true,
-            message: format!(
-                "Device registrations imported successfully for agent '{}'",
-                agent_id
-            ),
+            message: format!("Device registrations imported successfully for agent '{}'", agent_id),
             agent_id,
         }))
     }

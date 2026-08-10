@@ -1,24 +1,31 @@
+use crate::cortical_area::components::cortical_area_layout::enums::CorticalAreaLayoutNested;
+use crate::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
+use crate::cortical_area::genome_compose::cortical_writer::NeuronModelCorticalWriter;
+use crate::cortical_area::neuron::cortical_area_properties::{CorticalAreaProperties, PostCorticalPotential};
+use crate::cortical_area::neuron::neuron_properties::NeuronProperties;
+use crate::cortical_area::neuron_model_implementations::feagi_advanced::data::{
+    ConsecutiveFireCountdown, ConsecutiveFireLimit, DegeneracyConstant, FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData,
+    LeakCoefficient, RefractoryCountdown, RefractoryPeriodLimit, SnoozePeriod,
+};
+use crate::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
 use core::marker::PhantomData;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 use feagi_data::values::quantizable::{PercentageUnsigned, WrappedQuantizedIndexCount};
-use crate::cortical_area::genome_compose::cortical_writer::NeuronModelCorticalWriter;
-use crate::cortical_area::components::cortical_area_layout::enums::CorticalAreaLayoutNested;
-use crate::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
-use crate::cortical_area::neuron::cortical_area_properties::{CorticalAreaProperties, PostCorticalPotential};
-use crate::cortical_area::neuron_model_implementations::feagi_advanced::data::{ConsecutiveFireCountdown, ConsecutiveFireLimit, DegeneracyConstant, FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData, LeakCoefficient, RefractoryCountdown, RefractoryPeriodLimit, SnoozePeriod};
-use crate::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
-use crate::cortical_area::neuron::neuron_properties::NeuronProperties;
 
 #[derive(Debug, Clone, Copy)]
 pub enum FeagiAdvancedModelCorticalWriter<NMQ>
 where
     NMQ: FeagiAdvancedModelQuantization,
 {
-    DefaultNewDimensional {dimensions: DimensionalCorticalArea4DDimensions<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>, _p: PhantomData<NMQ>},
+    DefaultNewDimensional {
+        dimensions: DimensionalCorticalArea4DDimensions<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>,
+        _p: PhantomData<NMQ>,
+    },
 }
 
-impl<NMQ> NeuronModelCorticalWriter<NMQ, FeagiAdvancedModelCorticalData<NMQ>, FeagiAdvancedModelNeuronData<NMQ>> for FeagiAdvancedModelCorticalWriter<NMQ>
+impl<NMQ> NeuronModelCorticalWriter<NMQ, FeagiAdvancedModelCorticalData<NMQ>, FeagiAdvancedModelNeuronData<NMQ>>
+    for FeagiAdvancedModelCorticalWriter<NMQ>
 where
     NMQ: FeagiAdvancedModelQuantization,
 {
@@ -32,11 +39,14 @@ where
         }
     }
 
-    fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(self, cortical_data: &mut FeagiAdvancedModelCorticalData<NMQ>, neuron_data: &mut [FeagiAdvancedModelNeuronData<NMQ>], neuron_properties_out: &mut [NeuronProperties]) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties<NMQ>), ()> {
-
+    fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(
+        self,
+        cortical_data: &mut FeagiAdvancedModelCorticalData<NMQ>,
+        neuron_data: &mut [FeagiAdvancedModelNeuronData<NMQ>],
+        neuron_properties_out: &mut [NeuronProperties],
+    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties<NMQ>), ()> {
         match self {
             FeagiAdvancedModelCorticalWriter::DefaultNewDimensional { dimensions, _p } => {
-
                 // TODO these should really be coming from some cortical class definition
 
                 // Uniform
@@ -70,7 +80,7 @@ where
 
                 // `dimensions` is already in genomic quantization, which is exactly what the
                 // genomic-parameterized layout expects, so use it directly (no re-quantization).
-                let layout = CorticalAreaLayoutNested::Dimensional(CorticalAreaLayoutDimensional{dimensions});
+                let layout = CorticalAreaLayoutNested::Dimensional(CorticalAreaLayoutDimensional { dimensions });
 
                 *cortical_data = new_cortical;
                 neuron_data.fill(new_uniform_neuron);

@@ -124,8 +124,5 @@ pub trait GenomeService: Send + Sync {
     /// * `ServiceError::InvalidInput` - Invalid parameters
     /// * `ServiceError::Backend` - Creation failed
     ///
-    async fn create_cortical_areas(
-        &self,
-        params: Vec<CreateCorticalAreaParams>,
-    ) -> ServiceResult<Vec<CorticalAreaInfo>>;
+    async fn create_cortical_areas(&self, params: Vec<CreateCorticalAreaParams>) -> ServiceResult<Vec<CorticalAreaInfo>>;
 }

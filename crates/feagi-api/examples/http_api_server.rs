@@ -13,13 +13,9 @@ use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::{BurstLoopRunner, RustNPU};
 use feagi_observability::{init_logging, parse_debug_flags};
 use feagi_services::impls::{
-    AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
-    RuntimeServiceImpl, SystemServiceImpl,
+    AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl, RuntimeServiceImpl, SystemServiceImpl,
 };
-use feagi_services::traits::{
-    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
-    SystemService,
-};
+use feagi_services::traits::{AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService, SystemService};
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -106,9 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // If NPU trace was requested, ensure the feagi-npu-trace target is enabled at debug level.
     // This works with the existing debug flag system even though it’s a tracing target, not a crate.
     if npu_trace.enabled {
-        debug_flags
-            .enabled_crates
-            .insert("feagi-npu-trace".to_string(), true);
+        debug_flags.enabled_crates.insert("feagi-npu-trace".to_string(), true);
     }
 
     // Keep guard alive for duration of process.
@@ -140,21 +134,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🔧 Creating service layer...");
 
-    let _genome_service = Arc::new(GenomeServiceImpl::new(connectome.clone()))
-        as Arc<dyn GenomeService + Send + Sync>;
+    let _genome_service = Arc::new(GenomeServiceImpl::new(connectome.clone())) as Arc<dyn GenomeService + Send + Sync>;
 
     // Cast to GenomeServiceImpl to access get_current_genome_arc()
     let genome_service_impl = Arc::new(GenomeServiceImpl::new(connectome.clone()));
     let current_genome = genome_service_impl.get_current_genome_arc();
     let genome_service = genome_service_impl as Arc<dyn GenomeService + Send + Sync>;
 
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(
-        connectome.clone(),
-        current_genome.clone(),
-    )) as Arc<dyn ConnectomeService + Send + Sync>;
+    let connectome_service =
+        Arc::new(ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone())) as Arc<dyn ConnectomeService + Send + Sync>;
 
-    let neuron_service = Arc::new(NeuronServiceImpl::new(connectome.clone()))
-        as Arc<dyn NeuronService + Send + Sync>;
+    let neuron_service = Arc::new(NeuronServiceImpl::new(connectome.clone())) as Arc<dyn NeuronService + Send + Sync>;
 
     let analytics_service = Arc::new(AnalyticsServiceImpl::new(
         connectome.clone(),
@@ -167,11 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Dummy publishers for testing
     struct DummyViz;
     impl feagi_npu_burst_engine::VisualizationPublisher for DummyViz {
-        fn publish_raw_fire_queue_for_agent(
-            &self,
-            _agent_id: &str,
-            _fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
-        ) -> Result<(), String> {
+        fn publish_raw_fire_queue_for_agent(&self, _agent_id: &str, _fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<(), String> {
             Ok(())
         }
     }
@@ -191,18 +177,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let npu_result = RustNPU::new(runtime, backend, 10, 10, 10).expect("Failed to create NPU");
     // Wrap NPU in TracingMutex to automatically log all lock acquisitions
     let npu_for_runtime = Arc::new(TracingMutex::new(DynamicNPU::F32(npu_result), "NPU")); // Minimal NPU
-    let burst_loop =
-        BurstLoopRunner::new::<DummyViz, DummyMotor>(npu_for_runtime, None, None, 30.0); // No publishers
+    let burst_loop = BurstLoopRunner::new::<DummyViz, DummyMotor>(npu_for_runtime, None, None, 30.0); // No publishers
     let burst_runner_for_runtime = Arc::new(RwLock::new(burst_loop));
 
-    let runtime_service = Arc::new(RuntimeServiceImpl::new(burst_runner_for_runtime.clone()))
-        as Arc<dyn RuntimeService + Send + Sync>;
+    let runtime_service = Arc::new(RuntimeServiceImpl::new(burst_runner_for_runtime.clone())) as Arc<dyn RuntimeService + Send + Sync>;
 
     // For examples, create basic version info
     let mut version_info = feagi_services::types::VersionInfo::default();
-    version_info
-        .crates
-        .insert("example".to_string(), "1.0.0".to_string());
+    version_info.crates.insert("example".to_string(), "1.0.0".to_string());
     version_info.rust_version = "1.75".to_string();
     version_info.build_timestamp = "example build".to_string();
 
@@ -232,8 +214,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
-    let (genome_transition_lock, genome_transition_in_progress) =
-        ApiState::init_genome_transition_controls();
+    let (genome_transition_lock, genome_transition_in_progress) = ApiState::init_genome_transition_controls();
     let filesystem_data_root = ApiState::filesystem_data_root_from_config(std::path::Path::new(""));
     let api_state = ApiState {
         network_connection_info_provider: None,
@@ -255,10 +236,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         agent_handler: Some(ApiState::init_agent_registration_handler()),
     };
 
-    println!(
-        "✅ API state created (FEAGI session: {})\n",
-        feagi_session_timestamp
-    );
+    println!("✅ API state created (FEAGI session: {})\n", feagi_session_timestamp);
 
     // ========================================================================
     // STEP 4: Create and Start HTTP Server
@@ -274,18 +252,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("║                   FEAGI API SERVER READY                  ║");
     println!("╠═══════════════════════════════════════════════════════════╣");
     println!("║                                                           ║");
-    println!(
-        "║  HTTP API:       http://{}                 ║",
-        bind_address
-    );
-    println!(
-        "║  Swagger UI:     http://{}/swagger-ui/      ║",
-        bind_address
-    );
-    println!(
-        "║  OpenAPI Spec:   http://{}/openapi.json    ║",
-        bind_address
-    );
+    println!("║  HTTP API:       http://{}                 ║", bind_address);
+    println!("║  Swagger UI:     http://{}/swagger-ui/      ║", bind_address);
+    println!("║  OpenAPI Spec:   http://{}/openapi.json    ║", bind_address);
     println!("║                                                           ║");
     println!("║  Available Endpoints:                                     ║");
     println!("║    - GET  /health                                         ║");

@@ -103,8 +103,9 @@ impl ApiError {
         Self::new(format!(
             "{} is unavailable: the current NPU engine does not expose per-neuron/per-synapse \
              introspection. This endpoint's path and response schema are unchanged and it will \
-             serve data once the engine provides it."
-        , capability))
+             serve data once the engine provides it.",
+            capability
+        ))
         .with_code(ApiErrorCode::NotImplemented)
     }
 }
@@ -113,16 +114,10 @@ impl ApiError {
 impl From<ServiceError> for ApiError {
     fn from(error: ServiceError) -> Self {
         match error {
-            ServiceError::NotFound { resource, id } => {
-                ApiError::new(format!("{} '{}' not found", resource, id))
-                    .with_code(ApiErrorCode::NotFound)
-            }
-            ServiceError::InvalidInput(msg) => {
-                ApiError::new(msg).with_code(ApiErrorCode::BadRequest)
-            }
+            ServiceError::NotFound { resource, id } => ApiError::new(format!("{} '{}' not found", resource, id)).with_code(ApiErrorCode::NotFound),
+            ServiceError::InvalidInput(msg) => ApiError::new(msg).with_code(ApiErrorCode::BadRequest),
             ServiceError::AlreadyExists { resource, id } => {
-                ApiError::new(format!("{} '{}' already exists", resource, id))
-                    .with_code(ApiErrorCode::Conflict)
+                ApiError::new(format!("{} '{}' already exists", resource, id)).with_code(ApiErrorCode::Conflict)
             }
             ServiceError::Conflict(msg) => ApiError::conflict(msg),
             ServiceError::Internal(msg) => ApiError::new(msg).with_code(ApiErrorCode::Internal),
@@ -130,9 +125,7 @@ impl From<ServiceError> for ApiError {
             ServiceError::Backend(msg) => ApiError::new(msg).with_code(ApiErrorCode::Internal),
             ServiceError::StateError(msg) => ApiError::new(msg).with_code(ApiErrorCode::Internal),
             ServiceError::InvalidState(msg) => ApiError::new(msg).with_code(ApiErrorCode::Conflict),
-            ServiceError::NotImplemented(msg) => {
-                ApiError::new(msg).with_code(ApiErrorCode::NotImplemented)
-            }
+            ServiceError::NotImplemented(msg) => ApiError::new(msg).with_code(ApiErrorCode::NotImplemented),
         }
     }
 }
@@ -141,8 +134,7 @@ impl From<ServiceError> for ApiError {
 #[cfg(feature = "http")]
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let status_code =
-            StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status_code = StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
         (status_code, Json(self)).into_response()
     }

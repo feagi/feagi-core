@@ -43,9 +43,7 @@ pub fn random_bytes(buffer: &mut [u8]) {
     let crypto = window.crypto().expect("crypto not available");
 
     // Fill buffer directly - web_sys supports passing &mut [u8]
-    crypto
-        .get_random_values_with_u8_array(buffer)
-        .expect("get_random_values failed");
+    crypto.get_random_values_with_u8_array(buffer).expect("get_random_values failed");
 }
 
 /// Generate random integer in range [min, max)
@@ -70,11 +68,7 @@ mod tests {
     fn test_random_f64() {
         for _ in 0..100 {
             let val = random_f64();
-            assert!(
-                (0.0..1.0).contains(&val),
-                "random_f64 out of range: {}",
-                val
-            );
+            assert!((0.0..1.0).contains(&val), "random_f64 out of range: {}", val);
         }
     }
 
@@ -82,11 +76,7 @@ mod tests {
     fn test_random_f32() {
         for _ in 0..100 {
             let val = random_f32();
-            assert!(
-                (0.0..1.0).contains(&val),
-                "random_f32 out of range: {}",
-                val
-            );
+            assert!((0.0..1.0).contains(&val), "random_f32 out of range: {}", val);
         }
     }
 
@@ -104,11 +94,7 @@ mod tests {
     fn test_random_range() {
         for _ in 0..100 {
             let val = random_range(10, 20);
-            assert!(
-                (10..20).contains(&val),
-                "random_range out of range: {}",
-                val
-            );
+            assert!((10..20).contains(&val), "random_range out of range: {}", val);
         }
     }
 
@@ -121,10 +107,6 @@ mod tests {
         }
 
         // Should have good entropy - at least 95 unique values out of 100
-        assert!(
-            values.len() >= 95,
-            "random_u64 has poor entropy: {} unique out of 100",
-            values.len()
-        );
+        assert!(values.len() >= 95, "random_u64 has poor entropy: {} unique out of 100", values.len());
     }
 }

@@ -42,8 +42,7 @@ impl TryFrom<&FeagiByteContainer> for FeagiMessage {
         let mut feagi_json = FeagiJSON::new_empty();
         value.try_update_struct_from_index(0, &mut feagi_json)?;
         let json = feagi_json.borrow_json_value().clone();
-        serde_json::from_value(json)
-            .map_err(|err| FeagiAgentError::unable_to_decode_received_data(err.to_string()))
+        serde_json::from_value(json).map_err(|err| FeagiAgentError::unable_to_decode_received_data(err.to_string()))
     }
 }
 
@@ -53,9 +52,7 @@ impl From<FeagiMessage> for FeagiByteContainer {
         let json: serde_json::Value = serde_json::to_value(&message).unwrap();
         let feagi_json: FeagiJSON = FeagiJSON::from_json_value(json);
         let mut byte_container: FeagiByteContainer = FeagiByteContainer::new_empty();
-        byte_container
-            .overwrite_byte_data_with_single_struct_data(&feagi_json, 0)
-            .unwrap();
+        byte_container.overwrite_byte_data_with_single_struct_data(&feagi_json, 0).unwrap();
         byte_container
     }
 }

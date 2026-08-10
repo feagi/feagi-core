@@ -94,13 +94,7 @@ impl LogRingBuffer {
     /// * `min_level`   - drop records below this level (TRACE < DEBUG < INFO < WARN < ERROR)
     /// * `target_prefix` - drop records whose `target` does not start with this prefix
     /// * `limit`       - return at most this many records (most recent records win)
-    pub fn snapshot(
-        &self,
-        since_ts_ms: Option<i64>,
-        min_level: Option<&str>,
-        target_prefix: Option<&str>,
-        limit: Option<usize>,
-    ) -> Vec<LogRecord> {
+    pub fn snapshot(&self, since_ts_ms: Option<i64>, min_level: Option<&str>, target_prefix: Option<&str>, limit: Option<usize>) -> Vec<LogRecord> {
         let inner = self.inner.read();
         let min_rank = min_level.and_then(level_rank);
         let mut filtered: Vec<LogRecord> = inner
@@ -159,10 +153,7 @@ fn level_to_str(level: &Level) -> &'static str {
 }
 
 fn now_unix_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
 }
 
 /// Tracing layer that pushes events into the global ring buffer.
@@ -217,10 +208,8 @@ impl Visit for MessageVisitor {
             // Avoid the debug `"..."` wrapping: write directly into the message.
             let _ = write!(&mut self.message, "{:?}", value);
         } else {
-            self.extra_fields.insert(
-                field.name().to_string(),
-                serde_json::Value::String(format!("{:?}", value)),
-            );
+            self.extra_fields
+                .insert(field.name().to_string(), serde_json::Value::String(format!("{:?}", value)));
         }
     }
 
@@ -228,31 +217,25 @@ impl Visit for MessageVisitor {
         if field.name() == "message" {
             self.message.push_str(value);
         } else {
-            self.extra_fields.insert(
-                field.name().to_string(),
-                serde_json::Value::String(value.to_string()),
-            );
+            self.extra_fields
+                .insert(field.name().to_string(), serde_json::Value::String(value.to_string()));
         }
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        self.extra_fields
-            .insert(field.name().to_string(), serde_json::json!(value));
+        self.extra_fields.insert(field.name().to_string(), serde_json::json!(value));
     }
 
     fn record_u64(&mut self, field: &Field, value: u64) {
-        self.extra_fields
-            .insert(field.name().to_string(), serde_json::json!(value));
+        self.extra_fields.insert(field.name().to_string(), serde_json::json!(value));
     }
 
     fn record_f64(&mut self, field: &Field, value: f64) {
-        self.extra_fields
-            .insert(field.name().to_string(), serde_json::json!(value));
+        self.extra_fields.insert(field.name().to_string(), serde_json::json!(value));
     }
 
     fn record_bool(&mut self, field: &Field, value: bool) {
-        self.extra_fields
-            .insert(field.name().to_string(), serde_json::json!(value));
+        self.extra_fields.insert(field.name().to_string(), serde_json::json!(value));
     }
 }
 
@@ -261,9 +244,7 @@ static GLOBAL_RING: OnceLock<Arc<LogRingBuffer>> = OnceLock::new();
 /// Install (once) the global ring buffer with the given capacity. Subsequent
 /// calls are no-ops and return the previously installed instance.
 pub fn install_global_ring(capacity: usize) -> Arc<LogRingBuffer> {
-    GLOBAL_RING
-        .get_or_init(|| Arc::new(LogRingBuffer::new(capacity)))
-        .clone()
+    GLOBAL_RING.get_or_init(|| Arc::new(LogRingBuffer::new(capacity))).clone()
 }
 
 /// Resolve the configured capacity from `FEAGI_LOG_RING_BUFFER_CAPACITY`.

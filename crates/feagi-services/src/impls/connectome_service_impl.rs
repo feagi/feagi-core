@@ -14,18 +14,14 @@ use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
-use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_genomic_context::brain_region::{BrainRegion, RegionID, RegionType};
-use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, PercentageNeuronPositioning,
-};
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, PercentageNeuronPositioning};
 use feagi_genomic_context::cortical_area::CoreCorticalType;
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_genomic_context::cortical_area::IOCorticalAreaConfigurationFlag;
-use feagi_genomic_context::cortical_area::{
-    CorticalArea, CorticalAreaDimensions, CorticalAreaType,
-};
+use feagi_genomic_context::cortical_area::{CorticalArea, CorticalAreaDimensions, CorticalAreaType};
 use feagi_genomic_context::cortical_unit::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_npu_burst_engine::BurstLoopRunner;
 // Note: decode_cortical_id removed - use feagi_structures::CorticalID directly
 use parking_lot::RwLock;
 use serde_json::Value;
@@ -51,10 +47,7 @@ fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
                 let unit_name = unit.get_friendly_name();
                 let has_subunits = unit.get_number_cortical_areas() > 1;
                 let name = if has_subunits {
-                    format!(
-                        "{} Subunit {} Unit {}",
-                        unit_name, subunit_index, unit_index
-                    )
+                    format!("{} Subunit {} Unit {}", unit_name, subunit_index, unit_index)
                 } else {
                     format!("{} Unit {}", unit_name, unit_index)
                 };
@@ -74,10 +67,7 @@ fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
                     };
                     format!("{} ({}) Unit {}", unit_name, subunit_name, unit_index)
                 } else if has_subunits {
-                    format!(
-                        "{} Subunit {} Unit {}",
-                        unit_name, subunit_index, unit_index
-                    )
+                    format!("{} Subunit {} Unit {}", unit_name, subunit_index, unit_index)
                 } else {
                     format!("{} Unit {}", unit_name, unit_index)
                 };
@@ -91,18 +81,11 @@ fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
 
 /// Merge default template and memory properties into provided values.
 /// Existing values always override defaults.
-fn merge_memory_area_properties(
-    base: HashMap<String, Value>,
-    extra: Option<&HashMap<String, Value>>,
-) -> HashMap<String, Value> {
+fn merge_memory_area_properties(base: HashMap<String, Value>, extra: Option<&HashMap<String, Value>>) -> HashMap<String, Value> {
     let mut defaults = get_default_neural_properties();
     let memory_defaults = MemoryAreaProperties::default();
-    defaults
-        .entry("cortical_group".to_string())
-        .or_insert(Value::from("MEMORY"));
-    defaults
-        .entry("is_mem_type".to_string())
-        .or_insert(Value::from(true));
+    defaults.entry("cortical_group".to_string()).or_insert(Value::from("MEMORY"));
+    defaults.entry("is_mem_type".to_string()).or_insert(Value::from(true));
     defaults
         .entry("temporal_depth".to_string())
         .or_insert(Value::from(memory_defaults.temporal_depth));
@@ -115,9 +98,7 @@ fn merge_memory_area_properties(
     defaults
         .entry("init_lifespan".to_string())
         .or_insert(Value::from(memory_defaults.init_lifespan));
-    defaults
-        .entry("psp_uniform_distribution".to_string())
-        .or_insert(Value::from(true));
+    defaults.entry("psp_uniform_distribution".to_string()).or_insert(Value::from(true));
 
     defaults.extend(base);
     if let Some(extra_props) = extra {
@@ -170,9 +151,7 @@ fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static 
         | IOCorticalAreaConfigurationFlag::SignedPercentage(frame, _)
         | IOCorticalAreaConfigurationFlag::SignedPercentage2D(frame, _)
         | IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, _) => {
-            frame_handling_label(*frame)
-        }
+        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, _) => frame_handling_label(*frame),
     }
 }
 
@@ -218,9 +197,7 @@ fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'stat
         | IOCorticalAreaConfigurationFlag::SignedPercentage(_, positioning)
         | IOCorticalAreaConfigurationFlag::SignedPercentage2D(_, positioning)
         | IOCorticalAreaConfigurationFlag::SignedPercentage3D(_, positioning)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(_, positioning) => {
-            positioning_label(*positioning)
-        }
+        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(_, positioning) => positioning_label(*positioning),
         IOCorticalAreaConfigurationFlag::CartesianPlane(_)
         | IOCorticalAreaConfigurationFlag::Misc(_)
         | IOCorticalAreaConfigurationFlag::PoseEstimation(..)
@@ -244,18 +221,12 @@ fn io_coding_options_for_unit(cortical_id: &CorticalID) -> Option<IOCodingOption
         let unit = SensoryCorticalUnit::list_all()
             .iter()
             .find(|u| u.get_cortical_id_unit_reference() == unit_ref)?;
-        (
-            unit.get_accepted_wrapped_io_data_type(),
-            unit.get_allowed_frame_change_handling(),
-        )
+        (unit.get_accepted_wrapped_io_data_type(), unit.get_allowed_frame_change_handling())
     } else {
         let unit = MotorCorticalUnit::list_all()
             .iter()
             .find(|u| u.get_cortical_id_unit_reference() == unit_ref)?;
-        (
-            unit.get_accepted_wrapped_io_data_type(),
-            unit.get_allowed_frame_change_handling(),
-        )
+        (unit.get_accepted_wrapped_io_data_type(), unit.get_allowed_frame_change_handling())
     };
 
     let mut signage_options = Vec::new();
@@ -340,9 +311,7 @@ fn update_cortical_mapping_dst_in_properties(
             return Ok(());
         };
         let Some(mapping_dst) = existing.as_object_mut() else {
-            return Err(ServiceError::Backend(
-                "cortical_mapping_dst is not a JSON object".to_string(),
-            ));
+            return Err(ServiceError::Backend("cortical_mapping_dst is not a JSON object".to_string()));
         };
 
         mapping_dst.remove(dst_area_id);
@@ -357,19 +326,14 @@ fn update_cortical_mapping_dst_in_properties(
         .or_insert_with(|| serde_json::json!({}));
 
     let Some(mapping_dst) = entry.as_object_mut() else {
-        return Err(ServiceError::Backend(
-            "cortical_mapping_dst is not a JSON object".to_string(),
-        ));
+        return Err(ServiceError::Backend("cortical_mapping_dst is not a JSON object".to_string()));
     };
 
     mapping_dst.insert(dst_area_id.to_string(), serde_json::json!(mapping_data));
     Ok(())
 }
 
-fn get_cortical_mapping_dst_from_properties(
-    properties: &HashMap<String, serde_json::Value>,
-    dst_area_id: &str,
-) -> Option<Vec<serde_json::Value>> {
+fn get_cortical_mapping_dst_from_properties(properties: &HashMap<String, serde_json::Value>, dst_area_id: &str) -> Option<Vec<serde_json::Value>> {
     properties
         .get("cortical_mapping_dst")
         .and_then(|value| value.as_object())
@@ -388,18 +352,11 @@ fn mapping_rule_uses_morphology(rule: &serde_json::Value, morphology_id: &str) -
     false
 }
 
-fn collect_morphology_usage_pairs(
-    genome: &feagi_evolutionary::RuntimeGenome,
-    morphology_id: &str,
-) -> Vec<(String, String)> {
+fn collect_morphology_usage_pairs(genome: &feagi_evolutionary::RuntimeGenome, morphology_id: &str) -> Vec<(String, String)> {
     let mut usage_pairs: HashSet<(String, String)> = HashSet::new();
 
     for (src_id, area) in &genome.cortical_areas {
-        let Some(mapping_dst) = area
-            .properties
-            .get("cortical_mapping_dst")
-            .and_then(|value| value.as_object())
-        else {
+        let Some(mapping_dst) = area.properties.get("cortical_mapping_dst").and_then(|value| value.as_object()) else {
             continue;
         };
 
@@ -408,10 +365,7 @@ fn collect_morphology_usage_pairs(
                 continue;
             };
 
-            if rule_array
-                .iter()
-                .any(|rule| mapping_rule_uses_morphology(rule, morphology_id))
-            {
+            if rule_array.iter().any(|rule| mapping_rule_uses_morphology(rule, morphology_id)) {
                 usage_pairs.insert((src_id.as_base_64(), dst_id.clone()));
             }
         }
@@ -422,18 +376,11 @@ fn collect_morphology_usage_pairs(
     ordered_pairs
 }
 
-fn collect_morphology_usage_pairs_from_area_infos(
-    area_infos: &[CorticalAreaInfo],
-    morphology_id: &str,
-) -> Vec<(String, String)> {
+fn collect_morphology_usage_pairs_from_area_infos(area_infos: &[CorticalAreaInfo], morphology_id: &str) -> Vec<(String, String)> {
     let mut usage_pairs: HashSet<(String, String)> = HashSet::new();
 
     for area_info in area_infos {
-        let Some(mapping_dst) = area_info
-            .properties
-            .get("cortical_mapping_dst")
-            .and_then(|value| value.as_object())
-        else {
+        let Some(mapping_dst) = area_info.properties.get("cortical_mapping_dst").and_then(|value| value.as_object()) else {
             continue;
         };
 
@@ -442,10 +389,7 @@ fn collect_morphology_usage_pairs_from_area_infos(
                 continue;
             };
 
-            if rule_array
-                .iter()
-                .any(|rule| mapping_rule_uses_morphology(rule, morphology_id))
-            {
+            if rule_array.iter().any(|rule| mapping_rule_uses_morphology(rule, morphology_id)) {
                 usage_pairs.insert((area_info.cortical_id.clone(), dst_id.clone()));
             }
         }
@@ -463,22 +407,14 @@ fn parse_cortical_id_flexible(raw_id: &str) -> Result<CorticalID, String> {
     if let Ok(parsed) = CorticalID::try_from_legacy_ascii(raw_id) {
         return Ok(parsed);
     }
-    Err(format!(
-        "Unable to parse cortical ID '{}' as base64 or legacy ASCII format",
-        raw_id
-    ))
+    Err(format!("Unable to parse cortical ID '{}' as base64 or legacy ASCII format", raw_id))
 }
 
 /// Recursively replace morphology_id in JSON values.
 ///
 /// Handles object format `{"morphology_id": "x", ...}` and array format
 /// `["morphology_id", scalar, ...]` where morphology_id is the first element.
-fn replace_morphology_id_in_value(
-    value: &mut Value,
-    old_id: &str,
-    new_id: &str,
-    replaced_count: &mut usize,
-) {
+fn replace_morphology_id_in_value(value: &mut Value, old_id: &str, new_id: &str, replaced_count: &mut usize) {
     match value {
         Value::Object(obj) => {
             if let Some(morphology_id) = obj.get_mut("morphology_id") {
@@ -526,10 +462,7 @@ pub struct ConnectomeServiceImpl {
 }
 
 impl ConnectomeServiceImpl {
-    pub fn new(
-        connectome: Arc<RwLock<ConnectomeManager>>,
-        current_genome: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
-    ) -> Self {
+    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>, current_genome: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>) -> Self {
         Self {
             connectome,
             current_genome,
@@ -563,10 +496,7 @@ impl ConnectomeServiceImpl {
     /// This must be called after creating ConnectomeServiceImpl to enable
     /// connectome I/O operations.
     #[cfg(feature = "connectome-io")]
-    pub fn set_runtime_service(
-        &self,
-        runtime_service: Arc<dyn crate::traits::RuntimeService + Send + Sync>,
-    ) {
+    pub fn set_runtime_service(&self, runtime_service: Arc<dyn crate::traits::RuntimeService + Send + Sync>) {
         *self.runtime_service.write() = Some(runtime_service);
         info!(target: "feagi-services", "RuntimeService connected to ConnectomeService for connectome I/O");
     }
@@ -582,10 +512,7 @@ impl ConnectomeServiceImpl {
     fn string_to_region_type(s: &str) -> Result<RegionType, ServiceError> {
         match s {
             "Undefined" | "Sensory" | "Motor" | "Memory" | "Custom" => Ok(RegionType::Undefined),
-            _ => Err(ServiceError::InvalidInput(format!(
-                "Invalid region type: {}",
-                s
-            ))),
+            _ => Err(ServiceError::InvalidInput(format!("Invalid region type: {}", s))),
         }
     }
 }
@@ -596,20 +523,17 @@ impl ConnectomeService for ConnectomeServiceImpl {
     // CORTICAL AREA OPERATIONS
     // ========================================================================
 
-    async fn create_cortical_area(
-        &self,
-        params: CreateCorticalAreaParams,
-    ) -> ServiceResult<CorticalAreaInfo> {
+    async fn create_cortical_area(&self, params: CreateCorticalAreaParams) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services","Creating cortical area: {}", params.cortical_id);
 
         // Convert String to CorticalID
-        let cortical_id_typed = CorticalID::try_from_base_64(&params.cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        let cortical_id_typed =
+            CorticalID::try_from_base_64(&params.cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
         // Get cortical area type from the cortical ID
-        let area_type = cortical_id_typed.as_cortical_type().map_err(|e| {
-            ServiceError::InvalidInput(format!("Failed to determine cortical area type: {}", e))
-        })?;
+        let area_type = cortical_id_typed
+            .as_cortical_type()
+            .map_err(|e| ServiceError::InvalidInput(format!("Failed to determine cortical area type: {}", e)))?;
 
         let mut occupied_positions: HashSet<(i32, i32, i32)> = {
             let manager = self.connectome.read();
@@ -621,11 +545,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .collect()
         };
         let requested_position = params.position;
-        let resolved_position = resolve_non_overlapping_position(
-            requested_position,
-            params.dimensions.0,
-            &mut occupied_positions,
-        )?;
+        let resolved_position = resolve_non_overlapping_position(requested_position, params.dimensions.0, &mut occupied_positions)?;
         if resolved_position != requested_position {
             info!(
                 target: "feagi-services",
@@ -646,11 +566,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             cortical_id_typed,
             0, // Auto-assigned by ConnectomeManager
             params.name.clone(),
-            CorticalAreaDimensions::new(
-                params.dimensions.0 as u32,
-                params.dimensions.1 as u32,
-                params.dimensions.2 as u32,
-            )?,
+            CorticalAreaDimensions::new(params.dimensions.0 as u32, params.dimensions.1 as u32, params.dimensions.2 as u32)?,
             resolved_position.into(), // Convert (i32, i32, i32) to GenomeCoordinate3D
             area_type,
         )?;
@@ -666,79 +582,43 @@ impl ConnectomeService for ConnectomeServiceImpl {
             area.add_property_mut("sub_group".to_string(), serde_json::json!(sub_group));
         }
         if let Some(neurons_per_voxel) = params.neurons_per_voxel {
-            area.add_property_mut(
-                "neurons_per_voxel".to_string(),
-                serde_json::json!(neurons_per_voxel),
-            );
+            area.add_property_mut("neurons_per_voxel".to_string(), serde_json::json!(neurons_per_voxel));
         }
         if let Some(postsynaptic_current) = params.postsynaptic_current {
-            area.add_property_mut(
-                "postsynaptic_current".to_string(),
-                serde_json::json!(postsynaptic_current),
-            );
+            area.add_property_mut("postsynaptic_current".to_string(), serde_json::json!(postsynaptic_current));
         }
         if let Some(plasticity_constant) = params.plasticity_constant {
-            area.add_property_mut(
-                "plasticity_constant".to_string(),
-                serde_json::json!(plasticity_constant),
-            );
+            area.add_property_mut("plasticity_constant".to_string(), serde_json::json!(plasticity_constant));
         }
         if let Some(degeneration) = params.degeneration {
             area.add_property_mut("degeneration".to_string(), serde_json::json!(degeneration));
         }
         if let Some(psp_uniform_distribution) = params.psp_uniform_distribution {
-            area.add_property_mut(
-                "psp_uniform_distribution".to_string(),
-                serde_json::json!(psp_uniform_distribution),
-            );
+            area.add_property_mut("psp_uniform_distribution".to_string(), serde_json::json!(psp_uniform_distribution));
         }
         if let Some(firing_threshold_increment) = params.firing_threshold_increment {
-            area.add_property_mut(
-                "firing_threshold_increment".to_string(),
-                serde_json::json!(firing_threshold_increment),
-            );
+            area.add_property_mut("firing_threshold_increment".to_string(), serde_json::json!(firing_threshold_increment));
         }
         if let Some(firing_threshold_limit) = params.firing_threshold_limit {
-            area.add_property_mut(
-                "firing_threshold_limit".to_string(),
-                serde_json::json!(firing_threshold_limit),
-            );
+            area.add_property_mut("firing_threshold_limit".to_string(), serde_json::json!(firing_threshold_limit));
         }
         if let Some(consecutive_fire_count) = params.consecutive_fire_count {
-            area.add_property_mut(
-                "consecutive_fire_limit".to_string(),
-                serde_json::json!(consecutive_fire_count),
-            );
+            area.add_property_mut("consecutive_fire_limit".to_string(), serde_json::json!(consecutive_fire_count));
         }
         if let Some(snooze_period) = params.snooze_period {
-            area.add_property_mut(
-                "snooze_period".to_string(),
-                serde_json::json!(snooze_period),
-            );
+            area.add_property_mut("snooze_period".to_string(), serde_json::json!(snooze_period));
         }
         if let Some(refractory_period) = params.refractory_period {
-            area.add_property_mut(
-                "refractory_period".to_string(),
-                serde_json::json!(refractory_period),
-            );
+            area.add_property_mut("refractory_period".to_string(), serde_json::json!(refractory_period));
         }
         if let Some(leak_coefficient) = params.leak_coefficient {
-            area.add_property_mut(
-                "leak_coefficient".to_string(),
-                serde_json::json!(leak_coefficient),
-            );
+            area.add_property_mut("leak_coefficient".to_string(), serde_json::json!(leak_coefficient));
         }
         if let Some(leak_variability) = params.leak_variability {
-            area.add_property_mut(
-                "leak_variability".to_string(),
-                serde_json::json!(leak_variability),
-            );
+            area.add_property_mut("leak_variability".to_string(), serde_json::json!(leak_variability));
         }
         if let Some(burst_engine_active) = params.burst_engine_active {
-            area.add_property_mut(
-                "burst_engine_active".to_string(),
-                serde_json::json!(burst_engine_active),
-            );
+            area.add_property_mut("burst_engine_active".to_string(), serde_json::json!(burst_engine_active));
         }
 
         // Extract parent_region_id before moving properties
@@ -751,18 +631,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         let is_memory_area = matches!(area_type, CorticalAreaType::Memory(_));
         if is_memory_area {
-            let merged =
-                merge_memory_area_properties(area.properties.clone(), params.properties.as_ref());
+            let merged = merge_memory_area_properties(area.properties.clone(), params.properties.as_ref());
             area.properties = merged;
         } else if let Some(properties) = params.properties {
             area.properties = properties;
         }
 
         // Add to connectome
-        self.connectome
-            .write()
-            .add_cortical_area(area)
-            .map_err(ServiceError::from)?;
+        self.connectome.write().add_cortical_area(area).map_err(ServiceError::from)?;
 
         // Refresh burst runner cache after creating area
         self.refresh_burst_runner_cache();
@@ -793,8 +669,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         info!(target: "feagi-services","Deleting cortical area: {}", cortical_id);
 
         // Convert String to CorticalID
-        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        let cortical_id_typed =
+            CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
         let deleted_id_base64 = cortical_id_typed.as_base_64();
         let deleted_cortical_idx = {
             let manager = self.connectome.read();
@@ -812,11 +688,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let mut pruned_incoming_synapses = 0usize;
         let region_io = {
             let mut manager = self.connectome.write();
-            let region_ids: Vec<String> = manager
-                .get_brain_region_ids()
-                .into_iter()
-                .cloned()
-                .collect();
+            let region_ids: Vec<String> = manager.get_brain_region_ids().into_iter().cloned().collect();
             for region_id in region_ids {
                 if let Some(region) = manager.get_brain_region_mut(&region_id) {
                     region.remove_area(&cortical_id_typed);
@@ -835,11 +707,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             // still be resolvable in `cortical_id_to_idx`. We therefore clear all mapping rules
             // (incoming AND outgoing relative to the doomed area) and prune their synapses first,
             // then remove the area as the final step.
-            let cortical_ids: Vec<CorticalID> = manager
-                .get_cortical_area_ids()
-                .into_iter()
-                .cloned()
-                .collect();
+            let cortical_ids: Vec<CorticalID> = manager.get_cortical_area_ids().into_iter().cloned().collect();
 
             // 1) Incoming side: src → deleted_id. For every other area mapping to the doomed area,
             //    clear rules and prune the resulting orphan synapses out of the NPU.
@@ -859,12 +727,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         .map_err(ServiceError::from)?;
                     let pruned = manager
                         .regenerate_synapses_for_mapping(src_id, &cortical_id_typed)
-                        .map_err(|e| {
-                            ServiceError::Backend(format!(
-                                "Failed to prune synapses for {} -> {}: {}",
-                                src_id, cortical_id_typed, e
-                            ))
-                        })?;
+                        .map_err(|e| ServiceError::Backend(format!("Failed to prune synapses for {} -> {}: {}", src_id, cortical_id_typed, e)))?;
                     pruned_incoming_synapses = pruned_incoming_synapses.saturating_add(pruned);
                     removed_mapping_count += 1;
                 }
@@ -876,12 +739,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .get_cortical_area(&cortical_id_typed)
                 .and_then(|area| area.properties.get("cortical_mapping_dst"))
                 .and_then(|value| value.as_object())
-                .map(|mapping| {
-                    mapping
-                        .keys()
-                        .filter_map(|k| CorticalID::try_from_base_64(k).ok())
-                        .collect()
-                })
+                .map(|mapping| mapping.keys().filter_map(|k| CorticalID::try_from_base_64(k).ok()).collect())
                 .unwrap_or_default();
             for dst_id in outgoing_targets {
                 manager
@@ -889,12 +747,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     .map_err(ServiceError::from)?;
                 let pruned = manager
                     .regenerate_synapses_for_mapping(&cortical_id_typed, &dst_id)
-                    .map_err(|e| {
-                        ServiceError::Backend(format!(
-                            "Failed to prune synapses for {} -> {}: {}",
-                            cortical_id_typed, dst_id, e
-                        ))
-                    })?;
+                    .map_err(|e| ServiceError::Backend(format!("Failed to prune synapses for {} -> {}: {}", cortical_id_typed, dst_id, e)))?;
                 pruned_outgoing_synapses = pruned_outgoing_synapses.saturating_add(pruned);
                 removed_mapping_count += 1;
             }
@@ -907,18 +760,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
                 if let Some(deleted_idx) = deleted_cortical_idx {
                     if let Some(area) = manager.get_cortical_area_mut(src_id) {
-                        if let Some(upstream) = area
-                            .properties
-                            .get_mut("upstream_cortical_areas")
-                            .and_then(|value| value.as_array_mut())
-                        {
+                        if let Some(upstream) = area.properties.get_mut("upstream_cortical_areas").and_then(|value| value.as_array_mut()) {
                             let before = upstream.len();
-                            upstream.retain(|value| {
-                                value
-                                    .as_u64()
-                                    .map(|id| id != deleted_idx as u64)
-                                    .unwrap_or(true)
-                            });
+                            upstream.retain(|value| value.as_u64().map(|id| id != deleted_idx as u64).unwrap_or(true));
                             if upstream.len() != before {
                                 removed_upstream_count += before - upstream.len();
                             }
@@ -929,13 +773,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
             // 4) Finally remove the cortical area itself, after all synapses involving it have
             //    been pruned. Anything that remains is purely connectome bookkeeping.
-            manager
-                .remove_cortical_area(&cortical_id_typed)
-                .map_err(ServiceError::from)?;
+            manager.remove_cortical_area(&cortical_id_typed).map_err(ServiceError::from)?;
 
-            Some(manager.recompute_brain_region_io_registry().map_err(|e| {
-                ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e))
-            })?)
+            Some(
+                manager
+                    .recompute_brain_region_io_registry()
+                    .map_err(|e| ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e)))?,
+            )
         };
 
         // CRITICAL: Persist deletion into RuntimeGenome (source of truth for save/export).
@@ -945,23 +789,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 region.remove_area(&cortical_id_typed);
             }
             for area in genome.cortical_areas.values_mut() {
-                update_cortical_mapping_dst_in_properties(
-                    &mut area.properties,
-                    &deleted_id_base64,
-                    &[],
-                )?;
+                update_cortical_mapping_dst_in_properties(&mut area.properties, &deleted_id_base64, &[])?;
                 if let Some(deleted_idx) = deleted_cortical_idx {
-                    if let Some(upstream) = area
-                        .properties
-                        .get_mut("upstream_cortical_areas")
-                        .and_then(|value| value.as_array_mut())
-                    {
-                        upstream.retain(|value| {
-                            value
-                                .as_u64()
-                                .map(|id| id != deleted_idx as u64)
-                                .unwrap_or(true)
-                        });
+                    if let Some(upstream) = area.properties.get_mut("upstream_cortical_areas").and_then(|value| value.as_array_mut()) {
+                        upstream.retain(|value| value.as_u64().map(|id| id != deleted_idx as u64).unwrap_or(true));
                     }
                 }
             }
@@ -971,17 +802,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         if inputs.is_empty() {
                             region.properties.remove("inputs");
                         } else {
-                            region
-                                .properties
-                                .insert("inputs".to_string(), serde_json::json!(inputs));
+                            region.properties.insert("inputs".to_string(), serde_json::json!(inputs));
                         }
 
                         if outputs.is_empty() {
                             region.properties.remove("outputs");
                         } else {
-                            region
-                                .properties
-                                .insert("outputs".to_string(), serde_json::json!(outputs));
+                            region.properties.insert("outputs".to_string(), serde_json::json!(outputs));
                         }
                     } else {
                         warn!(
@@ -1012,11 +839,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 "[GENOME-UPDATE] No RuntimeGenome loaded - deletion will not persist to saved genome"
             );
         }
-        if removed_mapping_count > 0
-            || removed_upstream_count > 0
-            || pruned_incoming_synapses > 0
-            || pruned_outgoing_synapses > 0
-        {
+        if removed_mapping_count > 0 || removed_upstream_count > 0 || pruned_incoming_synapses > 0 || pruned_outgoing_synapses > 0 {
             info!(
                 target: "feagi-services",
                 "Deleted area cleanup: {} mapping references removed, {} upstream references pruned, \
@@ -1034,11 +857,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         Ok(())
     }
 
-    async fn update_cortical_area(
-        &self,
-        cortical_id: &str,
-        _params: UpdateCorticalAreaParams,
-    ) -> ServiceResult<CorticalAreaInfo> {
+    async fn update_cortical_area(&self, cortical_id: &str, _params: UpdateCorticalAreaParams) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services","Updating cortical area: {}", cortical_id);
 
         // TODO: This should be routed through GenomeService for proper genome update
@@ -1046,8 +865,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Currently this is a stub - needs architecture alignment with Python implementation
 
         Err(ServiceError::NotImplemented(
-            "Cortical area updates must go through GenomeService for proper genome synchronization"
-                .to_string(),
+            "Cortical area updates must go through GenomeService for proper genome synchronization".to_string(),
         ))
     }
 
@@ -1055,24 +873,19 @@ impl ConnectomeService for ConnectomeServiceImpl {
         trace!(target: "feagi-services", "Getting cortical area: {}", cortical_id);
 
         // Accept base64 or legacy ASCII (clients may send either form).
-        let cortical_id_typed =
-            parse_cortical_id_flexible(cortical_id).map_err(ServiceError::InvalidInput)?;
+        let cortical_id_typed = parse_cortical_id_flexible(cortical_id).map_err(ServiceError::InvalidInput)?;
 
         let manager = self.connectome.read();
 
-        let area = manager
-            .get_cortical_area(&cortical_id_typed)
-            .ok_or_else(|| ServiceError::NotFound {
-                resource: "CorticalArea".to_string(),
-                id: cortical_id.to_string(),
-            })?;
+        let area = manager.get_cortical_area(&cortical_id_typed).ok_or_else(|| ServiceError::NotFound {
+            resource: "CorticalArea".to_string(),
+            id: cortical_id.to_string(),
+        })?;
 
-        let cortical_idx = manager
-            .get_cortical_idx(&cortical_id_typed)
-            .ok_or_else(|| ServiceError::NotFound {
-                resource: "CorticalArea".to_string(),
-                id: cortical_id.to_string(),
-            })?;
+        let cortical_idx = manager.get_cortical_idx(&cortical_id_typed).ok_or_else(|| ServiceError::NotFound {
+            resource: "CorticalArea".to_string(),
+            id: cortical_id.to_string(),
+        })?;
 
         let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
         let outgoing_synapse_count = manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
@@ -1091,15 +904,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let cortical_bytes = cortical_id_typed.as_bytes();
         let is_io_area = cortical_bytes[0] == b'i' || cortical_bytes[0] == b'o';
         let io_flag = if is_io_area {
-            cortical_id_typed
-                .extract_io_data_flag()
-                .ok()
-                .or(match &area.cortical_type {
-                    CorticalAreaType::BrainInput(flag) | CorticalAreaType::BrainOutput(flag) => {
-                        Some(*flag)
-                    }
-                    _ => None,
-                })
+            cortical_id_typed.extract_io_data_flag().ok().or(match &area.cortical_type {
+                CorticalAreaType::BrainInput(flag) | CorticalAreaType::BrainOutput(flag) => Some(*flag),
+                _ => None,
+            })
         } else {
             None
         };
@@ -1110,25 +918,11 @@ impl ConnectomeService for ConnectomeServiceImpl {
         };
         // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see feagi-structures
         // genomic cortical ID layout). BV and motor decoders use byte 7 for device group.
-        let subunit_id = if is_io_area {
-            Some(cortical_bytes[6])
-        } else {
-            None
-        };
-        let cortical_unit_index = if is_io_area {
-            Some(cortical_bytes[7])
-        } else {
-            None
-        };
-        let coding_signage = io_flag
-            .as_ref()
-            .map(|flag| signage_label_from_flag(flag).to_string());
-        let coding_behavior = io_flag
-            .as_ref()
-            .map(|flag| behavior_label_from_flag(flag).to_string());
-        let coding_type = io_flag
-            .as_ref()
-            .map(|flag| coding_type_label_from_flag(flag).to_string());
+        let subunit_id = if is_io_area { Some(cortical_bytes[6]) } else { None };
+        let cortical_unit_index = if is_io_area { Some(cortical_bytes[7]) } else { None };
+        let coding_signage = io_flag.as_ref().map(|flag| signage_label_from_flag(flag).to_string());
+        let coding_behavior = io_flag.as_ref().map(|flag| behavior_label_from_flag(flag).to_string());
+        let coding_type = io_flag.as_ref().map(|flag| coding_type_label_from_flag(flag).to_string());
         let coding_options = if is_io_area {
             io_coding_options_for_unit(&cortical_id_typed)
         } else {
@@ -1208,12 +1002,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 area.dimensions.depth as usize,
             ),
             position: area.position.into(), // Convert GenomeCoordinate3D to (i32, i32, i32)
-            area_type: cortical_group
-                .clone()
-                .unwrap_or_else(|| "CUSTOM".to_string()),
-            cortical_group: cortical_group
-                .clone()
-                .unwrap_or_else(|| "CUSTOM".to_string()),
+            area_type: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
+            cortical_group: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
             // Determine cortical_type based on properties
             cortical_type: {
                 if memory_props.is_some() {
@@ -1295,11 +1085,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     .and_then(|v| v.as_array())
                     .and_then(|arr| {
                         if arr.len() == 3 {
-                            Some((
-                                arr[0].as_u64()? as usize,
-                                arr[1].as_u64()? as usize,
-                                arr[2].as_u64()? as usize,
-                            ))
+                            Some((arr[0].as_u64()? as usize, arr[1].as_u64()? as usize, arr[2].as_u64()? as usize))
                         } else {
                             None
                         }
@@ -1316,9 +1102,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         let total_width = area.dimensions.width as usize;
                         let height = area.dimensions.height as usize;
                         let depth = area.dimensions.depth as usize;
-                        total_width
-                            .checked_div(dev_count)
-                            .map(|w| (w, height, depth))
+                        total_width.checked_div(dev_count).map(|w| (w, height, depth))
                     } else {
                         from_properties
                     }
@@ -1334,15 +1118,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     .and_then(|v| v.as_array())
                     .and_then(|arr| {
                         if arr.len() == 3 {
-                            let x_opt = arr[0]
-                                .as_u64()
-                                .or_else(|| arr[0].as_f64().map(|f| f as u64));
-                            let y_opt = arr[1]
-                                .as_u64()
-                                .or_else(|| arr[1].as_f64().map(|f| f as u64));
-                            let z_opt = arr[2]
-                                .as_u64()
-                                .or_else(|| arr[2].as_f64().map(|f| f as u64));
+                            let x_opt = arr[0].as_u64().or_else(|| arr[0].as_f64().map(|f| f as u64));
+                            let y_opt = arr[1].as_u64().or_else(|| arr[1].as_f64().map(|f| f as u64));
+                            let z_opt = arr[2].as_u64().or_else(|| arr[2].as_f64().map(|f| f as u64));
                             if let (Some(x), Some(y), Some(z)) = (x_opt, y_opt, z_opt) {
                                 Some((x as u32, y as u32, z as u32))
                             } else {
@@ -1375,19 +1153,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .iter()
             .any(|core| manager.cortical_area_exists(&core.to_cortical_id()));
             if has_any_core {
-                manager
-                    .ensure_core_cortical_areas()
-                    .map_err(ServiceError::from)?;
+                manager.ensure_core_cortical_areas().map_err(ServiceError::from)?;
             }
         }
 
         let cortical_ids: Vec<String> = {
             let manager = self.connectome.read();
-            manager
-                .get_cortical_area_ids()
-                .into_iter()
-                .map(|id| id.as_base_64())
-                .collect()
+            manager.get_cortical_area_ids().into_iter().map(|id| id.as_base_64()).collect()
         };
 
         let mut areas = Vec::new();
@@ -1410,7 +1182,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 Some(guard) => guard,
                 None => {
                     warn!(target: "feagi-services", "⚠️ ConnectomeManager write lock is held - cannot read cortical area IDs");
-                    return Err(ServiceError::Backend("ConnectomeManager is currently being modified (e.g., genome loading in progress). Please try again in a moment.".to_string()));
+                    return Err(ServiceError::Backend(
+                        "ConnectomeManager is currently being modified (e.g., genome loading in progress). Please try again in a moment.".to_string(),
+                    ));
                 }
             };
 
@@ -1428,21 +1202,18 @@ impl ConnectomeService for ConnectomeServiceImpl {
         trace!(target: "feagi-services","Checking if cortical area exists: {}", cortical_id);
 
         // Convert String to CorticalID
-        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        let cortical_id_typed =
+            CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
         Ok(self.connectome.read().has_cortical_area(&cortical_id_typed))
     }
 
-    async fn get_cortical_area_properties(
-        &self,
-        cortical_id: &str,
-    ) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>> {
+    async fn get_cortical_area_properties(&self, cortical_id: &str) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>> {
         debug!(target: "feagi-services","Getting cortical area properties: {}", cortical_id);
 
         // Convert String to CorticalID
-        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        let cortical_id_typed =
+            CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
         let manager = self.connectome.read();
         manager
@@ -1453,36 +1224,26 @@ impl ConnectomeService for ConnectomeServiceImpl {
             })
     }
 
-    async fn get_all_cortical_area_properties(
-        &self,
-    ) -> ServiceResult<Vec<std::collections::HashMap<String, serde_json::Value>>> {
+    async fn get_all_cortical_area_properties(&self) -> ServiceResult<Vec<std::collections::HashMap<String, serde_json::Value>>> {
         debug!(target: "feagi-services","Getting all cortical area properties");
 
         let manager = self.connectome.read();
         Ok(manager.get_all_cortical_area_properties())
     }
 
-    async fn get_neuron_properties(
-        &self,
-        neuron_id: u64,
-    ) -> ServiceResult<HashMap<String, serde_json::Value>> {
+    async fn get_neuron_properties(&self, neuron_id: u64) -> ServiceResult<HashMap<String, serde_json::Value>> {
         let manager = self.connectome.read();
-        manager
-            .get_neuron_properties(neuron_id)
-            .ok_or_else(|| ServiceError::NotFound {
-                resource: "Neuron".to_string(),
-                id: neuron_id.to_string(),
-            })
+        manager.get_neuron_properties(neuron_id).ok_or_else(|| ServiceError::NotFound {
+            resource: "Neuron".to_string(),
+            id: neuron_id.to_string(),
+        })
     }
 
     // ========================================================================
     // BRAIN REGION OPERATIONS
     // ========================================================================
 
-    async fn create_brain_region(
-        &self,
-        params: CreateBrainRegionParams,
-    ) -> ServiceResult<BrainRegionInfo> {
+    async fn create_brain_region(&self, params: CreateBrainRegionParams) -> ServiceResult<BrainRegionInfo> {
         info!(target: "feagi-services","Creating brain region: {}", params.region_id);
 
         // Convert string to RegionType
@@ -1494,11 +1255,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .remove("areas")
                 .or_else(|| properties.remove("cortical_areas"))
                 .map(|value| {
-                    value.as_array().cloned().ok_or_else(|| {
-                        ServiceError::InvalidInput(
-                            "areas must be an array of cortical area IDs".to_string(),
-                        )
-                    })
+                    value
+                        .as_array()
+                        .cloned()
+                        .ok_or_else(|| ServiceError::InvalidInput("areas must be an array of cortical area IDs".to_string()))
                 })
                 .transpose()?
                 .unwrap_or_default();
@@ -1506,32 +1266,27 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .remove("regions")
                 .or_else(|| properties.remove("child_regions"))
                 .map(|value| {
-                    value.as_array().cloned().ok_or_else(|| {
-                        ServiceError::InvalidInput(
-                            "regions must be an array of brain region IDs".to_string(),
-                        )
-                    })
+                    value
+                        .as_array()
+                        .cloned()
+                        .ok_or_else(|| ServiceError::InvalidInput("regions must be an array of brain region IDs".to_string()))
                 })
                 .transpose()?
                 .unwrap_or_default();
 
             let mut areas: Vec<String> = Vec::new();
             for value in area_values {
-                let id = value.as_str().ok_or_else(|| {
-                    ServiceError::InvalidInput(
-                        "areas must be an array of cortical area IDs".to_string(),
-                    )
-                })?;
+                let id = value
+                    .as_str()
+                    .ok_or_else(|| ServiceError::InvalidInput("areas must be an array of cortical area IDs".to_string()))?;
                 areas.push(id.to_string());
             }
 
             let mut child_regions: Vec<String> = Vec::new();
             for value in child_values {
-                let id = value.as_str().ok_or_else(|| {
-                    ServiceError::InvalidInput(
-                        "regions must be an array of brain region IDs".to_string(),
-                    )
-                })?;
+                let id = value
+                    .as_str()
+                    .ok_or_else(|| ServiceError::InvalidInput("regions must be an array of brain region IDs".to_string()))?;
                 child_regions.push(id.to_string());
             }
 
@@ -1540,8 +1295,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         // Create BrainRegion
         let mut region = BrainRegion::new(
-            RegionID::from_string(&params.region_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid region ID: {}", e)))?,
+            RegionID::from_string(&params.region_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid region ID: {}", e)))?,
             params.name.clone(),
             region_type,
         )
@@ -1566,15 +1320,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         if let Some(genome) = self.current_genome.write().as_mut() {
             // Fetch the canonical region instance from ConnectomeManager to ensure any internal
             // normalization is reflected in the persisted copy.
-            if let Some(created) = self
-                .connectome
-                .read()
-                .get_brain_region(&params.region_id)
-                .cloned()
-            {
-                genome
-                    .brain_regions
-                    .insert(params.region_id.clone(), created);
+            if let Some(created) = self.connectome.read().get_brain_region(&params.region_id).cloned() {
+                genome.brain_regions.insert(params.region_id.clone(), created);
             }
         }
 
@@ -1583,10 +1330,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let mut manager = self.connectome.write();
 
             for area_id in &areas {
-                let cortical_id =
-                    feagi_evolutionary::string_to_cortical_id(area_id).map_err(|e| {
-                        ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e))
-                    })?;
+                let cortical_id = feagi_evolutionary::string_to_cortical_id(area_id)
+                    .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
                 if !manager.has_cortical_area(&cortical_id) {
                     return Err(ServiceError::NotFound {
@@ -1610,18 +1355,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 region.add_area(cortical_id);
 
                 if let Some(area) = manager.get_cortical_area_mut(&cortical_id) {
-                    area.properties.insert(
-                        "parent_region_id".to_string(),
-                        serde_json::json!(params.region_id),
-                    );
+                    area.properties
+                        .insert("parent_region_id".to_string(), serde_json::json!(params.region_id));
                 }
             }
 
             for child_id in &child_regions {
                 if child_id == &params.region_id {
-                    return Err(ServiceError::InvalidInput(
-                        "regions cannot include the new region_id".to_string(),
-                    ));
+                    return Err(ServiceError::InvalidInput("regions cannot include the new region_id".to_string()));
                 }
 
                 if manager.get_brain_region(child_id).is_none() {
@@ -1636,10 +1377,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     .map_err(ServiceError::from)?;
 
                 if let Some(child_region) = manager.get_brain_region_mut(child_id) {
-                    child_region.add_property(
-                        "parent_region_id".to_string(),
-                        serde_json::json!(params.region_id),
-                    );
+                    child_region.add_property("parent_region_id".to_string(), serde_json::json!(params.region_id));
                 }
             }
         }
@@ -1657,19 +1395,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         region.add_area(cortical_id);
                     }
                     if let Some(area) = genome.cortical_areas.get_mut(&cortical_id) {
-                        area.properties.insert(
-                            "parent_region_id".to_string(),
-                            serde_json::json!(params.region_id),
-                        );
+                        area.properties
+                            .insert("parent_region_id".to_string(), serde_json::json!(params.region_id));
                     }
                 }
 
                 for child_id in &child_regions {
                     if let Some(child_region) = genome.brain_regions.get_mut(child_id) {
-                        child_region.add_property(
-                            "parent_region_id".to_string(),
-                            serde_json::json!(params.region_id),
-                        );
+                        child_region.add_property("parent_region_id".to_string(), serde_json::json!(params.region_id));
                     }
                 }
             } else {
@@ -1697,11 +1430,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             }
 
             let hierarchy = manager.get_brain_region_hierarchy();
-            let mut region_ids: Vec<String> = hierarchy
-                .get_all_descendants(region_id)
-                .into_iter()
-                .cloned()
-                .collect();
+            let mut region_ids: Vec<String> = hierarchy.get_all_descendants(region_id).into_iter().cloned().collect();
             region_ids.push(region_id.to_string());
 
             let mut region_ids_with_depth: Vec<(String, usize)> = Vec::new();
@@ -1714,18 +1443,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
                 region_ids_with_depth.push((region_id.clone(), depth));
             }
-            region_ids_with_depth.sort_by(|(a_id, a_depth), (b_id, b_depth)| {
-                b_depth.cmp(a_depth).then_with(|| a_id.cmp(b_id))
-            });
-            let region_ids_sorted = region_ids_with_depth
-                .into_iter()
-                .map(|(id, _)| id)
-                .collect::<Vec<String>>();
+            region_ids_with_depth.sort_by(|(a_id, a_depth), (b_id, b_depth)| b_depth.cmp(a_depth).then_with(|| a_id.cmp(b_id)));
+            let region_ids_sorted = region_ids_with_depth.into_iter().map(|(id, _)| id).collect::<Vec<String>>();
 
-            let cortical_area_ids = hierarchy
-                .get_all_areas_recursive(region_id)
-                .into_iter()
-                .collect::<Vec<String>>();
+            let cortical_area_ids = hierarchy.get_all_areas_recursive(region_id).into_iter().collect::<Vec<String>>();
 
             (region_ids_sorted, cortical_area_ids)
         };
@@ -1737,9 +1458,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         {
             let mut manager = self.connectome.write();
             for region_id in &region_ids {
-                manager
-                    .remove_brain_region(region_id)
-                    .map_err(ServiceError::from)?;
+                manager.remove_brain_region(region_id).map_err(ServiceError::from)?;
             }
         }
 
@@ -1782,14 +1501,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         if inputs.is_empty() {
                             gr.properties.remove("inputs");
                         } else {
-                            gr.properties
-                                .insert("inputs".to_string(), serde_json::json!(inputs));
+                            gr.properties.insert("inputs".to_string(), serde_json::json!(inputs));
                         }
                         if outputs.is_empty() {
                             gr.properties.remove("outputs");
                         } else {
-                            gr.properties
-                                .insert("outputs".to_string(), serde_json::json!(outputs));
+                            gr.properties.insert("outputs".to_string(), serde_json::json!(outputs));
                         }
                     } else {
                         warn!(
@@ -1824,35 +1541,23 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .iter()
             .any(|core| manager.cortical_area_exists(&core.to_cortical_id()));
             if has_any_core {
-                manager
-                    .ensure_core_cortical_areas()
-                    .map_err(ServiceError::from)?;
+                manager.ensure_core_cortical_areas().map_err(ServiceError::from)?;
             }
         }
 
         let manager = self.connectome.read();
 
-        let region = manager
-            .get_brain_region(region_id)
-            .ok_or_else(|| ServiceError::NotFound {
-                resource: "BrainRegion".to_string(),
-                id: region_id.to_string(),
-            })?;
+        let region = manager.get_brain_region(region_id).ok_or_else(|| ServiceError::NotFound {
+            resource: "BrainRegion".to_string(),
+            id: region_id.to_string(),
+        })?;
 
         let hierarchy = manager.get_brain_region_hierarchy();
         let parent_id = hierarchy.get_parent(region_id).map(|s| s.to_string());
-        let mut child_regions: Vec<String> = hierarchy
-            .get_children(region_id)
-            .into_iter()
-            .cloned()
-            .collect();
+        let mut child_regions: Vec<String> = hierarchy.get_children(region_id).into_iter().cloned().collect();
         child_regions.retain(|child_id| child_id != region_id);
 
-        let mut cortical_areas: Vec<String> = region
-            .cortical_areas
-            .iter()
-            .map(|id| id.as_base_64())
-            .collect();
+        let mut cortical_areas: Vec<String> = region.cortical_areas.iter().map(|id| id.as_base_64()).collect();
 
         // Ensure root region always includes invariant core areas if they exist (fixes BV disappearing)
         if parent_id.is_none() {
@@ -1867,8 +1572,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             ] {
                 let core_id = core.to_cortical_id();
                 let core_id_b64 = core_id.as_base_64();
-                if manager.cortical_area_exists(&core_id) && !cortical_areas.contains(&core_id_b64)
-                {
+                if manager.cortical_area_exists(&core_id) && !cortical_areas.contains(&core_id_b64) {
                     cortical_areas.push(core_id_b64);
                 }
             }
@@ -1921,13 +1625,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
     async fn get_brain_region_ids(&self) -> ServiceResult<Vec<String>> {
         debug!(target: "feagi-services","Getting brain region IDs");
-        Ok(self
-            .connectome
-            .read()
-            .get_brain_region_ids()
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect())
+        Ok(self.connectome.read().get_brain_region_ids().into_iter().map(|s| s.to_string()).collect())
     }
 
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool> {
@@ -1950,8 +1648,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 MorphologyInfo {
                     morphology_type: format!("{:?}", morphology.morphology_type).to_lowercase(),
                     class: morphology.class.clone(),
-                    parameters: serde_json::to_value(&morphology.parameters)
-                        .unwrap_or(serde_json::json!({})),
+                    parameters: serde_json::to_value(&morphology.parameters).unwrap_or(serde_json::json!({})),
                 },
             );
         }
@@ -1960,15 +1657,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
         Ok(result)
     }
 
-    async fn create_morphology(
-        &self,
-        morphology_id: String,
-        morphology: feagi_evolutionary::Morphology,
-    ) -> ServiceResult<()> {
+    async fn create_morphology(&self, morphology_id: String, morphology: feagi_evolutionary::Morphology) -> ServiceResult<()> {
         if morphology_id.trim().is_empty() {
-            return Err(ServiceError::InvalidInput(
-                "morphology_id must be non-empty".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("morphology_id must be non-empty".to_string()));
         }
 
         // Require a loaded RuntimeGenome for persistence (source of truth).
@@ -1986,27 +1677,17 @@ impl ConnectomeService for ConnectomeServiceImpl {
             });
         }
 
-        genome
-            .morphologies
-            .add_morphology(morphology_id.clone(), morphology.clone());
+        genome.morphologies.add_morphology(morphology_id.clone(), morphology.clone());
 
         // Keep ConnectomeManager registry in sync (used by mapping/synapse generation).
-        self.connectome
-            .write()
-            .upsert_morphology(morphology_id, morphology);
+        self.connectome.write().upsert_morphology(morphology_id, morphology);
 
         Ok(())
     }
 
-    async fn update_morphology(
-        &self,
-        morphology_id: String,
-        morphology: feagi_evolutionary::Morphology,
-    ) -> ServiceResult<()> {
+    async fn update_morphology(&self, morphology_id: String, morphology: feagi_evolutionary::Morphology) -> ServiceResult<()> {
         if morphology_id.trim().is_empty() {
-            return Err(ServiceError::InvalidInput(
-                "morphology_id must be non-empty".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("morphology_id must be non-empty".to_string()));
         }
 
         tracing::info!(
@@ -2040,22 +1721,18 @@ impl ConnectomeService for ConnectomeServiceImpl {
             );
             if !usage_pairs.is_empty() && !self.connectome.read().has_npu() {
                 return Err(ServiceError::InvalidState(
-                    "Cannot rebuild synapses for morphology update because NPU is not connected"
-                        .to_string(),
+                    "Cannot rebuild synapses for morphology update because NPU is not connected".to_string(),
                 ));
             }
 
-            genome
-                .morphologies
-                .add_morphology(morphology_id.clone(), morphology.clone());
+            genome.morphologies.add_morphology(morphology_id.clone(), morphology.clone());
 
             usage_pairs
         };
 
         if usage_pairs.is_empty() {
             let area_infos = self.list_cortical_areas().await?;
-            let fallback_pairs =
-                collect_morphology_usage_pairs_from_area_infos(&area_infos, &morphology_id);
+            let fallback_pairs = collect_morphology_usage_pairs_from_area_infos(&area_infos, &morphology_id);
             if !fallback_pairs.is_empty() {
                 warn!(
                     target: "feagi-services",
@@ -2075,8 +1752,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         if !usage_pairs.is_empty() && !self.connectome.read().has_npu() {
             return Err(ServiceError::InvalidState(
-                "Cannot rebuild synapses for morphology update because NPU is not connected"
-                    .to_string(),
+                "Cannot rebuild synapses for morphology update because NPU is not connected".to_string(),
             ));
         }
 
@@ -2122,14 +1798,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
             };
 
-            let synapses = manager
-                .regenerate_synapses_for_mapping(&src_id, &dst_id)
-                .map_err(|e| {
-                    ServiceError::Backend(format!(
-                        "Failed to regenerate synapses for morphology update ({} -> {}): {}",
-                        src_id, dst_id, e
-                    ))
-                })?;
+            let synapses = manager.regenerate_synapses_for_mapping(&src_id, &dst_id).map_err(|e| {
+                ServiceError::Backend(format!(
+                    "Failed to regenerate synapses for morphology update ({} -> {}): {}",
+                    src_id, dst_id, e
+                ))
+            })?;
             regenerated_pairs += 1;
             total_synapses += synapses;
         }
@@ -2148,9 +1822,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
     async fn delete_morphology(&self, morphology_id: &str) -> ServiceResult<()> {
         if morphology_id.trim().is_empty() {
-            return Err(ServiceError::InvalidInput(
-                "morphology_id must be non-empty".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("morphology_id must be non-empty".to_string()));
         }
 
         let mut genome_guard = self.current_genome.write();
@@ -2178,19 +1850,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let new_id = new_id.trim();
 
         if old_id.is_empty() {
-            return Err(ServiceError::InvalidInput(
-                "old_id must be non-empty".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("old_id must be non-empty".to_string()));
         }
         if new_id.is_empty() {
-            return Err(ServiceError::InvalidInput(
-                "new_id must be non-empty".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("new_id must be non-empty".to_string()));
         }
         if old_id == new_id {
-            return Err(ServiceError::InvalidInput(
-                "old_id and new_id must differ".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("old_id and new_id must differ".to_string()));
         }
 
         let mut genome_guard = self.current_genome.write();
@@ -2200,21 +1866,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
             ));
         };
 
-        let morphology =
-            genome
-                .morphologies
-                .get(old_id)
-                .cloned()
-                .ok_or_else(|| ServiceError::NotFound {
-                    resource: "morphology".to_string(),
-                    id: old_id.to_string(),
-                })?;
+        let morphology = genome.morphologies.get(old_id).cloned().ok_or_else(|| ServiceError::NotFound {
+            resource: "morphology".to_string(),
+            id: old_id.to_string(),
+        })?;
 
         if morphology.class == "core" {
-            return Err(ServiceError::InvalidInput(format!(
-                "Core morphologies cannot be renamed: '{}'",
-                old_id
-            )));
+            return Err(ServiceError::InvalidInput(format!("Core morphologies cannot be renamed: '{}'", old_id)));
         }
 
         if genome.morphologies.contains(new_id) {
@@ -2225,9 +1883,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         }
 
         genome.morphologies.remove_morphology(old_id);
-        genome
-            .morphologies
-            .add_morphology(new_id.to_string(), morphology.clone());
+        genome.morphologies.add_morphology(new_id.to_string(), morphology.clone());
 
         let mut replaced_count: usize = 0;
         for area in genome.cortical_areas.values_mut() {
@@ -2251,21 +1907,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Update morphology references in ConnectomeManager's cortical area properties so
         // that API endpoints reading from the ConnectomeManager (e.g. cortical_map_detailed)
         // immediately reflect the new name without requiring a genome reload.
-        let cortical_ids: Vec<feagi_genomic_context::cortical_area::CorticalID> = manager
-            .get_cortical_area_ids()
-            .into_iter()
-            .cloned()
-            .collect();
+        let cortical_ids: Vec<feagi_genomic_context::cortical_area::CorticalID> = manager.get_cortical_area_ids().into_iter().cloned().collect();
         let mut connectome_replaced_count: usize = 0;
         for cortical_id in &cortical_ids {
             if let Some(area) = manager.get_cortical_area_mut(cortical_id) {
                 for prop_value in area.properties.values_mut() {
-                    replace_morphology_id_in_value(
-                        prop_value,
-                        old_id,
-                        new_id,
-                        &mut connectome_replaced_count,
-                    );
+                    replace_morphology_id_in_value(prop_value, old_id, new_id, &mut connectome_replaced_count);
                 }
             }
         }
@@ -2283,41 +1930,30 @@ impl ConnectomeService for ConnectomeServiceImpl {
         Ok(())
     }
 
-    async fn update_cortical_mapping(
-        &self,
-        src_area_id: String,
-        dst_area_id: String,
-        mapping_data: Vec<serde_json::Value>,
-    ) -> ServiceResult<usize> {
+    async fn update_cortical_mapping(&self, src_area_id: String, dst_area_id: String, mapping_data: Vec<serde_json::Value>) -> ServiceResult<usize> {
         debug!(target: "feagi-services", "Updating cortical mapping: {} -> {} with {} connections",
               src_area_id, dst_area_id, mapping_data.len());
 
         // Convert String to CorticalID
         use feagi_genomic_context::cortical_area::CorticalID;
-        let src_id = CorticalID::try_from_base_64(&src_area_id).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e))
-        })?;
-        let dst_id = CorticalID::try_from_base_64(&dst_area_id).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e))
-        })?;
+        let src_id =
+            CorticalID::try_from_base_64(&src_area_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e)))?;
+        let dst_id =
+            CorticalID::try_from_base_64(&dst_area_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e)))?;
 
         let existing_mapping = {
             let manager = self.connectome.read();
-            manager.get_cortical_area(&src_id).and_then(|area| {
-                get_cortical_mapping_dst_from_properties(&area.properties, &dst_area_id)
-            })
+            manager
+                .get_cortical_area(&src_id)
+                .and_then(|area| get_cortical_mapping_dst_from_properties(&area.properties, &dst_area_id))
         };
 
-        let mut existing_plasticity_by_morphology: HashMap<
-            String,
-            serde_json::Map<String, serde_json::Value>,
-        > = HashMap::new();
+        let mut existing_plasticity_by_morphology: HashMap<String, serde_json::Map<String, serde_json::Value>> = HashMap::new();
         if let Some(existing_rules) = existing_mapping.as_ref() {
             for rule in existing_rules {
                 if let Some(obj) = rule.as_object() {
                     if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str()) {
-                        existing_plasticity_by_morphology
-                            .insert(morphology_id.to_string(), obj.clone());
+                        existing_plasticity_by_morphology.insert(morphology_id.to_string(), obj.clone());
                     }
                 }
             }
@@ -2327,36 +1963,22 @@ impl ConnectomeService for ConnectomeServiceImpl {
         for rule in &mapping_data {
             if let Some(obj) = rule.as_object() {
                 let mut normalized = obj.clone();
-                let morphology_id = normalized
-                    .get("morphology_id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let morphology_id = normalized.get("morphology_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 let is_associative = morphology_id == "associative_memory";
-                let mut plasticity_flag = normalized
-                    .get("plasticity_flag")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
+                let mut plasticity_flag = normalized.get("plasticity_flag").and_then(|v| v.as_bool()).unwrap_or(false);
                 if is_associative {
                     normalized.insert("plasticity_flag".to_string(), serde_json::json!(true));
                     plasticity_flag = true;
                 }
                 if let Some(existing) = existing_plasticity_by_morphology.get(&morphology_id) {
-                    if !normalized.contains_key("synaptic_delay_bursts")
-                        && existing.contains_key("synaptic_delay_bursts")
-                    {
+                    if !normalized.contains_key("synaptic_delay_bursts") && existing.contains_key("synaptic_delay_bursts") {
                         if let Some(value) = existing.get("synaptic_delay_bursts") {
                             normalized.insert("synaptic_delay_bursts".to_string(), value.clone());
                         }
                     }
                 }
                 if plasticity_flag || is_associative {
-                    let required = [
-                        "plasticity_constant",
-                        "ltp_multiplier",
-                        "ltd_multiplier",
-                        "plasticity_window",
-                    ];
+                    let required = ["plasticity_constant", "ltp_multiplier", "ltd_multiplier", "plasticity_window"];
                     if let Some(existing) = existing_plasticity_by_morphology.get(&morphology_id) {
                         for key in required {
                             if !normalized.contains_key(key) && existing.contains_key(key) {
@@ -2366,11 +1988,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                             }
                         }
                     }
-                    let missing: Vec<&str> = required
-                        .iter()
-                        .copied()
-                        .filter(|key| !normalized.contains_key(*key))
-                        .collect();
+                    let missing: Vec<&str> = required.iter().copied().filter(|key| !normalized.contains_key(*key)).collect();
                     if !missing.is_empty() {
                         return Err(ServiceError::InvalidInput(format!(
                             "Associative memory mapping for {} is missing required plasticity keys {:?}",
@@ -2393,10 +2011,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             normalized_mapping_data.len()
         );
 
-        if existing_mapping
-            .as_ref()
-            .is_some_and(|rules| rules == &normalized_mapping_data)
-        {
+        if existing_mapping.as_ref().is_some_and(|rules| rules == &normalized_mapping_data) {
             info!(
                 target: "feagi-services",
                 "Mapping unchanged for {} -> {}; skipping regeneration",
@@ -2409,11 +2024,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
         if let Some(genome) = self.current_genome.write().as_mut() {
             if let Some(src_area) = genome.cortical_areas.get_mut(&src_id) {
-                update_cortical_mapping_dst_in_properties(
-                    &mut src_area.properties,
-                    &dst_area_id,
-                    &normalized_mapping_data,
-                )?;
+                update_cortical_mapping_dst_in_properties(&mut src_area.properties, &dst_area_id, &normalized_mapping_data)?;
                 debug!(
                     target: "feagi-services",
                     "[GENOME-UPDATE] Updated cortical_mapping_dst for {} -> {} (connections={})",
@@ -2438,14 +2049,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
             // Regenerate synapses for this mapping
             let synapse_count = manager
                 .regenerate_synapses_for_mapping(&src_id, &dst_id)
-                .map_err(|e| {
-                    ServiceError::Backend(format!("Failed to regenerate synapses: {}", e))
-                })?;
+                .map_err(|e| ServiceError::Backend(format!("Failed to regenerate synapses: {}", e)))?;
 
             // Recompute region IO registries after mapping change (critical for BV region boundary behavior)
-            let region_io = manager.recompute_brain_region_io_registry().map_err(|e| {
-                ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e))
-            })?;
+            let region_io = manager
+                .recompute_brain_region_io_registry()
+                .map_err(|e| ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e)))?;
 
             info!(
                 target: "feagi-services",
@@ -2467,17 +2076,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     if inputs.is_empty() {
                         region.properties.remove("inputs");
                     } else {
-                        region
-                            .properties
-                            .insert("inputs".to_string(), serde_json::json!(inputs));
+                        region.properties.insert("inputs".to_string(), serde_json::json!(inputs));
                     }
 
                     if outputs.is_empty() {
                         region.properties.remove("outputs");
                     } else {
-                        region
-                            .properties
-                            .insert("outputs".to_string(), serde_json::json!(outputs));
+                        region.properties.insert("outputs".to_string(), serde_json::json!(outputs));
                     }
                 } else {
                     warn!(
@@ -2490,19 +2095,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
             let manager = self.connectome.read();
             if let Some(memory_area) = manager.get_cortical_area(&dst_id) {
-                if let Some(twin_map) = memory_area
-                    .properties
-                    .get("memory_twin_areas")
-                    .and_then(|v| v.as_object())
-                {
+                if let Some(twin_map) = memory_area.properties.get("memory_twin_areas").and_then(|v| v.as_object()) {
                     if let Some(genome_area) = genome.cortical_areas.get_mut(&dst_id) {
                         genome_area
                             .properties
                             .insert("memory_twin_areas".to_string(), serde_json::json!(twin_map));
                         if let Some(mapping) = memory_area.properties.get("cortical_mapping_dst") {
-                            genome_area
-                                .properties
-                                .insert("cortical_mapping_dst".to_string(), mapping.clone());
+                            genome_area.properties.insert("cortical_mapping_dst".to_string(), mapping.clone());
                         }
                     }
                     for twin_id_str in twin_map.values().filter_map(|v| v.as_str()) {
@@ -2514,13 +2113,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         }
                         if let Some(twin_area) = manager.get_cortical_area(&twin_id) {
                             genome.cortical_areas.insert(twin_id, twin_area.clone());
-                            if let Some(parent_region_id) = twin_area
-                                .properties
-                                .get("parent_region_id")
-                                .and_then(|v| v.as_str())
-                            {
-                                if let Some(region) = genome.brain_regions.get_mut(parent_region_id)
-                                {
+                            if let Some(parent_region_id) = twin_area.properties.get("parent_region_id").and_then(|v| v.as_str()) {
+                                if let Some(region) = genome.brain_regions.get_mut(parent_region_id) {
                                     region.add_area(twin_id);
                                 }
                             }
@@ -2540,9 +2134,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     // ========================================================================
 
     #[cfg(feature = "connectome-io")]
-    async fn export_connectome(
-        &self,
-    ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot> {
+    async fn export_connectome(&self) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot> {
         info!(target: "feagi-services", "Exporting connectome via service layer");
 
         // Get NPU from ConnectomeManager (which has reference to NPU)
@@ -2552,9 +2144,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let connectome = self.connectome.read();
             let npu_opt = connectome.get_npu();
             npu_opt
-                .ok_or_else(|| {
-                    ServiceError::Backend("NPU not connected to ConnectomeManager".to_string())
-                })?
+                .ok_or_else(|| ServiceError::Backend("NPU not connected to ConnectomeManager".to_string()))?
                 .clone()
         };
 
@@ -2597,10 +2187,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     #[cfg(feature = "connectome-io")]
-    async fn import_connectome(
-        &self,
-        snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
-    ) -> ServiceResult<()> {
+    async fn import_connectome(&self, snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot) -> ServiceResult<()> {
         info!(target: "feagi-services", "Importing connectome via service layer: {} neurons, {} synapses",
             snapshot.neurons.count, snapshot.synapses.count);
 
@@ -2629,8 +2216,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
 #[cfg(test)]
 mod tests {
     use super::{
-        collect_morphology_usage_pairs, parse_cortical_id_flexible, replace_morphology_id_in_value,
-        update_cortical_mapping_dst_in_properties,
+        collect_morphology_usage_pairs, parse_cortical_id_flexible, replace_morphology_id_in_value, update_cortical_mapping_dst_in_properties,
     };
     use crate::types::ServiceResult;
     use std::collections::HashMap;
@@ -2663,29 +2249,20 @@ mod tests {
     #[test]
     fn non_empty_mapping_sets_destination_key() -> ServiceResult<()> {
         let mut props: HashMap<String, serde_json::Value> = HashMap::new();
-        update_cortical_mapping_dst_in_properties(
-            &mut props,
-            "dstX",
-            &[serde_json::json!({"morphology_id": "m1"})],
-        )?;
+        update_cortical_mapping_dst_in_properties(&mut props, "dstX", &[serde_json::json!({"morphology_id": "m1"})])?;
 
         let dst = props
             .get("cortical_mapping_dst")
             .and_then(|v| v.as_object())
             .expect("cortical_mapping_dst should exist");
-        let arr = dst
-            .get("dstX")
-            .and_then(|v| v.as_array())
-            .expect("dstX should be an array");
+        let arr = dst.get("dstX").and_then(|v| v.as_array()).expect("dstX should be an array");
         assert_eq!(arr.len(), 1);
         Ok(())
     }
 
     #[test]
     fn collect_morphology_usage_pairs_scans_object_and_array_rules() {
-        use feagi_genomic_context::cortical_area::{
-            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-        };
+        use feagi_genomic_context::cortical_area::{CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID};
 
         let src_a = CorticalID::try_from_bytes(b"csrc0001").unwrap();
         let src_b = CorticalID::try_from_bytes(b"csrc0002").unwrap();
@@ -2698,9 +2275,7 @@ mod tests {
             "Source A".to_string(),
             CorticalAreaDimensions::new(1, 1, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::Custom(
-                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
-            ),
+            CorticalAreaType::Custom(feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire),
         )
         .unwrap();
         area_a.properties.insert(
@@ -2722,9 +2297,7 @@ mod tests {
             "Source B".to_string(),
             CorticalAreaDimensions::new(1, 1, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::Custom(
-                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
-            ),
+            CorticalAreaType::Custom(feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire),
         )
         .unwrap();
         area_b.properties.insert(
@@ -2762,10 +2335,7 @@ mod tests {
         let pairs = collect_morphology_usage_pairs(&genome, "m_shared");
         assert_eq!(
             pairs,
-            vec![
-                (src_a.as_base_64(), dst_a.as_base_64()),
-                (src_a.as_base_64(), dst_b.as_base_64()),
-            ]
+            vec![(src_a.as_base_64(), dst_a.as_base_64()), (src_a.as_base_64(), dst_b.as_base_64()),]
         );
     }
 
@@ -2791,9 +2361,7 @@ mod tests {
         use std::sync::Arc;
 
         // Isolated connectome manager instance for this test.
-        let connectome = Arc::new(RwLock::new(
-            feagi_brain_development::ConnectomeManager::new_for_testing(),
-        ));
+        let connectome = Arc::new(RwLock::new(feagi_brain_development::ConnectomeManager::new_for_testing()));
 
         // Minimal RuntimeGenome (source of truth) for persistence.
         let genome = feagi_evolutionary::RuntimeGenome {
@@ -2825,9 +2393,7 @@ mod tests {
         let morph_id = "m_test_vectors".to_string();
         let morph = feagi_evolutionary::Morphology {
             morphology_type: feagi_evolutionary::MorphologyType::Vectors,
-            parameters: feagi_evolutionary::MorphologyParameters::Vectors {
-                vectors: vec![[1, 2, 3]],
-            },
+            parameters: feagi_evolutionary::MorphologyParameters::Vectors { vectors: vec![[1, 2, 3]] },
             class: "custom".to_string(),
         };
         svc.create_morphology(morph_id.clone(), morph).await?;
@@ -2846,18 +2412,13 @@ mod tests {
         // Update (overwrite vectors)
         let morph2 = feagi_evolutionary::Morphology {
             morphology_type: feagi_evolutionary::MorphologyType::Vectors,
-            parameters: feagi_evolutionary::MorphologyParameters::Vectors {
-                vectors: vec![[9, 9, 9]],
-            },
+            parameters: feagi_evolutionary::MorphologyParameters::Vectors { vectors: vec![[9, 9, 9]] },
             class: "custom".to_string(),
         };
         svc.update_morphology(morph_id.clone(), morph2).await?;
         {
             let mgr = connectome.read();
-            let stored = mgr
-                .get_morphologies()
-                .get(&morph_id)
-                .expect("morphology must exist");
+            let stored = mgr.get_morphologies().get(&morph_id).expect("morphology must exist");
             match &stored.parameters {
                 feagi_evolutionary::MorphologyParameters::Vectors { vectors } => {
                     assert_eq!(vectors.as_slice(), &[[9, 9, 9]]);
@@ -2882,20 +2443,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn morphology_rename_updates_registry_and_cortical_mapping_references(
-    ) -> ServiceResult<()> {
+    async fn morphology_rename_updates_registry_and_cortical_mapping_references() -> ServiceResult<()> {
         use super::ConnectomeServiceImpl;
         use crate::traits::ConnectomeService;
-        use feagi_genomic_context::cortical_area::{
-            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-        };
+        use feagi_genomic_context::cortical_area::{CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID};
         use parking_lot::RwLock;
         use std::collections::HashMap;
         use std::sync::Arc;
 
-        let connectome = Arc::new(RwLock::new(
-            feagi_brain_development::ConnectomeManager::new_for_testing(),
-        ));
+        let connectome = Arc::new(RwLock::new(feagi_brain_development::ConnectomeManager::new_for_testing()));
 
         let src_id = CorticalID::try_from_bytes(b"csrc0001").unwrap();
         let dst_id = CorticalID::try_from_bytes(b"csrc0002").unwrap();
@@ -2906,9 +2462,7 @@ mod tests {
             "Source".to_string(),
             CorticalAreaDimensions::new(1, 1, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::Custom(
-                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
-            ),
+            CorticalAreaType::Custom(feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire),
         )
         .unwrap();
         src_area.properties.insert(
@@ -2927,17 +2481,13 @@ mod tests {
             "Target".to_string(),
             CorticalAreaDimensions::new(1, 1, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::Custom(
-                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
-            ),
+            CorticalAreaType::Custom(feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire),
         )
         .unwrap();
 
         let morph = feagi_evolutionary::Morphology {
             morphology_type: feagi_evolutionary::MorphologyType::Vectors,
-            parameters: feagi_evolutionary::MorphologyParameters::Vectors {
-                vectors: vec![[1, 0, 0]],
-            },
+            parameters: feagi_evolutionary::MorphologyParameters::Vectors { vectors: vec![[1, 0, 0]] },
             class: "custom".to_string(),
         };
 
@@ -2984,31 +2534,16 @@ mod tests {
             assert!(!genome.morphologies.contains("m_old"));
             assert!(genome.morphologies.contains("m_new"));
 
-            let area = genome
-                .cortical_areas
-                .get(&src_id)
-                .expect("src area must exist");
+            let area = genome.cortical_areas.get(&src_id).expect("src area must exist");
             let dstmap = area
                 .properties
                 .get("cortical_mapping_dst")
                 .and_then(|v| v.as_object())
                 .expect("cortical_mapping_dst must exist");
-            let rules = dstmap
-                .get(&dst_id.as_base_64())
-                .and_then(|v| v.as_array())
-                .expect("rules must exist");
+            let rules = dstmap.get(&dst_id.as_base_64()).and_then(|v| v.as_array()).expect("rules must exist");
             assert_eq!(rules.len(), 2);
-            assert_eq!(
-                rules[0].get("morphology_id").and_then(|v| v.as_str()),
-                Some("m_new")
-            );
-            assert_eq!(
-                rules[1]
-                    .as_array()
-                    .and_then(|a| a.first())
-                    .and_then(|v| v.as_str()),
-                Some("m_new")
-            );
+            assert_eq!(rules[0].get("morphology_id").and_then(|v| v.as_str()), Some("m_new"));
+            assert_eq!(rules[1].as_array().and_then(|a| a.first()).and_then(|v| v.as_str()), Some("m_new"));
         }
 
         {
@@ -3025,10 +2560,7 @@ mod tests {
                 .get(&dst_id.as_base_64())
                 .and_then(|v| v.as_array())
                 .expect("connectome rules");
-            assert_eq!(
-                conn_rules[0].get("morphology_id").and_then(|v| v.as_str()),
-                Some("m_new")
-            );
+            assert_eq!(conn_rules[0].get("morphology_id").and_then(|v| v.as_str()), Some("m_new"));
         }
 
         Ok(())
@@ -3043,9 +2575,7 @@ mod tests {
         use std::collections::HashMap;
         use std::sync::Arc;
 
-        let connectome = Arc::new(RwLock::new(
-            feagi_brain_development::ConnectomeManager::new_for_testing(),
-        ));
+        let connectome = Arc::new(RwLock::new(feagi_brain_development::ConnectomeManager::new_for_testing()));
         {
             let mut manager = connectome.write();
             manager.setup_core_morphologies_for_testing();
@@ -3079,15 +2609,8 @@ mod tests {
         let current_genome = Arc::new(RwLock::new(Some(genome)));
         let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
 
-        let err = svc
-            .rename_morphology("projector", "projector_renamed")
-            .await
-            .unwrap_err();
-        assert!(
-            matches!(err, ServiceError::InvalidInput(_)),
-            "Expected InvalidInput, got {:?}",
-            err
-        );
+        let err = svc.rename_morphology("projector", "projector_renamed").await.unwrap_err();
+        assert!(matches!(err, ServiceError::InvalidInput(_)), "Expected InvalidInput, got {:?}", err);
 
         Ok(())
     }
@@ -3109,20 +2632,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn associative_memory_missing_window_is_filled_from_existing_mapping() -> ServiceResult<()>
-    {
+    async fn associative_memory_missing_window_is_filled_from_existing_mapping() -> ServiceResult<()> {
         use super::ConnectomeServiceImpl;
         use crate::traits::ConnectomeService;
-        use feagi_genomic_context::cortical_area::{
-            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-        };
+        use feagi_genomic_context::cortical_area::{CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID};
         use parking_lot::RwLock;
         use std::collections::HashMap;
         use std::sync::Arc;
 
-        let connectome = Arc::new(RwLock::new(
-            feagi_brain_development::ConnectomeManager::new_for_testing(),
-        ));
+        let connectome = Arc::new(RwLock::new(feagi_brain_development::ConnectomeManager::new_for_testing()));
 
         let src_id = CorticalID::try_from_bytes(b"csrc0003").unwrap();
         let dst_id = CorticalID::try_from_bytes(b"csrc0004").unwrap();
@@ -3133,9 +2651,7 @@ mod tests {
             "Source".to_string(),
             CorticalAreaDimensions::new(1, 1, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::Custom(
-                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
-            ),
+            CorticalAreaType::Custom(feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire),
         )
         .unwrap();
         let dst_area = CorticalArea::new(
@@ -3144,9 +2660,7 @@ mod tests {
             "Target".to_string(),
             CorticalAreaDimensions::new(1, 1, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::Custom(
-                feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire,
-            ),
+            CorticalAreaType::Custom(feagi_genomic_context::cortical_area::CustomCorticalType::LeakyIntegrateFire),
         )
         .unwrap();
 
@@ -3233,27 +2747,21 @@ mod tests {
         use super::ConnectomeServiceImpl;
         use crate::traits::ConnectomeService;
         use feagi_genomic_context::brain_region::{BrainRegion, RegionID, RegionType};
-        use feagi_genomic_context::cortical_area::{
-            CoreCorticalType, CorticalArea, CorticalAreaDimensions,
-        };
+        use feagi_genomic_context::cortical_area::{CoreCorticalType, CorticalArea, CorticalAreaDimensions};
         use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
         use parking_lot::RwLock;
         use std::collections::HashMap;
         use std::sync::Arc;
 
         // Isolated connectome manager instance for this test.
-        let connectome = Arc::new(RwLock::new(
-            feagi_brain_development::ConnectomeManager::new_for_testing(),
-        ));
+        let connectome = Arc::new(RwLock::new(feagi_brain_development::ConnectomeManager::new_for_testing()));
 
         // Use a known-valid cortical ID/type pair to avoid ID encoding intricacies in this unit test.
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
 
         let dims = CorticalAreaDimensions::new(1, 1, 1).expect("dimensions must be valid");
         let pos = GenomeCoordinate3D::new(0, 0, 0);
-        let cortical_type = cortical_id
-            .as_cortical_type()
-            .expect("cortical type must be derivable from id");
+        let cortical_type = cortical_id.as_cortical_type().expect("cortical type must be derivable from id");
 
         let area = CorticalArea::new(
             cortical_id,
@@ -3299,10 +2807,8 @@ mod tests {
         // Seed ConnectomeManager with the same region + area (this is what BV and runtime uses).
         {
             let mut mgr = connectome.write();
-            mgr.add_brain_region(region, None)
-                .expect("brain region should be addable");
-            mgr.add_cortical_area(area)
-                .expect("cortical area should be addable");
+            mgr.add_brain_region(region, None).expect("brain region should be addable");
+            mgr.add_cortical_area(area).expect("cortical area should be addable");
         }
 
         let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
@@ -3316,10 +2822,7 @@ mod tests {
             let genome_guard = current_genome.read();
             let genome = genome_guard.as_ref().expect("genome must exist");
             assert!(!genome.cortical_areas.contains_key(&cortical_id));
-            let region = genome
-                .brain_regions
-                .get(&region_key)
-                .expect("region must exist in genome");
+            let region = genome.brain_regions.get(&region_key).expect("region must exist in genome");
             assert!(!region.contains_area(&cortical_id));
         }
 
@@ -3333,9 +2836,7 @@ mod tests {
         use crate::traits::ConnectomeService;
         use feagi_brain_development::ConnectomeManager;
         use feagi_genomic_context::brain_region::{BrainRegion, RegionID, RegionType};
-        use feagi_genomic_context::cortical_area::{
-            CoreCorticalType, CorticalArea, CorticalAreaDimensions,
-        };
+        use feagi_genomic_context::cortical_area::{CoreCorticalType, CorticalArea, CorticalAreaDimensions};
         use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
         use parking_lot::RwLock;
         use std::collections::HashMap;
@@ -3371,11 +2872,8 @@ mod tests {
         )?;
 
         let root = BrainRegion::new(root_id, "root".to_string(), RegionType::Undefined)?;
-        let child = BrainRegion::new(child_id, "child".to_string(), RegionType::Undefined)?
-            .with_areas([power_id]);
-        let grandchild =
-            BrainRegion::new(grandchild_id, "grand".to_string(), RegionType::Undefined)?
-                .with_areas([death_id]);
+        let child = BrainRegion::new(child_id, "child".to_string(), RegionType::Undefined)?.with_areas([power_id]);
+        let grandchild = BrainRegion::new(grandchild_id, "grand".to_string(), RegionType::Undefined)?.with_areas([death_id]);
 
         let genome = feagi_evolutionary::RuntimeGenome {
             metadata: feagi_evolutionary::GenomeMetadata {
@@ -3386,10 +2884,7 @@ mod tests {
                 timestamp: 0.0,
                 brain_regions_root: Some(root_key.clone()),
             },
-            cortical_areas: HashMap::from([
-                (power_id, power_area.clone()),
-                (death_id, death_area.clone()),
-            ]),
+            cortical_areas: HashMap::from([(power_id, power_area.clone()), (death_id, death_area.clone())]),
             brain_regions: HashMap::from([
                 (root_key.clone(), root.clone()),
                 (child_key.clone(), child.clone()),
@@ -3454,13 +2949,12 @@ mod tests {
         use super::ConnectomeServiceImpl;
         use crate::traits::ConnectomeService;
         use feagi_brain_development::ConnectomeManager;
+        use feagi_genomic_context::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+        };
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
         use feagi_npu_runtime::StdRuntime;
-        use feagi_genomic_context::cortical_area::{
-            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-            IOCorticalAreaConfigurationFlag,
-        };
         use parking_lot::RwLock;
         use std::sync::Arc;
 
@@ -3491,27 +2985,11 @@ mod tests {
         }
 
         // Two neurons per area for non-trivial fan-out.
-        let s0 = mgr
-            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
-            .unwrap();
-        let s1 = mgr
-            .add_neuron(&src_id, 1, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
-            .unwrap();
-        let d0 = mgr
-            .add_neuron(
-                &doomed_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
-            )
-            .unwrap();
-        let d1 = mgr
-            .add_neuron(
-                &doomed_id, 1, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
-            )
-            .unwrap();
-        let k0 = mgr
-            .add_neuron(
-                &sink_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
-            )
-            .unwrap();
+        let s0 = mgr.add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false).unwrap();
+        let s1 = mgr.add_neuron(&src_id, 1, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false).unwrap();
+        let d0 = mgr.add_neuron(&doomed_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false).unwrap();
+        let d1 = mgr.add_neuron(&doomed_id, 1, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false).unwrap();
+        let k0 = mgr.add_neuron(&sink_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false).unwrap();
 
         // Pre-existing synapses src->doomed (the orphan-source path) and doomed->sink (the other
         // direction we also clean up). Use heavy fake weights to mimic R-STDP saturation.
@@ -3521,27 +2999,15 @@ mod tests {
 
         // Register the mapping rule entries so `delete_cortical_area` can discover the pairs to
         // prune via `cortical_mapping_dst` lookups.
-        mgr.update_cortical_mapping(
-            &src_id,
-            &doomed_id,
-            vec![serde_json::json!({"morphology_id": "all_to_all"})],
-        )
-        .unwrap();
-        mgr.update_cortical_mapping(
-            &doomed_id,
-            &sink_id,
-            vec![serde_json::json!({"morphology_id": "all_to_all"})],
-        )
-        .unwrap();
+        mgr.update_cortical_mapping(&src_id, &doomed_id, vec![serde_json::json!({"morphology_id": "all_to_all"})])
+            .unwrap();
+        mgr.update_cortical_mapping(&doomed_id, &sink_id, vec![serde_json::json!({"morphology_id": "all_to_all"})])
+            .unwrap();
 
         {
             let mut npu = dyn_npu.lock().unwrap();
             npu.rebuild_synapse_index();
-            assert_eq!(
-                npu.get_synapse_count(),
-                3,
-                "fixture should expose 3 synapses"
-            );
+            assert_eq!(npu.get_synapse_count(), 3, "fixture should expose 3 synapses");
             assert_eq!(npu.get_outgoing_synapses(s0 as u32).len(), 1);
             assert_eq!(npu.get_outgoing_synapses(s1 as u32).len(), 1);
             assert_eq!(npu.get_outgoing_synapses(d0 as u32).len(), 1);
@@ -3584,10 +3050,7 @@ mod tests {
             let mapping_dst = src.properties.get("cortical_mapping_dst");
             if let Some(mapping_dst) = mapping_dst {
                 assert!(
-                    !mapping_dst
-                        .as_object()
-                        .map(|m| m.contains_key(&doomed_id.as_base_64()))
-                        .unwrap_or(false),
+                    !mapping_dst.as_object().map(|m| m.contains_key(&doomed_id.as_base_64())).unwrap_or(false),
                     "src must not retain a mapping rule pointing at the deleted area"
                 );
             }
@@ -3606,13 +3069,12 @@ mod tests {
         use super::ConnectomeServiceImpl;
         use crate::traits::ConnectomeService;
         use feagi_brain_development::ConnectomeManager;
+        use feagi_genomic_context::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+        };
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
         use feagi_npu_runtime::StdRuntime;
-        use feagi_genomic_context::cortical_area::{
-            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-            IOCorticalAreaConfigurationFlag,
-        };
         use parking_lot::RwLock;
         use std::sync::Arc;
 
@@ -3639,19 +3101,11 @@ mod tests {
             )
             .unwrap();
         }
-        let s0 = mgr
-            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
-            .unwrap();
-        let t0 = mgr
-            .add_neuron(&dst_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
-            .unwrap();
+        let s0 = mgr.add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false).unwrap();
+        let t0 = mgr.add_neuron(&dst_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false).unwrap();
         mgr.create_synapse(s0, t0, 882_000.0, 200.0, 0).unwrap();
-        mgr.update_cortical_mapping(
-            &src_id,
-            &dst_id,
-            vec![serde_json::json!({"morphology_id": "all_to_all"})],
-        )
-        .unwrap();
+        mgr.update_cortical_mapping(&src_id, &dst_id, vec![serde_json::json!({"morphology_id": "all_to_all"})])
+            .unwrap();
         {
             let mut npu = dyn_npu.lock().unwrap();
             npu.rebuild_synapse_index();
@@ -3663,17 +3117,12 @@ mod tests {
         let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
 
         // Drive the service path used by `DELETE /v1/cortical_mapping/mapping`.
-        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![])
-            .await?;
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![]).await?;
 
         {
             let mut npu = dyn_npu.lock().unwrap();
             npu.rebuild_synapse_index();
-            assert_eq!(
-                npu.get_synapse_count(),
-                0,
-                "DELETE mapping must drop all synapses for the src->dst pair"
-            );
+            assert_eq!(npu.get_synapse_count(), 0, "DELETE mapping must drop all synapses for the src->dst pair");
             assert!(npu.get_outgoing_synapses(s0 as u32).is_empty());
         }
 

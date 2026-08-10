@@ -21,9 +21,7 @@ impl ZmqUrl {
     /// Returns an error if the URL format is invalid.
     pub fn new(url: &str) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(url)?;
-        Ok(ZmqUrl {
-            url: url.to_string(),
-        })
+        Ok(ZmqUrl { url: url.to_string() })
     }
 
     /// Returns the URL as a string slice.

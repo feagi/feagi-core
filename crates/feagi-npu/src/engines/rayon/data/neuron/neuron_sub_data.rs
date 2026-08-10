@@ -74,17 +74,11 @@ impl<FIQ: FeagiIndexQuantization> NeuronIndexLookupTable<FIQ> {
         cur_index..min(cur_index + EMPLOYEE_427, cortical_last_byte_index.quant_to_usize())
     }
 
-    pub fn get_neuron_mp_index(
-        &self,
-        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexQuant>,
-    ) -> NeuronMPIndex<FIQ::NeuronIndexQuant> {
+    pub fn get_neuron_mp_index(&self, from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexQuant>) -> NeuronMPIndex<FIQ::NeuronIndexQuant> {
         NeuronMPIndex::new(from_engine_index.deref() - self.cortical_first_neuron_mp_index.deref())
     }
 
-    pub fn get_neuron_model_index(
-        &self,
-        from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexQuant>,
-    ) -> NeuronModelIndex<FIQ::NeuronIndexQuant> {
+    pub fn get_neuron_model_index(&self, from_engine_index: &NeuronEngineIndex<FIQ::NeuronIndexQuant>) -> NeuronModelIndex<FIQ::NeuronIndexQuant> {
         NeuronModelIndex::new(from_engine_index.deref() - self.cortical_first_model_index.deref())
     }
 

@@ -1,7 +1,10 @@
-use serde::{Serialize, Deserialize};
-use crate::values::spatial::quantizable_index::{QuantizedIndexCoord3D, QuantizedIndexDimension3D};
-use crate::{ create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate, create_wrapped_quantized_index_dimension};
 use crate::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
+use crate::values::spatial::quantizable_index::{QuantizedIndexCoord3D, QuantizedIndexDimension3D};
+use crate::{
+    create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate,
+    create_wrapped_quantized_index_dimension,
+};
+use serde::{Deserialize, Serialize};
 
 create_wrapped_quantized_decimal!(
     /// Represents the Membrane Potential of the neuron(s) in a voxel. Most of the time, each
@@ -27,7 +30,6 @@ create_wrapped_quantized_index_coordinate!(
     (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis)
 );
 
-
 create_wrapped_quantized_index_dimension!(
     /// Represents the dimensions of rectangular prism of neuron voxels
     pub NeuronVoxelDimensions,
@@ -40,4 +42,3 @@ create_wrapped_quantized_index_dimension!(
 pub type NeuronVoxelLinearIndexGenomic = NeuronVoxelLinearIndex<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>;
 pub type NeuronVoxelCoordinateGenomic = NeuronVoxelCoordinate<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>;
 pub type NeuronVoxelDimensionsGenomic = NeuronVoxelDimensions<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>;
-

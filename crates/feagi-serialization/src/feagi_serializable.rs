@@ -20,32 +20,23 @@ pub trait FeagiSerializable: Debug + Any {
     /// Serializes this structure into the provided byte slice.
     ///
     /// The slice must be exactly the size returned by `get_number_of_bytes_needed`.
-    fn try_serialize_struct_to_byte_slice(
-        &self,
-        byte_destination: &mut [u8],
-    ) -> Result<(), ()>;
+    fn try_serialize_struct_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), ()>;
 
     /// Deserializes data from a byte slice and updates this structure.
-    fn try_deserialize_and_update_self_from_byte_slice(
-        &mut self,
-        byte_reading: &[u8],
-    ) -> Result<(), ()>;
+    fn try_deserialize_and_update_self_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), ()>;
 
     /// Provide access to `Any` trait for downcasting
     fn as_any(&self) -> &dyn Any;
 
     /// Verifies that a byte slice contains data of the correct type.
-    fn verify_byte_slice_is_of_correct_type(
-        &self,
-        byte_source: &[u8],
-    ) -> Result<(), ()> {
+    fn verify_byte_slice_is_of_correct_type(&self, byte_source: &[u8]) -> Result<(), ()> {
         if byte_source.len() <= FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT {
             return Err(());
             /*
             return Err(FeagiDataError::DeserializationError(
                 format!("Byte slice needs to be at least {} bytes long to be considered valid! Given slice is {} elements long!", FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT, byte_source.len())
             ));
-            
+
              */
         }
         if byte_source[0] != self.get_type() as u8 {
@@ -56,17 +47,14 @@ pub trait FeagiSerializable: Debug + Any {
     }
 
     /// Verifies that a byte slice contains data of the correct version.
-    fn verify_byte_slice_is_of_correct_version(
-        &self,
-        byte_source: &[u8],
-    ) -> Result<(), ()> {
+    fn verify_byte_slice_is_of_correct_version(&self, byte_source: &[u8]) -> Result<(), ()> {
         if byte_source.len() < FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT {
             return Err(());
             /*
             return Err(FeagiDataError::DeserializationError(
                 format!("Byte slice needs to be at least {} bytes long to be considered valid! Given slice is {} elements long!", FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT, byte_source.len())
             ));
-            
+
              */
         }
         if byte_source[1] != self.get_version() {

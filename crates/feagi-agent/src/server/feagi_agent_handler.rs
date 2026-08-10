@@ -1,20 +1,13 @@
 //use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
-use crate::command_and_control::agent_registration_message::{
-    AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse,
-};
+use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse};
 use crate::command_and_control::FeagiMessage;
 use crate::server::auth::AgentAuth;
-use crate::server::wrappers::{
-    CommandControlWrapper, MotorTranslator, SensorTranslator, VisualizationTranslator,
-};
+use crate::server::wrappers::{CommandControlWrapper, MotorTranslator, SensorTranslator, VisualizationTranslator};
 use crate::{AgentCapabilities, AgentDescriptor, FeagiAgentError};
 use feagi_io::traits_and_enums::server::{
-    FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller,
-    FeagiServerPullerProperties, FeagiServerRouterProperties,
+    FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties,
 };
-use feagi_io::traits_and_enums::shared::{
-    TransportProtocolEndpoint, TransportProtocolImplementation,
-};
+use feagi_io::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
 use std::collections::{HashMap, HashSet};
@@ -80,14 +73,8 @@ pub struct FeagiAgentHandler {
 
 impl FeagiAgentHandler {
     #[allow(dead_code)]
-    fn capabilities_equivalent(
-        existing: &[AgentCapabilities],
-        requested: &[AgentCapabilities],
-    ) -> bool {
-        existing.len() == requested.len()
-            && existing
-                .iter()
-                .all(|capability| requested.contains(capability))
+    fn capabilities_equivalent(existing: &[AgentCapabilities], requested: &[AgentCapabilities]) -> bool {
+        existing.len() == requested.len() && existing.iter().all(|capability| requested.contains(capability))
     }
 
     /// Returns true when an existing descriptor session should be replaced by a new registration.
@@ -102,10 +89,7 @@ impl FeagiAgentHandler {
     /// the duplicate guard forever.
     #[allow(dead_code)]
     fn should_replace_existing_descriptor_session(&self, existing_agent_id: AgentID) -> bool {
-        let Some(last_seen) = self
-            .last_command_control_activity_by_agent
-            .get(&existing_agent_id)
-        else {
+        let Some(last_seen) = self.last_command_control_activity_by_agent.get(&existing_agent_id) else {
             // Missing liveness state is treated as stale and replaceable.
             return true;
         };
@@ -129,10 +113,7 @@ impl FeagiAgentHandler {
     ///
     /// This constructor is preferred in FEAGI runtime code paths where values
     /// come from centralized configuration (`feagi_configuration.toml`).
-    pub fn new_with_liveness_config(
-        agent_auth_backend: Box<dyn AgentAuth>,
-        liveness_config: AgentLivenessConfig,
-    ) -> FeagiAgentHandler {
+    pub fn new_with_liveness_config(agent_auth_backend: Box<dyn AgentAuth>, liveness_config: AgentLivenessConfig) -> FeagiAgentHandler {
         FeagiAgentHandler {
             agent_auth_backend,
             available_publishers: Vec::new(),
@@ -159,9 +140,7 @@ impl FeagiAgentHandler {
 
     //region Get Properties
 
-    pub fn get_all_registered_agents(
-        &self,
-    ) -> &HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)> {
+    pub fn get_all_registered_agents(&self) -> &HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)> {
         &self.all_registered_agents
     }
 
@@ -181,18 +160,11 @@ impl FeagiAgentHandler {
     ///
     /// This utility is intended for deterministic transition/integration tests
     /// that need an active agent session record without starting network servers.
-    pub fn register_logical_agent(
-        &mut self,
-        agent_id: AgentID,
-        descriptor: AgentDescriptor,
-        capabilities: Vec<AgentCapabilities>,
-    ) {
-        self.all_registered_agents
-            .insert(agent_id, (descriptor, capabilities));
+    pub fn register_logical_agent(&mut self, agent_id: AgentID, descriptor: AgentDescriptor, capabilities: Vec<AgentCapabilities>) {
+        self.all_registered_agents.insert(agent_id, (descriptor, capabilities));
         let now = Instant::now();
         self.last_activity_by_agent.insert(agent_id, now);
-        self.last_command_control_activity_by_agent
-            .insert(agent_id, now);
+        self.last_command_control_activity_by_agent.insert(agent_id, now);
     }
 
     /// Forcefully deregister all currently connected agents.
@@ -220,10 +192,7 @@ impl FeagiAgentHandler {
     //region  REST
 
     /// Get device registrations by AgentID
-    pub fn get_device_registrations_by_agent(
-        &self,
-        agent_id: AgentID,
-    ) -> Option<&serde_json::Value> {
+    pub fn get_device_registrations_by_agent(&self, agent_id: AgentID) -> Option<&serde_json::Value> {
         self.device_registrations_by_agent.get(&agent_id)
     }
 
@@ -237,27 +206,17 @@ impl FeagiAgentHandler {
     ) {
         self.device_registrations_by_descriptor
             .insert(agent_descriptor.clone(), device_registrations);
-        self.agent_id_by_descriptor
-            .insert(agent_descriptor, agent_id_base64);
+        self.agent_id_by_descriptor.insert(agent_descriptor, agent_id_base64);
     }
 
     /// Get device registrations by AgentDescriptor (REST API queries)
-    pub fn get_device_registrations_by_descriptor(
-        &self,
-        agent_descriptor: &AgentDescriptor,
-    ) -> Option<&serde_json::Value> {
-        self.device_registrations_by_descriptor
-            .get(agent_descriptor)
+    pub fn get_device_registrations_by_descriptor(&self, agent_descriptor: &AgentDescriptor) -> Option<&serde_json::Value> {
+        self.device_registrations_by_descriptor.get(agent_descriptor)
     }
 
     /// Store device registrations by AgentID (active connection)
-    pub fn set_device_registrations_by_agent(
-        &mut self,
-        agent_id: AgentID,
-        device_registrations: serde_json::Value,
-    ) {
-        self.device_registrations_by_agent
-            .insert(agent_id, device_registrations);
+    pub fn set_device_registrations_by_agent(&mut self, agent_id: AgentID, device_registrations: serde_json::Value) {
+        self.device_registrations_by_agent.insert(agent_id, device_registrations);
     }
 
     /// Drain and return queued AgentConfiguration payloads received from agents.
@@ -278,10 +237,7 @@ impl FeagiAgentHandler {
 
         if rate_hz > 0.0 {
             let agent_descriptor = self.all_registered_agents.get(&agent_id)?;
-            let agent_id = self
-                .agent_id_by_descriptor
-                .get(&agent_descriptor.0)?
-                .clone();
+            let agent_id = self.agent_id_by_descriptor.get(&agent_descriptor.0)?.clone();
             Some((agent_id, rate_hz))
         } else {
             None
@@ -296,10 +252,7 @@ impl FeagiAgentHandler {
 
     /// Add a poll-based command/control server (ZMQ/WS). The router is wrapped in a
     /// [`CommandControlWrapper`] that only exposes messages.
-    pub fn add_and_start_command_control_server(
-        &mut self,
-        router_property: Box<dyn FeagiServerRouterProperties>,
-    ) -> Result<(), FeagiAgentError> {
+    pub fn add_and_start_command_control_server(&mut self, router_property: Box<dyn FeagiServerRouterProperties>) -> Result<(), FeagiAgentError> {
         let mut router = router_property.as_boxed_server_router();
         router.request_start()?;
         let translator = CommandControlWrapper::new(router);
@@ -337,14 +290,11 @@ impl FeagiAgentHandler {
 
     /// Poll all command and control servers. Messages for registration request and heartbeat are
     /// handled internally here. Others are raised for FEAGI to act upon
-    pub fn poll_command_and_control(
-        &mut self,
-    ) -> Result<Option<(AgentID, FeagiMessage)>, FeagiAgentError> {
+    pub fn poll_command_and_control(&mut self) -> Result<Option<(AgentID, FeagiMessage)>, FeagiAgentError> {
         self.try_prune_stale_agents();
         for (command_index, translator) in self.command_control_servers.iter_mut().enumerate() {
             // TODO smarter error handling. Many things don't deserve a panic
-            let possible_message =
-                translator.poll_for_incoming_messages(&self.all_registered_agents)?;
+            let possible_message = translator.poll_for_incoming_messages(&self.all_registered_agents)?;
 
             match possible_message {
                 None => {
@@ -352,11 +302,7 @@ impl FeagiAgentHandler {
                 }
                 Some((agent_id, message, is_new_agent)) => {
                     if is_new_agent {
-                        return self.handle_messages_from_unknown_agent_ids(
-                            agent_id,
-                            &message,
-                            command_index,
-                        );
+                        return self.handle_messages_from_unknown_agent_ids(agent_id, &message, command_index);
                     } else {
                         return self.handle_messages_from_known_agent_ids(agent_id, message);
                     }
@@ -368,21 +314,9 @@ impl FeagiAgentHandler {
     }
 
     /// Send a command and control message to a specific agent
-    pub fn send_message_to_agent(
-        &mut self,
-        agent_id: AgentID,
-        message: FeagiMessage,
-        increment_counter: u16,
-    ) -> Result<(), FeagiAgentError> {
-        let translator_index = match self
-            .agent_mapping_to_command_control_server_index
-            .get(&agent_id)
-        {
-            None => {
-                return Err(FeagiAgentError::other(
-                    "No such Agent ID exists!".to_string(),
-                ))
-            }
+    pub fn send_message_to_agent(&mut self, agent_id: AgentID, message: FeagiMessage, increment_counter: u16) -> Result<(), FeagiAgentError> {
+        let translator_index = match self.agent_mapping_to_command_control_server_index.get(&agent_id) {
+            None => return Err(FeagiAgentError::other("No such Agent ID exists!".to_string())),
             Some(index) => index,
         };
 
@@ -409,17 +343,11 @@ impl FeagiAgentHandler {
         let command_translator = self
             .command_control_servers
             .get_mut(command_server_index)
-            .ok_or_else(|| {
-                FeagiAgentError::other("Missing command control server index".to_string())
-            })?;
+            .ok_or_else(|| FeagiAgentError::other("Missing command control server index".to_string()))?;
         command_translator.send_message(session_id, message, increment_counter)
     }
 
-    pub fn send_motor_data_to_agent(
-        &mut self,
-        agent_id: AgentID,
-        data: &FeagiByteContainer,
-    ) -> Result<(), FeagiAgentError> {
+    pub fn send_motor_data_to_agent(&mut self, agent_id: AgentID, data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
         let motor_translator = self
             .motors
             .get_mut(&agent_id)
@@ -429,11 +357,7 @@ impl FeagiAgentHandler {
         Ok(())
     }
 
-    pub fn send_visualization_data_to_agent(
-        &mut self,
-        agent_id: AgentID,
-        data: &FeagiByteContainer,
-    ) -> Result<(), FeagiAgentError> {
+    pub fn send_visualization_data_to_agent(&mut self, agent_id: AgentID, data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
         let visualization_translator = self
             .visualizations
             .get_mut(&agent_id)
@@ -491,11 +415,7 @@ impl FeagiAgentHandler {
         Ok(())
     }
 
-    pub fn send_motor_data(
-        &mut self,
-        agent_id: AgentID,
-        motor_data: &FeagiByteContainer,
-    ) -> Result<(), FeagiAgentError> {
+    pub fn send_motor_data(&mut self, agent_id: AgentID, motor_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
         let embodiment_option = self.motors.get_mut(&agent_id);
         match embodiment_option {
             Some(embodiment) => {
@@ -503,18 +423,12 @@ impl FeagiAgentHandler {
                 self.refresh_agent_activity(agent_id);
                 Ok(())
             }
-            None => Err(FeagiAgentError::unable_to_send_data(
-                "Nonexistant Agent ID!".to_string(),
-            )),
+            None => Err(FeagiAgentError::unable_to_send_data("Nonexistant Agent ID!".to_string())),
         }
     }
 
     /// Send visualization data to a specific agent via dedicated visualization channel
-    pub fn send_visualization_data(
-        &mut self,
-        agent_id: AgentID,
-        viz_data: &FeagiByteContainer,
-    ) -> Result<(), FeagiAgentError> {
+    pub fn send_visualization_data(&mut self, agent_id: AgentID, viz_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
         let embodiment_option = self.visualizations.get_mut(&agent_id);
         match embodiment_option {
             Some(embodiment) => {
@@ -522,9 +436,7 @@ impl FeagiAgentHandler {
                 self.refresh_agent_activity(agent_id);
                 Ok(())
             }
-            None => Err(FeagiAgentError::unable_to_send_data(
-                "Nonexistant Agent ID!".to_string(),
-            )),
+            None => Err(FeagiAgentError::unable_to_send_data("Nonexistant Agent ID!".to_string())),
         }
     }
 
@@ -534,17 +446,10 @@ impl FeagiAgentHandler {
 
     //region Get property
 
-    fn try_get_puller_property_index(
-        &mut self,
-        wanted_protocol: &TransportProtocolImplementation,
-    ) -> Result<usize, FeagiAgentError> {
+    fn try_get_puller_property_index(&mut self, wanted_protocol: &TransportProtocolImplementation) -> Result<usize, FeagiAgentError> {
         for i in 0..self.available_pullers.len() {
             let available_puller = &self.available_pullers[i];
-            if &available_puller
-                .get_bind_point()
-                .as_transport_protocol_implementation()
-                != wanted_protocol
-            {
+            if &available_puller.get_bind_point().as_transport_protocol_implementation() != wanted_protocol {
                 // not the protocol we are looking for
                 continue;
             } else {
@@ -552,15 +457,10 @@ impl FeagiAgentHandler {
                 return Ok(i);
             }
         }
-        Err(FeagiAgentError::init_fail(
-            "Missing required protocol puller".to_string(),
-        ))
+        Err(FeagiAgentError::init_fail("Missing required protocol puller".to_string()))
     }
 
-    fn try_get_publisher_property_index(
-        &mut self,
-        wanted_protocol: &TransportProtocolImplementation,
-    ) -> Result<usize, FeagiAgentError> {
+    fn try_get_publisher_property_index(&mut self, wanted_protocol: &TransportProtocolImplementation) -> Result<usize, FeagiAgentError> {
         for i in 0..self.available_publishers.len() {
             let available_publisher = &self.available_publishers[i];
             if &available_publisher.get_protocol() != wanted_protocol {
@@ -571,15 +471,10 @@ impl FeagiAgentHandler {
                 return Ok(i);
             }
         }
-        Err(FeagiAgentError::init_fail(
-            "Missing required protocol publisher".to_string(),
-        ))
+        Err(FeagiAgentError::init_fail("Missing required protocol publisher".to_string()))
     }
 
-    fn try_get_last_publisher_property_index(
-        &mut self,
-        wanted_protocol: &TransportProtocolImplementation,
-    ) -> Result<usize, FeagiAgentError> {
+    fn try_get_last_publisher_property_index(&mut self, wanted_protocol: &TransportProtocolImplementation) -> Result<usize, FeagiAgentError> {
         for i in (0..self.available_publishers.len()).rev() {
             let available_publisher = &self.available_publishers[i];
             if &available_publisher.get_protocol() != wanted_protocol {
@@ -588,9 +483,7 @@ impl FeagiAgentHandler {
                 return Ok(i);
             }
         }
-        Err(FeagiAgentError::init_fail(
-            "Missing required protocol publisher".to_string(),
-        ))
+        Err(FeagiAgentError::init_fail("Missing required protocol publisher".to_string()))
     }
 
     //endregion
@@ -615,9 +508,7 @@ impl FeagiAgentHandler {
                             registration_request.requested_capabilities(),
                             registration_request.connection_protocol()
                         );
-                        let auth_result = self
-                            .agent_auth_backend
-                            .verify_agent_allowed_to_connect(registration_request);
+                        let auth_result = self.agent_auth_backend.verify_agent_allowed_to_connect(registration_request);
                         if auth_result.is_err() {
                             warn!(
                                 target: "feagi-agent",
@@ -628,11 +519,9 @@ impl FeagiAgentHandler {
                             self.send_message_via_command_server(
                                 command_control_index,
                                 agent_id,
-                                FeagiMessage::AgentRegistration(
-                                    AgentRegistrationMessage::ServerRespondsRegistration(
-                                        RegistrationResponse::FailedInvalidAuth,
-                                    ),
-                                ),
+                                FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(
+                                    RegistrationResponse::FailedInvalidAuth,
+                                )),
                                 0,
                             )?;
                             return Ok(None);
@@ -647,16 +536,9 @@ impl FeagiAgentHandler {
                         //
                         // Equivalent-capability duplicates still use `should_replace_existing_descriptor_session`
                         // to suppress in-flight duplicate registration noise.
-                        if let Some(existing_agent_id) = self
-                            .find_agent_id_by_descriptor(registration_request.agent_descriptor())
-                        {
-                            if let Some((_, existing_capabilities)) =
-                                self.all_registered_agents.get(&existing_agent_id)
-                            {
-                                if !Self::capabilities_equivalent(
-                                    existing_capabilities,
-                                    registration_request.requested_capabilities(),
-                                ) {
+                        if let Some(existing_agent_id) = self.find_agent_id_by_descriptor(registration_request.agent_descriptor()) {
+                            if let Some((_, existing_capabilities)) = self.all_registered_agents.get(&existing_agent_id) {
+                                if !Self::capabilities_equivalent(existing_capabilities, registration_request.requested_capabilities()) {
                                     info!(
                                         target: "feagi-agent",
                                         "Replacing session {} for descriptor {:?}: capability set changed (reconfigure)",
@@ -667,9 +549,7 @@ impl FeagiAgentHandler {
                                         existing_agent_id,
                                         "re-registration with different capabilities for same AgentDescriptor",
                                     );
-                                } else if !self
-                                    .should_replace_existing_descriptor_session(existing_agent_id)
-                                {
+                                } else if !self.should_replace_existing_descriptor_session(existing_agent_id) {
                                     debug!(
                                         target: "feagi-agent",
                                         "Ignoring duplicate registration for descriptor {:?}: existing session {} remains active",
@@ -679,23 +559,15 @@ impl FeagiAgentHandler {
                                     self.send_message_via_command_server(
                                         command_control_index,
                                         agent_id,
-                                        FeagiMessage::AgentRegistration(
-                                            AgentRegistrationMessage::ServerRespondsRegistration(
-                                                RegistrationResponse::AlreadyRegistered,
-                                            ),
-                                        ),
+                                        FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(
+                                            RegistrationResponse::AlreadyRegistered,
+                                        )),
                                         0,
                                     )?;
                                     return Ok(None);
                                 } else {
-                                    let replacement_reason = format!(
-                                        "descriptor replacement by new registration session={}",
-                                        agent_id.to_base64()
-                                    );
-                                    self.deregister_agent_internal(
-                                        existing_agent_id,
-                                        &replacement_reason,
-                                    );
+                                    let replacement_reason = format!("descriptor replacement by new registration session={}", agent_id.to_base64());
+                                    self.deregister_agent_internal(existing_agent_id, &replacement_reason);
                                 }
                             }
                         }
@@ -719,11 +591,9 @@ impl FeagiAgentHandler {
                                 self.send_message_via_command_server(
                                     command_control_index,
                                     agent_id,
-                                    FeagiMessage::AgentRegistration(
-                                        AgentRegistrationMessage::ServerRespondsRegistration(
-                                            RegistrationResponse::FailedInvalidRequest,
-                                        ),
-                                    ),
+                                    FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(
+                                        RegistrationResponse::FailedInvalidRequest,
+                                    )),
                                     0,
                                 )?;
                                 return Ok(None);
@@ -732,15 +602,8 @@ impl FeagiAgentHandler {
 
                         let mapped_caps: Vec<_> = mappings.keys().cloned().collect();
                         let response = RegistrationResponse::Success(agent_id, mappings);
-                        let response_message = FeagiMessage::AgentRegistration(
-                            AgentRegistrationMessage::ServerRespondsRegistration(response),
-                        );
-                        self.send_message_via_command_server(
-                            command_control_index,
-                            agent_id,
-                            response_message,
-                            0,
-                        )?;
+                        let response_message = FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(response));
+                        self.send_message_via_command_server(command_control_index, agent_id, response_message, 0)?;
                         debug!(
                             target: "feagi-agent",
                             "WS registration success response sent: session={} descriptor={:?} mapped_caps={:?}",
@@ -751,17 +614,10 @@ impl FeagiAgentHandler {
                         Ok(None)
                     }
                     AgentRegistrationMessage::ClientRequestDeregistration(_) => {
-                        let response = FeagiMessage::AgentRegistration(
-                            AgentRegistrationMessage::ServerRespondsDeregistration(
-                                DeregistrationResponse::NotRegistered,
-                            ),
-                        );
-                        self.send_message_via_command_server(
-                            command_control_index,
-                            agent_id,
-                            response,
-                            0,
-                        )?;
+                        let response = FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsDeregistration(
+                            DeregistrationResponse::NotRegistered,
+                        ));
+                        self.send_message_via_command_server(command_control_index, agent_id, response, 0)?;
                         Ok(None)
                     }
                     _ => {
@@ -791,11 +647,7 @@ impl FeagiAgentHandler {
                         // Respond first so REQ/REP clients can complete the in-flight request.
                         self.send_message_to_agent(
                             agent_id,
-                            FeagiMessage::AgentRegistration(
-                                AgentRegistrationMessage::ServerRespondsDeregistration(
-                                    DeregistrationResponse::Success,
-                                ),
-                            ),
+                            FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsDeregistration(DeregistrationResponse::Success)),
                             0,
                         )?;
                         let dereg_reason = request
@@ -848,7 +700,7 @@ impl FeagiAgentHandler {
                 self.send_message_to_agent(agent_id, FeagiMessage::HeartBeat, 0)?;
                 Ok(None)
             }
-            
+
              */
             _ => {
                 // Throw up anything else
@@ -884,51 +736,38 @@ impl FeagiAgentHandler {
         let mut sensor_servers: Vec<Box<dyn FeagiServerPuller>> = Vec::new();
         let mut motor_servers: Vec<Box<dyn FeagiServerPublisher>> = Vec::new();
         let mut visualizer_servers: Vec<Box<dyn FeagiServerPublisher>> = Vec::new();
-        let mut endpoint_mappings: HashMap<AgentCapabilities, TransportProtocolEndpoint> =
-            HashMap::new();
+        let mut endpoint_mappings: HashMap<AgentCapabilities, TransportProtocolEndpoint> = HashMap::new();
 
         // We try spawning all the servers first without taking any properties out mof circulation
         for agent_capability in &agent_capabilities {
             match agent_capability {
                 AgentCapabilities::SendSensorData => {
-                    let puller_property_index =
-                        self.try_get_puller_property_index(&wanted_protocol)?;
+                    let puller_property_index = self.try_get_puller_property_index(&wanted_protocol)?;
                     let puller_property = &self.available_pullers[puller_property_index];
                     let mut sensor_server = puller_property.as_boxed_server_puller();
                     sensor_server.request_start()?;
                     sensor_servers.push(sensor_server);
-                    endpoint_mappings.insert(
-                        AgentCapabilities::SendSensorData,
-                        puller_property.get_agent_endpoint(),
-                    );
+                    endpoint_mappings.insert(AgentCapabilities::SendSensorData, puller_property.get_agent_endpoint());
                     used_puller_indices.push(puller_property_index);
                 }
                 AgentCapabilities::ReceiveMotorData => {
-                    let publisher_index =
-                        self.try_get_publisher_property_index(&wanted_protocol)?;
+                    let publisher_index = self.try_get_publisher_property_index(&wanted_protocol)?;
                     let publisher_property = &self.available_publishers[publisher_index];
                     let mut publisher_server = publisher_property.as_boxed_server_publisher();
                     publisher_server.request_start()?;
                     motor_servers.push(publisher_server);
-                    endpoint_mappings.insert(
-                        AgentCapabilities::ReceiveMotorData,
-                        publisher_property.get_agent_endpoint(),
-                    );
+                    endpoint_mappings.insert(AgentCapabilities::ReceiveMotorData, publisher_property.get_agent_endpoint());
                     used_publisher_indices.push(publisher_index);
                 }
                 AgentCapabilities::ReceiveNeuronVisualizations => {
                     // Prefer the last matching publisher for visualization so motor/viz publishers
                     // configured in order [motor, visualization] map correctly.
-                    let publisher_index =
-                        self.try_get_last_publisher_property_index(&wanted_protocol)?;
+                    let publisher_index = self.try_get_last_publisher_property_index(&wanted_protocol)?;
                     let publisher_property = &self.available_publishers[publisher_index];
                     let mut publisher_server = publisher_property.as_boxed_server_publisher();
                     publisher_server.request_start()?;
                     visualizer_servers.push(publisher_server);
-                    endpoint_mappings.insert(
-                        AgentCapabilities::ReceiveNeuronVisualizations,
-                        publisher_property.get_agent_endpoint(),
-                    );
+                    endpoint_mappings.insert(AgentCapabilities::ReceiveNeuronVisualizations, publisher_property.get_agent_endpoint());
                     used_publisher_indices.push(publisher_index);
                 }
                 AgentCapabilities::ReceiveSystemMessages => {
@@ -952,8 +791,7 @@ impl FeagiAgentHandler {
 
         // insert the servers into the cache
         for sensor_server in sensor_servers {
-            let sensor_translator: SensorTranslator =
-                SensorTranslator::new(agent_id, sensor_server);
+            let sensor_translator: SensorTranslator = SensorTranslator::new(agent_id, sensor_server);
             self.sensors.insert(agent_id, sensor_translator);
         }
 
@@ -963,19 +801,15 @@ impl FeagiAgentHandler {
         }
 
         for visualizer_server in visualizer_servers {
-            let visualizer_translator: VisualizationTranslator =
-                VisualizationTranslator::new(agent_id, visualizer_server);
+            let visualizer_translator: VisualizationTranslator = VisualizationTranslator::new(agent_id, visualizer_server);
             self.visualizations.insert(agent_id, visualizer_translator);
         }
 
-        self.all_registered_agents
-            .insert(agent_id, (descriptor, agent_capabilities));
-        self.agent_mapping_to_command_control_server_index
-            .insert(agent_id, command_server_index);
+        self.all_registered_agents.insert(agent_id, (descriptor, agent_capabilities));
+        self.agent_mapping_to_command_control_server_index.insert(agent_id, command_server_index);
         let now = Instant::now();
         self.last_activity_by_agent.insert(agent_id, now);
-        self.last_command_control_activity_by_agent
-            .insert(agent_id, now);
+        self.last_command_control_activity_by_agent.insert(agent_id, now);
 
         Ok(endpoint_mappings)
     }
@@ -991,21 +825,20 @@ impl FeagiAgentHandler {
     /// Record inbound command/control traffic from a registered agent (exclusive
     /// of server-driven motor/sensor/visualization pushes).
     fn refresh_command_control_activity(&mut self, agent_id: AgentID) {
-        self.last_command_control_activity_by_agent
-            .insert(agent_id, Instant::now());
+        self.last_command_control_activity_by_agent.insert(agent_id, Instant::now());
     }
 
     /// Find currently connected agent by descriptor value.
     fn find_agent_id_by_descriptor(&self, descriptor: &AgentDescriptor) -> Option<AgentID> {
-        self.all_registered_agents
-            .iter()
-            .find_map(|(agent_id, (existing_descriptor, _))| {
+        self.all_registered_agents.iter().find_map(
+            |(agent_id, (existing_descriptor, _))| {
                 if existing_descriptor == descriptor {
                     Some(*agent_id)
                 } else {
                     None
                 }
-            })
+            },
+        )
     }
 
     /// Periodically scan and remove stale agents that have exceeded heartbeat timeout.
@@ -1042,14 +875,9 @@ impl FeagiAgentHandler {
     /// deregistration.
     fn deregister_agent_internal(&mut self, agent_id: AgentID, reason: &str) {
         self.last_activity_by_agent.remove(&agent_id);
-        self.last_command_control_activity_by_agent
-            .remove(&agent_id);
-        self.agent_mapping_to_command_control_server_index
-            .remove(&agent_id);
-        let descriptor = self
-            .all_registered_agents
-            .remove(&agent_id)
-            .map(|(descriptor, _)| descriptor);
+        self.last_command_control_activity_by_agent.remove(&agent_id);
+        self.agent_mapping_to_command_control_server_index.remove(&agent_id);
+        let descriptor = self.all_registered_agents.remove(&agent_id).map(|(descriptor, _)| descriptor);
         let descriptor_text = descriptor
             .as_ref()
             .map(|item| format!("{:?}", item))
@@ -1067,12 +895,10 @@ impl FeagiAgentHandler {
             self.available_pullers.push(sensor.into_puller_properties());
         }
         if let Some(motor) = self.motors.remove(&agent_id) {
-            self.available_publishers
-                .push(motor.into_publisher_properties());
+            self.available_publishers.push(motor.into_publisher_properties());
         }
         if let Some(viz) = self.visualizations.remove(&agent_id) {
-            self.available_publishers
-                .push(viz.into_publisher_properties());
+            self.available_publishers.push(viz.into_publisher_properties());
         }
 
         if let Some(descriptor) = descriptor {

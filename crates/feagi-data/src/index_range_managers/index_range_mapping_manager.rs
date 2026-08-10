@@ -1,5 +1,5 @@
-use core::ops::Range;
 use crate::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
+use core::ops::Range;
 
 // TODO rn very basic implementation just for adding stuff
 
@@ -17,10 +17,7 @@ pub struct IndexRangeMappingManager<HeaderIndex: WrappedQuantizedIndexCount, Ran
     amount_unused_capacity: RangeIndex,
 }
 
-
-
 impl<HeaderIndex: WrappedQuantizedIndexCount, RangeIndex: WrappedQuantizedIndexCount> IndexRangeMappingManager<HeaderIndex, RangeIndex> {
-
     pub fn new_empty(max_range_allowed: RangeIndex) -> Self {
         Self {
             header_indexed_used_ranges: vec![],
@@ -33,11 +30,8 @@ impl<HeaderIndex: WrappedQuantizedIndexCount, RangeIndex: WrappedQuantizedIndexC
         }
     }
 
-
-    pub fn allocate_for_length(&mut self, needed_length: RangeIndex) -> Result<NewHeaderRangeStruct<HeaderIndex, RangeIndex>, ()>
-    {
+    pub fn allocate_for_length(&mut self, needed_length: RangeIndex) -> Result<NewHeaderRangeStruct<HeaderIndex, RangeIndex>, ()> {
         // TODO check for space in fragmented space
-
 
         // Not enough contiguous space in fragmented free areas, append to the end
         if needed_length + self.current_max_range_index > self.max_allowed_range_index {
@@ -45,32 +39,32 @@ impl<HeaderIndex: WrappedQuantizedIndexCount, RangeIndex: WrappedQuantizedIndexC
         }
 
         let amount_to_allocate = needed_length - (self.current_range_allocated - self.current_max_range_index); // Make use of any free allocated space at the end
-        let allocation_needed = if amount_to_allocate != RangeIndex::QUANT_ZERO {Some(amount_to_allocate)} else {None};
+        let allocation_needed = if amount_to_allocate != RangeIndex::QUANT_ZERO {
+            Some(amount_to_allocate)
+        } else {
+            None
+        };
 
         let new_range = self.current_max_range_index..(self.current_max_range_index + needed_length);
         self.current_max_range_index = needed_length;
         self.current_range_allocated = new_range.end;
         let (header, range) = self.get_header_index_and_option_range();
         *range = Some(new_range.clone());
-        Ok(
-            NewHeaderRangeStruct {
-                new_header_index: header,
-                additional_allocation_needed: allocation_needed,
-                range: new_range,
-            }
-        )
+        Ok(NewHeaderRangeStruct {
+            new_header_index: header,
+            additional_allocation_needed: allocation_needed,
+            range: new_range,
+        })
     }
-
-
-
-
-
 
     /// Gets an unused header index and the mutable reference to the range it relates to (which will be a None)
     fn get_header_index_and_option_range(&mut self) -> (HeaderIndex, &mut Option<Range<RangeIndex>>) {
-        if let Some(header_index) = self.skipped_headers.pop()
-        {
-            assert_eq!(self.header_indexed_used_ranges[header_index.quant_to_usize()], None, "Range was returned without clearing it!");
+        if let Some(header_index) = self.skipped_headers.pop() {
+            assert_eq!(
+                self.header_indexed_used_ranges[header_index.quant_to_usize()],
+                None,
+                "Range was returned without clearing it!"
+            );
             return (header_index, &mut self.header_indexed_used_ranges[header_index.quant_to_usize()]);
         }
         let header: HeaderIndex = HeaderIndex::quant_from_usize(self.header_indexed_used_ranges.len());
@@ -78,7 +72,6 @@ impl<HeaderIndex: WrappedQuantizedIndexCount, RangeIndex: WrappedQuantizedIndexC
         (header, &mut self.header_indexed_used_ranges[header.quant_to_usize()])
     }
 }
-
 
 pub struct NewHeaderRangeStruct<HeaderIndex: WrappedQuantizedIndexCount, RangeIndex: WrappedQuantizedIndexCount> {
     pub new_header_index: HeaderIndex,

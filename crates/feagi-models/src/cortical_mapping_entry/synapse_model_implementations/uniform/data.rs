@@ -1,6 +1,6 @@
-use feagi_data::create_wrapped_quantized_decimal;
 use crate::cortical_mapping_entry::synapse::cortical_mapping_entry_data::SynapseModelCorticalMappingEntryData;
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelQuantization;
+use feagi_data::create_wrapped_quantized_decimal;
 create_wrapped_quantized_decimal!(
     /// A multiplier synapse value, applies some scale to incoming signal
    pub UniformSynapseMultiplier);
@@ -23,4 +23,3 @@ where
         Self { post_synaptic_multiplier }
     }
 }
-

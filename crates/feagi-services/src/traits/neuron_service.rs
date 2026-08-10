@@ -67,11 +67,7 @@ pub trait NeuronService: Send + Sync {
     /// * `ServiceError::NotFound` - Cortical area not found
     /// * `ServiceError::InvalidInput` - Invalid coordinates
     ///
-    async fn get_neuron_at_coordinates(
-        &self,
-        cortical_id: &str,
-        coordinates: (u32, u32, u32),
-    ) -> ServiceResult<Option<NeuronInfo>>;
+    async fn get_neuron_at_coordinates(&self, cortical_id: &str, coordinates: (u32, u32, u32)) -> ServiceResult<Option<NeuronInfo>>;
 
     /// List all neurons in a cortical_area area
     ///
@@ -85,11 +81,7 @@ pub trait NeuronService: Send + Sync {
     /// # Errors
     /// * `ServiceError::NotFound` - Cortical area not found
     ///
-    async fn list_neurons_in_area(
-        &self,
-        cortical_id: &str,
-        limit: Option<usize>,
-    ) -> ServiceResult<Vec<NeuronInfo>>;
+    async fn list_neurons_in_area(&self, cortical_id: &str, limit: Option<usize>) -> ServiceResult<Vec<NeuronInfo>>;
 
     /// Get the count of neurons in a cortical_area area
     ///

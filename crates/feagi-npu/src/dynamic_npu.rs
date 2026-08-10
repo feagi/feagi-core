@@ -1,17 +1,19 @@
+use crate::engines::rayon::rayon_burst_engine::RayonBurstEngine;
+use crate::engines_common::EditableEngine::EditableEngine;
+use crate::visualization::CorticalAreaFireSnapshot;
 use ahash::HashMap;
 use feagi_data::collections::BiDirectionHashmap;
-use crate::engines::rayon::rayon_burst_engine::RayonBurstEngine;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
+use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_models::connectome_requests::connectome_request::{ConnectomeRequest};
+use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
 use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
-use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::{CorticalMappingEntryWriterByModelQuant, UniformWriter};
+use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::{
+    CorticalMappingEntryWriterByModelQuant, UniformWriter,
+};
 use feagi_models::wrapped_index_collections::CorticalEngineIndex;
-use crate::engines_common::EditableEngine::EditableEngine;
-use crate::visualization::CorticalAreaFireSnapshot;
-use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
 
 // TODO Genomic level quantization isnt really meant to be used, but we will use it here for now
 
@@ -36,29 +38,27 @@ impl DynamicNPU {
             cortical_ids_by_engine_index: Vec::new(),
         }
     }
-    
-    pub fn request(&mut self, request: ConnectomeRequest) {
 
+    pub fn request(&mut self, request: ConnectomeRequest) {
         // TODO check indexing quant
 
         match request {
-            ConnectomeRequest::CorticalAreaAdd{ TEMP_adding_id, writer } => {
-                match writer {
-                    
-                    CorticalWriterByModelQuant::FeagiAdvanced(quant) => {
-                        match quant {
-                            FeagiAdvancedModelWriter::Standard(writer) => {
-                                let index = self.rayon_burst_engine.add_cortical_area::<
-                                    FeagiAdvancedModel<FeagiIndexQuantizationGenomic, FeagiAdvancedModelStandardQuant>,
-                                >(writer);
-                                self.cortical_id_engine_mapping.insert(TEMP_adding_id, index);
-                                self.cortical_ids_by_engine_index.push(TEMP_adding_id);
-                            }
-                        }
+            ConnectomeRequest::CorticalAreaAdd { TEMP_adding_id, writer } => match writer {
+                CorticalWriterByModelQuant::FeagiAdvanced(quant) => match quant {
+                    FeagiAdvancedModelWriter::Standard(writer) => {
+                        let index = self
+                            .rayon_burst_engine
+                            .add_cortical_area::<FeagiAdvancedModel<FeagiIndexQuantizationGenomic, FeagiAdvancedModelStandardQuant>>(writer);
+                        self.cortical_id_engine_mapping.insert(TEMP_adding_id, index);
+                        self.cortical_ids_by_engine_index.push(TEMP_adding_id);
                     }
-                }
+                },
             },
-            ConnectomeRequest::CorticalMappingEntryAdd { source_id, destination_id, mapping_writer } => {
+            ConnectomeRequest::CorticalMappingEntryAdd {
+                source_id,
+                destination_id,
+                mapping_writer,
+            } => {
                 let source_index = self.cortical_id_engine_mapping.get_forward(&source_id).unwrap();
                 let destination_index = self.cortical_id_engine_mapping.get_forward(&destination_id).unwrap();
 
@@ -69,16 +69,10 @@ impl DynamicNPU {
                                 //self.rayon_burst_engine.add_mapping_entry();
                             }
                         }
-
-
                     }
                 }
             }
         }
-
-
-
-        
     }
 
     pub fn execute_single_burst(&mut self) {
@@ -96,9 +90,7 @@ impl DynamicNPU {
             .into_iter()
             .filter_map(|snapshot| {
                 let slot = snapshot.cortical_index.deref().quant_to_usize();
-                self.cortical_ids_by_engine_index
-                    .get(slot)
-                    .map(|cortical_id| (*cortical_id, snapshot))
+                self.cortical_ids_by_engine_index.get(slot).map(|cortical_id| (*cortical_id, snapshot))
             })
             .collect()
     }
@@ -107,6 +99,4 @@ impl DynamicNPU {
     pub fn cortical_areas(&self) -> &[CorticalID] {
         &self.cortical_ids_by_engine_index
     }
-    
-    
 }

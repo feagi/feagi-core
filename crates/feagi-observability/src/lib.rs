@@ -63,8 +63,7 @@ pub use cli::*;
 pub use config::*;
 pub use init::*;
 pub use ring_layer::{
-    capacity_from_env, global_ring, install_global_ring, LogRecord, LogRingBuffer, RingBufferLayer,
-    CAPACITY_ENV_VAR, DEFAULT_CAPACITY,
+    capacity_from_env, global_ring, install_global_ring, LogRecord, LogRingBuffer, RingBufferLayer, CAPACITY_ENV_VAR, DEFAULT_CAPACITY,
 };
 
 /// Known FEAGI crate names for debug flags

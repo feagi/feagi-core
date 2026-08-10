@@ -42,9 +42,7 @@ impl CommandControlWrapper {
             FeagiEndpointState::Inactive => Ok(None),
             FeagiEndpointState::Pending => Ok(None),
             FeagiEndpointState::ActiveWaiting => Ok(None),
-            FeagiEndpointState::ActiveHasData => {
-                self.process_incoming_data_into_message(known_session_ids)
-            }
+            FeagiEndpointState::ActiveHasData => self.process_incoming_data_into_message(known_session_ids),
             FeagiEndpointState::Errored(error) => {
                 match error {
                     FeagiNetworkError::CannotBind(err) => {
@@ -89,16 +87,10 @@ impl CommandControlWrapper {
     }
 
     /// Send a message to a specific connected agent
-    pub fn send_message(
-        &mut self,
-        session_id: AgentID,
-        message: FeagiMessage,
-        increment_counter: u16,
-    ) -> Result<(), FeagiAgentError> {
+    pub fn send_message(&mut self, session_id: AgentID, message: FeagiMessage, increment_counter: u16) -> Result<(), FeagiAgentError> {
         let container = &mut self.send_buffer;
         message.serialize_to_byte_container(container, session_id, increment_counter)?;
-        self.router
-            .publish_response(session_id, container.get_byte_ref())?;
+        self.router.publish_response(session_id, container.get_byte_ref())?;
         Ok(())
     }
 
@@ -115,8 +107,7 @@ impl CommandControlWrapper {
         // connection type itself!
         let (session_id, incoming_data) = self.router.consume_retrieved_request()?;
 
-        let min_len = FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
-            + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
+        let min_len = FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
         if incoming_data.len() < min_len {
             tracing::warn!(
                 "Rejecting command/control payload: {} bytes (minimum {} for 48-byte AgentDescriptor)",
@@ -136,8 +127,7 @@ impl CommandControlWrapper {
             }
         }
 
-        self.request_buffer
-            .try_write_data_by_copy_and_verify(incoming_data); // Load in data
+        self.request_buffer.try_write_data_by_copy_and_verify(incoming_data); // Load in data
         let feagi_message: FeagiMessage = (&self.request_buffer).try_into()?;
 
         // WARNING: It is possible for an agent to request registration a second time. Be wary!

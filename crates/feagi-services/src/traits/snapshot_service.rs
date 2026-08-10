@@ -39,10 +39,7 @@ pub trait SnapshotService: Send + Sync {
     /// # Returns
     /// * `SnapshotMetadata` - Created snapshot metadata
     ///
-    async fn create_snapshot(
-        &self,
-        options: SnapshotCreateOptions,
-    ) -> ServiceResult<SnapshotMetadata>;
+    async fn create_snapshot(&self, options: SnapshotCreateOptions) -> ServiceResult<SnapshotMetadata>;
 
     /// Restore a snapshot
     ///
@@ -74,9 +71,5 @@ pub trait SnapshotService: Send + Sync {
     /// # Returns
     /// * Raw snapshot data
     ///
-    async fn get_snapshot_artifact(
-        &self,
-        snapshot_id: &str,
-        format: &str,
-    ) -> ServiceResult<Vec<u8>>;
+    async fn get_snapshot_artifact(&self, snapshot_id: &str, format: &str) -> ServiceResult<Vec<u8>>;
 }

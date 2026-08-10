@@ -12,9 +12,7 @@ incompletely shows up as a burst that panics or silently processes nothing.
 use core::marker::PhantomData;
 
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
-use feagi_data::quantization_levels::feagi_index_quantization::{
-    FeagiIndexQuantization, FeagiIndexQuantizationGenomic,
-};
+use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
@@ -25,8 +23,7 @@ type NeuronQuant = <FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::Ne
 
 /// Builds an area-add request for a `x * y * z * d` dimensional area.
 fn add_area_request(cortical_id: CorticalID, x: usize, y: usize, z: usize, d: usize) -> ConnectomeRequest {
-    let dimensions = DimensionalCorticalArea4DDimensions::<NeuronQuant>::try_new_from_usizes(x, y, z, d)
-        .expect("dimensions should be representable");
+    let dimensions = DimensionalCorticalArea4DDimensions::<NeuronQuant>::try_new_from_usizes(x, y, z, d).expect("dimensions should be representable");
 
     let writer = FeagiAdvancedModelCorticalWriter::DefaultNewDimensional {
         dimensions,
@@ -107,9 +104,7 @@ fn firing_burst_reports_every_neuron_once_at_its_own_coordinate() {
 
     // Each neuron should map to a distinct coordinate covering the whole volume, which is what
     // proves the linear-index-to-coordinate walk lines up with the area's dimensions.
-    let mut reported: Vec<(u32, u32, u32)> = (0..area.len())
-        .map(|i| (area.coords_x[i], area.coords_y[i], area.coords_z[i]))
-        .collect();
+    let mut reported: Vec<(u32, u32, u32)> = (0..area.len()).map(|i| (area.coords_x[i], area.coords_y[i], area.coords_z[i])).collect();
     reported.sort_unstable();
 
     let mut expected: Vec<(u32, u32, u32)> = Vec::new();
@@ -182,9 +177,7 @@ fn an_area_spanning_many_bytes_reports_every_neuron_exactly_once() {
     let area = &snapshot[0].1;
     assert_eq!(area.len(), x * y);
 
-    let mut reported: Vec<(u32, u32)> = (0..area.len())
-        .map(|i| (area.coords_x[i], area.coords_y[i]))
-        .collect();
+    let mut reported: Vec<(u32, u32)> = (0..area.len()).map(|i| (area.coords_x[i], area.coords_y[i])).collect();
     reported.sort_unstable();
     reported.dedup();
     assert_eq!(
@@ -211,10 +204,7 @@ fn neighbouring_ragged_areas_do_not_bleed_into_each_other() {
     npu.execute_single_burst();
 
     let snapshot = npu.fire_queue_snapshot();
-    let counts: Vec<(CorticalID, usize)> = snapshot
-        .iter()
-        .map(|(id, area)| (*id, area.len()))
-        .collect();
+    let counts: Vec<(CorticalID, usize)> = snapshot.iter().map(|(id, area)| (*id, area.len())).collect();
 
     assert_eq!(counts, vec![(first, 3), (second, 5), (third, 7)]);
 }
@@ -228,10 +218,7 @@ fn firing_bits_do_not_survive_into_the_next_burst() {
     npu.request(add_area_request(first, 10, 10, 1, 1));
 
     npu.execute_single_burst();
-    assert!(
-        !npu.fire_queue_snapshot().is_empty(),
-        "burst zero fires under the placeholder dynamics"
-    );
+    assert!(!npu.fire_queue_snapshot().is_empty(), "burst zero fires under the placeholder dynamics");
 
     npu.execute_single_burst();
     assert!(

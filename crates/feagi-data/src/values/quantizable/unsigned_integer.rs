@@ -45,31 +45,32 @@ impl QuantizationLevelPacking for UnsignedIntegerQuantizationLevel {
 
 /// Trait designed to hold uint data values in a quantized form
 pub trait QuantizedUnsignedIntegerTrait:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::cmp::PartialOrd
-+ core::cmp::Ord
-+ core::iter::Sum
-+ core::fmt::Debug
-+ core::fmt::Display
-+ core::ops::Rem<Output=Self>
-+ core::ops::RemAssign
-+ core::cmp::Eq
-+ core::hash::Hash
-+ Sized
-+ 'static
-+ QuantizedElementBase {
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + Default
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + core::cmp::PartialOrd
+    + core::cmp::Ord
+    + core::iter::Sum
+    + core::fmt::Debug
+    + core::fmt::Display
+    + core::ops::Rem<Output = Self>
+    + core::ops::RemAssign
+    + core::cmp::Eq
+    + core::hash::Hash
+    + Sized
+    + 'static
+    + QuantizedElementBase
+{
     const LEVEL: UnsignedIntegerQuantizationLevel;
 
     const QUANT_MAX: Self;
@@ -295,13 +296,7 @@ impl UnsignedIntegerEnum {
     pub fn try_into_quant<Quant: QuantizedUnsignedIntegerTrait>(self) -> Result<Quant, FeagiDataValueQuantizationError> {
         let value = self.to_usize();
         if !unsigned_value_fits_quant::<Quant>(value) {
-            return Err(
-                FeagiFailQuantizationOutOfRange::new(
-                    "Quantized unsigned integer exceeds target quantization!",
-                    value,
-                )
-                .into(),
-            );
+            return Err(FeagiFailQuantizationOutOfRange::new("Quantized unsigned integer exceeds target quantization!", value).into());
         }
         Ok(Quant::quant_from_usize(value))
     }
@@ -345,32 +340,32 @@ fn unsigned_value_fits_quant<Quant: QuantizedUnsignedIntegerTrait>(value: usize)
 /// [`QuantizedUnsignedIntegerTrait`] value; the macro only needs to supply [`Self::new`],
 /// [`Self::deref`] and the `Self`-typed constants.
 pub trait WrappedQuantizedUnsignedInteger:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::fmt::Debug
-+ core::cmp::PartialEq
-+ core::cmp::Eq
-+ core::cmp::PartialOrd
-+ core::cmp::Ord
-+ core::hash::Hash
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::Rem<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::ops::RemAssign
-+ From<Self::Quant>
-+ AsRef<Self::Quant>
-+ AsMut<Self::Quant>
-+ Sized
-+ 'static
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + Default
+    + core::fmt::Debug
+    + core::cmp::PartialEq
+    + core::cmp::Eq
+    + core::cmp::PartialOrd
+    + core::cmp::Ord
+    + core::hash::Hash
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::Rem<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + core::ops::RemAssign
+    + From<Self::Quant>
+    + AsRef<Self::Quant>
+    + AsMut<Self::Quant>
+    + Sized
+    + 'static
 {
     /// The underlying quantized unsigned integer value this wrapper stores.
     type Quant: QuantizedUnsignedIntegerTrait;
@@ -428,16 +423,7 @@ Copy
 /// These enums hide the generic quantized wrapper type behind concrete variants
 /// (`U8`, `U16`, `U32`, `U64`) while preserving the wrapper family semantics.
 pub trait WrappedQuantizedUnsignedIntegerEnum:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::cmp::PartialEq
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Sized
-    + 'static
+    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
     fn get_level(&self) -> UnsignedIntegerQuantizationLevel;
 

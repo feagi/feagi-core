@@ -11,21 +11,13 @@ use std::collections::HashMap;
 use utoipa::{IntoParams, ToSchema};
 
 /// Get the current simulation timestep in seconds.
-#[utoipa::path(
-    get,
-    path = "/v1/burst_engine/simulation_timestep",
-    tag = "burst_engine"
-)]
+#[utoipa::path(get, path = "/v1/burst_engine/simulation_timestep", tag = "burst_engine")]
 pub async fn get_simulation_timestep(State(state): State<ApiState>) -> ApiResult<Json<f64>> {
     let runtime_service = state.runtime_service.as_ref();
     match runtime_service.get_status().await {
         Ok(status) => {
             // Convert frequency to timestep (1/Hz = seconds)
-            let timestep = if status.frequency_hz > 0.0 {
-                1.0 / status.frequency_hz
-            } else {
-                0.0
-            };
+            let timestep = if status.frequency_hz > 0.0 { 1.0 / status.frequency_hz } else { 0.0 };
             Ok(Json(timestep))
         }
         Err(e) => Err(ApiError::internal(format!("Failed to get timestep: {}", e))),
@@ -33,11 +25,7 @@ pub async fn get_simulation_timestep(State(state): State<ApiState>) -> ApiResult
 }
 
 /// Set the simulation timestep in seconds (converted to burst frequency).
-#[utoipa::path(
-    post,
-    path = "/v1/burst_engine/simulation_timestep",
-    tag = "burst_engine"
-)]
+#[utoipa::path(post, path = "/v1/burst_engine/simulation_timestep", tag = "burst_engine")]
 pub async fn post_simulation_timestep(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, f64>>,
@@ -49,10 +37,7 @@ pub async fn post_simulation_timestep(
         let frequency = if timestep > 0.0 { 1.0 / timestep } else { 0.0 };
 
         match runtime_service.set_frequency(frequency).await {
-            Ok(_) => Ok(Json(HashMap::from([(
-                "message".to_string(),
-                format!("Timestep set to {}", timestep),
-            )]))),
+            Ok(_) => Ok(Json(HashMap::from([("message".to_string(), format!("Timestep set to {}", timestep))]))),
             Err(e) => Err(ApiError::internal(format!("Failed to set timestep: {}", e))),
         }
     } else {
@@ -74,9 +59,7 @@ pub async fn post_simulation_timestep(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fcl(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_fcl(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use std::collections::BTreeMap;
     use tracing::{debug, warn};
 
@@ -130,10 +113,7 @@ pub async fn get_fcl(
             ))
         })?;
 
-        cortical_areas
-            .entry(cortical_id)
-            .or_default()
-            .push(*neuron_id);
+        cortical_areas.entry(cortical_id).or_default().push(*neuron_id);
     }
 
     // Limit to first 20 neuron IDs per area (matching Python behavior for network efficiency)
@@ -147,19 +127,10 @@ pub async fn get_fcl(
     // Build response (NO global_fcl per user request)
     let mut response = HashMap::new();
     response.insert("timestep".to_string(), serde_json::json!(timestep));
-    response.insert(
-        "total_neurons".to_string(),
-        serde_json::json!(total_neurons),
-    );
-    response.insert(
-        "cortical_areas".to_string(),
-        serde_json::json!(cortical_areas),
-    );
+    response.insert("total_neurons".to_string(), serde_json::json!(total_neurons));
+    response.insert("cortical_areas".to_string(), serde_json::json!(cortical_areas));
     response.insert("default_window_size".to_string(), serde_json::json!(20));
-    response.insert(
-        "active_cortical_count".to_string(),
-        serde_json::json!(active_cortical_count),
-    );
+    response.insert("active_cortical_count".to_string(), serde_json::json!(active_cortical_count));
 
     debug!(target: "feagi-api", "GET /fcl - {} neurons across {} cortical_area areas (limited to 20/area)",
            total_neurons, active_cortical_count);
@@ -177,9 +148,7 @@ pub async fn get_fcl(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fire_queue(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_fire_queue(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use tracing::{debug, info};
 
     let runtime_service = state.runtime_service.as_ref();
@@ -194,10 +163,7 @@ pub async fn get_fire_queue(
     if fq_sample.is_empty() {
         debug!("[FIRE-QUEUE-API] ⚠️ Fire queue sample is EMPTY - no areas");
     } else {
-        let total_neurons: usize = fq_sample
-            .values()
-            .map(|(x, y, z, _, _)| x.len() + y.len() + z.len())
-            .sum();
+        let total_neurons: usize = fq_sample.values().map(|(x, y, z, _, _)| x.len() + y.len() + z.len()).sum();
         info!(
             "[FIRE-QUEUE-API] ✓ Received fire queue sample: {} areas, {} total neurons",
             fq_sample.len(),
@@ -218,10 +184,7 @@ pub async fn get_fire_queue(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to list cortical_area areas: {}", e)))?;
 
-    let idx_to_id: HashMap<u32, String> = areas
-        .iter()
-        .map(|a| (a.cortical_idx, a.cortical_id.clone()))
-        .collect();
+    let idx_to_id: HashMap<u32, String> = areas.iter().map(|a| (a.cortical_idx, a.cortical_id.clone())).collect();
 
     // Convert cortical_idx to cortical_id and report only per-area fired neuron COUNT.
     // Caller explicitly does not need individual neuron IDs.
@@ -251,10 +214,7 @@ pub async fn get_fire_queue(
     let mut response = HashMap::new();
     response.insert("timestep".to_string(), serde_json::json!(timestep));
     response.insert("total_fired".to_string(), serde_json::json!(total_fired));
-    response.insert(
-        "cortical_areas".to_string(),
-        serde_json::json!(cortical_areas),
-    );
+    response.insert("cortical_areas".to_string(), serde_json::json!(cortical_areas));
 
     debug!(target: "feagi-api", "GET /fire_queue - returned {} fired neurons", total_fired);
 
@@ -269,12 +229,7 @@ pub struct FclNeuronQuery {
 }
 
 /// Get the current FCL candidate potential for a specific neuron.
-#[utoipa::path(
-    get,
-    path = "/v1/burst_engine/fcl/neuron",
-    tag = "burst_engine",
-    params(FclNeuronQuery)
-)]
+#[utoipa::path(get, path = "/v1/burst_engine/fcl/neuron", tag = "burst_engine", params(FclNeuronQuery))]
 pub async fn get_fcl_neuron(
     State(state): State<ApiState>,
     Query(params): Query<FclNeuronQuery>,
@@ -293,10 +248,7 @@ pub async fn get_fcl_neuron(
         Some((_id, cortical_idx, potential)) => {
             response.insert("present".to_string(), serde_json::json!(true));
             response.insert("cortical_idx".to_string(), serde_json::json!(*cortical_idx));
-            response.insert(
-                "candidate_potential".to_string(),
-                serde_json::json!(*potential),
-            );
+            response.insert("candidate_potential".to_string(), serde_json::json!(*potential));
         }
         None => {
             response.insert("present".to_string(), serde_json::json!(false));
@@ -315,12 +267,7 @@ pub struct FireQueueNeuronQuery {
 }
 
 /// Check whether a specific neuron fired in the last burst (Fire Queue sample).
-#[utoipa::path(
-    get,
-    path = "/v1/burst_engine/fire_queue/neuron",
-    tag = "burst_engine",
-    params(FireQueueNeuronQuery)
-)]
+#[utoipa::path(get, path = "/v1/burst_engine/fire_queue/neuron", tag = "burst_engine", params(FireQueueNeuronQuery))]
 pub async fn get_fire_queue_neuron(
     State(state): State<ApiState>,
     Query(params): Query<FireQueueNeuronQuery>,
@@ -362,9 +309,7 @@ pub async fn get_fire_queue_neuron(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_fcl_reset(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_fcl_reset(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     use tracing::info;
 
     // TODO: Reset FCL in BurstLoopRunner/NPU
@@ -386,9 +331,7 @@ pub async fn post_fcl_reset(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fcl_status(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_fcl_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use tracing::debug;
 
     // TODO: Get FCL manager status
@@ -396,10 +339,7 @@ pub async fn get_fcl_status(
 
     let mut response = HashMap::new();
     response.insert("available".to_string(), serde_json::json!(false));
-    response.insert(
-        "error".to_string(),
-        serde_json::json!("FCL manager not yet implemented in Rust"),
-    );
+    response.insert("error".to_string(), serde_json::json!("FCL manager not yet implemented in Rust"));
 
     Ok(Json(response))
 }
@@ -418,9 +358,7 @@ pub async fn get_fcl_status(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fire_ledger_default_window_size(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<i32>> {
+pub async fn get_fire_ledger_default_window_size(State(_state): State<ApiState>) -> ApiResult<Json<i32>> {
     // Get default window size from Fire Ledger configuration
     // TODO: Add get_default_window_size to RuntimeService
     // For now, return standard default
@@ -471,9 +409,7 @@ pub async fn put_fire_ledger_default_window_size(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fire_ledger_areas_window_config(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_fire_ledger_areas_window_config(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     tracing::debug!("[NPU-LOCK] API: GET /v1/burst_engine/fire_ledger/areas_window_config called - this acquires NPU lock!");
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
@@ -491,10 +427,7 @@ pub async fn get_fire_ledger_areas_window_config(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to list cortical_area areas: {}", e)))?;
 
-    let idx_to_id: HashMap<u32, String> = cortical_areas_list
-        .iter()
-        .map(|a| (a.cortical_idx, a.cortical_id.clone()))
-        .collect();
+    let idx_to_id: HashMap<u32, String> = cortical_areas_list.iter().map(|a| (a.cortical_idx, a.cortical_id.clone())).collect();
 
     // Convert to area_id -> window_size HashMap using actual cortical_id
     let mut areas: HashMap<String, usize> = HashMap::new();
@@ -511,10 +444,7 @@ pub async fn get_fire_ledger_areas_window_config(
     let mut response = HashMap::new();
     response.insert("default_window_size".to_string(), serde_json::json!(20));
     response.insert("areas".to_string(), serde_json::json!(areas));
-    response.insert(
-        "total_configured_areas".to_string(),
-        serde_json::json!(areas.len()),
-    );
+    response.insert("total_configured_areas".to_string(), serde_json::json!(areas.len()));
 
     Ok(Json(response))
 }
@@ -533,22 +463,14 @@ pub async fn get_fire_ledger_areas_window_config(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_stats(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_stats(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     match runtime_service.get_status().await {
         Ok(status) => {
             let mut response = HashMap::new();
-            response.insert(
-                "burst_count".to_string(),
-                serde_json::json!(status.burst_count),
-            );
-            response.insert(
-                "frequency_hz".to_string(),
-                serde_json::json!(status.frequency_hz),
-            );
+            response.insert("burst_count".to_string(), serde_json::json!(status.burst_count));
+            response.insert("frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
             response.insert("active".to_string(), serde_json::json!(status.is_running));
             response.insert("paused".to_string(), serde_json::json!(status.is_paused));
 
@@ -568,9 +490,7 @@ pub async fn get_stats(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_status(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_status(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     match runtime_service.get_status().await {
@@ -578,14 +498,8 @@ pub async fn get_status(
             let mut response = HashMap::new();
             response.insert("active".to_string(), serde_json::json!(status.is_running));
             response.insert("paused".to_string(), serde_json::json!(status.is_paused));
-            response.insert(
-                "burst_count".to_string(),
-                serde_json::json!(status.burst_count),
-            );
-            response.insert(
-                "frequency_hz".to_string(),
-                serde_json::json!(status.frequency_hz),
-            );
+            response.insert("burst_count".to_string(), serde_json::json!(status.burst_count));
+            response.insert("frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
 
             Ok(Json(response))
         }
@@ -603,10 +517,7 @@ pub async fn get_status(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_control(
-    State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_control(State(state): State<ApiState>, Json(request): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
     let runtime_service = state.runtime_service.as_ref();
     let action = request.get("action").map(|s| s.as_str());
 
@@ -616,34 +527,23 @@ pub async fn post_control(
                 .start()
                 .await
                 .map_err(|e| ApiError::internal(format!("Failed to start: {}", e)))?;
-            Ok(Json(HashMap::from([(
-                "message".to_string(),
-                "Burst engine started".to_string(),
-            )])))
+            Ok(Json(HashMap::from([("message".to_string(), "Burst engine started".to_string())])))
         }
         Some("pause") => {
             runtime_service
                 .pause()
                 .await
                 .map_err(|e| ApiError::internal(format!("Failed to pause: {}", e)))?;
-            Ok(Json(HashMap::from([(
-                "message".to_string(),
-                "Burst engine paused".to_string(),
-            )])))
+            Ok(Json(HashMap::from([("message".to_string(), "Burst engine paused".to_string())])))
         }
         Some("stop") => {
             runtime_service
                 .stop()
                 .await
                 .map_err(|e| ApiError::internal(format!("Failed to stop: {}", e)))?;
-            Ok(Json(HashMap::from([(
-                "message".to_string(),
-                "Burst engine stopped".to_string(),
-            )])))
+            Ok(Json(HashMap::from([("message".to_string(), "Burst engine stopped".to_string())])))
         }
-        _ => Err(ApiError::invalid_input(
-            "Invalid action: must be 'start', 'pause', or 'stop'",
-        )),
+        _ => Err(ApiError::invalid_input("Invalid action: must be 'start', 'pause', or 'stop'")),
     }
 }
 
@@ -661,9 +561,7 @@ pub async fn post_control(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fcl_sampler_config(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_fcl_sampler_config(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     let (frequency, consumer) = runtime_service
@@ -696,9 +594,7 @@ pub async fn post_fcl_sampler_config(
     let runtime_service = state.runtime_service.as_ref();
 
     let frequency = request.get("frequency").and_then(|v| v.as_f64());
-    let consumer = request
-        .get("consumer")
-        .and_then(|v| v.as_u64().map(|n| n as u32));
+    let consumer = request.get("consumer").and_then(|v| v.as_u64().map(|n| n as u32));
 
     runtime_service
         .set_fcl_sampler_config(frequency, consumer)
@@ -731,10 +627,7 @@ pub async fn post_fcl_sampler_config(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_area_fcl_sample_rate(
-    State(state): State<ApiState>,
-    Path(area_id): Path<u32>,
-) -> ApiResult<Json<HashMap<String, f64>>> {
+pub async fn get_area_fcl_sample_rate(State(state): State<ApiState>, Path(area_id): Path<u32>) -> ApiResult<Json<HashMap<String, f64>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     let sample_rate = runtime_service
@@ -899,9 +792,7 @@ pub async fn post_hold(State(state): State<ApiState>) -> ApiResult<Json<HashMap<
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_resume(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_resume(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     runtime_service
@@ -925,9 +816,7 @@ pub async fn post_resume(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_config(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_config(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     let status = runtime_service
@@ -936,22 +825,10 @@ pub async fn get_config(
         .map_err(|e| ApiError::internal(format!("Failed to get config: {}", e)))?;
 
     let mut response = HashMap::new();
-    response.insert(
-        "burst_frequency_hz".to_string(),
-        serde_json::json!(status.frequency_hz),
-    );
-    response.insert(
-        "burst_interval_seconds".to_string(),
-        serde_json::json!(1.0 / status.frequency_hz),
-    );
-    response.insert(
-        "target_frequency_hz".to_string(),
-        serde_json::json!(status.frequency_hz),
-    );
-    response.insert(
-        "is_running".to_string(),
-        serde_json::json!(status.is_running),
-    );
+    response.insert("burst_frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
+    response.insert("burst_interval_seconds".to_string(), serde_json::json!(1.0 / status.frequency_hz));
+    response.insert("target_frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
+    response.insert("is_running".to_string(), serde_json::json!(status.is_running));
     response.insert("is_paused".to_string(), serde_json::json!(status.is_paused));
 
     Ok(Json(response))
@@ -1007,10 +884,7 @@ pub async fn put_config(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fire_ledger_area_window_size(
-    State(state): State<ApiState>,
-    Path(area_id): Path<u32>,
-) -> ApiResult<Json<i32>> {
+pub async fn get_fire_ledger_area_window_size(State(state): State<ApiState>, Path(area_id): Path<u32>) -> ApiResult<Json<i32>> {
     let runtime_service = state.runtime_service.as_ref();
 
     let configs = runtime_service
@@ -1025,10 +899,7 @@ pub async fn get_fire_ledger_area_window_size(
         }
     }
 
-    Err(ApiError::not_found(
-        "FireLedgerArea",
-        &format!("cortical_idx={}", area_id),
-    ))
+    Err(ApiError::not_found("FireLedgerArea", &format!("cortical_idx={}", area_id)))
 }
 
 /// Set fire ledger window size for a specific cortical_area area.
@@ -1099,9 +970,7 @@ pub async fn get_fire_ledger_history(
         .parse::<u32>()
         .map_err(|_| ApiError::invalid_input(format!("Invalid area_id: {}", area_id)))?;
 
-    let _lookback_steps = params
-        .get("lookback_steps")
-        .and_then(|s| s.parse::<i32>().ok());
+    let _lookback_steps = params.get("lookback_steps").and_then(|s| s.parse::<i32>().ok());
 
     Err(ApiError::internal(format!(
         "Fire ledger history retrieval is not yet implemented (requested cortical_idx={})",
@@ -1180,9 +1049,7 @@ pub async fn put_membrane_potentials(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_frequency_status(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_frequency_status(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let runtime_service = state.runtime_service.as_ref();
 
     let status = runtime_service
@@ -1191,18 +1058,9 @@ pub async fn get_frequency_status(
         .map_err(|e| ApiError::internal(format!("Failed to get status: {}", e)))?;
 
     let mut response = HashMap::new();
-    response.insert(
-        "target_frequency_hz".to_string(),
-        serde_json::json!(status.frequency_hz),
-    );
-    response.insert(
-        "actual_frequency_hz".to_string(),
-        serde_json::json!(status.frequency_hz),
-    );
-    response.insert(
-        "burst_count".to_string(),
-        serde_json::json!(status.burst_count),
-    );
+    response.insert("target_frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
+    response.insert("actual_frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
+    response.insert("burst_count".to_string(), serde_json::json!(status.burst_count));
     response.insert("is_measuring".to_string(), serde_json::json!(false));
 
     Ok(Json(response))
@@ -1222,14 +1080,8 @@ pub async fn post_measure_frequency(
     State(_state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    let duration = request
-        .get("duration_seconds")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(5.0);
-    let sample_count = request
-        .get("sample_count")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(100) as i32;
+    let duration = request.get("duration_seconds").and_then(|v| v.as_f64()).unwrap_or(5.0);
+    let sample_count = request.get("sample_count").and_then(|v| v.as_i64()).unwrap_or(100) as i32;
 
     tracing::info!(target: "feagi-api", "Starting frequency measurement: {}s, {} samples", duration, sample_count);
 
@@ -1259,10 +1111,7 @@ pub async fn get_frequency_history(
     State(_state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    let limit = params
-        .get("limit")
-        .and_then(|s| s.parse::<i32>().ok())
-        .unwrap_or(10);
+    let limit = params.get("limit").and_then(|s| s.parse::<i32>().ok()).unwrap_or(10);
 
     // TODO: Implement frequency history retrieval
     let mut response = HashMap::new();
@@ -1282,17 +1131,12 @@ pub async fn get_frequency_history(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_force_connectome_integration(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_force_connectome_integration(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Implement connectome integration forcing
     tracing::info!(target: "feagi-api", "Force connectome integration requested");
 
     Ok(Json(HashMap::from([
-        (
-            "message".to_string(),
-            "Connectome integration initiated".to_string(),
-        ),
+        ("message".to_string(), "Connectome integration initiated".to_string()),
         ("status".to_string(), "not_yet_implemented".to_string()),
     ])))
 }

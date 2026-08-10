@@ -1,8 +1,8 @@
 //! Sets the indexing of various data types, where higher quantizations can support bigger
 //! collections of those items but at an increased memory cost
 
-use std::hash::Hash;
 use crate::values::quantizable::QuantizedIndexCountTrait;
+use std::hash::Hash;
 
 // TODO we may want more granular options?
 
@@ -37,7 +37,7 @@ pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq {
 /// follow
 pub enum FeagiIndexQuantizationLevel {
     /// Used throughout genome contexts. fits everything
-    #[default] 
+    #[default]
     Genomic = 0,
     // 4b Neurons, 4b Synapses, 4b FCLC Entries, 2b Burst index, 32k Cortical Areas, 32k Cortical Mapping Entries
     Standard = 1,
@@ -73,5 +73,3 @@ impl FeagiIndexQuantization for FeagiIndexQuantizationGenomic {
 }
 
 //endregion
-
-

@@ -1,10 +1,12 @@
-use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
-use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::cortical_area::components::neuron_history::neuron_history::NeuronModelHistory;
 use crate::cortical_mapping_entry::synapse::cortical_mapping_entry_data::SynapseModelCorticalMappingEntryData;
-use crate::cortical_mapping_entry::synapse_model_implementations::generated_enums::{SynapseModelType, SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked};
 use crate::cortical_mapping_entry::synapse::synapse_data::SynapseModelSynapseData;
+use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
+use crate::cortical_mapping_entry::synapse_model_implementations::generated_enums::{
+    SynapseModelType, SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked,
+};
+use feagi_data::neurons::NeuronMembranePotential;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root base trait for defining synapse firing and alteration of
 /// transmitting synapse potentials between synapses. Does NOT store actual data,

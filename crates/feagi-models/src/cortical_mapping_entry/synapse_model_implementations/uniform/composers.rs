@@ -1,18 +1,23 @@
-use core::marker::PhantomData;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer::SynapseModelCorticalWriter;
 use crate::cortical_mapping_entry::synapse::cortical_mapping_entry_properties::CorticalMappingEntryProperties;
 use crate::cortical_mapping_entry::synapse::synapse_data::EmptyPerSynapseData;
 use crate::cortical_mapping_entry::synapse::synapse_properties::SynapseProperties;
-use crate::cortical_mapping_entry::synapse_model_implementations::uniform::data::{UniformSynapseModelCorticalMappingEntryData, UniformSynapseMultiplier};
+use crate::cortical_mapping_entry::synapse_model_implementations::uniform::data::{
+    UniformSynapseModelCorticalMappingEntryData, UniformSynapseMultiplier,
+};
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelQuantization;
+use core::marker::PhantomData;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 #[derive(Debug, Clone, Copy)]
 pub enum UniformSynapseWriter<SMQ>
 where
-    SMQ: UniformSynapseModelQuantization
+    SMQ: UniformSynapseModelQuantization,
 {
-    Default  {uniform_weight: UniformSynapseMultiplier<SMQ::JunctionPotentialQuant>, _p: PhantomData<SMQ> }
+    Default {
+        uniform_weight: UniformSynapseMultiplier<SMQ::JunctionPotentialQuant>,
+        _p: PhantomData<SMQ>,
+    },
 }
 
 /*

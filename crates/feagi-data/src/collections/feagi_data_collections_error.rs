@@ -1,5 +1,5 @@
-use feagi_logging_and_errors::{generate_feagi_error, FeagiErrorKey, FeagiError};
 use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
+use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
 
 #[derive(FeagiErrorKey)]
 /// An invalid index (such as one out of range) was used

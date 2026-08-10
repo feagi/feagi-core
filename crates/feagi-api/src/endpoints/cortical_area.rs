@@ -12,10 +12,10 @@ use std::collections::HashMap;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use feagi_evolutionary::extract_memory_properties;
-use feagi_genomic_context::cortical_unit::CorticalSubUnitIndex;
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
 use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
+use feagi_genomic_context::cortical_unit::CorticalSubUnitIndex;
 use utoipa::{IntoParams, ToSchema};
 
 // ============================================================================
@@ -185,9 +185,7 @@ pub(crate) fn peer_cortical_voxel_fields(
         format!("{prefix}_cortical_id"),
         cortical_id.map_or(serde_json::Value::Null, serde_json::Value::String),
     );
-    let cortical_name = peer_cortical
-        .and_then(|cid| mgr.get_cortical_area(&cid))
-        .map(|a| a.name.clone());
+    let cortical_name = peer_cortical.and_then(|cid| mgr.get_cortical_area(&cid)).map(|a| a.name.clone());
     m.insert(
         format!("{prefix}_cortical_name"),
         cortical_name.map_or(serde_json::Value::Null, serde_json::Value::String),
@@ -239,10 +237,7 @@ pub(crate) fn synapse_details_for_neuron(
             serde_json::Value::Object(obj)
         })
         .collect();
-    (
-        serde_json::Value::Array(outgoing_json),
-        serde_json::Value::Array(incoming_json),
-    )
+    (serde_json::Value::Array(outgoing_json), serde_json::Value::Array(incoming_json))
 }
 
 /// All neurons whose 3D coordinate within the cortical_area area matches the requested voxel, with live properties.
@@ -266,27 +261,15 @@ pub struct VoxelNeuronsResponse {
 /// Resolve every neuron at `(x, y, z)` inside `cortical_id` and attach `cortical_id` / `cortical_idx`,
 /// plus paginated `outgoing_synapses` / `incoming_synapses` (at most 50 each per `synapse_page`),
 /// full `outgoing_synapse_count` / `incoming_synapse_count`, and `*_synapses_has_more` flags.
-async fn resolve_voxel_neurons(
-    state: &ApiState,
-    cortical_id: String,
-    x: u32,
-    y: u32,
-    z: u32,
-    synapse_page: u32,
-) -> ApiResult<VoxelNeuronsResponse> {
+async fn resolve_voxel_neurons(state: &ApiState, cortical_id: String, x: u32, y: u32, z: u32, synapse_page: u32) -> ApiResult<VoxelNeuronsResponse> {
     let connectome_service = state.connectome_service.as_ref();
-    let area = connectome_service
-        .get_cortical_area(&cortical_id)
-        .await
-        .map_err(ApiError::from)?;
+    let area = connectome_service.get_cortical_area(&cortical_id).await.map_err(ApiError::from)?;
 
     // Selecting the neurons sitting at one voxel requires the NPU's per-neuron coordinate index,
     // and each neuron's synapse page requires per-synapse addressing. The current engine exposes
     // neither. The area lookup above still surfaces 404 for an unknown cortical id.
     let _ = (area, x, y, z, synapse_page);
-    Err(ApiError::npu_introspection_unavailable(
-        "Voxel neuron inspection",
-    ))
+    Err(ApiError::npu_introspection_unavailable("Voxel neuron inspection"))
 }
 
 // ============================================================================
@@ -306,10 +289,7 @@ pub async fn get_ipu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String
                 .collect();
             Ok(Json(ipu_areas))
         }
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to get IPU areas: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to get IPU areas: {}", e))),
     }
 }
 
@@ -326,10 +306,7 @@ pub async fn get_opu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String
                 .collect();
             Ok(Json(opu_areas))
         }
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to get OPU areas: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to get OPU areas: {}", e))),
     }
 }
 
@@ -343,18 +320,14 @@ pub async fn get_opu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String
         (status = 500, description = "Internal server error", body = ApiError)
     )
 )]
-pub async fn get_cortical_area_id_list(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<CorticalAreaIdListResponse>> {
+pub async fn get_cortical_area_id_list(State(state): State<ApiState>) -> ApiResult<Json<CorticalAreaIdListResponse>> {
     tracing::debug!(target: "feagi-api", "🔍 GET /v1/cortical_area/cortical_area_id_list - handler called");
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.get_cortical_area_ids().await {
         Ok(ids) => {
             tracing::info!(target: "feagi-api", "✅ GET /v1/cortical_area/cortical_area_id_list - success, returning {} IDs", ids.len());
             tracing::debug!(target: "feagi-api", "📋 Cortical area IDs: {:?}", ids.iter().take(20).collect::<Vec<_>>());
-            let response = CorticalAreaIdListResponse {
-                cortical_ids: ids.clone(),
-            };
+            let response = CorticalAreaIdListResponse { cortical_ids: ids.clone() };
             match serde_json::to_string(&response) {
                 Ok(json_str) => {
                     tracing::debug!(target: "feagi-api", "📤 Response JSON: {}", json_str);
@@ -367,10 +340,7 @@ pub async fn get_cortical_area_id_list(
         }
         Err(e) => {
             tracing::error!(target: "feagi-api", "❌ GET /v1/cortical_area/cortical_area_id_list - error: {}", e);
-            Err(ApiError::internal(format!(
-                "Failed to get cortical_area IDs: {}",
-                e
-            )))
+            Err(ApiError::internal(format!("Failed to get cortical_area IDs: {}", e)))
         }
     }
 }
@@ -385,9 +355,7 @@ pub async fn get_cortical_area_id_list(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_cortical_area_name_list(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<CorticalAreaNameListResponse>> {
+pub async fn get_cortical_area_name_list(State(state): State<ApiState>) -> ApiResult<Json<CorticalAreaNameListResponse>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {
         Ok(areas) => {
@@ -396,22 +364,13 @@ pub async fn get_cortical_area_name_list(
                 cortical_area_name_list: names,
             }))
         }
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to get cortical_area names: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to get cortical_area names: {}", e))),
     }
 }
 
 /// Get a map of cortical_area area IDs to their human-readable names. Returns {cortical_id: name} pairs.
-#[utoipa::path(
-    get,
-    path = "/v1/cortical_area/cortical_id_name_mapping",
-    tag = "cortical_area"
-)]
-pub async fn get_cortical_id_name_mapping(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+#[utoipa::path(get, path = "/v1/cortical_area/cortical_id_name_mapping", tag = "cortical_area")]
+pub async fn get_cortical_id_name_mapping(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     let connectome_service = state.connectome_service.as_ref();
     let ids = connectome_service
         .get_cortical_area_ids()
@@ -448,9 +407,7 @@ pub async fn get_cortical_types(State(_state): State<ApiState>) -> ApiResult<Jso
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_cortical_map_detailed(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_cortical_map_detailed(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {
         Ok(areas) => {
@@ -459,11 +416,7 @@ pub async fn get_cortical_map_detailed(
             for area in areas {
                 // Extract cortical_mapping_dst from area properties
                 if let Some(cortical_mapping_dst) = area.properties.get("cortical_mapping_dst") {
-                    if !cortical_mapping_dst.is_null()
-                        && cortical_mapping_dst
-                            .as_object()
-                            .is_some_and(|obj| !obj.is_empty())
-                    {
+                    if !cortical_mapping_dst.is_null() && cortical_mapping_dst.as_object().is_some_and(|obj| !obj.is_empty()) {
                         map.insert(area.cortical_id.clone(), cortical_mapping_dst.clone());
                     }
                 }
@@ -471,22 +424,13 @@ pub async fn get_cortical_map_detailed(
 
             Ok(Json(map))
         }
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to get detailed map: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to get detailed map: {}", e))),
     }
 }
 
 /// Get 2D positions of all cortical_area areas for visualization. Returns {cortical_id: (x, y)} coordinates.
-#[utoipa::path(
-    get,
-    path = "/v1/cortical_area/cortical_locations_2d",
-    tag = "cortical_area"
-)]
-pub async fn get_cortical_locations_2d(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, (i32, i32)>>> {
+#[utoipa::path(get, path = "/v1/cortical_area/cortical_locations_2d", tag = "cortical_area")]
+pub async fn get_cortical_locations_2d(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, (i32, i32)>>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {
         Ok(areas) => {
@@ -496,26 +440,18 @@ pub async fn get_cortical_locations_2d(
                 .collect();
             Ok(Json(locations))
         }
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to get 2D locations: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to get 2D locations: {}", e))),
     }
 }
 
 /// Get complete cortical_area area data including geometry, neural parameters, and metadata. Used by Brain Visualizer.
-#[utoipa::path(
-    get,
-    path = "/v1/cortical_area/cortical_area/geometry",
-    tag = "cortical_area"
-)]
-pub async fn get_cortical_area_geometry(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+#[utoipa::path(get, path = "/v1/cortical_area/cortical_area/geometry", tag = "cortical_area")]
+pub async fn get_cortical_area_geometry(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {
         Ok(areas) => {
-            let geometry: HashMap<String, serde_json::Value> = areas.into_iter()
+            let geometry: HashMap<String, serde_json::Value> = areas
+                .into_iter()
                 .map(|area| {
                     // Return FULL cortical_area area data (matching Python format)
                     // This is what Brain Visualizer expects for genome loading
@@ -573,36 +509,20 @@ pub async fn get_cortical_area_geometry(
 }
 
 /// Get visibility status of all cortical_area areas. Returns {cortical_id: visibility_flag}.
-#[utoipa::path(
-    get,
-    path = "/v1/cortical_area/cortical_visibility",
-    tag = "cortical_area"
-)]
-pub async fn get_cortical_visibility(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, bool>>> {
+#[utoipa::path(get, path = "/v1/cortical_area/cortical_visibility", tag = "cortical_area")]
+pub async fn get_cortical_visibility(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, bool>>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {
         Ok(areas) => {
-            let visibility: HashMap<String, bool> = areas
-                .into_iter()
-                .map(|area| (area.cortical_id, area.visible))
-                .collect();
+            let visibility: HashMap<String, bool> = areas.into_iter().map(|area| (area.cortical_id, area.visible)).collect();
             Ok(Json(visibility))
         }
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to get visibility: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to get visibility: {}", e))),
     }
 }
 
 /// Get the 2D location of a cortical_area area by its name. Request: {cortical_name: string}.
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_area/cortical_name_location",
-    tag = "cortical_area"
-)]
+#[utoipa::path(post, path = "/v1/cortical_area/cortical_name_location", tag = "cortical_area")]
 #[allow(unused_variables)] // In development
 pub async fn post_cortical_name_location(
     State(state): State<ApiState>,
@@ -614,20 +534,13 @@ pub async fn post_cortical_name_location(
         .ok_or_else(|| ApiError::invalid_input("cortical_name required"))?;
 
     match connectome_service.get_cortical_area(cortical_name).await {
-        Ok(area) => Ok(Json(HashMap::from([(
-            area.cortical_id,
-            (area.position.0, area.position.1),
-        )]))),
+        Ok(area) => Ok(Json(HashMap::from([(area.cortical_id, (area.position.0, area.position.1))]))),
         Err(e) => Err(ApiError::internal(format!("Failed to get location: {}", e))),
     }
 }
 
 /// Get detailed properties of a single cortical_area area by ID. Request: {cortical_id: string}.
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_area/cortical_area_properties",
-    tag = "cortical_area"
-)]
+#[utoipa::path(post, path = "/v1/cortical_area/cortical_area_properties", tag = "cortical_area")]
 #[allow(unused_variables)] // In development
 pub async fn post_cortical_area_properties(
     State(state): State<ApiState>,
@@ -648,19 +561,12 @@ pub async fn post_cortical_area_properties(
             tracing::debug!(target: "feagi-api", "Serialized cortical_type value: {:?}", json_value.get("cortical_type"));
             Ok(Json(json_value))
         }
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to get properties: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to get properties: {}", e))),
     }
 }
 
 /// Get properties for multiple cortical_area areas. Accepts array [\"id1\", \"id2\"] or object {cortical_id_list: [...]}.
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_area/multi/cortical_area_properties",
-    tag = "cortical_area"
-)]
+#[utoipa::path(post, path = "/v1/cortical_area/multi/cortical_area_properties", tag = "cortical_area")]
 #[allow(unused_variables)] // In development
 pub async fn post_multi_cortical_area_properties(
     State(state): State<ApiState>,
@@ -688,9 +594,7 @@ pub async fn post_multi_cortical_area_properties(
             .filter_map(|v| v.as_str().map(|s| s.to_string()))
             .collect()
     } else {
-        return Err(ApiError::invalid_input(
-            "Request must be an array of IDs or object with cortical_id_list",
-        ));
+        return Err(ApiError::invalid_input("Request must be an array of IDs or object with cortical_id_list"));
     };
 
     for cortical_id in cortical_ids {
@@ -718,9 +622,9 @@ pub async fn post_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    use feagi_services::types::CreateCorticalAreaParams;
     use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
     use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
+    use feagi_services::types::CreateCorticalAreaParams;
 
     // ARCHITECTURE: Use genome_service (proper entry point) instead of connectome_service
     let genome_service = state.genome_service.as_ref();
@@ -731,27 +635,19 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
 
-    let mut group_id = request
-        .get("group_id")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u8;
+    let mut group_id = request.get("group_id").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
 
     let device_count = request
         .get("device_count")
         .and_then(|v| v.as_u64())
-        .ok_or_else(|| ApiError::invalid_input("device_count required"))?
-        as usize;
+        .ok_or_else(|| ApiError::invalid_input("device_count required"))? as usize;
 
     let coordinates_3d: Vec<i32> = request
         .get("coordinates_3d")
         .and_then(|v| v.as_array())
         .and_then(|arr| {
             if arr.len() == 3 {
-                Some(vec![
-                    arr[0].as_i64()? as i32,
-                    arr[1].as_i64()? as i32,
-                    arr[2].as_i64()? as i32,
-                ])
+                Some(vec![arr[0].as_i64()? as i32, arr[1].as_i64()? as i32, arr[2].as_i64()? as i32])
             } else {
                 None
             }
@@ -766,35 +662,22 @@ pub async fn post_cortical_area(
     let unit_id: Option<u8> = request
         .get("unit_id")
         .and_then(|v| v.as_u64())
-        .map(|value| {
-            value
-                .try_into()
-                .map_err(|_| ApiError::invalid_input("unit_id out of range"))
-        })
+        .map(|value| value.try_into().map_err(|_| ApiError::invalid_input("unit_id out of range")))
         .transpose()?;
     if let Some(unit_id) = unit_id {
         group_id = unit_id;
     }
 
     // Extract neurons_per_voxel from request (default to 1 if not provided)
-    let neurons_per_voxel = request
-        .get("neurons_per_voxel")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(1) as u32;
+    let neurons_per_voxel = request.get("neurons_per_voxel").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
 
     // Optional: Override per-device dimensions (especially Z for angle resolution)
     // Format: [x, y, z] where x=joints per device, y=1, z=angle_resolution
     // Example: [1, 1, 32] for single-joint servo with 32-angle resolution
-    let per_device_dimensions_override: Option<(usize, usize, usize)> = request
-        .get("per_device_dimensions")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| {
+    let per_device_dimensions_override: Option<(usize, usize, usize)> =
+        request.get("per_device_dimensions").and_then(|v| v.as_array()).and_then(|arr| {
             if arr.len() == 3 {
-                Some((
-                    arr[0].as_u64()? as usize,
-                    arr[1].as_u64()? as usize,
-                    arr[2].as_u64()? as usize,
-                ))
+                Some((arr[0].as_u64()? as usize, arr[1].as_u64()? as usize, arr[2].as_u64()? as usize))
             } else {
                 None
             }
@@ -814,12 +697,12 @@ pub async fn post_cortical_area(
     let mut data_type_configs_by_subunit: HashMap<u8, u16> = HashMap::new();
 
     for (k, v) in raw_configs {
-        let subunit_idx_u64 = k.parse::<u64>().map_err(|_| {
-            ApiError::invalid_input("data_type_configs_by_subunit keys must be integers")
-        })?;
-        let subunit_idx: u8 = subunit_idx_u64.try_into().map_err(|_| {
-            ApiError::invalid_input("data_type_configs_by_subunit key out of range")
-        })?;
+        let subunit_idx_u64 = k
+            .parse::<u64>()
+            .map_err(|_| ApiError::invalid_input("data_type_configs_by_subunit keys must be integers"))?;
+        let subunit_idx: u8 = subunit_idx_u64
+            .try_into()
+            .map_err(|_| ApiError::invalid_input("data_type_configs_by_subunit key out of range"))?;
 
         let parsed_u64 = if let Some(u) = v.as_u64() {
             Some(u)
@@ -840,14 +723,10 @@ pub async fn post_cortical_area(
         } else {
             None
         }
-        .ok_or_else(|| {
-            ApiError::invalid_input("data_type_configs_by_subunit values must be numeric")
-        })?;
+        .ok_or_else(|| ApiError::invalid_input("data_type_configs_by_subunit values must be numeric"))?;
 
         if parsed_u64 > u16::MAX as u64 {
-            return Err(ApiError::invalid_input(
-                "data_type_configs_by_subunit value exceeds u16::MAX",
-            ));
+            return Err(ApiError::invalid_input("data_type_configs_by_subunit value exceeds u16::MAX"));
         }
 
         data_type_configs_by_subunit.insert(subunit_idx, parsed_u64 as u16);
@@ -871,14 +750,9 @@ pub async fn post_cortical_area(
                 let key = format!("i{}", std::str::from_utf8(&id_ref).unwrap_or(""));
                 key == cortical_type_key
             })
-            .ok_or_else(|| {
-                ApiError::invalid_input(format!("Unknown IPU type: {}", cortical_type_key))
-            })?;
+            .ok_or_else(|| ApiError::invalid_input(format!("Unknown IPU type: {}", cortical_type_key)))?;
 
-        (
-            unit.get_number_cortical_areas(),
-            unit.get_unit_default_topology(),
-        )
+        (unit.get_number_cortical_areas(), unit.get_unit_default_topology())
     } else if cortical_type_str == "OPU" {
         // Find the matching motor cortical_area unit
         let unit = MotorCorticalUnit::list_all()
@@ -888,23 +762,14 @@ pub async fn post_cortical_area(
                 let key = format!("o{}", std::str::from_utf8(&id_ref).unwrap_or(""));
                 key == cortical_type_key
             })
-            .ok_or_else(|| {
-                ApiError::invalid_input(format!("Unknown OPU type: {}", cortical_type_key))
-            })?;
+            .ok_or_else(|| ApiError::invalid_input(format!("Unknown OPU type: {}", cortical_type_key)))?;
 
-        (
-            unit.get_number_cortical_areas(),
-            unit.get_unit_default_topology(),
-        )
+        (unit.get_number_cortical_areas(), unit.get_unit_default_topology())
     } else {
         return Err(ApiError::invalid_input("cortical_type must be IPU or OPU"));
     };
 
-    tracing::info!(
-        "Creating {} units for cortical_area type: {}",
-        num_units,
-        cortical_type_key
-    );
+    tracing::info!("Creating {} units for cortical_area type: {}", num_units, cortical_type_key);
 
     // Build creation parameters for all units
     let mut creation_params = Vec::new();
@@ -912,12 +777,7 @@ pub async fn post_cortical_area(
         let data_type_config = data_type_configs_by_subunit
             .get(&(unit_idx as u8))
             .copied()
-            .ok_or_else(|| {
-                ApiError::invalid_input(format!(
-                    "data_type_configs_by_subunit missing entry for subunit {}",
-                    unit_idx
-                ))
-            })?;
+            .ok_or_else(|| ApiError::invalid_input(format!("data_type_configs_by_subunit missing entry for subunit {}", unit_idx)))?;
 
         // Split per-subunit data_type_config into two bytes for cortical_area ID
         let config_byte_4 = (data_type_config & 0xFF) as u8; // Lower byte
@@ -926,9 +786,7 @@ pub async fn post_cortical_area(
         // Get per-device dimensions from topology, then scale X by device_count:
         // total_x = device_count * per_device_x
         // If per_device_dimensions_override is provided, use it instead of topology defaults
-        let (per_device_dimensions, dimensions) = if let Some(override_dims) =
-            per_device_dimensions_override
-        {
+        let (per_device_dimensions, dimensions) = if let Some(override_dims) = per_device_dimensions_override {
             // Use custom per-device dimensions, scale X by device_count
             let total_x = override_dims.0.saturating_mul(device_count);
             (override_dims, (total_x, override_dims.1, override_dims.2))
@@ -943,17 +801,16 @@ pub async fn post_cortical_area(
         };
 
         // Calculate position for this unit
-        let position =
-            if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
-                let rel_pos = topo.relative_position;
-                (
-                    coordinates_3d[0] + rel_pos[0],
-                    coordinates_3d[1] + rel_pos[1],
-                    coordinates_3d[2] + rel_pos[2],
-                )
-            } else {
-                (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2])
-            };
+        let position = if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
+            let rel_pos = topo.relative_position;
+            (
+                coordinates_3d[0] + rel_pos[0],
+                coordinates_3d[1] + rel_pos[1],
+                coordinates_3d[2] + rel_pos[2],
+            )
+        } else {
+            (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2])
+        };
 
         // Construct proper 8-byte cortical_area ID
         // Byte structure: [type(i/o), subtype[0], subtype[1], subtype[2], encoding_type, encoding_format, unit_idx, group_id]
@@ -971,18 +828,14 @@ pub async fn post_cortical_area(
 
         // Construct the 8-byte cortical_area ID
         let cortical_id_bytes = [
-            if cortical_type_str == "IPU" {
-                b'i'
-            } else {
-                b'o'
-            }, // Byte 0: type
-            subtype_bytes[0], // Byte 1: subtype[0]
-            subtype_bytes[1], // Byte 2: subtype[1]
-            subtype_bytes[2], // Byte 3: subtype[2]
-            config_byte_4,    // Byte 4: data type config (lower byte)
-            config_byte_5,    // Byte 5: data type config (upper byte)
-            unit_idx as u8,   // Byte 6: unit index
-            group_id,         // Byte 7: group ID
+            if cortical_type_str == "IPU" { b'i' } else { b'o' }, // Byte 0: type
+            subtype_bytes[0],                                     // Byte 1: subtype[0]
+            subtype_bytes[1],                                     // Byte 2: subtype[1]
+            subtype_bytes[2],                                     // Byte 3: subtype[2]
+            config_byte_4,                                        // Byte 4: data type config (lower byte)
+            config_byte_5,                                        // Byte 5: data type config (upper byte)
+            unit_idx as u8,                                       // Byte 6: unit index
+            group_id,                                             // Byte 7: group ID
         ];
 
         // Encode to base64 for use as cortical_id string
@@ -996,17 +849,10 @@ pub async fn post_cortical_area(
 
         // Store device_count and per-device dimensions in properties for BV compatibility
         let mut properties = HashMap::new();
-        properties.insert(
-            "dev_count".to_string(),
-            serde_json::Value::Number(serde_json::Number::from(device_count)),
-        );
+        properties.insert("dev_count".to_string(), serde_json::Value::Number(serde_json::Number::from(device_count)));
         properties.insert(
             "cortical_dimensions_per_device".to_string(),
-            serde_json::json!([
-                per_device_dimensions.0,
-                per_device_dimensions.1,
-                per_device_dimensions.2
-            ]),
+            serde_json::json!([per_device_dimensions.0, per_device_dimensions.1, per_device_dimensions.2]),
         );
 
         let params = CreateCorticalAreaParams {
@@ -1036,10 +882,7 @@ pub async fn post_cortical_area(
         creation_params.push(params);
     }
 
-    tracing::info!(
-        "Calling GenomeService to create {} cortical_area areas",
-        creation_params.len()
-    );
+    tracing::info!("Calling GenomeService to create {} cortical_area areas", creation_params.len());
 
     // ARCHITECTURE: Call genome_service.create_cortical_areas (proper flow)
     // This will: 1) Update runtime genome, 2) Call neuroembryogenesis, 3) Create neurons/synapses
@@ -1048,19 +891,13 @@ pub async fn post_cortical_area(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to create cortical_area areas: {}", e)))?;
 
-    tracing::info!(
-        "✅ Successfully created {} cortical_area areas via GenomeService",
-        areas_details.len()
-    );
+    tracing::info!("✅ Successfully created {} cortical_area areas via GenomeService", areas_details.len());
 
     // Serialize as JSON
     let areas_json = serde_json::to_value(&areas_details).unwrap_or_default();
 
     // Extract cortical_area IDs from created areas
-    let created_ids: Vec<String> = areas_details
-        .iter()
-        .map(|a| a.cortical_id.clone())
-        .collect();
+    let created_ids: Vec<String> = areas_details.iter().map(|a| a.cortical_id.clone()).collect();
 
     // Return comprehensive response
     let first_id = created_ids.first().cloned().unwrap_or_default();
@@ -1069,18 +906,9 @@ pub async fn post_cortical_area(
         "message".to_string(),
         serde_json::Value::String(format!("Created {} cortical_area areas", created_ids.len())),
     );
-    response.insert(
-        "cortical_id".to_string(),
-        serde_json::Value::String(first_id),
-    ); // For backward compatibility
-    response.insert(
-        "cortical_ids".to_string(),
-        serde_json::Value::String(created_ids.join(", ")),
-    );
-    response.insert(
-        "unit_count".to_string(),
-        serde_json::Value::Number(created_ids.len().into()),
-    );
+    response.insert("cortical_id".to_string(), serde_json::Value::String(first_id)); // For backward compatibility
+    response.insert("cortical_ids".to_string(), serde_json::Value::String(created_ids.join(", ")));
+    response.insert("unit_count".to_string(), serde_json::Value::Number(created_ids.len().into()));
     response.insert("areas".to_string(), areas_json); // Full details for all areas
 
     Ok(Json(serde_json::Value::Object(response)))
@@ -1112,10 +940,7 @@ pub async fn put_cortical_area(
     request.remove("cortical_id");
 
     // Call GenomeService with raw changes (it handles classification and routing)
-    match genome_service
-        .update_cortical_area(&cortical_id, request)
-        .await
-    {
+    match genome_service.update_cortical_area(&cortical_id, request).await {
         Ok(area_info) => {
             let updated_id = area_info.cortical_id.clone();
             tracing::debug!(
@@ -1138,11 +963,7 @@ pub async fn put_cortical_area(
 }
 
 /// Delete a cortical_area area by ID. Removes the area and all associated neurons and synapses.
-#[utoipa::path(
-    delete,
-    path = "/v1/cortical_area/cortical_area",
-    tag = "cortical_area"
-)]
+#[utoipa::path(delete, path = "/v1/cortical_area/cortical_area", tag = "cortical_area")]
 #[allow(unused_variables)] // In development - parameters will be used when implemented
 pub async fn delete_cortical_area(
     State(state): State<ApiState>,
@@ -1154,20 +975,13 @@ pub async fn delete_cortical_area(
         .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
 
     match connectome_service.delete_cortical_area(cortical_id).await {
-        Ok(_) => Ok(Json(HashMap::from([(
-            "message".to_string(),
-            "Cortical area deleted".to_string(),
-        )]))),
+        Ok(_) => Ok(Json(HashMap::from([("message".to_string(), "Cortical area deleted".to_string())]))),
         Err(e) => Err(ApiError::internal(format!("Failed to delete: {}", e))),
     }
 }
 
 /// Create a custom cortical_area area for internal processing with specified dimensions and position.
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_area/custom_cortical_area",
-    tag = "cortical_area"
-)]
+#[utoipa::path(post, path = "/v1/cortical_area/custom_cortical_area", tag = "cortical_area")]
 pub async fn post_custom_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
@@ -1203,11 +1017,7 @@ pub async fn post_custom_cortical_area(
         .and_then(|v| v.as_array())
         .and_then(|arr| {
             if arr.len() == 3 {
-                Some(vec![
-                    arr[0].as_u64()? as u32,
-                    arr[1].as_u64()? as u32,
-                    arr[2].as_u64()? as u32,
-                ])
+                Some(vec![arr[0].as_u64()? as u32, arr[1].as_u64()? as u32, arr[2].as_u64()? as u32])
             } else {
                 None
             }
@@ -1219,11 +1029,7 @@ pub async fn post_custom_cortical_area(
         .and_then(|v| v.as_array())
         .and_then(|arr| {
             if arr.len() == 3 {
-                Some(vec![
-                    arr[0].as_i64()? as i32,
-                    arr[1].as_i64()? as i32,
-                    arr[2].as_i64()? as i32,
-                ])
+                Some(vec![arr[0].as_i64()? as i32, arr[1].as_i64()? as i32, arr[2].as_i64()? as i32])
             } else {
                 None
             }
@@ -1238,11 +1044,7 @@ pub async fn post_custom_cortical_area(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
-        .ok_or_else(|| {
-            ApiError::invalid_input(
-                "brain_region_id is required for custom and memory cortical_area areas",
-            )
-        })?;
+        .ok_or_else(|| ApiError::invalid_input("brain_region_id is required for custom and memory cortical_area areas"))?;
 
     let cortical_sub_group = request
         .get("cortical_sub_group")
@@ -1260,10 +1062,7 @@ pub async fn post_custom_cortical_area(
     // Generate unique cortical_area ID for custom cortical_area area
     // Format: [b'c', 6 random alphanumeric bytes, group_counter]
     // Use timestamp + counter to ensure uniqueness
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64;
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
 
     // Create 8-byte cortical_area ID for custom/memory area
     // Byte 0: 'c' for custom OR 'm' for memory (authoritative type discriminator)
@@ -1301,10 +1100,7 @@ pub async fn post_custom_cortical_area(
 
     // parent_region_id is required (validated above) so the area is registered in the hierarchy.
     let mut properties = HashMap::new();
-    properties.insert(
-        "parent_region_id".to_string(),
-        serde_json::Value::String(brain_region_id.clone()),
-    );
+    properties.insert("parent_region_id".to_string(), serde_json::Value::String(brain_region_id.clone()));
 
     // Create cortical_area area parameters
     let params = CreateCorticalAreaParams {
@@ -1360,10 +1156,7 @@ pub async fn post_custom_cortical_area(
 
     // Return response
     let mut response = HashMap::new();
-    response.insert(
-        "message".to_string(),
-        "Custom cortical_area area created successfully".to_string(),
-    );
+    response.insert("message".to_string(), "Custom cortical_area area created successfully".to_string());
     response.insert("cortical_id".to_string(), created_area.cortical_id.clone());
     response.insert("cortical_name".to_string(), cortical_name.to_string());
 
@@ -1372,13 +1165,10 @@ pub async fn post_custom_cortical_area(
 
 /// Clone an existing cortical_area area with all its properties and structure. (Not yet implemented)
 #[utoipa::path(post, path = "/v1/cortical_area/clone", tag = "cortical_area")]
-pub async fn post_clone(
-    State(state): State<ApiState>,
-    Json(request): Json<CloneCorticalAreaRequest>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_clone(State(state): State<ApiState>, Json(request): Json<CloneCorticalAreaRequest>) -> ApiResult<Json<HashMap<String, String>>> {
     use base64::{engine::general_purpose, Engine as _};
-    use feagi_services::types::CreateCorticalAreaParams;
     use feagi_genomic_context::cortical_area::CorticalID;
+    use feagi_services::types::CreateCorticalAreaParams;
     use serde_json::Value;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1387,8 +1177,7 @@ pub async fn post_clone(
 
     // Resolve + validate source cortical_area ID.
     let source_id = request.source_area_id.clone();
-    let source_typed = CorticalID::try_from_base_64(&source_id)
-        .map_err(|e| ApiError::invalid_input(e.to_string()))?;
+    let source_typed = CorticalID::try_from_base_64(&source_id).map_err(|e| ApiError::invalid_input(e.to_string()))?;
     let src_first_byte = source_typed.as_bytes()[0];
     if src_first_byte != b'c' && src_first_byte != b'm' {
         return Err(ApiError::invalid_input(format!(
@@ -1436,11 +1225,7 @@ pub async fn post_clone(
     }
 
     // Extract outgoing mappings (we will apply them after creation, via update_cortical_mapping).
-    let outgoing_mapping_dst = source_area
-        .properties
-        .get("cortical_mapping_dst")
-        .and_then(|v| v.as_object())
-        .cloned();
+    let outgoing_mapping_dst = source_area.properties.get("cortical_mapping_dst").and_then(|v| v.as_object()).cloned();
 
     // Generate unique cortical_area ID for the clone.
     //
@@ -1479,10 +1264,7 @@ pub async fn post_clone(
     cloned_properties.remove("cortical_mapping_dst");
 
     // Set parent region + 2D coordinate explicitly for the clone.
-    cloned_properties.insert(
-        "parent_region_id".to_string(),
-        Value::String(source_parent_region_id),
-    );
+    cloned_properties.insert("parent_region_id".to_string(), Value::String(source_parent_region_id));
     cloned_properties.insert(
         "coordinate_2d".to_string(),
         serde_json::json!([request.coordinates_2d[0], request.coordinates_2d[1]]),
@@ -1492,11 +1274,7 @@ pub async fn post_clone(
         cortical_id: new_area_id.clone(),
         name: request.new_name.clone(),
         dimensions: source_area.dimensions,
-        position: (
-            request.coordinates_3d[0],
-            request.coordinates_3d[1],
-            request.coordinates_3d[2],
-        ),
+        position: (request.coordinates_3d[0], request.coordinates_3d[1], request.coordinates_3d[2]),
         area_type: source_area.area_type.clone(),
         visible: Some(source_area.visible),
         sub_group: source_area.sub_group.clone(),
@@ -1552,18 +1330,9 @@ pub async fn post_clone(
                 };
 
                 connectome_service
-                    .update_cortical_mapping(
-                        new_area_id.clone(),
-                        dst_effective,
-                        rules_array.clone(),
-                    )
+                    .update_cortical_mapping(new_area_id.clone(), dst_effective, rules_array.clone())
                     .await
-                    .map_err(|e| {
-                        ApiError::internal(format!(
-                            "Failed to clone outgoing mapping from {}: {}",
-                            source_id, e
-                        ))
-                    })?;
+                    .map_err(|e| ApiError::internal(format!("Failed to clone outgoing mapping from {}: {}", source_id, e)))?;
             }
         }
 
@@ -1580,11 +1349,7 @@ pub async fn post_clone(
                 continue;
             }
 
-            let Some(dst_map) = area
-                .properties
-                .get("cortical_mapping_dst")
-                .and_then(|v| v.as_object())
-            else {
+            let Some(dst_map) = area.properties.get("cortical_mapping_dst").and_then(|v| v.as_object()) else {
                 continue;
             };
 
@@ -1600,11 +1365,7 @@ pub async fn post_clone(
             };
 
             connectome_service
-                .update_cortical_mapping(
-                    area.cortical_id.clone(),
-                    new_area_id.clone(),
-                    rules_array.clone(),
-                )
+                .update_cortical_mapping(area.cortical_id.clone(), new_area_id.clone(), rules_array.clone())
                 .await
                 .map_err(|e| {
                     ApiError::internal(format!(
@@ -1643,11 +1404,7 @@ pub struct CloneCorticalAreaRequest {
 }
 
 /// Update properties of multiple cortical_area areas in a single request. (Not yet implemented)
-#[utoipa::path(
-    put,
-    path = "/v1/cortical_area/multi/cortical_area",
-    tag = "cortical_area"
-)]
+#[utoipa::path(put, path = "/v1/cortical_area/multi/cortical_area", tag = "cortical_area")]
 pub async fn put_multi_cortical_area(
     State(state): State<ApiState>,
     Json(mut request): Json<HashMap<String, serde_json::Value>>,
@@ -1692,46 +1449,28 @@ pub async fn put_multi_cortical_area(
                 properties.insert(key.clone(), value.clone());
             }
         }
-        match genome_service
-            .update_cortical_area(cortical_id, properties)
-            .await
-        {
+        match genome_service.update_cortical_area(cortical_id, properties).await {
             Ok(_) => {
                 tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - success for {}", cortical_id);
             }
             Err(e) => {
                 tracing::error!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - failed for {}: {}", cortical_id, e);
-                return Err(ApiError::internal(format!(
-                    "Failed to update cortical_area area {}: {}",
-                    cortical_id, e
-                )));
+                return Err(ApiError::internal(format!("Failed to update cortical_area area {}: {}", cortical_id, e)));
             }
         }
     }
 
     Ok(Json(HashMap::from([
-        (
-            "message".to_string(),
-            format!("Updated {} cortical_area areas", cortical_ids.len()),
-        ),
+        ("message".to_string(), format!("Updated {} cortical_area areas", cortical_ids.len())),
         ("cortical_ids".to_string(), cortical_ids.join(", ")),
     ])))
 }
 
 /// Delete multiple cortical_area areas by their IDs.
-#[utoipa::path(
-    delete,
-    path = "/v1/cortical_area/multi/cortical_area",
-    tag = "cortical_area"
-)]
-pub async fn delete_multi_cortical_area(
-    State(state): State<ApiState>,
-    Json(request): Json<Vec<String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+#[utoipa::path(delete, path = "/v1/cortical_area/multi/cortical_area", tag = "cortical_area")]
+pub async fn delete_multi_cortical_area(State(state): State<ApiState>, Json(request): Json<Vec<String>>) -> ApiResult<Json<HashMap<String, String>>> {
     if request.is_empty() {
-        return Err(ApiError::invalid_input(
-            "Request must contain at least one cortical_area ID",
-        ));
+        return Err(ApiError::invalid_input("Request must contain at least one cortical_area ID"));
     }
 
     let connectome_service = state.connectome_service.as_ref();
@@ -1758,19 +1497,13 @@ pub async fn delete_multi_cortical_area(
                     cortical_id,
                     e
                 );
-                return Err(ApiError::internal(format!(
-                    "Failed to delete cortical_area area {}: {}",
-                    cortical_id, e
-                )));
+                return Err(ApiError::internal(format!("Failed to delete cortical_area area {}: {}", cortical_id, e)));
             }
         }
     }
 
     Ok(Json(HashMap::from([
-        (
-            "message".to_string(),
-            format!("Deleted {} cortical_area areas", request.len()),
-        ),
+        ("message".to_string(), format!("Deleted {} cortical_area areas", request.len())),
         ("cortical_ids".to_string(), request.join(", ")),
     ])))
 }
@@ -1787,11 +1520,7 @@ pub async fn put_coord_2d(
 }
 
 /// Hide/show cortical_area areas in visualizations. (Not yet implemented)
-#[utoipa::path(
-    put,
-    path = "/v1/cortical_area/suppress_cortical_visibility",
-    tag = "cortical_area"
-)]
+#[utoipa::path(put, path = "/v1/cortical_area/suppress_cortical_visibility", tag = "cortical_area")]
 #[allow(unused_variables)] // In development
 pub async fn put_suppress_cortical_visibility(
     State(state): State<ApiState>,
@@ -1812,10 +1541,7 @@ pub async fn put_suppress_cortical_visibility(
         (status = 200, description = "Reset applied", body = CorticalAreaResetResponse),
     )
 )]
-pub async fn put_reset(
-    State(state): State<ApiState>,
-    Json(request): Json<CorticalAreaResetRequest>,
-) -> ApiResult<Json<CorticalAreaResetResponse>> {
+pub async fn put_reset(State(state): State<ApiState>, Json(request): Json<CorticalAreaResetRequest>) -> ApiResult<Json<CorticalAreaResetResponse>> {
     use tracing::info;
 
     if request.area_list.is_empty() {
@@ -1832,10 +1558,7 @@ pub async fn put_reset(
     let connectome_service = state.connectome_service.as_ref();
     let mut cortical_indices: Vec<u32> = Vec::with_capacity(request.area_list.len());
     for id in &request.area_list {
-        let area = connectome_service
-            .get_cortical_area(id)
-            .await
-            .map_err(ApiError::from)?;
+        let area = connectome_service.get_cortical_area(id).await.map_err(ApiError::from)?;
         cortical_indices.push(area.cortical_idx);
         info!(
             target: "feagi-api",
@@ -1866,10 +1589,7 @@ pub async fn put_reset(
                 cortical_idx,
                 neurons_reset
             );
-            CorticalAreaResetItem {
-                cortical_idx,
-                neurons_reset,
-            }
+            CorticalAreaResetItem { cortical_idx, neurons_reset }
         })
         .collect();
 
@@ -1887,20 +1607,14 @@ pub async fn put_reset(
 
 /// Check if visualization is enabled for the system.
 #[utoipa::path(get, path = "/v1/cortical_area/visualization", tag = "cortical_area")]
-pub async fn get_visualization(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, bool>>> {
+pub async fn get_visualization(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, bool>>> {
     let mut response = HashMap::new();
     response.insert("enabled".to_string(), true);
     Ok(Json(response))
 }
 
 /// Execute multiple cortical_area area operations (create, update, delete) in a single batch.
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_area/batch_operations",
-    tag = "cortical_area"
-)]
+#[utoipa::path(post, path = "/v1/cortical_area/batch_operations", tag = "cortical_area")]
 pub async fn post_batch_operations(
     State(_state): State<ApiState>,
     Json(_ops): Json<Vec<HashMap<String, serde_json::Value>>>,
@@ -1928,18 +1642,12 @@ pub async fn put_coordinates_3d(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
 /// Delete multiple cortical_area areas by their IDs in a single operation.
 #[utoipa::path(delete, path = "/v1/cortical_area/bulk_delete", tag = "cortical_area")]
-pub async fn delete_bulk(
-    State(_state): State<ApiState>,
-    Json(_ids): Json<Vec<String>>,
-) -> ApiResult<Json<HashMap<String, i32>>> {
+pub async fn delete_bulk(State(_state): State<ApiState>, Json(_ids): Json<Vec<String>>) -> ApiResult<Json<HashMap<String, i32>>> {
     let mut response = HashMap::new();
     response.insert("deleted_count".to_string(), 0);
     Ok(Json(response))
@@ -1951,10 +1659,7 @@ pub async fn post_resize(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
 /// Move a cortical_area area to a new position. (Not yet implemented)
@@ -1963,10 +1668,7 @@ pub async fn post_reposition(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
 /// List all neurons at a voxel `(x, y, z)` within a cortical_area area, with the same live property snapshot as `/v1/connectome/neuron_properties`.
@@ -1981,20 +1683,10 @@ pub async fn post_reposition(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_voxel_neurons(
-    State(state): State<ApiState>,
-    Query(params): Query<VoxelNeuronsQuery>,
-) -> ApiResult<Json<VoxelNeuronsResponse>> {
-    resolve_voxel_neurons(
-        &state,
-        params.cortical_id,
-        params.x,
-        params.y,
-        params.z,
-        params.synapse_page,
-    )
-    .await
-    .map(Json)
+pub async fn get_voxel_neurons(State(state): State<ApiState>, Query(params): Query<VoxelNeuronsQuery>) -> ApiResult<Json<VoxelNeuronsResponse>> {
+    resolve_voxel_neurons(&state, params.cortical_id, params.x, params.y, params.z, params.synapse_page)
+        .await
+        .map(Json)
 }
 
 /// Same as [`get_voxel_neurons`] but accepts a JSON body (for clients that cannot use query strings).
@@ -2009,20 +1701,10 @@ pub async fn get_voxel_neurons(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_voxel_neurons(
-    State(state): State<ApiState>,
-    Json(body): Json<VoxelNeuronsBody>,
-) -> ApiResult<Json<VoxelNeuronsResponse>> {
-    resolve_voxel_neurons(
-        &state,
-        body.cortical_id,
-        body.x,
-        body.y,
-        body.z,
-        body.synapse_page,
-    )
-    .await
-    .map(Json)
+pub async fn post_voxel_neurons(State(state): State<ApiState>, Json(body): Json<VoxelNeuronsBody>) -> ApiResult<Json<VoxelNeuronsResponse>> {
+    resolve_voxel_neurons(&state, body.cortical_id, body.x, body.y, body.z, body.synapse_page)
+        .await
+        .map(Json)
 }
 
 /// GET /v1/cortical_area/memory — plasticity runtime stats, genome memory parameters, upstream wiring, synapse counts, and paginated memory neuron ids.
@@ -2042,26 +1724,17 @@ pub async fn get_memory_cortical_area(
     Query(params): Query<MemoryCorticalAreaQuery>,
 ) -> ApiResult<Json<MemoryCorticalAreaResponse>> {
     let connectome_service = state.connectome_service.as_ref();
-    let area = connectome_service
-        .get_cortical_area(&params.cortical_id)
-        .await
-        .map_err(ApiError::from)?;
+    let area = connectome_service.get_cortical_area(&params.cortical_id).await.map_err(ApiError::from)?;
 
-    let mem_props = extract_memory_properties(&area.properties).ok_or_else(|| {
-        ApiError::invalid_input(
-            "cortical_area area is not a memory area (expected is_mem_type memory properties)",
-        )
-    })?;
+    let mem_props = extract_memory_properties(&area.properties)
+        .ok_or_else(|| ApiError::invalid_input("cortical_area area is not a memory area (expected is_mem_type memory properties)"))?;
 
     let cortical_idx = area.cortical_idx;
     let cortical_name = area.name.clone();
 
-    let cid = CorticalID::try_from_base_64(&params.cortical_id)
-        .map_err(|e| ApiError::invalid_input(format!("Invalid cortical_id: {}", e)))?;
+    let cid = CorticalID::try_from_base_64(&params.cortical_id).map_err(|e| ApiError::invalid_input(format!("Invalid cortical_id: {}", e)))?;
 
-    let page_size_u32 = params
-        .page_size
-        .clamp(1, MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_MAX);
+    let page_size_u32 = params.page_size.clamp(1, MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_MAX);
     let page_size = page_size_u32 as usize;
     let offset = (params.page as usize).saturating_mul(page_size);
 
@@ -2069,9 +1742,7 @@ pub async fn get_memory_cortical_area(
     // from the plasticity executor's runtime tables, which the current engine has no counterpart
     // for. Validation above still yields 404 for unknown ids and 400 for non-memory areas.
     let _ = (cid, cortical_idx, cortical_name, mem_props, offset, page_size);
-    Err(ApiError::npu_introspection_unavailable(
-        "Memory cortical area runtime detail",
-    ))
+    Err(ApiError::npu_introspection_unavailable("Memory cortical area runtime detail"))
 }
 
 /// Get metadata for all available IPU types (vision, infrared, etc.). Includes encodings, formats, units, and topology.
@@ -2084,9 +1755,7 @@ pub async fn get_memory_cortical_area(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_ipu_types(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, CorticalTypeMetadata>>> {
+pub async fn get_ipu_types(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, CorticalTypeMetadata>>> {
     let mut types = HashMap::new();
 
     // Dynamically generate metadata from feagi_data_structures cortical_units
@@ -2102,10 +1771,7 @@ pub async fn get_ipu_types(
         // MiscData uses Misc (no formats)
         // All others use Percentage-based types (have formats)
         let snake_name = unit.get_snake_case_name();
-        let formats = if snake_name == "vision"
-            || snake_name == "segmented_vision"
-            || snake_name == "miscellaneous"
-        {
+        let formats = if snake_name == "vision" || snake_name == "segmented_vision" || snake_name == "miscellaneous" {
             vec![]
         } else {
             vec!["linear".to_string(), "fractional".to_string()]
@@ -2165,9 +1831,7 @@ pub async fn get_ipu_types(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_opu_types(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, CorticalTypeMetadata>>> {
+pub async fn get_opu_types(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, CorticalTypeMetadata>>> {
     let mut types = HashMap::new();
 
     // Dynamically generate metadata from feagi_data_structures cortical_units
@@ -2227,14 +1891,8 @@ pub async fn get_opu_types(
 }
 
 /// Get list of all cortical_area area indices (numerical indices used internally for indexing).
-#[utoipa::path(
-    get,
-    path = "/v1/cortical_area/cortical_area_index_list",
-    tag = "cortical_area"
-)]
-pub async fn get_cortical_area_index_list(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<Vec<u32>>> {
+#[utoipa::path(get, path = "/v1/cortical_area/cortical_area_index_list", tag = "cortical_area")]
+pub async fn get_cortical_area_index_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<u32>>> {
     let connectome_service = state.connectome_service.as_ref();
     let areas = connectome_service
         .list_cortical_areas()
@@ -2246,14 +1904,8 @@ pub async fn get_cortical_area_index_list(
 }
 
 /// Get mapping from cortical_area area IDs to their internal indices. Returns {cortical_id: index}.
-#[utoipa::path(
-    get,
-    path = "/v1/cortical_area/cortical_idx_mapping",
-    tag = "cortical_area"
-)]
-pub async fn get_cortical_idx_mapping(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<std::collections::BTreeMap<String, u32>>> {
+#[utoipa::path(get, path = "/v1/cortical_area/cortical_idx_mapping", tag = "cortical_area")]
+pub async fn get_cortical_idx_mapping(State(state): State<ApiState>) -> ApiResult<Json<std::collections::BTreeMap<String, u32>>> {
     use std::collections::BTreeMap;
 
     let connectome_service = state.connectome_service.as_ref();
@@ -2263,19 +1915,12 @@ pub async fn get_cortical_idx_mapping(
         .map_err(|e| ApiError::internal(format!("{}", e)))?;
     // CRITICAL FIX: Use the actual cortical_idx from CorticalArea, NOT enumerate() which ignores reserved indices!
     // Use BTreeMap for consistent alphabetical ordering
-    let mapping: BTreeMap<String, u32> = areas
-        .iter()
-        .map(|a| (a.cortical_id.clone(), a.cortical_idx))
-        .collect();
+    let mapping: BTreeMap<String, u32> = areas.iter().map(|a| (a.cortical_id.clone(), a.cortical_idx)).collect();
     Ok(Json(mapping))
 }
 
 /// Get restrictions on which cortical_area areas can connect to which (connection validation rules).
-#[utoipa::path(
-    get,
-    path = "/v1/cortical_area/mapping_restrictions",
-    tag = "cortical_area"
-)]
+#[utoipa::path(get, path = "/v1/cortical_area/mapping_restrictions", tag = "cortical_area")]
 pub async fn get_mapping_restrictions_query(
     State(_state): State<ApiState>,
     Query(_params): Query<HashMap<String, String>>,
@@ -2284,15 +1929,8 @@ pub async fn get_mapping_restrictions_query(
 }
 
 /// Get memory usage of a specific cortical_area area in bytes (calculated from neuron count).
-#[utoipa::path(
-    get,
-    path = "/v1/cortical_area/{cortical_id}/memory_usage",
-    tag = "cortical_area"
-)]
-pub async fn get_memory_usage(
-    State(state): State<ApiState>,
-    Path(cortical_id): Path<String>,
-) -> ApiResult<Json<HashMap<String, i64>>> {
+#[utoipa::path(get, path = "/v1/cortical_area/{cortical_id}/memory_usage", tag = "cortical_area")]
+pub async fn get_memory_usage(State(state): State<ApiState>, Path(cortical_id): Path<String>) -> ApiResult<Json<HashMap<String, i64>>> {
     let connectome_service = state.connectome_service.as_ref();
 
     // CRITICAL FIX: Calculate actual memory usage based on neuron count instead of hardcoded 0
@@ -2312,15 +1950,8 @@ pub async fn get_memory_usage(
 }
 
 /// Get the total number of neurons in a specific cortical_area area.
-#[utoipa::path(
-    get,
-    path = "/v1/cortical_area/{cortical_id}/neuron_count",
-    tag = "cortical_area"
-)]
-pub async fn get_area_neuron_count(
-    State(state): State<ApiState>,
-    Path(cortical_id): Path<String>,
-) -> ApiResult<Json<i64>> {
+#[utoipa::path(get, path = "/v1/cortical_area/{cortical_id}/neuron_count", tag = "cortical_area")]
+pub async fn get_area_neuron_count(State(state): State<ApiState>, Path(cortical_id): Path<String>) -> ApiResult<Json<i64>> {
     let connectome_service = state.connectome_service.as_ref();
 
     // CRITICAL FIX: Get actual neuron count from ConnectomeService instead of hardcoded 0
@@ -2333,14 +1964,8 @@ pub async fn get_area_neuron_count(
 }
 
 /// Get available cortical_area type options for UI selection: Sensory, Motor, Custom, Memory.
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_area/cortical_type_options",
-    tag = "cortical_area"
-)]
-pub async fn post_cortical_type_options(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<Vec<String>>> {
+#[utoipa::path(post, path = "/v1/cortical_area/cortical_type_options", tag = "cortical_area")]
+pub async fn post_cortical_type_options(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     Ok(Json(vec![
         "Sensory".to_string(),
         "Motor".to_string(),
@@ -2350,11 +1975,7 @@ pub async fn post_cortical_type_options(
 }
 
 /// Get mapping restrictions for specific cortical_area areas (POST version with request body).
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_area/mapping_restrictions",
-    tag = "cortical_area"
-)]
+#[utoipa::path(post, path = "/v1/cortical_area/mapping_restrictions", tag = "cortical_area")]
 pub async fn post_mapping_restrictions(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, String>>,
@@ -2363,11 +1984,7 @@ pub async fn post_mapping_restrictions(
 }
 
 /// Get mapping restrictions between two specific cortical_area areas (connection validation).
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_area/mapping_restrictions_between_areas",
-    tag = "cortical_area"
-)]
+#[utoipa::path(post, path = "/v1/cortical_area/mapping_restrictions_between_areas", tag = "cortical_area")]
 pub async fn post_mapping_restrictions_between_areas(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, String>>,
@@ -2381,19 +1998,14 @@ pub async fn put_coord_3d(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
 // Exercises the synapse detail formatters, which target the pre-refactor ConnectomeManager and are
 // gated with them.
 #[cfg(all(test, feature = "legacy-connectome"))]
 mod voxel_neurons_dto_tests {
-    use super::{
-        synapse_details_for_neuron, synapse_page_window, VoxelNeuronsBody, VoxelNeuronsResponse,
-    };
+    use super::{synapse_details_for_neuron, synapse_page_window, VoxelNeuronsBody, VoxelNeuronsResponse};
 
     #[test]
     fn synapse_page_window_paginates_fifty_per_direction() {

@@ -1,4 +1,4 @@
-use feagi_logging_and_errors::{generate_feagi_error, FeagiErrorKey, FeagiError};
+use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
 
 #[derive(FeagiErrorKey)]
 pub struct FeagiIndexManagerInvalid {
@@ -13,15 +13,13 @@ pub struct FeagiIndexManagerLimit {
 #[derive(FeagiErrorKey)]
 pub struct FeagiIndexManagerInvalidIndex {
     context: &'static str,
-    index: usize
+    index: usize,
 }
 
 #[derive(FeagiErrorKey)]
 pub struct FeagiIndexRangeVectorFailedMerge {
     context: &'static str,
 }
-
-
 
 generate_feagi_error! {
     FeagiIndexRangeManagerError,

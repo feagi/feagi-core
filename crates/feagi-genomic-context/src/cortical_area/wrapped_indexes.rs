@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantizationStandard, FeagiIndexQuantization};
+use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 
 type StandardNeuronQuantization = <FeagiIndexQuantizationStandard as FeagiIndexQuantization>::NeuronIndexQuant;
 
@@ -8,8 +8,7 @@ pub type CorticalChannelIndexCount = generics::CorticalChannelIndexCountQuant<St
 /// The number of neuron_collections deep of a sensor / motor channel. Generally used to define resolution
 pub type CorticalChannelNeuronDepth = generics::CorticalChannelNeuronDepthQuant<StandardNeuronQuantization>;
 
-pub mod generics
-{
+pub mod generics {
     use feagi_data::create_wrapped_quantized_index;
 
     create_wrapped_quantized_index!(
@@ -18,13 +17,7 @@ pub mod generics
     );
 
     create_wrapped_quantized_index!(
-    /// The number of neuron_collections deep of a sensor / motor channel. Generally used to define resolution
-    pub CorticalChannelNeuronDepthQuant
-);
-
-
-
+        /// The number of neuron_collections deep of a sensor / motor channel. Generally used to define resolution
+        pub CorticalChannelNeuronDepthQuant
+    );
 }
-
-
-

@@ -47,11 +47,7 @@ pub trait FeagiServerRouter: FeagiServer {
     /// # Errors
     ///
     /// Returns an error if the response cannot be sent (e.g., client disconnected).
-    fn publish_response(
-        &mut self,
-        session_id: AgentID,
-        message: &[u8],
-    ) -> Result<(), FeagiNetworkError>;
+    fn publish_response(&mut self, session_id: AgentID, message: &[u8]) -> Result<(), FeagiNetworkError>;
 
     /// Creates a boxed properties object for this router.
     ///

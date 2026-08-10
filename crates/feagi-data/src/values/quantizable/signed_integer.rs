@@ -43,31 +43,32 @@ impl QuantizationLevelPacking for SignedIntegerQuantizationLevel {
 
 /// Trait designed to hold Sint data values in a quantized form
 pub trait QuantizedSignedIntegerTrait:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::cmp::PartialOrd
-+ core::cmp::Ord
-+ core::iter::Sum
-+ core::fmt::Debug
-+ core::fmt::Display
-+ core::ops::Rem<Output=Self>
-+ core::ops::RemAssign
-+ core::cmp::Eq
-+ core::hash::Hash
-+ Sized
-+ 'static
-+ QuantizedElementBase {
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + Default
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + core::cmp::PartialOrd
+    + core::cmp::Ord
+    + core::iter::Sum
+    + core::fmt::Debug
+    + core::fmt::Display
+    + core::ops::Rem<Output = Self>
+    + core::ops::RemAssign
+    + core::cmp::Eq
+    + core::hash::Hash
+    + Sized
+    + 'static
+    + QuantizedElementBase
+{
     const LEVEL: SignedIntegerQuantizationLevel;
 
     const QUANT_MAX: Self;
@@ -276,7 +277,6 @@ pub enum SignedIntegerEnum {
     I64(i64),
 }
 
-
 impl SignedIntegerEnum {
     pub fn new_from_quantized<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
         FromQuant::quant_to_enum(value)
@@ -294,13 +294,7 @@ impl SignedIntegerEnum {
     pub fn try_into_quant<Quant: QuantizedSignedIntegerTrait>(self) -> Result<Quant, FeagiDataValueQuantizationError> {
         let value = self.to_isize();
         if !signed_value_fits_quant::<Quant>(value) {
-            return Err(
-                FeagiFailQuantizationOutOfRange::new(
-                    "Quantized signed integer exceeds target quantization!",
-                    value as usize,
-                )
-                .into(),
-            );
+            return Err(FeagiFailQuantizationOutOfRange::new("Quantized signed integer exceeds target quantization!", value as usize).into());
         }
         Ok(Quant::quant_from_isize(value))
     }
@@ -323,18 +317,10 @@ impl SignedIntegerEnum {
 
 fn signed_value_fits_quant<Quant: QuantizedSignedIntegerTrait>(value: isize) -> bool {
     match Quant::LEVEL {
-        SignedIntegerQuantizationLevel::I8 => {
-            (i8::MIN as isize) <= value && value <= (i8::MAX as isize)
-        }
-        SignedIntegerQuantizationLevel::I16 => {
-            (i16::MIN as isize) <= value && value <= (i16::MAX as isize)
-        }
-        SignedIntegerQuantizationLevel::I32 => {
-            (i32::MIN as isize) <= value && value <= (i32::MAX as isize)
-        }
-        SignedIntegerQuantizationLevel::I64 => {
-            (i64::MIN as isize) <= value && value <= (i64::MAX as isize)
-        }
+        SignedIntegerQuantizationLevel::I8 => (i8::MIN as isize) <= value && value <= (i8::MAX as isize),
+        SignedIntegerQuantizationLevel::I16 => (i16::MIN as isize) <= value && value <= (i16::MAX as isize),
+        SignedIntegerQuantizationLevel::I32 => (i32::MIN as isize) <= value && value <= (i32::MAX as isize),
+        SignedIntegerQuantizationLevel::I64 => (i64::MIN as isize) <= value && value <= (i64::MAX as isize),
         SignedIntegerQuantizationLevel::Isize => true,
     }
 }
@@ -352,32 +338,32 @@ fn signed_value_fits_quant<Quant: QuantizedSignedIntegerTrait>(value: isize) -> 
 /// [`QuantizedSignedIntegerTrait`] value; the macro only needs to supply [`Self::new`],
 /// [`Self::deref`] and the `Self`-typed constants.
 pub trait WrappedQuantizedSignedInteger:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::fmt::Debug
-+ core::cmp::PartialEq
-+ core::cmp::Eq
-+ core::cmp::PartialOrd
-+ core::cmp::Ord
-+ core::hash::Hash
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::Rem<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::ops::RemAssign
-+ From<Self::Quant>
-+ AsRef<Self::Quant>
-+ AsMut<Self::Quant>
-+ Sized
-+ 'static
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + Default
+    + core::fmt::Debug
+    + core::cmp::PartialEq
+    + core::cmp::Eq
+    + core::cmp::PartialOrd
+    + core::cmp::Ord
+    + core::hash::Hash
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::Rem<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + core::ops::RemAssign
+    + From<Self::Quant>
+    + AsRef<Self::Quant>
+    + AsMut<Self::Quant>
+    + Sized
+    + 'static
 {
     /// The underlying quantized signed integer value this wrapper stores.
     type Quant: QuantizedSignedIntegerTrait;
@@ -435,16 +421,7 @@ Copy
 /// These enums hide the generic quantized wrapper type behind concrete variants
 /// (`I8`, `I16`, `I32`, `I64`) while preserving the wrapper family semantics.
 pub trait WrappedQuantizedSignedIntegerEnum:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::cmp::PartialEq
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Sized
-    + 'static
+    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
     fn get_level(&self) -> SignedIntegerQuantizationLevel;
 

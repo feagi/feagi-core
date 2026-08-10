@@ -27,8 +27,7 @@ use feagi_agent::AgentCapabilities;
 use feagi_agent::{AgentDescriptor, AuthToken};
 #[cfg(feature = "feagi-agent")]
 use feagi_api::common::agent_registration::{
-    auto_create_cortical_areas_from_device_registrations,
-    derive_motor_cortical_ids_from_device_registrations,
+    auto_create_cortical_areas_from_device_registrations, derive_motor_cortical_ids_from_device_registrations,
     derive_sensory_cortical_ids_from_device_registrations,
 };
 use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
@@ -41,9 +40,14 @@ use feagi_api::v1::AgentRegistrationRequest;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::templates::create_genome_with_core_areas;
 #[cfg(feature = "feagi-agent")]
+use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
+#[cfg(feature = "feagi-agent")]
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, PercentageNeuronPositioning};
+#[cfg(feature = "feagi-agent")]
+use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
+#[cfg(feature = "feagi-agent")]
 use feagi_io::protocol_implementations::websocket::websocket_std::{
-    FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties,
-    FeagiWebSocketServerRouterProperties,
+    FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties, FeagiWebSocketServerRouterProperties,
 };
 #[cfg(feature = "feagi-agent")]
 use feagi_io::traits_and_enums::client::{FeagiClient, FeagiClientPusher};
@@ -55,21 +59,10 @@ use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
 use feagi_npu_runtime::StdRuntime;
 #[cfg(feature = "feagi-agent")]
 use feagi_serialization::FeagiByteContainer;
-use feagi_services::impls::{
-    AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
-    SystemServiceImpl,
-};
+use feagi_services::impls::{AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl, SystemServiceImpl};
 use feagi_services::types::CreateCorticalAreaParams;
 #[cfg(feature = "feagi-agent")]
 use feagi_services::RuntimeService;
-#[cfg(feature = "feagi-agent")]
-use feagi_genomic_context::cortical_area::descriptors::CorticalUnitIndex;
-#[cfg(feature = "feagi-agent")]
-use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, PercentageNeuronPositioning,
-};
-#[cfg(feature = "feagi-agent")]
-use feagi_genomic_context::cortical_unit::SensoryCorticalUnit;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -88,41 +81,27 @@ use tower::ServiceExt;
 /// Each test gets a fresh, isolated manager (no singleton conflicts)
 fn build_test_state() -> ApiState {
     if std::env::var("FEAGI_CONFIG_PATH").is_err() {
-        std::env::set_var(
-            "FEAGI_CONFIG_PATH",
-            "/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml",
-        );
+        std::env::set_var("FEAGI_CONFIG_PATH", "/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml");
     }
 
     // Initialize NPU (fire_ledger_window=10)
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let npu_result = RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).unwrap();
-    let npu = Arc::new(TracingMutex::new(
-        DynamicNPU::F32(npu_result),
-        "api-contract-test-npu",
-    ));
+    let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu_result), "api-contract-test-npu"));
 
     // Create isolated ConnectomeManager for testing (bypasses singleton)
-    let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
-        Arc::clone(&npu),
-    )));
+    let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(Arc::clone(&npu))));
 
     // Create services
     let genome_service_impl = Arc::new(GenomeServiceImpl::new(Arc::clone(&manager)));
     let current_genome = genome_service_impl.get_current_genome_arc();
     {
         let mut genome_guard = current_genome.write();
-        *genome_guard = Some(create_genome_with_core_areas(
-            "test-genome".to_string(),
-            "test".to_string(),
-        ));
+        *genome_guard = Some(create_genome_with_core_areas("test-genome".to_string(), "test".to_string()));
     }
     let genome_service = genome_service_impl;
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(
-        Arc::clone(&manager),
-        current_genome.clone(),
-    ));
+    let connectome_service = Arc::new(ConnectomeServiceImpl::new(Arc::clone(&manager), current_genome.clone()));
     // For tests, use empty version info
     let version_info = feagi_services::types::VersionInfo::default();
     let system_service = Arc::new(SystemServiceImpl::new(
@@ -142,29 +121,19 @@ fn build_test_state() -> ApiState {
     #[async_trait::async_trait]
     impl feagi_services::RuntimeService for MockRuntimeService {
         async fn start(&self) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
         async fn stop(&self) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
         async fn pause(&self) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
         async fn resume(&self) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
         async fn step(&self) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
         async fn get_status(&self) -> feagi_services::ServiceResult<feagi_services::RuntimeStatus> {
             Ok(feagi_services::RuntimeStatus {
@@ -178,73 +147,42 @@ fn build_test_state() -> ApiState {
             })
         }
         async fn set_frequency(&self, _frequency: f64) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
         async fn get_burst_count(&self) -> feagi_services::ServiceResult<u64> {
             Ok(0)
         }
         async fn reset_burst_count(&self) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
         async fn get_fcl_snapshot(&self) -> feagi_services::ServiceResult<Vec<(u64, f32)>> {
             Ok(vec![])
         }
-        async fn get_fcl_snapshot_with_cortical_idx(
-            &self,
-        ) -> feagi_services::ServiceResult<Vec<(u64, u32, f32)>> {
+        async fn get_fcl_snapshot_with_cortical_idx(&self) -> feagi_services::ServiceResult<Vec<(u64, u32, f32)>> {
             Ok(vec![])
         }
         async fn get_fire_queue_sample(
             &self,
-        ) -> feagi_services::ServiceResult<
-            std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
-        > {
+        ) -> feagi_services::ServiceResult<std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
             Ok(std::collections::HashMap::new())
         }
-        async fn get_fire_ledger_configs(
-            &self,
-        ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+        async fn get_fire_ledger_configs(&self) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
             Ok(vec![])
         }
-        async fn configure_fire_ledger_window(
-            &self,
-            _cortical_id: u32,
-            _window_size: usize,
-        ) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+        async fn configure_fire_ledger_window(&self, _cortical_id: u32, _window_size: usize) -> feagi_services::ServiceResult<()> {
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
         async fn get_fcl_sampler_config(&self) -> feagi_services::ServiceResult<(f64, u32)> {
             Ok((0.0, 0))
         }
-        async fn set_fcl_sampler_config(
-            &self,
-            _sample_rate: Option<f64>,
-            _max_samples: Option<u32>,
-        ) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+        async fn set_fcl_sampler_config(&self, _sample_rate: Option<f64>, _max_samples: Option<u32>) -> feagi_services::ServiceResult<()> {
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
-        async fn get_area_fcl_sample_rate(
-            &self,
-            _cortical_id: u32,
-        ) -> feagi_services::ServiceResult<f64> {
+        async fn get_area_fcl_sample_rate(&self, _cortical_id: u32) -> feagi_services::ServiceResult<f64> {
             Ok(0.0)
         }
-        async fn set_area_fcl_sample_rate(
-            &self,
-            _cortical_id: u32,
-            _sample_rate: f64,
-        ) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+        async fn set_area_fcl_sample_rate(&self, _cortical_id: u32, _sample_rate: f64) -> feagi_services::ServiceResult<()> {
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
         async fn inject_sensory_by_coordinates(
             &self,
@@ -252,9 +190,7 @@ fn build_test_state() -> ApiState {
             _coordinates: &[(u32, u32, u32, f32)],
             _mode: feagi_services::traits::runtime_service::ManualStimulationMode,
         ) -> feagi_services::ServiceResult<usize> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+            Err(feagi_services::ServiceError::NotImplemented("MockRuntimeService".to_string()))
         }
 
         async fn register_motor_subscriptions(
@@ -266,27 +202,19 @@ fn build_test_state() -> ApiState {
             Ok(())
         }
 
-        async fn register_visualization_subscriptions(
-            &self,
-            _agent_id: &str,
-            _rate_hz: f64,
-        ) -> feagi_services::ServiceResult<()> {
+        async fn register_visualization_subscriptions(&self, _agent_id: &str, _rate_hz: f64) -> feagi_services::ServiceResult<()> {
             Ok(())
         }
         fn unregister_motor_subscriptions(&self, _agent_id: &str) {}
         fn unregister_visualization_subscriptions(&self, _agent_id: &str) {}
-        async fn reset_cortical_area_states(
-            &self,
-            cortical_indices: &[u32],
-        ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+        async fn reset_cortical_area_states(&self, cortical_indices: &[u32]) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
             Ok(cortical_indices.iter().map(|&i| (i, 0)).collect())
         }
         fn clear_all_motor_subscriptions(&self) {}
         fn clear_all_visualization_subscriptions(&self) {}
     }
 
-    let runtime_service =
-        Arc::new(MockRuntimeService) as Arc<dyn feagi_services::RuntimeService + Send + Sync>;
+    let runtime_service = Arc::new(MockRuntimeService) as Arc<dyn feagi_services::RuntimeService + Send + Sync>;
 
     // Create API state
     // Get FEAGI session timestamp (when this instance started)
@@ -295,8 +223,7 @@ fn build_test_state() -> ApiState {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
-    let (genome_transition_lock, genome_transition_in_progress) =
-        ApiState::init_genome_transition_controls();
+    let (genome_transition_lock, genome_transition_in_progress) = ApiState::init_genome_transition_controls();
     let filesystem_data_root = ApiState::filesystem_data_root_from_config(std::path::Path::new(""));
     ApiState {
         network_connection_info_provider: None,
@@ -379,49 +306,30 @@ impl feagi_services::RuntimeService for TrackingRuntimeService {
     async fn get_fcl_snapshot(&self) -> feagi_services::ServiceResult<Vec<(u64, f32)>> {
         Ok(vec![])
     }
-    async fn get_fcl_snapshot_with_cortical_idx(
-        &self,
-    ) -> feagi_services::ServiceResult<Vec<(u64, u32, f32)>> {
+    async fn get_fcl_snapshot_with_cortical_idx(&self) -> feagi_services::ServiceResult<Vec<(u64, u32, f32)>> {
         Ok(vec![])
     }
     async fn get_fire_queue_sample(
         &self,
-    ) -> feagi_services::ServiceResult<
-        std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
-    > {
+    ) -> feagi_services::ServiceResult<std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
         Ok(std::collections::HashMap::new())
     }
     async fn get_fire_ledger_configs(&self) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
         Ok(vec![])
     }
-    async fn configure_fire_ledger_window(
-        &self,
-        _cortical_id: u32,
-        _window_size: usize,
-    ) -> feagi_services::ServiceResult<()> {
+    async fn configure_fire_ledger_window(&self, _cortical_id: u32, _window_size: usize) -> feagi_services::ServiceResult<()> {
         Ok(())
     }
     async fn get_fcl_sampler_config(&self) -> feagi_services::ServiceResult<(f64, u32)> {
         Ok((0.0, 0))
     }
-    async fn set_fcl_sampler_config(
-        &self,
-        _sample_rate: Option<f64>,
-        _max_samples: Option<u32>,
-    ) -> feagi_services::ServiceResult<()> {
+    async fn set_fcl_sampler_config(&self, _sample_rate: Option<f64>, _max_samples: Option<u32>) -> feagi_services::ServiceResult<()> {
         Ok(())
     }
-    async fn get_area_fcl_sample_rate(
-        &self,
-        _cortical_id: u32,
-    ) -> feagi_services::ServiceResult<f64> {
+    async fn get_area_fcl_sample_rate(&self, _cortical_id: u32) -> feagi_services::ServiceResult<f64> {
         Ok(0.0)
     }
-    async fn set_area_fcl_sample_rate(
-        &self,
-        _cortical_id: u32,
-        _sample_rate: f64,
-    ) -> feagi_services::ServiceResult<()> {
+    async fn set_area_fcl_sample_rate(&self, _cortical_id: u32, _sample_rate: f64) -> feagi_services::ServiceResult<()> {
         Ok(())
     }
     async fn inject_sensory_by_coordinates(
@@ -432,60 +340,28 @@ impl feagi_services::RuntimeService for TrackingRuntimeService {
     ) -> feagi_services::ServiceResult<usize> {
         Ok(0)
     }
-    async fn register_motor_subscriptions(
-        &self,
-        agent_id: &str,
-        _cortical_ids: Vec<String>,
-        _rate_hz: f64,
-    ) -> feagi_services::ServiceResult<()> {
-        self.tracker
-            .motor_subscriptions
-            .lock()
-            .unwrap()
-            .insert(agent_id.to_string());
+    async fn register_motor_subscriptions(&self, agent_id: &str, _cortical_ids: Vec<String>, _rate_hz: f64) -> feagi_services::ServiceResult<()> {
+        self.tracker.motor_subscriptions.lock().unwrap().insert(agent_id.to_string());
         Ok(())
     }
-    async fn register_visualization_subscriptions(
-        &self,
-        agent_id: &str,
-        _rate_hz: f64,
-    ) -> feagi_services::ServiceResult<()> {
-        self.tracker
-            .visualization_subscriptions
-            .lock()
-            .unwrap()
-            .insert(agent_id.to_string());
+    async fn register_visualization_subscriptions(&self, agent_id: &str, _rate_hz: f64) -> feagi_services::ServiceResult<()> {
+        self.tracker.visualization_subscriptions.lock().unwrap().insert(agent_id.to_string());
         Ok(())
     }
     fn unregister_motor_subscriptions(&self, agent_id: &str) {
-        self.tracker
-            .motor_subscriptions
-            .lock()
-            .unwrap()
-            .remove(agent_id);
+        self.tracker.motor_subscriptions.lock().unwrap().remove(agent_id);
     }
     fn unregister_visualization_subscriptions(&self, agent_id: &str) {
-        self.tracker
-            .visualization_subscriptions
-            .lock()
-            .unwrap()
-            .remove(agent_id);
+        self.tracker.visualization_subscriptions.lock().unwrap().remove(agent_id);
     }
-    async fn reset_cortical_area_states(
-        &self,
-        cortical_indices: &[u32],
-    ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+    async fn reset_cortical_area_states(&self, cortical_indices: &[u32]) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
         Ok(cortical_indices.iter().map(|&i| (i, 0)).collect())
     }
     fn clear_all_motor_subscriptions(&self) {
         self.tracker.motor_subscriptions.lock().unwrap().clear();
     }
     fn clear_all_visualization_subscriptions(&self) {
-        self.tracker
-            .visualization_subscriptions
-            .lock()
-            .unwrap()
-            .clear();
+        self.tracker.visualization_subscriptions.lock().unwrap().clear();
     }
 }
 
@@ -494,34 +370,22 @@ fn wait_for_registered_agent(
     handler: &Arc<Mutex<FeagiAgentHandler>>,
     client: &mut CommandControlAgent,
     timeout: Duration,
-) -> (
-    String,
-    feagi_io::traits_and_enums::shared::TransportProtocolEndpoint,
-) {
+) -> (String, feagi_io::traits_and_enums::shared::TransportProtocolEndpoint) {
     let deadline = Instant::now() + timeout;
     loop {
         {
             let mut guard = handler.lock().unwrap();
-            guard
-                .poll_command_and_control()
-                .expect("command/control polling failed");
+            guard.poll_command_and_control().expect("command/control polling failed");
         }
-        client
-            .poll_for_messages()
-            .expect("client poll_for_messages failed");
-        if let AgentRegistrationStatus::Registered(session_id, endpoints) =
-            client.registration_status()
-        {
+        client.poll_for_messages().expect("client poll_for_messages failed");
+        if let AgentRegistrationStatus::Registered(session_id, endpoints) = client.registration_status() {
             let sensory_endpoint = endpoints
                 .get(&AgentCapabilities::SendSensorData)
                 .cloned()
                 .expect("registration response missing sensory endpoint");
             return (session_id.to_base64(), sensory_endpoint);
         }
-        assert!(
-            Instant::now() < deadline,
-            "timed out waiting for agent registration"
-        );
+        assert!(Instant::now() < deadline, "timed out waiting for agent registration");
         std::thread::sleep(Duration::from_millis(2));
     }
 }
@@ -547,12 +411,8 @@ fn wait_for_sensory_data(handler: &Arc<Mutex<FeagiAgentHandler>>, timeout: Durat
 
 #[cfg(feature = "feagi-agent")]
 fn reserve_free_port() -> u16 {
-    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
-        .expect("failed to bind ephemeral port");
-    listener
-        .local_addr()
-        .expect("failed to read local addr")
-        .port()
+    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).expect("failed to bind ephemeral port");
+    listener.local_addr().expect("failed to read local addr").port()
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -590,10 +450,8 @@ fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
         .expect("Time went backwards")
         .as_nanos();
     let path = std::path::PathBuf::from(format!("/tmp/feagi-config-{nanos}--temp.toml"));
-    let base_path =
-        std::path::PathBuf::from("/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml");
-    let base_contents =
-        std::fs::read_to_string(&base_path).expect("Failed to read base FEAGI config");
+    let base_path = std::path::PathBuf::from("/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml");
+    let base_contents = std::fs::read_to_string(&base_path).expect("Failed to read base FEAGI config");
     let mut contents = String::new();
     let mut in_agent = false;
     let mut injected = false;
@@ -608,19 +466,13 @@ fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
         }
         if in_agent && trimmed.starts_with('[') {
             if !injected {
-                contents.push_str(&format!(
-                    "auto_create_missing_cortical_areas = {}\n",
-                    auto_create
-                ));
+                contents.push_str(&format!("auto_create_missing_cortical_areas = {}\n", auto_create));
                 injected = true;
             }
             in_agent = false;
         }
         if in_agent && trimmed.starts_with("auto_create_missing_cortical_areas") {
-            contents.push_str(&format!(
-                "auto_create_missing_cortical_areas = {}\n",
-                auto_create
-            ));
+            contents.push_str(&format!("auto_create_missing_cortical_areas = {}\n", auto_create));
             injected = true;
             continue;
         }
@@ -629,10 +481,7 @@ fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
     }
 
     if in_agent && !injected {
-        contents.push_str(&format!(
-            "auto_create_missing_cortical_areas = {}\n",
-            auto_create
-        ));
+        contents.push_str(&format!("auto_create_missing_cortical_areas = {}\n", auto_create));
     }
 
     std::fs::write(&path, contents).expect("Failed to write temp config");
@@ -913,21 +762,11 @@ fn sample_sensory_device_registrations_with_large_vision_encoder() -> Value {
 }
 
 /// Helper to make a request and get response as JSON
-async fn request_json(
-    app: axum::Router,
-    method: &str,
-    path: &str,
-    body: Option<Value>,
-) -> (StatusCode, Value) {
-    let request_builder = Request::builder()
-        .uri(path)
-        .method(method)
-        .header("content-type", "application/json");
+async fn request_json(app: axum::Router, method: &str, path: &str, body: Option<Value>) -> (StatusCode, Value) {
+    let request_builder = Request::builder().uri(path).method(method).header("content-type", "application/json");
 
     let request = if let Some(body_json) = body {
-        request_builder
-            .body(Body::from(serde_json::to_vec(&body_json).unwrap()))
-            .unwrap()
+        request_builder.body(Body::from(serde_json::to_vec(&body_json).unwrap())).unwrap()
     } else {
         request_builder.body(Body::empty()).unwrap()
     };
@@ -935,9 +774,7 @@ async fn request_json(
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
 
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
 
     let json: Value = if body_bytes.is_empty() {
         json!(null)
@@ -1071,10 +908,7 @@ async fn test_register_agent_rejects_rate_above_burst_frequency() {
     let auth_token = AuthToken::new([2u8; 32]).to_base64();
 
     let mut capabilities: HashMap<String, Value> = HashMap::new();
-    capabilities.insert(
-        "device_registrations".to_string(),
-        sample_device_registrations(),
-    );
+    capabilities.insert("device_registrations".to_string(), sample_device_registrations());
     capabilities.insert("motor".to_string(), json!({ "rate_hz": 2000.0 }));
 
     let request = AgentRegistrationRequest {
@@ -1102,10 +936,7 @@ async fn test_register_agent_rejects_visualization_rate_above_burst_frequency() 
     let auth_token = AuthToken::new([3u8; 32]).to_base64();
 
     let mut capabilities: HashMap<String, Value> = HashMap::new();
-    capabilities.insert(
-        "device_registrations".to_string(),
-        sample_device_registrations(),
-    );
+    capabilities.insert("device_registrations".to_string(), sample_device_registrations());
     capabilities.insert("visualization".to_string(), json!({ "rate_hz": 2000.0 }));
 
     let request = AgentRegistrationRequest {
@@ -1129,16 +960,12 @@ async fn test_register_agent_rejects_visualization_rate_above_burst_frequency() 
 #[tokio::test]
 async fn test_auto_create_disabled_skips_creation() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(false)
     };
     let state = build_test_state();
 
-    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
-        .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations()).await;
 
     let areas = state
         .connectome_service
@@ -1152,16 +979,12 @@ async fn test_auto_create_disabled_skips_creation() {
 #[tokio::test]
 async fn test_auto_create_enabled_creates_areas() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
 
-    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
-        .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations()).await;
 
     let areas = state
         .connectome_service
@@ -1175,29 +998,19 @@ async fn test_auto_create_enabled_creates_areas() {
 #[tokio::test]
 async fn test_auto_create_creates_all_limb_cortical_areas() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
 
-    auto_create_cortical_areas_from_device_registrations(
-        &state,
-        &sample_multi_limb_device_registrations(),
-    )
-    .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_multi_limb_device_registrations()).await;
 
     let areas = state
         .connectome_service
         .list_cortical_areas()
         .await
         .expect("Failed to list cortical_area areas");
-    let motor_areas: Vec<_> = areas
-        .iter()
-        .filter(|a| a.area_type == "motor" || a.cortical_group == "OPU")
-        .collect();
+    let motor_areas: Vec<_> = areas.iter().filter(|a| a.area_type == "motor" || a.cortical_group == "OPU").collect();
     assert_eq!(
         motor_areas.len(),
         8,
@@ -1208,10 +1021,7 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
     let mut inc_width_count = 0;
     for area in &motor_areas {
         if area.name.ends_with("-1") {
-            assert_eq!(
-                area.dimensions.0, 6,
-                "Incremental subunit width should be 6"
-            );
+            assert_eq!(area.dimensions.0, 6, "Incremental subunit width should be 6");
             inc_width_count += 1;
         } else if area.name.ends_with("-0") {
             assert_eq!(area.dimensions.0, 3, "Absolute subunit width should be 3");
@@ -1231,10 +1041,7 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
 #[tokio::test]
 async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_index() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
@@ -1270,24 +1077,12 @@ async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_in
         }
     }
 
-    assert_eq!(
-        group0_by_subunit.len(),
-        9,
-        "Expected 9 segmented-vision subunits for group 0"
-    );
-    assert_eq!(
-        group1_by_subunit.len(),
-        9,
-        "Expected 9 segmented-vision subunits for group 1"
-    );
+    assert_eq!(group0_by_subunit.len(), 9, "Expected 9 segmented-vision subunits for group 0");
+    assert_eq!(group1_by_subunit.len(), 9, "Expected 9 segmented-vision subunits for group 1");
 
     for subunit in 0u8..9u8 {
-        let pos0 = group0_by_subunit
-            .get(&subunit)
-            .expect("Missing segmented-vision subunit in group 0");
-        let pos1 = group1_by_subunit
-            .get(&subunit)
-            .expect("Missing segmented-vision subunit in group 1");
+        let pos0 = group0_by_subunit.get(&subunit).expect("Missing segmented-vision subunit in group 0");
+        let pos1 = group1_by_subunit.get(&subunit).expect("Missing segmented-vision subunit in group 1");
 
         assert_eq!(
             pos0.1, pos1.1,
@@ -1308,16 +1103,8 @@ async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_in
         );
     }
 
-    let group0_max_x = group0_by_subunit
-        .values()
-        .map(|(x, _, _)| *x)
-        .max()
-        .expect("Group 0 should not be empty");
-    let group1_min_x = group1_by_subunit
-        .values()
-        .map(|(x, _, _)| *x)
-        .min()
-        .expect("Group 1 should not be empty");
+    let group0_max_x = group0_by_subunit.values().map(|(x, _, _)| *x).max().expect("Group 0 should not be empty");
+    let group1_min_x = group1_by_subunit.values().map(|(x, _, _)| *x).min().expect("Group 1 should not be empty");
     assert!(
         group1_min_x > group0_max_x,
         "Expected segmented-vision group 1 assembly to be placed to the right of group 0 assembly"
@@ -1328,10 +1115,7 @@ async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_in
 #[tokio::test]
 async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
@@ -1344,15 +1128,11 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
     );
     config.insert(
         "percentage_neuron_positioning".to_string(),
-        serde_json::to_value(PercentageNeuronPositioning::Linear)
-            .expect("Serialize percentage neuron positioning"),
+        serde_json::to_value(PercentageNeuronPositioning::Linear).expect("Serialize percentage neuron positioning"),
     );
 
     let existing_ids = SensoryCorticalUnit::SegmentedVision
-        .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-            CorticalUnitIndex::from(0u8),
-            config,
-        )
+        .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(CorticalUnitIndex::from(0u8), config)
         .expect("Generate segmented-vision cortical_area IDs for group 0");
 
     let mut existing_params: Vec<CreateCorticalAreaParams> = Vec::new();
@@ -1361,11 +1141,7 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
         existing_params.push(CreateCorticalAreaParams {
             cortical_id: cortical_id.as_base_64(),
             name: format!("seeded-segmented-{}", subunit),
-            dimensions: if subunit == 4 {
-                (128, 128, 3)
-            } else {
-                (32, 32, 1)
-            },
+            dimensions: if subunit == 4 { (128, 128, 3) } else { (32, 32, 1) },
             position: (-100 + subunit_i32, 200 + subunit_i32, -300 - subunit_i32),
             area_type: "sensory".to_string(),
             visible: None,
@@ -1393,11 +1169,7 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
         .await
         .expect("Seed existing segmented-vision group");
 
-    auto_create_cortical_areas_from_device_registrations(
-        &state,
-        &sample_segmented_vision_group1_only_device_registrations(),
-    )
-    .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_segmented_vision_group1_only_device_registrations()).await;
 
     let areas = state
         .connectome_service
@@ -1423,24 +1195,12 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
         }
     }
 
-    assert_eq!(
-        group0_by_subunit.len(),
-        9,
-        "Expected seeded group 0 subunits"
-    );
-    assert_eq!(
-        group1_by_subunit.len(),
-        9,
-        "Expected newly created group 1 subunits"
-    );
+    assert_eq!(group0_by_subunit.len(), 9, "Expected seeded group 0 subunits");
+    assert_eq!(group1_by_subunit.len(), 9, "Expected newly created group 1 subunits");
 
     for subunit in 0u8..9u8 {
-        let pos0 = group0_by_subunit
-            .get(&subunit)
-            .expect("Missing seeded group 0 subunit");
-        let pos1 = group1_by_subunit
-            .get(&subunit)
-            .expect("Missing created group 1 subunit");
+        let pos0 = group0_by_subunit.get(&subunit).expect("Missing seeded group 0 subunit");
+        let pos1 = group1_by_subunit.get(&subunit).expect("Missing created group 1 subunit");
 
         assert_eq!(
             pos1.1, pos0.1,
@@ -1462,13 +1222,9 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
-async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existing_anchor_incomplete(
-) {
+async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existing_anchor_incomplete() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
@@ -1481,14 +1237,10 @@ async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existi
     );
     config.insert(
         "percentage_neuron_positioning".to_string(),
-        serde_json::to_value(PercentageNeuronPositioning::Linear)
-            .expect("Serialize percentage neuron positioning"),
+        serde_json::to_value(PercentageNeuronPositioning::Linear).expect("Serialize percentage neuron positioning"),
     );
     let existing_ids = SensoryCorticalUnit::SegmentedVision
-        .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-            CorticalUnitIndex::from(0u8),
-            config,
-        )
+        .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(CorticalUnitIndex::from(0u8), config)
         .expect("Generate segmented-vision cortical_area IDs for group 0");
 
     state
@@ -1519,11 +1271,7 @@ async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existi
         .await
         .expect("Seed incomplete segmented-vision anchor");
 
-    auto_create_cortical_areas_from_device_registrations(
-        &state,
-        &sample_segmented_vision_group1_only_device_registrations(),
-    )
-    .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_segmented_vision_group1_only_device_registrations()).await;
 
     let areas = state
         .connectome_service
@@ -1544,44 +1292,25 @@ async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existi
         }
     }
 
-    assert_eq!(
-        group1_by_subunit.len(),
-        9,
-        "Expected complete group 1 segmented-vision creation"
-    );
+    assert_eq!(group1_by_subunit.len(), 9, "Expected complete group 1 segmented-vision creation");
 
     // Subunit 0 template-relative Y/Z for segmented vision is (-70, 0) in sensory template.
     // With an incomplete anchor, Y/Z must come from template (not the seeded 777/555).
-    let subunit0 = group1_by_subunit
-        .get(&0)
-        .expect("Missing group 1 subunit 0");
-    assert_eq!(
-        subunit0.1, -70,
-        "Expected template Y when existing segmented anchor is incomplete"
-    );
-    assert_eq!(
-        subunit0.2, 0,
-        "Expected template Z when existing segmented anchor is incomplete"
-    );
+    let subunit0 = group1_by_subunit.get(&0).expect("Missing group 1 subunit 0");
+    assert_eq!(subunit0.1, -70, "Expected template Y when existing segmented anchor is incomplete");
+    assert_eq!(subunit0.2, 0, "Expected template Z when existing segmented anchor is incomplete");
 }
 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
 
-    auto_create_cortical_areas_from_device_registrations(
-        &state,
-        &sample_named_motor_device_registrations(),
-    )
-    .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_named_motor_device_registrations()).await;
 
     let areas = state
         .connectome_service
@@ -1589,9 +1318,7 @@ async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
         .await
         .expect("Failed to list cortical_area areas");
     assert!(
-        areas
-            .iter()
-            .any(|area| area.name.starts_with("front_left_leg")),
+        areas.iter().any(|area| area.name.starts_with("front_left_leg")),
         "Expected created motor area names to use registration friendly name"
     );
 }
@@ -1600,16 +1327,12 @@ async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
 #[tokio::test]
 async fn test_auto_create_sets_firing_threshold_for_simple_vision() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
 
-    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
-        .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations()).await;
 
     let areas = state
         .connectome_service
@@ -1640,19 +1363,12 @@ async fn test_auto_create_sets_firing_threshold_for_simple_vision() {
 #[tokio::test]
 async fn test_auto_create_sets_firing_threshold_for_segmented_vision() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
 
-    auto_create_cortical_areas_from_device_registrations(
-        &state,
-        &sample_multi_segmented_vision_device_registrations(),
-    )
-    .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_multi_segmented_vision_device_registrations()).await;
 
     let areas = state
         .connectome_service
@@ -1670,10 +1386,7 @@ async fn test_auto_create_sets_firing_threshold_for_segmented_vision() {
         })
         .collect();
 
-    assert!(
-        !segmented_vision_areas.is_empty(),
-        "Expected segmented vision areas to be auto-created"
-    );
+    assert!(!segmented_vision_areas.is_empty(), "Expected segmented vision areas to be auto-created");
     for area in segmented_vision_areas {
         assert_eq!(
             area.firing_threshold, 150.0,
@@ -1692,19 +1405,12 @@ async fn test_auto_create_sets_firing_threshold_for_segmented_vision() {
 #[tokio::test]
 async fn test_auto_create_supports_sensory_only_registrations() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
 
-    auto_create_cortical_areas_from_device_registrations(
-        &state,
-        &sample_named_sensory_only_device_registrations(),
-    )
-    .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_named_sensory_only_device_registrations()).await;
 
     let areas = state
         .connectome_service
@@ -1721,20 +1427,13 @@ async fn test_auto_create_supports_sensory_only_registrations() {
 #[tokio::test]
 async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_properties() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
     let registrations = sample_sensory_device_registrations_with_large_vision_encoder();
-    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
-        .expect("Failed deriving sensory cortical_area IDs");
-    let cortical_id = sensory_ids
-        .into_iter()
-        .next()
-        .expect("Expected a vision cortical_area ID");
+    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations).expect("Failed deriving sensory cortical_area IDs");
+    let cortical_id = sensory_ids.into_iter().next().expect("Expected a vision cortical_area ID");
 
     // Pre-create an undersized sensory area to verify auto-create update logic expands it.
     state
@@ -1793,20 +1492,13 @@ async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_
 #[tokio::test]
 async fn test_auto_create_preserves_existing_motor_area_position_while_reconciling_structure() {
     let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
+        let _lock = CONFIG_ENV_LOCK.get_or_init(|| Mutex::new(())).lock().expect("Failed to lock config env");
         set_temp_config(true)
     };
     let state = build_test_state();
     let registrations = sample_motor_device_registrations_with_io_flags();
-    let motor_ids = derive_motor_cortical_ids_from_device_registrations(&registrations)
-        .expect("Failed deriving motor cortical_area IDs");
-    let cortical_id = motor_ids
-        .into_iter()
-        .next()
-        .expect("Expected at least one motor cortical_area ID");
+    let motor_ids = derive_motor_cortical_ids_from_device_registrations(&registrations).expect("Failed deriving motor cortical_area IDs");
+    let cortical_id = motor_ids.into_iter().next().expect("Expected at least one motor cortical_area ID");
     let preserved_position = (777, 888, 9);
 
     state
@@ -1859,10 +1551,7 @@ async fn test_auto_create_preserves_existing_motor_area_position_while_reconcili
         "Expected motor dimensions to reconcile from registration while preserving position"
     );
     assert_eq!(
-        reconciled
-            .properties
-            .get("dev_count")
-            .and_then(|v| v.as_u64()),
+        reconciled.properties.get("dev_count").and_then(|v| v.as_u64()),
         Some(2),
         "Expected motor dev_count to reconcile from registration while preserving position"
     );
@@ -1872,28 +1561,23 @@ async fn test_auto_create_preserves_existing_motor_area_position_while_reconcili
 #[tokio::test]
 async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_until_reregister() {
     let tracker = Arc::new(RuntimeTransitionTracker::default());
-    let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
-        as Arc<dyn RuntimeService + Send + Sync>;
+    let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker))) as Arc<dyn RuntimeService + Send + Sync>;
 
     let mut state = build_test_state();
     state.runtime_service = runtime_service.clone();
-    let handler = Arc::new(Mutex::new(feagi_agent::server::FeagiAgentHandler::new(
-        Box::new(feagi_agent::server::auth::DummyAuth {}),
-    )));
+    let handler = Arc::new(Mutex::new(feagi_agent::server::FeagiAgentHandler::new(Box::new(
+        feagi_agent::server::auth::DummyAuth {},
+    ))));
     state.agent_handler = Some(Arc::clone(&handler));
 
     let session_id = AgentID::new([7u8; AgentID::NUMBER_BYTES]);
-    let descriptor = AgentDescriptor::new("neuraville", "transition-test-agent", 1)
-        .expect("descriptor creation failed");
+    let descriptor = AgentDescriptor::new("neuraville", "transition-test-agent", 1).expect("descriptor creation failed");
     {
         let mut guard = handler.lock().unwrap();
         guard.register_logical_agent(
             session_id,
             descriptor.clone(),
-            vec![
-                AgentCapabilities::SendSensorData,
-                AgentCapabilities::ReceiveMotorData,
-            ],
+            vec![AgentCapabilities::SendSensorData, AgentCapabilities::ReceiveMotorData],
         );
     }
     let session_id_b64 = session_id.to_base64();
@@ -1915,12 +1599,8 @@ async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_u
     // Use a malformed genome payload so load fails fast while still exercising
     // strict transition teardown logic that runs before genome parsing/loading.
     let bad_genome_value = json!({"invalid": "payload"});
-    let transition_result =
-        post_upload(ApiStateExtract(state.clone()), ApiJson(bad_genome_value)).await;
-    assert!(
-        transition_result.is_err(),
-        "expected malformed genome upload to fail"
-    );
+    let transition_result = post_upload(ApiStateExtract(state.clone()), ApiJson(bad_genome_value)).await;
+    assert!(transition_result.is_err(), "expected malformed genome upload to fail");
 
     assert_eq!(
         handler.lock().unwrap().get_all_registered_agents().len(),
@@ -1932,11 +1612,7 @@ async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_u
         "motor subscriptions should be empty after genome transition"
     );
     assert!(
-        tracker
-            .visualization_subscriptions
-            .lock()
-            .unwrap()
-            .is_empty(),
+        tracker.visualization_subscriptions.lock().unwrap().is_empty(),
         "visualization subscriptions should be empty after genome transition"
     );
 
@@ -1945,10 +1621,7 @@ async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_u
     {
         let mut guard = handler.lock().unwrap();
         assert!(
-            guard
-                .poll_agent_sensors()
-                .expect("polling sensory should not fail")
-                .is_none(),
+            guard.poll_agent_sensors().expect("polling sensory should not fail").is_none(),
             "sensory must not be consumed after genome transition before re-registration"
         );
     }
@@ -1960,10 +1633,7 @@ async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_u
         guard.register_logical_agent(
             new_session_id,
             descriptor,
-            vec![
-                AgentCapabilities::SendSensorData,
-                AgentCapabilities::ReceiveMotorData,
-            ],
+            vec![AgentCapabilities::SendSensorData, AgentCapabilities::ReceiveMotorData],
         );
     }
     assert_eq!(
@@ -1977,8 +1647,7 @@ async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_u
 #[tokio::test]
 async fn test_force_deregister_preserves_descriptor_device_registrations_for_reconnect() {
     let mut handler = FeagiAgentHandler::new(Box::new(DummyAuth {}));
-    let descriptor =
-        AgentDescriptor::new("neuraville", "mujoco-agent", 1).expect("descriptor creation failed");
+    let descriptor = AgentDescriptor::new("neuraville", "mujoco-agent", 1).expect("descriptor creation failed");
     let initial_session = AgentID::new([3u8; AgentID::NUMBER_BYTES]);
 
     handler.set_device_registrations_by_descriptor(
@@ -1993,11 +1662,7 @@ async fn test_force_deregister_preserves_descriptor_device_registrations_for_rec
             }
         }),
     );
-    handler.register_logical_agent(
-        initial_session,
-        descriptor.clone(),
-        vec![AgentCapabilities::ReceiveMotorData],
-    );
+    handler.register_logical_agent(initial_session, descriptor.clone(), vec![AgentCapabilities::ReceiveMotorData]);
 
     let removed = handler.force_deregister_all_agents("test transition");
     assert_eq!(removed.len(), 1, "expected one agent to be deregistered");
@@ -2006,9 +1671,7 @@ async fn test_force_deregister_preserves_descriptor_device_registrations_for_rec
         "all active agent sessions must be removed"
     );
     assert!(
-        handler
-            .get_device_registrations_by_descriptor(&descriptor)
-            .is_some(),
+        handler.get_device_registrations_by_descriptor(&descriptor).is_some(),
         "descriptor device registrations should persist for reconnect mapping"
     );
 }
@@ -2018,8 +1681,7 @@ async fn test_force_deregister_preserves_descriptor_device_registrations_for_rec
 #[ignore = "real transport path can hang in CI; run manually for websocket validation"]
 async fn test_genome_transition_realtime_transport_requires_reregistration() {
     let tracker = Arc::new(RuntimeTransitionTracker::default());
-    let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
-        as Arc<dyn RuntimeService + Send + Sync>;
+    let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker))) as Arc<dyn RuntimeService + Send + Sync>;
 
     let mut state = build_test_state();
     state.runtime_service = runtime_service.clone();
@@ -2037,17 +1699,11 @@ async fn test_genome_transition_realtime_transport_requires_reregistration() {
     let viz_bind = format!("{host}:{viz_port}");
     let viz_remote = format!("ws://{host}:{viz_port}");
 
-    let mut test_handler = FeagiAgentHandler::new_with_liveness_config(
-        Box::new(DummyAuth {}),
-        AgentLivenessConfig::default(),
-    );
+    let mut test_handler = FeagiAgentHandler::new_with_liveness_config(Box::new(DummyAuth {}), AgentLivenessConfig::default());
     test_handler
         .add_and_start_command_control_server(Box::new(
-            FeagiWebSocketServerRouterProperties::new_with_remote(
-                &registration_bind,
-                &registration_remote,
-            )
-            .expect("failed to create websocket router properties"),
+            FeagiWebSocketServerRouterProperties::new_with_remote(&registration_bind, &registration_remote)
+                .expect("failed to create websocket router properties"),
         ))
         .expect("failed to start websocket command/control router");
     test_handler.add_puller_server(Box::new(
@@ -2055,12 +1711,10 @@ async fn test_genome_transition_realtime_transport_requires_reregistration() {
             .expect("failed to create websocket sensory puller properties"),
     ));
     test_handler.add_publisher_server(Box::new(
-        FeagiWebSocketServerPublisherProperties::new(&motor_bind, &motor_remote)
-            .expect("failed to create websocket motor publisher properties"),
+        FeagiWebSocketServerPublisherProperties::new(&motor_bind, &motor_remote).expect("failed to create websocket motor publisher properties"),
     ));
     test_handler.add_publisher_server(Box::new(
-        FeagiWebSocketServerPublisherProperties::new(&viz_bind, &viz_remote)
-            .expect("failed to create websocket viz publisher properties"),
+        FeagiWebSocketServerPublisherProperties::new(&viz_bind, &viz_remote).expect("failed to create websocket viz publisher properties"),
     ));
     let handler = Arc::new(Mutex::new(test_handler));
     state.agent_handler = Some(Arc::clone(&handler));
@@ -2083,18 +1737,13 @@ async fn test_genome_transition_realtime_transport_requires_reregistration() {
     client.request_connect().expect("client connect failed");
     client
         .request_registration(
-            AgentDescriptor::new("neuraville", "transition-rt-agent", 1)
-                .expect("descriptor creation failed"),
+            AgentDescriptor::new("neuraville", "transition-rt-agent", 1).expect("descriptor creation failed"),
             AuthToken::new([0u8; 32]),
-            vec![
-                AgentCapabilities::SendSensorData,
-                AgentCapabilities::ReceiveMotorData,
-            ],
+            vec![AgentCapabilities::SendSensorData, AgentCapabilities::ReceiveMotorData],
         )
         .expect("registration request failed");
 
-    let (session_id_b64, sensory_endpoint) =
-        wait_for_registered_agent(&handler, &mut client, Duration::from_secs(5));
+    let (session_id_b64, sensory_endpoint) = wait_for_registered_agent(&handler, &mut client, Duration::from_secs(5));
     assert_eq!(
         handler.lock().unwrap().get_all_registered_agents().len(),
         1,
@@ -2114,9 +1763,7 @@ async fn test_genome_transition_realtime_transport_requires_reregistration() {
         .try_create_boxed_client_pusher_properties()
         .expect("failed to create sensory pusher properties");
     let mut sensory_pusher = pusher_props.as_boxed_client_pusher();
-    sensory_pusher
-        .request_connect()
-        .expect("sensory pusher connect failed");
+    sensory_pusher.request_connect().expect("sensory pusher connect failed");
     let pre_payload: FeagiByteContainer = FeagiMessage::HeartBeat.into();
     sensory_pusher
         .publish_data(pre_payload.get_byte_ref())
@@ -2127,12 +1774,8 @@ async fn test_genome_transition_realtime_transport_requires_reregistration() {
     );
 
     let bad_genome_value = json!({"invalid": "payload"});
-    let transition_result =
-        post_upload(ApiStateExtract(state.clone()), ApiJson(bad_genome_value)).await;
-    assert!(
-        transition_result.is_err(),
-        "expected malformed genome upload to fail"
-    );
+    let transition_result = post_upload(ApiStateExtract(state.clone()), ApiJson(bad_genome_value)).await;
+    assert!(transition_result.is_err(), "expected malformed genome upload to fail");
 
     assert_eq!(
         handler.lock().unwrap().get_all_registered_agents().len(),
@@ -2144,11 +1787,7 @@ async fn test_genome_transition_realtime_transport_requires_reregistration() {
         "motor subscriptions should be empty after genome transition"
     );
     assert!(
-        tracker
-            .visualization_subscriptions
-            .lock()
-            .unwrap()
-            .is_empty(),
+        tracker.visualization_subscriptions.lock().unwrap().is_empty(),
         "visualization subscriptions should be empty after genome transition"
     );
 
@@ -2164,30 +1803,21 @@ async fn test_genome_transition_realtime_transport_requires_reregistration() {
             .try_create_boxed_client_requester_properties()
             .expect("failed to create requester properties for reconnect"),
     );
-    reconnected_client
-        .request_connect()
-        .expect("reconnect client connect failed");
+    reconnected_client.request_connect().expect("reconnect client connect failed");
     reconnected_client
         .request_registration(
-            AgentDescriptor::new("neuraville", "transition-rt-agent", 1)
-                .expect("descriptor creation failed on reconnect"),
+            AgentDescriptor::new("neuraville", "transition-rt-agent", 1).expect("descriptor creation failed on reconnect"),
             AuthToken::new([0u8; 32]),
-            vec![
-                AgentCapabilities::SendSensorData,
-                AgentCapabilities::ReceiveMotorData,
-            ],
+            vec![AgentCapabilities::SendSensorData, AgentCapabilities::ReceiveMotorData],
         )
         .expect("reconnect registration request failed");
-    let (_new_session, new_sensory_endpoint) =
-        wait_for_registered_agent(&handler, &mut reconnected_client, Duration::from_secs(5));
+    let (_new_session, new_sensory_endpoint) = wait_for_registered_agent(&handler, &mut reconnected_client, Duration::from_secs(5));
 
     let new_pusher_props = new_sensory_endpoint
         .try_create_boxed_client_pusher_properties()
         .expect("failed to create new sensory pusher properties");
     let mut new_sensory_pusher = new_pusher_props.as_boxed_client_pusher();
-    new_sensory_pusher
-        .request_connect()
-        .expect("new sensory pusher connect failed");
+    new_sensory_pusher.request_connect().expect("new sensory pusher connect failed");
     let rereg_payload: FeagiByteContainer = FeagiMessage::HeartBeat.into();
     new_sensory_pusher
         .publish_data(rereg_payload.get_byte_ref())
@@ -2217,13 +1847,7 @@ async fn test_create_cortical_area_success() {
         "neurons_per_voxel": 1
     });
 
-    let (status, response) = request_json(
-        app,
-        "POST",
-        "/v1/cortical_area/cortical_area",
-        Some(create_request),
-    )
-    .await;
+    let (status, response) = request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(create_request)).await;
 
     assert_eq!(status, StatusCode::OK, "response: {}", response);
     assert!(response.get("cortical_id").is_some());
@@ -2245,13 +1869,7 @@ async fn test_create_cortical_area_invalid_id() {
         "neurons_per_voxel": 1
     });
 
-    let (status, _response) = request_json(
-        app,
-        "POST",
-        "/v1/cortical_area/cortical_area",
-        Some(create_request),
-    )
-    .await;
+    let (status, _response) = request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(create_request)).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -2260,13 +1878,7 @@ async fn test_create_cortical_area_invalid_id() {
 async fn test_get_cortical_area_not_found() {
     let app = create_test_server().await;
 
-    let (status, response) = request_json(
-        app,
-        "GET",
-        "/v1/connectome/area_details?area_ids=notfnd",
-        None,
-    )
-    .await;
+    let (status, response) = request_json(app, "GET", "/v1/connectome/area_details?area_ids=notfnd", None).await;
 
     assert_eq!(status, StatusCode::OK, "response: {}", response);
     assert!(response.as_object().map(|o| o.is_empty()).unwrap_or(false));
@@ -2276,8 +1888,7 @@ async fn test_get_cortical_area_not_found() {
 async fn test_list_cortical_areas_empty() {
     let app = create_test_server().await;
 
-    let (status, response) =
-        request_json(app, "GET", "/v1/cortical_area/cortical_area_id_list", None).await;
+    let (status, response) = request_json(app, "GET", "/v1/cortical_area/cortical_area_id_list", None).await;
 
     assert_eq!(status, StatusCode::OK);
     let cortical_ids = response
@@ -2303,13 +1914,7 @@ async fn test_create_and_get_cortical_area() {
         "neurons_per_voxel": 1
     });
 
-    let (status, response) = request_json(
-        app,
-        "POST",
-        "/v1/cortical_area/cortical_area",
-        Some(create_request),
-    )
-    .await;
+    let (status, response) = request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(create_request)).await;
     assert_eq!(status, StatusCode::OK);
     let created_id = response
         .get("cortical_id")
@@ -2319,13 +1924,7 @@ async fn test_create_and_get_cortical_area() {
 
     // Get - need to recreate app because oneshot consumes it
     let app2 = create_test_server().await;
-    let (status2, response2) = request_json(
-        app2,
-        "GET",
-        &format!("/v1/connectome/area_details?area_ids={}", created_id),
-        None,
-    )
-    .await;
+    let (status2, response2) = request_json(app2, "GET", &format!("/v1/connectome/area_details?area_ids={}", created_id), None).await;
 
     // Fresh manager: created area not present
     assert_eq!(status2, StatusCode::OK);
@@ -2370,10 +1969,7 @@ async fn test_io_dev_count_scales_x_and_per_device_stays_independent() {
             &cortical_id,
             HashMap::from([
                 ("dev_count".to_string(), json!(3)),
-                (
-                    "cortical_dimensions_per_device".to_string(),
-                    json!([4, 5, 7]),
-                ),
+                ("cortical_dimensions_per_device".to_string(), json!([4, 5, 7])),
             ]),
         )
         .await
@@ -2381,10 +1977,7 @@ async fn test_io_dev_count_scales_x_and_per_device_stays_independent() {
 
     let updated_float_dev_count = state
         .genome_service
-        .update_cortical_area(
-            &cortical_id,
-            HashMap::from([("dev_count".to_string(), json!(2.0))]),
-        )
+        .update_cortical_area(&cortical_id, HashMap::from([("dev_count".to_string(), json!(2.0))]))
         .await
         .expect("failed updating float dev_count");
     assert_eq!(
@@ -2424,10 +2017,7 @@ async fn test_io_dev_count_scales_x_and_per_device_stays_independent() {
         .genome_service
         .update_cortical_area(
             &cortical_id,
-            HashMap::from([(
-                "cortical_dimensions_per_device".to_string(),
-                json!([6, 5, 7]),
-            )]),
+            HashMap::from([("cortical_dimensions_per_device".to_string(), json!([6, 5, 7]))]),
         )
         .await
         .expect("failed updating per-device dimensions");
@@ -2436,11 +2026,7 @@ async fn test_io_dev_count_scales_x_and_per_device_stays_independent() {
         (30, 5, 7),
         "per-device update must preserve Y/Z and apply dev_count on X only"
     );
-    assert_eq!(
-        updated_per_device.dev_count,
-        Some(5),
-        "per-device update must not change dev_count"
-    );
+    assert_eq!(updated_per_device.dev_count, Some(5), "per-device update must not change dev_count");
     assert_eq!(
         updated_per_device.cortical_dimensions_per_device,
         Some((6, 5, 7)),
@@ -2513,18 +2099,12 @@ async fn test_delete_multi_cortical_area_success() {
         .await
         .expect("Failed to create second cortical_area area for multi-delete test");
 
-    let response = delete_multi_cortical_area(
-        ApiStateExtract(state.clone()),
-        ApiJson(vec![area_1.clone(), area_2.clone()]),
-    )
-    .await
-    .expect("Multi-delete endpoint should succeed");
+    let response = delete_multi_cortical_area(ApiStateExtract(state.clone()), ApiJson(vec![area_1.clone(), area_2.clone()]))
+        .await
+        .expect("Multi-delete endpoint should succeed");
 
     let body = response.0;
-    assert_eq!(
-        body.get("message").map(String::as_str),
-        Some("Deleted 2 cortical_area areas")
-    );
+    assert_eq!(body.get("message").map(String::as_str), Some("Deleted 2 cortical_area areas"));
 
     let area_1_exists = state
         .connectome_service
@@ -2556,13 +2136,7 @@ async fn test_genome_validate_minimal() {
         }
     });
 
-    let (status, response) = request_json(
-        app,
-        "POST",
-        "/v1/genome/validate",
-        Some(json!({ "genome_json": genome.to_string() })),
-    )
-    .await;
+    let (status, response) = request_json(app, "POST", "/v1/genome/validate", Some(json!({ "genome_json": genome.to_string() }))).await;
 
     assert_eq!(status, StatusCode::OK);
     // Response should indicate validation result
@@ -2578,13 +2152,7 @@ async fn test_error_format_consistency() {
     let app = create_test_server().await;
 
     // All error responses should have consistent format
-    let (status, response) = request_json(
-        app,
-        "POST",
-        "/v1/cortical_area/cortical_area",
-        Some(json!({})),
-    )
-    .await;
+    let (status, response) = request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(json!({}))).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     // Should have some error information

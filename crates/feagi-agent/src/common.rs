@@ -1,7 +1,5 @@
-
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
 
 use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
@@ -60,9 +58,7 @@ impl AuthToken {
 // Custom Debug impl that masks the token value
 impl fmt::Debug for AuthToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AuthToken")
-            .field("value", &"[REDACTED]")
-            .finish()
+        f.debug_struct("AuthToken").field("value", &"[REDACTED]").finish()
     }
 }
 
@@ -139,8 +135,7 @@ impl AgentDescriptor {
     pub const MAX_AGENT_NAME_BYTE_COUNT: usize = 64;
 
     /// Total size in bytes when serialized to binary format
-    pub const SIZE_BYTES: usize =
-        4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT + 4;
+    pub const SIZE_BYTES: usize = 4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT + 4;
 
     /// Create a new AgentDescriptor with validation.
     ///
@@ -156,11 +151,7 @@ impl AgentDescriptor {
     /// - `manufacturer` exceeds 20 bytes
     /// - `agent_name` exceeds 20 bytes
     /// - `agent_version` is zero
-    pub fn new(
-        manufacturer: &str,
-        agent_name: &str,
-        agent_version: u32,
-    ) -> Result<Self, FeagiDataError> {
+    pub fn new(manufacturer: &str, agent_name: &str, agent_version: u32) -> Result<Self, FeagiDataError> {
         Self::validate(manufacturer, agent_name, agent_version)?;
 
         Ok(AgentDescriptor {
@@ -265,20 +256,12 @@ impl AgentDescriptor {
      */
 
     /// Validate the fields without creating a new instance.
-    fn validate(
-        manufacturer: &str,
-        agent_name: &str,
-        agent_version: u32,
-    ) -> Result<(), FeagiDataError> {
+    fn validate(manufacturer: &str, agent_name: &str, agent_version: u32) -> Result<(), FeagiDataError> {
         if !manufacturer.is_ascii() {
-            return Err(feagi_data_etc_error(
-                "Manufacturer must contain ASCII characters only!".to_string(),
-            ));
+            return Err(feagi_data_etc_error("Manufacturer must contain ASCII characters only!".to_string()));
         }
         if !agent_name.is_ascii() {
-            return Err(feagi_data_etc_error(
-                "Agent name must contain ASCII characters only!".to_string(),
-            ));
+            return Err(feagi_data_etc_error("Agent name must contain ASCII characters only!".to_string()));
         }
         if manufacturer.len() > Self::MAX_MANUFACTURER_NAME_BYTE_COUNT {
             return Err(feagi_data_etc_error(format!(
@@ -295,9 +278,7 @@ impl AgentDescriptor {
             )));
         }
         if agent_version == 0 {
-            return Err(feagi_data_etc_error(
-                "Agent version cannot be zero!".to_string(),
-            ));
+            return Err(feagi_data_etc_error("Agent version cannot be zero!".to_string()));
         }
         Ok(())
     }

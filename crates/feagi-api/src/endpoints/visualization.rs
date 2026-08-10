@@ -45,10 +45,7 @@ pub async fn post_register_client(
     let mut response = HashMap::new();
     response.insert("client_id".to_string(), json!(client_id));
     response.insert("success".to_string(), json!(true));
-    response.insert(
-        "message".to_string(),
-        json!("Visualization client registered successfully"),
-    );
+    response.insert("message".to_string(), json!("Visualization client registered successfully"));
 
     Ok(Json(response))
 }
@@ -98,10 +95,7 @@ pub async fn post_heartbeat(
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Process visualization heartbeat
 
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Heartbeat received".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Heartbeat received".to_string())])))
 }
 
 /// Get visualization system status including active clients and FQ sampler state.

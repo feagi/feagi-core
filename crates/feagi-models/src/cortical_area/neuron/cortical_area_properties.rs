@@ -15,7 +15,6 @@ pub struct CorticalAreaProperties<MPQ: MembranePotentialQuantization> {
     /// Probe setting, causes cortical area neurons to never express a firing state, regardless of
     /// what their actual firing state is
     pub probe_cortical_area_output_disabled: bool,
-
     // TODO neuron model stuff
 }
 
@@ -23,8 +22,7 @@ pub struct CorticalAreaProperties<MPQ: MembranePotentialQuantization> {
 
 /// Defines how potential is defined for a firing neuron in a cortical area
 #[derive(Clone, Copy, Debug)]
-pub enum PostCorticalPotential<MembranePotentialQuant: QuantizedDecimalTrait>
-{
+pub enum PostCorticalPotential<MembranePotentialQuant: QuantizedDecimalTrait> {
     MembraneDriven,
-    Uniform(NeuronMembranePotential<MembranePotentialQuant>)
+    Uniform(NeuronMembranePotential<MembranePotentialQuant>),
 }

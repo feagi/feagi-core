@@ -76,7 +76,6 @@ impl UIFieldGeneralList {
     }
 }
 
-
 pub trait UIParameterValue: Sized + Copy {
     fn to_parameter_type(self) -> UIFieldParameterType;
     fn try_from_change(change: UIFieldDataChangeType) -> Result<Option<Self>, ()>;
@@ -84,7 +83,11 @@ pub trait UIParameterValue: Sized + Copy {
 
 impl UIParameterValue for f64 {
     fn to_parameter_type(self) -> UIFieldParameterType {
-        UIFieldParameterType::Decimal { min: f64::MIN, max: f64::MAX, value: self }
+        UIFieldParameterType::Decimal {
+            min: f64::MIN,
+            max: f64::MAX,
+            value: self,
+        }
     }
 
     fn try_from_change(change: UIFieldDataChangeType) -> Result<Option<Self>, ()> {
@@ -109,8 +112,6 @@ impl UIParameterValue for bool {
         }
     }
 }
-
-
 
 /// Builds a concrete "static" version of the general parameter structs above.
 macro_rules! static_parameters_builder {

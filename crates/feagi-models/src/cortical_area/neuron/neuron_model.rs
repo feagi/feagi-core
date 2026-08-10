@@ -1,11 +1,11 @@
+use crate::cortical_area::components::burst_index_rollover_handling::neuron_burst_index_rollover_handling::NeuronModelBurstIndexRolloverHandling;
 use crate::cortical_area::components::neuron_history::neuron_history::NeuronModelHistory;
 use crate::cortical_area::neuron::cortical_data::NeuronModelCorticalData;
+use crate::cortical_area::neuron::neuron_data::NeuronModelNeuronData;
+use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
 use crate::cortical_area::neuron_model_implementations::generated_enums::{
     NeuronModelType, NeuronModelTypeAndQuantizationNested, NeuronModelTypeAndQuantizationPacked,
 };
-use crate::cortical_area::components::burst_index_rollover_handling::neuron_burst_index_rollover_handling::NeuronModelBurstIndexRolloverHandling;
-use crate::cortical_area::neuron::neuron_data::NeuronModelNeuronData;
-use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
 use crate::wrapped_indexes::BurstIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedIndexCountTrait;

@@ -7,11 +7,11 @@ RegionID - UUID-based unique identifier for brain regions.
 Provides type safety and global uniqueness for brain region identifiers.
 */
 
+use crate::feagi_genome_context_error::{FeagiBrainRegionErrKey, FeagiGenomeContextError};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
-use crate::feagi_genome_context_error::{FeagiBrainRegionErrKey, FeagiGenomeContextError};
 
 /// Unique identifier for a brain region, based on UUID v7.
 ///
@@ -38,9 +38,7 @@ impl RegionID {
     /// assert_ne!(region_id.to_string(), "");
     /// ```
     pub fn new() -> Self {
-        Self {
-            uuid: Uuid::now_v7(),
-        }
+        Self { uuid: Uuid::now_v7() }
     }
 
     /// Creates a RegionID from a UUID.

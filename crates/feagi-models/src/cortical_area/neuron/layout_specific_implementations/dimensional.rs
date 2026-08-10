@@ -1,16 +1,16 @@
-use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::cortical_area::neuron::neuron_model::NeuronModel;
 use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
 use crate::wrapped_indexes::BurstIndex;
+use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Extend `NeuronModel` to denote that the model can function on dimensional cortical areas
 pub trait DimensionalNeuronModel<FIQ, NMQ>: NeuronModel<FIQ, NMQ>
-where // NOTE: These all should be extended for the given neuron model!
+where
+    // NOTE: These all should be extended for the given neuron model!
     FIQ: FeagiIndexQuantization,
     NMQ: NeuronModelQuantization,
 {
-
     /// Dimensional Neuron received input potential. Process it, updating any internal states and
     /// update this neurons potential. Return true if it results in this neuron firing, otherwise
     /// return false.

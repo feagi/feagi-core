@@ -11,9 +11,7 @@ use std::net::TcpListener;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use feagi_io::protocol_implementations::zmq::{
-    FeagiZmqClientPusherProperties, FeagiZmqServerPullerProperties,
-};
+use feagi_io::protocol_implementations::zmq::{FeagiZmqClientPusherProperties, FeagiZmqServerPullerProperties};
 use feagi_io::traits_and_enums::client::FeagiClientPusherProperties;
 use feagi_io::traits_and_enums::server::{FeagiServerPuller, FeagiServerPullerProperties};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
@@ -21,10 +19,7 @@ use feagi_serialization::{FeagiByteContainer, FeagiJSON};
 
 fn reserve_free_tcp_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to reserve free TCP port");
-    listener
-        .local_addr()
-        .expect("Failed to read local socket address")
-        .port()
+    listener.local_addr().expect("Failed to read local socket address").port()
 }
 
 fn wait_until(timeout: Duration, mut predicate: impl FnMut() -> bool) {
@@ -44,23 +39,14 @@ fn wait_until(timeout: Duration, mut predicate: impl FnMut() -> bool) {
 /// captures one, so a burst larger than that window is delivered over several poll/consume
 /// cycles. Cycling until nothing arrives for `idle` therefore yields the newest frame overall,
 /// which is what latest-wins means to a real consumer.
-fn drain_newest_frame(
-    server: &mut dyn FeagiServerPuller,
-    idle: Duration,
-    timeout: Duration,
-) -> Option<Vec<u8>> {
+fn drain_newest_frame(server: &mut dyn FeagiServerPuller, idle: Duration, timeout: Duration) -> Option<Vec<u8>> {
     let start = Instant::now();
     let mut newest: Option<Vec<u8>> = None;
     let mut last_seen = Instant::now();
 
     while start.elapsed() < timeout {
         if matches!(server.poll(), FeagiEndpointState::ActiveHasData) {
-            newest = Some(
-                server
-                    .consume_retrieved_data()
-                    .expect("Server failed to consume retrieved data")
-                    .to_vec(),
-            );
+            newest = Some(server.consume_retrieved_data().expect("Server failed to consume retrieved data").to_vec());
             last_seen = Instant::now();
             continue;
         }
@@ -117,25 +103,16 @@ fn zmq_puller_keeps_latest_valid_frame_in_burst_with_noise() {
     let port = reserve_free_tcp_port();
     let endpoint = format!("tcp://127.0.0.1:{port}");
 
-    let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint)
-        .expect("Failed to create ZMQ server puller properties");
+    let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint).expect("Failed to create ZMQ server puller properties");
     let mut server = server_props.as_boxed_server_puller();
-    server
-        .request_start()
-        .expect("Failed to start server puller");
+    server.request_start().expect("Failed to start server puller");
 
-    let client_props = FeagiZmqClientPusherProperties::new(&endpoint)
-        .expect("Failed to create ZMQ client pusher properties");
+    let client_props = FeagiZmqClientPusherProperties::new(&endpoint).expect("Failed to create ZMQ client pusher properties");
     let mut client = client_props.as_boxed_client_pusher();
-    client
-        .request_connect()
-        .expect("Failed to request client connect");
+    client.request_connect().expect("Failed to request client connect");
 
     wait_until(Duration::from_secs(2), || {
-        matches!(
-            client.poll(),
-            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData
-        )
+        matches!(client.poll(), FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData)
     });
 
     // Give ZMQ connect handshake a short moment before burst.
@@ -153,17 +130,10 @@ fn zmq_puller_keeps_latest_valid_frame_in_burst_with_noise() {
 
     let expected_marker = last_sent_valid_marker.expect("No valid frame was sent");
 
-    let consumed = drain_newest_frame(
-        server.as_mut(),
-        Duration::from_millis(200),
-        Duration::from_secs(5),
-    )
-    .expect("Server never produced a frame");
+    let consumed = drain_newest_frame(server.as_mut(), Duration::from_millis(200), Duration::from_secs(5)).expect("Server never produced a frame");
 
     assert!(
-        consumed.len()
-            >= FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
-                + FeagiByteContainer::AGENT_ID_BYTE_COUNT,
+        consumed.len() >= FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT,
         "Expected FEAGI frame length >= 52 (header+agent_id), got {} bytes",
         consumed.len()
     );
@@ -179,25 +149,16 @@ fn zmq_stream_stays_responsive_and_fresh_under_sustained_noise() {
     let port = reserve_free_tcp_port();
     let endpoint = format!("tcp://127.0.0.1:{port}");
 
-    let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint)
-        .expect("Failed to create ZMQ server puller properties");
+    let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint).expect("Failed to create ZMQ server puller properties");
     let mut server = server_props.as_boxed_server_puller();
-    server
-        .request_start()
-        .expect("Failed to start server puller");
+    server.request_start().expect("Failed to start server puller");
 
-    let client_props = FeagiZmqClientPusherProperties::new(&endpoint)
-        .expect("Failed to create ZMQ client pusher properties");
+    let client_props = FeagiZmqClientPusherProperties::new(&endpoint).expect("Failed to create ZMQ client pusher properties");
     let mut client = client_props.as_boxed_client_pusher();
-    client
-        .request_connect()
-        .expect("Failed to request client connect");
+    client.request_connect().expect("Failed to request client connect");
 
     wait_until(Duration::from_secs(2), || {
-        matches!(
-            client.poll(),
-            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData
-        )
+        matches!(client.poll(), FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData)
     });
 
     // Allow connection setup to settle before sustained send.
@@ -233,13 +194,8 @@ fn zmq_stream_stays_responsive_and_fresh_under_sustained_noise() {
     while recv_start.elapsed() < observe_for {
         match server.poll() {
             FeagiEndpointState::ActiveHasData => {
-                let data = server
-                    .consume_retrieved_data()
-                    .expect("Server failed to consume retrieved data");
-                if data.len()
-                    >= FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
-                        + FeagiByteContainer::AGENT_ID_BYTE_COUNT
-                {
+                let data = server.consume_retrieved_data().expect("Server failed to consume retrieved data");
+                if data.len() >= FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT {
                     let now = Instant::now();
                     if first_valid_at.is_none() {
                         first_valid_at = Some(now);
@@ -255,9 +211,7 @@ fn zmq_stream_stays_responsive_and_fresh_under_sustained_noise() {
                     last_received_counter = Some(counter_from_frame(data));
                 }
             }
-            FeagiEndpointState::ActiveWaiting
-            | FeagiEndpointState::Pending
-            | FeagiEndpointState::Inactive => {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::Pending | FeagiEndpointState::Inactive => {
                 thread::sleep(Duration::from_millis(1));
             }
             FeagiEndpointState::Errored(err) => {
@@ -304,25 +258,16 @@ fn zmq_puller_prefers_non_empty_sensory_frame_over_empty_container_in_same_drain
     let port = reserve_free_tcp_port();
     let endpoint = format!("tcp://127.0.0.1:{port}");
 
-    let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint)
-        .expect("Failed to create ZMQ server puller properties");
+    let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint).expect("Failed to create ZMQ server puller properties");
     let mut server = server_props.as_boxed_server_puller();
-    server
-        .request_start()
-        .expect("Failed to start server puller");
+    server.request_start().expect("Failed to start server puller");
 
-    let client_props = FeagiZmqClientPusherProperties::new(&endpoint)
-        .expect("Failed to create ZMQ client pusher properties");
+    let client_props = FeagiZmqClientPusherProperties::new(&endpoint).expect("Failed to create ZMQ client pusher properties");
     let mut client = client_props.as_boxed_client_pusher();
-    client
-        .request_connect()
-        .expect("Failed to request client connect");
+    client.request_connect().expect("Failed to request client connect");
 
     wait_until(Duration::from_secs(2), || {
-        matches!(
-            client.poll(),
-            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData
-        )
+        matches!(client.poll(), FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData)
     });
 
     thread::sleep(Duration::from_millis(50));
@@ -332,22 +277,13 @@ fn zmq_puller_prefers_non_empty_sensory_frame_over_empty_container_in_same_drain
 
     // Same drain window: meaningful arrives, then empty frame arrives later.
     // Puller should keep meaningful frame to avoid visual flicker from empty overwrite.
-    client
-        .publish_data(&meaningful)
-        .expect("Failed to send meaningful sensory frame");
-    client
-        .publish_data(&empty)
-        .expect("Failed to send empty sensory frame");
+    client.publish_data(&meaningful).expect("Failed to send meaningful sensory frame");
+    client.publish_data(&empty).expect("Failed to send empty sensory frame");
 
-    wait_until(Duration::from_secs(2), || {
-        matches!(server.poll(), FeagiEndpointState::ActiveHasData)
-    });
+    wait_until(Duration::from_secs(2), || matches!(server.poll(), FeagiEndpointState::ActiveHasData));
 
-    let consumed = server
-        .consume_retrieved_data()
-        .expect("Server failed to consume retrieved data");
-    let min_frame =
-        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
+    let consumed = server.consume_retrieved_data().expect("Server failed to consume retrieved data");
+    let min_frame = FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
     assert!(
         consumed.len() > min_frame,
         "Expected non-empty sensory payload to be preferred, got empty container len={}",
@@ -369,25 +305,16 @@ fn zmq_stream_soak_detects_blackout_or_degradation_windows() {
     let port = reserve_free_tcp_port();
     let endpoint = format!("tcp://127.0.0.1:{port}");
 
-    let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint)
-        .expect("Failed to create ZMQ server puller properties");
+    let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint).expect("Failed to create ZMQ server puller properties");
     let mut server = server_props.as_boxed_server_puller();
-    server
-        .request_start()
-        .expect("Failed to start server puller");
+    server.request_start().expect("Failed to start server puller");
 
-    let client_props = FeagiZmqClientPusherProperties::new(&endpoint)
-        .expect("Failed to create ZMQ client pusher properties");
+    let client_props = FeagiZmqClientPusherProperties::new(&endpoint).expect("Failed to create ZMQ client pusher properties");
     let mut client = client_props.as_boxed_client_pusher();
-    client
-        .request_connect()
-        .expect("Failed to request client connect");
+    client.request_connect().expect("Failed to request client connect");
 
     wait_until(Duration::from_secs(2), || {
-        matches!(
-            client.poll(),
-            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData
-        )
+        matches!(client.poll(), FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData)
     });
     thread::sleep(Duration::from_millis(50));
 
@@ -425,13 +352,8 @@ fn zmq_stream_soak_detects_blackout_or_degradation_windows() {
     while recv_start.elapsed() < observe_for {
         match server.poll() {
             FeagiEndpointState::ActiveHasData => {
-                let data = server
-                    .consume_retrieved_data()
-                    .expect("Server failed to consume retrieved data");
-                if data.len()
-                    > FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
-                        + FeagiByteContainer::AGENT_ID_BYTE_COUNT
-                {
+                let data = server.consume_retrieved_data().expect("Server failed to consume retrieved data");
+                if data.len() > FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT {
                     let now = Instant::now();
                     if first_valid_at.is_none() {
                         first_valid_at = Some(now);
@@ -447,9 +369,7 @@ fn zmq_stream_soak_detects_blackout_or_degradation_windows() {
                     last_received_counter = Some(counter_from_frame(data));
                 }
             }
-            FeagiEndpointState::ActiveWaiting
-            | FeagiEndpointState::Pending
-            | FeagiEndpointState::Inactive => {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::Pending | FeagiEndpointState::Inactive => {
                 thread::sleep(Duration::from_millis(1));
             }
             FeagiEndpointState::Errored(err) => {
@@ -459,8 +379,7 @@ fn zmq_stream_soak_detects_blackout_or_degradation_windows() {
     }
 
     let last_sent_counter = sender.join().expect("Sender thread panicked");
-    let first_valid_at =
-        first_valid_at.expect("No non-empty valid sensory frame received during soak");
+    let first_valid_at = first_valid_at.expect("No non-empty valid sensory frame received during soak");
 
     let startup_latency = first_valid_at.saturating_duration_since(recv_start);
     assert!(

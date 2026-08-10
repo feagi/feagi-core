@@ -1,6 +1,3 @@
-
-
-
 macro_rules! create_spatial_bitpacked_vector {
     (
         $(#[$meta:meta])*

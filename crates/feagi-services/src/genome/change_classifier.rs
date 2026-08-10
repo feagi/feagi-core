@@ -212,10 +212,7 @@ impl CorticalChangeClassifier {
         let has_special = changes.keys().any(|k| special.contains(k.as_str()));
 
         // Count change types
-        let change_count = [has_structural, has_parameters, has_metadata, has_special]
-            .iter()
-            .filter(|&&x| x)
-            .count();
+        let change_count = [has_structural, has_parameters, has_metadata, has_special].iter().filter(|&&x| x).count();
 
         if change_count > 1 {
             ChangeType::Hybrid
@@ -234,9 +231,7 @@ impl CorticalChangeClassifier {
     }
 
     /// Separate changes into buckets by type for hybrid processing
-    pub fn separate_changes_by_type(
-        changes: &HashMap<String, Value>,
-    ) -> HashMap<ChangeType, HashMap<String, Value>> {
+    pub fn separate_changes_by_type(changes: &HashMap<String, Value>) -> HashMap<ChangeType, HashMap<String, Value>> {
         let structural = Self::structural_changes();
         let parameters = Self::parameter_changes();
         let metadata = Self::metadata_changes();
@@ -249,26 +244,14 @@ impl CorticalChangeClassifier {
 
         for (key, value) in changes {
             if structural.contains(key.as_str()) || special.contains(key.as_str()) {
-                separated
-                    .get_mut(&ChangeType::Structural)
-                    .unwrap()
-                    .insert(key.clone(), value.clone());
+                separated.get_mut(&ChangeType::Structural).unwrap().insert(key.clone(), value.clone());
             } else if parameters.contains(key.as_str()) {
-                separated
-                    .get_mut(&ChangeType::Parameter)
-                    .unwrap()
-                    .insert(key.clone(), value.clone());
+                separated.get_mut(&ChangeType::Parameter).unwrap().insert(key.clone(), value.clone());
             } else if metadata.contains(key.as_str()) {
-                separated
-                    .get_mut(&ChangeType::Metadata)
-                    .unwrap()
-                    .insert(key.clone(), value.clone());
+                separated.get_mut(&ChangeType::Metadata).unwrap().insert(key.clone(), value.clone());
             } else {
                 // Unknown - treat as structural to be safe
-                separated
-                    .get_mut(&ChangeType::Structural)
-                    .unwrap()
-                    .insert(key.clone(), value.clone());
+                separated.get_mut(&ChangeType::Structural).unwrap().insert(key.clone(), value.clone());
             }
         }
 
@@ -277,22 +260,13 @@ impl CorticalChangeClassifier {
 
     /// Log the classification result for debugging and monitoring
     pub fn log_classification_result(changes: &HashMap<String, Value>, change_type: ChangeType) {
-        let change_summary: Vec<String> = changes
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect();
+        let change_summary: Vec<String> = changes.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
 
-        tracing::info!(
-            "[CHANGE-CLASSIFIER] Type: {:?} | Changes: {}",
-            change_type,
-            change_summary.join(", ")
-        );
+        tracing::info!("[CHANGE-CLASSIFIER] Type: {:?} | Changes: {}", change_type, change_summary.join(", "));
 
         match change_type {
             ChangeType::Parameter => {
-                tracing::info!(
-                    "[OPTIMIZATION] Fast parameter update path selected - avoiding synapse rebuild"
-                );
+                tracing::info!("[OPTIMIZATION] Fast parameter update path selected - avoiding synapse rebuild");
             }
             ChangeType::Metadata => {
                 tracing::info!("[OPTIMIZATION] Metadata-only update - minimal processing required");
@@ -301,9 +275,7 @@ impl CorticalChangeClassifier {
                 tracing::info!("[STRUCTURAL] Synapse rebuild required for this change");
             }
             ChangeType::Hybrid => {
-                tracing::info!(
-                    "[HYBRID] Mixed changes - using optimized combination of update paths"
-                );
+                tracing::info!("[HYBRID] Mixed changes - using optimized combination of update paths");
             }
         }
     }

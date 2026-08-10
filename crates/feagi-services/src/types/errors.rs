@@ -78,15 +78,9 @@ impl From<feagi_brain_development::BduError> for ServiceError {
     fn from(err: feagi_brain_development::BduError) -> Self {
         match err {
             feagi_brain_development::BduError::InvalidArea(msg) => ServiceError::InvalidInput(msg),
-            feagi_brain_development::BduError::InvalidGenome(msg) => {
-                ServiceError::InvalidInput(msg)
-            }
-            feagi_brain_development::BduError::InvalidMorphology(msg) => {
-                ServiceError::InvalidInput(msg)
-            }
-            feagi_brain_development::BduError::RegionIoPolicyViolation(msg) => {
-                ServiceError::Conflict(msg)
-            }
+            feagi_brain_development::BduError::InvalidGenome(msg) => ServiceError::InvalidInput(msg),
+            feagi_brain_development::BduError::InvalidMorphology(msg) => ServiceError::InvalidInput(msg),
+            feagi_brain_development::BduError::RegionIoPolicyViolation(msg) => ServiceError::Conflict(msg),
             _ => ServiceError::Backend(err.to_string()),
         }
     }
@@ -97,12 +91,8 @@ impl From<feagi_evolutionary::EvoError> for ServiceError {
         // Variants carry error-key structs rather than `String` since the error rework, so the
         // message is read back off the error instead of being moved out of the variant.
         match &err {
-            feagi_evolutionary::EvoError::InvalidGenome(_) => {
-                ServiceError::InvalidInput(err.message().to_string())
-            }
-            feagi_evolutionary::EvoError::InvalidArea(_) => {
-                ServiceError::InvalidInput(err.message().to_string())
-            }
+            feagi_evolutionary::EvoError::InvalidGenome(_) => ServiceError::InvalidInput(err.message().to_string()),
+            feagi_evolutionary::EvoError::InvalidArea(_) => ServiceError::InvalidInput(err.message().to_string()),
             _ => ServiceError::Backend(err.to_string()),
         }
     }

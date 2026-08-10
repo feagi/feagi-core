@@ -1,11 +1,11 @@
 use crate::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateAxis, NeuronVoxelDimensions};
 use crate::values::quantizable::QuantizedIndexCountTrait;
+use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
 use crate::values::spatial::quantizable_index::{QuantizedIndexCoord4D, QuantizedIndexDimension4D};
 use crate::{
     create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate,
     create_wrapped_quantized_index_dimension,
 };
-use crate::values::spatial::feagi_data_values_spatial_error::{FeagiDataValuesSpatialError};
 
 create_wrapped_quantized_decimal!(
     /// The membrane potential of a single neuron (NOT VOXEL)
@@ -30,15 +30,9 @@ create_wrapped_quantized_index_coordinate!(
     (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis), (3, d, NeuronVoxelDensityIndex)
 );
 
-impl<Q: QuantizedIndexCountTrait> DimensionalCorticalArea4DCoordinate<Q>
-{
+impl<Q: QuantizedIndexCountTrait> DimensionalCorticalArea4DCoordinate<Q> {
     pub fn new_from_voxel_and_density(voxel_coord: NeuronVoxelCoordinate<Q>, density: NeuronVoxelDensityIndex<Q>) -> Self {
-        DimensionalCorticalArea4DCoordinate::new(
-            *voxel_coord.get_x(),
-            *voxel_coord.get_y(),
-            *voxel_coord.get_z(),
-            density
-        )
+        DimensionalCorticalArea4DCoordinate::new(*voxel_coord.get_x(), *voxel_coord.get_y(), *voxel_coord.get_z(), density)
     }
 }
 
@@ -51,14 +45,11 @@ create_wrapped_quantized_index_dimension!(
     (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis), (3, d, NeuronVoxelDensityIndex)
 );
 
-impl<Q: QuantizedIndexCountTrait> DimensionalCorticalArea4DDimensions<Q>
-{
-    pub fn try_new_from_voxel_and_density(voxel_dim: NeuronVoxelDimensions<Q>, density: NeuronVoxelDensityIndex<Q>) -> Result<Self, FeagiDataValuesSpatialError>  {
-        DimensionalCorticalArea4DDimensions::try_new(
-            *voxel_dim.get_x(),
-            *voxel_dim.get_y(),
-            *voxel_dim.get_z(),
-            density
-        )
+impl<Q: QuantizedIndexCountTrait> DimensionalCorticalArea4DDimensions<Q> {
+    pub fn try_new_from_voxel_and_density(
+        voxel_dim: NeuronVoxelDimensions<Q>,
+        density: NeuronVoxelDensityIndex<Q>,
+    ) -> Result<Self, FeagiDataValuesSpatialError> {
+        DimensionalCorticalArea4DDimensions::try_new(*voxel_dim.get_x(), *voxel_dim.get_y(), *voxel_dim.get_z(), density)
     }
 }

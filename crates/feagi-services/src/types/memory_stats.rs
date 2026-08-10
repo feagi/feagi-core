@@ -42,10 +42,7 @@ impl Default for MemoryAreaStats {
             neuron_count: 0,
             created_total: 0,
             deleted_total: 0,
-            last_updated: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
+            last_updated: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
         }
     }
 }
@@ -66,10 +63,7 @@ pub fn on_neuron_created(cache: &MemoryStatsCache, area_name: &str) {
     let area_stats = stats.entry(area_name.to_string()).or_default();
     area_stats.neuron_count += 1;
     area_stats.created_total += 1;
-    area_stats.last_updated = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64;
+    area_stats.last_updated = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
 
     #[cfg(feature = "std")]
     if let Some(state_manager) = StateManager::instance().try_read() {
@@ -86,10 +80,7 @@ pub fn on_neuron_deleted(cache: &MemoryStatsCache, area_name: &str) {
     if let Some(area_stats) = stats.get_mut(area_name) {
         area_stats.neuron_count = area_stats.neuron_count.saturating_sub(1);
         area_stats.deleted_total += 1;
-        area_stats.last_updated = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        area_stats.last_updated = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
     }
 
     #[cfg(feature = "std")]
@@ -97,9 +88,7 @@ pub fn on_neuron_deleted(cache: &MemoryStatsCache, area_name: &str) {
         // @cursor:critical-path - Keep per-area neuron count synced for BV reads.
         state_manager.subtract_cortical_area_neuron_count(area_name, 1);
         state_manager.get_core_state().subtract_neuron_count(1);
-        state_manager
-            .get_core_state()
-            .subtract_memory_neuron_count(1);
+        state_manager.get_core_state().subtract_memory_neuron_count(1);
     }
 }
 

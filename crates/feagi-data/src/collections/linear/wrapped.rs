@@ -343,7 +343,7 @@ macro_rules! create_wrapped_contiguous_vector {
                 Self(self.0.clone())
             }
         }
-        
+
         impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone > Default
             for $struct_name<Q, V>
         {
@@ -355,12 +355,12 @@ macro_rules! create_wrapped_contiguous_vector {
         impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone >
             $struct_name<Q, V>
         {
-            
+
             /// Starts with an empty vector
             pub fn new_empty() -> Self {
                 Self($crate::collections::linear::contiguous_data::QuantizedContiguousVector::new_empty())
             }
-            
+
             /// Builds a vector of `number_values` elements, each set to `filling_value`.
             pub fn new_uniform(number_values: $index<Q>, filling_value: V) -> Self {
                 Self($crate::collections::linear::contiguous_data::QuantizedContiguousVector::new_uniform(
@@ -401,7 +401,7 @@ macro_rules! create_wrapped_contiguous_vector {
                 self.0.extend(number_values.const_deref(), extend_with);
                 &mut self.0.as_mut_slice()[start_index..]
             }
-            
+
             /// Wraps the underlying (unwrapped) collection type.
             pub fn from_inner(
                 inner: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<Q, V>,

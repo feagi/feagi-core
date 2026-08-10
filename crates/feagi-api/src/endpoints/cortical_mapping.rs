@@ -14,42 +14,19 @@ fn i8_ltd_ltp_from_json_value(v: &serde_json::Value, field: &str) -> Result<i8, 
     let n = v
         .as_i64()
         .or_else(|| v.as_f64().map(|f| f as i64))
-        .ok_or_else(|| {
-            ApiError::invalid_input(format!("{field} must be a number (integer-like)"))
-        })?;
-    i8::try_from(n).map_err(|_| {
-        ApiError::invalid_input(format!(
-            "{field} must be in i8 range {}..={} (got {})",
-            i8::MIN,
-            i8::MAX,
-            n
-        ))
-    })
+        .ok_or_else(|| ApiError::invalid_input(format!("{field} must be a number (integer-like)")))?;
+    i8::try_from(n).map_err(|_| ApiError::invalid_input(format!("{field} must be in i8 range {}..={} (got {})", i8::MIN, i8::MAX, n)))
 }
 
 /// POST /v1/cortical_mapping/afferents
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_mapping/afferents",
-    tag = "cortical_mapping"
-)]
-pub async fn post_afferents(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, String>>,
-) -> ApiResult<Json<Vec<String>>> {
+#[utoipa::path(post, path = "/v1/cortical_mapping/afferents", tag = "cortical_mapping")]
+pub async fn post_afferents(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<Vec<String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }
 
 /// POST /v1/cortical_mapping/efferents
-#[utoipa::path(
-    post,
-    path = "/v1/cortical_mapping/efferents",
-    tag = "cortical_mapping"
-)]
-pub async fn post_efferents(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, String>>,
-) -> ApiResult<Json<Vec<String>>> {
+#[utoipa::path(post, path = "/v1/cortical_mapping/efferents", tag = "cortical_mapping")]
+pub async fn post_efferents(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<Vec<String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }
 
@@ -87,15 +64,10 @@ pub async fn post_mapping_properties(
     let src_area_info = connectome_service
         .get_cortical_area(src_area)
         .await
-        .map_err(|e| {
-            ApiError::not_found("Cortical area", &format!("Source area {}: {}", src_area, e))
-        })?;
+        .map_err(|e| ApiError::not_found("Cortical area", &format!("Source area {}: {}", src_area, e)))?;
 
     // Look for cortical_mapping_dst in properties
-    let mapping_dst = src_area_info
-        .properties
-        .get("cortical_mapping_dst")
-        .and_then(|v| v.as_object());
+    let mapping_dst = src_area_info.properties.get("cortical_mapping_dst").and_then(|v| v.as_object());
 
     if mapping_dst.is_none() {
         debug!(target: "feagi-api", "No cortical_mapping_dst found for {}", src_area);
@@ -103,10 +75,7 @@ pub async fn post_mapping_properties(
     }
 
     // Get connections for this destination
-    let connections = mapping_dst
-        .unwrap()
-        .get(dst_area)
-        .and_then(|v| v.as_array());
+    let connections = mapping_dst.unwrap().get(dst_area).and_then(|v| v.as_array());
 
     if connections.is_none() {
         debug!(target: "feagi-api", "No connections found from {} to {}", src_area, dst_area);
@@ -129,13 +98,11 @@ pub async fn post_mapping_properties(
                 )));
             }
             // Strict parsing (no implicit defaults).
-            let morphology_id = arr[0]
-                .as_str()
-                .ok_or_else(|| ApiError::invalid_input("morphology_id must be a string"))?;
+            let morphology_id = arr[0].as_str().ok_or_else(|| ApiError::invalid_input("morphology_id must be a string"))?;
             let morphology_scalar = arr[1].clone();
-            let psc_multiplier = arr[2].as_i64().ok_or_else(|| {
-                ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
-            })?;
+            let psc_multiplier = arr[2]
+                .as_i64()
+                .ok_or_else(|| ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer"))?;
             let plasticity_flag = arr[3]
                 .as_bool()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
@@ -152,11 +119,7 @@ pub async fn post_mapping_properties(
                 arr[8]
                     .as_u64()
                     .or_else(|| arr[8].as_i64().map(|i| i as u64))
-                    .ok_or_else(|| {
-                        ApiError::invalid_input(
-                            "synaptic_delay_bursts must be a non-negative integer",
-                        )
-                    })?
+                    .ok_or_else(|| ApiError::invalid_input("synaptic_delay_bursts must be a non-negative integer"))?
             } else {
                 1
             }
@@ -186,9 +149,7 @@ pub async fn post_mapping_properties(
             let psc_multiplier = obj
                 .get("postSynapticCurrent_multiplier")
                 .and_then(|v| v.as_i64())
-                .ok_or_else(|| {
-                    ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
-                })?;
+                .ok_or_else(|| ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer"))?;
             let plasticity_flag = obj
                 .get("plasticity_flag")
                 .and_then(|v| v.as_bool())
@@ -222,28 +183,14 @@ pub async fn post_mapping_properties(
             // plasticity_flag; when absent, downstream defaults to Stdp / Off based on the flag.
             // The other three fields are only meaningful when plasticity_mode == "rstdp" and are
             // validated downstream by the BDU.
-            let plasticity_mode = obj
-                .get("plasticity_mode")
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-            let eligibility_decay_bursts =
-                obj.get("eligibility_decay_bursts").and_then(|v| v.as_u64());
-            let reward_source_area = obj
-                .get("reward_source_area")
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-            let punishment_source_area = obj
-                .get("punishment_source_area")
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
+            let plasticity_mode = obj.get("plasticity_mode").and_then(|v| v.as_str()).map(str::to_string);
+            let eligibility_decay_bursts = obj.get("eligibility_decay_bursts").and_then(|v| v.as_u64());
+            let reward_source_area = obj.get("reward_source_area").and_then(|v| v.as_str()).map(str::to_string);
+            let punishment_source_area = obj.get("punishment_source_area").and_then(|v| v.as_str()).map(str::to_string);
             // Optional R-STDP / STDP weight ceiling. Validated downstream by the BDU; we only
             // shape it here so the rule round-trips cleanly through GET.
-            let max_weight =
-                obj.get("max_weight")
-                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
-            let plasticity_eta =
-                obj.get("plasticity_eta")
-                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
+            let max_weight = obj.get("max_weight").and_then(|v| if v.is_null() { None } else { v.as_f64() });
+            let plasticity_eta = obj.get("plasticity_eta").and_then(|v| if v.is_null() { None } else { v.as_f64() });
 
             let mut rule = serde_json::json!({
                 "morphology_id": morphology_id,
@@ -261,19 +208,13 @@ pub async fn post_mapping_properties(
                 rule_obj.insert("plasticity_mode".to_string(), serde_json::json!(mode));
             }
             if let Some(decay) = eligibility_decay_bursts {
-                rule_obj.insert(
-                    "eligibility_decay_bursts".to_string(),
-                    serde_json::json!(decay),
-                );
+                rule_obj.insert("eligibility_decay_bursts".to_string(), serde_json::json!(decay));
             }
             if let Some(area) = reward_source_area {
                 rule_obj.insert("reward_source_area".to_string(), serde_json::json!(area));
             }
             if let Some(area) = punishment_source_area {
-                rule_obj.insert(
-                    "punishment_source_area".to_string(),
-                    serde_json::json!(area),
-                );
+                rule_obj.insert("punishment_source_area".to_string(), serde_json::json!(area));
             }
             if let Some(mw) = max_weight {
                 rule_obj.insert("max_weight".to_string(), serde_json::json!(mw));
@@ -334,11 +275,7 @@ pub async fn put_mapping_properties(
 
     // Update the cortical_area mapping (this modifies ConnectomeManager and regenerates synapses)
     let synapse_count = connectome_service
-        .update_cortical_mapping(
-            src_area.to_string(),
-            dst_area.to_string(),
-            mapping_string.clone(),
-        )
+        .update_cortical_mapping(src_area.to_string(), dst_area.to_string(), mapping_string.clone())
         .await
         .map_err(|e| match e {
             feagi_services::types::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
@@ -357,10 +294,7 @@ pub async fn put_mapping_properties(
             src_area, dst_area
         )),
     );
-    response.insert(
-        "synapse_count".to_string(),
-        serde_json::json!(synapse_count),
-    );
+    response.insert("synapse_count".to_string(), serde_json::json!(synapse_count));
     response.insert("src_region".to_string(), serde_json::json!(null)); // TODO: Add region context
     response.insert("dst_region".to_string(), serde_json::json!(null)); // TODO: Add region context
 
@@ -399,31 +333,20 @@ pub async fn get_mapping(
     let src_area_info = connectome_service
         .get_cortical_area(src_area)
         .await
-        .map_err(|e| {
-            ApiError::not_found("Cortical area", &format!("Source area {}: {}", src_area, e))
-        })?;
+        .map_err(|e| ApiError::not_found("Cortical area", &format!("Source area {}: {}", src_area, e)))?;
 
     // Look for cortical_mapping_dst in properties
-    let mapping_dst = src_area_info
-        .properties
-        .get("cortical_mapping_dst")
-        .and_then(|v| v.as_object());
+    let mapping_dst = src_area_info.properties.get("cortical_mapping_dst").and_then(|v| v.as_object());
 
     if mapping_dst.is_none() {
         return Ok(Json(HashMap::new()));
     }
 
     // Get connections for this destination
-    let connections = mapping_dst
-        .unwrap()
-        .get(dst_area)
-        .and_then(|v| v.as_array());
+    let connections = mapping_dst.unwrap().get(dst_area).and_then(|v| v.as_array());
 
     let mut response = HashMap::new();
-    response.insert(
-        "connections".to_string(),
-        serde_json::json!(connections.unwrap_or(&vec![])),
-    );
+    response.insert("connections".to_string(), serde_json::json!(connections.unwrap_or(&vec![])));
 
     Ok(Json(response))
 }
@@ -450,10 +373,7 @@ pub async fn get_mapping_list(State(state): State<ApiState>) -> ApiResult<Json<V
 
     // Scan all cortical_mapping_dst properties
     for area in &areas {
-        if let Ok(area_detail) = connectome_service
-            .get_cortical_area(&area.cortical_id)
-            .await
-        {
+        if let Ok(area_detail) = connectome_service.get_cortical_area(&area.cortical_id).await {
             if let Some(mapping_dst) = area_detail.properties.get("cortical_mapping_dst") {
                 if let Some(dst_map) = mapping_dst.as_object() {
                     for dst_area_id in dst_map.keys() {
@@ -542,17 +462,11 @@ pub async fn delete_mapping(
     let mut response = HashMap::new();
     response.insert(
         "message".to_string(),
-        serde_json::json!(format!(
-            "Cortical mapping deleted from {} to {}",
-            src_area, dst_area
-        )),
+        serde_json::json!(format!("Cortical mapping deleted from {} to {}", src_area, dst_area)),
     );
     response.insert("src_cortical_area".to_string(), serde_json::json!(src_area));
     response.insert("dst_cortical_area".to_string(), serde_json::json!(dst_area));
-    response.insert(
-        "synapse_count".to_string(),
-        serde_json::json!(synapse_count),
-    );
+    response.insert("synapse_count".to_string(), serde_json::json!(synapse_count));
 
     Ok(Json(response))
 }
@@ -573,10 +487,7 @@ pub async fn post_batch_update(
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // TODO: Implement batch update
     let mut response = HashMap::new();
-    response.insert(
-        "message".to_string(),
-        serde_json::json!("Batch update not yet implemented"),
-    );
+    response.insert("message".to_string(), serde_json::json!("Batch update not yet implemented"));
     response.insert("updated_count".to_string(), serde_json::json!(0));
 
     Ok(Json(response))
@@ -589,10 +500,7 @@ pub async fn post_mapping(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
 /// PUT /v1/cortical_mapping/mapping
@@ -601,8 +509,5 @@ pub async fn put_mapping(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }

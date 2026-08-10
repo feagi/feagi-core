@@ -48,23 +48,16 @@ impl GenomeSystemService {
     /// With no genome loaded both counts are genuinely zero, which is what these status fields
     /// should report rather than failing the whole request.
     fn genome_counts(&self) -> (usize, usize) {
-        crate::services::with_genome(&self.genome, |g| {
-            (g.cortical_areas.len(), g.brain_regions.len())
-        })
-        .unwrap_or((0, 0))
+        crate::services::with_genome(&self.genome, |g| (g.cortical_areas.len(), g.brain_regions.len())).unwrap_or((0, 0))
     }
 
     /// Reads a value from the core state, or reports the state manager as unavailable.
     ///
     /// `try_read` is used so a REST call never blocks behind the burst thread.
-    fn with_core_state<T>(
-        f: impl FnOnce(&feagi_state_manager::MemoryMappedState) -> T,
-    ) -> ServiceResult<T> {
+    fn with_core_state<T>(f: impl FnOnce(&feagi_state_manager::MemoryMappedState) -> T) -> ServiceResult<T> {
         match StateManager::instance().try_read() {
             Some(state_manager) => Ok(f(state_manager.get_core_state())),
-            None => Err(ServiceError::Internal(
-                "state manager is busy; core state could not be read".to_string(),
-            )),
+            None => Err(ServiceError::Internal("state manager is busy; core state could not be read".to_string())),
         }
     }
 }
@@ -81,8 +74,7 @@ impl SystemService for GenomeSystemService {
             | feagi_state_manager::BurstEngineState::Paused
             | feagi_state_manager::BurstEngineState::LightSleep
             | feagi_state_manager::BurstEngineState::DeepSleep => "degraded",
-            feagi_state_manager::BurstEngineState::Unavailable
-            | feagi_state_manager::BurstEngineState::Error => "unhealthy",
+            feagi_state_manager::BurstEngineState::Unavailable | feagi_state_manager::BurstEngineState::Error => "unhealthy",
         };
 
         let (cortical_area_count, brain_region_count) = self.genome_counts();
@@ -96,10 +88,7 @@ impl SystemService for GenomeSystemService {
             ComponentHealth {
                 name: "genome".to_string(),
                 status: if genome_loaded { "healthy" } else { "degraded" }.to_string(),
-                message: Some(format!(
-                    "{} cortical areas, {} brain regions",
-                    cortical_area_count, brain_region_count
-                )),
+                message: Some(format!("{} cortical areas, {} brain regions", cortical_area_count, brain_region_count)),
             },
         ];
 
@@ -119,24 +108,20 @@ impl SystemService for GenomeSystemService {
     }
 
     async fn get_status(&self) -> ServiceResult<SystemStatus> {
-        let (burst_engine_state, neuron_count, synapse_count, burst_frequency) =
-            Self::with_core_state(|core| {
-                (
-                    core.get_burst_engine_state(),
-                    core.get_neuron_count(),
-                    core.get_synapse_count(),
-                    core.get_burst_frequency(),
-                )
-            })?;
+        let (burst_engine_state, neuron_count, synapse_count, burst_frequency) = Self::with_core_state(|core| {
+            (
+                core.get_burst_engine_state(),
+                core.get_neuron_count(),
+                core.get_synapse_count(),
+                core.get_burst_frequency(),
+            )
+        })?;
 
         let (cortical_area_count, brain_region_count) = self.genome_counts();
 
         Ok(SystemStatus {
             is_initialized: cortical_area_count > 0,
-            burst_engine_running: matches!(
-                burst_engine_state,
-                feagi_state_manager::BurstEngineState::Running
-            ),
+            burst_engine_running: matches!(burst_engine_state, feagi_state_manager::BurstEngineState::Running),
             burst_count: self.get_burst_count().await?,
             neuron_count: neuron_count as usize,
             synapse_count: synapse_count as usize,
@@ -161,9 +146,7 @@ impl SystemService for GenomeSystemService {
     async fn get_burst_count(&self) -> ServiceResult<u64> {
         // The taps record the burst number of the most recent motor publish, which is the burst
         // counter the burst loop last committed.
-        Ok(feagi_npu::runtime_taps::BurstTaps::instance()
-            .motor_snapshot()
-            .burst_num)
+        Ok(feagi_npu::runtime_taps::BurstTaps::instance().motor_snapshot().burst_num)
     }
 
     async fn get_runtime_stats(&self) -> ServiceResult<RuntimeStats> {
@@ -176,21 +159,19 @@ impl SystemService for GenomeSystemService {
 
     async fn get_memory_usage(&self) -> ServiceResult<MemoryUsage> {
         Err(ServiceError::NotImplemented(
-            "the current engine does not report allocation sizes for neuron and synapse storage"
-                .to_string(),
+            "the current engine does not report allocation sizes for neuron and synapse storage".to_string(),
         ))
     }
 
     async fn get_capacity(&self) -> ServiceResult<CapacityInfo> {
-        let (neuron_count, neuron_capacity, synapse_count, synapse_capacity) =
-            Self::with_core_state(|core| {
-                (
-                    core.get_neuron_count(),
-                    core.get_neuron_capacity(),
-                    core.get_synapse_count(),
-                    core.get_synapse_capacity(),
-                )
-            })?;
+        let (neuron_count, neuron_capacity, synapse_count, synapse_capacity) = Self::with_core_state(|core| {
+            (
+                core.get_neuron_count(),
+                core.get_neuron_capacity(),
+                core.get_synapse_count(),
+                core.get_synapse_capacity(),
+            )
+        })?;
 
         let percent = |used: u32, max: u32| -> f64 {
             if max == 0 {
@@ -208,8 +189,7 @@ impl SystemService for GenomeSystemService {
             max_synapses: synapse_capacity as usize,
             synapse_utilization_percent: percent(synapse_count, synapse_capacity),
             current_cortical_areas: self.genome_counts().0,
-            max_cortical_areas: Self::with_core_state(|core| core.get_cortical_area_count())?
-                as usize,
+            max_cortical_areas: Self::with_core_state(|core| core.get_cortical_area_count())? as usize,
         })
     }
 }

@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
 use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
+use serde::{Deserialize, Serialize};
 
 ///
 #[repr(u8)]
@@ -46,50 +46,50 @@ impl QuantizationLevelPacking for IndexCountQuantizationLevel {
 
 /// Trait designed to hold index and/or count values in a quantized form
 pub trait QuantizedIndexCountTrait:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::ops::BitAnd<Output=Self>
-+ core::ops::BitOr<Output=Self>
-+ core::ops::BitXor<Output=Self>
-+ core::ops::Shl<Output=Self>
-+ core::ops::Shr<Output=Self>
-+ core::ops::BitAndAssign
-+ core::ops::BitOrAssign
-+ core::ops::BitXorAssign
-+ core::cmp::PartialOrd
-+ core::cmp::Ord
-+ core::iter::Sum
-+ core::fmt::Debug
-+ core::fmt::Display
-+ core::ops::Rem<Output=Self>
-+ core::ops::RemAssign
-+ core::cmp::Eq
-+ core::hash::Hash
-+ Sized
-+ 'static
-+ QuantizedElementBase
-+ Serialize // TODO should be conditional
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + Default
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + core::ops::BitAnd<Output = Self>
+    + core::ops::BitOr<Output = Self>
+    + core::ops::BitXor<Output = Self>
+    + core::ops::Shl<Output = Self>
+    + core::ops::Shr<Output = Self>
+    + core::ops::BitAndAssign
+    + core::ops::BitOrAssign
+    + core::ops::BitXorAssign
+    + core::cmp::PartialOrd
+    + core::cmp::Ord
+    + core::iter::Sum
+    + core::fmt::Debug
+    + core::fmt::Display
+    + core::ops::Rem<Output = Self>
+    + core::ops::RemAssign
+    + core::cmp::Eq
+    + core::hash::Hash
+    + Sized
+    + 'static
+    + QuantizedElementBase
+    + Serialize // TODO should be conditional
 {
     const LEVEL: IndexCountQuantizationLevel;
     const QUANT_MAX: Self;
-    
+
     const QUANT_MAX_U8: Self;
     const QUANT_MAX_U16: Self;
     const QUANT_MAX_U32: Self;
     const QUANT_MAX_U64: Self;
     const QUANT_MAX_USIZE: usize;
-    
+
     const QUANT_CLAMPED_U8: u8;
     const QUANT_CLAMPED_U16: u16;
     const QUANT_CLAMPED_U32: u32;
@@ -114,13 +114,13 @@ Copy
 
     /// Tries to convert from u32, does NOT check bounds!
     fn quant_to_u8(self) -> u8;
-    
+
     /// Tries to convert to u16, does NOT check bounds!
     fn quant_to_u16(self) -> u16;
 
     /// Tries to convert to u32, does NOT check bounds!
     fn quant_to_u32(self) -> u32;
-    
+
     /// Tries to convert to u64, bound checking shouldnt matter since this is the biggest type (not doing u128 lol)
     fn quant_to_u64(self) -> u64;
 
@@ -152,7 +152,6 @@ Copy
     /// quantization itself
     fn clamp_for_quantization<ClampFor: QuantizedIndexCountTrait>(self) -> Self;
 
-    
     fn clamp_for_quantization_level_runtime(self, level: IndexCountQuantizationLevel) -> Self;
 }
 
@@ -214,7 +213,7 @@ impl QuantizedIndexCountTrait for u8 {
 
     fn from_quantization_clamped<FromQuant: QuantizedIndexCountTrait>(value: FromQuant) -> Self {
         if value > FromQuant::QUANT_MAX_U8 {
-            return u8::MAX
+            return u8::MAX;
         }
         value.quant_to_u8()
     }
@@ -299,7 +298,7 @@ impl QuantizedIndexCountTrait for u16 {
 
     fn from_quantization_clamped<FromQuant: QuantizedIndexCountTrait>(value: FromQuant) -> Self {
         if value > FromQuant::QUANT_MAX_U16 {
-            return u16::MAX
+            return u16::MAX;
         }
         value.quant_to_u16()
     }
@@ -325,7 +324,6 @@ impl QuantizedIndexCountTrait for u16 {
         }
     }
 }
-
 
 // lol, lmao even
 impl QuantizedIndexCountTrait for u32 {
@@ -386,7 +384,7 @@ impl QuantizedIndexCountTrait for u32 {
 
     fn from_quantization_clamped<FromQuant: QuantizedIndexCountTrait>(value: FromQuant) -> Self {
         if value > FromQuant::QUANT_MAX_U32 {
-            return u32::MAX
+            return u32::MAX;
         }
         value.quant_to_u32()
     }
@@ -469,7 +467,7 @@ impl QuantizedIndexCountTrait for u64 {
 
     fn from_quantization_clamped<FromQuant: QuantizedIndexCountTrait>(value: FromQuant) -> Self {
         if value > FromQuant::QUANT_MAX_U64 {
-            return u64::MAX
+            return u64::MAX;
         }
         value.quant_to_u64()
     }
@@ -515,29 +513,29 @@ impl IndexCountEnum {
 
     pub fn get_level(&self) -> IndexCountQuantizationLevel {
         match self {
-            IndexCountEnum::U8(_) => { IndexCountQuantizationLevel::U8 }
-            IndexCountEnum::U16(_) => { IndexCountQuantizationLevel::U16 }
-            IndexCountEnum::U32(_) => { IndexCountQuantizationLevel::U32 }
-            IndexCountEnum::U64(_) => { IndexCountQuantizationLevel::U64 }
+            IndexCountEnum::U8(_) => IndexCountQuantizationLevel::U8,
+            IndexCountEnum::U16(_) => IndexCountQuantizationLevel::U16,
+            IndexCountEnum::U32(_) => IndexCountQuantizationLevel::U32,
+            IndexCountEnum::U64(_) => IndexCountQuantizationLevel::U64,
         }
     }
 
     pub fn try_into_quant<Quant: QuantizedIndexCountTrait>(self) -> Result<Quant, FeagiDataValueQuantizationError> {
         // TODO assert Debug Check!
         match self {
-            IndexCountEnum::U8(value) => {value.try_to_quantization()}
-            IndexCountEnum::U16(value) => {value.try_to_quantization()}
-            IndexCountEnum::U32(value) => {value.try_to_quantization()}
-            IndexCountEnum::U64(value) => {value.try_to_quantization()}
+            IndexCountEnum::U8(value) => value.try_to_quantization(),
+            IndexCountEnum::U16(value) => value.try_to_quantization(),
+            IndexCountEnum::U32(value) => value.try_to_quantization(),
+            IndexCountEnum::U64(value) => value.try_to_quantization(),
         }
     }
 
     pub fn into_quant<Quant: QuantizedIndexCountTrait>(self) -> Quant {
         match self {
-            IndexCountEnum::U8(value) => {value.to_quantization()}
-            IndexCountEnum::U16(value) => {value.to_quantization()}
-            IndexCountEnum::U32(value) => {value.to_quantization()}
-            IndexCountEnum::U64(value) => {value.to_quantization()}
+            IndexCountEnum::U8(value) => value.to_quantization(),
+            IndexCountEnum::U16(value) => value.to_quantization(),
+            IndexCountEnum::U32(value) => value.to_quantization(),
+            IndexCountEnum::U64(value) => value.to_quantization(),
         }
     }
 
@@ -553,7 +551,6 @@ impl IndexCountEnum {
     // TODO from usize that is CPU dependent to be either 32 bit or 64 bit
 }
 
-
 /// Shared behaviour implemented by every strongly-typed wrapper generated by
 /// [`create_wrapped_quantized_index`].
 ///
@@ -567,32 +564,32 @@ impl IndexCountEnum {
 /// [`QuantizedIndexCountTrait`] value; the macro only needs to supply [`Self::new`],
 /// [`Self::deref`] and the `Self`-typed constants.
 pub trait WrappedQuantizedIndexCount:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::fmt::Debug
-+ core::cmp::PartialEq
-+ core::cmp::Eq
-+ core::cmp::PartialOrd
-+ core::cmp::Ord
-+ core::hash::Hash
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::Rem<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::ops::RemAssign
-+ From<Self::Quant>
-+ AsRef<Self::Quant>
-+ AsMut<Self::Quant>
-+ Sized
-+ 'static
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + Default
+    + core::fmt::Debug
+    + core::cmp::PartialEq
+    + core::cmp::Eq
+    + core::cmp::PartialOrd
+    + core::cmp::Ord
+    + core::hash::Hash
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::Rem<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + core::ops::RemAssign
+    + From<Self::Quant>
+    + AsRef<Self::Quant>
+    + AsMut<Self::Quant>
+    + Sized
+    + 'static
 {
     /// The underlying quantized index / count value this wrapper stores.
     type Quant: QuantizedIndexCountTrait;
@@ -710,16 +707,7 @@ Copy
 /// These enums hide the generic quantized wrapper type behind concrete variants
 /// (`U8`, `U16`, `U32`, `U64`) while preserving the wrapper family semantics.
 pub trait WrappedQuantizedIndexCountEnum:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::cmp::PartialEq
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Sized
-    + 'static
+    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
     fn get_level(&self) -> IndexCountQuantizationLevel;
 
@@ -873,7 +861,7 @@ macro_rules! create_wrapped_quantized_index {
                 Self(self.0 % rhs.0)
             }
         }
-        
+
 
 
         impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> core::ops::AddAssign for $struct_name<Q> {
@@ -905,7 +893,7 @@ macro_rules! create_wrapped_quantized_index {
                 self.0 %= rhs.0;
             }
         }
-        
+
                 impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> Default for $struct_name<Q> {
             fn default() -> Self {
                 Self(Q::default())
@@ -1030,4 +1018,3 @@ macro_rules! create_wrapped_quantized_index {
 
     };
 }
-

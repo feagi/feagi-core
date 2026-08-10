@@ -34,7 +34,7 @@ impl NeuronRuntimeFlags {
     pub fn get_firing(&self) -> bool {
         (self.0 & Self::BITMASK_FIRING) != 0
     }
-    
+
     pub fn set_force_off(&mut self, value: bool) {
         self.set_bit(Self::BITMASK_NEURON_FORCE_OFF, value);
     }

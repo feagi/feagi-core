@@ -39,10 +39,7 @@ impl FeagiSerializable for FeagiJSON {
         Ok(())
     }
 
-    fn try_deserialize_and_update_self_from_byte_slice(
-        &mut self,
-        byte_structure_slice: &[u8],
-    ) -> Result<(), ()> {
+    fn try_deserialize_and_update_self_from_byte_slice(&mut self, byte_structure_slice: &[u8]) -> Result<(), ()> {
         // Assuming type is correct
         self.verify_byte_slice_is_of_correct_version(byte_structure_slice)?;
 

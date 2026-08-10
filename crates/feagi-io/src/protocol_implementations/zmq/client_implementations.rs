@@ -14,8 +14,8 @@ use zmq::{Context, Message, Socket};
 
 use crate::protocol_implementations::zmq::shared::ZmqUrl;
 use crate::traits_and_enums::client::{
-    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester,
-    FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties,
+    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester, FeagiClientRequesterProperties, FeagiClientSubscriber,
+    FeagiClientSubscriberProperties,
 };
 use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
 use crate::FeagiNetworkError;
@@ -41,11 +41,10 @@ fn parse_i32_env(name: &str) -> Result<Option<i32>, FeagiNetworkError> {
     let Ok(raw) = env::var(name) else {
         return Ok(None);
     };
-    let parsed = raw.trim().parse::<i32>().map_err(|_| {
-        FeagiNetworkError::InvalidSocketProperties(format!(
-            "Invalid integer value for {name}: '{raw}'"
-        ))
-    })?;
+    let parsed = raw
+        .trim()
+        .parse::<i32>()
+        .map_err(|_| FeagiNetworkError::InvalidSocketProperties(format!("Invalid integer value for {name}: '{raw}'")))?;
     Ok(Some(parsed))
 }
 
@@ -116,23 +115,17 @@ impl FeagiZmqClientSubscriberProperties {
     /// Returns an error if the address is invalid.
     pub fn new(server_address: &str) -> Result<Self, FeagiNetworkError> {
         let zmq_url = ZmqUrl::new(server_address)?;
-        Ok(Self {
-            server_address: zmq_url,
-        })
+        Ok(Self { server_address: zmq_url })
     }
 }
 
 impl FeagiClientSubscriberProperties for FeagiZmqClientSubscriberProperties {
     fn as_boxed_client_subscriber(&self) -> Box<dyn FeagiClientSubscriber> {
         let context = Context::new();
-        let socket = context
-            .socket(zmq::SUB)
-            .expect("Failed to create ZMQ SUB socket");
+        let socket = context.socket(zmq::SUB).expect("Failed to create ZMQ SUB socket");
 
         // Subscribe to all messages (empty filter)
-        socket
-            .set_subscribe(b"")
-            .expect("Failed to set ZMQ subscription filter");
+        socket.set_subscribe(b"").expect("Failed to set ZMQ subscription filter");
 
         Box::new(FeagiZmqClientSubscriber {
             server_address: self.server_address.clone(),
@@ -199,9 +192,7 @@ impl FeagiClient for FeagiZmqClientSubscriber {
                     // No data available
                 }
                 Err(e) => {
-                    self.current_state = FeagiEndpointState::Errored(
-                        FeagiNetworkError::ReceiveFailed(e.to_string()),
-                    );
+                    self.current_state = FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(e.to_string()));
                 }
             }
         }
@@ -276,9 +267,7 @@ impl FeagiClientSubscriber for FeagiZmqClientSubscriber {
                     ))
                 }
             }
-            _ => Err(FeagiNetworkError::ReceiveFailed(
-                "Cannot consume: no data available".to_string(),
-            )),
+            _ => Err(FeagiNetworkError::ReceiveFailed("Cannot consume: no data available".to_string())),
         }
     }
 
@@ -318,18 +307,14 @@ impl FeagiZmqClientPusherProperties {
     /// Returns an error if the address is invalid.
     pub fn new(server_address: &str) -> Result<Self, FeagiNetworkError> {
         let zmq_url = ZmqUrl::new(server_address)?;
-        Ok(Self {
-            server_address: zmq_url,
-        })
+        Ok(Self { server_address: zmq_url })
     }
 }
 
 impl FeagiClientPusherProperties for FeagiZmqClientPusherProperties {
     fn as_boxed_client_pusher(&self) -> Box<dyn FeagiClientPusher> {
         let context = Context::new();
-        let socket = context
-            .socket(zmq::PUSH)
-            .expect("Failed to create ZMQ PUSH socket");
+        let socket = context.socket(zmq::PUSH).expect("Failed to create ZMQ PUSH socket");
 
         Box::new(FeagiZmqClientPusher {
             server_address: self.server_address.clone(),
@@ -441,9 +426,7 @@ impl FeagiClientPusher for FeagiZmqClientPusher {
                 })?;
                 Ok(())
             }
-            _ => Err(FeagiNetworkError::SendFailed(
-                "Cannot publish: client is not in Active state".to_string(),
-            )),
+            _ => Err(FeagiNetworkError::SendFailed("Cannot publish: client is not in Active state".to_string())),
         }
     }
 
@@ -483,18 +466,14 @@ impl FeagiZmqClientRequesterProperties {
     /// Returns an error if the address is invalid.
     pub fn new(server_address: &str) -> Result<Self, FeagiNetworkError> {
         let zmq_url = ZmqUrl::new(server_address)?;
-        Ok(Self {
-            server_address: zmq_url,
-        })
+        Ok(Self { server_address: zmq_url })
     }
 }
 
 impl FeagiClientRequesterProperties for FeagiZmqClientRequesterProperties {
     fn as_boxed_client_requester(&self) -> Box<dyn FeagiClientRequester> {
         let context = Context::new();
-        let socket = context
-            .socket(zmq::DEALER)
-            .expect("Failed to create ZMQ DEALER socket");
+        let socket = context.socket(zmq::DEALER).expect("Failed to create ZMQ DEALER socket");
 
         Box::new(FeagiZmqClientRequester {
             server_address: self.server_address.clone(),
@@ -601,9 +580,7 @@ impl FeagiClient for FeagiZmqClientRequester {
                     // No response yet
                 }
                 Err(e) => {
-                    self.current_state = FeagiEndpointState::Errored(
-                        FeagiNetworkError::ReceiveFailed(e.to_string()),
-                    );
+                    self.current_state = FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(e.to_string()));
                 }
             }
         }
@@ -669,15 +646,13 @@ impl FeagiClientRequester for FeagiZmqClientRequester {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
                 // DEALER sends: [empty delimiter, payload]
                 let frames: &[&[u8]] = &[&[], request];
-                self.socket
-                    .send_multipart(frames, zmq::DONTWAIT)
-                    .map_err(|e| {
-                        if e == zmq::Error::EAGAIN {
-                            FeagiNetworkError::SendFailed("Socket would block".to_string())
-                        } else {
-                            FeagiNetworkError::SendFailed(e.to_string())
-                        }
-                    })?;
+                self.socket.send_multipart(frames, zmq::DONTWAIT).map_err(|e| {
+                    if e == zmq::Error::EAGAIN {
+                        FeagiNetworkError::SendFailed("Socket would block".to_string())
+                    } else {
+                        FeagiNetworkError::SendFailed(e.to_string())
+                    }
+                })?;
                 Ok(())
             }
             _ => Err(FeagiNetworkError::SendFailed(
@@ -699,9 +674,7 @@ impl FeagiClientRequester for FeagiZmqClientRequester {
                     ))
                 }
             }
-            _ => Err(FeagiNetworkError::ReceiveFailed(
-                "Cannot consume: no response available".to_string(),
-            )),
+            _ => Err(FeagiNetworkError::ReceiveFailed("Cannot consume: no response available".to_string())),
         }
     }
 

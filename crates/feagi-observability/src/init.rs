@@ -26,8 +26,7 @@ use crate::cli::CrateDebugFlags;
 /// Otherwise, fall back to the per-crate debug flags filter string.
 fn resolve_env_filter(debug_flags: &CrateDebugFlags) -> Result<EnvFilter> {
     if let Ok(rust_log) = std::env::var("RUST_LOG") {
-        return EnvFilter::try_new(rust_log.clone())
-            .map_err(|e| anyhow!("Invalid RUST_LOG '{}': {}", rust_log, e));
+        return EnvFilter::try_new(rust_log.clone()).map_err(|e| anyhow!("Invalid RUST_LOG '{}': {}", rust_log, e));
     }
 
     let filter = debug_flags.to_filter_string();
@@ -85,8 +84,7 @@ pub fn init_logging(
     // Create timestamped run folder
     let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
     let run_folder = base_log_dir.join(format!("run_{}", timestamp));
-    std::fs::create_dir_all(&run_folder)
-        .with_context(|| format!("Failed to create log directory: {}", run_folder.display()))?;
+    std::fs::create_dir_all(&run_folder).with_context(|| format!("Failed to create log directory: {}", run_folder.display()))?;
 
     // Clean up old logs based on retention policy
     cleanup_old_logs(&base_log_dir, retention_days, retention_runs)?;
@@ -147,9 +145,7 @@ pub fn init_logging(
     let ring_capacity = crate::ring_layer::capacity_from_env();
     if ring_capacity > 0 {
         let ring = crate::ring_layer::install_global_ring(ring_capacity);
-        let ring_layer = crate::ring_layer::RingBufferLayer::new(ring)
-            .with_filter(env_filter.clone())
-            .boxed();
+        let ring_layer = crate::ring_layer::RingBufferLayer::new(ring).with_filter(env_filter.clone()).boxed();
         layers.push(ring_layer);
     }
 
@@ -192,9 +188,7 @@ pub fn init_logging(
     let ring_capacity = crate::ring_layer::capacity_from_env();
     if ring_capacity > 0 {
         let ring = crate::ring_layer::install_global_ring(ring_capacity);
-        let ring_layer = crate::ring_layer::RingBufferLayer::new(ring)
-            .with_filter(env_filter)
-            .boxed();
+        let ring_layer = crate::ring_layer::RingBufferLayer::new(ring).with_filter(env_filter).boxed();
         layers.push(ring_layer);
     }
 
@@ -206,11 +200,7 @@ pub fn init_logging(
 
 /// Clean up old log directories based on retention policy (desktop only)
 #[cfg(feature = "file-logging")]
-fn cleanup_old_logs(
-    base_log_dir: &Path,
-    retention_days: Option<u64>,
-    retention_runs: Option<usize>,
-) -> Result<()> {
+fn cleanup_old_logs(base_log_dir: &Path, retention_days: Option<u64>, retention_runs: Option<usize>) -> Result<()> {
     if !base_log_dir.exists() {
         return Ok(());
     }
@@ -248,11 +238,7 @@ fn cleanup_old_logs(
     for (path, dt) in &runs {
         if *dt < cutoff_date {
             if let Err(e) = std::fs::remove_dir_all(path) {
-                eprintln!(
-                    "Warning: Failed to remove old log directory {}: {}",
-                    path.display(),
-                    e
-                );
+                eprintln!("Warning: Failed to remove old log directory {}: {}", path.display(), e);
             } else {
                 removed_count += 1;
             }
@@ -267,11 +253,7 @@ fn cleanup_old_logs(
                 // Only remove if not already removed by date-based cleanup
                 if path.exists() {
                     if let Err(e) = std::fs::remove_dir_all(path) {
-                        eprintln!(
-                            "Warning: Failed to remove old log directory {}: {}",
-                            path.display(),
-                            e
-                        );
+                        eprintln!("Warning: Failed to remove old log directory {}: {}", path.display(), e);
                     }
                 }
             }

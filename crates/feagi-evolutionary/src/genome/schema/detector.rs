@@ -26,12 +26,9 @@ use crate::types::{EvoError, EvoResult};
 /// legacy string.
 pub fn detect_schema_version(genome: &Value) -> EvoResult<GenomeSchemaVersion> {
     if let Some(integer) = genome.get("genome_schema_version").and_then(|v| v.as_u64()) {
-        let narrowed: u32 = integer.try_into().map_err(|_| {
-            EvoError::invalid_genome(format!(
-                "genome_schema_version {} exceeds u32 range",
-                integer
-            ))
-        })?;
+        let narrowed: u32 = integer
+            .try_into()
+            .map_err(|_| EvoError::invalid_genome(format!("genome_schema_version {} exceeds u32 range", integer)))?;
         return Ok(GenomeSchemaVersion(narrowed));
     }
 
@@ -88,10 +85,7 @@ mod tests {
     #[test]
     fn unsupported_legacy_string_is_rejected() {
         let g = json!({ "version": "1.0" });
-        assert!(matches!(
-            detect_schema_version(&g),
-            Err(EvoError::InvalidGenome(_))
-        ));
+        assert!(matches!(detect_schema_version(&g), Err(EvoError::InvalidGenome(_))));
     }
 
     #[test]
@@ -100,28 +94,19 @@ mod tests {
         // this shape but is not a genome. The detector must reject it
         // explicitly rather than guess.
         let g = json!({ "version": "v0.0.1" });
-        assert!(matches!(
-            detect_schema_version(&g),
-            Err(EvoError::InvalidGenome(_))
-        ));
+        assert!(matches!(detect_schema_version(&g), Err(EvoError::InvalidGenome(_))));
     }
 
     #[test]
     fn missing_both_fields_is_rejected() {
         let g = json!({});
-        assert!(matches!(
-            detect_schema_version(&g),
-            Err(EvoError::InvalidGenome(_))
-        ));
+        assert!(matches!(detect_schema_version(&g), Err(EvoError::InvalidGenome(_))));
     }
 
     #[test]
     fn integer_above_u32_is_rejected() {
         let g = json!({ "genome_schema_version": (u32::MAX as u64 + 1) });
-        assert!(matches!(
-            detect_schema_version(&g),
-            Err(EvoError::InvalidGenome(_))
-        ));
+        assert!(matches!(detect_schema_version(&g), Err(EvoError::InvalidGenome(_))));
     }
 
     #[test]
@@ -129,10 +114,7 @@ mod tests {
         // No version fields at all but with blueprint-shaped data should
         // still be rejected. The detector does not infer from shape.
         let g = json!({ "blueprint": {}, "brain_regions": {} });
-        assert!(matches!(
-            detect_schema_version(&g),
-            Err(EvoError::InvalidGenome(_))
-        ));
+        assert!(matches!(detect_schema_version(&g), Err(EvoError::InvalidGenome(_))));
     }
 
     #[test]
@@ -152,10 +134,7 @@ mod tests {
         // "2.5" must be rejected so that introducing it requires an
         // explicit code change and review.
         let g = json!({ "version": "2.5" });
-        assert!(matches!(
-            detect_schema_version(&g),
-            Err(EvoError::InvalidGenome(_))
-        ));
+        assert!(matches!(detect_schema_version(&g), Err(EvoError::InvalidGenome(_))));
     }
 
     #[test]

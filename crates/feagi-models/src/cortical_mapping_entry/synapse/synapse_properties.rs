@@ -1,5 +1,3 @@
-
-
 // TODO think better on these flags
 
 /// Per synapse properties that all neurons have that can be configured
@@ -17,4 +15,3 @@ impl Default for SynapseProperties {
         }
     }
 }
-

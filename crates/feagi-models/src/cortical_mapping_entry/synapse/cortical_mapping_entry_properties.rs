@@ -1,8 +1,6 @@
-
 /// Universal properties that all Cortical Mapping Entries have
 #[derive(Clone, Copy, Debug)]
-pub struct CorticalMappingEntryProperties
-{
+pub struct CorticalMappingEntryProperties {
     /// The delay in bursts from a firing being generated to arriving at the destination.
     /// 0 means none
     pub propagation_delay: u16,

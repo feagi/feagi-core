@@ -9,11 +9,7 @@ use crate::common::{ApiError, ApiResult, Json, State};
 use std::collections::HashMap;
 
 /// Get membrane potential status for multiple neurons.
-#[utoipa::path(
-    post,
-    path = "/v1/insight/neurons/membrane_potential_status",
-    tag = "insight"
-)]
+#[utoipa::path(post, path = "/v1/insight/neurons/membrane_potential_status", tag = "insight")]
 pub async fn post_neurons_membrane_potential_status(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
@@ -22,11 +18,7 @@ pub async fn post_neurons_membrane_potential_status(
 }
 
 /// Get synaptic potential status for a specific neuron.
-#[utoipa::path(
-    post,
-    path = "/v1/insight/neuron/synaptic_potential_status",
-    tag = "insight"
-)]
+#[utoipa::path(post, path = "/v1/insight/neuron/synaptic_potential_status", tag = "insight")]
 pub async fn post_neuron_synaptic_potential_status(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
@@ -35,11 +27,7 @@ pub async fn post_neuron_synaptic_potential_status(
 }
 
 /// Set membrane potential for multiple neurons.
-#[utoipa::path(
-    post,
-    path = "/v1/insight/neurons/membrane_potential_set",
-    tag = "insight"
-)]
+#[utoipa::path(post, path = "/v1/insight/neurons/membrane_potential_set", tag = "insight")]
 pub async fn post_neurons_membrane_potential_set(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
@@ -48,11 +36,7 @@ pub async fn post_neurons_membrane_potential_set(
 }
 
 /// Set synaptic potential for a specific neuron.
-#[utoipa::path(
-    post,
-    path = "/v1/insight/neuron/synaptic_potential_set",
-    tag = "insight"
-)]
+#[utoipa::path(post, path = "/v1/insight/neuron/synaptic_potential_set", tag = "insight")]
 pub async fn post_neuron_synaptic_potential_set(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
@@ -62,16 +46,12 @@ pub async fn post_neuron_synaptic_potential_set(
 
 /// Get analytics data for neural activity and performance insights.
 #[utoipa::path(get, path = "/v1/insight/analytics", tag = "insight")]
-pub async fn get_analytics(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_analytics(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     Ok(Json(HashMap::new()))
 }
 
 /// Get detailed insight data for debugging and analysis.
 #[utoipa::path(get, path = "/v1/insight/data", tag = "insight")]
-pub async fn get_data(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_data(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     Ok(Json(HashMap::new()))
 }

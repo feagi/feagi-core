@@ -32,35 +32,17 @@ fn test_load_barebones_genome() {
         genome.cortical_areas.len()
     );
 
-    let death_id =
-        feagi_evolutionary::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
-    let power_id =
-        feagi_evolutionary::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
-    let fatigue_id =
-        feagi_evolutionary::genome::parser::string_to_cortical_id("_fatigue").expect("Valid ID");
-    assert!(
-        genome.cortical_areas.contains_key(&death_id),
-        "Missing _death cortical area"
-    );
-    assert!(
-        genome.cortical_areas.contains_key(&power_id),
-        "Missing _power cortical area"
-    );
-    assert!(
-        genome.cortical_areas.contains_key(&fatigue_id),
-        "Missing _fatigue cortical area"
-    );
+    let death_id = feagi_evolutionary::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
+    let power_id = feagi_evolutionary::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+    let fatigue_id = feagi_evolutionary::genome::parser::string_to_cortical_id("_fatigue").expect("Valid ID");
+    assert!(genome.cortical_areas.contains_key(&death_id), "Missing _death cortical area");
+    assert!(genome.cortical_areas.contains_key(&power_id), "Missing _power cortical area");
+    assert!(genome.cortical_areas.contains_key(&fatigue_id), "Missing _fatigue cortical area");
 
     // Verify morphologies
     assert!(genome.morphologies.count() != 0, "Should have morphologies");
-    assert!(
-        genome.morphologies.contains("block_to_block"),
-        "Missing block_to_block morphology"
-    );
-    assert!(
-        genome.morphologies.contains("projector"),
-        "Missing projector morphology"
-    );
+    assert!(genome.morphologies.contains("block_to_block"), "Missing block_to_block morphology");
+    assert!(genome.morphologies.contains("projector"), "Missing projector morphology");
 
     // Verify physiology
     assert!(genome.physiology.simulation_timestep > 0.0);
@@ -78,25 +60,15 @@ fn test_load_barebones_genome() {
     println!("   - Genome ID: {}", genome.metadata.genome_id);
     println!("   - Cortical areas: {}", genome.cortical_areas.len());
     println!("   - Morphologies: {}", genome.morphologies.count());
-    println!(
-        "   - Physiology timestep: {}",
-        genome.physiology.simulation_timestep
-    );
+    println!("   - Physiology timestep: {}", genome.physiology.simulation_timestep);
 }
 
 #[test]
 fn test_load_all_sample_genomes() {
-    let genome_files = [
-        "barebones_genome.json",
-        "essential_genome.json",
-        "test_genome.json",
-        "vision_genome.json",
-    ];
+    let genome_files = ["barebones_genome.json", "essential_genome.json", "test_genome.json", "vision_genome.json"];
 
     for genome_file in &genome_files {
-        let genome_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("genomes")
-            .join(genome_file);
+        let genome_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("genomes").join(genome_file);
 
         match load_genome_from_file(&genome_path) {
             Ok(mut genome) => {
@@ -116,10 +88,7 @@ fn test_load_all_sample_genomes() {
                 assert!(genome.cortical_areas.len() >= 3); // At least _death, _power, and _fatigue
             }
             Err(e) => {
-                println!(
-                    "⚠️  Could not load {}: {} (this is OK if file doesn't exist)",
-                    genome_file, e
-                );
+                println!("⚠️  Could not load {}: {} (this is OK if file doesn't exist)", genome_file, e);
             }
         }
     }

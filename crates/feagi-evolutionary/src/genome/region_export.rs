@@ -14,21 +14,17 @@ Copyright 2025 Neuraville Inc.
 
 use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, RuntimeGenome};
 use crate::{EvoError, EvoResult};
-use serde_json::Value;
-use std::collections::{HashMap, HashSet, VecDeque};
 use feagi_genomic_context::brain_region::BrainRegion;
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
+use serde_json::Value;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Build a map: parent region id -> direct child region ids (from `parent_region_id` properties).
 fn children_by_parent(genome: &RuntimeGenome) -> HashMap<String, Vec<String>> {
     let mut m: HashMap<String, Vec<String>> = HashMap::new();
     for (rid, region) in &genome.brain_regions {
-        if let Some(p) = region
-            .properties
-            .get("parent_region_id")
-            .and_then(|v| v.as_str())
-        {
+        if let Some(p) = region.properties.get("parent_region_id").and_then(|v| v.as_str()) {
             if !p.is_empty() {
                 m.entry(p.to_string()).or_default().push(rid.clone());
             }
@@ -44,10 +40,7 @@ fn collect_region_branch_ids(
     children_by_parent: &HashMap<String, Vec<String>>,
 ) -> EvoResult<Vec<String>> {
     if !genome.brain_regions.contains_key(root_region_id) {
-        return Err(EvoError::invalid_region(format!(
-            "Unknown region_id: {}",
-            root_region_id
-        )));
+        return Err(EvoError::invalid_region(format!("Unknown region_id: {}", root_region_id)));
     }
 
     let mut out: Vec<String> = Vec::new();
@@ -96,10 +89,7 @@ fn strip_dst_mappings_outside_branch(area: &mut CorticalArea, kept: &HashSet<Str
 /// - Preserves physiology and full morphology registry from the source genome.
 /// - Sets a new `genome_id` / title on the exported genome.
 /// - Strips synapse destination mappings that leave the branch.
-pub fn subset_runtime_genome_for_region_branch(
-    genome: &RuntimeGenome,
-    root_region_id: &str,
-) -> EvoResult<RuntimeGenome> {
+pub fn subset_runtime_genome_for_region_branch(genome: &RuntimeGenome, root_region_id: &str) -> EvoResult<RuntimeGenome> {
     let children = children_by_parent(genome);
     let branch_ids = collect_region_branch_ids(genome, root_region_id, &children)?;
     let branch_set: HashSet<String> = branch_ids.iter().cloned().collect();
@@ -123,11 +113,7 @@ pub fn subset_runtime_genome_for_region_branch(
         };
         if rid == root_region_id {
             br.properties.remove("parent_region_id");
-        } else if let Some(parent) = br
-            .properties
-            .get("parent_region_id")
-            .and_then(|v| v.as_str())
-        {
+        } else if let Some(parent) = br.properties.get("parent_region_id").and_then(|v| v.as_str()) {
             if !branch_set.contains(parent) {
                 br.properties.remove("parent_region_id");
             }
@@ -175,13 +161,10 @@ pub fn subset_runtime_genome_for_region_branch(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::{
-        GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig,
-        RuntimeGenome,
-    };
+    use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig, RuntimeGenome};
+    use feagi_genomic_context::brain_region::{BrainRegion, RegionID, RegionType};
     use serde_json::json;
     use std::collections::HashMap;
-    use feagi_genomic_context::brain_region::{BrainRegion, RegionID, RegionType};
 
     fn runtime_parent_and_child() -> (RuntimeGenome, String, String) {
         let parent_rid = RegionID::new();
@@ -189,10 +172,8 @@ mod tests {
         let parent_key = parent_rid.to_string();
         let child_key = child_rid.to_string();
 
-        let parent = BrainRegion::new(parent_rid, "Parent".to_string(), RegionType::Undefined)
-            .expect("parent region");
-        let mut child = BrainRegion::new(child_rid, "Child".to_string(), RegionType::Undefined)
-            .expect("child region");
+        let parent = BrainRegion::new(parent_rid, "Parent".to_string(), RegionType::Undefined).expect("parent region");
+        let mut child = BrainRegion::new(child_rid, "Child".to_string(), RegionType::Undefined).expect("child region");
         child.add_property("parent_region_id".to_string(), json!(parent_key.clone()));
 
         let mut brain_regions = HashMap::new();
@@ -236,12 +217,7 @@ mod tests {
         let sub = subset_runtime_genome_for_region_branch(&g, &child_key).expect("subset");
         assert_eq!(sub.brain_regions.len(), 1);
         assert!(sub.brain_regions.contains_key(&child_key));
-        assert_eq!(
-            sub.metadata.brain_regions_root.as_deref(),
-            Some(child_key.as_str())
-        );
-        assert!(!sub.brain_regions[&child_key]
-            .properties
-            .contains_key("parent_region_id"));
+        assert_eq!(sub.metadata.brain_regions_root.as_deref(), Some(child_key.as_str()));
+        assert!(!sub.brain_regions[&child_key].properties.contains_key("parent_region_id"));
     }
 }

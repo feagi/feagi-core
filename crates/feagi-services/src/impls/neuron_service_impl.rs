@@ -34,59 +34,35 @@ impl NeuronService for NeuronServiceImpl {
         debug!(target: "feagi-services", "Creating neuron in area {} at {:?}", params.cortical_id, params.coordinates);
 
         // Convert String to CorticalID
-        let cortical_id_typed = CorticalID::try_from_base_64(&params.cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
+        let cortical_id_typed =
+            CorticalID::try_from_base_64(&params.cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
 
         let mut manager = self.connectome.write();
 
         // Extract neural parameters from properties or use defaults
         let props = params.properties.as_ref();
 
-        let firing_threshold = props
-            .and_then(|p| p.get("firing_threshold"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0) as f32;
+        let firing_threshold = props.and_then(|p| p.get("firing_threshold")).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
 
-        let leak_coefficient = props
-            .and_then(|p| p.get("leak_coefficient"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) as f32;
+        let leak_coefficient = props.and_then(|p| p.get("leak_coefficient")).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
 
-        let resting_potential = props
-            .and_then(|p| p.get("resting_potential"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) as f32;
+        let resting_potential = props.and_then(|p| p.get("resting_potential")).and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
 
-        let is_inhibitory = props
-            .and_then(|p| p.get("is_inhibitory"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let is_inhibitory = props.and_then(|p| p.get("is_inhibitory")).and_then(|v| v.as_bool()).unwrap_or(false);
 
-        let refractory_period = props
-            .and_then(|p| p.get("refractory_period"))
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as u16;
+        let refractory_period = props.and_then(|p| p.get("refractory_period")).and_then(|v| v.as_i64()).unwrap_or(0) as u16;
 
-        let excitability = props
-            .and_then(|p| p.get("excitability"))
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0) as f32;
+        let excitability = props.and_then(|p| p.get("excitability")).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32;
 
         // SIMD-friendly encoding: 0 means no limit, convert to MAX
-        let consecutive_fire_limit_raw = props
-            .and_then(|p| p.get("consecutive_fire_limit"))
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as u16;
+        let consecutive_fire_limit_raw = props.and_then(|p| p.get("consecutive_fire_limit")).and_then(|v| v.as_i64()).unwrap_or(0) as u16;
         let consecutive_fire_limit = if consecutive_fire_limit_raw == 0 {
             u16::MAX // SIMD-friendly encoding: MAX = no limit
         } else {
             consecutive_fire_limit_raw
         };
 
-        let snooze_length = props
-            .and_then(|p| p.get("snooze_length"))
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as u16;
+        let snooze_length = props.and_then(|p| p.get("snooze_length")).and_then(|v| v.as_i64()).unwrap_or(0) as u16;
 
         let mp_charge_accumulation = props
             .and_then(|p| p.get("mp_charge_accumulation"))
@@ -124,12 +100,10 @@ impl NeuronService for NeuronServiceImpl {
             )
             .map_err(ServiceError::from)?;
 
-        let cortical_idx = manager
-            .get_cortical_idx(&cortical_id_typed)
-            .ok_or_else(|| ServiceError::NotFound {
-                resource: "CorticalArea".to_string(),
-                id: params.cortical_id.clone(),
-            })?;
+        let cortical_idx = manager.get_cortical_idx(&cortical_id_typed).ok_or_else(|| ServiceError::NotFound {
+            resource: "CorticalArea".to_string(),
+            id: params.cortical_id.clone(),
+        })?;
 
         Ok(NeuronInfo {
             id: neuron_id,
@@ -144,9 +118,7 @@ impl NeuronService for NeuronServiceImpl {
         debug!(target: "feagi-services","Deleting neuron {}", neuron_id);
 
         let mut manager = self.connectome.write();
-        let deleted = manager
-            .delete_neuron(neuron_id)
-            .map_err(ServiceError::from)?;
+        let deleted = manager.delete_neuron(neuron_id).map_err(ServiceError::from)?;
 
         if !deleted {
             return Err(ServiceError::NotFound {
@@ -187,19 +159,14 @@ impl NeuronService for NeuronServiceImpl {
         })
     }
 
-    async fn get_neuron_at_coordinates(
-        &self,
-        cortical_id: &str,
-        coordinates: (u32, u32, u32),
-    ) -> ServiceResult<Option<NeuronInfo>> {
+    async fn get_neuron_at_coordinates(&self, cortical_id: &str, coordinates: (u32, u32, u32)) -> ServiceResult<Option<NeuronInfo>> {
         debug!(target: "feagi-services","Looking up neuron in area {} at {:?}", cortical_id, coordinates);
 
         let manager = self.connectome.read();
 
         // Verify area exists
         if !manager.has_cortical_area(
-            &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
+            &CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
         ) {
             return Err(ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
@@ -209,8 +176,7 @@ impl NeuronService for NeuronServiceImpl {
 
         // Get all neurons in the area and find one at coordinates
         let neurons = manager.get_neurons_in_area(
-            &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
+            &CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
         );
 
         for neuron_id in neurons {
@@ -231,18 +197,13 @@ impl NeuronService for NeuronServiceImpl {
         Ok(None)
     }
 
-    async fn list_neurons_in_area(
-        &self,
-        cortical_id: &str,
-        limit: Option<usize>,
-    ) -> ServiceResult<Vec<NeuronInfo>> {
+    async fn list_neurons_in_area(&self, cortical_id: &str, limit: Option<usize>) -> ServiceResult<Vec<NeuronInfo>> {
         debug!(target: "feagi-services","Listing neurons in area: {}", cortical_id);
 
         // Get neurons from ConnectomeManager
         let manager = self.connectome.read();
         let neuron_ids = manager.get_neurons_in_area(
-            &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
+            &CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
         );
 
         let neurons: Vec<NeuronInfo> = neuron_ids
@@ -272,13 +233,10 @@ impl NeuronService for NeuronServiceImpl {
         debug!(target: "feagi-services","Getting neuron count for area: {}", cortical_id);
 
         // Convert String to CorticalID
-        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
+        let cortical_id_typed =
+            CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
 
-        let count = self
-            .connectome
-            .read()
-            .get_neuron_count_in_area(&cortical_id_typed);
+        let count = self.connectome.read().get_neuron_count_in_area(&cortical_id_typed);
 
         Ok(count)
     }

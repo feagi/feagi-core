@@ -20,10 +20,7 @@ use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscribe
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::FeagiNetworkError;
 
-use crate::clients::{
-    NowMs, SessionAction, SessionEvent, SessionInit, SessionPhase, SessionStateMachine,
-    SessionTimingConfig,
-};
+use crate::clients::{NowMs, SessionAction, SessionEvent, SessionInit, SessionPhase, SessionStateMachine, SessionTimingConfig};
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiAgentError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,9 +102,7 @@ fn publish_sensor_payload_with_transient_retry(
         );
         return Ok(false);
     }
-    Err(FeagiAgentError::other(
-        "Sensory publish retry exhausted unexpectedly".to_string(),
-    ))
+    Err(FeagiAgentError::other("Sensory publish retry exhausted unexpectedly".to_string()))
 }
 
 /*

@@ -69,11 +69,7 @@ pub fn find_config_file() -> ConfigResult<PathBuf> {
     }
 
     // Not found
-    let search_list = search_paths
-        .iter()
-        .map(|p| format!("  - {}", p.display()))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let search_list = search_paths.iter().map(|p| format!("  - {}", p.display())).collect::<Vec<_>>().join("\n");
 
     Err(ConfigError::FileNotFound(format!(
         "FEAGI configuration file 'feagi_configuration.toml' not found in any of these locations:\n{}\n\nSet FEAGI_CONFIG_PATH environment variable to specify custom location.",
@@ -95,10 +91,7 @@ pub fn find_config_file() -> ConfigResult<PathBuf> {
 /// # Errors
 ///
 /// Returns error if config file is not found, contains invalid TOML, or fails validation
-pub fn load_config(
-    config_path: Option<&Path>,
-    cli_args: Option<&HashMap<String, String>>,
-) -> ConfigResult<FeagiConfig> {
+pub fn load_config(config_path: Option<&Path>, cli_args: Option<&HashMap<String, String>>) -> ConfigResult<FeagiConfig> {
     // Find config file
     let config_file = if let Some(path) = config_path {
         path.to_path_buf()
@@ -167,8 +160,7 @@ pub fn apply_environment_overrides(config: &mut FeagiConfig) {
         }
     }
     if let Ok(value) = env::var("FEAGI_API_RELOAD") {
-        config.api.reload =
-            value.to_lowercase() == "true" || value == "1" || value.to_lowercase() == "yes";
+        config.api.reload = value.to_lowercase() == "true" || value == "1" || value.to_lowercase() == "yes";
     }
 
     // ZMQ settings

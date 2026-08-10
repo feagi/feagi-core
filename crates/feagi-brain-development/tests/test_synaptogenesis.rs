@@ -23,8 +23,8 @@ path for more realistic integration tests.
 */
 
 use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
-use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
 use feagi_genomic_context::cortical_area::CorticalAreaDimensions;
+use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -34,12 +34,8 @@ use std::sync::Arc;
 fn create_test_manager() -> ConnectomeManager {
     let runtime = feagi_npu_runtime::StdRuntime;
     let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
-    let npu_result =
-        RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).expect("Failed to create NPU");
-    let npu = Arc::new(TracingMutex::new(
-        feagi_npu_burst_engine::DynamicNPU::F32(npu_result),
-        "TestNPU",
-    ));
+    let npu_result = RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).expect("Failed to create NPU");
+    let npu = Arc::new(TracingMutex::new(feagi_npu_burst_engine::DynamicNPU::F32(npu_result), "TestNPU"));
 
     let mut manager = ConnectomeManager::new_for_testing_with_npu(npu);
     // Set up core morphologies required for synaptogenesis
@@ -51,13 +47,7 @@ fn create_test_manager() -> ConnectomeManager {
 ///
 /// Creates custom cortical_area areas using the same approach as other tests:
 /// Custom cortical_area IDs are 8 bytes starting with 'c' (e.g., b"csrc0000").
-fn create_test_area(
-    name: &str,
-    width: u32,
-    height: u32,
-    depth: u32,
-    idx: u32,
-) -> (CorticalArea, CorticalID) {
+fn create_test_area(name: &str, width: u32, height: u32, depth: u32, idx: u32) -> (CorticalArea, CorticalID) {
     use feagi_genome_definitions::{CorticalAreaType, CustomCorticalType};
 
     // Create custom cortical_area ID: 8 bytes starting with 'c', padded with nulls
@@ -68,8 +58,7 @@ fn create_test_area(
     let copy_len = name_bytes.len().min(7); // Leave first byte as 'c'
     id_bytes[1..1 + copy_len].copy_from_slice(&name_bytes[..copy_len]);
 
-    let cortical_id =
-        CorticalID::try_from_bytes(&id_bytes).expect("Failed to create custom cortical_area ID");
+    let cortical_id = CorticalID::try_from_bytes(&id_bytes).expect("Failed to create custom cortical_area ID");
     let cortical_type = CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire);
 
     let area = CorticalArea::new(
@@ -85,13 +74,7 @@ fn create_test_area(
 }
 
 /// Helper to create neurons in a grid pattern within an area
-fn create_grid_neurons(
-    manager: &mut ConnectomeManager,
-    area_id: &CorticalID,
-    width: usize,
-    height: usize,
-    depth: usize,
-) -> Vec<u64> {
+fn create_grid_neurons(manager: &mut ConnectomeManager, area_id: &CorticalID, width: usize, height: usize, depth: usize) -> Vec<u64> {
     let mut neuron_ids = Vec::new();
     for z in 0..depth {
         for y in 0..height {
@@ -127,15 +110,11 @@ fn test_projector_morphology_basic() {
 
     // Create source area (10x10x1 = 100 neurons)
     let (src_area, src_id) = create_test_area("src000", 10, 10, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     // Create destination area (10x10x1 = 100 neurons)
     let (dst_area, dst_id) = create_test_area("dst000", 10, 10, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     // Create neurons in both areas
     create_grid_neurons(&mut manager, &src_id, 10, 10, 1);
@@ -158,10 +137,7 @@ fn test_projector_morphology_basic() {
         .regenerate_synapses_for_mapping(&src_id, &dst_id)
         .expect("Failed to apply cortical_area mapping");
 
-    println!(
-        "Created {} synapses via projector morphology",
-        synapse_count
-    );
+    println!("Created {} synapses via projector morphology", synapse_count);
 
     // Verify synapses were created (projector should create 1:1 mapping for same dimensions)
     // With 100% attractivity, should create approximately 100 synapses (one per source neuron)
@@ -181,13 +157,9 @@ fn test_centered_projector_drops_out_of_bounds() {
 
     // Source larger than destination so peripheral source voxels are dropped.
     let (src_area, src_id) = create_test_area("src_cpr", 5, 5, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
     let (dst_area, dst_id) = create_test_area("dst_cpr", 3, 3, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     let src_neurons = create_grid_neurons(&mut manager, &src_id, 5, 5, 1);
     create_grid_neurons(&mut manager, &dst_id, 3, 3, 1);
@@ -207,10 +179,7 @@ fn test_centered_projector_drops_out_of_bounds() {
         .expect("Failed to apply cortical_area mapping");
 
     // Only centered 3x3 source region maps into 3x3 destination => 9 synapses.
-    assert_eq!(
-        synapse_count, 9,
-        "Centered projector should map only in-bounds centered voxels"
-    );
+    assert_eq!(synapse_count, 9, "Centered projector should map only in-bounds centered voxels");
 
     let Some(npu_arc) = manager.get_npu() else {
         panic!("Test manager must have an attached NPU");
@@ -231,17 +200,10 @@ fn test_centered_projector_drops_out_of_bounds() {
             let center_target_coords = npu
                 .get_neuron_coordinates(center_outgoing[0].0)
                 .expect("Destination neuron coordinates should exist");
-            assert_eq!(
-                center_target_coords,
-                (1, 1, 0),
-                "Source center should map to destination center"
-            );
+            assert_eq!(center_target_coords, (1, 1, 0), "Source center should map to destination center");
 
             let corner_outgoing = npu.get_outgoing_synapses(src_corner_nid);
-            assert!(
-                corner_outgoing.is_empty(),
-                "Out-of-bounds mapped source voxels should be dropped"
-            );
+            assert!(corner_outgoing.is_empty(), "Out-of-bounds mapped source voxels should be dropped");
         }
         DynamicNPU::INT8(ref mut npu) => {
             let center_outgoing = npu.get_outgoing_synapses(src_center_nid);
@@ -253,17 +215,10 @@ fn test_centered_projector_drops_out_of_bounds() {
             let center_target_coords = npu
                 .get_neuron_coordinates(center_outgoing[0].0)
                 .expect("Destination neuron coordinates should exist");
-            assert_eq!(
-                center_target_coords,
-                (1, 1, 0),
-                "Source center should map to destination center"
-            );
+            assert_eq!(center_target_coords, (1, 1, 0), "Source center should map to destination center");
 
             let corner_outgoing = npu.get_outgoing_synapses(src_corner_nid);
-            assert!(
-                corner_outgoing.is_empty(),
-                "Out-of-bounds mapped source voxels should be dropped"
-            );
+            assert!(corner_outgoing.is_empty(), "Out-of-bounds mapped source voxels should be dropped");
         }
     }
 }
@@ -275,13 +230,9 @@ fn test_centered_projector_even_dimensions_use_lower_center_anchor() {
     // Even-sized areas validate the lower-center anchor contract:
     // src center at (1,1,0) in 4x4x1 maps to dst center at (2,2,0) in 6x6x1.
     let (src_area, src_id) = create_test_area("src_cpe", 4, 4, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
     let (dst_area, dst_id) = create_test_area("dst_cpe", 6, 6, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     let src_neurons = create_grid_neurons(&mut manager, &src_id, 4, 4, 1);
     create_grid_neurons(&mut manager, &dst_id, 6, 6, 1);
@@ -299,10 +250,7 @@ fn test_centered_projector_even_dimensions_use_lower_center_anchor() {
     let synapse_count = manager
         .regenerate_synapses_for_mapping(&src_id, &dst_id)
         .expect("Failed to apply cortical_area mapping");
-    assert_eq!(
-        synapse_count, 16,
-        "All 4x4 source voxels should map in-bounds into 6x6 destination"
-    );
+    assert_eq!(synapse_count, 16, "All 4x4 source voxels should map in-bounds into 6x6 destination");
 
     let Some(npu_arc) = manager.get_npu() else {
         panic!("Test manager must have an attached NPU");
@@ -357,14 +305,10 @@ fn test_transpose_morphologies_basic() {
 
         // Keep dimensions small and asymmetric so axis swaps are exercised.
         let (src_area, src_id) = create_test_area("srctrx", 4, 3, 2, 0);
-        manager
-            .add_cortical_area(src_area)
-            .expect("Failed to add source area");
+        manager.add_cortical_area(src_area).expect("Failed to add source area");
 
         let (dst_area, dst_id) = create_test_area("dsttrx", 4, 3, 2, 1);
-        manager
-            .add_cortical_area(dst_area)
-            .expect("Failed to add destination area");
+        manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
         create_grid_neurons(&mut manager, &src_id, 4, 3, 2);
         create_grid_neurons(&mut manager, &dst_id, 4, 3, 2);
@@ -383,11 +327,7 @@ fn test_transpose_morphologies_basic() {
             .regenerate_synapses_for_mapping(&src_id, &dst_id)
             .expect("Failed to apply cortical_area mapping");
 
-        assert!(
-            synapse_count > 0,
-            "Morphology {} should create synapses",
-            morphology_id
-        );
+        assert!(synapse_count > 0, "Morphology {} should create synapses", morphology_id);
     }
 
     println!("✅ Test 1a: Transpose morphologies basic - PASSED");
@@ -402,14 +342,10 @@ fn test_inhibitory_mapping_creates_inhibitory_synapses() {
 
     // Create source + destination areas (small, deterministic)
     let (src_area, src_id) = create_test_area("src_inh", 4, 4, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     let (dst_area, dst_id) = create_test_area("dst_inh", 4, 4, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     // Create neurons in both areas
     let src_neurons = create_grid_neurons(&mut manager, &src_id, 4, 4, 1);
@@ -426,14 +362,9 @@ fn test_inhibitory_mapping_creates_inhibitory_synapses() {
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
         .expect("Failed to update cortical_area mapping");
 
-    let synapse_count = manager
-        .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical_area mapping");
+    let synapse_count = manager.apply_cortical_mapping(&src_id).expect("Failed to apply cortical_area mapping");
 
-    assert!(
-        synapse_count > 0,
-        "Should have created synapses for inhibitory mapping"
-    );
+    assert!(synapse_count > 0, "Should have created synapses for inhibitory mapping");
 
     // Inspect outgoing synapses from a sample source neuron
     let Some(npu_arc) = manager.get_npu() else {
@@ -446,32 +377,20 @@ fn test_inhibitory_mapping_creates_inhibitory_synapses() {
         DynamicNPU::F32(ref mut npu) => {
             // Propagation index is rebuilt during mapping application; outgoing list should be non-empty.
             let outgoing = npu.get_outgoing_synapses(sample_src);
-            assert!(
-                !outgoing.is_empty(),
-                "Expected outgoing synapses from source neuron"
-            );
+            assert!(!outgoing.is_empty(), "Expected outgoing synapses from source neuron");
 
             // Validate sign encoding: synapse_type=1 (inhibitory) and weight=5
             for (_target, weight, _psp, syn_type) in outgoing {
                 assert_eq!(weight, 5.0, "Expected abs(multiplier) to be used as weight");
-                assert_eq!(
-                    syn_type, 1,
-                    "Expected inhibitory synapse_type=1 for negative multiplier"
-                );
+                assert_eq!(syn_type, 1, "Expected inhibitory synapse_type=1 for negative multiplier");
             }
         }
         DynamicNPU::INT8(ref mut npu) => {
             let outgoing = npu.get_outgoing_synapses(sample_src);
-            assert!(
-                !outgoing.is_empty(),
-                "Expected outgoing synapses from source neuron"
-            );
+            assert!(!outgoing.is_empty(), "Expected outgoing synapses from source neuron");
             for (_target, weight, _psp, syn_type) in outgoing {
                 assert_eq!(weight, 5.0, "Expected abs(multiplier) to be used as weight");
-                assert_eq!(
-                    syn_type, 1,
-                    "Expected inhibitory synapse_type=1 for negative multiplier"
-                );
+                assert_eq!(syn_type, 1, "Expected inhibitory synapse_type=1 for negative multiplier");
             }
         }
     }
@@ -489,14 +408,10 @@ fn test_pattern_morphology_origin_to_all() {
 
     // Create source + destination areas (small, deterministic)
     let (src_area, src_id) = create_test_area("src_pat", 2, 2, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     let (dst_area, dst_id) = create_test_area("dst_pat", 2, 2, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     // Create neurons in both areas
     let src_neurons = create_grid_neurons(&mut manager, &src_id, 2, 2, 1);
@@ -513,9 +428,7 @@ fn test_pattern_morphology_origin_to_all() {
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
         .expect("Failed to update cortical_area mapping");
 
-    let synapse_count = manager
-        .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical_area mapping");
+    let synapse_count = manager.apply_cortical_mapping(&src_id).expect("Failed to apply cortical_area mapping");
 
     let expected_count = u32::try_from(dst_neurons.len()).expect("Neuron count overflow");
     assert_eq!(
@@ -556,14 +469,10 @@ fn test_first_to_last_morphology_maps_origin_to_destination_max() {
 
     // Source and destination dimensions intentionally differ.
     let (src_area, src_id) = create_test_area("srcf2l", 3, 3, 2, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     let (dst_area, dst_id) = create_test_area("dstf2l", 4, 2, 2, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     let src_neurons = create_grid_neurons(&mut manager, &src_id, 3, 3, 2);
     create_grid_neurons(&mut manager, &dst_id, 4, 2, 2);
@@ -578,13 +487,8 @@ fn test_first_to_last_morphology_maps_origin_to_destination_max() {
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
         .expect("Failed to update cortical_area mapping");
 
-    let synapse_count = manager
-        .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical_area mapping");
-    assert_eq!(
-        synapse_count, 1,
-        "first_to_last should create exactly one synapse"
-    );
+    let synapse_count = manager.apply_cortical_mapping(&src_id).expect("Failed to apply cortical_area mapping");
+    assert_eq!(synapse_count, 1, "first_to_last should create exactly one synapse");
 
     let Some(npu_arc) = manager.get_npu() else {
         panic!("Test manager must have an attached NPU");
@@ -600,11 +504,7 @@ fn test_first_to_last_morphology_maps_origin_to_destination_max() {
                 .find(|nid| npu.get_neuron_coordinates(*nid) == Some((0, 0, 0)))
                 .expect("Source origin neuron must exist");
             let outgoing = npu.get_outgoing_synapses(src_origin);
-            assert_eq!(
-                outgoing.len(),
-                1,
-                "Source origin should have exactly one outgoing synapse"
-            );
+            assert_eq!(outgoing.len(), 1, "Source origin should have exactly one outgoing synapse");
             assert_eq!(
                 npu.get_neuron_coordinates(outgoing[0].0),
                 Some(expected_dst),
@@ -618,11 +518,7 @@ fn test_first_to_last_morphology_maps_origin_to_destination_max() {
                 .find(|nid| npu.get_neuron_coordinates(*nid) == Some((0, 0, 0)))
                 .expect("Source origin neuron must exist");
             let outgoing = npu.get_outgoing_synapses(src_origin);
-            assert_eq!(
-                outgoing.len(),
-                1,
-                "Source origin should have exactly one outgoing synapse"
-            );
+            assert_eq!(outgoing.len(), 1, "Source origin should have exactly one outgoing synapse");
             assert_eq!(
                 npu.get_neuron_coordinates(outgoing[0].0),
                 Some(expected_dst),
@@ -642,15 +538,11 @@ fn test_block_to_block_morphology_basic() {
 
     // Create source area (10x10x1 = 100 neurons)
     let (src_area, src_id) = create_test_area("src001", 10, 10, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     // Create destination area (5x5x1 = 25 neurons)
     let (dst_area, dst_id) = create_test_area("dst001", 5, 5, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     // Create neurons in both areas
     create_grid_neurons(&mut manager, &src_id, 10, 10, 1);
@@ -670,14 +562,9 @@ fn test_block_to_block_morphology_basic() {
         .expect("Failed to update cortical_area mapping");
 
     // Apply cortical_area mapping
-    let synapse_count = manager
-        .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical_area mapping");
+    let synapse_count = manager.apply_cortical_mapping(&src_id).expect("Failed to apply cortical_area mapping");
 
-    println!(
-        "Created {} synapses via block_to_block morphology",
-        synapse_count
-    );
+    println!("Created {} synapses via block_to_block morphology", synapse_count);
 
     // Verify synapses were created
     assert!(synapse_count > 0, "Should have created some synapses");
@@ -694,13 +581,9 @@ fn test_tile_morphology_fold_and_replicate() {
 
     // Fold case: source larger than destination
     let (src_fold_area, src_fold_id) = create_test_area("src_tlf", 4, 1, 1, 10);
-    manager
-        .add_cortical_area(src_fold_area)
-        .expect("Failed to add fold source area");
+    manager.add_cortical_area(src_fold_area).expect("Failed to add fold source area");
     let (dst_fold_area, dst_fold_id) = create_test_area("dst_tlf", 2, 1, 1, 11);
-    manager
-        .add_cortical_area(dst_fold_area)
-        .expect("Failed to add fold destination area");
+    manager.add_cortical_area(dst_fold_area).expect("Failed to add fold destination area");
     create_grid_neurons(&mut manager, &src_fold_id, 4, 1, 1);
     create_grid_neurons(&mut manager, &dst_fold_id, 2, 1, 1);
 
@@ -722,13 +605,9 @@ fn test_tile_morphology_fold_and_replicate() {
 
     // Replicate case: source smaller than destination
     let (src_rep_area, src_rep_id) = create_test_area("src_tlr", 2, 1, 1, 12);
-    manager
-        .add_cortical_area(src_rep_area)
-        .expect("Failed to add replicate source area");
+    manager.add_cortical_area(src_rep_area).expect("Failed to add replicate source area");
     let (dst_rep_area, dst_rep_id) = create_test_area("dst_tlr", 5, 1, 1, 13);
-    manager
-        .add_cortical_area(dst_rep_area)
-        .expect("Failed to add replicate destination area");
+    manager.add_cortical_area(dst_rep_area).expect("Failed to add replicate destination area");
     create_grid_neurons(&mut manager, &src_rep_id, 2, 1, 1);
     create_grid_neurons(&mut manager, &dst_rep_id, 5, 1, 1);
 
@@ -743,10 +622,7 @@ fn test_tile_morphology_fold_and_replicate() {
     let rep_count = manager
         .regenerate_synapses_for_mapping(&src_rep_id, &dst_rep_id)
         .expect("Failed to apply replicate tile mapping");
-    assert_eq!(
-        rep_count, 5,
-        "Replicate mode should tile source over destination (x=0,2,4 and x=1,3)"
-    );
+    assert_eq!(rep_count, 5, "Replicate mode should tile source over destination (x=0,2,4 and x=1,3)");
 }
 
 // ============================================================================
@@ -759,15 +635,11 @@ fn test_synaptogenesis_empty_source_area() {
 
     // Create source area (but don't add neurons)
     let (src_area, src_id) = create_test_area("src002", 10, 10, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     // Create destination area with neurons
     let (dst_area, dst_id) = create_test_area("dst002", 10, 10, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
     create_grid_neurons(&mut manager, &dst_id, 10, 10, 1);
 
     // Create a mapping rule
@@ -787,10 +659,7 @@ fn test_synaptogenesis_empty_source_area() {
         .apply_cortical_mapping(&src_id)
         .expect("Should handle empty source area gracefully");
 
-    assert_eq!(
-        synapse_count, 0,
-        "Should create 0 synapses when source area is empty"
-    );
+    assert_eq!(synapse_count, 0, "Should create 0 synapses when source area is empty");
 
     println!("✅ Test 3: Empty source area - PASSED");
 }
@@ -805,16 +674,12 @@ fn test_synaptogenesis_empty_destination_area() {
 
     // Create source area with neurons
     let (src_area, src_id) = create_test_area("src003", 10, 10, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
     create_grid_neurons(&mut manager, &src_id, 10, 10, 1);
 
     // Create destination area (but don't add neurons)
     let (dst_area, dst_id) = create_test_area("dst003", 10, 10, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     // Create a mapping rule
     let rule = json!({
@@ -833,10 +698,7 @@ fn test_synaptogenesis_empty_destination_area() {
         .apply_cortical_mapping(&src_id)
         .expect("Should handle empty destination area gracefully");
 
-    assert_eq!(
-        synapse_count, 0,
-        "Should create 0 synapses when destination area is empty"
-    );
+    assert_eq!(synapse_count, 0, "Should create 0 synapses when destination area is empty");
 
     println!("✅ Test 4: Empty destination area - PASSED");
 }
@@ -851,14 +713,10 @@ fn test_synapse_attractivity_parameter() {
 
     // Create source and destination areas
     let (src_area, src_id) = create_test_area("src004", 10, 10, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     let (dst_area, dst_id) = create_test_area("dst004", 10, 10, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     // Create neurons in both areas
     create_grid_neurons(&mut manager, &src_id, 10, 10, 1);
@@ -880,10 +738,7 @@ fn test_synapse_attractivity_parameter() {
         .apply_cortical_mapping(&src_id)
         .expect("Failed to apply cortical_area mapping with 0% attractivity");
 
-    assert_eq!(
-        synapse_count_zero, 0,
-        "0% attractivity should create 0 synapses"
-    );
+    assert_eq!(synapse_count_zero, 0, "0% attractivity should create 0 synapses");
 
     println!("✅ Test 5: Synapse attractivity parameter - PASSED");
 }
@@ -898,15 +753,11 @@ fn test_multiple_morphology_rules() {
 
     // Create source area
     let (src_area, src_id) = create_test_area("src005", 10, 10, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     // Create destination area
     let (dst_area, dst_id) = create_test_area("dst005", 10, 10, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     // Create neurons in both areas
     create_grid_neurons(&mut manager, &src_id, 10, 10, 1);
@@ -935,10 +786,7 @@ fn test_multiple_morphology_rules() {
         .apply_cortical_mapping(&src_id)
         .expect("Failed to apply cortical_area mapping with multiple rules");
 
-    println!(
-        "Created {} synapses via multiple morphology rules",
-        synapse_count
-    );
+    println!("Created {} synapses via multiple morphology rules", synapse_count);
 
     // Verify synapses were created (should be more than 0, but exact count depends on randomness)
     // synapse_count is unsigned; non-negative is guaranteed.
@@ -967,15 +815,11 @@ fn test_parallel_projector_and_block_to_block_preserves_both() {
 
     // 1x1x1 source
     let (src_area, src_id) = create_test_area("src_par", 1, 1, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     // 1x1x10 destination
     let (dst_area, dst_id) = create_test_area("dst_par", 1, 1, 10, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     let src_neurons = create_grid_neurons(&mut manager, &src_id, 1, 1, 1);
     let dst_neurons = create_grid_neurons(&mut manager, &dst_id, 1, 1, 10);
@@ -1007,9 +851,7 @@ fn test_parallel_projector_and_block_to_block_preserves_both() {
         .update_cortical_mapping(&src_id, &dst_id, vec![projector_rule, block_to_block_rule])
         .expect("Failed to update cortical_area mapping");
 
-    let synapse_count = manager
-        .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical_area mapping");
+    let synapse_count = manager.apply_cortical_mapping(&src_id).expect("Failed to apply cortical_area mapping");
 
     // projector => 10 synapses (z=0..9), block_to_block => 1 additional synapse at z=0
     assert_eq!(
@@ -1038,8 +880,7 @@ fn test_parallel_projector_and_block_to_block_preserves_both() {
     );
 
     // Validate: every target is a real destination neuron (no orphans).
-    let dst_neuron_ids: std::collections::HashSet<u32> =
-        dst_neurons.iter().map(|&id| id as u32).collect();
+    let dst_neuron_ids: std::collections::HashSet<u32> = dst_neurons.iter().map(|&id| id as u32).collect();
     for (target, _weight, _psp, _syn_type) in &outgoing {
         assert!(
             dst_neuron_ids.contains(target),
@@ -1051,10 +892,7 @@ fn test_parallel_projector_and_block_to_block_preserves_both() {
     // Validate the block_to_block synapse (weight=10) exists alongside the
     // projector synapse (weight=1) for the same src/dst pair at voxel (0,0,0).
     let target_at_z0 = dst_neurons[0] as u32;
-    let synapses_to_z0: Vec<&(u32, f32, f32, u8)> = outgoing
-        .iter()
-        .filter(|(t, _, _, _)| *t == target_at_z0)
-        .collect();
+    let synapses_to_z0: Vec<&(u32, f32, f32, u8)> = outgoing.iter().filter(|(t, _, _, _)| *t == target_at_z0).collect();
 
     assert_eq!(
         synapses_to_z0.len(),
@@ -1109,13 +947,9 @@ fn test_apply_cortical_mapping_delivers_spikes_to_target() {
 
     // Tiny 1x1x1 -> 1x1x1 graph: deterministic and rules out fan-out as a confounder.
     let (src_area, src_id) = create_test_area("src_e2e", 1, 1, 1, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
     let (dst_area, dst_id) = create_test_area("dst_e2e", 1, 1, 1, 1);
-    manager
-        .add_cortical_area(dst_area)
-        .expect("Failed to add destination area");
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
 
     // Use neuron parameters matching the canonical integration_burst_workflow tests
     // (mp_charge_accumulation=true, no consecutive-fire/snooze cap, no leak) so we
@@ -1160,9 +994,7 @@ fn test_apply_cortical_mapping_delivers_spikes_to_target() {
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
         .expect("Failed to update cortical_area mapping");
-    let synapse_count = manager
-        .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical_area mapping");
+    let synapse_count = manager.apply_cortical_mapping(&src_id).expect("Failed to apply cortical_area mapping");
     assert_eq!(
         synapse_count, 1,
         "projector should produce exactly one src->dst synapse for matching 1x1x1 dims"
@@ -1171,9 +1003,7 @@ fn test_apply_cortical_mapping_delivers_spikes_to_target() {
     let src_nid = NeuronId(src_neuron_id as u32);
     let dst_nid = NeuronId(dst_neuron_id as u32);
 
-    let npu_arc = manager
-        .get_npu()
-        .expect("Test manager must have an attached NPU");
+    let npu_arc = manager.get_npu().expect("Test manager must have an attached NPU");
     let mut npu_guard = npu_arc.lock().unwrap();
 
     match *npu_guard {
@@ -1250,21 +1080,15 @@ fn test_fanout_psp_dilution_silences_low_threshold_target() {
 
     // Source: 1x1x10 (matches the cartpole encoder shape)
     let (src_area, src_id) = create_test_area("src_fan", 1, 1, 10, 0);
-    manager
-        .add_cortical_area(src_area)
-        .expect("Failed to add source area");
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
 
     // Detector: 1x1x1 (matches pain_fallen / pleasure_upright)
     let (det_area, det_id) = create_test_area("det_fan", 1, 1, 1, 1);
-    manager
-        .add_cortical_area(det_area)
-        .expect("Failed to add detector area");
+    manager.add_cortical_area(det_area).expect("Failed to add detector area");
 
     // Motor sink: 2x1x10 (matches ungrouped-1 fan-out target)
     let (mot_area, mot_id) = create_test_area("mot_fan", 2, 1, 10, 2);
-    manager
-        .add_cortical_area(mot_area)
-        .expect("Failed to add motor area");
+    manager.add_cortical_area(mot_area).expect("Failed to add motor area");
 
     // Add a single firing neuron at src[0,0,0] (encoder z=0 = "fallen" position).
     let src_neuron_id = manager
@@ -1310,22 +1134,7 @@ fn test_fanout_psp_dilution_silences_low_threshold_target() {
     for x in 0..2 {
         for z in 0..10 {
             manager
-                .add_neuron(
-                    &mot_id,
-                    x,
-                    0,
-                    z,
-                    1.0,
-                    f32::MAX,
-                    0.0,
-                    0.0,
-                    0,
-                    5,
-                    1.0,
-                    0,
-                    0,
-                    true,
-                )
+                .add_neuron(&mot_id, x, 0, z, 1.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, 0, 0, true)
                 .expect("add motor neuron failed");
         }
     }
@@ -1360,20 +1169,13 @@ fn test_fanout_psp_dilution_silences_low_threshold_target() {
         .expect("update src→mot mapping failed");
 
     // Apply both mappings.
-    let total_synapses = manager
-        .apply_cortical_mapping(&src_id)
-        .expect("apply_cortical_mapping failed");
-    assert_eq!(
-        total_synapses, 21,
-        "Expected 21 total synapses (1 src→det + 20 src→mot)"
-    );
+    let total_synapses = manager.apply_cortical_mapping(&src_id).expect("apply_cortical_mapping failed");
+    assert_eq!(total_synapses, 21, "Expected 21 total synapses (1 src→det + 20 src→mot)");
 
     let src_nid = NeuronId(src_neuron_id as u32);
     let det_nid = NeuronId(det_neuron_id as u32);
 
-    let npu_arc = manager
-        .get_npu()
-        .expect("Test manager must have an attached NPU");
+    let npu_arc = manager.get_npu().expect("Test manager must have an attached NPU");
     let mut npu_guard = npu_arc.lock().unwrap();
 
     match *npu_guard {

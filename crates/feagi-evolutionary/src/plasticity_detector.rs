@@ -126,40 +126,19 @@ impl Default for MemoryAreaProperties {
 /// # Arguments
 /// * `properties` - The cortical_area area properties HashMap
 ///
-pub fn extract_memory_properties(
-    properties: &HashMap<String, Value>,
-) -> Option<MemoryAreaProperties> {
-    let is_memory = properties
-        .get("is_mem_type")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+pub fn extract_memory_properties(properties: &HashMap<String, Value>) -> Option<MemoryAreaProperties> {
+    let is_memory = properties.get("is_mem_type").and_then(|v| v.as_bool()).unwrap_or(false);
 
     if !is_memory {
         return None;
     }
 
     Some(MemoryAreaProperties {
-        temporal_depth: properties
-            .get("temporal_depth")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1)
-            .max(1) as u32,
-        longterm_threshold: properties
-            .get("longterm_mem_threshold")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(100) as u32,
-        lifespan_growth_rate: properties
-            .get("lifespan_growth_rate")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0) as f32,
-        init_lifespan: properties
-            .get("init_lifespan")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(9) as u32,
-        mp_learning_enabled: properties
-            .get("mp_learning_enabled")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false),
+        temporal_depth: properties.get("temporal_depth").and_then(|v| v.as_u64()).unwrap_or(1).max(1) as u32,
+        longterm_threshold: properties.get("longterm_mem_threshold").and_then(|v| v.as_u64()).unwrap_or(100) as u32,
+        lifespan_growth_rate: properties.get("lifespan_growth_rate").and_then(|v| v.as_f64()).unwrap_or(1.0) as f32,
+        init_lifespan: properties.get("init_lifespan").and_then(|v| v.as_u64()).unwrap_or(9) as u32,
+        mp_learning_enabled: properties.get("mp_learning_enabled").and_then(|v| v.as_bool()).unwrap_or(false),
     })
 }
 

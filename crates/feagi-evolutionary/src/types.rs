@@ -110,4 +110,3 @@ impl From<()> for EvoError {
         EvoError::internal("operation failed")
     }
 }
-

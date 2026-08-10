@@ -9,13 +9,13 @@ Transformation methods live in feagi-bdu.
 Moved from feagi-core/crates/feagi-bdu/src/models/cortical_area.rs
 */
 
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelDimensions, NeuronVoxelDimensionsGenomic};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
 use feagi_genomic_context::cortical_area::{CorticalAreaType, CorticalID};
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Cortical area metadata (genome representation)
 ///

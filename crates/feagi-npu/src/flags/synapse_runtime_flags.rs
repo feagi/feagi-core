@@ -1,5 +1,3 @@
-
-
 /// Per synapse flags that denote various properties
 /// bit 0-6 - unused
 /// bit 6 - debug disabled -> synapse has been disabled as per debug command
@@ -7,8 +5,7 @@
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SynapseRuntimeFlags(u8);
 
-impl SynapseRuntimeFlags
-{
+impl SynapseRuntimeFlags {
     const BITMASK_SYNAPSE_DISABLED: u8 = 1 << 1;
     const BITMASK_SYNAPSE_KILLED: u8 = 1 << 0;
 

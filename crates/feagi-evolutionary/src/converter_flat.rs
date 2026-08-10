@@ -38,13 +38,10 @@ use std::collections::HashSet;
 pub fn convert_flat_to_hierarchical(flat_genome: &Value) -> EvoResult<Value> {
     // Extract flat blueprint section
     let flat_blueprint = if let Some(bp) = flat_genome.get("blueprint") {
-        bp.as_object().ok_or_else(|| {
-            EvoError::invalid_genome("Flat genome blueprint must be an object".to_string())
-        })?
+        bp.as_object()
+            .ok_or_else(|| EvoError::invalid_genome("Flat genome blueprint must be an object".to_string()))?
     } else {
-        return Err(EvoError::invalid_genome(
-            "Flat genome missing blueprint section".to_string(),
-        ));
+        return Err(EvoError::invalid_genome("Flat genome missing blueprint section".to_string()));
     };
 
     // Find all cortical_area areas
@@ -60,10 +57,7 @@ pub fn convert_flat_to_hierarchical(flat_genome: &Value) -> EvoResult<Value> {
 
     // Build complete hierarchical genome
     let mut hierarchical = serde_json::Map::new();
-    hierarchical.insert(
-        "blueprint".to_string(),
-        Value::Object(hierarchical_blueprint),
-    );
+    hierarchical.insert("blueprint".to_string(), Value::Object(hierarchical_blueprint));
 
     // Copy other sections as-is
     if let Some(morphologies) = flat_genome.get("neuron_morphologies") {
@@ -104,9 +98,7 @@ pub fn convert_flat_to_hierarchical(flat_genome: &Value) -> EvoResult<Value> {
 }
 
 /// Extract all cortical_area area IDs from flat blueprint
-fn extract_cortical_areas(
-    flat_blueprint: &serde_json::Map<String, Value>,
-) -> EvoResult<HashSet<String>> {
+fn extract_cortical_areas(flat_blueprint: &serde_json::Map<String, Value>) -> EvoResult<HashSet<String>> {
     let mut areas = HashSet::new();
 
     for key in flat_blueprint.keys() {
@@ -134,10 +126,7 @@ fn parse_cortical_id(key: &str) -> Option<String> {
 }
 
 /// Build hierarchical area data from flat keys
-fn build_hierarchical_area(
-    cortical_id: &str,
-    flat_blueprint: &serde_json::Map<String, Value>,
-) -> EvoResult<Value> {
+fn build_hierarchical_area(cortical_id: &str, flat_blueprint: &serde_json::Map<String, Value>) -> EvoResult<Value> {
     let mut area = serde_json::Map::new();
 
     // Default values
@@ -205,14 +194,8 @@ mod tests {
 
     #[test]
     fn test_parse_cortical_id() {
-        assert_eq!(
-            parse_cortical_id("_____10c-test01-cx-__name-t"),
-            Some("test01".to_string())
-        );
-        assert_eq!(
-            parse_cortical_id("_____10c-abc123-nx-fire_t-f"),
-            Some("abc123".to_string())
-        );
+        assert_eq!(parse_cortical_id("_____10c-test01-cx-__name-t"), Some("test01".to_string()));
+        assert_eq!(parse_cortical_id("_____10c-abc123-nx-fire_t-f"), Some("abc123".to_string()));
         assert_eq!(parse_cortical_id("invalid_key"), None);
     }
 

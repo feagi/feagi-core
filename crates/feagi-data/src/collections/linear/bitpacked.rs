@@ -1,6 +1,6 @@
-use core::ops::{Index, IndexMut, Range};
-use crate::values::quantizable::QuantizedIndexCountTrait;
 use crate::collections::feagi_data_collections_error::{FeagiDataCollectionError, FeagiFailCollectionInvalidIndex};
+use crate::values::quantizable::QuantizedIndexCountTrait;
+use core::ops::{Index, IndexMut, Range};
 
 macro_rules! impl_bitpacked_range_read {
     ($self_ty:ty, $qi:ty, [$($generics:tt)*]) => {
@@ -87,7 +87,6 @@ fn number_bits_to_number_bytes(n: usize) -> usize {
     }
 }
 
-
 pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> + Index<Range<QI>, Output = [u8]> {
     /// Borrows the backing storage as a regular shared byte slice.
     fn as_bytes(&self) -> &[u8];
@@ -153,12 +152,9 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> +
 
     /// Copies the internal bytes and total length to a new owned vector structure
     fn clone_to_owned(&self) -> BitPackedVector<QI> {
-        BitPackedVector::from_vec_with_bits(
-            self.as_bytes().to_vec(),
-            self.number_addressable_bits(),
-        )
+        BitPackedVector::from_vec_with_bits(self.as_bytes().to_vec(), self.number_addressable_bits())
     }
-    
+
     /// Iterates over shared references to the bytes.
     fn iter_bytes(&self) -> core::slice::Iter<'_, u8> {
         self.as_bytes().iter()
@@ -687,4 +683,3 @@ impl<QI: QuantizedIndexCountTrait, const N: usize> From<[u8; N]> for BitPackedAr
 }
 
 //endregion
-

@@ -24,16 +24,14 @@ fn barebones_genome() -> String {
         .join("genomes")
         .join("barebones_genome.json");
 
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+    std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
 }
 
 #[test]
 fn barebones_genome_yields_one_request_per_cortical_area() {
     let genome = load_genome_from_json(&barebones_genome()).expect("barebones genome should load");
 
-    let (requests, report) =
-        develop_connectome_requests(&genome).expect("corticogenesis should succeed");
+    let (requests, report) = develop_connectome_requests(&genome).expect("corticogenesis should succeed");
 
     assert_eq!(
         report.areas_added,
@@ -53,15 +51,11 @@ fn barebones_genome_yields_one_request_per_cortical_area() {
 fn barebones_genome_areas_are_single_neuron() {
     let genome = load_genome_from_json(&barebones_genome()).expect("barebones genome should load");
 
-    let (_requests, report) =
-        develop_connectome_requests(&genome).expect("corticogenesis should succeed");
+    let (_requests, report) = develop_connectome_requests(&genome).expect("corticogenesis should succeed");
 
     // Each area is 1x1x1 voxels holding one neuron, so the neuron total equals the area count.
     assert_eq!(report.neurons_added, report.areas_added as u64);
-    assert_eq!(
-        report.mappings_deferred, 0,
-        "barebones has an empty dstmap on every area"
-    );
+    assert_eq!(report.mappings_deferred, 0, "barebones has an empty dstmap on every area");
 }
 
 #[test]
@@ -88,11 +82,7 @@ fn request_order_is_stable_across_runs() {
 fn area_missing_neurons_per_voxel_is_rejected() {
     let mut genome = load_genome_from_json(&barebones_genome()).expect("barebones genome should load");
 
-    let victim = *genome
-        .cortical_areas
-        .keys()
-        .next()
-        .expect("barebones has areas");
+    let victim = *genome.cortical_areas.keys().next().expect("barebones has areas");
     genome
         .cortical_areas
         .get_mut(&victim)

@@ -23,9 +23,7 @@ use feagi_genomic_data::cortical_area_prev::CorticalArea;
 pub fn to_cortical_type_info(area: &CorticalArea) -> Option<CorticalTypeInfo> {
     let cortical_type = area.cortical_id.as_cortical_type().ok()?;
 
-    let category = area
-        .get_cortical_group()
-        .unwrap_or_else(|| "CUSTOM".to_string());
+    let category = area.get_cortical_group().unwrap_or_else(|| "CUSTOM".to_string());
 
     // Extract data_type and frame_handling for IPU/OPU
     let (data_type, frame_handling, encoding_details) = match cortical_type {
@@ -43,18 +41,12 @@ pub fn to_cortical_type_info(area: &CorticalArea) -> Option<CorticalTypeInfo> {
 }
 
 /// Extract detailed information from IOCorticalAreaDataFlag
-fn extract_io_type_details(
-    io_type: &IOCorticalAreaConfigurationFlag,
-) -> (Option<String>, Option<String>, Option<serde_json::Value>) {
+fn extract_io_type_details(io_type: &IOCorticalAreaConfigurationFlag) -> (Option<String>, Option<String>, Option<serde_json::Value>) {
     use IOCorticalAreaConfigurationFlag::*;
 
     match io_type {
         Boolean => (Some("Boolean".to_string()), None, None),
-        CartesianPlane(frame_handling) => (
-            Some("CartesianPlane".to_string()),
-            Some(frame_handling_to_string(frame_handling)),
-            None,
-        ),
+        CartesianPlane(frame_handling) => (Some("CartesianPlane".to_string()), Some(frame_handling_to_string(frame_handling)), None),
         Percentage(frame_handling, positioning) => (
             Some("Percentage".to_string()),
             Some(frame_handling_to_string(frame_handling)),
@@ -125,16 +117,8 @@ fn extract_io_type_details(
                 "dimensions": 4
             })),
         ),
-        Misc(frame_handling) => (
-            Some("Misc".to_string()),
-            Some(frame_handling_to_string(frame_handling)),
-            None,
-        ),
-        PoseEstimation(frame_handling, _) => (
-            Some("PoseEstimation".to_string()),
-            Some(frame_handling_to_string(frame_handling)),
-            None,
-        ),
+        Misc(frame_handling) => (Some("Misc".to_string()), Some(frame_handling_to_string(frame_handling)), None),
+        PoseEstimation(frame_handling, _) => (Some("PoseEstimation".to_string()), Some(frame_handling_to_string(frame_handling)), None),
     }
 }
 
@@ -188,22 +172,13 @@ mod tests {
         let type_info = to_cortical_type_info(&area);
 
         // Verify the function returns Some (custom CorticalID encodes type, so as_cortical_type() succeeds)
-        assert!(
-            type_info.is_some(),
-            "Function should return Some when cortical_id encodes type"
-        );
+        assert!(type_info.is_some(), "Function should return Some when cortical_id encodes type");
 
         // Verify the category is derived from AreaType (Sensory -> IPU)
         let info = type_info.unwrap();
-        assert_eq!(
-            info.category, "IPU",
-            "Sensory AreaType should map to IPU category"
-        );
+        assert_eq!(info.category, "IPU", "Sensory AreaType should map to IPU category");
         // Custom CorticalID type doesn't provide IPU/OPU data_type, so those should be None
-        assert!(
-            info.data_type.is_none(),
-            "Custom CorticalID type doesn't provide IPU data_type"
-        );
+        assert!(info.data_type.is_none(), "Custom CorticalID type doesn't provide IPU data_type");
         assert!(info.frame_handling.is_none());
     }
 
@@ -228,21 +203,12 @@ mod tests {
         let type_info = to_cortical_type_info(&area);
 
         // Verify the function returns Some
-        assert!(
-            type_info.is_some(),
-            "Function should return Some when cortical_id encodes type"
-        );
+        assert!(type_info.is_some(), "Function should return Some when cortical_id encodes type");
 
         let info = type_info.unwrap();
-        assert_eq!(
-            info.category, "OPU",
-            "Motor AreaType should map to OPU category"
-        );
+        assert_eq!(info.category, "OPU", "Motor AreaType should map to OPU category");
         // Custom CorticalID type doesn't provide OPU data_type
-        assert!(
-            info.data_type.is_none(),
-            "Custom CorticalID type doesn't provide OPU data_type"
-        );
+        assert!(info.data_type.is_none(), "Custom CorticalID type doesn't provide OPU data_type");
     }
 
     #[test]
@@ -266,16 +232,10 @@ mod tests {
         let type_info = to_cortical_type_info(&area);
 
         // Verify the function correctly extracts type info
-        assert!(
-            type_info.is_some(),
-            "Function should return Some when cortical_id encodes type"
-        );
+        assert!(type_info.is_some(), "Function should return Some when cortical_id encodes type");
 
         let info = type_info.unwrap();
-        assert_eq!(
-            info.category, "OPU",
-            "Motor AreaType should map to OPU category"
-        );
+        assert_eq!(info.category, "OPU", "Motor AreaType should map to OPU category");
 
         // This test verifies that the function correctly:
         // 1. Extracts cortical_area type from CorticalID (as_cortical_type())

@@ -2,71 +2,41 @@
 /// Shared behavior for enums that hide the quantization generic of spatial index
 /// structures (coordinates or dimensions).
 pub trait QuantizedIndexSpatialEnum:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::cmp::PartialEq
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Sized
-    + 'static
+    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
     type Shape<Q: crate::values::quantizable::QuantizedIndexCountTrait>;
 
     fn get_level(&self) -> crate::values::quantizable::IndexCountQuantizationLevel;
 
-    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedIndexCountTrait>(
-        value: Self::Shape<FromQ>
-    ) -> Self;
+    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedIndexCountTrait>(value: Self::Shape<FromQ>) -> Self;
 
-    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(
-        self
-    ) -> Self::Shape<NewQ>;
+    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Self::Shape<NewQ>;
 
     fn try_into_quantization<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(
-        self
+        self,
     ) -> Result<Self::Shape<NewQ>, crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError>;
 
-    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(
-        self
-    ) -> Self::Shape<NewQ>;
+    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Self::Shape<NewQ>;
 }
 
 /// Shared behavior for enums that hide the quantization generic of wrapped spatial index
 /// structures (wrapped coordinates or wrapped dimensions).
 pub trait WrappedQuantizedIndexSpatialEnum:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::cmp::PartialEq
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Sized
-    + 'static
+    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
     type WrappedShape<Q: crate::values::quantizable::QuantizedIndexCountTrait>;
 
     fn get_level(&self) -> crate::values::quantizable::IndexCountQuantizationLevel;
 
-    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedIndexCountTrait>(
-        value: Self::WrappedShape<FromQ>
-    ) -> Self;
+    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedIndexCountTrait>(value: Self::WrappedShape<FromQ>) -> Self;
 
-    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(
-        self
-    ) -> Self::WrappedShape<NewQ>;
+    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Self::WrappedShape<NewQ>;
 
     fn try_into_quantization<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(
-        self
+        self,
     ) -> Result<Self::WrappedShape<NewQ>, crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError>;
 
-    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(
-        self
-    ) -> Self::WrappedShape<NewQ>;
+    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedIndexCountTrait>(self) -> Self::WrappedShape<NewQ>;
 }
 
 macro_rules! create_coordinate {

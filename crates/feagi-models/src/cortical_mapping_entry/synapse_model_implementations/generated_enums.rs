@@ -1,5 +1,5 @@
 //! The many permutations of synapse models and their quantizations expressed as enums
-//! 
+//!
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelQuantizationLevel;
 
 /// Describes what Synapse Model is being used without further context. Internally is encoded as an
@@ -68,11 +68,9 @@ impl SynapseModelTypeAndQuantizationPacked {
         match self {
             SynapseModelTypeAndQuantizationPacked::Uniform_Standard => {
                 SynapseModelTypeAndQuantizationNested::Uniform(UniformSynapseModelQuantizationLevel::Standard)
-            }
-            //SynapseModelTypeAndQuantizationPacked::Plastic_Standard => {
-            //    SynapseModelTypeAndQuantizationNested::Plastic(PlasticSynapseModelQuantizationLevel::Standard)
-            //}
-            
+            } //SynapseModelTypeAndQuantizationPacked::Plastic_Standard => {
+              //    SynapseModelTypeAndQuantizationNested::Plastic(PlasticSynapseModelQuantizationLevel::Standard)
+              //}
         }
     }
 

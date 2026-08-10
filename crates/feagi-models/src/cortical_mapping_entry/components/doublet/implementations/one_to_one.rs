@@ -1,9 +1,9 @@
+use crate::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use crate::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
 use feagi_data::neurons::{DimensionalCorticalArea4DCoordinate, NeuronCorticalLocalIndex, NeuronVoxelDensityIndex};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
-use crate::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 
 /// Maps every neuron of a single source voxel (its full density column) to every neuron of a
 /// single destination voxel.
@@ -32,28 +32,19 @@ impl<FIQ: FeagiIndexQuantization> DoubletIteratorOneToOne<FIQ> {
     ) -> Self {
         let source_dimensions = source_layout.dimensions;
         let destination_dimensions = destination_layout.dimensions;
-        let source_probe = DimensionalCorticalArea4DCoordinate::new_from_voxel_and_density(
-            source_voxel_coordinate,
-            NeuronVoxelDensityIndex::QUANT_ZERO,
-        );
-        let destination_probe = DimensionalCorticalArea4DCoordinate::new_from_voxel_and_density(
-            destination_voxel_coordinate,
-            NeuronVoxelDensityIndex::QUANT_ZERO,
-        );
-        if !source_dimensions.contains_coordinate(&source_probe)
-            || !destination_dimensions.contains_coordinate(&destination_probe)
-        {
+        let source_probe =
+            DimensionalCorticalArea4DCoordinate::new_from_voxel_and_density(source_voxel_coordinate, NeuronVoxelDensityIndex::QUANT_ZERO);
+        let destination_probe =
+            DimensionalCorticalArea4DCoordinate::new_from_voxel_and_density(destination_voxel_coordinate, NeuronVoxelDensityIndex::QUANT_ZERO);
+        if !source_dimensions.contains_coordinate(&source_probe) || !destination_dimensions.contains_coordinate(&destination_probe) {
             return Self::empty();
         }
 
         // Linear indexes increment along x fastest, so the neurons of a single voxel are a full
         // xyz plane apart from each other rather than being contiguous.
-        let source_density_stride = source_dimensions.get_x().deref()
-            * source_dimensions.get_y().deref()
-            * source_dimensions.get_z().deref();
-        let destination_density_stride = destination_dimensions.get_x().deref()
-            * destination_dimensions.get_y().deref()
-            * destination_dimensions.get_z().deref();
+        let source_density_stride = source_dimensions.get_x().deref() * source_dimensions.get_y().deref() * source_dimensions.get_z().deref();
+        let destination_density_stride =
+            destination_dimensions.get_x().deref() * destination_dimensions.get_y().deref() * destination_dimensions.get_z().deref();
 
         Self {
             source_base_index: source_dimensions.coordinate_to_linear_index_unchecked(source_probe),
@@ -107,10 +98,8 @@ impl<FIQ: FeagiIndexQuantization> Iterator for DoubletIteratorOneToOne<FIQ> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         // Counted in usize rather than in the neuron quantization, as the total number of pairs
         // can exceed what a single neuron index is able to hold.
-        let remaining_sources =
-            self.source_density_count.quant_to_usize() - self.source_cursor.quant_to_usize();
-        let remaining = (remaining_sources * self.destination_density_count.quant_to_usize())
-            - self.destination_cursor.quant_to_usize();
+        let remaining_sources = self.source_density_count.quant_to_usize() - self.source_cursor.quant_to_usize();
+        let remaining = (remaining_sources * self.destination_density_count.quant_to_usize()) - self.destination_cursor.quant_to_usize();
         (remaining, Some(remaining))
     }
 }

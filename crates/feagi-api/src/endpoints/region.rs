@@ -6,8 +6,8 @@
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, State};
-use feagi_services::types::CreateBrainRegionParams;
 use feagi_genomic_context::brain_region::RegionID;
+use feagi_services::types::CreateBrainRegionParams;
 use std::collections::HashMap;
 
 /// GET /v1/region/regions_members
@@ -41,9 +41,7 @@ use std::collections::HashMap;
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_regions_members(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_regions_members(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use tracing::trace;
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_brain_regions().await {
@@ -64,22 +62,14 @@ pub async fn get_regions_members(
                     .properties
                     .get("inputs")
                     .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect::<Vec<String>>()
-                    })
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<String>>())
                     .unwrap_or_default();
 
                 let outputs = region
                     .properties
                     .get("outputs")
                     .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect::<Vec<String>>()
-                    })
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<String>>())
                     .unwrap_or_default();
 
                 // Declared region IO roles (persisted in genome `properties`; drives BV IO preset).
@@ -87,22 +77,14 @@ pub async fn get_regions_members(
                     .properties
                     .get("designated_inputs")
                     .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect::<Vec<String>>()
-                    })
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<String>>())
                     .unwrap_or_default();
 
                 let designated_outputs = region
                     .properties
                     .get("designated_outputs")
                     .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect::<Vec<String>>()
-                    })
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<String>>())
                     .unwrap_or_default();
 
                 trace!(
@@ -216,9 +198,7 @@ pub async fn post_region(
         .and_then(|v| v.as_array().cloned())
         .ok_or_else(|| ApiError::invalid_input("coordinates_2d required"))?;
     if coordinate_2d_value.len() != 2 {
-        return Err(ApiError::invalid_input(
-            "coordinates_2d must contain exactly 2 values",
-        ));
+        return Err(ApiError::invalid_input("coordinates_2d must contain exactly 2 values"));
     }
     req.remove("coordinate_2d");
     req.remove("coordinates_2d");
@@ -229,27 +209,16 @@ pub async fn post_region(
         .and_then(|v| v.as_array().cloned())
         .ok_or_else(|| ApiError::invalid_input("coordinates_3d required"))?;
     if coordinate_3d_value.len() != 3 {
-        return Err(ApiError::invalid_input(
-            "coordinates_3d must contain exactly 3 values",
-        ));
+        return Err(ApiError::invalid_input("coordinates_3d must contain exactly 3 values"));
     }
     req.remove("coordinate_3d");
     req.remove("coordinates_3d");
 
     let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
-    properties.insert(
-        "coordinate_2d".to_string(),
-        serde_json::Value::Array(coordinate_2d_value),
-    );
-    properties.insert(
-        "coordinate_3d".to_string(),
-        serde_json::Value::Array(coordinate_3d_value),
-    );
+    properties.insert("coordinate_2d".to_string(), serde_json::Value::Array(coordinate_2d_value));
+    properties.insert("coordinate_3d".to_string(), serde_json::Value::Array(coordinate_3d_value));
     if let Some(parent_region_id) = &parent_region_id {
-        properties.insert(
-            "parent_region_id".to_string(),
-            serde_json::json!(parent_region_id),
-        );
+        properties.insert("parent_region_id".to_string(), serde_json::json!(parent_region_id));
     }
     if let Some(areas) = req.remove("areas") {
         properties.insert("areas".to_string(), areas);
@@ -269,10 +238,7 @@ pub async fn post_region(
         properties: Some(properties),
     };
 
-    let info = connectome_service
-        .create_brain_region(params)
-        .await
-        .map_err(ApiError::from)?;
+    let info = connectome_service.create_brain_region(params).await.map_err(ApiError::from)?;
 
     let coordinate_2d = info
         .properties
@@ -288,10 +254,7 @@ pub async fn post_region(
     let mut response = HashMap::from([
         ("region_id".to_string(), serde_json::json!(info.region_id)),
         ("title".to_string(), serde_json::json!(info.name)),
-        (
-            "parent_region_id".to_string(),
-            serde_json::json!(info.parent_id),
-        ),
+        ("parent_region_id".to_string(), serde_json::json!(info.parent_id)),
         ("coordinate_2d".to_string(), coordinate_2d),
         ("coordinate_3d".to_string(), coordinate_3d),
         ("areas".to_string(), serde_json::json!(info.cortical_areas)),
@@ -339,10 +302,7 @@ pub async fn put_region(
 
 /// DELETE /v1/region/region
 #[utoipa::path(delete, path = "/v1/region/region", tag = "region")]
-pub async fn delete_region(
-    State(state): State<ApiState>,
-    Json(req): Json<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn delete_region(State(state): State<ApiState>, Json(req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
     let connectome_service = state.connectome_service.as_ref();
     let region_id = req
         .get("region_id")
@@ -353,10 +313,7 @@ pub async fn delete_region(
         .ok_or_else(|| ApiError::invalid_input("region_id required"))?
         .to_string();
 
-    connectome_service
-        .delete_brain_region(&region_id)
-        .await
-        .map_err(ApiError::from)?;
+    connectome_service.delete_brain_region(&region_id).await.map_err(ApiError::from)?;
 
     Ok(Json(HashMap::from([
         ("message".to_string(), "Brain region deleted".to_string()),
@@ -388,9 +345,9 @@ pub async fn put_relocate_members(
     let mut updated_regions: Vec<String> = Vec::new();
 
     for (region_id, payload) in request {
-        let payload_obj = payload.as_object().ok_or_else(|| {
-            ApiError::invalid_input(format!("Region '{}' entry must be an object", region_id))
-        })?;
+        let payload_obj = payload
+            .as_object()
+            .ok_or_else(|| ApiError::invalid_input(format!("Region '{}' entry must be an object", region_id)))?;
 
         if payload_obj.contains_key("parent_region_id") {
             return Err(ApiError::invalid_input(
@@ -399,16 +356,10 @@ pub async fn put_relocate_members(
         }
 
         let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
-        if let Some(value) = payload_obj
-            .get("coordinate_2d")
-            .or_else(|| payload_obj.get("coordinates_2d"))
-        {
+        if let Some(value) = payload_obj.get("coordinate_2d").or_else(|| payload_obj.get("coordinates_2d")) {
             properties.insert("coordinate_2d".to_string(), value.clone());
         }
-        if let Some(value) = payload_obj
-            .get("coordinate_3d")
-            .or_else(|| payload_obj.get("coordinates_3d"))
-        {
+        if let Some(value) = payload_obj.get("coordinate_3d").or_else(|| payload_obj.get("coordinates_3d")) {
             properties.insert("coordinate_3d".to_string(), value.clone());
         }
 
@@ -428,10 +379,7 @@ pub async fn put_relocate_members(
     }
 
     Ok(Json(HashMap::from([
-        (
-            "message".to_string(),
-            format!("Updated {} brain regions", updated_regions.len()),
-        ),
+        ("message".to_string(), format!("Updated {} brain regions", updated_regions.len())),
         ("region_ids".to_string(), updated_regions.join(", ")),
     ])))
 }
@@ -477,9 +425,7 @@ pub async fn get_regions(State(state): State<ApiState>) -> ApiResult<Json<Vec<St
         (status = 200, description = "Region ID to title mapping", body = HashMap<String, String>)
     )
 )]
-pub async fn get_region_titles(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn get_region_titles(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     let connectome_service = state.connectome_service.as_ref();
 
     let regions = connectome_service
@@ -509,10 +455,7 @@ pub async fn get_region_titles(
         (status = 404, description = "Region not found")
     )
 )]
-pub async fn get_region_detail(
-    State(state): State<ApiState>,
-    Path(region_id): Path<String>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_region_detail(State(state): State<ApiState>, Path(region_id): Path<String>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
 
     let region = connectome_service
@@ -548,12 +491,7 @@ pub async fn get_region_detail(
         })
         .unwrap_or_else(|| serde_json::json!([0, 0]));
 
-    let description = region
-        .properties
-        .get("description")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let description = region.properties.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
     let mut response = HashMap::new();
     response.insert("region_id".to_string(), serde_json::json!(region.region_id));
@@ -561,18 +499,9 @@ pub async fn get_region_detail(
     response.insert("description".to_string(), serde_json::json!(description));
     response.insert("coordinate_2d".to_string(), coordinate_2d);
     response.insert("coordinate_3d".to_string(), coordinate_3d);
-    response.insert(
-        "areas".to_string(),
-        serde_json::json!(region.cortical_areas),
-    );
-    response.insert(
-        "regions".to_string(),
-        serde_json::json!(region.child_regions),
-    );
-    response.insert(
-        "parent_region_id".to_string(),
-        serde_json::json!(region.parent_id),
-    );
+    response.insert("areas".to_string(), serde_json::json!(region.cortical_areas));
+    response.insert("regions".to_string(), serde_json::json!(region.child_regions));
+    response.insert("parent_region_id".to_string(), serde_json::json!(region.parent_id));
 
     Ok(Json(response))
 }

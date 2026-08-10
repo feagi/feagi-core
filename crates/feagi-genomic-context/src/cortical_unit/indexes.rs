@@ -1,5 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization};
-
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Denotes the index for grouping cortical_area units of the same type within a genome.
 pub type CorticalUnitIndex = generics::CorticalUnitIndexQuant<u8>;

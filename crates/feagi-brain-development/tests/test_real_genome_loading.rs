@@ -24,34 +24,22 @@ use std::fs;
 
 #[test]
 fn test_barebones_genome_end_to_end() {
-    test_genome_end_to_end(
-        "../../../feagi-py/feagi/evo/defaults/genome/barebones_genome.json",
-        "barebones",
-    );
+    test_genome_end_to_end("../../../feagi-py/feagi/evo/defaults/genome/barebones_genome.json", "barebones");
 }
 
 #[test]
 fn test_essential_genome_end_to_end() {
-    test_genome_end_to_end(
-        "../../../feagi-py/feagi/evo/defaults/genome/essential_genome.json",
-        "essential",
-    );
+    test_genome_end_to_end("../../../feagi-py/feagi/evo/defaults/genome/essential_genome.json", "essential");
 }
 
 #[test]
 fn test_test_genome_end_to_end() {
-    test_genome_end_to_end(
-        "../../../feagi-py/feagi/evo/defaults/genome/test_genome.json",
-        "test",
-    );
+    test_genome_end_to_end("../../../feagi-py/feagi/evo/defaults/genome/test_genome.json", "test");
 }
 
 #[test]
 fn test_vision_genome_end_to_end() {
-    test_genome_end_to_end(
-        "../../../feagi-py/feagi/evo/defaults/genome/vision_genome.json",
-        "vision",
-    );
+    test_genome_end_to_end("../../../feagi-py/feagi/evo/defaults/genome/vision_genome.json", "vision");
 }
 
 fn test_genome_end_to_end(genome_path: &str, genome_name: &str) {
@@ -72,28 +60,20 @@ fn test_genome_end_to_end(genome_path: &str, genome_name: &str) {
     println!("{}\n", "=".repeat(80));
 
     // Step 1: Load flat genome from file
-    let flat_json = fs::read_to_string(genome_path)
-        .unwrap_or_else(|_| panic!("Failed to read genome file: {}", genome_path));
-    let flat_genome: serde_json::Value =
-        serde_json::from_str(&flat_json).expect("Failed to parse flat genome JSON");
+    let flat_json = fs::read_to_string(genome_path).unwrap_or_else(|_| panic!("Failed to read genome file: {}", genome_path));
+    let flat_genome: serde_json::Value = serde_json::from_str(&flat_json).expect("Failed to parse flat genome JSON");
 
     println!("✅ Step 1: Loaded flat genome from file");
 
     // Step 2: Convert to hierarchical
-    let hierarchical = convert_flat_to_hierarchical_full(&flat_genome)
-        .expect("Failed to convert flat to hierarchical");
+    let hierarchical = convert_flat_to_hierarchical_full(&flat_genome).expect("Failed to convert flat to hierarchical");
 
     let blueprint = hierarchical.get("blueprint").unwrap().as_object().unwrap();
-    println!(
-        "✅ Step 2: Converted to hierarchical: {} cortical_area areas",
-        blueprint.len()
-    );
+    println!("✅ Step 2: Converted to hierarchical: {} cortical_area areas", blueprint.len());
 
     // Step 3: Load as RuntimeGenome
-    let hierarchical_json = serde_json::to_string_pretty(&hierarchical)
-        .expect("Failed to serialize hierarchical genome");
-    let runtime_genome =
-        load_genome_from_json(&hierarchical_json).expect("Failed to load as RuntimeGenome");
+    let hierarchical_json = serde_json::to_string_pretty(&hierarchical).expect("Failed to serialize hierarchical genome");
+    let runtime_genome = load_genome_from_json(&hierarchical_json).expect("Failed to load as RuntimeGenome");
 
     println!(
         "✅ Step 3: Parsed as RuntimeGenome: {} areas, {} morphologies",
@@ -105,9 +85,7 @@ fn test_genome_end_to_end(genome_path: &str, genome_name: &str) {
     let manager = ConnectomeManager::instance();
     let mut neuro = Neuroembryogenesis::new(manager);
 
-    neuro
-        .develop_from_genome(&runtime_genome)
-        .expect("Neuroembryogenesis failed");
+    neuro.develop_from_genome(&runtime_genome).expect("Neuroembryogenesis failed");
 
     let progress = neuro.get_progress();
 
@@ -119,10 +97,7 @@ fn test_genome_end_to_end(genome_path: &str, genome_name: &str) {
     println!("   - Duration: {}ms", progress.duration_ms);
 
     // Assertions
-    assert_eq!(
-        progress.cortical_areas_created,
-        runtime_genome.cortical_areas.len()
-    );
+    assert_eq!(progress.cortical_areas_created, runtime_genome.cortical_areas.len());
     assert!(progress.neurons_created > 0, "Should have created neurons");
 
     println!("\n🎉 {} genome test PASSED!\n", genome_name);

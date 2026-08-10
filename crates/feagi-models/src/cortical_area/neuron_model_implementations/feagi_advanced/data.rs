@@ -1,9 +1,9 @@
-use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
-use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::values::quantizable::PercentageUnsigned;
-use crate::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
 use crate::cortical_area::neuron::cortical_data::NeuronModelCorticalData;
 use crate::cortical_area::neuron::neuron_data::NeuronModelNeuronData;
+use crate::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
+use feagi_data::neurons::NeuronMembranePotential;
+use feagi_data::values::quantizable::PercentageUnsigned;
+use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
 
 //create_wrapped_quantized_decimal!(pub Excitation);
 create_wrapped_quantized_index!(pub RefractoryPeriodLimit);

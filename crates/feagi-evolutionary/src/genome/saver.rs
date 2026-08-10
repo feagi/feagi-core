@@ -10,13 +10,13 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use serde_json::{json, Value};
-use std::collections::HashMap;
+use crate::types::{EvoError, EvoResult};
 use feagi_genomic_context::brain_region::BrainRegion;
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
-        use feagi_genomic_data::cortical_area_prev::CorticalArea;
-use crate::types::{EvoError, EvoResult};
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
+use serde_json::{json, Value};
+use std::collections::HashMap;
 
 /// Genome saver
 pub struct GenomeSaver;
@@ -40,9 +40,7 @@ impl GenomeSaver {
     ///
     /// JSON string of the genome (hierarchical v2.1, incomplete)
     ///
-    #[deprecated(
-        note = "Use feagi_evolutionary::save_genome_to_json(RuntimeGenome) instead. This produces incomplete v2.1 format."
-    )]
+    #[deprecated(note = "Use feagi_evolutionary::save_genome_to_json(RuntimeGenome) instead. This produces incomplete v2.1 format.")]
     pub fn save_to_json(
         cortical_areas: &HashMap<CorticalID, CorticalArea>,
         brain_regions: &HashMap<String, (BrainRegion, Option<String>)>,
@@ -72,11 +70,7 @@ impl GenomeSaver {
             );
 
             // Area type (from properties)
-            let cortical_type = area
-                .properties
-                .get("cortical_group")
-                .and_then(|v| v.as_str())
-                .unwrap_or("CUSTOM");
+            let cortical_type = area.properties.get("cortical_group").and_then(|v| v.as_str()).unwrap_or("CUSTOM");
             area_data.insert("cortical_type".to_string(), json!(cortical_type));
 
             // Add all properties from the area's properties HashMap
@@ -96,19 +90,11 @@ impl GenomeSaver {
             region_data.insert("title".to_string(), json!(region.name));
             region_data.insert(
                 "parent_region_id".to_string(),
-                if let Some(ref parent) = parent_id {
-                    json!(parent)
-                } else {
-                    Value::Null
-                },
+                if let Some(ref parent) = parent_id { json!(parent) } else { Value::Null },
             );
 
             // Cortical areas in this region (convert CorticalID to base64 strings)
-            let areas: Vec<String> = region
-                .cortical_areas
-                .iter()
-                .map(|id| id.as_base_64())
-                .collect();
+            let areas: Vec<String> = region.cortical_areas.iter().map(|id| id.as_base_64()).collect();
             region_data.insert("areas".to_string(), json!(areas));
 
             // Add all properties from HashMap
@@ -136,16 +122,15 @@ impl GenomeSaver {
         });
 
         // Serialize to pretty JSON
-        serde_json::to_string_pretty(&genome)
-            .map_err(|e| EvoError::internal(format!("Failed to serialize genome: {}", e)))
+        serde_json::to_string_pretty(&genome).map_err(|e| EvoError::internal(format!("Failed to serialize genome: {}", e)))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
     use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
-    use super::*;
     use feagi_genomic_context::brain_region::{RegionID, RegionType};
     use feagi_genomic_context::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
 
@@ -162,7 +147,7 @@ mod tests {
             0,
             "Test Area".to_string(),
             NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(10, 10, 10),
-            GenomeCoordinate3D::new(0,0,0),
+            GenomeCoordinate3D::new(0, 0, 0),
             CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
@@ -170,8 +155,7 @@ mod tests {
         cortical_areas.insert(cortical_id, area);
 
         // Create a test brain region
-        let region =
-            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
+        let region = BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
 
         brain_regions.insert("root".to_string(), (region, None));
 
@@ -208,19 +192,14 @@ mod tests {
             0,
             "Test Area".to_string(),
             NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(10, 10, 10),
-            GenomeCoordinate3D::new(5,5,5),
+            GenomeCoordinate3D::new(5, 5, 5),
             CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
         cortical_areas.insert(cortical_id, area);
 
         let mut brain_regions = HashMap::new();
-        let region = BrainRegion::new(
-            RegionID::new(),
-            "Root Region".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let region = BrainRegion::new(RegionID::new(), "Root Region".to_string(), RegionType::Undefined).unwrap();
         brain_regions.insert("root".to_string(), (region, None));
 
         // Save to JSON
@@ -244,10 +223,8 @@ mod tests {
 
         let area = &parsed.cortical_areas[0];
         // cortical_id is now stored as CorticalID object after roundtrip
-        let expected_power_id =
-            feagi_genomic_context::cortical_area::CoreCorticalType::Power.to_cortical_id();
+        let expected_power_id = feagi_genomic_context::cortical_area::CoreCorticalType::Power.to_cortical_id();
         assert_eq!(area.cortical_id, expected_power_id);
         assert_eq!(area.name, "Test Area");
-
     }
 }

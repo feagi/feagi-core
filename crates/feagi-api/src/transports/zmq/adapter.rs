@@ -34,8 +34,7 @@ impl ZmqApiAdapter {
         let server_config = ServerConfig::new(bind_address);
 
         // Create ZMQ router using feagi-io transport primitives
-        let router = ZmqRouter::new(runtime, server_config)
-            .map_err(|e| format!("Failed to create ZMQ router: {}", e))?;
+        let router = ZmqRouter::new(runtime, server_config).map_err(|e| format!("Failed to create ZMQ router: {}", e))?;
 
         Ok(Self {
             router: Arc::new(Mutex::new(Some(router))),
@@ -111,9 +110,7 @@ impl ZmqApiAdapter {
                         let api_request: ApiRequest = match serde_json::from_slice(&request_data) {
                             Ok(req) => req,
                             Err(e) => {
-                                let error_response = ApiResponse::<()>::error(
-                                    ApiError::bad_request(&format!("Invalid request: {}", e)),
-                                );
+                                let error_response = ApiResponse::<()>::error(ApiError::bad_request(&format!("Invalid request: {}", e)));
                                 if let Ok(response_json) = serde_json::to_vec(&error_response) {
                                     let _ = reply_handle.send(&response_json);
                                 }
@@ -205,17 +202,12 @@ impl ZmqApiAdapter {
             }
 
             // Not found
-            _ => ApiResponse::error(ApiError::not_found(&format!(
-                "Endpoint not found: {} {}",
-                request.method, request.path
-            ))),
+            _ => ApiResponse::error(ApiError::not_found(&format!("Endpoint not found: {} {}", request.method, request.path))),
         }
     }
 
     /// Convert endpoint result to API response with JSON value
-    fn convert_result<T: serde::Serialize>(
-        result: Result<ApiResponse<T>, ApiError>,
-    ) -> ApiResponse<serde_json::Value> {
+    fn convert_result<T: serde::Serialize>(result: Result<ApiResponse<T>, ApiError>) -> ApiResponse<serde_json::Value> {
         match result {
             Ok(response) => {
                 // Convert data to JSON value
@@ -226,10 +218,7 @@ impl ZmqApiAdapter {
                         error: response.error,
                         timestamp: response.timestamp,
                     },
-                    Err(e) => ApiResponse::error(ApiError::internal_error(&format!(
-                        "Failed to serialize response: {}",
-                        e
-                    ))),
+                    Err(e) => ApiResponse::error(ApiError::internal_error(&format!("Failed to serialize response: {}", e))),
                 }
             }
             Err(error) => ApiResponse::error(error),

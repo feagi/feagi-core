@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use ahash::AHashSet;
 use async_trait::async_trait;
-use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_npu_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use tracing::{debug, info, warn};
 
@@ -47,10 +47,7 @@ impl RuntimeServiceImpl {
 
     /// Create a new RuntimeServiceImpl with plasticity support
     #[cfg(feature = "plasticity")]
-    pub fn new_with_plasticity(
-        burst_runner: Arc<RwLock<BurstLoopRunner>>,
-        plasticity_service: Arc<feagi_npu_plasticity::PlasticityService>,
-    ) -> Self {
+    pub fn new_with_plasticity(burst_runner: Arc<RwLock<BurstLoopRunner>>, plasticity_service: Arc<feagi_npu_plasticity::PlasticityService>) -> Self {
         Self {
             burst_runner,
             paused: Arc::new(RwLock::new(false)),
@@ -60,10 +57,7 @@ impl RuntimeServiceImpl {
 
     /// Create a new RuntimeServiceImpl with plasticity support (stub for no_plasticity builds)
     #[cfg(not(feature = "plasticity"))]
-    pub fn new_with_plasticity(
-        burst_runner: Arc<RwLock<BurstLoopRunner>>,
-        _plasticity_service: Arc<dyn std::any::Any + Send + Sync>,
-    ) -> Self {
+    pub fn new_with_plasticity(burst_runner: Arc<RwLock<BurstLoopRunner>>, _plasticity_service: Arc<dyn std::any::Any + Send + Sync>) -> Self {
         Self {
             burst_runner,
             paused: Arc::new(RwLock::new(false)),
@@ -78,9 +72,7 @@ impl RuntimeService for RuntimeServiceImpl {
 
         let mut runner = self.burst_runner.write();
 
-        runner
-            .start()
-            .map_err(|e| ServiceError::InvalidState(e.to_string()))?;
+        runner.start().map_err(|e| ServiceError::InvalidState(e.to_string()))?;
 
         // Clear paused flag
         *self.paused.write() = false;
@@ -107,9 +99,7 @@ impl RuntimeService for RuntimeServiceImpl {
 
         let runner = self.burst_runner.read();
         if !runner.is_running() {
-            return Err(ServiceError::InvalidState(
-                "Burst engine is not running".to_string(),
-            ));
+            return Err(ServiceError::InvalidState("Burst engine is not running".to_string()));
         }
 
         // Set paused flag (actual pause implementation depends on burst loop design)
@@ -127,9 +117,7 @@ impl RuntimeService for RuntimeServiceImpl {
 
         let paused = *self.paused.read();
         if !paused {
-            return Err(ServiceError::InvalidState(
-                "Burst engine is not paused".to_string(),
-            ));
+            return Err(ServiceError::InvalidState("Burst engine is not paused".to_string()));
         }
 
         // Clear paused flag
@@ -154,9 +142,7 @@ impl RuntimeService for RuntimeServiceImpl {
         // TODO: Implement single-step execution in BurstLoopRunner
         warn!(target: "feagi-services", "Single-step execution not yet implemented in BurstLoopRunner");
 
-        Err(ServiceError::NotImplemented(
-            "Single-step execution not yet implemented".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("Single-step execution not yet implemented".to_string()))
     }
 
     async fn get_status(&self) -> ServiceResult<RuntimeStatus> {
@@ -174,11 +160,7 @@ impl RuntimeService for RuntimeServiceImpl {
             is_paused,
             frequency_hz: runner.get_frequency(),
             burst_count,
-            current_rate_hz: if is_running {
-                runner.get_frequency()
-            } else {
-                0.0
-            },
+            current_rate_hz: if is_running { runner.get_frequency() } else { 0.0 },
             last_burst_neuron_count: 0, // Not yet tracked
             avg_burst_time_ms: 0.0,     // Not yet tracked
         })
@@ -186,9 +168,7 @@ impl RuntimeService for RuntimeServiceImpl {
 
     async fn set_frequency(&self, frequency_hz: f64) -> ServiceResult<()> {
         if frequency_hz <= 0.0 {
-            return Err(ServiceError::InvalidInput(
-                "Frequency must be greater than 0".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("Frequency must be greater than 0".to_string()));
         }
 
         info!(target: "feagi-services", "Setting burst frequency to {} Hz", frequency_hz);
@@ -210,21 +190,12 @@ impl RuntimeService for RuntimeServiceImpl {
         // TODO: Implement burst count reset in BurstLoopRunner
         warn!(target: "feagi-services", "Burst count reset not yet implemented in BurstLoopRunner");
 
-        Err(ServiceError::NotImplemented(
-            "Burst count reset not yet implemented".to_string(),
-        ))
+        Err(ServiceError::NotImplemented("Burst count reset not yet implemented".to_string()))
     }
 
-    async fn register_motor_subscriptions(
-        &self,
-        agent_id: &str,
-        cortical_ids: Vec<String>,
-        rate_hz: f64,
-    ) -> ServiceResult<()> {
+    async fn register_motor_subscriptions(&self, agent_id: &str, cortical_ids: Vec<String>, rate_hz: f64) -> ServiceResult<()> {
         if rate_hz <= 0.0 {
-            return Err(ServiceError::InvalidInput(
-                "Motor rate must be greater than 0".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("Motor rate must be greater than 0".to_string()));
         }
 
         let cortical_set: AHashSet<String> = cortical_ids.into_iter().collect();
@@ -234,15 +205,9 @@ impl RuntimeService for RuntimeServiceImpl {
             .map_err(|e| ServiceError::InvalidInput(e.to_string()))
     }
 
-    async fn register_visualization_subscriptions(
-        &self,
-        agent_id: &str,
-        rate_hz: f64,
-    ) -> ServiceResult<()> {
+    async fn register_visualization_subscriptions(&self, agent_id: &str, rate_hz: f64) -> ServiceResult<()> {
         if rate_hz <= 0.0 {
-            return Err(ServiceError::InvalidInput(
-                "Visualization rate must be greater than 0".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("Visualization rate must be greater than 0".to_string()));
         }
 
         let runner = self.burst_runner.read();
@@ -276,10 +241,7 @@ impl RuntimeService for RuntimeServiceImpl {
         let fcl_data = runner.get_fcl_snapshot();
 
         // Convert NeuronId (u32) to u64
-        let result = fcl_data
-            .iter()
-            .map(|(neuron_id, potential)| (neuron_id.0 as u64, *potential))
-            .collect();
+        let result = fcl_data.iter().map(|(neuron_id, potential)| (neuron_id.0 as u64, *potential)).collect();
 
         Ok(result)
     }
@@ -292,7 +254,10 @@ impl RuntimeService for RuntimeServiceImpl {
         // Previous code acquired lock twice: once for get_fcl_snapshot(), once for cortical_idx
         let lock_start = std::time::Instant::now();
         let thread_id = std::thread::current().id();
-        debug!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} attempting NPU lock for get_fcl_snapshot_with_cortical_idx at {:?}", thread_id, lock_start);
+        debug!(
+            "[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} attempting NPU lock for get_fcl_snapshot_with_cortical_idx at {:?}",
+            thread_id, lock_start
+        );
         let result: Vec<(u64, u32, f32)> = {
             // Acquire lock ONCE for both FCL snapshot and cortical_idx lookup
             let npu_lock = npu.lock().unwrap();
@@ -307,9 +272,7 @@ impl RuntimeService for RuntimeServiceImpl {
             // STRICT: Resolve cortical_idx without fallbacks (memory neurons are handled explicitly).
             let fcl_data = npu_lock
                 .get_last_fcl_snapshot_with_cortical_idx()
-                .map_err(|e| {
-                    ServiceError::Internal(format!("Failed to resolve FCL cortical_idx: {e}"))
-                })?;
+                .map_err(|e| ServiceError::Internal(format!("Failed to resolve FCL cortical_idx: {e}")))?;
             debug!(
                 "[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} got FCL snapshot ({} neurons) with cortical_idx",
                 thread_id,
@@ -318,9 +281,7 @@ impl RuntimeService for RuntimeServiceImpl {
 
             fcl_data
                 .into_iter()
-                .map(|(neuron_id, cortical_idx, potential)| {
-                    (neuron_id.0 as u64, cortical_idx, potential)
-                })
+                .map(|(neuron_id, cortical_idx, potential)| (neuron_id.0 as u64, cortical_idx, potential))
                 .collect()
         }; // Lock released here
         let lock_released = std::time::Instant::now();
@@ -334,11 +295,7 @@ impl RuntimeService for RuntimeServiceImpl {
         Ok(result)
     }
 
-    async fn get_fire_queue_sample(
-        &self,
-    ) -> ServiceResult<
-        std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
-    > {
+    async fn get_fire_queue_sample(&self) -> ServiceResult<std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
         let mut runner = self.burst_runner.write();
 
         match runner.get_fire_queue_sample() {
@@ -358,17 +315,11 @@ impl RuntimeService for RuntimeServiceImpl {
         Ok(configs)
     }
 
-    async fn configure_fire_ledger_window(
-        &self,
-        cortical_idx: u32,
-        window_size: usize,
-    ) -> ServiceResult<()> {
+    async fn configure_fire_ledger_window(&self, cortical_idx: u32, window_size: usize) -> ServiceResult<()> {
         let mut runner = self.burst_runner.write();
         runner
             .configure_fire_ledger_window(cortical_idx, window_size)
-            .map_err(|e| {
-                ServiceError::Internal(format!("Failed to configure fire ledger window: {e}"))
-            })?;
+            .map_err(|e| ServiceError::Internal(format!("Failed to configure fire ledger window: {e}")))?;
 
         info!(target: "feagi-services", "Configured Fire Ledger window for area {}: {} bursts",
             cortical_idx, window_size);
@@ -381,11 +332,7 @@ impl RuntimeService for RuntimeServiceImpl {
         Ok(runner.get_fcl_sampler_config())
     }
 
-    async fn set_fcl_sampler_config(
-        &self,
-        frequency: Option<f64>,
-        consumer: Option<u32>,
-    ) -> ServiceResult<()> {
+    async fn set_fcl_sampler_config(&self, frequency: Option<f64>, consumer: Option<u32>) -> ServiceResult<()> {
         let runner = self.burst_runner.read();
         runner.set_fcl_sampler_config(frequency, consumer);
         Ok(())
@@ -398,9 +345,7 @@ impl RuntimeService for RuntimeServiceImpl {
 
     async fn set_area_fcl_sample_rate(&self, area_id: u32, sample_rate: f64) -> ServiceResult<()> {
         if sample_rate <= 0.0 || sample_rate > 1000.0 {
-            return Err(ServiceError::InvalidInput(
-                "Sample rate must be between 0 and 1000 Hz".to_string(),
-            ));
+            return Err(ServiceError::InvalidInput("Sample rate must be between 0 and 1000 Hz".to_string()));
         }
 
         let runner = self.burst_runner.read();
@@ -417,9 +362,8 @@ impl RuntimeService for RuntimeServiceImpl {
         mode: ManualStimulationMode,
     ) -> ServiceResult<usize> {
         // Parse cortical_area ID from base64 string
-        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid cortical_area ID format: {}", e))
-        })?;
+        let cortical_id_typed =
+            CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID format: {}", e)))?;
 
         // Get NPU from burst runner
         let runner = self.burst_runner.read();
@@ -432,21 +376,15 @@ impl RuntimeService for RuntimeServiceImpl {
             xyzp_data.len()
         );
         let injected_count = {
-            let mut npu_lock = npu
-                .lock()
-                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+            let mut npu_lock = npu.lock().map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
             let lock_wait = lock_start.elapsed();
             debug!(
                 "[NPU-LOCK] RUNTIME-SERVICE: Lock acquired for manual stimulation (waited {:.2}ms)",
                 lock_wait.as_secs_f64() * 1000.0
             );
             let result = match mode {
-                ManualStimulationMode::Candidate => {
-                    npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data)
-                }
-                ManualStimulationMode::ForceFire => {
-                    npu_lock.inject_force_fire_by_coordinates(&cortical_id_typed, xyzp_data)
-                }
+                ManualStimulationMode::Candidate => npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data),
+                ManualStimulationMode::ForceFire => npu_lock.inject_force_fire_by_coordinates(&cortical_id_typed, xyzp_data),
             };
             let lock_hold_duration = lock_start.elapsed();
             debug!(
@@ -465,19 +403,14 @@ impl RuntimeService for RuntimeServiceImpl {
         Ok(injected_count)
     }
 
-    async fn reset_cortical_area_states(
-        &self,
-        cortical_indices: &[u32],
-    ) -> ServiceResult<Vec<(u32, usize)>> {
+    async fn reset_cortical_area_states(&self, cortical_indices: &[u32]) -> ServiceResult<Vec<(u32, usize)>> {
         if cortical_indices.is_empty() {
             return Ok(Vec::new());
         }
 
         let runner = self.burst_runner.read();
         let npu = runner.get_npu();
-        let mut npu_lock = npu
-            .lock()
-            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {e}")))?;
+        let mut npu_lock = npu.lock().map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {e}")))?;
 
         let mut results: Vec<(u32, usize)> = Vec::with_capacity(cortical_indices.len());
         for &idx in cortical_indices {
@@ -492,9 +425,7 @@ impl RuntimeService for RuntimeServiceImpl {
         // Reset memory neurons if plasticity service is available
         #[cfg(feature = "plasticity")]
         if let Some(plasticity_any) = &self.plasticity_service {
-            if let Some(plasticity_service) =
-                plasticity_any.downcast_ref::<feagi_npu_plasticity::PlasticityService>()
-            {
+            if let Some(plasticity_service) = plasticity_any.downcast_ref::<feagi_npu_plasticity::PlasticityService>() {
                 for &idx in cortical_indices {
                     let memory_neuron_count = plasticity_service.reset_memory_neurons_in_area(idx);
                     if memory_neuron_count > 0 {

@@ -28,10 +28,7 @@ pub trait EditableEngine<FIQ: FeagiIndexQuantization> {
             NeuronData = FeagiAdvancedModelNeuronData<FeagiAdvancedModelStandardQuant>,
         >;
 
-    fn edit_cortical_area_cortical_flags(
-        &mut self,
-        cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
-    );
+    fn edit_cortical_area_cortical_flags(&mut self, cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>);
 
     fn edit_cortical_area_cortical_data<NMQ: NeuronModelQuantization, NM: NeuronModel<FIQ, NMQ>>(&mut self, new_cortical_data: NM::CorticalData);
 

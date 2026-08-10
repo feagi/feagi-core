@@ -341,9 +341,7 @@ mod tests {
         let _ = w.observe(snapshot(Some(1), Some(1), Some(100), true, false));
         let events = w.observe(snapshot(Some(2), Some(2), Some(200), false, true));
         assert!(events.contains(&HealthEvent::SessionChanged { old: 1, new: 2 }));
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, HealthEvent::GenomeChanged { .. })));
+        assert!(events.iter().any(|e| matches!(e, HealthEvent::GenomeChanged { .. })));
         assert!(events.contains(&HealthEvent::GenomeLoadCompleted));
         assert!(events.contains(&HealthEvent::BrainReady));
     }

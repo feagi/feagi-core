@@ -55,8 +55,7 @@ impl Migrator for V2ToV3Migrator {
             reason: e.to_string(),
         })?;
 
-        let mut diag =
-            MigrationStepDiagnostics::new(GenomeSchemaVersion(2), GenomeSchemaVersion(3));
+        let mut diag = MigrationStepDiagnostics::new(GenomeSchemaVersion(2), GenomeSchemaVersion(3));
 
         if result.cortical_ids_migrated > 0 {
             diag.record(format!(

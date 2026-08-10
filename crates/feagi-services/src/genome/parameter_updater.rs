@@ -48,12 +48,7 @@ impl CorticalParameterUpdater {
     ///
     /// # Returns
     /// Number of successfully updated parameters
-    pub fn update_neuron_parameters(
-        &self,
-        cortical_idx: u32,
-        cortical_id: &str,
-        parameter_changes: &HashMap<String, Value>,
-    ) -> ServiceResult<usize> {
+    pub fn update_neuron_parameters(&self, cortical_idx: u32, cortical_id: &str, parameter_changes: &HashMap<String, Value>) -> ServiceResult<usize> {
         let mut success_count = 0;
         let mut npu = self.npu.lock().unwrap();
 
@@ -62,12 +57,8 @@ impl CorticalParameterUpdater {
                 // Firing threshold
                 "neuron_fire_threshold" | "firing_threshold" => {
                     if let Some(threshold) = value.as_f64() {
-                        let count =
-                            npu.update_cortical_area_threshold(cortical_idx, threshold as f32);
-                        info!(
-                            "✓ Synced firing_threshold={} to {} neurons in area {}",
-                            threshold, count, cortical_id
-                        );
+                        let count = npu.update_cortical_area_threshold(cortical_idx, threshold as f32);
+                        info!("✓ Synced firing_threshold={} to {} neurons in area {}", threshold, count, cortical_id);
                         count
                     } else {
                         0
@@ -77,12 +68,8 @@ impl CorticalParameterUpdater {
                 // Firing threshold limit (different from firing threshold)
                 "neuron_firing_threshold_limit" | "firing_threshold_limit" => {
                     if let Some(limit) = value.as_f64() {
-                        let count =
-                            npu.update_cortical_area_threshold_limit(cortical_idx, limit as f32);
-                        info!(
-                            "✓ Synced firing_threshold_limit={} to {} neurons in area {}",
-                            limit, count, cortical_id
-                        );
+                        let count = npu.update_cortical_area_threshold_limit(cortical_idx, limit as f32);
+                        info!("✓ Synced firing_threshold_limit={} to {} neurons in area {}", limit, count, cortical_id);
                         count
                     } else {
                         0
@@ -92,12 +79,8 @@ impl CorticalParameterUpdater {
                 // Refractory period
                 "neuron_refractory_period" | "refractory_period" | "refrac" => {
                     if let Some(period) = value.as_u64() {
-                        let count =
-                            npu.update_cortical_area_refractory_period(cortical_idx, period as u16);
-                        info!(
-                            "✓ Synced refractory_period={} to {} neurons in area {}",
-                            period, count, cortical_id
-                        );
+                        let count = npu.update_cortical_area_refractory_period(cortical_idx, period as u16);
+                        info!("✓ Synced refractory_period={} to {} neurons in area {}", period, count, cortical_id);
                         count
                     } else {
                         0
@@ -112,10 +95,7 @@ impl CorticalParameterUpdater {
                             0
                         } else {
                             let count = npu.update_cortical_area_leak(cortical_idx, leak as f32);
-                            info!(
-                                "✓ Synced leak_coefficient={} to {} neurons in area {}",
-                                leak, count, cortical_id
-                            );
+                            info!("✓ Synced leak_coefficient={} to {} neurons in area {}", leak, count, cortical_id);
                             count
                         }
                     } else {
@@ -124,18 +104,10 @@ impl CorticalParameterUpdater {
                 }
 
                 // Consecutive fire limit
-                "consecutive_fire_cnt_max"
-                | "neuron_consecutive_fire_count"
-                | "consecutive_fire_count" => {
+                "consecutive_fire_cnt_max" | "neuron_consecutive_fire_count" | "consecutive_fire_count" => {
                     if let Some(limit) = value.as_u64() {
-                        let count = npu.update_cortical_area_consecutive_fire_limit(
-                            cortical_idx,
-                            limit as u16,
-                        );
-                        info!(
-                            "✓ Synced consecutive_fire_limit={} to {} neurons in area {}",
-                            limit, count, cortical_id
-                        );
+                        let count = npu.update_cortical_area_consecutive_fire_limit(cortical_idx, limit as u16);
+                        info!("✓ Synced consecutive_fire_limit={} to {} neurons in area {}", limit, count, cortical_id);
                         count
                     } else {
                         0
@@ -145,12 +117,8 @@ impl CorticalParameterUpdater {
                 // Snooze period
                 "snooze_length" | "neuron_snooze_period" | "snooze_period" => {
                     if let Some(snooze) = value.as_u64() {
-                        let count =
-                            npu.update_cortical_area_snooze_period(cortical_idx, snooze as u16);
-                        info!(
-                            "✓ Synced snooze_period={} to {} neurons in area {}",
-                            snooze, count, cortical_id
-                        );
+                        let count = npu.update_cortical_area_snooze_period(cortical_idx, snooze as u16);
+                        info!("✓ Synced snooze_period={} to {} neurons in area {}", snooze, count, cortical_id);
                         count
                     } else {
                         0
@@ -161,20 +129,11 @@ impl CorticalParameterUpdater {
                 "neuron_excitability" => {
                     if let Some(excitability) = value.as_f64() {
                         if !(0.0..=1.0).contains(&excitability) {
-                            error!(
-                                "Excitability must be in range 0.0-1.0, got {}",
-                                excitability
-                            );
+                            error!("Excitability must be in range 0.0-1.0, got {}", excitability);
                             0
                         } else {
-                            let count = npu.update_cortical_area_excitability(
-                                cortical_idx,
-                                excitability as f32,
-                            );
-                            info!(
-                                "✓ Synced excitability={} to {} neurons in area {}",
-                                excitability, count, cortical_id
-                            );
+                            let count = npu.update_cortical_area_excitability(cortical_idx, excitability as f32);
+                            info!("✓ Synced excitability={} to {} neurons in area {}", excitability, count, cortical_id);
                             count
                         }
                     } else {
@@ -185,10 +144,7 @@ impl CorticalParameterUpdater {
                 // MP charge accumulation
                 "neuron_mp_charge_accumulation" | "mp_charge_accumulation" => {
                     if let Some(accumulation) = value.as_bool() {
-                        let count = npu.update_cortical_area_mp_charge_accumulation(
-                            cortical_idx,
-                            accumulation,
-                        );
+                        let count = npu.update_cortical_area_mp_charge_accumulation(cortical_idx, accumulation);
                         if count == 0 {
                             warn!(
                                 "mp_charge_accumulation={} synced to 0 neurons (cortical_idx={}, area={}); check cortical_idx",
@@ -200,10 +156,7 @@ impl CorticalParameterUpdater {
                                 count, cortical_id
                             );
                         } else {
-                            info!(
-                                "✓ Synced mp_charge_accumulation=true to {} neurons in area {}",
-                                count, cortical_id
-                            );
+                            info!("✓ Synced mp_charge_accumulation=true to {} neurons in area {}", count, cortical_id);
                         }
                         count
                     } else {
@@ -217,10 +170,7 @@ impl CorticalParameterUpdater {
 
                 // Other parameters - not yet implemented for live update
                 _ => {
-                    warn!(
-                        "Live update for parameter '{}' not yet implemented - will require restart",
-                        param_name
-                    );
+                    warn!("Live update for parameter '{}' not yet implemented - will require restart", param_name);
                     0
                 }
             };

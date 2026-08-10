@@ -66,28 +66,23 @@ pub use converter_hierarchical_to_flat::convert_hierarchical_to_flat;
 pub use cortical_type_parser::{parse_cortical_type, validate_cortical_type};
 pub use genome::parser::string_to_cortical_id;
 pub use genome::{
-    load_genome_from_file, load_genome_from_json, load_genome_with_report,
-    load_genome_with_report_from_file, migrate_genome, peek_quantization_precision,
-    save_genome_to_file, save_genome_to_json, subset_runtime_genome_for_region_branch, ChainResult,
-    GenomeParser, GenomeSaver, MigrationResult, ParsedGenome,
+    load_genome_from_file, load_genome_from_json, load_genome_with_report, load_genome_with_report_from_file, migrate_genome,
+    peek_quantization_precision, save_genome_to_file, save_genome_to_json, subset_runtime_genome_for_region_branch, ChainResult, GenomeParser,
+    GenomeSaver, MigrationResult, ParsedGenome,
 };
-pub use plasticity_detector::{
-    extract_memory_properties, genome_has_plasticity, MemoryAreaProperties,
-};
+pub use plasticity_detector::{extract_memory_properties, genome_has_plasticity, MemoryAreaProperties};
 pub use runtime::{
-    GenomeMetadata, GenomeSignatures, GenomeStats, Morphology, MorphologyParameters,
-    MorphologyRegistry, MorphologyType, PatternElement, PhysiologyConfig, RuntimeGenome,
+    GenomeMetadata, GenomeSignatures, GenomeStats, Morphology, MorphologyParameters, MorphologyRegistry, MorphologyType, PatternElement,
+    PhysiologyConfig, RuntimeGenome,
 };
 #[cfg(feature = "async-tokio")]
 pub use storage::fs_storage::FileSystemStorage;
 pub use storage::{GenomeStorage, StorageError};
 pub use templates::{
-    add_core_morphologies, create_death_area, create_fatigue_area, create_fear_area,
-    create_genome_with_core_areas, create_genome_with_core_morphologies, create_hope_area,
-    create_minimal_genome, create_pain_area, create_pleasure_area, create_power_area,
-    ensure_core_components, get_default_neural_properties, load_barebones_genome,
-    load_essential_genome, load_test_genome, load_vision_genome, BAREBONES_GENOME_JSON,
-    ESSENTIAL_GENOME_JSON, TEST_GENOME_JSON, VISION_GENOME_JSON,
+    add_core_morphologies, create_death_area, create_fatigue_area, create_fear_area, create_genome_with_core_areas,
+    create_genome_with_core_morphologies, create_hope_area, create_minimal_genome, create_pain_area, create_pleasure_area, create_power_area,
+    ensure_core_components, get_default_neural_properties, load_barebones_genome, load_essential_genome, load_test_genome, load_vision_genome,
+    BAREBONES_GENOME_JSON, ESSENTIAL_GENOME_JSON, TEST_GENOME_JSON, VISION_GENOME_JSON,
 };
 pub use types::{EvoError, EvoResult};
 pub use validator::{validate_genome, ValidationResult};

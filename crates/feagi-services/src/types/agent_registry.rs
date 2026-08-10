@@ -232,16 +232,8 @@ pub struct AgentInfo {
 
 impl AgentInfo {
     /// Create a new agent info with current timestamp
-    pub fn new(
-        agent_id: String,
-        agent_type: AgentType,
-        capabilities: AgentCapabilities,
-        transport: AgentTransport,
-    ) -> Self {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+    pub fn new(agent_id: String, agent_type: AgentType, capabilities: AgentCapabilities, transport: AgentTransport) -> Self {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
 
         Self {
             agent_id,
@@ -257,18 +249,12 @@ impl AgentInfo {
 
     /// Update last_seen timestamp to current time
     pub fn update_activity(&mut self) {
-        self.last_seen = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        self.last_seen = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
     }
 
     /// Check if agent has been inactive for more than timeout_ms
     pub fn is_inactive(&self, timeout_ms: u64) -> bool {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
 
         now - self.last_seen > timeout_ms
     }
@@ -288,11 +274,7 @@ impl AgentRegistry {
     /// * `max_agents` - Maximum number of concurrent agents (default: 100)
     /// * `timeout_ms` - Inactivity timeout in milliseconds (default: 60000)
     pub fn new(max_agents: usize, timeout_ms: u64) -> Self {
-        tracing::info!(
-            "🦀 [REGISTRY] Initialized (max_agents={}, timeout_ms={})",
-            max_agents,
-            timeout_ms
-        );
+        tracing::info!("🦀 [REGISTRY] Initialized (max_agents={}, timeout_ms={})", max_agents, timeout_ms);
         Self {
             agents: std::collections::HashMap::new(),
             max_agents,
@@ -315,18 +297,11 @@ impl AgentRegistry {
         // Check if already registered (allow re-registration)
         let is_reregistration = self.agents.contains_key(&agent_id);
         if is_reregistration {
-            tracing::warn!(
-                "⚠️ [REGISTRY] Agent re-registering (updating existing entry): {}",
-                agent_id
-            );
+            tracing::warn!("⚠️ [REGISTRY] Agent re-registering (updating existing entry): {}", agent_id);
         } else {
             // Check capacity only for new registrations
             if self.agents.len() >= self.max_agents {
-                return Err(format!(
-                    "Registry full ({}/{})",
-                    self.agents.len(),
-                    self.max_agents
-                ));
+                return Err(format!("Registry full ({}/{})", self.agents.len(), self.max_agents));
             }
         }
 
@@ -344,11 +319,7 @@ impl AgentRegistry {
     /// Deregister an agent
     pub fn deregister(&mut self, agent_id: &str) -> Result<(), String> {
         if self.agents.remove(agent_id).is_some() {
-            tracing::info!(
-                "🦀 [REGISTRY] Deregistered agent: {} (total: {})",
-                agent_id,
-                self.agents.len()
-            );
+            tracing::info!("🦀 [REGISTRY] Deregistered agent: {} (total: {})", agent_id, self.agents.len());
             self.refresh_agent_data_hash();
             Ok(())
         } else {
@@ -417,11 +388,7 @@ impl AgentRegistry {
         }
 
         if count > 0 {
-            tracing::info!(
-                "🦀 [REGISTRY] Pruned {} inactive agents (total: {})",
-                count,
-                self.agents.len()
-            );
+            tracing::info!("🦀 [REGISTRY] Pruned {} inactive agents (total: {})", count, self.agents.len());
             self.refresh_agent_data_hash();
         }
 
@@ -447,10 +414,7 @@ impl AgentRegistry {
                     agent.agent_type.hash(&mut hasher);
                     agent.transport.hash(&mut hasher);
                     hash_optional_string(&agent.chosen_transport, &mut hasher);
-                    hash_json_value(
-                        &serde_json::Value::Object(agent.metadata.clone()),
-                        &mut hasher,
-                    );
+                    hash_json_value(&serde_json::Value::Object(agent.metadata.clone()), &mut hasher);
                     if let Ok(value) = serde_json::to_value(&agent.capabilities) {
                         hash_json_value(&value, &mut hasher);
                     }
@@ -465,49 +429,37 @@ impl AgentRegistry {
 
     /// Check if any agent has sensory capability (for stream gating)
     pub fn has_sensory_agents(&self) -> bool {
-        self.agents.values().any(|agent| {
-            agent.capabilities.sensory.is_some() || agent.capabilities.vision.is_some()
-        })
+        self.agents
+            .values()
+            .any(|agent| agent.capabilities.sensory.is_some() || agent.capabilities.vision.is_some())
     }
 
     /// Check if any agent has motor capability (for stream gating)
     pub fn has_motor_agents(&self) -> bool {
-        self.agents
-            .values()
-            .any(|agent| agent.capabilities.motor.is_some())
+        self.agents.values().any(|agent| agent.capabilities.motor.is_some())
     }
 
     /// Check if any agent has visualization capability (for stream gating)
     pub fn has_visualization_agents(&self) -> bool {
-        self.agents
-            .values()
-            .any(|agent| agent.capabilities.visualization.is_some())
+        self.agents.values().any(|agent| agent.capabilities.visualization.is_some())
     }
 
     /// Get count of agents with sensory capability
     pub fn count_sensory_agents(&self) -> usize {
         self.agents
             .values()
-            .filter(|agent| {
-                agent.capabilities.sensory.is_some() || agent.capabilities.vision.is_some()
-            })
+            .filter(|agent| agent.capabilities.sensory.is_some() || agent.capabilities.vision.is_some())
             .count()
     }
 
     /// Get count of agents with motor capability
     pub fn count_motor_agents(&self) -> usize {
-        self.agents
-            .values()
-            .filter(|agent| agent.capabilities.motor.is_some())
-            .count()
+        self.agents.values().filter(|agent| agent.capabilities.motor.is_some()).count()
     }
 
     /// Get count of agents with visualization capability
     pub fn count_visualization_agents(&self) -> usize {
-        self.agents
-            .values()
-            .filter(|agent| agent.capabilities.visualization.is_some())
-            .count()
+        self.agents.values().filter(|agent| agent.capabilities.visualization.is_some()).count()
     }
 
     /// Get the configured timeout threshold in milliseconds
@@ -516,12 +468,7 @@ impl AgentRegistry {
     }
 
     /// Validate agent configuration
-    fn validate_agent_config(
-        &self,
-        agent_id: &str,
-        agent_type: &AgentType,
-        capabilities: &AgentCapabilities,
-    ) -> Result<(), String> {
+    fn validate_agent_config(&self, agent_id: &str, agent_type: &AgentType, capabilities: &AgentCapabilities) -> Result<(), String> {
         // Agent ID must not be empty
         if agent_id.is_empty() {
             return Err("Agent ID cannot be empty".to_string());
@@ -530,10 +477,7 @@ impl AgentRegistry {
         // Validate capabilities match agent type
         match agent_type {
             AgentType::Sensory => {
-                if capabilities.vision.is_none()
-                    && capabilities.sensory.is_none()
-                    && capabilities.custom.is_empty()
-                {
+                if capabilities.vision.is_none() && capabilities.sensory.is_none() && capabilities.custom.is_empty() {
                     return Err("Sensory agent must have at least one input capability".to_string());
                 }
             }
@@ -544,22 +488,14 @@ impl AgentRegistry {
             }
             AgentType::Both => {
                 // Both requires at least one capability of each type
-                if (capabilities.vision.is_none()
-                    && capabilities.sensory.is_none()
-                    && capabilities.custom.is_empty())
-                    || capabilities.motor.is_none()
+                if (capabilities.vision.is_none() && capabilities.sensory.is_none() && capabilities.custom.is_empty()) || capabilities.motor.is_none()
                 {
-                    return Err(
-                        "Bidirectional agent must have both input and output capabilities"
-                            .to_string(),
-                    );
+                    return Err("Bidirectional agent must have both input and output capabilities".to_string());
                 }
             }
             AgentType::Visualization => {
                 if capabilities.visualization.is_none() {
-                    return Err(
-                        "Visualization agent must have visualization capability".to_string()
-                    );
+                    return Err("Visualization agent must have visualization capability".to_string());
                 }
             }
             AgentType::Infrastructure => {
@@ -571,9 +507,7 @@ impl AgentRegistry {
                     && capabilities.visualization.is_none()
                     && capabilities.custom.is_empty()
                 {
-                    return Err(
-                        "Infrastructure agent must declare at least one capability".to_string()
-                    );
+                    return Err("Infrastructure agent must declare at least one capability".to_string());
                 }
             }
         }

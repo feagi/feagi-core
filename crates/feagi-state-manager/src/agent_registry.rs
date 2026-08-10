@@ -137,9 +137,7 @@ impl AgentRegistry {
 
     pub fn deregister(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.write();
-        agents
-            .remove(agent_id)
-            .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
+        agents.remove(agent_id).ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
         Ok(())
     }
 
@@ -197,9 +195,7 @@ impl AgentRegistry {
 
     pub fn deregister(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.write();
-        agents
-            .remove(agent_id)
-            .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
+        agents.remove(agent_id).ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
         Ok(())
     }
 
@@ -257,9 +253,7 @@ impl AgentRegistry {
 
     pub fn deregister(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.borrow_mut();
-        agents
-            .remove(agent_id)
-            .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
+        agents.remove(agent_id).ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
         Ok(())
     }
 
@@ -317,9 +311,7 @@ impl AgentRegistry {
 
     pub fn deregister(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.lock().unwrap();
-        agents
-            .remove(agent_id)
-            .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
+        agents.remove(agent_id).ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
         Ok(())
     }
 
@@ -409,12 +401,8 @@ mod tests {
     fn test_agent_registry_get_all() {
         let registry = AgentRegistry::new();
 
-        registry
-            .register(AgentInfo::new("agent1".to_string(), AgentType::Sensory))
-            .unwrap();
-        registry
-            .register(AgentInfo::new("agent2".to_string(), AgentType::Motor))
-            .unwrap();
+        registry.register(AgentInfo::new("agent1".to_string(), AgentType::Sensory)).unwrap();
+        registry.register(AgentInfo::new("agent2".to_string(), AgentType::Motor)).unwrap();
 
         let all = registry.get_all();
         assert_eq!(all.len(), 2);

@@ -11,9 +11,7 @@
 //!
 //! @cursor:critical-path
 
-use crate::command_and_control::agent_registration_message::{
-    AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse,
-};
+use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse};
 use crate::command_and_control::FeagiMessage;
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken};
 use feagi_io::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
@@ -117,14 +115,8 @@ impl SessionStateMachine {
         let mut actions: Vec<SessionAction> = Vec::new();
 
         // Optional registration deadline enforcement (policy from config, not hardcoded).
-        if matches!(
-            self.phase,
-            SessionPhase::ControlConnecting | SessionPhase::Registering
-        ) {
-            if let (Some(start_ms), Some(deadline_ms)) = (
-                self.connect_started_at_ms,
-                self.init.timing.registration_deadline_ms,
-            ) {
+        if matches!(self.phase, SessionPhase::ControlConnecting | SessionPhase::Registering) {
+            if let (Some(start_ms), Some(deadline_ms)) = (self.connect_started_at_ms, self.init.timing.registration_deadline_ms) {
                 if now_ms.saturating_sub(start_ms) > deadline_ms {
                     self.fail("registration deadline exceeded");
                     return actions;
@@ -170,12 +162,7 @@ impl SessionStateMachine {
         }
     }
 
-    fn on_control_observed(
-        &mut self,
-        now_ms: NowMs,
-        state: &FeagiEndpointState,
-        message: Option<FeagiMessage>,
-    ) -> Vec<SessionAction> {
+    fn on_control_observed(&mut self, now_ms: NowMs, state: &FeagiEndpointState, message: Option<FeagiMessage>) -> Vec<SessionAction> {
         match self.phase {
             SessionPhase::ControlConnecting => match state {
                 FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
@@ -213,10 +200,7 @@ impl SessionStateMachine {
                 if let Some(FeagiMessage::HeartBeat) = message {
                     // Heartbeat ack; no state change required.
                 }
-                if let Some(FeagiMessage::AgentRegistration(
-                    AgentRegistrationMessage::ServerRespondsDeregistration(resp),
-                )) = message
-                {
+                if let Some(FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsDeregistration(resp))) = message {
                     return self.on_deregistered(resp);
                 }
                 if let FeagiEndpointState::Errored(e) = state {
@@ -225,10 +209,7 @@ impl SessionStateMachine {
                 Vec::new()
             }
             SessionPhase::Deregistering => {
-                if let Some(FeagiMessage::AgentRegistration(
-                    AgentRegistrationMessage::ServerRespondsDeregistration(resp),
-                )) = message
-                {
+                if let Some(FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsDeregistration(resp))) = message {
                     return self.on_deregistered(resp);
                 }
                 if let FeagiEndpointState::Errored(e) = state {
@@ -240,11 +221,7 @@ impl SessionStateMachine {
         }
     }
 
-    fn on_registration_response(
-        &mut self,
-        now_ms: NowMs,
-        resp: RegistrationResponse,
-    ) -> Vec<SessionAction> {
+    fn on_registration_response(&mut self, now_ms: NowMs, resp: RegistrationResponse) -> Vec<SessionAction> {
         match resp {
             RegistrationResponse::Success(session_id, endpoints) => {
                 self.session_id = Some(session_id);
@@ -329,22 +306,12 @@ impl SessionStateMachine {
 
     /// Helper for drivers: after polling sensor and motor channels, call this to decide if
     /// data channels are fully active and transition to Active.
-    pub fn try_mark_data_channels_active(
-        &mut self,
-        sensor_state: &FeagiEndpointState,
-        motor_state: &FeagiEndpointState,
-    ) {
+    pub fn try_mark_data_channels_active(&mut self, sensor_state: &FeagiEndpointState, motor_state: &FeagiEndpointState) {
         if self.phase != SessionPhase::DataConnecting {
             return;
         }
-        let sensor_ok = matches!(
-            sensor_state,
-            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData
-        );
-        let motor_ok = matches!(
-            motor_state,
-            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData
-        );
+        let sensor_ok = matches!(sensor_state, FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData);
+        let motor_ok = matches!(motor_state, FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData);
         if sensor_ok && motor_ok {
             self.phase = SessionPhase::Active;
         }

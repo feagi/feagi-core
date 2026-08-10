@@ -1,8 +1,10 @@
-use crate::cortical_mapping_entry::synapse_model_implementations::generated_enums::{SynapseModelType, SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked};
 use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
+use crate::cortical_mapping_entry::synapse_model_implementations::generated_enums::{
+    SynapseModelType, SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked,
+};
 
 /// Root trait for all synapse data implementations, which is essentially any data related
-/// to each individual synapse of a mapping. Note that the "default" trait is used for memory 
+/// to each individual synapse of a mapping. Note that the "default" trait is used for memory
 /// purposes and any values specified in default will not actually be used.
 pub trait SynapseModelSynapseData<SMQ>: Clone + Copy
 where

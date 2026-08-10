@@ -1,17 +1,23 @@
+use crate::cortical_area::genome_compose::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
+use crate::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::CorticalMappingEntryWriterByModelQuant;
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
 use feagi_genomic_context::cortical_area::CorticalID;
-use crate::cortical_area::genome_compose::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
-use crate::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::CorticalMappingEntryWriterByModelQuant;
 
 pub enum ConnectomeRequest {
-    CorticalAreaAdd{TEMP_adding_id: CorticalID, writer: CorticalWriterByModelQuant}, // TODO we really shouldnt be taking in a new cortical ID for this
+    CorticalAreaAdd {
+        TEMP_adding_id: CorticalID,
+        writer: CorticalWriterByModelQuant,
+    }, // TODO we really shouldnt be taking in a new cortical ID for this
     // CorticalAreaEdit
     // CorticalAreaDelete
-    CorticalMappingEntryAdd{source_id: CorticalID, destination_id: CorticalID, mapping_writer: CorticalMappingEntryWriterByModelQuant},
+    CorticalMappingEntryAdd {
+        source_id: CorticalID,
+        destination_id: CorticalID,
+        mapping_writer: CorticalMappingEntryWriterByModelQuant,
+    },
     // TODO BDU cannot handle mapping IDs for now, so only expose an option to delete ALL mappings between 2 cortical areas
 }
-
 
 // TODO this should be a higher level, will be handled by future 'BDU'
 /*

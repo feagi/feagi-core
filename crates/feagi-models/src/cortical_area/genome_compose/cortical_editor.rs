@@ -1,8 +1,8 @@
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 use crate::cortical_area::components::cortical_area_layout::enums::CorticalAreaLayoutNested;
 use crate::cortical_area::neuron::cortical_data::NeuronModelCorticalData;
 use crate::cortical_area::neuron::neuron_data::NeuronModelNeuronData;
 use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 // TODO rethink interface a bit more
 
 /*

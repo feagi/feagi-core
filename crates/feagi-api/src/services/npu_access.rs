@@ -39,14 +39,7 @@ pub trait NpuAccess: Send + Sync {
     ///
     /// Returns a human-readable message on rejection (duplicate id, zero or unrepresentable
     /// dimensions) so the service can surface it without knowing the engine's error type.
-    fn add_cortical_area(
-        &self,
-        id: CorticalID,
-        x: u64,
-        y: u64,
-        z: u64,
-        density: u64,
-    ) -> Result<NpuCorticalArea, String>;
+    fn add_cortical_area(&self, id: CorticalID, x: u64, y: u64, z: u64, density: u64) -> Result<NpuCorticalArea, String>;
 
     /// Bursts completed since the engine started.
     fn burst_count(&self) -> u64;

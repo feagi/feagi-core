@@ -1,8 +1,10 @@
-use crate::cortical_mapping_entry::synapse_model_implementations::generated_enums::{SynapseModelType, SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked};
 use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
+use crate::cortical_mapping_entry::synapse_model_implementations::generated_enums::{
+    SynapseModelType, SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked,
+};
 
-/// Root trait for all cortical mapping entry implementations, which is essentially any data shared 
-/// among all synapses within a single mapping. Note that the "default" trait is used for memory 
+/// Root trait for all cortical mapping entry implementations, which is essentially any data shared
+/// among all synapses within a single mapping. Note that the "default" trait is used for memory
 /// purposes and any values specified in default will not actually be used.
 pub trait SynapseModelCorticalMappingEntryData<SMQ>: Clone + Default + Copy
 where
@@ -17,5 +19,4 @@ where
     /// A flat enum (byte) that denotes both the synapse model and the quantization at runtime.
     /// Useful for some burst engines
     const PACKED_SYNAPSE_MODEL_AND_QUANTIZATION: SynapseModelTypeAndQuantizationPacked = SMQ::PACKED_SYNAPSE_MODEL_AND_QUANTIZATION;
-
 }

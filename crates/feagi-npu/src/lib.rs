@@ -1,5 +1,5 @@
-pub mod engines;
 pub mod dynamic_npu;
+pub mod engines;
 mod engines_common;
 pub mod flags;
 pub mod genome;

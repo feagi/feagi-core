@@ -43,10 +43,7 @@ pub async fn get_status(State(state): State<ApiState>) -> ApiResult<Json<HashMap
     response.insert("enabled".to_string(), json!(true));
     response.insert("metrics_collected".to_string(), json!(5)); // Static count for now
     response.insert("brain_readiness".to_string(), json!(health.brain_readiness));
-    response.insert(
-        "burst_engine_active".to_string(),
-        json!(health.burst_engine_active),
-    );
+    response.insert("burst_engine_active".to_string(), json!(health.burst_engine_active));
 
     Ok(Json(response))
 }
@@ -77,21 +74,12 @@ pub async fn get_metrics(State(state): State<ApiState>) -> ApiResult<Json<HashMa
         .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
 
     let mut response = HashMap::new();
-    response.insert(
-        "burst_frequency_hz".to_string(),
-        json!(runtime_status.frequency_hz),
-    );
+    response.insert("burst_frequency_hz".to_string(), json!(runtime_status.frequency_hz));
     response.insert("burst_count".to_string(), json!(runtime_status.burst_count));
     response.insert("neuron_count".to_string(), json!(health.neuron_count));
-    response.insert(
-        "cortical_area_count".to_string(),
-        json!(health.cortical_area_count),
-    );
+    response.insert("cortical_area_count".to_string(), json!(health.cortical_area_count));
     response.insert("brain_readiness".to_string(), json!(health.brain_readiness));
-    response.insert(
-        "burst_engine_active".to_string(),
-        json!(health.burst_engine_active),
-    );
+    response.insert("burst_engine_active".to_string(), json!(health.burst_engine_active));
 
     Ok(Json(response))
 }
@@ -118,23 +106,14 @@ pub async fn get_data(State(state): State<ApiState>) -> ApiResult<Json<HashMap<S
     // Return comprehensive monitoring data
     let mut data = HashMap::new();
     data.insert("neuron_count".to_string(), json!(health.neuron_count));
-    data.insert(
-        "cortical_area_count".to_string(),
-        json!(health.cortical_area_count),
-    );
+    data.insert("cortical_area_count".to_string(), json!(health.cortical_area_count));
     data.insert("burst_count".to_string(), json!(health.burst_count));
     data.insert("brain_readiness".to_string(), json!(health.brain_readiness));
-    data.insert(
-        "burst_engine_active".to_string(),
-        json!(health.burst_engine_active),
-    );
+    data.insert("burst_engine_active".to_string(), json!(health.burst_engine_active));
 
     let mut response = HashMap::new();
     response.insert("data".to_string(), json!(data));
-    response.insert(
-        "timestamp".to_string(),
-        json!(chrono::Utc::now().to_rfc3339()),
-    );
+    response.insert("timestamp".to_string(), json!(chrono::Utc::now().to_rfc3339()));
 
     Ok(Json(response))
 }
@@ -149,9 +128,7 @@ pub async fn get_data(State(state): State<ApiState>) -> ApiResult<Json<HashMap<S
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_performance(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn get_performance(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
     let mut response = HashMap::new();
     response.insert("cpu_usage".to_string(), json!(0.0));
     response.insert("memory_usage".to_string(), json!(0.0));
@@ -234,9 +211,7 @@ pub async fn get_cortical_activity(
             .await
             .map_err(|e| ApiError::internal(format!("Failed to get fire queue: {}", e)))?;
 
-        if let Some((neuron_ids, _x_coords, _y_coords, _z_coords, potentials)) =
-            fq_sample.get(&cortical_idx)
-        {
+        if let Some((neuron_ids, _x_coords, _y_coords, _z_coords, potentials)) = fq_sample.get(&cortical_idx) {
             let current_burst = runtime_service
                 .get_burst_count()
                 .await
@@ -271,10 +246,7 @@ pub async fn get_cortical_activity(
     };
 
     let active_neurons: Vec<u32> = neuron_fire_counts.keys().copied().collect();
-    let peak_firing_neuron = neuron_fire_counts
-        .iter()
-        .max_by_key(|(_, &count)| count)
-        .map(|(&neuron_id, _)| neuron_id);
+    let peak_firing_neuron = neuron_fire_counts.iter().max_by_key(|(_, &count)| count).map(|(&neuron_id, _)| neuron_id);
 
     let avg_membrane_potential = if potential_samples > 0 {
         total_membrane_potential / potential_samples as f32
@@ -294,10 +266,7 @@ pub async fn get_cortical_activity(
         ("area_id".to_string(), json!(params.area)),
         ("area_name".to_string(), json!(area_name)),
         ("duration_ms".to_string(), json!(params.duration * 1000.0)),
-        (
-            "burst_count_sampled".to_string(),
-            json!(end_burst - start_burst),
-        ),
+        ("burst_count_sampled".to_string(), json!(end_burst - start_burst)),
         (
             "firing_statistics".to_string(),
             json!({

@@ -99,10 +99,7 @@ mod tests {
         let hash3 = hash_string("different");
 
         assert_eq!(hash1, hash2, "Same input should produce same hash");
-        assert_ne!(
-            hash1, hash3,
-            "Different inputs should produce different hashes"
-        );
+        assert_ne!(hash1, hash3, "Different inputs should produce different hashes");
         assert_eq!(hash1.len(), 16, "Hash should be 16 characters");
     }
 

@@ -70,10 +70,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
 
 /// Build property mapping lookup table
 fn build_property_map() -> HashMap<String, String> {
-    PROPERTY_MAPPINGS
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect()
+    PROPERTY_MAPPINGS.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
 }
 
 /// Template for hierarchical genome area
@@ -105,13 +102,10 @@ fn create_area_template() -> serde_json::Map<String, Value> {
 /// Convert flat genome (2.0) to hierarchical format - COMPLETE implementation
 pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value> {
     let flat_blueprint = if let Some(bp) = flat_genome.get("blueprint") {
-        bp.as_object().ok_or_else(|| {
-            EvoError::invalid_genome("Flat genome blueprint must be an object".to_string())
-        })?
+        bp.as_object()
+            .ok_or_else(|| EvoError::invalid_genome("Flat genome blueprint must be an object".to_string()))?
     } else {
-        return Err(EvoError::invalid_genome(
-            "Flat genome missing blueprint section".to_string(),
-        ));
+        return Err(EvoError::invalid_genome("Flat genome missing blueprint section".to_string()));
     };
 
     // Build property mapping
@@ -121,19 +115,15 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
     let cortical_areas = extract_cortical_areas(flat_blueprint)?;
 
     // Load visualization_voxel_granularity overrides (if present)
-    let visualization_overrides: HashMap<String, Value> =
-        if let Some(overrides_obj) = flat_genome.get("visualization_voxel_granularity_overrides") {
-            if let Some(overrides_map) = overrides_obj.as_object() {
-                overrides_map
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect()
-            } else {
-                HashMap::new()
-            }
+    let visualization_overrides: HashMap<String, Value> = if let Some(overrides_obj) = flat_genome.get("visualization_voxel_granularity_overrides") {
+        if let Some(overrides_map) = overrides_obj.as_object() {
+            overrides_map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
         } else {
             HashMap::new()
-        };
+        }
+    } else {
+        HashMap::new()
+    };
 
     // Build hierarchical blueprint
     let mut hierarchical_blueprint = serde_json::Map::new();
@@ -148,10 +138,7 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
         if let Some(override_value) = visualization_overrides.get(cortical_id) {
             if let Some(properties) = area_data.get_mut("properties") {
                 if let Some(properties_obj) = properties.as_object_mut() {
-                    properties_obj.insert(
-                        "visualization_voxel_granularity".to_string(),
-                        override_value.clone(),
-                    );
+                    properties_obj.insert("visualization_voxel_granularity".to_string(), override_value.clone());
                 }
             }
         }
@@ -161,10 +148,7 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
 
     // Build complete hierarchical genome
     let mut hierarchical = serde_json::Map::new();
-    hierarchical.insert(
-        "blueprint".to_string(),
-        Value::Object(hierarchical_blueprint),
-    );
+    hierarchical.insert("blueprint".to_string(), Value::Object(hierarchical_blueprint));
 
     // Copy other sections
     if let Some(morphologies) = flat_genome.get("neuron_morphologies") {
@@ -208,9 +192,7 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
 }
 
 /// Extract cortical_area area IDs from flat keys
-fn extract_cortical_areas(
-    flat_blueprint: &serde_json::Map<String, Value>,
-) -> EvoResult<HashSet<String>> {
+fn extract_cortical_areas(flat_blueprint: &serde_json::Map<String, Value>) -> EvoResult<HashSet<String>> {
     let mut areas = HashSet::new();
 
     for key in flat_blueprint.keys() {
@@ -258,11 +240,7 @@ fn process_area_properties(
 
             // Join parts after cortical_id: "cx-__name-t" or "nx-fire_t-f"
             let exon = parts[2..].join("-");
-            let exon_without_prefix = if parts.len() > 3 {
-                parts[3..].join("-")
-            } else {
-                exon.clone()
-            };
+            let exon_without_prefix = if parts.len() > 3 { parts[3..].join("-") } else { exon.clone() };
 
             // Try both full and without-prefix lookup
             let lookup_key = if property_map.contains_key(&exon) {
@@ -282,11 +260,7 @@ fn process_area_properties(
                 }
 
                 "location_generation_type" => {
-                    let value = if flat_value.as_bool().unwrap_or(false) {
-                        "random"
-                    } else {
-                        "sequential"
-                    };
+                    let value = if flat_value.as_bool().unwrap_or(false) { "random" } else { "sequential" };
                     area_data.insert(hierarchical_prop.clone(), json!(value));
                 }
 
@@ -295,12 +269,7 @@ fn process_area_properties(
                 }
 
                 "block_boundaries" | "relative_coordinate" | "2d_coordinate" => {
-                    process_coordinate_property(
-                        flat_key,
-                        flat_value,
-                        hierarchical_prop,
-                        area_data,
-                    )?;
+                    process_coordinate_property(flat_key, flat_value, hierarchical_prop, area_data)?;
                 }
 
                 _ => {
@@ -315,12 +284,7 @@ fn process_area_properties(
 }
 
 /// Process coordinate properties (block_boundaries, relative_coordinate, 2d_coordinate)
-fn process_coordinate_property(
-    flat_key: &str,
-    flat_value: &Value,
-    prop_name: &str,
-    area_data: &mut serde_json::Map<String, Value>,
-) -> EvoResult<()> {
+fn process_coordinate_property(flat_key: &str, flat_value: &Value, prop_name: &str, area_data: &mut serde_json::Map<String, Value>) -> EvoResult<()> {
     // Deterministic coordinate "jitter" for legacy flat genomes:
     // If a 2D coordinate field is null, we assign a stable, per-cortical_area-id offset so
     // multiple areas don't overlap at (0,0). This is NOT random (Rust/RTOS compatible).
@@ -338,11 +302,7 @@ fn process_coordinate_property(
 
     // Ensure array exists
     if !area_data.contains_key(prop_name) {
-        let default_array = if prop_name == "2d_coordinate" {
-            json!([0, 0])
-        } else {
-            json!([0, 0, 0])
-        };
+        let default_array = if prop_name == "2d_coordinate" { json!([0, 0]) } else { json!([0, 0, 0]) };
         area_data.insert(prop_name.to_string(), default_array);
     }
 
@@ -410,10 +370,7 @@ fn process_coordinate_property(
         if !area_data.contains_key("cortical_dimensions") {
             area_data.insert("cortical_dimensions".to_string(), json!({}));
         }
-        if let Some(dims) = area_data
-            .get_mut("cortical_dimensions")
-            .and_then(|v| v.as_object_mut())
-        {
+        if let Some(dims) = area_data.get_mut("cortical_dimensions").and_then(|v| v.as_object_mut()) {
             let dim_name = match index {
                 0 => "width",
                 1 => "height",
@@ -426,10 +383,7 @@ fn process_coordinate_property(
         if !area_data.contains_key("coordinates_3d") {
             area_data.insert("coordinates_3d".to_string(), json!({}));
         }
-        if let Some(coords) = area_data
-            .get_mut("coordinates_3d")
-            .and_then(|v| v.as_object_mut())
-        {
+        if let Some(coords) = area_data.get_mut("coordinates_3d").and_then(|v| v.as_object_mut()) {
             let coord_name = match index {
                 0 => "x",
                 1 => "y",
@@ -444,10 +398,7 @@ fn process_coordinate_property(
 }
 
 /// Process destination mapping (dstmap) - COMPLETE implementation
-fn process_dstmap(
-    dstmap_value: &Value,
-    area_data: &mut serde_json::Map<String, Value>,
-) -> EvoResult<()> {
+fn process_dstmap(dstmap_value: &Value, area_data: &mut serde_json::Map<String, Value>) -> EvoResult<()> {
     let dstmap_obj = match dstmap_value.as_object() {
         Some(obj) => obj,
         None => return Ok(()), // Skip if not an object
@@ -484,17 +435,8 @@ fn process_dstmap(
                 // Strict plasticity validation (no backward compatibility):
                 // If plasticity_flag=true, the full plasticity parameter set must be present.
                 if rule_obj.get("plasticity_flag").and_then(|v| v.as_bool()) == Some(true) {
-                    let required = [
-                        "plasticity_constant",
-                        "ltp_multiplier",
-                        "ltd_multiplier",
-                        "plasticity_window",
-                    ];
-                    let missing: Vec<&str> = required
-                        .iter()
-                        .copied()
-                        .filter(|k| !rule_obj.contains_key(*k))
-                        .collect();
+                    let required = ["plasticity_constant", "ltp_multiplier", "ltd_multiplier", "plasticity_window"];
+                    let missing: Vec<&str> = required.iter().copied().filter(|k| !rule_obj.contains_key(*k)).collect();
                     if !missing.is_empty() {
                         warn!(
                             target: "feagi-evo",
@@ -558,10 +500,7 @@ fn process_dstmap(
 
             rule_dict.insert("morphology_id".to_string(), rule_array[0].clone());
             rule_dict.insert("morphology_scalar".to_string(), rule_array[1].clone());
-            rule_dict.insert(
-                "postSynapticCurrent_multiplier".to_string(),
-                rule_array[2].clone(),
-            );
+            rule_dict.insert("postSynapticCurrent_multiplier".to_string(), rule_array[2].clone());
             rule_dict.insert("plasticity_flag".to_string(), rule_array[3].clone());
             rule_dict.insert("plasticity_constant".to_string(), plasticity_constant);
             rule_dict.insert("ltp_multiplier".to_string(), ltp_multiplier);
@@ -580,10 +519,7 @@ fn process_dstmap(
         }
     }
 
-    area_data.insert(
-        "cortical_mapping_dst".to_string(),
-        Value::Object(hierarchical_dstmap),
-    );
+    area_data.insert("cortical_mapping_dst".to_string(), Value::Object(hierarchical_dstmap));
 
     Ok(())
 }
@@ -596,10 +532,7 @@ mod tests {
     #[test]
     fn test_property_map_completeness() {
         let map = build_property_map();
-        let unique_flat_keys: HashSet<&str> = PROPERTY_MAPPINGS
-            .iter()
-            .map(|(flat_key, _)| *flat_key)
-            .collect();
+        let unique_flat_keys: HashSet<&str> = PROPERTY_MAPPINGS.iter().map(|(flat_key, _)| *flat_key).collect();
         assert_eq!(
             map.len(),
             unique_flat_keys.len(),
@@ -713,10 +646,7 @@ mod tests {
         });
 
         let hierarchical = convert_flat_to_hierarchical_full(&flat).unwrap();
-        let blueprint = hierarchical
-            .get("blueprint")
-            .and_then(|v| v.as_object())
-            .unwrap();
+        let blueprint = hierarchical.get("blueprint").and_then(|v| v.as_object()).unwrap();
         let area = blueprint.get("CIStra").and_then(|v| v.as_object()).unwrap();
 
         // 2D null coords are jittered deterministically (not necessarily 0,0) but must be integers.
@@ -724,9 +654,6 @@ mod tests {
         assert_eq!(coords_2d.len(), 2);
         assert!(coords_2d[0].as_i64().is_some());
         assert!(coords_2d[1].as_i64().is_some());
-        assert_eq!(
-            area.get("relative_coordinate").unwrap(),
-            &json!([10, 0, -20])
-        );
+        assert_eq!(area.get("relative_coordinate").unwrap(), &json!([10, 0, -20]));
     }
 }

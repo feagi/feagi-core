@@ -102,21 +102,17 @@ pub mod types;
 
 // Re-export main API
 pub use traits::{
-    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
-    SnapshotCreateOptions, SnapshotMetadata, SnapshotService,
+    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService, SnapshotCreateOptions, SnapshotMetadata, SnapshotService,
 };
 
 pub use types::{
     // Agent registry types
     agent_registry::{
-        AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
-        SensoryCapability, VisionCapability, VisualizationCapability,
+        AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability, SensoryCapability, VisionCapability,
+        VisualizationCapability,
     },
     // Registration DTOs
-    registration::{
-        AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
-        RegistrationResponse, TransportConfig,
-    },
+    registration::{AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest, RegistrationResponse, TransportConfig},
     // DTOs
     BrainRegionInfo,
     ConnectivityStats,
@@ -149,10 +145,7 @@ pub use feagi_brain_development::models::CorticalAreaExt;
 
 // Re-export implementations (optional - adapters can use their own)
 #[cfg(all(feature = "std", feature = "builtin-impls"))]
-pub use impls::{
-    AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
-    RuntimeServiceImpl, SnapshotServiceImpl,
-};
+pub use impls::{AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl, RuntimeServiceImpl, SnapshotServiceImpl};
 
 /// Version of this crate (for feagi-rust version reporting)
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

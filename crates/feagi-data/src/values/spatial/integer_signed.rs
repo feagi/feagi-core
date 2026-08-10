@@ -3,107 +3,59 @@
 /// Shared behavior for enums that hide the quantization generic of spatial signed-integer
 /// coordinates.
 pub trait QuantizedSignedIntegerSpatialEnum:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::cmp::PartialEq
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Sized
-    + 'static
+    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
     type Shape<Q: crate::values::quantizable::QuantizedSignedIntegerTrait>;
 
     fn get_level(&self) -> crate::values::quantizable::SignedIntegerQuantizationLevel;
 
-    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(
-        value: Self::Shape<FromQ>
-    ) -> Self;
+    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(value: Self::Shape<FromQ>) -> Self;
 
-    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(
-        self
-    ) -> Self::Shape<NewQ>;
+    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(self) -> Self::Shape<NewQ>;
 
     fn try_into_quantization<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(
-        self
+        self,
     ) -> Result<Self::Shape<NewQ>, crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError>;
 
-    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(
-        self
-    ) -> Self::Shape<NewQ>;
+    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(self) -> Self::Shape<NewQ>;
 }
 
 /// Shared behavior for enums that hide the quantization generic of wrapped spatial signed-integer
 /// coordinates.
 pub trait WrappedQuantizedSignedIntegerSpatialEnum:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::cmp::PartialEq
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Sized
-    + 'static
+    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
     type WrappedShape<Q: crate::values::quantizable::QuantizedSignedIntegerTrait>;
 
     fn get_level(&self) -> crate::values::quantizable::SignedIntegerQuantizationLevel;
 
-    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(
-        value: Self::WrappedShape<FromQ>
-    ) -> Self;
+    fn new_from_quantized<FromQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(value: Self::WrappedShape<FromQ>) -> Self;
 
-    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(
-        self
-    ) -> Self::WrappedShape<NewQ>;
+    fn into_quantization_unchecked<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(self) -> Self::WrappedShape<NewQ>;
 
     fn try_into_quantization<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(
-        self
+        self,
     ) -> Result<Self::WrappedShape<NewQ>, crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError>;
 
-    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(
-        self
-    ) -> Self::WrappedShape<NewQ>;
+    fn into_quantization_clamped<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(self) -> Self::WrappedShape<NewQ>;
 }
 
 fn signed_isize_fits_quant<Q: crate::values::quantizable::QuantizedSignedIntegerTrait>(value: isize) -> bool {
     match Q::LEVEL {
-        crate::values::quantizable::SignedIntegerQuantizationLevel::I8 => {
-            (i8::MIN as isize) <= value && value <= (i8::MAX as isize)
-        }
-        crate::values::quantizable::SignedIntegerQuantizationLevel::I16 => {
-            (i16::MIN as isize) <= value && value <= (i16::MAX as isize)
-        }
-        crate::values::quantizable::SignedIntegerQuantizationLevel::I32 => {
-            (i32::MIN as isize) <= value && value <= (i32::MAX as isize)
-        }
-        crate::values::quantizable::SignedIntegerQuantizationLevel::I64 => {
-            (i64::MIN as isize) <= value && value <= (i64::MAX as isize)
-        }
+        crate::values::quantizable::SignedIntegerQuantizationLevel::I8 => (i8::MIN as isize) <= value && value <= (i8::MAX as isize),
+        crate::values::quantizable::SignedIntegerQuantizationLevel::I16 => (i16::MIN as isize) <= value && value <= (i16::MAX as isize),
+        crate::values::quantizable::SignedIntegerQuantizationLevel::I32 => (i32::MIN as isize) <= value && value <= (i32::MAX as isize),
+        crate::values::quantizable::SignedIntegerQuantizationLevel::I64 => (i64::MIN as isize) <= value && value <= (i64::MAX as isize),
         crate::values::quantizable::SignedIntegerQuantizationLevel::Isize => true,
     }
 }
 
-fn clamp_isize_for_signed_quant<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(
-    value: isize,
-) -> isize {
+fn clamp_isize_for_signed_quant<NewQ: crate::values::quantizable::QuantizedSignedIntegerTrait>(value: isize) -> isize {
     match NewQ::LEVEL {
-        crate::values::quantizable::SignedIntegerQuantizationLevel::I8 => {
-            value.clamp(i8::MIN as isize, i8::MAX as isize)
-        }
-        crate::values::quantizable::SignedIntegerQuantizationLevel::I16 => {
-            value.clamp(i16::MIN as isize, i16::MAX as isize)
-        }
-        crate::values::quantizable::SignedIntegerQuantizationLevel::I32 => {
-            value.clamp(i32::MIN as isize, i32::MAX as isize)
-        }
-        crate::values::quantizable::SignedIntegerQuantizationLevel::I64 => {
-            value.clamp(i64::MIN as isize, i64::MAX as isize)
-        }
+        crate::values::quantizable::SignedIntegerQuantizationLevel::I8 => value.clamp(i8::MIN as isize, i8::MAX as isize),
+        crate::values::quantizable::SignedIntegerQuantizationLevel::I16 => value.clamp(i16::MIN as isize, i16::MAX as isize),
+        crate::values::quantizable::SignedIntegerQuantizationLevel::I32 => value.clamp(i32::MIN as isize, i32::MAX as isize),
+        crate::values::quantizable::SignedIntegerQuantizationLevel::I64 => value.clamp(i64::MIN as isize, i64::MAX as isize),
         crate::values::quantizable::SignedIntegerQuantizationLevel::Isize => value,
     }
 }

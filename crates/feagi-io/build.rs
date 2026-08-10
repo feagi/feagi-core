@@ -7,34 +7,20 @@ fn main() {
     // This is a compile-time check to prevent incompatible feature combinations.
 
     let wasm_features: &[(&str, bool)] = &[
-        (
-            "websocket-transport-wasm",
-            cfg!(feature = "websocket-transport-wasm"),
-        ),
+        ("websocket-transport-wasm", cfg!(feature = "websocket-transport-wasm")),
         ("js-bridge-wasm", cfg!(feature = "js-bridge-wasm")),
     ];
 
     let native_features: &[(&str, bool)] = &[
         ("zmq-transport", cfg!(feature = "zmq-transport")),
-        (
-            "websocket-transport-std",
-            cfg!(feature = "websocket-transport-std"),
-        ),
+        ("websocket-transport-std", cfg!(feature = "websocket-transport-std")),
         ("shm-transport", cfg!(feature = "shm-transport")),
         ("bluetooth-transport", cfg!(feature = "bluetooth-transport")),
     ];
 
-    let enabled_wasm: Vec<&str> = wasm_features
-        .iter()
-        .filter(|(_, enabled)| *enabled)
-        .map(|(name, _)| *name)
-        .collect();
+    let enabled_wasm: Vec<&str> = wasm_features.iter().filter(|(_, enabled)| *enabled).map(|(name, _)| *name).collect();
 
-    let enabled_native: Vec<&str> = native_features
-        .iter()
-        .filter(|(_, enabled)| *enabled)
-        .map(|(name, _)| *name)
-        .collect();
+    let enabled_native: Vec<&str> = native_features.iter().filter(|(_, enabled)| *enabled).map(|(name, _)| *name).collect();
 
     if !enabled_wasm.is_empty() && !enabled_native.is_empty() {
         panic!(

@@ -14,12 +14,10 @@ use tungstenite::{accept, Message, WebSocket};
 
 use crate::protocol_implementations::websocket::shared::WebSocketUrl;
 use crate::traits_and_enums::server::{
-    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller,
-    FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties,
+    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouter,
+    FeagiServerRouterProperties,
 };
-use crate::traits_and_enums::shared::{
-    FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation,
-};
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::{AgentID, FeagiNetworkError};
 use feagi_serialization::FeagiByteContainer;
 
@@ -86,10 +84,7 @@ pub struct FeagiWebSocketServerPublisherProperties {
 
 impl FeagiWebSocketServerPublisherProperties {
     /// Creates new publisher properties with explicit local/remote endpoints.
-    pub fn new(
-        local_bind_address: &str,
-        remote_bind_address: &str,
-    ) -> Result<Self, FeagiNetworkError> {
+    pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = WebSocketUrl::new(local_bind_address)?;
         let remote_bind_address = WebSocketUrl::new(remote_bind_address)?;
         Ok(Self {
@@ -178,10 +173,7 @@ impl FeagiWebSocketServerPublisher {
 
     /// Get the number of connected clients.
     pub fn client_count(&self) -> usize {
-        self.clients
-            .iter()
-            .filter(|s| matches!(s, HandshakeState::Ready(_)))
-            .count()
+        self.clients.iter().filter(|s| matches!(s, HandshakeState::Ready(_))).count()
     }
 }
 
@@ -197,13 +189,10 @@ impl FeagiServer for FeagiWebSocketServerPublisher {
     fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
-                let listener = TcpListener::bind(self.local_bind_address.host_port())
-                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+                let listener = TcpListener::bind(self.local_bind_address.host_port()).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
 
                 // Set listener to non-blocking for poll-based accept
-                listener
-                    .set_nonblocking(true)
-                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+                listener.set_nonblocking(true).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
 
                 self.listener = Some(listener);
                 self.current_state = FeagiEndpointState::ActiveWaiting;
@@ -303,9 +292,7 @@ impl FeagiServerPublisher for FeagiWebSocketServerPublisher {
 
                 Ok(())
             }
-            _ => Err(FeagiNetworkError::SendFailed(
-                "Cannot publish: server is not in Active state".to_string(),
-            )),
+            _ => Err(FeagiNetworkError::SendFailed("Cannot publish: server is not in Active state".to_string())),
         }
     }
 
@@ -341,10 +328,7 @@ impl FeagiWebSocketServerPullerProperties {
     }
 
     /// Creates new puller properties with explicit local/remote endpoints.
-    pub fn new_with_remote(
-        local_bind_address: &str,
-        remote_bind_address: &str,
-    ) -> Result<Self, FeagiNetworkError> {
+    pub fn new_with_remote(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = WebSocketUrl::new(local_bind_address)?;
         let remote_bind_address = WebSocketUrl::new(remote_bind_address)?;
         Ok(Self {
@@ -499,11 +483,8 @@ impl FeagiServer for FeagiWebSocketServerPuller {
     fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
-                let listener = TcpListener::bind(self.local_bind_address.host_port())
-                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
-                listener
-                    .set_nonblocking(true)
-                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+                let listener = TcpListener::bind(self.local_bind_address.host_port()).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+                listener.set_nonblocking(true).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
 
                 self.listener = Some(listener);
                 self.current_state = FeagiEndpointState::ActiveWaiting;
@@ -578,19 +559,13 @@ impl FeagiServerPuller for FeagiWebSocketServerPuller {
                         self.current_state = FeagiEndpointState::ActiveWaiting;
                         Ok(data.as_slice())
                     } else {
-                        Err(FeagiNetworkError::ReceiveFailed(
-                            "No data in buffer".to_string(),
-                        ))
+                        Err(FeagiNetworkError::ReceiveFailed("No data in buffer".to_string()))
                     }
                 } else {
-                    Err(FeagiNetworkError::ReceiveFailed(
-                        "No data available".to_string(),
-                    ))
+                    Err(FeagiNetworkError::ReceiveFailed("No data available".to_string()))
                 }
             }
-            _ => Err(FeagiNetworkError::ReceiveFailed(
-                "Cannot consume: no data available".to_string(),
-            )),
+            _ => Err(FeagiNetworkError::ReceiveFailed("Cannot consume: no data available".to_string())),
         }
     }
 
@@ -626,10 +601,7 @@ impl FeagiWebSocketServerRouterProperties {
     }
 
     /// Creates new router properties with explicit local/remote endpoints.
-    pub fn new_with_remote(
-        local_bind_address: &str,
-        remote_bind_address: &str,
-    ) -> Result<Self, FeagiNetworkError> {
+    pub fn new_with_remote(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = WebSocketUrl::new(local_bind_address)?;
         let remote_bind_address = WebSocketUrl::new(remote_bind_address)?;
         Ok(Self {
@@ -771,9 +743,7 @@ impl FeagiWebSocketServerRouter {
                     // Ensure every ready client has a stable session mapping.
                     // This also covers immediate-handshake success where a client
                     // was inserted as Ready directly from accept path.
-                    if let std::collections::hash_map::Entry::Vacant(e) =
-                        self.index_to_session.entry(i)
-                    {
+                    if let std::collections::hash_map::Entry::Vacant(e) = self.index_to_session.entry(i) {
                         let session_id = AgentID::new_random();
                         e.insert(session_id);
                         self.session_to_index.insert(session_id, i);
@@ -866,11 +836,7 @@ impl FeagiWebSocketServerRouter {
         let mut new_session_to_index = HashMap::new();
 
         for (old_idx, session_id) in self.index_to_session.drain() {
-            let new_idx = if old_idx > index {
-                old_idx - 1
-            } else {
-                old_idx
-            };
+            let new_idx = if old_idx > index { old_idx - 1 } else { old_idx };
             new_index_to_session.insert(new_idx, session_id);
             new_session_to_index.insert(session_id, new_idx);
         }
@@ -897,11 +863,8 @@ impl FeagiServer for FeagiWebSocketServerRouter {
     fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
-                let listener = TcpListener::bind(self.local_bind_address.host_port())
-                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
-                listener
-                    .set_nonblocking(true)
-                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+                let listener = TcpListener::bind(self.local_bind_address.host_port()).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+                listener.set_nonblocking(true).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
 
                 self.listener = Some(listener);
                 self.current_state = FeagiEndpointState::ActiveWaiting;
@@ -977,64 +940,43 @@ impl FeagiServerRouter for FeagiWebSocketServerRouter {
         match &self.current_state {
             FeagiEndpointState::ActiveHasData => {
                 if self.has_data {
-                    if let (Some(ref data), Some(session_id)) =
-                        (&self.receive_buffer, self.current_session)
-                    {
+                    if let (Some(ref data), Some(session_id)) = (&self.receive_buffer, self.current_session) {
                         self.has_data = false;
                         self.current_session = None;
                         self.current_state = FeagiEndpointState::ActiveWaiting;
                         Ok((session_id, data.as_slice()))
                     } else {
-                        Err(FeagiNetworkError::ReceiveFailed(
-                            "No data or session in buffer".to_string(),
-                        ))
+                        Err(FeagiNetworkError::ReceiveFailed("No data or session in buffer".to_string()))
                     }
                 } else {
-                    Err(FeagiNetworkError::ReceiveFailed(
-                        "No data available".to_string(),
-                    ))
+                    Err(FeagiNetworkError::ReceiveFailed("No data available".to_string()))
                 }
             }
-            _ => Err(FeagiNetworkError::ReceiveFailed(
-                "Cannot consume: no request available".to_string(),
-            )),
+            _ => Err(FeagiNetworkError::ReceiveFailed("Cannot consume: no request available".to_string())),
         }
     }
 
-    fn publish_response(
-        &mut self,
-        session_id: AgentID,
-        message: &[u8],
-    ) -> Result<(), FeagiNetworkError> {
+    fn publish_response(&mut self, session_id: AgentID, message: &[u8]) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
-                let client_index = *self.session_to_index.get(&session_id).ok_or_else(|| {
-                    FeagiNetworkError::SendFailed(format!("Unknown session: {:?}", session_id))
-                })?;
+                let client_index = *self
+                    .session_to_index
+                    .get(&session_id)
+                    .ok_or_else(|| FeagiNetworkError::SendFailed(format!("Unknown session: {:?}", session_id)))?;
 
                 if client_index >= self.clients.len() {
-                    return Err(FeagiNetworkError::SendFailed(
-                        "Client disconnected".to_string(),
-                    ));
+                    return Err(FeagiNetworkError::SendFailed("Client disconnected".to_string()));
                 }
 
                 let ws_message = Message::Binary(message.to_vec());
 
                 let client = match &mut self.clients[client_index] {
                     HandshakeState::Ready(ws) => ws,
-                    _ => {
-                        return Err(FeagiNetworkError::SendFailed(
-                            "Client not ready".to_string(),
-                        ))
-                    }
+                    _ => return Err(FeagiNetworkError::SendFailed("Client not ready".to_string())),
                 };
 
-                client
-                    .send(ws_message)
-                    .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
-                client
-                    .flush()
-                    .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
+                client.send(ws_message).map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
+                client.flush().map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
 
                 Ok(())
             }

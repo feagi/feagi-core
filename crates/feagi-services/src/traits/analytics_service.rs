@@ -55,11 +55,7 @@ pub trait AnalyticsService: Send + Sync {
     /// # Errors
     /// * `ServiceError::NotFound` - One or both cortical_area areas not found
     ///
-    async fn get_connectivity_stats(
-        &self,
-        source_area: &str,
-        target_area: &str,
-    ) -> ServiceResult<ConnectivityStats>;
+    async fn get_connectivity_stats(&self, source_area: &str, target_area: &str) -> ServiceResult<ConnectivityStats>;
 
     /// Get total neuron count across all cortical_area areas
     ///

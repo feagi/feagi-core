@@ -19,9 +19,7 @@ use std::collections::HashMap;
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_vision(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_vision(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // TODO: Get vision input configuration
     Ok(Json(HashMap::new()))
 }
@@ -55,10 +53,7 @@ pub async fn post_configure(
     State(_state): State<ApiState>,
     Json(_req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Input configured".to_string(),
-    )])))
+    Ok(Json(HashMap::from([("message".to_string(), "Input configured".to_string())])))
 }
 
 // ============================================================================

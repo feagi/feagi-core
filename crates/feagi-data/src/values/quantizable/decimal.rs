@@ -51,25 +51,25 @@ impl QuantizationLevelPacking for DecimalQuantizationLevel {
 
 /// Quantizable data for some decimal value (float)
 pub trait QuantizedDecimalTrait:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::cmp::PartialOrd
-+ core::fmt::Debug
-+ core::fmt::Display
-+ Sized
-+ 'static
-+ QuantizedElementBase
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + Default
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + core::cmp::PartialOrd
+    + core::fmt::Debug
+    + core::fmt::Display
+    + Sized
+    + 'static
+    + QuantizedElementBase
 {
     const LEVEL: DecimalQuantizationLevel;
 
@@ -338,27 +338,27 @@ impl DecimalEnum {
 /// Note: because the underlying types are floats, `Eq`, `Ord` and `Hash` are intentionally *not*
 /// required (nor is `Rem`), matching the interface the macro actually generates.
 pub trait WrappedQuantizedDecimal:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::fmt::Debug
-+ core::cmp::PartialEq
-+ core::cmp::PartialOrd
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ From<Self::Quant>
-+ AsRef<Self::Quant>
-+ AsMut<Self::Quant>
-+ Sized
-+ 'static
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + Default
+    + core::fmt::Debug
+    + core::cmp::PartialEq
+    + core::cmp::PartialOrd
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + From<Self::Quant>
+    + AsRef<Self::Quant>
+    + AsMut<Self::Quant>
+    + Sized
+    + 'static
 {
     /// The underlying quantized decimal value this wrapper stores.
     type Quant: QuantizedDecimalTrait;
@@ -421,16 +421,7 @@ Copy
 ///
 /// These enums hide the generic wrapped decimal type behind concrete variants
 /// (`F16`, `BF16`, `F32`, `F64`, `StorageF8`) while preserving wrapper-family semantics.
-pub trait WrappedQuantizedDecimalEnum:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::cmp::PartialEq
-    + Sized
-    + 'static
-{
+pub trait WrappedQuantizedDecimalEnum: Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + Sized + 'static {
     fn get_level(&self) -> DecimalQuantizationLevel;
 
     fn into_quant<Quant: QuantizedDecimalTrait>(self) -> Quant;
@@ -580,7 +571,7 @@ macro_rules! create_wrapped_quantized_decimal {
                 self.0 /= rhs.0;
             }
         }
-        
+
         impl<Q: $crate::values::quantizable::QuantizedDecimalTrait> Default for $struct_name<Q> {
             fn default() -> Self {
                 Self(Q::default())

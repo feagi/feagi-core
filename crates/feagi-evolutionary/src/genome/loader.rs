@@ -26,9 +26,7 @@ pub fn load_genome_from_file<P: AsRef<Path>>(path: P) -> EvoResult<RuntimeGenome
 
 /// Load a genome from a JSON file and return the chain report alongside
 /// the runtime genome. See [`load_genome_with_report`] for semantics.
-pub fn load_genome_with_report_from_file<P: AsRef<Path>>(
-    path: P,
-) -> EvoResult<(RuntimeGenome, ChainResult)> {
+pub fn load_genome_with_report_from_file<P: AsRef<Path>>(path: P) -> EvoResult<(RuntimeGenome, ChainResult)> {
     let json_str = fs::read_to_string(path)?;
     load_genome_with_report(&json_str)
 }
@@ -57,8 +55,8 @@ pub fn load_genome_with_report_from_file<P: AsRef<Path>>(
 pub fn peek_quantization_precision<P: AsRef<Path>>(path: P) -> EvoResult<String> {
     let json_str = fs::read_to_string(path)?;
 
-    let json_value: Value = serde_json::from_str(&json_str)
-        .map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to parse JSON: {e}")))?;
+    let json_value: Value =
+        serde_json::from_str(&json_str).map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to parse JSON: {e}")))?;
 
     let precision = json_value
         .get("genome_physiology")
@@ -109,8 +107,8 @@ pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
 /// JSON parse, or structural failures where there is no `RuntimeGenome`
 /// to return at all.
 pub fn load_genome_with_report(json_str: &str) -> EvoResult<(RuntimeGenome, ChainResult)> {
-    let json_value: Value = serde_json::from_str(json_str)
-        .map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to parse JSON: {e}")))?;
+    let json_value: Value =
+        serde_json::from_str(json_str).map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to parse JSON: {e}")))?;
 
     let hierarchical_json = if is_flat_format(&json_value) {
         crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value).map_err(|e| {
@@ -123,9 +121,8 @@ pub fn load_genome_with_report(json_str: &str) -> EvoResult<(RuntimeGenome, Chai
 
     let (migrated_json, report) = run_default_chain(hierarchical_json)?;
 
-    let migrated_json_str = serde_json::to_string(&migrated_json).map_err(|e| {
-        crate::types::EvoError::invalid_genome(format!("Failed to serialize migrated genome: {e}"))
-    })?;
+    let migrated_json_str = serde_json::to_string(&migrated_json)
+        .map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to serialize migrated genome: {e}")))?;
 
     let parsed = GenomeParser::parse(&migrated_json_str).map_err(|e| {
         tracing::error!(target: "feagi-evo", "GenomeParser::parse failed: {}", e);
@@ -331,9 +328,6 @@ mod tests {
             "timestamp": 0.0
         }"#;
         let result = load_genome_with_report(json);
-        assert!(
-            result.is_ok(),
-            "load_genome_with_report must not turn validator output into Err"
-        );
+        assert!(result.is_ok(), "load_genome_with_report must not turn validator output into Err");
     }
 }

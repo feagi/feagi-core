@@ -42,10 +42,7 @@ pub enum ConnectomeError {
     Deserialization(String),
 
     #[error("Version mismatch: file version {file_version}, expected {expected_version}")]
-    VersionMismatch {
-        file_version: u32,
-        expected_version: u32,
-    },
+    VersionMismatch { file_version: u32, expected_version: u32 },
 
     #[error("Invalid magic number: expected FEAGI, got {0:?}")]
     InvalidMagic([u8; 5]),
@@ -92,15 +89,13 @@ pub fn save_connectome<P: AsRef<Path>>(snapshot: &ConnectomeSnapshot, path: P) -
     file.write_all(&FORMAT_VERSION.to_le_bytes())?;
 
     // Serialize data
-    let data =
-        bincode::serialize(snapshot).map_err(|e| ConnectomeError::Serialization(e.to_string()))?;
+    let data = bincode::serialize(snapshot).map_err(|e| ConnectomeError::Serialization(e.to_string()))?;
 
     // Compress if feature enabled
     #[cfg(feature = "connectome-compression")]
     let (final_data, flags, uncompressed_size) = {
         let original_size = data.len();
-        let compressed = lz4::block::compress(&data, None, false)
-            .map_err(|e| ConnectomeError::Compression(e.to_string()))?;
+        let compressed = lz4::block::compress(&data, None, false).map_err(|e| ConnectomeError::Compression(e.to_string()))?;
         (compressed, 1u8, original_size as u64) // Flag bit 0 = compressed
     };
 
@@ -202,8 +197,7 @@ pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
     };
 
     // Deserialize
-    let snapshot: ConnectomeSnapshot =
-        bincode::deserialize(&data).map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
+    let snapshot: ConnectomeSnapshot = bincode::deserialize(&data).map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
 
     Ok(snapshot)
 }

@@ -16,9 +16,8 @@ Licensed under the Apache License, Version 2.0
 
 use crate::genome::signatures::generate_signatures;
 use crate::{
-    EvoError, EvoResult, GenomeMetadata, GenomeStats, Morphology, MorphologyParameters,
-    MorphologyRegistry, MorphologyType, ParsedGenome, PatternElement, PhysiologyConfig,
-    RuntimeGenome,
+    EvoError, EvoResult, GenomeMetadata, GenomeStats, Morphology, MorphologyParameters, MorphologyRegistry, MorphologyType, ParsedGenome,
+    PatternElement, PhysiologyConfig, RuntimeGenome,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -32,15 +31,10 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
     let metadata = GenomeMetadata {
         genome_id: parsed.genome_id.clone(),
         genome_title: parsed.genome_title.clone(),
-        genome_description: raw_value["genome_description"]
-            .as_str()
-            .unwrap_or("")
-            .to_string(),
+        genome_description: raw_value["genome_description"].as_str().unwrap_or("").to_string(),
         version: parsed.version.clone(),
         timestamp: raw_value["timestamp"].as_f64().unwrap_or(0.0),
-        brain_regions_root: raw_value["brain_regions_root"]
-            .as_str()
-            .map(|s| s.to_string()),
+        brain_regions_root: raw_value["brain_regions_root"].as_str().map(|s| s.to_string()),
     };
 
     // Convert cortical_area areas to HashMap with CorticalID keys
@@ -68,11 +62,7 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
     // Generate signatures
     // For signature generation, we need the raw blueprint and morphologies as HashMap<String, Value>
     let blueprint_map = extract_blueprint_map(&raw_value)?;
-    let signatures = generate_signatures(
-        &blueprint_map,
-        &parsed.neuron_morphologies,
-        &parsed.physiology,
-    )?;
+    let signatures = generate_signatures(&blueprint_map, &parsed.neuron_morphologies, &parsed.physiology)?;
 
     Ok(RuntimeGenome {
         metadata,
@@ -126,23 +116,14 @@ fn parse_single_morphology(value: &Value) -> EvoResult<Morphology> {
         .as_str()
         .map(|s| s.to_string())
         .or_else(|| infer_morphology_type_from_params(&value["parameters"]))
-        .ok_or_else(|| {
-            EvoError::invalid_genome(
-                "Morphology missing 'type' field and parameters do not allow inference".to_string(),
-            )
-        })?;
+        .ok_or_else(|| EvoError::invalid_genome("Morphology missing 'type' field and parameters do not allow inference".to_string()))?;
 
     let morphology_type = match morphology_type_str.as_str() {
         "vectors" => MorphologyType::Vectors,
         "patterns" => MorphologyType::Patterns,
         "functions" => MorphologyType::Functions,
         "composite" => MorphologyType::Composite,
-        _ => {
-            return Err(EvoError::invalid_genome(format!(
-                "Unknown morphology type: {}",
-                morphology_type_str
-            )))
-        }
+        _ => return Err(EvoError::invalid_genome(format!("Unknown morphology type: {}", morphology_type_str))),
     };
 
     let parameters = parse_morphology_parameters(&morphology_type, &value["parameters"])?;
@@ -157,38 +138,32 @@ fn parse_single_morphology(value: &Value) -> EvoResult<Morphology> {
 }
 
 /// Parse morphology parameters based on type
-fn parse_morphology_parameters(
-    morphology_type: &MorphologyType,
-    params_value: &Value,
-) -> EvoResult<MorphologyParameters> {
+fn parse_morphology_parameters(morphology_type: &MorphologyType, params_value: &Value) -> EvoResult<MorphologyParameters> {
     match morphology_type {
         MorphologyType::Vectors => {
-            let vectors_array = params_value["vectors"].as_array().ok_or_else(|| {
-                EvoError::invalid_genome("Vectors morphology missing 'vectors' array".to_string())
-            })?;
+            let vectors_array = params_value["vectors"]
+                .as_array()
+                .ok_or_else(|| EvoError::invalid_genome("Vectors morphology missing 'vectors' array".to_string()))?;
 
             let mut vectors = Vec::new();
             for vec in vectors_array {
-                let vec_array = vec.as_array().ok_or_else(|| {
-                    EvoError::invalid_genome("Vector must be an array".to_string())
-                })?;
+                let vec_array = vec
+                    .as_array()
+                    .ok_or_else(|| EvoError::invalid_genome("Vector must be an array".to_string()))?;
 
                 if vec_array.len() != 3 {
-                    return Err(EvoError::invalid_genome(format!(
-                        "Vector must have 3 elements, got {}",
-                        vec_array.len()
-                    )));
+                    return Err(EvoError::invalid_genome(format!("Vector must have 3 elements, got {}", vec_array.len())));
                 }
 
-                let x = vec_array[0].as_i64().ok_or_else(|| {
-                    EvoError::invalid_genome("Vector element must be an integer".to_string())
-                })? as i32;
-                let y = vec_array[1].as_i64().ok_or_else(|| {
-                    EvoError::invalid_genome("Vector element must be an integer".to_string())
-                })? as i32;
-                let z = vec_array[2].as_i64().ok_or_else(|| {
-                    EvoError::invalid_genome("Vector element must be an integer".to_string())
-                })? as i32;
+                let x = vec_array[0]
+                    .as_i64()
+                    .ok_or_else(|| EvoError::invalid_genome("Vector element must be an integer".to_string()))? as i32;
+                let y = vec_array[1]
+                    .as_i64()
+                    .ok_or_else(|| EvoError::invalid_genome("Vector element must be an integer".to_string()))? as i32;
+                let z = vec_array[2]
+                    .as_i64()
+                    .ok_or_else(|| EvoError::invalid_genome("Vector element must be an integer".to_string()))? as i32;
 
                 vectors.push([x, y, z]);
             }
@@ -197,22 +172,18 @@ fn parse_morphology_parameters(
         }
 
         MorphologyType::Patterns => {
-            let patterns_array = params_value["patterns"].as_array().ok_or_else(|| {
-                EvoError::invalid_genome("Patterns morphology missing 'patterns' array".to_string())
-            })?;
+            let patterns_array = params_value["patterns"]
+                .as_array()
+                .ok_or_else(|| EvoError::invalid_genome("Patterns morphology missing 'patterns' array".to_string()))?;
 
             let mut patterns = Vec::new();
             for pattern in patterns_array {
-                let pattern_pair = pattern.as_array().ok_or_else(|| {
-                    EvoError::invalid_genome(
-                        "Pattern must be an array of [source, dest]".to_string(),
-                    )
-                })?;
+                let pattern_pair = pattern
+                    .as_array()
+                    .ok_or_else(|| EvoError::invalid_genome("Pattern must be an array of [source, dest]".to_string()))?;
 
                 if pattern_pair.len() != 2 {
-                    return Err(EvoError::invalid_genome(
-                        "Pattern must have 2 elements [source, dest]".to_string(),
-                    ));
+                    return Err(EvoError::invalid_genome("Pattern must have 2 elements [source, dest]".to_string()));
                 }
 
                 let source = parse_pattern_elements(&pattern_pair[0])?;
@@ -228,43 +199,39 @@ fn parse_morphology_parameters(
 
         MorphologyType::Composite => {
             let src_seed = parse_u32_array(
-                params_value["src_seed"].as_array().ok_or_else(|| {
-                    EvoError::invalid_genome("Composite missing 'src_seed'".to_string())
-                })?,
+                params_value["src_seed"]
+                    .as_array()
+                    .ok_or_else(|| EvoError::invalid_genome("Composite missing 'src_seed'".to_string()))?,
                 3,
             )?;
 
-            let src_pattern_array = params_value["src_pattern"].as_array().ok_or_else(|| {
-                EvoError::invalid_genome("Composite missing 'src_pattern'".to_string())
-            })?;
+            let src_pattern_array = params_value["src_pattern"]
+                .as_array()
+                .ok_or_else(|| EvoError::invalid_genome("Composite missing 'src_pattern'".to_string()))?;
 
             let mut src_pattern = Vec::new();
             for item in src_pattern_array {
-                let pair = item.as_array().ok_or_else(|| {
-                    EvoError::invalid_genome("src_pattern item must be [i32, i32]".to_string())
-                })?;
+                let pair = item
+                    .as_array()
+                    .ok_or_else(|| EvoError::invalid_genome("src_pattern item must be [i32, i32]".to_string()))?;
 
                 if pair.len() != 2 {
-                    return Err(EvoError::invalid_genome(
-                        "src_pattern item must have 2 elements".to_string(),
-                    ));
+                    return Err(EvoError::invalid_genome("src_pattern item must have 2 elements".to_string()));
                 }
 
-                let a = pair[0].as_i64().ok_or_else(|| {
-                    EvoError::invalid_genome("src_pattern value must be integer".to_string())
-                })? as i32;
-                let b = pair[1].as_i64().ok_or_else(|| {
-                    EvoError::invalid_genome("src_pattern value must be integer".to_string())
-                })? as i32;
+                let a = pair[0]
+                    .as_i64()
+                    .ok_or_else(|| EvoError::invalid_genome("src_pattern value must be integer".to_string()))? as i32;
+                let b = pair[1]
+                    .as_i64()
+                    .ok_or_else(|| EvoError::invalid_genome("src_pattern value must be integer".to_string()))? as i32;
 
                 src_pattern.push([a, b]);
             }
 
             let mapper_morphology = params_value["mapper_morphology"]
                 .as_str()
-                .ok_or_else(|| {
-                    EvoError::invalid_genome("Composite missing 'mapper_morphology'".to_string())
-                })?
+                .ok_or_else(|| EvoError::invalid_genome("Composite missing 'mapper_morphology'".to_string()))?
                 .to_string();
 
             Ok(MorphologyParameters::Composite {
@@ -285,14 +252,11 @@ fn parse_pattern_elements(value: &Value) -> EvoResult<Vec<PatternElement>> {
     let mut elements = Vec::new();
     for elem in array {
         let pattern_elem = if let Some(s) = elem.as_str() {
-            PatternElement::parse_string(s)
-                .ok_or_else(|| EvoError::invalid_genome(format!("Unknown pattern element: {}", s)))?
+            PatternElement::parse_string(s).ok_or_else(|| EvoError::invalid_genome(format!("Unknown pattern element: {}", s)))?
         } else if let Some(i) = elem.as_i64() {
             PatternElement::Value(i as i32)
         } else {
-            return Err(EvoError::invalid_genome(
-                "Pattern element must be string or integer".to_string(),
-            ));
+            return Err(EvoError::invalid_genome("Pattern element must be string or integer".to_string()));
         };
 
         elements.push(pattern_elem);
@@ -313,9 +277,9 @@ fn parse_u32_array(array: &[Value], expected_len: usize) -> EvoResult<[u32; 3]> 
 
     let mut result = [0u32; 3];
     for (i, val) in array.iter().enumerate() {
-        result[i] = val.as_u64().ok_or_else(|| {
-            EvoError::invalid_genome("Array element must be unsigned integer".to_string())
-        })? as u32;
+        result[i] = val
+            .as_u64()
+            .ok_or_else(|| EvoError::invalid_genome("Array element must be unsigned integer".to_string()))? as u32;
     }
 
     Ok(result)
@@ -332,18 +296,14 @@ fn parse_physiology(physiology_value: &Option<Value>) -> EvoResult<PhysiologyCon
                 .unwrap_or(0.025);
 
             // Parse quantization precision (new field)
-            let quantization_precision = value["quantization_precision"]
-                .as_str()
-                .unwrap_or("fp32")
-                .to_string();
+            let quantization_precision = value["quantization_precision"].as_str().unwrap_or("fp32").to_string();
 
             Ok(PhysiologyConfig {
                 simulation_timestep,
                 max_age: value["max_age"].as_u64().unwrap_or(10_000_000),
                 evolution_burst_count: value["evolution_burst_count"].as_u64().unwrap_or(50),
                 ipu_idle_threshold: value["ipu_idle_threshold"].as_u64().unwrap_or(1000),
-                plasticity_queue_depth: value["plasticity_queue_depth"].as_u64().unwrap_or(3)
-                    as usize,
+                plasticity_queue_depth: value["plasticity_queue_depth"].as_u64().unwrap_or(3) as usize,
                 lifespan_mgmt_interval: value["lifespan_mgmt_interval"].as_u64().unwrap_or(10),
                 quantization_precision,
             })
@@ -356,12 +316,9 @@ fn parse_physiology(physiology_value: &Option<Value>) -> EvoResult<PhysiologyCon
 fn parse_stats(genome_value: &Value) -> EvoResult<GenomeStats> {
     if let Some(stats_value) = genome_value.get("stats") {
         Ok(GenomeStats {
-            innate_cortical_area_count: stats_value["innate_cortical_area_count"]
-                .as_u64()
-                .unwrap_or(0) as usize,
+            innate_cortical_area_count: stats_value["innate_cortical_area_count"].as_u64().unwrap_or(0) as usize,
             innate_neuron_count: stats_value["innate_neuron_count"].as_u64().unwrap_or(0) as usize,
-            innate_synapse_count: stats_value["innate_synapse_count"].as_u64().unwrap_or(0)
-                as usize,
+            innate_synapse_count: stats_value["innate_synapse_count"].as_u64().unwrap_or(0) as usize,
         })
     } else {
         Ok(GenomeStats::default())
@@ -381,9 +338,7 @@ fn extract_blueprint_map(genome_value: &Value) -> EvoResult<HashMap<String, Valu
         }
         Ok(map)
     } else {
-        Err(EvoError::invalid_genome(
-            "Blueprint must be an object".to_string(),
-        ))
+        Err(EvoError::invalid_genome("Blueprint must be an object".to_string()))
     }
 }
 

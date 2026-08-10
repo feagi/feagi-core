@@ -1,7 +1,7 @@
-use feagi_data::values::quantizable::DecimalQuantizationLevel;
 use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
 use crate::cortical_mapping_entry::synapse::synapse_model_quantization_level::SynapseModelQuantizationLevel;
 use crate::cortical_mapping_entry::synapse_model_implementations::generated_enums::{SynapseModelType, SynapseModelTypeAndQuantizationNested};
+use feagi_data::values::quantizable::DecimalQuantizationLevel;
 
 pub trait UniformSynapseModelQuantization: SynapseModelQuantization + Clone + Copy {
     const MODEL_QUANTIZATION_LEVEL: UniformSynapseModelQuantizationLevel;

@@ -1,2 +1,2 @@
-pub mod neuron_history;
 pub mod implementations;
+pub mod neuron_history;

@@ -56,10 +56,7 @@ impl SensorTranslator {
             FeagiEndpointState::ActiveWaiting => Ok(None),
             FeagiEndpointState::ActiveHasData => {
                 let data = self.sensor_server.consume_retrieved_data()?;
-                match self
-                    .sensor_byte_cache
-                    .try_write_data_by_copy_and_verify(data)
-                {
+                match self.sensor_byte_cache.try_write_data_by_copy_and_verify(data) {
                     Ok(()) => Ok(Some(&self.sensor_byte_cache)),
                     Err(e) => {
                         panic!("Dropping malformed short sensor frame for session");

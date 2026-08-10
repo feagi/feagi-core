@@ -11,6 +11,6 @@ generate_feagi_error! {
         InvalidDimensions: FeagiVoxelsInvalidDimensions
     },
     sub_errors: {
-        
+
     },
 }

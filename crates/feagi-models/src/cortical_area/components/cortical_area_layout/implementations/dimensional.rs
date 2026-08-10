@@ -1,7 +1,7 @@
-use feagi_data::neurons::{DimensionalCorticalArea4DDimensions};
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
 use crate::cortical_area::components::cortical_area_layout::enums::{CorticalAreaLayoutNested, CorticalAreaLayoutTypePacked};
+use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
+use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Represents the layout of a cortical area with xyz and d dimensions
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]

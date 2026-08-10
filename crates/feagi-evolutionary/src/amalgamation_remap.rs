@@ -1,4 +1,3 @@
-
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -15,17 +14,16 @@ Licensed under the Apache License, Version 2.0
 
 use crate::random::random_bytes;
 use crate::runtime::RuntimeGenome;
+use feagi_data::feagi_data_error::FeagiDataError;
 use feagi_genomic_context::cortical_area::CorticalAreaType;
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_data::feagi_data_error::FeagiDataError;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-
 
 use feagi_data::feagi_data_error::FeagiFailDataEtc;
 use feagi_genomic_context::brain_region::BrainRegion;
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
-        use feagi_genomic_data::cortical_area_prev::CorticalArea;
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -36,10 +34,7 @@ const MAX_ID_ALLOC_ATTEMPTS: u32 = 100_000;
 
 /// Allocate a new cortical_area ID with the given first-byte prefix (`c` or `m`), distinct from
 /// `reserved` (inserts the chosen ID into `reserved`).
-fn allocate_unique_typed_id(
-    prefix: u8,
-    reserved: &mut HashSet<String>,
-) -> Result<CorticalID, FeagiDataError> {
+fn allocate_unique_typed_id(prefix: u8, reserved: &mut HashSet<String>) -> Result<CorticalID, FeagiDataError> {
     for _ in 0..MAX_ID_ALLOC_ATTEMPTS {
         let mut bytes = [0u8; CorticalID::CORTICAL_ID_LENGTH];
         bytes[0] = prefix;
@@ -58,12 +53,7 @@ fn allocate_unique_typed_id(
 }
 
 fn remap_region_io_lists(region: &mut BrainRegion, b64_remap: &HashMap<String, String>) {
-    for key in [
-        "inputs",
-        "outputs",
-        "designated_inputs",
-        "designated_outputs",
-    ] {
+    for key in ["inputs", "outputs", "designated_inputs", "designated_outputs"] {
         let Some(val) = region.properties.get_mut(key) else {
             continue;
         };
@@ -80,10 +70,7 @@ fn remap_region_io_lists(region: &mut BrainRegion, b64_remap: &HashMap<String, S
     }
 }
 
-fn remap_cortical_mapping_dst_keys(
-    properties: &mut HashMap<String, Value>,
-    b64_remap: &HashMap<String, String>,
-) {
+fn remap_cortical_mapping_dst_keys(properties: &mut HashMap<String, Value>, b64_remap: &HashMap<String, String>) {
     let Some(Value::Object(dstmap)) = properties.get_mut("cortical_mapping_dst") else {
         return;
     };
@@ -113,10 +100,7 @@ pub fn remap_guest_custom_memory_cortical_ids_for_amalgamation(
     let mut id_remap: HashMap<CorticalID, CorticalID> = HashMap::new();
 
     for (old_id, area) in genome.cortical_areas.iter() {
-        let needs_remapping = matches!(
-            &area.cortical_type,
-            CorticalAreaType::Custom(_) | CorticalAreaType::Memory(_)
-        );
+        let needs_remapping = matches!(&area.cortical_type, CorticalAreaType::Custom(_) | CorticalAreaType::Memory(_));
         if !needs_remapping {
             continue;
         }
@@ -139,8 +123,7 @@ pub fn remap_guest_custom_memory_cortical_ids_for_amalgamation(
     }
 
     // Re-key cortical_areas and refresh each area's `cortical_id`.
-    let mut new_areas: HashMap<CorticalID, CorticalArea> =
-        HashMap::with_capacity(genome.cortical_areas.len());
+    let mut new_areas: HashMap<CorticalID, CorticalArea> = HashMap::with_capacity(genome.cortical_areas.len());
     for (old_id, mut area) in std::mem::take(&mut genome.cortical_areas) {
         let new_id = id_remap.get(&old_id).copied().unwrap_or(old_id);
         area.cortical_id = new_id;
@@ -167,12 +150,12 @@ pub fn remap_guest_custom_memory_cortical_ids_for_amalgamation(
 
 #[cfg(test)]
 mod tests {
-    use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
     use super::*;
     use crate::random::random_bytes;
     use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, PhysiologyConfig};
     use crate::MorphologyRegistry;
     use crate::RuntimeGenome;
+    use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
     use feagi_genomic_context::cortical_area::CustomCorticalType;
 
     fn sample_custom_cortical_id() -> CorticalID {
@@ -224,26 +207,17 @@ mod tests {
         let sample_custom = old_id.as_base_64();
         host.insert(sample_custom.clone());
 
-        let pairs = remap_guest_custom_memory_cortical_ids_for_amalgamation(&mut genome, &host)
-            .expect("remap");
+        let pairs = remap_guest_custom_memory_cortical_ids_for_amalgamation(&mut genome, &host).expect("remap");
 
-        assert!(
-            pairs.contains_key(&sample_custom),
-            "expected reserved custom id to be remapped"
-        );
+        assert!(pairs.contains_key(&sample_custom), "expected reserved custom id to be remapped");
         let new_b64 = pairs.get(&sample_custom).unwrap();
         assert_ne!(new_b64, &sample_custom);
         assert!(
-            genome
-                .cortical_areas
-                .keys()
-                .any(|k| k.as_base_64() == *new_b64),
+            genome.cortical_areas.keys().any(|k| k.as_base_64() == *new_b64),
             "new id should appear as a cortical_areas key"
         );
         assert!(
-            !genome
-                .cortical_areas
-                .contains_key(&CorticalID::try_from_base_64(&sample_custom).unwrap()),
+            !genome.cortical_areas.contains_key(&CorticalID::try_from_base_64(&sample_custom).unwrap()),
             "old custom id should not remain as a key when remapped"
         );
     }

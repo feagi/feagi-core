@@ -28,22 +28,18 @@ pub struct StateSnapshot {
 impl StateSnapshot {
     /// Save snapshot to file
     pub fn save_to_file(&self, path: &std::path::Path) -> Result<()> {
-        let encoded = bincode::serialize(self)
-            .map_err(|e| StateError::PersistenceError(format!("Serialize failed: {}", e)))?;
+        let encoded = bincode::serialize(self).map_err(|e| StateError::PersistenceError(format!("Serialize failed: {}", e)))?;
 
-        std::fs::write(path, encoded)
-            .map_err(|e| StateError::PersistenceError(format!("Write failed: {}", e)))?;
+        std::fs::write(path, encoded).map_err(|e| StateError::PersistenceError(format!("Write failed: {}", e)))?;
 
         Ok(())
     }
 
     /// Load snapshot from file
     pub fn load_from_file(path: &std::path::Path) -> Result<Self> {
-        let data = std::fs::read(path)
-            .map_err(|e| StateError::PersistenceError(format!("Read failed: {}", e)))?;
+        let data = std::fs::read(path).map_err(|e| StateError::PersistenceError(format!("Read failed: {}", e)))?;
 
-        let snapshot = bincode::deserialize(&data)
-            .map_err(|e| StateError::PersistenceError(format!("Deserialize failed: {}", e)))?;
+        let snapshot = bincode::deserialize(&data).map_err(|e| StateError::PersistenceError(format!("Deserialize failed: {}", e)))?;
 
         Ok(snapshot)
     }
@@ -56,15 +52,11 @@ pub struct StateSnapshot;
 #[cfg(not(feature = "std"))]
 impl StateSnapshot {
     pub fn save_to_file(&self, _path: &str) -> Result<()> {
-        Err(StateError::PersistenceError(
-            "Persistence not available on no_std".to_string(),
-        ))
+        Err(StateError::PersistenceError("Persistence not available on no_std".to_string()))
     }
 
     pub fn load_from_file(_path: &str) -> Result<Self> {
-        Err(StateError::PersistenceError(
-            "Persistence not available on no_std".to_string(),
-        ))
+        Err(StateError::PersistenceError("Persistence not available on no_std".to_string()))
     }
 }
 

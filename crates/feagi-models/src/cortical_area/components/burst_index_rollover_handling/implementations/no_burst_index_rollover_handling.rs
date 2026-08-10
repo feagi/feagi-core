@@ -1,9 +1,9 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::cortical_area::components::burst_index_rollover_handling::neuron_burst_index_rollover_handling::NeuronModelBurstIndexRolloverHandling;
 use crate::cortical_area::neuron::cortical_data::NeuronModelCorticalData;
 use crate::cortical_area::neuron::neuron_data::NeuronModelNeuronData;
 use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
 use crate::wrapped_indexes::BurstIndex;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// The case for many neuron models, since Neuron History is automatically rolled over
 /// by the burst engine anyway

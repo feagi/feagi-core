@@ -36,15 +36,13 @@ mod client_implementations;
 #[cfg(feature = "feagi-server")]
 // Server implementations and properties
 pub use server_implementations::{
-    FeagiWebSocketServerPublisher, FeagiWebSocketServerPublisherProperties,
-    FeagiWebSocketServerPuller, FeagiWebSocketServerPullerProperties, FeagiWebSocketServerRouter,
-    FeagiWebSocketServerRouterProperties,
+    FeagiWebSocketServerPublisher, FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPuller, FeagiWebSocketServerPullerProperties,
+    FeagiWebSocketServerRouter, FeagiWebSocketServerRouterProperties,
 };
 
 #[cfg(feature = "feagi-client")]
 // Client implementations and properties
 pub use client_implementations::{
-    FeagiWebSocketClientPusher, FeagiWebSocketClientPusherProperties,
-    FeagiWebSocketClientRequester, FeagiWebSocketClientRequesterProperties,
+    FeagiWebSocketClientPusher, FeagiWebSocketClientPusherProperties, FeagiWebSocketClientRequester, FeagiWebSocketClientRequesterProperties,
     FeagiWebSocketClientSubscriber, FeagiWebSocketClientSubscriberProperties,
 };

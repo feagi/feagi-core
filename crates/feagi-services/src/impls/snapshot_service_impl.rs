@@ -35,10 +35,7 @@ impl SnapshotServiceImpl {
 
 #[async_trait]
 impl SnapshotService for SnapshotServiceImpl {
-    async fn create_snapshot(
-        &self,
-        options: SnapshotCreateOptions,
-    ) -> ServiceResult<SnapshotMetadata> {
+    async fn create_snapshot(&self, options: SnapshotCreateOptions) -> ServiceResult<SnapshotMetadata> {
         // Generate unique snapshot ID
         let snapshot_id = uuid::Uuid::new_v4().to_string();
         let timestamp = chrono::Utc::now().to_rfc3339();
@@ -83,11 +80,7 @@ impl SnapshotService for SnapshotServiceImpl {
         Ok(())
     }
 
-    async fn get_snapshot_artifact(
-        &self,
-        snapshot_id: &str,
-        format: &str,
-    ) -> ServiceResult<Vec<u8>> {
+    async fn get_snapshot_artifact(&self, snapshot_id: &str, format: &str) -> ServiceResult<Vec<u8>> {
         // TODO: Load and return snapshot artifact
 
         warn!(target: "feagi-services", "get_snapshot_artifact not yet implemented: {} ({})",

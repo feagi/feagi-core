@@ -6,7 +6,6 @@
 
 //pub use contiguous_vector::ContiguousVoxelVector;
 
-
 // TODO bring back others later
 
 //mod sparse_hashmap;
@@ -14,4 +13,3 @@
 //pub mod shared_traits;
 //pub use contiguous_vector::NeuronVoxelCollectionContiguousVectorGeneric;
 //pub use sparse_hashmap::NeuronVoxelCollectionSparseHashmapGeneric;
-

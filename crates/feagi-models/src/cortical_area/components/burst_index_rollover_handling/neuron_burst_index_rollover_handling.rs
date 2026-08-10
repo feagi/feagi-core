@@ -32,4 +32,3 @@ where
         upcoming_rollover_burst: BurstIndex<FIQ::GlobalBurstIndexQuant>,
     );
 }
-

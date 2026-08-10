@@ -85,9 +85,7 @@ impl serde::Serialize for GenomeCoordinate3D {
 #[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for GenomeCoordinate3D {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let (x, y, z) = <(GenomeAxisQuant, GenomeAxisQuant, GenomeAxisQuant)>::deserialize(
-            deserializer,
-        )?;
+        let (x, y, z) = <(GenomeAxisQuant, GenomeAxisQuant, GenomeAxisQuant)>::deserialize(deserializer)?;
         Ok(Self::new(x, y, z))
     }
 }

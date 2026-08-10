@@ -1,4 +1,6 @@
-use crate::index_range_managers::feagi_index_range_manager_error::{FeagiIndexManagerInvalid, FeagiIndexManagerInvalidIndex, FeagiIndexManagerLimit, FeagiIndexRangeManagerError};
+use crate::index_range_managers::feagi_index_range_manager_error::{
+    FeagiIndexManagerInvalid, FeagiIndexManagerInvalidIndex, FeagiIndexManagerLimit, FeagiIndexRangeManagerError,
+};
 use crate::values::quantizable::QuantizedIndexCountTrait;
 
 pub struct IndexManager<Q: QuantizedIndexCountTrait> {
@@ -32,7 +34,7 @@ impl<Q: QuantizedIndexCountTrait> IndexManager<Q> {
         }
 
         if self.next_index == self.maximum_index {
-            return Err(FeagiIndexManagerLimit::new("Reached maximum index").into())
+            return Err(FeagiIndexManagerLimit::new("Reached maximum index").into());
         }
 
         let i: Q = self.next_index;

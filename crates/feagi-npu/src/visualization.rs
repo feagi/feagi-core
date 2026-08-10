@@ -67,17 +67,13 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
             let layout_index = cortical_lookups[area].cortical_layout_index.deref().quant_to_usize();
             let dimensions = layouts[layout_index].dimensions;
 
-            let first_neuron = index_lookup
-                .cortical_first_neuron_engine_index
-                .deref()
-                .quant_to_usize();
+            let first_neuron = index_lookup.cortical_first_neuron_engine_index.deref().quant_to_usize();
 
             // The burst packs firing state into a bit per neuron, so the set bits are exactly the
             // neurons to draw. Reading them costs one pass over `neuron_count / 8` bytes with
             // whole zero bytes skipped, rather than a test per neuron.
             let bitmap_index = FIQ::CorticalAreaIndexCountQuant::quant_from_usize(area);
-            let Some((firing_bits, _)) = data.neuron_voxel_is_firing.get_slice_by_index(bitmap_index)
-            else {
+            let Some((firing_bits, _)) = data.neuron_voxel_is_firing.get_slice_by_index(bitmap_index) else {
                 continue;
             };
 
@@ -92,8 +88,7 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
             let mut potentials = Vec::with_capacity(firing_count);
 
             firing_bits.for_each_set_bit(|local| {
-                let local_index: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant> =
-                    NeuronCorticalLocalIndex::new(local);
+                let local_index: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant> = NeuronCorticalLocalIndex::new(local);
                 // The 4th axis is the neuron's index within its voxel, which visualizers do not
                 // draw, so only the spatial axes are carried over.
                 let coordinate = dimensions.linear_index_to_coordinate_unchecked(local_index);
@@ -104,10 +99,7 @@ impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
 
                 let engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant> =
                     NeuronEngineIndex::quant_from_usize(first_neuron + local.quant_to_usize());
-                let mp_slot = index_lookup
-                    .get_neuron_mp_index(&engine_index)
-                    .deref()
-                    .quant_to_usize();
+                let mp_slot = index_lookup.get_neuron_mp_index(&engine_index).deref().quant_to_usize();
                 potentials.push(membrane_potentials[mp_slot].deref());
             });
 

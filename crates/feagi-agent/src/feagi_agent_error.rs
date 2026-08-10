@@ -1,7 +1,7 @@
 //! Unified error types for the FEAGI agent (client and server).
 
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
 use feagi_io::FeagiNetworkError;
+use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
 
 macro_rules! define_feagi_agent_error_key {
     ($(#[$meta:meta])* $name:ident) => {
@@ -74,11 +74,7 @@ impl FeagiAgentError {
     }
 
     pub fn unable_to_decode_received_data(message: impl Into<String>) -> Self {
-        FeagiAgentUnableToDecodeReceivedDataErrKey::new(
-            "FeagiAgentError: Unable to decode received data",
-            message.into(),
-        )
-        .into()
+        FeagiAgentUnableToDecodeReceivedDataErrKey::new("FeagiAgentError: Unable to decode received data", message.into()).into()
     }
 
     pub fn unable_to_send_data(message: impl Into<String>) -> Self {
@@ -126,31 +122,15 @@ pub fn is_transient_zmq_send_message(message: &str) -> bool {
 impl From<FeagiNetworkError> for FeagiAgentError {
     fn from(err: FeagiNetworkError) -> Self {
         match err {
-            FeagiNetworkError::CannotBind(msg) => {
-                FeagiAgentError::init_fail(format!("Cannot bind: {}", msg))
-            }
-            FeagiNetworkError::CannotUnbind(msg) => {
-                FeagiAgentError::socket_failure(format!("Cannot unbind: {}", msg))
-            }
-            FeagiNetworkError::CannotConnect(msg) => {
-                FeagiAgentError::connection_failed(format!("Cannot connect: {}", msg))
-            }
-            FeagiNetworkError::CannotDisconnect(msg) => {
-                FeagiAgentError::socket_failure(format!("Cannot disconnect: {}", msg))
-            }
+            FeagiNetworkError::CannotBind(msg) => FeagiAgentError::init_fail(format!("Cannot bind: {}", msg)),
+            FeagiNetworkError::CannotUnbind(msg) => FeagiAgentError::socket_failure(format!("Cannot unbind: {}", msg)),
+            FeagiNetworkError::CannotConnect(msg) => FeagiAgentError::connection_failed(format!("Cannot connect: {}", msg)),
+            FeagiNetworkError::CannotDisconnect(msg) => FeagiAgentError::socket_failure(format!("Cannot disconnect: {}", msg)),
             FeagiNetworkError::SendFailed(msg) => FeagiAgentError::unable_to_send_data(msg),
-            FeagiNetworkError::ReceiveFailed(msg) => {
-                FeagiAgentError::unable_to_decode_received_data(format!("Receive failed: {}", msg))
-            }
-            FeagiNetworkError::InvalidSocketProperties(msg) => {
-                FeagiAgentError::init_fail(format!("Invalid socket properties: {}", msg))
-            }
-            FeagiNetworkError::SocketCreationFailed(msg) => {
-                FeagiAgentError::socket_failure(format!("Socket creation failed: {}", msg))
-            }
-            FeagiNetworkError::GeneralFailure(msg) => {
-                FeagiAgentError::other(format!("General failure: {}", msg))
-            }
+            FeagiNetworkError::ReceiveFailed(msg) => FeagiAgentError::unable_to_decode_received_data(format!("Receive failed: {}", msg)),
+            FeagiNetworkError::InvalidSocketProperties(msg) => FeagiAgentError::init_fail(format!("Invalid socket properties: {}", msg)),
+            FeagiNetworkError::SocketCreationFailed(msg) => FeagiAgentError::socket_failure(format!("Socket creation failed: {}", msg)),
+            FeagiNetworkError::GeneralFailure(msg) => FeagiAgentError::other(format!("General failure: {}", msg)),
         }
     }
 }
@@ -179,9 +159,7 @@ mod transient_send_tests {
 
     #[test]
     fn message_helper_matches() {
-        assert!(is_transient_zmq_send_message(
-            "FeagiAgentError: Unable to send data: Socket would block"
-        ));
+        assert!(is_transient_zmq_send_message("FeagiAgentError: Unable to send data: Socket would block"));
         assert!(!is_transient_zmq_send_message("connection reset"));
     }
 }

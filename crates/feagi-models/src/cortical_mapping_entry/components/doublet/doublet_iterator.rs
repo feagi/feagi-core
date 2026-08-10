@@ -1,9 +1,6 @@
-
 use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
 use feagi_data::neurons::NeuronCorticalLocalIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-
-
 
 /// Used to map source and destination neurons for a cortical mapping entry.
 pub trait DoubletIterator<FIQ, SourceLayout, DestinationLayout>:
@@ -12,11 +9,10 @@ pub trait DoubletIterator<FIQ, SourceLayout, DestinationLayout>:
             NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
             NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
         ),
-    >
-+ ExactSizeIterator
-+ Clone
-+ PartialEq
-+ core::hash::Hash
+    > + ExactSizeIterator
+    + Clone
+    + PartialEq
+    + core::hash::Hash
 where
     FIQ: FeagiIndexQuantization,
     SourceLayout: CorticalAreaLayout<FIQ>,
@@ -27,7 +23,7 @@ where
     /// be useful for genome developers. Set this flag to true to instruct UIs to not
     /// show this as a UI option.
     const ALWAYS_HIDDEN: bool = false;
-    
+
     /// If true, the doublet can be recomputed to remap synapses if either cortical area resizes.
     /// If false, this would mean this doublet would need to be replaced with another for the
     /// given cortical mapping entry if a cortical area is being resized. This should be true

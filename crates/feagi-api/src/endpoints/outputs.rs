@@ -72,14 +72,9 @@ pub async fn get_targets(State(state): State<ApiState>) -> ApiResult<Json<HashMa
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_configure(
-    State(_state): State<ApiState>,
-    Json(request): Json<HashMap<String, Value>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_configure(State(_state): State<ApiState>, Json(request): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     // Extract configuration from request
-    let config = request
-        .get("config")
-        .ok_or_else(|| ApiError::invalid_input("Missing 'config' field"))?;
+    let config = request.get("config").ok_or_else(|| ApiError::invalid_input("Missing 'config' field"))?;
 
     // TODO: Store output configuration in runtime state
     // For now, just validate the structure
@@ -227,12 +222,7 @@ pub async fn get_motor_snapshot_last(
     }
 
     let activity_summary: ActivitySummary =
-        feagi_npu::runtime_taps::BurstActivitySummary::from_areas(
-            snap.burst_num,
-            snap.timestamp_ms,
-            &raw_areas,
-        )
-        .into();
+        feagi_npu::runtime_taps::BurstActivitySummary::from_areas(snap.burst_num, snap.timestamp_ms, &raw_areas).into();
 
     let areas: Vec<MotorTapArea> = raw_areas
         .into_iter()
@@ -291,7 +281,7 @@ pub async fn get_motor_snapshot_last(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_npu::runtime_taps::{BurstActivitySummary, AreaActivity, TapSample};
+    use feagi_npu::runtime_taps::{AreaActivity, BurstActivitySummary, TapSample};
 
     fn area(cortical_id: &str, neuron_count: usize, potentials: &[f32]) -> AreaActivity {
         AreaActivity {
@@ -337,16 +327,9 @@ mod tests {
     /// matching the `cortical_id` filter applied to the returned `areas`.
     #[test]
     fn summary_respects_cortical_id_filter() {
-        let raw = [
-            area("AAAA", 2, &[0.2, 0.8]),
-            area("BBBB", 3, &[0.5, 0.5, 0.5]),
-        ];
+        let raw = [area("AAAA", 2, &[0.2, 0.8]), area("BBBB", 3, &[0.5, 0.5, 0.5])];
 
-        let filtered: Vec<AreaActivity> = raw
-            .iter()
-            .filter(|a| a.cortical_id == "BBBB")
-            .cloned()
-            .collect();
+        let filtered: Vec<AreaActivity> = raw.iter().filter(|a| a.cortical_id == "BBBB").cloned().collect();
         let summary: ActivitySummary = BurstActivitySummary::from_areas(1, 0, &filtered).into();
 
         assert_eq!(summary.active_area_count, 1);

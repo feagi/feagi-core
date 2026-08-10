@@ -14,13 +14,13 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+use super::parser::string_to_cortical_id;
 use crate::{EvoError, EvoResult};
-use serde_json::Value;
-use std::collections::HashMap;
-use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
 use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
 use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
-use super::parser::string_to_cortical_id;
+use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
+use serde_json::Value;
+use std::collections::HashMap;
 
 fn is_legacy_io_shorthand(id: &str) -> bool {
     id.len() == 6 && (id.starts_with('i') || id.starts_with('o'))
@@ -79,10 +79,7 @@ pub fn migrate_genome(genome_json: &Value) -> EvoResult<MigrationResult> {
 }
 
 fn migrate_morphology_ids(result: &mut MigrationResult) -> EvoResult<()> {
-    let replacements: HashMap<&str, &str> = HashMap::from([
-        ("memory", "episodic_memory"),
-        ("bi_directional_stdp", "associative_memory"),
-    ]);
+    let replacements: HashMap<&str, &str> = HashMap::from([("memory", "episodic_memory"), ("bi_directional_stdp", "associative_memory")]);
     let mut replaced_count: usize = 0;
 
     let genome = result
@@ -101,11 +98,7 @@ fn migrate_morphology_ids(result: &mut MigrationResult) -> EvoResult<()> {
         }
     }
 
-    fn update_morphology_id_fields(
-        value: &mut Value,
-        replacements: &HashMap<&str, &str>,
-        replaced_count: &mut usize,
-    ) {
+    fn update_morphology_id_fields(value: &mut Value, replacements: &HashMap<&str, &str>, replaced_count: &mut usize) {
         match value {
             Value::Object(obj) => {
                 if let Some(morphology_id) = obj.get_mut("morphology_id") {
@@ -175,14 +168,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
     if let Some(brain_regions) = genome_json.get("brain_regions").and_then(|v| v.as_object()) {
         for region in brain_regions.values() {
             if let Some(region_obj) = region.as_object() {
-                for arr_key in [
-                    "areas",
-                    "cortical_areas",
-                    "inputs",
-                    "outputs",
-                    "designated_inputs",
-                    "designated_outputs",
-                ] {
+                for arr_key in ["areas", "cortical_areas", "inputs", "outputs", "designated_inputs", "designated_outputs"] {
                     if let Some(Value::Array(arr)) = region_obj.get(arr_key) {
                         for item in arr {
                             if let Some(id) = item.as_str() {
@@ -192,12 +178,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                     }
                 }
                 if let Some(Value::Object(props)) = region_obj.get("properties") {
-                    for arr_key in [
-                        "inputs",
-                        "outputs",
-                        "designated_inputs",
-                        "designated_outputs",
-                    ] {
+                    for arr_key in ["inputs", "outputs", "designated_inputs", "designated_outputs"] {
                         if let Some(Value::Array(arr)) = props.get(arr_key) {
                             for item in arr {
                                 if let Some(id) = item.as_str() {
@@ -275,11 +256,10 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
 
                     if let Some(idx) = tile_idx {
                         let group_index: CorticalUnitIndex = 0.into();
-                        let segmented =
-                            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                                FrameChangeHandling::Absolute,
-                                group_index,
-                            );
+                        let segmented = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                            FrameChangeHandling::Absolute,
+                            group_index,
+                        );
                         if idx < segmented.len() {
                             let new_id = segmented[idx].as_base_64();
                             if !used_base64.contains(&new_id) {
@@ -307,10 +287,9 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                         for group_u16 in 0u16..=u8::MAX as u16 {
                             let group_u8 = group_u16 as u8;
                             let group_index: CorticalUnitIndex = group_u8.into();
-                            let new_id = SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
-                                FrameChangeHandling::Absolute,
-                                group_index,
-                            )[0]
+                            let new_id =
+                                SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(FrameChangeHandling::Absolute, group_index)
+                                    [0]
                                 .as_base_64();
 
                             if used_base64.contains(&new_id) {
@@ -379,10 +358,9 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
             }
         }
 
-        result.warnings.push(format!(
-            "Cannot auto-migrate cortical_area ID: '{}' - no mapping defined",
-            id
-        ));
+        result
+            .warnings
+            .push(format!("Cannot auto-migrate cortical_area ID: '{}' - no mapping defined", id));
     }
 
     if !legacy_io_shorthands.is_empty() {
@@ -414,10 +392,7 @@ fn legacy_io_to_custom_base64(old_id: &str) -> EvoResult<String> {
     } else {
         old_id.to_string()
     };
-    Err(EvoError::invalid_genome(format!(
-        "Failed to convert legacy IO '{}' to custom",
-        old_id,
-    )))
+    Err(EvoError::invalid_genome(format!("Failed to convert legacy IO '{}' to custom", old_id,)))
 }
 
 fn apply_legacy_io_shorthand_migration(
@@ -461,11 +436,7 @@ fn apply_legacy_io_shorthand_migration(
 
             if let Some(idx) = tile_idx {
                 let group_index: CorticalUnitIndex = 0.into();
-                let segmented =
-                    SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                        frame_handling,
-                        group_index,
-                    );
+                let segmented = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(frame_handling, group_index);
                 if idx < segmented.len() {
                     let new_id = segmented[idx].as_base_64();
                     used_base64.insert(new_id.clone());
@@ -631,9 +602,7 @@ fn needs_migration(id: &str) -> bool {
 /// NOTE: Old format doesn't encode frame handling, so we default to Absolute.
 /// This function is public so it can be used by string_to_cortical_id for individual ID conversions.
 pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
-    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
-        FrameChangeHandling, PercentageNeuronPositioning,
-    };
+    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, PercentageNeuronPositioning};
 
     // IPU: iicXYZ → Proper 8-byte SegmentedVision ID
     if old_id.starts_with("iic") && old_id.len() >= 6 {
@@ -646,11 +615,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                     // Priority: Absolute over Incremental (segmented vision doesn't use positioning)
                     let frame_handling = FrameChangeHandling::Absolute;
                     let group_index: CorticalUnitIndex = 0.into();
-                    let cortical_ids =
-                        SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                            frame_handling,
-                            group_index,
-                        );
+                    let cortical_ids = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(frame_handling, group_index);
 
                     if (unit_index as usize) < cortical_ids.len() {
                         let new_id = cortical_ids[unit_index as usize].as_base_64();
@@ -671,19 +636,11 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 let positioning = PercentageNeuronPositioning::Linear;
                 let group_index: CorticalUnitIndex = 0.into();
                 let cortical_ids =
-                    MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
-                        frame_handling,
-                        positioning,
-                        group_index,
-                    );
+                    MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(frame_handling, positioning, group_index);
 
                 if unit_index == 0 && !cortical_ids.is_empty() {
                     let new_id = cortical_ids[0].as_base_64();
-                    tracing::debug!(
-                        "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64, Absolute+Linear)",
-                        old_id,
-                        new_id
-                    );
+                    tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64, Absolute+Linear)", old_id, new_id);
                     return Some(new_id);
                 }
             }
@@ -698,20 +655,11 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 let frame_handling = FrameChangeHandling::Absolute;
                 let positioning = PercentageNeuronPositioning::Linear;
                 let group_index: CorticalUnitIndex = 0.into();
-                let cortical_ids =
-                    MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
-                        frame_handling,
-                        positioning,
-                        group_index,
-                    );
+                let cortical_ids = MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(frame_handling, positioning, group_index);
 
                 if (unit_index as usize) < cortical_ids.len() {
                     let new_id = cortical_ids[unit_index as usize].as_base_64();
-                    tracing::debug!(
-                        "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64, Absolute+Linear)",
-                        old_id,
-                        new_id
-                    );
+                    tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64, Absolute+Linear)", old_id, new_id);
                     return Some(new_id);
                 }
             }
@@ -722,40 +670,24 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
     use feagi_genomic_context::cortical_area::CoreCorticalType;
     if old_id == "_power" {
         let new_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
-        tracing::debug!(
-            "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)",
-            old_id,
-            new_id
-        );
+        tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)", old_id, new_id);
         return Some(new_id);
     }
     // Legacy shorthand used by older FEAGI genomes: "___pwr" (6-char) refers to core Power.
     if old_id == "___pwr" {
         let new_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
-        tracing::debug!(
-            "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)",
-            old_id,
-            new_id
-        );
+        tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)", old_id, new_id);
         return Some(new_id);
     }
     // 8-char padded form of ___pwr (from parser 6-char padding path in legacy genomes)
     if old_id == "___pwr__" {
         let new_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
-        tracing::debug!(
-            "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)",
-            old_id,
-            new_id
-        );
+        tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)", old_id, new_id);
         return Some(new_id);
     }
     if old_id == "_death" {
         let new_id = CoreCorticalType::Death.to_cortical_id().as_base_64();
-        tracing::debug!(
-            "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)",
-            old_id,
-            new_id
-        );
+        tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)", old_id, new_id);
         return Some(new_id);
     }
 
@@ -786,8 +718,7 @@ fn migrate_blueprint(result: &mut MigrationResult) -> EvoResult<()> {
             if let Some(cortical_id) = extract_cortical_id_from_flat_key(old_key) {
                 if let Some(new_id) = result.id_mapping.get(&cortical_id) {
                     // Replace cortical_area ID in flat key
-                    let new_key =
-                        old_key.replace(&format!("-{}-", cortical_id), &format!("-{}-", new_id));
+                    let new_key = old_key.replace(&format!("-{}-", cortical_id), &format!("-{}-", new_id));
                     new_blueprint.insert(new_key, value.clone());
                 } else {
                     new_blueprint.insert(old_key.clone(), value.clone());
@@ -881,12 +812,7 @@ fn migrate_brain_regions(result: &mut MigrationResult) -> EvoResult<()> {
 
                     // v3 nested properties
                     if let Some(Value::Object(props)) = region_obj.get_mut("properties") {
-                        for key in [
-                            "inputs",
-                            "outputs",
-                            "designated_inputs",
-                            "designated_outputs",
-                        ] {
+                        for key in ["inputs", "outputs", "designated_inputs", "designated_outputs"] {
                             if let Some(val) = props.get_mut(key) {
                                 if let Some(arr) = val.as_array_mut() {
                                     for entry in arr.iter_mut() {
@@ -925,15 +851,11 @@ fn migrate_cortical_mappings(result: &mut MigrationResult) -> EvoResult<()> {
                             let mut new_dstmap = serde_json::Map::new();
 
                             for (old_dst_id, mapping_rules) in old_dstmap.iter() {
-                                let new_dst_id =
-                                    result.id_mapping.get(old_dst_id).unwrap_or(old_dst_id);
+                                let new_dst_id = result.id_mapping.get(old_dst_id).unwrap_or(old_dst_id);
                                 new_dstmap.insert(new_dst_id.clone(), mapping_rules.clone());
                             }
 
-                            area_obj.insert(
-                                "cortical_mapping_dst".to_string(),
-                                Value::Object(new_dstmap),
-                            );
+                            area_obj.insert("cortical_mapping_dst".to_string(), Value::Object(new_dstmap));
                         }
                     }
                 }
@@ -959,29 +881,13 @@ mod tests {
         let group_index: CorticalUnitIndex = 0.into();
         let frame_handling = FrameChangeHandling::Absolute;
         let expected_svi0 =
-            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                frame_handling,
-                group_index,
-            )[0]
-            .as_base_64();
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(frame_handling, group_index)[0].as_base_64();
         let expected_svi1 =
-            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                frame_handling,
-                group_index,
-            )[1]
-            .as_base_64();
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(frame_handling, group_index)[1].as_base_64();
         let expected_svi4 =
-            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                frame_handling,
-                group_index,
-            )[4]
-            .as_base_64();
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(frame_handling, group_index)[4].as_base_64();
         let expected_svi8 =
-            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                frame_handling,
-                group_index,
-            )[8]
-            .as_base_64();
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(frame_handling, group_index)[8].as_base_64();
 
         assert_eq!(map_old_id_to_new("iic000"), Some(expected_svi0));
         assert_eq!(map_old_id_to_new("iic100"), Some(expected_svi1));
@@ -991,46 +897,22 @@ mod tests {
         // OPU migrations - should return base64 IDs with Absolute + Linear
         let positioning = PercentageNeuronPositioning::Linear;
         let expected_mot0 =
-            MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
-                frame_handling,
-                positioning,
-                group_index,
-            )[0]
-            .as_base_64();
-        let expected_gaz0 = MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
-            frame_handling,
-            positioning,
-            group_index,
-        )[0]
-        .as_base_64();
+            MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(frame_handling, positioning, group_index)[0].as_base_64();
+        let expected_gaz0 =
+            MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(frame_handling, positioning, group_index)[0].as_base_64();
 
         assert_eq!(map_old_id_to_new("omot00"), Some(expected_mot0));
         assert_eq!(map_old_id_to_new("ogaz00"), Some(expected_gaz0));
 
         // CORE migrations - use types from feagi-data-processing (single source of truth)
-        assert_eq!(
-            map_old_id_to_new("_power"),
-            Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
-        );
-        assert_eq!(
-            map_old_id_to_new("___pwr"),
-            Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
-        );
-        assert_eq!(
-            map_old_id_to_new("___pwr__"),
-            Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
-        );
-        assert_eq!(
-            map_old_id_to_new("_death"),
-            Some(CoreCorticalType::Death.to_cortical_id().as_base_64())
-        );
+        assert_eq!(map_old_id_to_new("_power"), Some(CoreCorticalType::Power.to_cortical_id().as_base_64()));
+        assert_eq!(map_old_id_to_new("___pwr"), Some(CoreCorticalType::Power.to_cortical_id().as_base_64()));
+        assert_eq!(map_old_id_to_new("___pwr__"), Some(CoreCorticalType::Power.to_cortical_id().as_base_64()));
+        assert_eq!(map_old_id_to_new("_death"), Some(CoreCorticalType::Death.to_cortical_id().as_base_64()));
 
         // No migration needed for already-migrated IDs
         assert_eq!(map_old_id_to_new("svi0____"), None);
-        assert_eq!(
-            map_old_id_to_new(&CoreCorticalType::Power.to_cortical_id().as_base_64()),
-            None
-        );
+        assert_eq!(map_old_id_to_new(&CoreCorticalType::Power.to_cortical_id().as_base_64()), None);
     }
 
     #[test]
@@ -1046,9 +928,7 @@ mod tests {
         // Should NOT migrate - use types from feagi-data-processing
         assert!(!needs_migration("svi0____"));
         assert!(!needs_migration("mot0____"));
-        assert!(!needs_migration(
-            &CoreCorticalType::Power.to_cortical_id().to_string()
-        ));
+        assert!(!needs_migration(&CoreCorticalType::Power.to_cortical_id().to_string()));
         assert!(!needs_migration("custom01"));
     }
 
@@ -1064,15 +944,8 @@ mod tests {
             "physiology": {}
         });
         let result = migrate_genome(&genome).expect("Migration failed");
-        let br = result
-            .genome
-            .get("brain_regions")
-            .expect("brain_regions key present after migration");
-        assert!(
-            br.is_object(),
-            "brain_regions should be an object after migration, got {:?}",
-            br
-        );
+        let br = result.genome.get("brain_regions").expect("brain_regions key present after migration");
+        assert!(br.is_object(), "brain_regions should be an object after migration, got {:?}", br);
     }
 
     #[test]
@@ -1095,10 +968,7 @@ mod tests {
         let result = migrate_genome(&genome).expect("Migration failed");
 
         assert_eq!(result.cortical_ids_migrated, 1);
-        let new_id = result
-            .id_mapping
-            .get("custom")
-            .expect("custom should be mapped");
+        let new_id = result.id_mapping.get("custom").expect("custom should be mapped");
         // New ID must be valid base64 (CorticalID format) via string_to_cortical_id
         assert!(
             string_to_cortical_id(new_id).is_ok(),
@@ -1107,11 +977,7 @@ mod tests {
         );
         assert_ne!(new_id, "custom__", "must use base64, not string padding");
 
-        let new_blueprint = result
-            .genome
-            .get("blueprint")
-            .and_then(|v| v.as_object())
-            .expect("Blueprint missing");
+        let new_blueprint = result.genome.get("blueprint").and_then(|v| v.as_object()).expect("Blueprint missing");
         assert!(new_blueprint.contains_key(new_id));
         assert!(!new_blueprint.contains_key("custom"));
     }
@@ -1150,35 +1016,16 @@ mod tests {
         // Check that IDs were migrated
         assert_eq!(result.cortical_ids_migrated, 2);
         // Check that the old IDs were mapped to new base64 IDs
-        assert!(
-            result.id_mapping.contains_key("iic000"),
-            "iic000 should be migrated"
-        );
-        assert!(
-            result.id_mapping.contains_key("_power"),
-            "_power should be migrated"
-        );
+        assert!(result.id_mapping.contains_key("iic000"), "iic000 should be migrated");
+        assert!(result.id_mapping.contains_key("_power"), "_power should be migrated");
         assert_eq!(result.id_mapping.get("_power"), Some(&expected_power_id));
 
         // Check that blueprint was updated
-        let new_blueprint = result
-            .genome
-            .get("blueprint")
-            .and_then(|v| v.as_object())
-            .expect("Blueprint missing");
+        let new_blueprint = result.genome.get("blueprint").and_then(|v| v.as_object()).expect("Blueprint missing");
         // Verify that the new IDs are in the blueprint and old ones are gone
-        assert!(
-            new_blueprint.contains_key(&expected_power_id),
-            "Power ID should be in blueprint"
-        );
-        assert!(
-            !new_blueprint.contains_key("iic000"),
-            "Old iic000 should be removed"
-        );
-        assert!(
-            !new_blueprint.contains_key("_power"),
-            "Old _power should be removed"
-        );
+        assert!(new_blueprint.contains_key(&expected_power_id), "Power ID should be in blueprint");
+        assert!(!new_blueprint.contains_key("iic000"), "Old iic000 should be removed");
+        assert!(!new_blueprint.contains_key("_power"), "Old _power should be removed");
 
         // Check that brain_regions were updated
         let regions = result
@@ -1186,30 +1033,13 @@ mod tests {
             .get("brain_regions")
             .and_then(|v| v.as_object())
             .expect("brain_regions missing");
-        let root = regions
-            .get("root")
-            .and_then(|v| v.as_object())
-            .expect("root region missing");
-        let areas = root
-            .get("areas")
-            .and_then(|v| v.as_array())
-            .expect("areas array missing");
+        let root = regions.get("root").and_then(|v| v.as_object()).expect("root region missing");
+        let areas = root.get("areas").and_then(|v| v.as_array()).expect("areas array missing");
 
         // Verify that areas contains the migrated IDs (not hardcoding expected format)
-        let migrated_vision_id = result
-            .id_mapping
-            .get("iic000")
-            .expect("iic000 should be mapped");
-        assert_eq!(
-            areas[0].as_str(),
-            Some(migrated_vision_id.as_str()),
-            "Vision ID should be migrated"
-        );
-        assert_eq!(
-            areas[1].as_str(),
-            Some(expected_power_id.as_str()),
-            "Power ID should be migrated"
-        );
+        let migrated_vision_id = result.id_mapping.get("iic000").expect("iic000 should be mapped");
+        assert_eq!(areas[0].as_str(), Some(migrated_vision_id.as_str()), "Vision ID should be migrated");
+        assert_eq!(areas[1].as_str(), Some(expected_power_id.as_str()), "Power ID should be migrated");
     }
 
     #[test]
@@ -1234,12 +1064,11 @@ mod tests {
 
         // iv00_C → SegmentedVision center (index 4), Absolute frame handling, group 0.
         use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
-        let expected_center =
-            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                FrameChangeHandling::Absolute,
-                CorticalUnitIndex::from(0u8),
-            )[4]
-            .as_base_64();
+        let expected_center = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+            FrameChangeHandling::Absolute,
+            CorticalUnitIndex::from(0u8),
+        )[4]
+        .as_base_64();
 
         assert_eq!(result.id_mapping.get("iv00_C").unwrap(), &expected_center);
 
@@ -1250,10 +1079,7 @@ mod tests {
 
         // Ensure we generated an exceptions report.
         assert!(
-            result
-                .warnings
-                .iter()
-                .any(|w| w.contains("Legacy") && w.contains("mapped")),
+            result.warnings.iter().any(|w| w.contains("Legacy") && w.contains("mapped")),
             "Expected migration warnings report for legacy IO shorthands"
         );
     }
@@ -1273,14 +1099,13 @@ mod tests {
         });
 
         let result = migrate_genome(&genome).unwrap();
-        
+
         use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
-        let expected =
-            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                FrameChangeHandling::Absolute,
-                CorticalUnitIndex::from(0u8),
-            )[6]
-            .as_base_64();
+        let expected = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+            FrameChangeHandling::Absolute,
+            CorticalUnitIndex::from(0u8),
+        )[6]
+        .as_base_64();
 
         assert_eq!(result.id_mapping.get("iv00TL").unwrap(), &expected);
     }

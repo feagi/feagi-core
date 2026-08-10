@@ -3,7 +3,6 @@ pub mod implementations;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub trait FireLedger<FIQ: FeagiIndexQuantization> {
-
     /// Defines if the fire ledger exists (is not None)
     const IS_FIRE_LEDGER: bool;
 

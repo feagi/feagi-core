@@ -31,11 +31,7 @@ impl SystemServiceImpl {
     ///
     /// The version_info should be populated by the application (e.g., feagi-rust)
     /// with the versions of all crates it was compiled with
-    pub fn new(
-        connectome: Arc<RwLock<ConnectomeManager>>,
-        burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
-        version_info: VersionInfo,
-    ) -> Self {
+    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>, burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>, version_info: VersionInfo) -> Self {
         Self {
             connectome,
             burst_runner,
@@ -90,11 +86,7 @@ impl SystemService for SystemServiceImpl {
         let has_npu = self.connectome.read().has_npu();
         components.push(ComponentHealth {
             name: "NPU".to_string(),
-            status: if has_npu {
-                "healthy".to_string()
-            } else {
-                "unhealthy".to_string()
-            },
+            status: if has_npu { "healthy".to_string() } else { "unhealthy".to_string() },
             message: if has_npu {
                 Some("NPU connected".to_string())
             } else {
@@ -147,33 +139,28 @@ impl SystemService for SystemServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
         let state_manager_instance = feagi_state_manager::StateManager::instance();
-        let (neuron_count, synapse_count) =
-            if let Some(state_manager) = state_manager_instance.try_read() {
-                let core_state = state_manager.get_core_state();
-                (
-                    core_state.get_neuron_count() as usize,
-                    core_state.get_synapse_count() as usize,
-                )
-            } else {
-                // Fallback to ConnectomeManager if StateManager unavailable (shouldn't happen)
-                (manager.get_neuron_count(), manager.get_synapse_count())
-            };
+        let (neuron_count, synapse_count) = if let Some(state_manager) = state_manager_instance.try_read() {
+            let core_state = state_manager.get_core_state();
+            (core_state.get_neuron_count() as usize, core_state.get_synapse_count() as usize)
+        } else {
+            // Fallback to ConnectomeManager if StateManager unavailable (shouldn't happen)
+            (manager.get_neuron_count(), manager.get_synapse_count())
+        };
 
         let cortical_area_count = manager.get_cortical_area_count();
         let brain_region_count = manager.get_brain_region_ids().len();
 
-        let (burst_engine_running, burst_count, current_burst_rate_hz, avg_burst_time_ms) =
-            if let Some(ref runner) = self.burst_runner {
-                let runner_lock = runner.read();
-                (
-                    runner_lock.is_running(),
-                    runner_lock.get_burst_count(),
-                    0.0, // TODO: Implement rate tracking in BurstLoopRunner
-                    0.0, // TODO: Implement timing tracking in BurstLoopRunner
-                )
-            } else {
-                (false, 0, 0.0, 0.0)
-            };
+        let (burst_engine_running, burst_count, current_burst_rate_hz, avg_burst_time_ms) = if let Some(ref runner) = self.burst_runner {
+            let runner_lock = runner.read();
+            (
+                runner_lock.is_running(),
+                runner_lock.get_burst_count(),
+                0.0, // TODO: Implement rate tracking in BurstLoopRunner
+                0.0, // TODO: Implement timing tracking in BurstLoopRunner
+            )
+        } else {
+            (false, 0, 0.0, 0.0)
+        };
 
         Ok(SystemStatus {
             is_initialized,
@@ -245,17 +232,13 @@ impl SystemService for SystemServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
         let state_manager_instance = feagi_state_manager::StateManager::instance();
-        let (neuron_count, synapse_count) =
-            if let Some(state_manager) = state_manager_instance.try_read() {
-                let core_state = state_manager.get_core_state();
-                (
-                    core_state.get_neuron_count() as usize,
-                    core_state.get_synapse_count() as usize,
-                )
-            } else {
-                // Fallback to ConnectomeManager if StateManager unavailable (shouldn't happen)
-                (manager.get_neuron_count(), manager.get_synapse_count())
-            };
+        let (neuron_count, synapse_count) = if let Some(state_manager) = state_manager_instance.try_read() {
+            let core_state = state_manager.get_core_state();
+            (core_state.get_neuron_count() as usize, core_state.get_synapse_count() as usize)
+        } else {
+            // Fallback to ConnectomeManager if StateManager unavailable (shouldn't happen)
+            (manager.get_neuron_count(), manager.get_synapse_count())
+        };
 
         // Rough estimates (actual sizes depend on NPU implementation)
         let npu_neurons_bytes = neuron_count * 64; // ~64 bytes per neuron
@@ -289,16 +272,12 @@ impl SystemService for SystemServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
         let state_manager_instance = feagi_state_manager::StateManager::instance();
-        let (current_neurons, current_synapses) =
-            if let Some(state_manager) = state_manager_instance.try_read() {
-                let core_state = state_manager.get_core_state();
-                (
-                    core_state.get_neuron_count() as usize,
-                    core_state.get_synapse_count() as usize,
-                )
-            } else {
-                (manager.get_neuron_count(), manager.get_synapse_count())
-            };
+        let (current_neurons, current_synapses) = if let Some(state_manager) = state_manager_instance.try_read() {
+            let core_state = state_manager.get_core_state();
+            (core_state.get_neuron_count() as usize, core_state.get_synapse_count() as usize)
+        } else {
+            (manager.get_neuron_count(), manager.get_synapse_count())
+        };
 
         let max_neurons = config.max_neurons;
         let neuron_utilization_percent = (current_neurons as f64 / max_neurons as f64) * 100.0;

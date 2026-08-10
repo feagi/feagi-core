@@ -227,11 +227,7 @@ impl std::fmt::Display for ConnectomeStatistics {
         write!(
             f,
             "Neurons: {}, Synapses: {} ({} active), Cortical Areas: {}, Avg Weight: {:.2}",
-            self.neuron_count,
-            self.synapse_count,
-            self.active_synapse_count,
-            self.cortical_area_count,
-            self.avg_synaptic_weight
+            self.neuron_count, self.synapse_count, self.active_synapse_count, self.cortical_area_count, self.avg_synaptic_weight
         )
     }
 }
@@ -293,10 +289,7 @@ impl ConnectomeSnapshot {
     /// Get statistics about the connectome
     pub fn statistics(&self) -> ConnectomeStatistics {
         // Count active synapses
-        let active_synapse_count = self.synapses.valid_mask[..self.synapses.count]
-            .iter()
-            .filter(|&&v| v)
-            .count();
+        let active_synapse_count = self.synapses.valid_mask[..self.synapses.count].iter().filter(|&&v| v).count();
 
         let mut stats = ConnectomeStatistics {
             neuron_count: self.neurons.count,
@@ -307,10 +300,7 @@ impl ConnectomeSnapshot {
         };
 
         // Calculate average synaptic weight
-        let total_weight: u32 = self.synapses.weights[..self.synapses.count]
-            .iter()
-            .map(|&w| w as u32)
-            .sum();
+        let total_weight: u32 = self.synapses.weights[..self.synapses.count].iter().map(|&w| w as u32).sum();
         stats.avg_synaptic_weight = if stats.active_synapse_count > 0 {
             total_weight as f32 / stats.active_synapse_count as f32
         } else {

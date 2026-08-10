@@ -1,7 +1,5 @@
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiApiVersion};
-use feagi_io::traits_and_enums::shared::{
-    TransportProtocolEndpoint, TransportProtocolImplementation,
-};
+use feagi_io::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 use feagi_io::AgentID;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -94,12 +92,9 @@ impl RegistrationRequest {
 #[serde(rename_all = "snake_case")]
 pub enum RegistrationResponse {
     FailedInvalidRequest, // This may not be sent back if the server ignores bad data
-    FailedInvalidAuth, // Usually the auth token, may be the agent too. Server may not send this if configured to ignore invalid auth
+    FailedInvalidAuth,    // Usually the auth token, may be the agent too. Server may not send this if configured to ignore invalid auth
     AlreadyRegistered,
-    Success(
-        AgentID,
-        HashMap<AgentCapabilities, TransportProtocolEndpoint>,
-    ),
+    Success(AgentID, HashMap<AgentCapabilities, TransportProtocolEndpoint>),
 }
 
 //endregion
@@ -143,25 +138,17 @@ mod tests {
 
     #[test]
     fn deregistration_request_round_trip_serialization_preserves_reason() {
-        let request = AgentRegistrationMessage::ClientRequestDeregistration(
-            DeregistrationRequest::new(Some("shutdown".to_string())),
-        );
-        let encoded =
-            serde_json::to_string(&request).expect("deregistration request should serialize");
-        let decoded: AgentRegistrationMessage =
-            serde_json::from_str(&encoded).expect("deregistration request should deserialize");
+        let request = AgentRegistrationMessage::ClientRequestDeregistration(DeregistrationRequest::new(Some("shutdown".to_string())));
+        let encoded = serde_json::to_string(&request).expect("deregistration request should serialize");
+        let decoded: AgentRegistrationMessage = serde_json::from_str(&encoded).expect("deregistration request should deserialize");
         assert_eq!(request, decoded);
     }
 
     #[test]
     fn deregistration_response_round_trip_serialization_preserves_variant() {
-        let response = AgentRegistrationMessage::ServerRespondsDeregistration(
-            DeregistrationResponse::NotRegistered,
-        );
-        let encoded =
-            serde_json::to_string(&response).expect("deregistration response should serialize");
-        let decoded: AgentRegistrationMessage =
-            serde_json::from_str(&encoded).expect("deregistration response should deserialize");
+        let response = AgentRegistrationMessage::ServerRespondsDeregistration(DeregistrationResponse::NotRegistered);
+        let encoded = serde_json::to_string(&response).expect("deregistration response should serialize");
+        let decoded: AgentRegistrationMessage = serde_json::from_str(&encoded).expect("deregistration response should deserialize");
         assert_eq!(response, decoded);
     }
 }

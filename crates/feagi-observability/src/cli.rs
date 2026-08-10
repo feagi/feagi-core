@@ -169,10 +169,7 @@ mod tests {
 
     #[test]
     fn test_multiple_crate_flags() {
-        let flags = CrateDebugFlags::from_args(vec![
-            "--debug-feagi-api".to_string(),
-            "--debug-feagi-burst-engine".to_string(),
-        ]);
+        let flags = CrateDebugFlags::from_args(vec!["--debug-feagi-api".to_string(), "--debug-feagi-burst-engine".to_string()]);
         assert!(flags.is_enabled("feagi-api"));
         assert!(flags.is_enabled("feagi-burst-engine"));
         assert!(!flags.is_enabled("feagi-bdu"));
@@ -182,11 +179,7 @@ mod tests {
     fn test_debug_all() {
         let flags = CrateDebugFlags::from_args(vec!["--debug-all".to_string()]);
         for crate_name in KNOWN_CRATES {
-            assert!(
-                flags.is_enabled(crate_name),
-                "{} should be enabled",
-                crate_name
-            );
+            assert!(flags.is_enabled(crate_name), "{} should be enabled", crate_name);
         }
     }
 

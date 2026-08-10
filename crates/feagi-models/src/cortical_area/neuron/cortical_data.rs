@@ -1,5 +1,7 @@
-use crate::cortical_area::neuron_model_implementations::generated_enums::{NeuronModelType, NeuronModelTypeAndQuantizationNested, NeuronModelTypeAndQuantizationPacked};
 use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
+use crate::cortical_area::neuron_model_implementations::generated_enums::{
+    NeuronModelType, NeuronModelTypeAndQuantizationNested, NeuronModelTypeAndQuantizationPacked,
+};
 
 /// Root trait for all cortical_area data implementations, essentially any cortical_area level data shared
 /// by all neurons in a cortical_area area of a given neuron model. This should be extended with only

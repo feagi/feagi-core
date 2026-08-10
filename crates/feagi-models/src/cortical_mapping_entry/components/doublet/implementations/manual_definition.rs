@@ -1,9 +1,9 @@
+use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
+use crate::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
 use core::marker::PhantomData;
 use feagi_data::neurons::NeuronCorticalLocalIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedIndexCountTrait;
-use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
-use crate::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
 
 /// Effectively reads a list of existing neuron index pairs into memory. Cannot be modified
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -13,7 +13,10 @@ where
     SourceLayout: CorticalAreaLayout<FIQ>,
     DestinationLayout: CorticalAreaLayout<FIQ>,
 {
-    stored_pairs: Vec<(NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>, NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>)>,
+    stored_pairs: Vec<(
+        NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
+        NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
+    )>,
     cursor: usize,
     _p: PhantomData<(SourceLayout, DestinationLayout)>,
 }
@@ -26,19 +29,19 @@ where
 {
     /// Loads in the given vector of pairs, first filtering out all pairs of neurons that do not fit
     pub fn new(
-        mut pairs_to_validate: Vec<(NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>, NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>)>,
+        mut pairs_to_validate: Vec<(
+            NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
+            NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
+        )>,
         source_layout: &SourceLayout,
         destination_layout: &DestinationLayout,
     ) -> DoubleIteratorManualDefinition<FIQ, SourceLayout, DestinationLayout> {
-        
         // TODO swap for result, error if the number of neurons is greater that quantization allows!
-        
+
         let mut i = 0;
         while i < pairs_to_validate.len() {
             let pair = pairs_to_validate[i];
-            if source_layout.contains_given_neuron_index(pair.0)
-                && destination_layout.contains_given_neuron_index(pair.1)
-            {
+            if source_layout.contains_given_neuron_index(pair.0) && destination_layout.contains_given_neuron_index(pair.1) {
                 i += 1;
             } else {
                 pairs_to_validate.swap_remove(i);
@@ -63,7 +66,7 @@ where
         NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
         NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
     );
-    
+
     fn next(&mut self) -> Option<Self::Item> {
         if self.cursor >= self.stored_pairs.len() {
             return None;
@@ -84,10 +87,11 @@ where
     FIQ: FeagiIndexQuantization,
     SourceLayout: CorticalAreaLayout<FIQ>,
     DestinationLayout: CorticalAreaLayout<FIQ>,
-{}
+{
+}
 
-
-impl<FIQ, SourceLayout, DestinationLayout> DoubletIterator<FIQ, SourceLayout, DestinationLayout> for DoubleIteratorManualDefinition<FIQ, SourceLayout, DestinationLayout>
+impl<FIQ, SourceLayout, DestinationLayout> DoubletIterator<FIQ, SourceLayout, DestinationLayout>
+    for DoubleIteratorManualDefinition<FIQ, SourceLayout, DestinationLayout>
 where
     FIQ: FeagiIndexQuantization,
     SourceLayout: CorticalAreaLayout<FIQ>,

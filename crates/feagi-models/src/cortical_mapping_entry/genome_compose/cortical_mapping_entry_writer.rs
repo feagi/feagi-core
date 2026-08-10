@@ -1,21 +1,21 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 use crate::cortical_mapping_entry::synapse::cortical_mapping_entry_data::SynapseModelCorticalMappingEntryData;
 use crate::cortical_mapping_entry::synapse::cortical_mapping_entry_properties::CorticalMappingEntryProperties;
 use crate::cortical_mapping_entry::synapse::synapse_data::SynapseModelSynapseData;
 use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
 use crate::cortical_mapping_entry::synapse::synapse_properties::SynapseProperties;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 
 pub trait SynapseModelCorticalWriter<SMQ, SMCMD, SMSD>
 where
     SMQ: SynapseModelQuantization,
     SMCMD: SynapseModelCorticalMappingEntryData<SMQ>,
-    SMSD: SynapseModelSynapseData<SMQ>
+    SMSD: SynapseModelSynapseData<SMQ>,
 {
     /// Number of synapses needed
     fn number_synapses_needed<FIQ: FeagiIndexQuantization>(&self) -> Result<FIQ::SynapseIndexCountQuant, ()>; // TODO error!
 
-    /// Handles writing the per synapse data and creating the properties. 
+    /// Handles writing the per synapse data and creating the properties.
     /// ALL MEMBERS are to be overwritten!
     fn write_to_synapse_region<FIQ: FeagiIndexQuantization>(
         self,
@@ -47,8 +47,7 @@ where
     ModelSpecific(SE),
 }
 
-impl<SMQ, SMCMD, SMSD, SE> SynapseModelCorticalWriter<SMQ, SMCMD, SMSD>
-for RootSynapseModelCorticalWriter<SMQ, SMCMD, SMSD, SE>
+impl<SMQ, SMCMD, SMSD, SE> SynapseModelCorticalWriter<SMQ, SMCMD, SMSD> for RootSynapseModelCorticalWriter<SMQ, SMCMD, SMSD, SE>
 where
     SMQ: SynapseModelQuantization,
     SMCMD: SynapseModelCorticalMappingEntryData<SMQ>,
@@ -64,14 +63,12 @@ where
         }
     }
 
-
     fn write_to_synapse_region<FIQ: FeagiIndexQuantization>(
         self,
         current_cortical_mapping_entry_data: &mut SMCMD,
         current_synapse_data: &mut [SMSD],
         synapse_properties_out: &mut [SynapseProperties],
-    ) -> Result<(CorticalMappingEntryProperties), ()>
-    {
+    ) -> Result<(CorticalMappingEntryProperties), ()> {
         match self {
             RootSynapseModelCorticalWriter::CompleteRawData {
                 _p,
@@ -85,7 +82,7 @@ where
                 for (dst, src) in synapse_properties_out.iter_mut().zip(synapse_properties.into_iter()) {
                     *dst = src;
                 }
-                Ok( cortical_mapping_properties)
+                Ok(cortical_mapping_properties)
             }
             RootSynapseModelCorticalWriter::ModelSpecific(model) => {
                 model.write_to_synapse_region::<FIQ>(current_cortical_mapping_entry_data, current_synapse_data, synapse_properties_out)

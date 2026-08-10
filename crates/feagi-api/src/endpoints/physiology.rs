@@ -28,9 +28,7 @@ use std::collections::HashMap;
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_physiology(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn get_physiology(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
     // Get physiology parameters from genome via ConnectomeService
     let _connectome_service = state.connectome_service.as_ref();
 
@@ -41,11 +39,7 @@ pub async fn get_physiology(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get runtime status: {}", e)))?;
 
-    let simulation_timestep = if status.frequency_hz > 0.0 {
-        1.0 / status.frequency_hz
-    } else {
-        0.0
-    };
+    let simulation_timestep = if status.frequency_hz > 0.0 { 1.0 / status.frequency_hz } else { 0.0 };
 
     // TODO: Add get_genome_physiology to ConnectomeService for other parameters
     let physiology = json!({
@@ -75,10 +69,7 @@ pub async fn get_physiology(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn put_physiology(
-    State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, Value>>,
-) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn put_physiology(State(state): State<ApiState>, Json(request): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, Value>>> {
     // Whitelist of allowed physiology keys
     let allowed_keys = [
         "simulation_timestep",
@@ -107,10 +98,7 @@ pub async fn put_physiology(
         return Ok(Json(HashMap::from([
             ("success".to_string(), json!(false)),
             ("updated".to_string(), json!({})),
-            (
-                "message".to_string(),
-                json!("No valid physiology parameters provided"),
-            ),
+            ("message".to_string(), json!("No valid physiology parameters provided")),
         ])));
     }
 
