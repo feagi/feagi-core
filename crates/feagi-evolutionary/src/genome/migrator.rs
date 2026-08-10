@@ -392,7 +392,9 @@ fn legacy_io_to_custom_base64(old_id: &str) -> EvoResult<String> {
     } else {
         old_id.to_string()
     };
-    Err(EvoError::invalid_genome(format!("Failed to convert legacy IO '{}' to custom", old_id,)))
+    let cid = CorticalID::try_from_legacy_ascii(&custom_str)
+        .map_err(|e| EvoError::invalid_genome(format!("Failed to convert legacy IO '{}' to custom: {}", old_id, e)))?;
+    Ok(cid.as_base_64())
 }
 
 fn apply_legacy_io_shorthand_migration(

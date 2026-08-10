@@ -287,6 +287,14 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
         return Ok(CoreCorticalType::Hope.to_cortical_id());
     }
 
+    // Non-core areas in a v2 genome are addressed by their 6- or 8-char ASCII name (the custom
+    // areas of the essential and vision genomes, for instance). Without this the blueprint entry
+    // resolves to no ID and the area is dropped from the connectome.
+    if id_str.len() == 6 || id_str.len() == 8 {
+        return CorticalID::try_from_legacy_ascii(id_str)
+            .map_err(|e| EvoError::invalid_area(format!("Failed to convert cortical_id '{}': {}", id_str, e)));
+    }
+
     Err(EvoError::invalid_area(format!(
         "Invalid cortical_id length: '{}' (expected 6 or 8 ASCII chars, or base64)",
         id_str

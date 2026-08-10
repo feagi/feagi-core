@@ -16,7 +16,9 @@ pub struct CorticalMappingEntryProperties {
     pub flags: CorticalMappingEntryRuntimeFlags,
     pub model_and_quant: SynapseModelTypeAndQuantizationPacked,
     pub source_destination_mp_quants: SynapseMappingMPQuants,
-    pub delay: u8,
+    /// Delay in bursts between the source firing and the potential arriving. Matches the width the
+    /// models layer expresses it at, so no narrowing happens at the genome boundary.
+    pub delay: u16,
 }
 
 /// For a cortical mapping entry, contains indexes for some corresponding properties belonging to it
@@ -37,10 +39,15 @@ impl SynapseMappingMPQuants {
     }
 
     pub fn source_mp(&self) -> DecimalQuantizationLevel {
-        unsafe { DecimalQuantizationLevel::from_unpacked_byte(self.0.clone() >> DecimalQuantizationLevel::NUMBER_BITS) }
+        // The shift already discards the destination's bits, leaving only the source's.
+        unsafe { DecimalQuantizationLevel::from_unpacked_byte(self.0 >> DecimalQuantizationLevel::NUMBER_BITS) }
     }
 
     pub fn destination_mp(&self) -> DecimalQuantizationLevel {
-        unsafe { DecimalQuantizationLevel::from_unpacked_byte(self.0.clone()) }
+        // Masked first: the source occupies the high nibble, and transmuting the packed byte whole
+        // would build the enum out of a value no variant has.
+        let mut byte = self.0;
+        DecimalQuantizationLevel::apply_mask(&mut byte);
+        unsafe { DecimalQuantizationLevel::from_unpacked_byte(byte) }
     }
 }

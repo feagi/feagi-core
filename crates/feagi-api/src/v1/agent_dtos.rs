@@ -212,3 +212,46 @@ pub struct DeviceRegistrationImportResponse {
     pub message: String,
     pub agent_id: String,
 }
+
+/// Liveness state of one registered agent.
+///
+/// Registration alone does not keep an agent connected: FEAGI deregisters agents that
+/// stay quiet longer than the heartbeat timeout, and that teardown closes their
+/// motor/visualization sockets. These ages show an agent drifting toward that
+/// threshold before the disconnect happens.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AgentLivenessEntry {
+    /// Base64 agent id, matching the values from `/v1/agent/list`.
+    pub agent_id: String,
+    pub agent_name: String,
+    pub manufacturer: String,
+    pub agent_version: u32,
+    /// Capability keys granted at registration (e.g. `receive_neuron_visualizations`).
+    pub capabilities: Vec<String>,
+    /// Seconds since anything touched this agent, counting both inbound command/control
+    /// messages and outbound motor/visualization pushes. This is what the stale pruner
+    /// measures. `null` indicates the handler holds no activity record for a registered
+    /// agent, which is an internal inconsistency rather than a freshly active agent.
+    pub last_activity_age_s: Option<f64>,
+    /// Seconds since the agent itself last sent command/control traffic (heartbeat or
+    /// configuration). When this keeps climbing while `last_activity_age_s` stays low,
+    /// the agent is being held alive purely by FEAGI's outbound traffic and will drop as
+    /// soon as that traffic stops.
+    pub last_command_control_age_s: Option<f64>,
+    /// Seconds remaining before the stale pruner deregisters this agent, i.e.
+    /// `heartbeat_timeout_s - last_activity_age_s`, clamped at zero.
+    pub prune_in_s: Option<f64>,
+}
+
+/// Response for `GET /v1/agent/liveness`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AgentLivenessResponse {
+    /// Quiet period after which an agent is deregistered, from
+    /// `[zmq].client_heartbeat_timeout`.
+    pub heartbeat_timeout_s: f64,
+    /// How often the stale scan runs, from `[zmq].polling_timeout`.
+    pub stale_check_interval_s: f64,
+    /// One entry per registered agent, ordered by agent id.
+    pub agents: Vec<AgentLivenessEntry>,
+    pub count: usize,
+}

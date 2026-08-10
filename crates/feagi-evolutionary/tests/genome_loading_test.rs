@@ -8,7 +8,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_evolutionary::{convert_hierarchical_to_flat, ensure_core_components, load_genome_from_file};
+use feagi_evolutionary::{convert_hierarchical_to_flat, ensure_core_components, load_barebones_genome, load_essential_genome, load_genome_from_file};
 
 /// The runtime name of the per-voxel neuron count. Genome documents spell it
 /// `per_voxel_neuron_cnt` (`_n_cnt-i` when flat) and the parser translates it to this on the way
@@ -123,6 +123,119 @@ fn exporting_a_genome_preserves_the_per_voxel_neuron_count() {
         Some(distinctive_count),
         "export should carry the area's own neuron count rather than a default"
     );
+}
+
+/// Every distinct cortical area named by a flat blueprint key, in declaration order.
+///
+/// Flat keys are spelled `_____10c-<cortical_id>-<section>-<property>-<type>`.
+fn cortical_ids_declared_in_flat_genome(genome_json: &str) -> Vec<String> {
+    let genome: serde_json::Value = serde_json::from_str(genome_json).expect("embedded genome is valid JSON");
+    let blueprint = genome.get("blueprint").and_then(|b| b.as_object()).expect("genome carries a blueprint");
+
+    let mut declared: Vec<String> = Vec::new();
+    for flat_key in blueprint.keys() {
+        let Some(cortical_id) = flat_key.split('-').nth(1) else {
+            continue;
+        };
+        if !declared.iter().any(|seen| seen == cortical_id) {
+            declared.push(cortical_id.to_string());
+        }
+    }
+    declared
+}
+
+/// A genome load must publish every cortical area the document declares.
+///
+/// The loader skips a blueprint entry whose ID it cannot resolve, and it does so with only a log
+/// line, so a gap in ID resolution shows up as areas quietly missing from the connectome rather
+/// than as a failed load. The essential genome is the case that matters most here: twelve of its
+/// twenty-four areas are custom areas addressed by legacy ASCII name, and when those stopped
+/// resolving, loading it left the brain holding nothing but the injected core areas.
+#[test]
+fn loading_the_essential_genome_publishes_every_declared_area() {
+    let declared = cortical_ids_declared_in_flat_genome(feagi_evolutionary::ESSENTIAL_GENOME_JSON);
+    let genome = feagi_evolutionary::load_genome_from_json(feagi_evolutionary::ESSENTIAL_GENOME_JSON).expect("essential genome loads");
+
+    // The document is loaded verbatim here, without the core-area injection, so the counts have to
+    // match exactly: a dropped area lowers the count and a collision between two migrated IDs
+    // lowers it too.
+    assert_eq!(
+        genome.cortical_areas.len(),
+        declared.len(),
+        "genome declares {} areas but {} were loaded",
+        declared.len(),
+        genome.cortical_areas.len()
+    );
+
+    // Custom areas keep their legacy ASCII name through the migration, so they can be named
+    // directly. These are the twelve that went missing.
+    for legacy_id in declared.iter().filter(|id| id.starts_with('c')) {
+        let cortical_id = feagi_evolutionary::genome::parser::string_to_cortical_id(legacy_id)
+            .unwrap_or_else(|e| panic!("custom area '{legacy_id}' has no resolvable cortical ID: {e}"));
+        assert!(
+            genome.cortical_areas.contains_key(&cortical_id),
+            "custom area '{legacy_id}' is missing from the loaded genome"
+        );
+    }
+
+    // Loading through the template entry point adds the core areas the document omits.
+    let with_core_areas = load_essential_genome().expect("essential genome loads with core areas");
+    assert!(
+        with_core_areas.cortical_areas.len() > declared.len(),
+        "core-area injection should add to the declared set, not replace it"
+    );
+}
+
+/// A genome that declares no regions still has to arrive with a hierarchy the visualizer can draw.
+///
+/// The essential genome carries no `brain_regions` section, so the whole hierarchy is synthesized
+/// during the load. Putting every area on the root leaves the visualizer with a single plate and
+/// no nesting, which is what a region-less genome looked like after the areas were placed by hand.
+#[test]
+fn loading_the_essential_genome_nests_its_custom_areas_under_the_root() {
+    let mut genome = load_essential_genome().expect("essential genome loads");
+    let (root_region_id, root_was_created) = feagi_evolutionary::ensure_root_brain_region(&mut genome);
+
+    assert!(root_was_created, "the essential genome declares no root of its own");
+    assert_eq!(genome.brain_regions.len(), 2, "expected a root plus the synthesized subregion");
+
+    let root = &genome.brain_regions[&root_region_id];
+    let subregion = genome
+        .brain_regions
+        .values()
+        .find(|region| region.properties.get("parent_region_id").and_then(|id| id.as_str()) == Some(root_region_id.as_str()))
+        .expect("the subregion names the root as its parent");
+
+    // The genome's twelve custom areas belong to the subregion, the sensory, motor and core areas
+    // to the root, and no area belongs to both.
+    assert_eq!(subregion.cortical_areas.len(), 12);
+    for area_id in &subregion.cortical_areas {
+        assert!(!root.contains_area(area_id), "area {area_id} is on both plates");
+    }
+    assert_eq!(root.cortical_areas.len() + subregion.cortical_areas.len(), genome.cortical_areas.len());
+
+    // Both plates need a position and ports, or the visualizer draws them stacked and unconnected.
+    assert!(subregion.properties.contains_key("coordinate_3d"));
+    assert!(subregion.properties.contains_key("inputs"), "subregion should declare its inbound ports");
+    assert!(root.properties.contains_key("outputs"), "root should declare its outbound ports");
+}
+
+/// The barebones genome declares only core areas, and the same no-silent-drop rule applies.
+#[test]
+fn loading_the_barebones_genome_publishes_every_declared_area() {
+    let declared = cortical_ids_declared_in_flat_genome(feagi_evolutionary::BAREBONES_GENOME_JSON);
+    let genome = feagi_evolutionary::load_genome_from_json(feagi_evolutionary::BAREBONES_GENOME_JSON).expect("barebones genome loads");
+
+    assert_eq!(
+        genome.cortical_areas.len(),
+        declared.len(),
+        "genome declares {} areas but {} were loaded",
+        declared.len(),
+        genome.cortical_areas.len()
+    );
+
+    let with_core_areas = load_barebones_genome().expect("barebones genome loads with core areas");
+    assert!(with_core_areas.cortical_areas.len() >= declared.len());
 }
 
 #[test]

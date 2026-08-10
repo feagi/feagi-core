@@ -414,6 +414,18 @@ pub const SYNTHESIZED_ROOT_REGION_NAME: &str = "Root Brain Region";
 /// Property under which a region records its parent, spelled as the genome document spells it.
 const PARENT_REGION_ID_KEY: &str = "parent_region_id";
 
+/// Name for the synthesized subregion when the genome carries no title worth showing.
+const AUTOGEN_SUBREGION_FALLBACK_NAME: &str = "Autogen Circuit";
+
+/// Region properties the brain visualizer reads to place a region and draw its ports.
+const REGION_INPUTS_KEY: &str = "inputs";
+const REGION_OUTPUTS_KEY: &str = "outputs";
+const REGION_COORDINATE_2D_KEY: &str = "coordinate_2d";
+const REGION_COORDINATE_3D_KEY: &str = "coordinate_3d";
+
+/// Area property holding the area's outbound mappings, keyed by destination cortical ID.
+const CORTICAL_MAPPING_DST_KEY: &str = "cortical_mapping_dst";
+
 /// CRITICAL: Ensure a genome describes a brain region hierarchy with one reachable root
 ///
 /// Every consumer of the hierarchy - the brain visualizer, the region endpoints, the health
@@ -423,9 +435,15 @@ const PARENT_REGION_ID_KEY: &str = "parent_region_id";
 /// hierarchy is empty, no cortical area can be placed in a region, and the visualizer cannot
 /// build its cache.
 ///
-/// When no root is declared, one is created holding every cortical area no other region claims,
-/// and regions whose declared parent is absent from the genome are attached to it so the whole
-/// hierarchy stays reachable from the root.
+/// When no root is declared, one is created holding the sensory, motor and core areas that no
+/// other region claims. Custom and memory areas are gathered into a subregion beneath it rather
+/// than sharing the root plate, which is how the pre-refactor development path arranged a
+/// region-less genome and what the visualizer draws its region plates from: a root holding
+/// everything gives it one plate and nothing to nest. Both regions declare the areas that carry
+/// traffic across their boundary as ports.
+///
+/// Regions whose declared parent is absent from the genome are attached to the root so the whole
+/// hierarchy stays reachable from it.
 ///
 /// # Arguments
 /// * `genome` - The genome to normalize; `metadata.brain_regions_root` is stamped with the result
@@ -445,12 +463,47 @@ pub fn ensure_root_brain_region(genome: &mut RuntimeGenome) -> (String, bool) {
         .flat_map(|region| region.cortical_areas.iter().copied())
         .collect();
 
+    // Sorted so that two loads of the same genome describe their regions identically; the genome
+    // holds its areas in a hash map, whose order is not stable across runs.
+    let mut unclaimed_areas: Vec<CorticalID> = genome
+        .cortical_areas
+        .keys()
+        .copied()
+        .filter(|area_id| !claimed_areas.contains(area_id))
+        .collect();
+    unclaimed_areas.sort_by_key(|area_id| area_id.as_base_64());
+    let (subregion_areas, root_areas): (Vec<CorticalID>, Vec<CorticalID>) =
+        unclaimed_areas.into_iter().partition(|area_id| belongs_in_autogen_subregion(area_id));
+
     let root_region_id = RegionID::new();
     let root_region_id_str = root_region_id.to_string();
-    let root_region = BrainRegion::new(root_region_id, SYNTHESIZED_ROOT_REGION_NAME.to_string(), RegionType::Undefined)
+    let mut root_region = BrainRegion::new(root_region_id, SYNTHESIZED_ROOT_REGION_NAME.to_string(), RegionType::Undefined)
         .expect("the root region name is a non-empty constant")
-        .with_areas(genome.cortical_areas.keys().copied().filter(|area_id| !claimed_areas.contains(area_id)));
-    let root_area_count = root_region.cortical_areas.len();
+        .with_areas(root_areas.iter().copied());
+    declare_region_ports(&mut root_region, &root_areas, genome);
+
+    let subregion_area_count = subregion_areas.len();
+    let subregion = (!subregion_areas.is_empty()).then(|| {
+        let subregion_id = RegionID::new();
+        let mut subregion = BrainRegion::new(
+            subregion_id,
+            autogen_subregion_display_name(&genome.metadata.genome_title),
+            RegionType::Undefined,
+        )
+        .expect("the subregion name is never empty")
+        .with_areas(subregion_areas.iter().copied());
+
+        subregion.add_property(PARENT_REGION_ID_KEY.to_string(), Value::String(root_region_id_str.clone()));
+        // Placed clear of the root's areas so the two plates do not overlap in the visualizer.
+        subregion.add_property(
+            REGION_COORDINATE_3D_KEY.to_string(),
+            Value::from(autogen_subregion_position(&root_areas, genome).to_vec()),
+        );
+        subregion.add_property(REGION_COORDINATE_2D_KEY.to_string(), Value::from(vec![0, 0]));
+        declare_region_ports(&mut subregion, &subregion_areas, genome);
+
+        (subregion_id.to_string(), subregion)
+    });
 
     // No region is parentless here, or the branch above would have returned, so every region left
     // names a parent. One naming a parent this genome does not contain is unreachable from the
@@ -469,19 +522,146 @@ pub fn ensure_root_brain_region(genome: &mut RuntimeGenome) -> (String, bool) {
         reparented_regions += 1;
     }
 
+    let root_area_count = root_region.cortical_areas.len();
     genome.brain_regions.insert(root_region_id_str.clone(), root_region);
+    if let Some((subregion_id, subregion)) = subregion {
+        genome.brain_regions.insert(subregion_id, subregion);
+    }
     genome.metadata.brain_regions_root = Some(root_region_id_str.clone());
 
     tracing::info!(
         target: "feagi-evo",
-        "Genome declared no root brain region; created '{}' ({}) holding {} unclaimed cortical area(s), {} region(s) reparented under it",
+        "Genome declared no root brain region; created '{}' ({}) holding {} cortical area(s), a subregion holding {} custom/memory area(s), {} region(s) reparented under the root",
         SYNTHESIZED_ROOT_REGION_NAME,
         root_region_id_str,
         root_area_count,
+        subregion_area_count,
         reparented_regions
     );
 
     (root_region_id_str, true)
+}
+
+/// Whether an area belongs in the synthesized subregion rather than on the root plate.
+///
+/// Sensory, motor and core areas are the genome's fixed scaffolding and stay on the root. Custom
+/// and memory areas are what a circuit actually contributes, so they are the ones worth grouping.
+fn belongs_in_autogen_subregion(area_id: &CorticalID) -> bool {
+    use feagi_genomic_context::cortical_area::CorticalAreaType;
+
+    matches!(
+        area_id.as_cortical_type(),
+        Ok(CorticalAreaType::Custom(_)) | Ok(CorticalAreaType::Memory(_))
+    )
+}
+
+/// The subregion's display name: the genome's own title, since a circuit is usually loaded under
+/// the name it was saved as, and a generic label only when the genome supplies nothing.
+fn autogen_subregion_display_name(genome_title: &str) -> String {
+    let title = genome_title.trim();
+    if title.is_empty() || title.eq_ignore_ascii_case("untitled") {
+        AUTOGEN_SUBREGION_FALLBACK_NAME.to_string()
+    } else {
+        title.to_string()
+    }
+}
+
+/// Record which of a region's areas carry traffic across its boundary.
+///
+/// An area is an output when it maps to somewhere outside the region and an input when something
+/// outside maps into it. The visualizer draws a region's ports from these two lists, so a region
+/// without them reads as isolated no matter how its areas are wired.
+fn declare_region_ports(region: &mut BrainRegion, region_areas: &[CorticalID], genome: &RuntimeGenome) {
+    let (inputs, outputs) = analyze_region_io(region_areas, genome);
+    if !inputs.is_empty() {
+        region.add_property(REGION_INPUTS_KEY.to_string(), Value::from(inputs));
+    }
+    if !outputs.is_empty() {
+        region.add_property(REGION_OUTPUTS_KEY.to_string(), Value::from(outputs));
+    }
+}
+
+/// The areas of `region_areas` that receive traffic from outside the region, and those that send
+/// traffic outside it, each named by base64 cortical ID.
+fn analyze_region_io(region_areas: &[CorticalID], genome: &RuntimeGenome) -> (Vec<String>, Vec<String>) {
+    use crate::genome::parser::string_to_cortical_id;
+
+    /// The destinations an area maps to. Keys are cortical IDs; the parser has already rewritten
+    /// them to base64, but a genome may still be read before that pass, so each is resolved rather
+    /// than compared as text.
+    fn destinations_of(area: &CorticalArea) -> Vec<CorticalID> {
+        area.properties
+            .get(CORTICAL_MAPPING_DST_KEY)
+            .and_then(|mappings| mappings.as_object())
+            .map(|mappings| mappings.keys().filter_map(|dst| string_to_cortical_id(dst).ok()).collect())
+            .unwrap_or_default()
+    }
+
+    let members: HashSet<CorticalID> = region_areas.iter().copied().collect();
+
+    let mut outputs: Vec<String> = Vec::new();
+    for area_id in region_areas {
+        let Some(area) = genome.cortical_areas.get(area_id) else {
+            continue;
+        };
+        if destinations_of(area).iter().any(|dst| !members.contains(dst)) {
+            outputs.push(area_id.as_base_64());
+        }
+    }
+
+    let mut inputs: Vec<String> = Vec::new();
+    let mut seen_inputs: HashSet<CorticalID> = HashSet::new();
+    for (source_id, source) in genome.cortical_areas.iter() {
+        if members.contains(source_id) {
+            continue;
+        }
+        for destination in destinations_of(source) {
+            if members.contains(&destination) && seen_inputs.insert(destination) {
+                inputs.push(destination.as_base_64());
+            }
+        }
+    }
+    inputs.sort();
+
+    (inputs, outputs)
+}
+
+/// Where to place the synthesized subregion: clear of the root areas' bounding box along x, and
+/// centred on it in the other two axes, so the two plates read as neighbours rather than overlap.
+fn autogen_subregion_position(root_areas: &[CorticalID], genome: &RuntimeGenome) -> [i32; 3] {
+    /// Distance kept between the two plates when the root's own extent is too small to scale from.
+    const MINIMUM_PADDING: i32 = 50;
+
+    let mut bounds: Option<([i32; 3], [i32; 3])> = None;
+    for area_id in root_areas {
+        let Some(area) = genome.cortical_areas.get(area_id) else {
+            continue;
+        };
+        let low = [area.position.x(), area.position.y(), area.position.z()];
+        let high = [
+            low[0].saturating_add(*area.dimensions.get_x().as_ref() as i32),
+            low[1].saturating_add(*area.dimensions.get_y().as_ref() as i32),
+            low[2].saturating_add(*area.dimensions.get_z().as_ref() as i32),
+        ];
+        bounds = Some(match bounds {
+            None => (low, high),
+            Some((mut min, mut max)) => {
+                for axis in 0..3 {
+                    min[axis] = min[axis].min(low[axis]);
+                    max[axis] = max[axis].max(high[axis]);
+                }
+                (min, max)
+            }
+        });
+    }
+
+    let Some((min, max)) = bounds else {
+        // Nothing on the root plate to sit beside, so any placement off the origin will do.
+        return [MINIMUM_PADDING * 2, 0, 0];
+    };
+
+    let padding = ((max[0] - min[0]).max(1) / 5).max(MINIMUM_PADDING);
+    [max[0].saturating_add(padding), (min[1] + max[1]) / 2, (min[2] + max[2]) / 2]
 }
 
 /// The ID of the region the genome declares as its root: the one that names no parent.
@@ -995,6 +1175,139 @@ mod tests {
         assert!(genome.morphologies.contains("first_to_last"));
         assert!(genome.morphologies.contains("episodic_memory"));
         assert!(genome.morphologies.contains("lateral_+x"));
+    }
+
+    /// Adds a custom cortical area of the given size at the given position, and returns its ID.
+    fn add_custom_area(genome: &mut RuntimeGenome, legacy_name: &str, position: (i32, i32, i32), size: usize) -> CorticalID {
+        let cortical_id = crate::genome::parser::string_to_cortical_id(legacy_name).expect("custom area name resolves");
+        let area = CorticalArea::new(
+            cortical_id,
+            genome.cortical_areas.len() as u32,
+            legacy_name.to_string(),
+            NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(size, size, size),
+            GenomeCoordinate3D::new(position.0, position.1, position.2),
+            cortical_id.as_cortical_type().expect("custom ID maps to a cortical type"),
+        )
+        .expect("custom area is well formed");
+        genome.cortical_areas.insert(cortical_id, area);
+        cortical_id
+    }
+
+    /// Records that `source` maps to `destination`, the way the parser stores an area's mappings.
+    fn map_area_to(genome: &mut RuntimeGenome, source: &CorticalID, destination: &CorticalID) {
+        let area = genome.cortical_areas.get_mut(source).expect("source area is in the genome");
+        let mut mappings = area
+            .properties
+            .get(CORTICAL_MAPPING_DST_KEY)
+            .and_then(|existing| existing.as_object().cloned())
+            .unwrap_or_default();
+        mappings.insert(destination.as_base_64(), Value::Array(Vec::new()));
+        area.properties.insert(CORTICAL_MAPPING_DST_KEY.to_string(), Value::Object(mappings));
+    }
+
+    /// The one region under the root, which is where the custom and memory areas are gathered.
+    fn subregion_of<'a>(genome: &'a RuntimeGenome, root_region_id: &str) -> &'a BrainRegion {
+        let children: Vec<&BrainRegion> = genome
+            .brain_regions
+            .values()
+            .filter(|region| region.properties.get(PARENT_REGION_ID_KEY).and_then(|id| id.as_str()) == Some(root_region_id))
+            .collect();
+        assert_eq!(children.len(), 1, "expected exactly one region under the root");
+        children[0]
+    }
+
+    #[test]
+    fn test_ensure_root_brain_region_gathers_custom_areas_into_a_subregion() {
+        // A root plate holding everything gives the visualizer nothing to nest, so the areas a
+        // circuit contributes are grouped beneath it instead.
+        let mut genome = create_genome_with_core_areas("test".to_string(), "Test Circuit".to_string());
+        let core_area_count = genome.cortical_areas.len();
+        let left = add_custom_area(&mut genome, "c__lef", (0, 0, 0), 4);
+        let right = add_custom_area(&mut genome, "c__rig", (10, 0, 0), 4);
+
+        let (root_region_id, _) = ensure_root_brain_region(&mut genome);
+
+        let root = &genome.brain_regions[&root_region_id];
+        assert_eq!(root.cortical_areas.len(), core_area_count, "core areas stay on the root plate");
+        assert!(!root.contains_area(&left));
+        assert!(!root.contains_area(&right));
+
+        let subregion = subregion_of(&genome, &root_region_id);
+        assert_eq!(subregion.name, "Test Circuit", "the subregion is named after the genome");
+        assert!(subregion.contains_area(&left));
+        assert!(subregion.contains_area(&right));
+        assert_eq!(subregion.cortical_areas.len(), 2);
+    }
+
+    #[test]
+    fn test_ensure_root_brain_region_creates_no_subregion_without_custom_areas() {
+        let mut genome = create_genome_with_core_areas("test".to_string(), "Test".to_string());
+
+        let (root_region_id, _) = ensure_root_brain_region(&mut genome);
+
+        assert_eq!(genome.brain_regions.len(), 1, "nothing to gather means no second region");
+        assert_eq!(genome.brain_regions[&root_region_id].cortical_areas.len(), genome.cortical_areas.len());
+    }
+
+    #[test]
+    fn test_ensure_root_brain_region_names_untitled_subregion_generically() {
+        let mut genome = create_genome_with_core_areas("test".to_string(), "Untitled".to_string());
+        add_custom_area(&mut genome, "c__lef", (0, 0, 0), 4);
+
+        let (root_region_id, _) = ensure_root_brain_region(&mut genome);
+
+        assert_eq!(subregion_of(&genome, &root_region_id).name, AUTOGEN_SUBREGION_FALLBACK_NAME);
+    }
+
+    #[test]
+    fn test_ensure_root_brain_region_declares_ports_for_cross_boundary_mappings() {
+        // The visualizer draws a region's ports from these lists; a mapping that stays inside a
+        // region is not a port, and one that leaves it is.
+        let mut genome = create_genome_with_core_areas("test".to_string(), "Test".to_string());
+        let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("core area name resolves");
+        let left = add_custom_area(&mut genome, "c__lef", (0, 0, 0), 4);
+        let right = add_custom_area(&mut genome, "c__rig", (10, 0, 0), 4);
+
+        map_area_to(&mut genome, &power_id, &left); // crosses into the subregion
+        map_area_to(&mut genome, &left, &right); // stays inside the subregion
+        map_area_to(&mut genome, &right, &power_id); // crosses back out to the root
+
+        let (root_region_id, _) = ensure_root_brain_region(&mut genome);
+
+        let root = &genome.brain_regions[&root_region_id];
+        assert_eq!(root.properties[REGION_OUTPUTS_KEY], Value::from(vec![power_id.as_base_64()]));
+        assert_eq!(root.properties[REGION_INPUTS_KEY], Value::from(vec![power_id.as_base_64()]));
+
+        let subregion = subregion_of(&genome, &root_region_id);
+        assert_eq!(subregion.properties[REGION_INPUTS_KEY], Value::from(vec![left.as_base_64()]));
+        assert_eq!(
+            subregion.properties[REGION_OUTPUTS_KEY],
+            Value::from(vec![right.as_base_64()]),
+            "the area mapping only within the region is not a port"
+        );
+    }
+
+    #[test]
+    fn test_ensure_root_brain_region_places_subregion_clear_of_the_root_areas() {
+        let mut genome = create_minimal_genome("test".to_string(), "Test".to_string());
+        let anchor = crate::genome::parser::string_to_cortical_id("_power").expect("core area name resolves");
+        let mut power = create_power_area();
+        power.position = GenomeCoordinate3D::new(0, 0, 0);
+        power.dimensions = NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(200, 10, 10);
+        genome.cortical_areas.insert(anchor, power);
+        add_custom_area(&mut genome, "c__lef", (0, 0, 0), 4);
+
+        let (root_region_id, _) = ensure_root_brain_region(&mut genome);
+
+        let position = subregion_of(&genome, &root_region_id).properties[REGION_COORDINATE_3D_KEY]
+            .as_array()
+            .expect("the subregion carries a 3D position")
+            .iter()
+            .map(|axis| axis.as_i64().expect("each axis is a number"))
+            .collect::<Vec<i64>>();
+
+        // The root's only area spans x 0..200, so the subregion sits beyond its far edge.
+        assert!(position[0] > 200, "subregion at x={} overlaps the root areas", position[0]);
     }
 
     /// Builds a region that names `parent` as its parent, or none when `parent` is `None`.

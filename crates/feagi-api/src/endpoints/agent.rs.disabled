@@ -182,6 +182,23 @@ fn registration_capabilities_to_map(capabilities: &[RegistrationCapabilities]) -
     out
 }
 
+/// Canonical capability keys, matching the `snake_case` serde names of
+/// [`RegistrationCapabilities`]. Unlike [`registration_capabilities_to_map`] this emits
+/// no legacy aliases, so the list stays one entry per granted capability.
+#[cfg(feature = "feagi-agent")]
+fn capability_keys(capabilities: &[RegistrationCapabilities]) -> Vec<String> {
+    capabilities
+        .iter()
+        .map(|capability| match capability {
+            RegistrationCapabilities::SendSensorData => "send_sensor_data",
+            RegistrationCapabilities::ReceiveMotorData => "receive_motor_data",
+            RegistrationCapabilities::ReceiveNeuronVisualizations => "receive_neuron_visualizations",
+            RegistrationCapabilities::ReceiveSystemMessages => "receive_system_messages",
+        })
+        .map(str::to_string)
+        .collect()
+}
+
 #[cfg(feature = "feagi-agent")]
 fn list_agent_ids_from_handler(state: &ApiState) -> Vec<String> {
     if let Some(handler) = &state.agent_handler {
@@ -417,6 +434,66 @@ pub async fn list_agents(State(state): State<ApiState>) -> ApiResult<Json<Vec<St
     #[cfg(not(feature = "feagi-agent"))]
     {
         Err(ApiError::internal("Agent service not available"))
+    }
+}
+
+/// Report how close each registered agent is to being deregistered for inactivity.
+///
+/// Registration is not the same as staying connected. FEAGI deregisters any agent that
+/// goes quiet for longer than the configured heartbeat timeout, and that teardown drops
+/// the agent's motor and visualization publishers, closing its sockets. Clients that see
+/// an agent reconnect on a fixed period can use this endpoint to tell whether the agent
+/// is being reaped for inactivity rather than failing at the transport layer.
+#[utoipa::path(
+    get,
+    path = "/v1/agent/liveness",
+    responses(
+        (status = 200, description = "Per-agent inactivity ages and the configured timeout", body = AgentLivenessResponse),
+        (status = 500, description = "Agent handler not available")
+    ),
+    tag = "agent"
+)]
+pub async fn get_agent_liveness(State(state): State<ApiState>) -> ApiResult<Json<AgentLivenessResponse>> {
+    #[cfg(feature = "feagi-agent")]
+    {
+        let Some(handler) = state.agent_handler.as_ref() else {
+            return Err(ApiError::internal("Agent handler not available"));
+        };
+        let handler_guard = handler.lock().unwrap();
+        let liveness_config = handler_guard.get_liveness_config();
+        let heartbeat_timeout_s = liveness_config.heartbeat_timeout.as_secs_f64();
+        let stale_check_interval_s = liveness_config.stale_check_interval.as_secs_f64();
+
+        let agents: Vec<AgentLivenessEntry> = handler_guard
+            .get_agent_liveness()
+            .into_iter()
+            .map(|record| {
+                let last_activity_age_s = record.last_activity_age.map(|age| age.as_secs_f64());
+                AgentLivenessEntry {
+                    agent_id: record.agent_id.to_base64(),
+                    agent_name: record.descriptor.agent_name().to_string(),
+                    manufacturer: record.descriptor.manufacturer().to_string(),
+                    agent_version: record.descriptor.agent_version(),
+                    capabilities: capability_keys(&record.capabilities),
+                    last_activity_age_s,
+                    last_command_control_age_s: record.last_command_control_age.map(|age| age.as_secs_f64()),
+                    prune_in_s: last_activity_age_s.map(|age| (heartbeat_timeout_s - age).max(0.0)),
+                }
+            })
+            .collect();
+
+        Ok(Json(AgentLivenessResponse {
+            heartbeat_timeout_s,
+            stale_check_interval_s,
+            count: agents.len(),
+            agents,
+        }))
+    }
+
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        let _ = state;
+        Err(ApiError::internal("Agent handler not available"))
     }
 }
 

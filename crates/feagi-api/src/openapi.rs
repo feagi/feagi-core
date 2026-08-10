@@ -86,6 +86,7 @@ use crate::{
         // Agent endpoints (registration uses ZMQ/WebSocket only)
         crate::endpoints::agent::heartbeat,
         crate::endpoints::agent::list_agents,
+        crate::endpoints::agent::get_agent_liveness,
         crate::endpoints::agent::get_agent_properties,
         crate::endpoints::agent::get_agent_properties_path,
         crate::endpoints::agent::get_shared_memory,
@@ -531,6 +532,8 @@ use crate::{
             crate::v1::HeartbeatRequest,
             crate::v1::HeartbeatResponse,
             crate::v1::AgentListResponse,
+            crate::v1::AgentLivenessEntry,
+            crate::v1::AgentLivenessResponse,
             crate::v1::AgentPropertiesResponse,
             crate::v1::AgentCapabilitiesSummary,
             crate::v1::AgentDeregistrationRequest,

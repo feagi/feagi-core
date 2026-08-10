@@ -5,7 +5,9 @@ use feagi_models::cortical_area::neuron::neuron_model_quantization::NeuronModelQ
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
 use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::UniformWriter;
+use feagi_models::cortical_mapping_entry::synapse::synapse_data::EmptyPerSynapseData;
 use feagi_models::cortical_mapping_entry::synapse::synapse_model::SynapseModel;
+use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::data::UniformSynapseModelCorticalMappingEntryData;
 use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelStandardQuant;
 use feagi_models::wrapped_index_collections::{CorticalEngineIndex, MappingEntryEngineIndex, NeuronEngineIndex};
 
@@ -36,9 +38,21 @@ pub trait EditableEngine<FIQ: FeagiIndexQuantization> {
 
     fn resize_dimensional_area(&mut self, cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>);
 
-    fn add_mapping_entry<SM>(&mut self, writer: UniformWriter) -> MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant>
+    // TODO as with `add_cortical_area`, the engine only allocates `Uniform` / standard quant synapse
+    // storage for now, so the model data types are pinned to that pair.
+    fn add_mapping_entry<SM>(
+        &mut self,
+        source_cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
+        destination_cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
+        writer: UniformWriter,
+    ) -> MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant>
     where
-        SM: SynapseModel<FIQ, UniformSynapseModelStandardQuant>;
+        SM: SynapseModel<
+            FIQ,
+            UniformSynapseModelStandardQuant,
+            CorticalMappingEntryData = UniformSynapseModelCorticalMappingEntryData<UniformSynapseModelStandardQuant>,
+            SynapseData = EmptyPerSynapseData,
+        >;
 
     fn remap_mapping_entry(&mut self, mapping_entry: MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant>);
 

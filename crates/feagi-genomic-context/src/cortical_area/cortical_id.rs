@@ -89,6 +89,31 @@ impl CorticalID {
         bytes.copy_from_slice(&decoded);
         Self::try_from_bytes(&bytes)
     }
+
+    /// Parse a legacy 6-char or 8-char ASCII cortical area ID, as written in v2 genome documents.
+    ///
+    /// Shipped genomes address areas by ASCII name (`c__lef`, `cRSMot`, `omot00`) rather than by
+    /// the 8-byte encoding, so every reader of a v2 document needs this to resolve them. Shorter
+    /// names are right-padded with `_` to the full 8 bytes, which is how the same names are
+    /// spelled in 8-char form.
+    ///
+    /// An uppercase type prefix (`C`/`M`/`I`/`O`) is lowercased, and any first byte that names no
+    /// type at all is read as a custom area, because that is the only type a v2 document can spell
+    /// without encoding type metadata into the ID.
+    pub fn try_from_legacy_ascii(id_str: &str) -> Result<Self, FeagiGenomeContextError> {
+        let mut bytes = [b'_'; Self::CORTICAL_ID_LENGTH];
+        let len = id_str.len().min(Self::CORTICAL_ID_LENGTH);
+        bytes[..len].copy_from_slice(&id_str.as_bytes()[..len]);
+        bytes[0] = match bytes[0] {
+            b'C' => b'c',
+            b'M' => b'm',
+            b'I' => b'i',
+            b'O' => b'o',
+            b'c' | b'm' | b'_' | b'i' | b'o' => bytes[0],
+            _ => b'c',
+        };
+        Self::try_from_bytes(&bytes)
+    }
     //endregion
 
     //region export
@@ -221,5 +246,45 @@ impl<'de> Deserialize<'de> for CorticalID {
     {
         let s = String::deserialize(deserializer)?;
         CorticalID::try_from_base_64(&s).map_err(|e| serde::de::Error::custom(format!("Invalid CorticalID: {}", e)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_ascii_pads_six_char_names_to_full_width() {
+        // Custom areas in the shipped v2 genomes are spelled this way; a six-char name and its
+        // eight-char padded spelling name the same area and must resolve to the same ID.
+        let padded = CorticalID::try_from_legacy_ascii("c__lef").expect("six-char custom name resolves");
+        assert_eq!(padded.as_bytes(), b"c__lef__");
+        assert_eq!(
+            padded,
+            CorticalID::try_from_legacy_ascii("c__lef__").expect("eight-char custom name resolves")
+        );
+    }
+
+    #[test]
+    fn legacy_ascii_lowercases_uppercase_type_prefix() {
+        let id = CorticalID::try_from_legacy_ascii("C03bbb").expect("uppercase custom prefix resolves");
+        assert_eq!(id.as_bytes()[0], b'c');
+        assert_eq!(&id.as_bytes()[1..6], b"03bbb");
+    }
+
+    #[test]
+    fn legacy_ascii_reads_unknown_prefix_as_custom() {
+        for name in ["visioA", "visioB", "0_45de"] {
+            let id = CorticalID::try_from_legacy_ascii(name).expect("unknown prefix resolves as custom");
+            assert_eq!(id.as_bytes()[0], b'c', "'{name}' should be read as a custom area");
+        }
+    }
+
+    #[test]
+    fn legacy_ascii_preserves_recognised_type_prefixes() {
+        for (name, expected_prefix) in [("omot00", b'o'), ("iic000", b'i'), ("m_epis", b'm'), ("_power", b'_')] {
+            let id = CorticalID::try_from_legacy_ascii(name).expect("known prefix resolves");
+            assert_eq!(id.as_bytes()[0], expected_prefix, "'{name}' should keep its type prefix");
+        }
     }
 }

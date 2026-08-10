@@ -10,9 +10,9 @@ use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
 use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
-use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::{
-    CorticalMappingEntryWriterByModelQuant, UniformWriter,
-};
+use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::CorticalMappingEntryWriterByModelQuant;
+use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::model::UniformSynapseModel;
+use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelStandardQuant;
 use feagi_models::wrapped_index_collections::CorticalEngineIndex;
 
 // TODO Genomic level quantization isnt really meant to be used, but we will use it here for now
@@ -59,16 +59,23 @@ impl DynamicNPU {
                 destination_id,
                 mapping_writer,
             } => {
-                let source_index = self.cortical_id_engine_mapping.get_forward(&source_id).unwrap();
-                let destination_index = self.cortical_id_engine_mapping.get_forward(&destination_id).unwrap();
+                let source_index = *self
+                    .cortical_id_engine_mapping
+                    .get_forward(&source_id)
+                    .expect("mapping entry source cortical area must already exist in the engine"); // TODO ERROR HANDLING
+                let destination_index = *self
+                    .cortical_id_engine_mapping
+                    .get_forward(&destination_id)
+                    .expect("mapping entry destination cortical area must already exist in the engine"); // TODO ERROR HANDLING
 
                 match mapping_writer {
-                    CorticalMappingEntryWriterByModelQuant::Uniform(quant) => {
-                        match quant {
-                            UniformWriter::Standard { .. } => {
-                                //self.rayon_burst_engine.add_mapping_entry();
-                            }
-                        }
+                    CorticalMappingEntryWriterByModelQuant::Uniform(writer) => {
+                        self.rayon_burst_engine
+                            .add_mapping_entry::<UniformSynapseModel<FeagiIndexQuantizationGenomic, UniformSynapseModelStandardQuant>>(
+                                source_index,
+                                destination_index,
+                                writer,
+                            );
                     }
                 }
             }

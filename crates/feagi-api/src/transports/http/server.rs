@@ -309,6 +309,7 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/agent/register", axum::routing::post(agent::register_agent))
         .route("/agent/heartbeat", axum::routing::post(agent::heartbeat))
         .route("/agent/list", get(agent::list_agents))
+        .route("/agent/liveness", get(agent::get_agent_liveness))
         .route("/agent/properties", get(agent::get_agent_properties))
         .route("/agent/shared_mem", get(agent::get_shared_memory))
         .route("/agent/deregister", axum::routing::delete(agent::deregister_agent))
