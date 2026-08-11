@@ -280,6 +280,19 @@ fn normalize_quantization_precision(value: &str) -> String {
     }
 }
 
+fn precision_import_warning_reason(
+    requested_precision: &str,
+    active_precision: &str,
+) -> Option<&'static str> {
+    if requested_precision == "unknown" {
+        Some("unknown")
+    } else if requested_precision != active_precision {
+        Some("mismatch")
+    } else {
+        None
+    }
+}
+
 /// Default implementation of GenomeService
 pub struct GenomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
@@ -392,8 +405,9 @@ impl GenomeService for GenomeServiceImpl {
         let simulation_timestep = genome.physiology.simulation_timestep;
         info!(target: "feagi-services", "Genome simulation_timestep: {} seconds", simulation_timestep);
 
-        // Guard against silent precision mismatch between runtime NPU and incoming genome.
-        // Mismatches can cause threshold/limit quantization behavior that diverges from genome intent.
+        // Keep genome import deterministic and non-failing: when a genome requests a precision
+        // that differs from active runtime precision, continue load and canonicalize to runtime.
+        // This preserves import success while making runtime precision intent explicit in memory.
         let requested_precision =
             normalize_quantization_precision(&genome.physiology.quantization_precision);
         let active_precision = {
@@ -411,11 +425,28 @@ impl GenomeService for GenomeServiceImpl {
                 feagi_npu_burst_engine::DynamicNPU::INT8(_) => "int8",
             }
         };
-        if requested_precision != "unknown" && requested_precision != active_precision {
-            return Err(ServiceError::InvalidInput(format!(
-                "Genome quantization precision '{}' does not match active NPU precision '{}'. Restart FEAGI with matching precision (e.g. --precision {}).",
-                genome.physiology.quantization_precision, active_precision, requested_precision
-            )));
+        if let Some(reason) =
+            precision_import_warning_reason(&requested_precision, active_precision)
+        {
+            match reason {
+                "unknown" => warn!(
+                    target: "feagi-services",
+                    "Genome quantization precision '{}' is unknown; using active runtime precision '{}'",
+                    genome.physiology.quantization_precision,
+                    active_precision
+                ),
+                "mismatch" => warn!(
+                    target: "feagi-services",
+                    "Genome quantization precision '{}' does not match active runtime precision '{}'; importing with active runtime precision",
+                    genome.physiology.quantization_precision,
+                    active_precision
+                ),
+                _ => {}
+            }
+            genome.physiology.quantization_precision = active_precision.to_string();
+        } else if genome.physiology.quantization_precision != active_precision {
+            // Canonicalize aliases (e.g. f32 -> fp32) even when semantically matching.
+            genome.physiology.quantization_precision = active_precision.to_string();
         }
 
         // Store genome for future updates (source of truth for structural changes)
@@ -4557,7 +4588,7 @@ impl GenomeServiceImpl {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_quantization_precision;
+    use super::{normalize_quantization_precision, precision_import_warning_reason};
 
     #[test]
     fn normalize_quantization_precision_handles_aliases() {
@@ -4571,5 +4602,18 @@ mod tests {
     #[test]
     fn normalize_quantization_precision_marks_unknown_values() {
         assert_eq!(normalize_quantization_precision("weird"), "unknown");
+    }
+
+    #[test]
+    fn precision_import_warning_reason_flags_unknown_and_mismatch() {
+        assert_eq!(
+            precision_import_warning_reason("unknown", "fp32"),
+            Some("unknown")
+        );
+        assert_eq!(
+            precision_import_warning_reason("fp16", "fp32"),
+            Some("mismatch")
+        );
+        assert_eq!(precision_import_warning_reason("int8", "int8"), None);
     }
 }

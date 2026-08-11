@@ -3,12 +3,65 @@
 
 //! Region API Endpoints - Exact port from Python `/v1/region/*`
 
+use crate::amalgamation;
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, State};
 use feagi_services::types::CreateBrainRegionParams;
 use feagi_structures::genomic::brain_regions::RegionID;
 use std::collections::HashMap;
+use uuid::Uuid;
+
+fn queue_amalgamation_from_genome_json_str(
+    state: &ApiState,
+    genome_json: String,
+) -> Result<(String, [i32; 3]), ApiError> {
+    {
+        let lock = state.amalgamation_state.read();
+        if lock.pending.is_some() {
+            return Err(ApiError::invalid_input(
+                "Amalgamation already pending; cancel it first via /v1/genome/amalgamation_cancellation",
+            ));
+        }
+    }
+
+    let genome = feagi_evolutionary::load_genome_from_json(&genome_json)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid genome payload: {}", e)))?;
+
+    let circuit_size = amalgamation::compute_circuit_size_from_runtime_genome(&genome);
+    let amalgamation_id = Uuid::new_v4().to_string();
+    let genome_title = genome.metadata.genome_title.clone();
+
+    let summary = amalgamation::AmalgamationPendingSummary {
+        amalgamation_id: amalgamation_id.clone(),
+        genome_title,
+        circuit_size,
+    };
+
+    let pending = amalgamation::AmalgamationPending {
+        summary: summary.clone(),
+        genome_json,
+    };
+
+    {
+        let mut lock = state.amalgamation_state.write();
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+
+        lock.history.push(amalgamation::AmalgamationHistoryEntry {
+            amalgamation_id: summary.amalgamation_id.clone(),
+            genome_title: summary.genome_title.clone(),
+            circuit_size: summary.circuit_size,
+            status: "pending".to_string(),
+            timestamp_ms: now_ms,
+        });
+        lock.pending = Some(pending);
+    }
+
+    Ok((amalgamation_id, circuit_size))
+}
 
 /// GET /v1/region/regions_members
 ///
@@ -367,10 +420,73 @@ pub async fn delete_region(
 /// POST /v1/region/clone
 #[utoipa::path(post, path = "/v1/region/clone", tag = "region")]
 pub async fn post_clone(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, serde_json::Value>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let source_region_id = req
+        .get("source_region_id")
+        .or_else(|| req.get("region_id"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::invalid_input("source_region_id required"))?
+        .to_string();
+
+    let region_name = req
+        .get("region_name")
+        .or_else(|| req.get("title"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::invalid_input("region_name required"))?
+        .to_string();
+
+    // Root region must never be cloneable.
+    let source_region = state
+        .connectome_service
+        .get_brain_region(&source_region_id)
+        .await
+        .map_err(ApiError::from)?;
+    if source_region.parent_id.is_none() {
+        return Err(ApiError::forbidden(
+            "Root region cannot be cloned. Only non-root regions are cloneable.",
+        ));
+    }
+
+    // Export selected non-root region subtree as genome JSON (equivalent to download_region payload).
+    let exported_json = state
+        .genome_service
+        .export_region_genome(source_region_id)
+        .await
+        .map_err(ApiError::from)?;
+
+    // Apply requested clone title so pending amalgamation is named exactly like export+reimport flow.
+    let mut exported_value: serde_json::Value = serde_json::from_str(&exported_json)
+        .map_err(|e| ApiError::internal(format!("Exported region JSON is invalid: {}", e)))?;
+    if let Some(obj) = exported_value.as_object_mut() {
+        obj.insert(
+            "genome_title".to_string(),
+            serde_json::Value::String(region_name.clone()),
+        );
+    }
+    let updated_exported_json = serde_json::to_string(&exported_value).map_err(|e| {
+        ApiError::internal(format!("Failed to serialize cloned region JSON: {}", e))
+    })?;
+
+    let (amalgamation_id, circuit_size) =
+        queue_amalgamation_from_genome_json_str(&state, updated_exported_json)?;
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            serde_json::Value::String("Region clone queued".to_string()),
+        ),
+        (
+            "amalgamation_id".to_string(),
+            serde_json::Value::String(amalgamation_id),
+        ),
+        ("circuit_size".to_string(), serde_json::json!(circuit_size)),
+    ])))
 }
 
 /// PUT /v1/region/relocate_members
