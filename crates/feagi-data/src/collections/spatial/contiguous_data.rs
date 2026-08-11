@@ -1,7 +1,3 @@
-use crate::collections::spatial::{
-    QuantizedIndexCoord2D, QuantizedIndexCoord3D, QuantizedIndexCoord4D, QuantizedIndexDimension2D, QuantizedIndexDimension3D,
-    QuantizedIndexDimension4D, QuantizedIndexLinearIndex,
-};
 
 macro_rules! create_spatial_quantized_contiguous_vector {
     (
@@ -350,6 +346,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
     }
 }
 
+/*
 // These are the base spatial contiguous vectors, mirroring the base coordinate /
 // dimension types defined in `crate::collections::spatial::index_types`.
 
@@ -376,3 +373,6 @@ create_spatial_quantized_contiguous_vector!(
     QuantizedIndexDimension4D,
     4,
 );
+
+
+ */
