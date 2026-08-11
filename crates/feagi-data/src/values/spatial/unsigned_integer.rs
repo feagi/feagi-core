@@ -8,13 +8,13 @@ pub struct UnsignedIntegerSpatial<Q: QuantizedUnsignedIntegerTrait, const NUM_DI
 
 impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> UnsignedIntegerSpatial<Q, NUM_DIMS> {
     /// What quantization level this represents
-    const LEVEL: UnsignedIntegerQuantizationLevel = Q::LEVEL;
+    pub const LEVEL: UnsignedIntegerQuantizationLevel = Q::LEVEL;
 
     /// Spatial of all elements as zero
-    const QUANT_ZEROS: UnsignedIntegerSpatial<Q, NUM_DIMS> = Self::new_from_array_const([Q::QUANT_ZERO; NUM_DIMS]);
+    pub const QUANT_ZEROS: UnsignedIntegerSpatial<Q, NUM_DIMS> = Self::new_from_array_const([Q::QUANT_ZERO; NUM_DIMS]);
 
     /// Spatial of all elements as one
-    const QUANT_ONES: UnsignedIntegerSpatial<Q, NUM_DIMS> = Self::new_from_array_const([Q::QUANT_ONE; NUM_DIMS]);
+    pub const QUANT_ONES: UnsignedIntegerSpatial<Q, NUM_DIMS> = Self::new_from_array_const([Q::QUANT_ONE; NUM_DIMS]);
 
     /// Create self from a correctly sized array in const context
     pub const fn new_from_array_const(array: [Q; NUM_DIMS]) -> Self {
