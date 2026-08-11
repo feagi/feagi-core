@@ -1,5 +1,5 @@
 use crate::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_count, create_wrapped_quantized_unsigned_integer_index};
+use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_count, create_wrapped_quantized_unsigned_integer_index, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
 use serde::{Deserialize, Serialize};
 
 create_wrapped_quantized_decimal!(
@@ -25,33 +25,35 @@ create_wrapped_quantized_unsigned_integer_index!(
 );
 
 
-
-create_wrapped_quantized_index!(
+create_wrapped_quantized_unsigned_integer_index!(
     /// Represents the index of a voxel in a collection using a single uint value that represents
     /// the overall index incrementing from X, Y and Z
     pub NeuronVoxelLinearIndex
 );
 
-create_wrapped_quantized_index!(
-    /// Represents the uint value of a single axis of a coordinate or dimension
-    pub NeuronVoxelCoordinateAxis
+create_wrapped_quantized_unsigned_integer_count!(
+    /// The number of voxels within a dimensional cortical area
+    pub CorticalAreaVoxelCount NeuronVoxelLinearIndex
 );
 
-create_wrapped_quantized_index_coordinate!(
-    /// Represents a 3D coordinate of a specific neuron voxel
-    pub NeuronVoxelCoordinate,
-    QuantizedIndexCoord3D,
-    (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis)
+create_wrapped_unsigned_integer_spatial_coordinate!(
+        /// Represents a 4D coordinate of a neuron within a dimensional cortical_area area, with the
+        /// 4th dimension being the density index
+        pub NeuronVoxelCoordinate,
+        3,
+        (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis)
 );
 
-create_wrapped_quantized_index_dimension!(
-    /// Represents the dimensions of rectangular prism of neuron voxels
+create_wrapped_unsigned_integer_spatial_dimensions!(
+    /// Represents the dimensions and density of a dimensional cortical_area area
     pub NeuronVoxelDimensions,
-    QuantizedIndexDimension3D,
     NeuronVoxelCoordinate,
     NeuronVoxelLinearIndex,
-    (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis)
+    CorticalAreaVoxelCount,
+    3,
+    (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis),
 );
+
 
 pub type NeuronVoxelLinearIndexGenomic = NeuronVoxelLinearIndex<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>;
 pub type NeuronVoxelCoordinateGenomic = NeuronVoxelCoordinate<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>;

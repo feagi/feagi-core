@@ -997,7 +997,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer_data {
         $vis:vis $struct_name:ident
     ) => {
 
-        _create_wrapped_quantized_unsigned_integer!(
+        $crate::_create_wrapped_quantized_unsigned_integer!(
             $(#[$meta])*
             $vis $struct_name
         );
@@ -1034,7 +1034,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer_count {
         $vis:vis $struct_count_name:ident $struct_index_name:ident
     ) => {
 
-        _create_wrapped_quantized_unsigned_integer!(
+        $crate::_create_wrapped_quantized_unsigned_integer!(
             $(#[$meta])*
             $vis $struct_count_name
         );
