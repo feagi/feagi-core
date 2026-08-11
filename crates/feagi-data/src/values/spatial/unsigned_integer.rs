@@ -332,7 +332,7 @@ pub trait WrappedUnsignedIntegerSpatialDimensions<Q: QuantizedUnsignedIntegerTra
     /// Total number of discrete coordinates contained within these dimensions (the product of
     /// every axis).
     fn number_contained_elements(&self) -> Self::LinearCount {
-        let out = self.as_slice().iter().product();
+        let out = self.as_slice().iter().copied().product();
         Self::LinearCount::wrap(out)
     }
 
@@ -488,8 +488,6 @@ macro_rules! create_wrapped_unsigned_integer_spatial_data {
             impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
                 $crate::values::spatial::unsigned_integer::WrappedUnsignedIntegerSpatial<Q, $num_dimensions> for $struct_name<Q>
             {
-                type AtQuant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $struct_name<Quant>;
-
                 const QUANT_ONES: Self = Self::const_new(
                     $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial::<Q, $num_dimensions>::QUANT_ONES,
                 );
@@ -514,8 +512,6 @@ macro_rules! create_wrapped_unsigned_integer_spatial_data {
             impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
                 $crate::values::spatial::unsigned_integer::WrappedUnsignedIntegerSpatialData<Q, $num_dimensions> for $struct_name<Q>
             {
-                type AtQuant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $struct_name<Quant>;
-
                 const QUANT_ZEROS: Self = Self::const_new(
                     $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial::<Q, $num_dimensions>::QUANT_ZEROS,
                 );
@@ -753,8 +749,6 @@ macro_rules! create_wrapped_unsigned_integer_spatial_coordinate {
             impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
                 $crate::values::spatial::unsigned_integer::WrappedUnsignedIntegerSpatial<Q, $num_dimensions> for $struct_name<Q>
             {
-                type AtQuant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $struct_name<Quant>;
-
                 const QUANT_ONES: Self = Self::const_new(
                     $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial::<Q, $num_dimensions>::QUANT_ONES,
                 );
@@ -779,8 +773,6 @@ macro_rules! create_wrapped_unsigned_integer_spatial_coordinate {
             impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
                 $crate::values::spatial::unsigned_integer::WrappedUnsignedIntegerSpatialCoordinate<Q, $num_dimensions> for $struct_name<Q>
             {
-                type AtQuant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $struct_name<Quant>;
-
                 const QUANT_ZEROS: Self = Self::const_new(
                     $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial::<Q, $num_dimensions>::QUANT_ZEROS,
                 );
@@ -1116,8 +1108,6 @@ macro_rules! create_wrapped_unsigned_integer_spatial_dimensions {
             impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
                 $crate::values::spatial::unsigned_integer::WrappedUnsignedIntegerSpatial<Q, $num_dimensions> for $struct_name<Q>
             {
-                type AtQuant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $struct_name<Quant>;
-
                 const QUANT_ONES: Self = Self::const_new(
                     $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial::<Q, $num_dimensions>::QUANT_ONES,
                 );

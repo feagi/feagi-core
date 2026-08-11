@@ -66,6 +66,7 @@ pub trait QuantizedUnsignedIntegerTrait:
     + core::ops::BitOrAssign
     + core::ops::BitXorAssign
     + core::cmp::PartialOrd
+    + core::iter::Product
     + core::cmp::Ord
     + core::iter::Sum
     + core::fmt::Debug
