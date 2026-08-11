@@ -9,13 +9,12 @@ Transformation methods live in feagi-bdu.
 Moved from feagi-core/crates/feagi-bdu/src/models/cortical_area.rs
 */
 
-use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelDimensions, NeuronVoxelDimensionsGenomic};
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
-use feagi_data::values::quantizable::WrappedQuantizedIndexCount;
+use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelDimensionsGenomic};
 use feagi_genomic_context::cortical_area::{CorticalAreaType, CorticalID};
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use feagi_data::values::quantizable::WrappedQuantizedUnsignedInteger;
 
 /// Cortical area metadata (genome representation)
 ///
@@ -99,6 +98,6 @@ impl CorticalArea {
 
     /// Get the total number of voxels in this area
     pub fn total_voxels(&self) -> u32 {
-        self.dimensions.number_contained_elements().quant_to_u32()
+        self.dimensions.number_contained_elements().quant_to_u32_unchecked()
     }
 }

@@ -6,6 +6,38 @@ pub struct UnsignedIntegerSpatial<Q: QuantizedUnsignedIntegerTrait, const NUM_DI
     data: [Q; NUM_DIMS],
 }
 
+impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> serde::Serialize for UnsignedIntegerSpatial<Q, NUM_DIMS> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.data.as_slice().serialize(serializer)
+    }
+}
+
+impl<'de, Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> serde::Deserialize<'de> for UnsignedIntegerSpatial<Q, NUM_DIMS>
+where
+    Q: serde::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let values = Vec::<Q>::deserialize(deserializer)?;
+        if values.len() != NUM_DIMS {
+            return Err(serde::de::Error::custom(format!(
+                "expected {} spatial elements, got {}",
+                NUM_DIMS,
+                values.len()
+            )));
+        }
+        let data: [Q; NUM_DIMS] = values
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("failed converting spatial elements to fixed-size array"))?;
+        Ok(Self { data })
+    }
+}
+
 impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> UnsignedIntegerSpatial<Q, NUM_DIMS> {
     /// What quantization level this represents
     pub const LEVEL: UnsignedIntegerQuantizationLevel = Q::LEVEL;
@@ -168,7 +200,7 @@ impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> UnsignedIntegerSpa
 ///
 /// NOTE that due to how enums work in Rust, memory allocation will always be at u64 quant
 /// levels!
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
 pub enum UnsignedIntegerSpatialEnum<const NUM_DIMS: usize> {
     U8(UnsignedIntegerSpatial<u8, NUM_DIMS>),
     U16(UnsignedIntegerSpatial<u16, NUM_DIMS>),
@@ -417,7 +449,7 @@ macro_rules! create_wrapped_unsigned_integer_spatial_data {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
             $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial<Q, $num_dimensions>
         );
@@ -558,7 +590,7 @@ macro_rules! create_wrapped_unsigned_integer_spatial_data {
                 }
             }
 
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
             $vis enum [<$struct_name Enum>] {
                 U8($struct_name<u8>),
                 U16($struct_name<u16>),
@@ -688,7 +720,7 @@ macro_rules! create_wrapped_unsigned_integer_spatial_coordinate {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
             $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial<Q, $num_dimensions>
         );
@@ -833,7 +865,7 @@ macro_rules! create_wrapped_unsigned_integer_spatial_coordinate {
                 }
             }
 
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
             $vis enum [<$struct_name Enum>] {
                 U8($struct_name<u8>),
                 U16($struct_name<u16>),
@@ -966,7 +998,7 @@ macro_rules! create_wrapped_unsigned_integer_spatial_dimensions {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
             $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial<Q, $num_dimensions>
         );
@@ -1240,7 +1272,7 @@ macro_rules! create_wrapped_unsigned_integer_spatial_dimensions {
                 }
             }
 
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
             $vis enum [<$struct_name Enum>] {
                 U8($struct_name<u8>),
                 U16($struct_name<u16>),
