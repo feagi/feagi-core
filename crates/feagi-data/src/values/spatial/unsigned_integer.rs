@@ -1,5 +1,5 @@
 use std::ops::Deref;
-use crate::values::quantizable::{QuantizedElementBase, QuantizedUnsignedIntegerTrait, UnsignedIntegerQuantizationLevel, WrappedQuantizedUnsignedInteger, WrappedQuantizedUnsignedIntegerCount, WrappedQuantizedUnsignedIntegerIndex};
+use crate::values::quantizable::{QuantizedElementBase, QuantizedUnsignedIntegerTrait, UnsignedIntegerQuantizationLevel, WrappedQuantizedUnsignedInteger, WrappedQuantizedUnsignedIntegerCount, WrappedQuantizedUnsignedIntegerData, WrappedQuantizedUnsignedIntegerIndex};
 use crate::values::spatial::feagi_data_values_spatial_error::{
     FeagiDataValuesSpatialError, FeagiFailInvalidSpatialIndex,
 };
@@ -10,6 +10,10 @@ pub struct UnsignedIntegerSpatial<Q: QuantizedUnsignedIntegerTrait, const NUM_DI
 }
 
 impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> UnsignedIntegerSpatial<Q, NUM_DIMS> {
+
+    /// What quantization level this represents
+    const LEVEL: UnsignedIntegerQuantizationLevel = Q::LEVEL;
+
     /// Create self from a correctly sized array in const context
     pub const fn new_from_array_const(array: [Q; NUM_DIMS]) -> Self {
         Self { data: array }
@@ -229,7 +233,7 @@ impl<const NUM_DIMS: usize> UnsignedIntegerSpatialEnum<NUM_DIMS> {
 
 /// Shared behaviour implemented by every strongly-typed wrapper around
 /// [`UnsignedIntegerSpatial`]
-pub trait WrappedUnsignedIntegerSpatial<Quant: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>:
+pub trait WrappedUnsignedIntegerSpatial<WQ: WrappedQuantizedUnsignedInteger, const NUM_DIMS: usize>:
 Copy
 + Clone
 + Send
@@ -241,10 +245,21 @@ Copy
 + Sized
 + 'static
 {
-    fn new_from_array(value: UnsignedIntegerSpatial<Quant, NUM_DIMS>) -> Self;
-    fn deref(self) -> UnsignedIntegerSpatial<Quant, NUM_DIMS>;
+    /// What quantization level this represents
+    const LEVEL: UnsignedIntegerQuantizationLevel = WQ::LEVEL;
 
-    fn as_slice(&self) -> &[Quant];
+    /// Create from an unwrapped spatial
+    fn new_unchecked(value: UnsignedIntegerSpatial<WQ, NUM_DIMS>) -> Self;
+
+    // NOTE: do not expose unchecked constructors as dimensions needs an additional check to ensure no
+    // 0 sized lengths and the different subtypes take in different subwrappers! The above is the only
+    // exception as its explicitly an unchecked wrapper!
+
+    /// Removes the wrapper
+    fn dewrap(self) -> UnsignedIntegerSpatial<WQ, NUM_DIMS>;
+
+    /// Get a slice view of the data
+    fn as_slice(&self) -> &[WQ];
 
     /*
     fn new_from_quant_unchecked<FromQuant: QuantizedUnsignedIntegerTrait>(
@@ -265,10 +280,13 @@ Copy
 
     fn to_quantization_unchecked<ToQuant: QuantizedUnsignedIntegerTrait>(
         self,
-    ) -> UnsignedIntegerSpatial<ToQuant, NUM_DIMS> {
-        self.deref().to_quantization_unchecked()
+    ) -> Self<ToQuant, NUM_DIMS> {
+
+        let dewrapped = self.dewrap();
+        Self::new_unchecked(dewrapped.to_quantization_unchecked())
     }
 
+    /*
     fn try_to_quantization<ToQuant: QuantizedUnsignedIntegerTrait>(
         self,
     ) -> Result<UnsignedIntegerSpatial<ToQuant, NUM_DIMS>, FeagiDataValuesSpatialError> {
@@ -290,13 +308,25 @@ Copy
     {
         Self::new_from_array(self.deref().clamp_for_quantization_level_runtime(level))
     }
+
+     */
 }
+
 
 
 /// Shared behaviour implemented by every strongly-typed wrapper around
 /// [`UnsignedIntegerSpatial`] used to store spatial data (not indexing).
-pub trait WrappedUnsignedIntegerSpatialData<Quant: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>: WrappedUnsignedIntegerSpatial<Quant, NUM_DIMS>
+pub trait WrappedUnsignedIntegerSpatialData<WQ: WrappedQuantizedUnsignedIntegerData, const NUM_DIMS: usize>: WrappedUnsignedIntegerSpatial<WQ, NUM_DIMS>
 {
+    /// Create from an unwrapped spatial
+    fn new(value: UnsignedIntegerSpatial<WQ, NUM_DIMS>) -> Self;
+
+    /// Create from a sized array of the quant
+    fn new_from_array(array: [WQ::Quant; NUM_DIMS]) -> Self {
+        let val = UnsignedIntegerSpatial::new_from_array(array);
+        Self::new(val)
+    }
+
     /// Returns spatial data with all elements zero
     fn new_zero() -> Self {
         Self::new_from_array( UnsignedIntegerSpatial::new_zero() )
@@ -305,18 +335,23 @@ pub trait WrappedUnsignedIntegerSpatialData<Quant: QuantizedUnsignedIntegerTrait
 
 /// Shared behaviour implemented by every strongly-typed wrapper around
 /// [`UnsignedIntegerSpatial`] used to store spatial coordinates.
-pub trait WrappedUnsignedIntegerSpatialCoordinate<Quant: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>: WrappedUnsignedIntegerSpatial<Quant, NUM_DIMS> {
+pub trait WrappedUnsignedIntegerSpatialCoordinate<Quant: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>: WrappedUnsignedIntegerSpatial<Quant, NUM_DIMS>
+{
+
+    /// Create from an unwrapped spatial
+    fn new(value: UnsignedIntegerSpatial<WQ, NUM_DIMS>) -> Self;
+
     /// Returns a coordinate with all axis zero
     fn new_zero() -> Self {
         Self::new_from_array( UnsignedIntegerSpatial::new_zero() )
     }
 }
-
+/*
 /// Shared behaviour implemented by every strongly-typed wrapper around
 /// [`UnsignedIntegerSpatial`] used to store spatial dimensions.
 pub trait WrappedUnsignedIntegerSpatialDimensions<Quant: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>: WrappedUnsignedIntegerSpatial<Quant, NUM_DIMS>
 {
-    type LinearIndex: WrappedQuantizedUnsignedIntegerIndex<Quant>;
+    type LinearIndex: WrappedQuantizedUnsignedIntegerIndex;
     type LinearCount: WrappedQuantizedUnsignedIntegerCount<Quant, Self::LinearIndex>;
     type Coordinate: WrappedUnsignedIntegerSpatialCoordinate<Quant, NUM_DIMS>;
 
@@ -1239,3 +1274,6 @@ macro_rules! create_wrapped_unsigned_integer_spatial_dimensions {
         }
     };
 }
+
+
+ */

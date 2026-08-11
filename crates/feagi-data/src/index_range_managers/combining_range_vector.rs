@@ -1,18 +1,18 @@
 use crate::index_range_managers::feagi_index_range_manager_error::{FeagiIndexRangeManagerError, FeagiIndexRangeVectorFailedMerge};
-use crate::values::quantizable::QuantizedIndexCountTrait;
+use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
 use core::ops::Range;
 
 /// Contains a vector of incrementing (by start / end index) ranges that are not overlapping, as well as indexes to those
 /// ranges in order of decrementing lengths of each range. Inserting a range will attempt to insert
 /// a range maintaining order, but if the range touches any neighbors, those neighbors are merged
 /// to produce a contiguous range instead
-pub struct CombiningRangeVector<Q: QuantizedIndexCountTrait> {
+pub struct CombiningRangeVector<Q: QuantizedUnsignedIntegerTrait> {
     ranges: Vec<Range<Q>>,
     indexes_sorted_by_length: Vec<Q>,
     total_value: Q,
 }
 
-impl<Q: QuantizedIndexCountTrait> CombiningRangeVector<Q> {
+impl<Q: QuantizedUnsignedIntegerTrait> CombiningRangeVector<Q> {
     pub fn new() -> Self {
         Self {
             ranges: vec![],
@@ -23,7 +23,7 @@ impl<Q: QuantizedIndexCountTrait> CombiningRangeVector<Q> {
 
     /// Returns the number of contained ranges
     pub fn get_number_ranges(&self) -> Q {
-        Q::quant_from_usize(self.ranges.len())
+        Q::quant_from_usize_unchecked(self.ranges.len())
     }
 
     /// Returns the total value of all lengths of all ranges summed together
@@ -192,7 +192,7 @@ impl<Q: QuantizedIndexCountTrait> CombiningRangeVector<Q> {
         self.indexes_sorted_by_length.clear();
         self.indexes_sorted_by_length.reserve(self.ranges.len());
         for i in 0..self.ranges.len() {
-            self.indexes_sorted_by_length.push(Q::quant_from_usize(i));
+            self.indexes_sorted_by_length.push(Q::quant_from_usize_unchecked(i));
         }
 
         let ranges = &self.ranges;

@@ -1,4 +1,4 @@
-use crate::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
+use crate::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedUnsignedIntegerIndex};
 use core::ops::Range;
 
 // TODO rn very basic implementation just for adding stuff

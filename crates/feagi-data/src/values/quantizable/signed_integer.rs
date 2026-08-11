@@ -1,6 +1,8 @@
 use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
 use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
 
+//region Value
+
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum SignedIntegerQuantizationLevel {
@@ -91,6 +93,58 @@ pub trait QuantizedSignedIntegerTrait:
     /// Will wrap whatever quant this is to an `SignedIntegerEnum`
     fn quant_to_enum(value: Self) -> SignedIntegerEnum;
 
+    /// Tries converting from isize, returns an error if out of bounds
+    fn quant_try_from_isize(value: isize) -> Result<Self, FeagiDataValueQuantizationError>;
+
+    /// Converts to isize.
+    fn quant_to_isize(self) -> isize;
+
+    /// Tries to convert to i8, does NOT check bounds!
+    fn quant_to_i8_unchecked(self) -> i8;
+
+    /// Tries to convert to i16, does NOT check bounds!
+    fn quant_to_i16_unchecked(self) -> i16;
+
+    /// Tries to convert to i32, does NOT check bounds!
+    fn quant_to_i32_unchecked(self) -> i32;
+
+    /// Tries to convert to i64, does NOT check bounds!
+    fn quant_to_i64_unchecked(self) -> i64;
+
+    /// Creates from a value of another quantization. Does not check for validity of ranges!
+    fn from_quantization_unchecked<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self;
+
+    /// Creates from a value of another quantization, clamping its values to ensure it fits
+    fn from_quantization_clamped<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self;
+
+    /// Tries to create a value of another quantization, returns an error if it would break the bounds
+    fn try_from_quantization<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError>;
+
+    /// Converts to another quantization. Does not check for validity of ranges!
+    fn to_quantization_unchecked<ToQuant: QuantizedSignedIntegerTrait>(self) -> ToQuant {
+        ToQuant::from_quantization_unchecked::<Self>(self)
+    }
+
+    /// Converts to another quantization, clamping its values to ensure it fits
+    fn to_quantization_clamped<ToQuant: QuantizedSignedIntegerTrait>(self) -> ToQuant {
+        ToQuant::from_quantization_clamped(self)
+    }
+
+    /// Tries to convert to another quantization, returns an error if it would break the bounds
+    fn try_to_quantization<ToQuant: QuantizedSignedIntegerTrait>(self) -> Result<ToQuant, FeagiDataValueQuantizationError> {
+        ToQuant::try_from_quantization(self)
+    }
+
+    /// Clamps the value for another quantization, but does not actually change the quantization itself
+    fn clamp_for_quantization<ClampFor: QuantizedSignedIntegerTrait>(self) -> Self;
+
+    fn clamp_for_quantization_level_runtime(self, level: SignedIntegerQuantizationLevel) -> Self;
+
+    /// Returns true if the value is zero
+    fn is_zero(self) -> bool {
+        self == Self::QUANT_ZERO
+    }
+
     fn is_negative(&self) -> bool;
     fn is_zero_or_negative(&self) -> bool;
 }
@@ -116,6 +170,61 @@ impl QuantizedSignedIntegerTrait for i8 {
 
     fn quant_to_enum(value: Self) -> SignedIntegerEnum {
         SignedIntegerEnum::I8(value)
+    }
+
+    fn quant_try_from_isize(value: isize) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value < i8::MIN as isize || value > i8::MAX as isize {
+            return Err(
+                FeagiFailQuantizationOutOfRange::new("Given signed integer value cannot fit in a quantized i8!", value as usize).into(),
+            );
+        }
+        Ok(value as i8)
+    }
+
+    fn quant_to_isize(self) -> isize {
+        self as isize
+    }
+
+    fn quant_to_i8_unchecked(self) -> i8 {
+        self
+    }
+
+    fn quant_to_i16_unchecked(self) -> i16 {
+        self as i16
+    }
+
+    fn quant_to_i32_unchecked(self) -> i32 {
+        self as i32
+    }
+
+    fn quant_to_i64_unchecked(self) -> i64 {
+        self as i64
+    }
+
+    fn from_quantization_unchecked<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        value.quant_to_i8_unchecked()
+    }
+
+    fn from_quantization_clamped<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        Self::quant_from_isize(clamp_isize_for_signed_quant::<Self>(value.quant_to_isize()))
+    }
+
+    fn try_from_quantization<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+        let as_isize = value.quant_to_isize();
+        if !signed_value_fits_quant::<Self>(as_isize) {
+            return Err(
+                FeagiFailQuantizationOutOfRange::new("Quantized signed integer exceeds i8 quantization!", as_isize as usize).into(),
+            );
+        }
+        Ok(value.quant_to_i8_unchecked())
+    }
+
+    fn clamp_for_quantization<ClampFor: QuantizedSignedIntegerTrait>(self) -> Self {
+        self.clamp_for_quantization_level_runtime(ClampFor::LEVEL)
+    }
+
+    fn clamp_for_quantization_level_runtime(self, level: SignedIntegerQuantizationLevel) -> Self {
+        Self::quant_from_isize(clamp_isize_for_signed_quant_level(self.quant_to_isize(), level))
     }
 
     #[inline(always)]
@@ -150,6 +259,61 @@ impl QuantizedSignedIntegerTrait for i16 {
 
     fn quant_to_enum(value: Self) -> SignedIntegerEnum {
         SignedIntegerEnum::I16(value)
+    }
+
+    fn quant_try_from_isize(value: isize) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value < i16::MIN as isize || value > i16::MAX as isize {
+            return Err(
+                FeagiFailQuantizationOutOfRange::new("Given signed integer value cannot fit in a quantized i16!", value as usize).into(),
+            );
+        }
+        Ok(value as i16)
+    }
+
+    fn quant_to_isize(self) -> isize {
+        self as isize
+    }
+
+    fn quant_to_i8_unchecked(self) -> i8 {
+        self as i8
+    }
+
+    fn quant_to_i16_unchecked(self) -> i16 {
+        self
+    }
+
+    fn quant_to_i32_unchecked(self) -> i32 {
+        self as i32
+    }
+
+    fn quant_to_i64_unchecked(self) -> i64 {
+        self as i64
+    }
+
+    fn from_quantization_unchecked<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        value.quant_to_i16_unchecked()
+    }
+
+    fn from_quantization_clamped<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        Self::quant_from_isize(clamp_isize_for_signed_quant::<Self>(value.quant_to_isize()))
+    }
+
+    fn try_from_quantization<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+        let as_isize = value.quant_to_isize();
+        if !signed_value_fits_quant::<Self>(as_isize) {
+            return Err(
+                FeagiFailQuantizationOutOfRange::new("Quantized signed integer exceeds i16 quantization!", as_isize as usize).into(),
+            );
+        }
+        Ok(value.quant_to_i16_unchecked())
+    }
+
+    fn clamp_for_quantization<ClampFor: QuantizedSignedIntegerTrait>(self) -> Self {
+        self.clamp_for_quantization_level_runtime(ClampFor::LEVEL)
+    }
+
+    fn clamp_for_quantization_level_runtime(self, level: SignedIntegerQuantizationLevel) -> Self {
+        Self::quant_from_isize(clamp_isize_for_signed_quant_level(self.quant_to_isize(), level))
     }
 
     #[inline(always)]
@@ -187,6 +351,61 @@ impl QuantizedSignedIntegerTrait for i32 {
         SignedIntegerEnum::I32(value)
     }
 
+    fn quant_try_from_isize(value: isize) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value < i32::MIN as isize || value > i32::MAX as isize {
+            return Err(
+                FeagiFailQuantizationOutOfRange::new("Given signed integer value cannot fit in a quantized i32!", value as usize).into(),
+            );
+        }
+        Ok(value as i32)
+    }
+
+    fn quant_to_isize(self) -> isize {
+        self as isize
+    }
+
+    fn quant_to_i8_unchecked(self) -> i8 {
+        self as i8
+    }
+
+    fn quant_to_i16_unchecked(self) -> i16 {
+        self as i16
+    }
+
+    fn quant_to_i32_unchecked(self) -> i32 {
+        self
+    }
+
+    fn quant_to_i64_unchecked(self) -> i64 {
+        self as i64
+    }
+
+    fn from_quantization_unchecked<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        value.quant_to_i32_unchecked()
+    }
+
+    fn from_quantization_clamped<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        Self::quant_from_isize(clamp_isize_for_signed_quant::<Self>(value.quant_to_isize()))
+    }
+
+    fn try_from_quantization<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+        let as_isize = value.quant_to_isize();
+        if !signed_value_fits_quant::<Self>(as_isize) {
+            return Err(
+                FeagiFailQuantizationOutOfRange::new("Quantized signed integer exceeds i32 quantization!", as_isize as usize).into(),
+            );
+        }
+        Ok(value.quant_to_i32_unchecked())
+    }
+
+    fn clamp_for_quantization<ClampFor: QuantizedSignedIntegerTrait>(self) -> Self {
+        self.clamp_for_quantization_level_runtime(ClampFor::LEVEL)
+    }
+
+    fn clamp_for_quantization_level_runtime(self, level: SignedIntegerQuantizationLevel) -> Self {
+        Self::quant_from_isize(clamp_isize_for_signed_quant_level(self.quant_to_isize(), level))
+    }
+
     #[inline(always)]
     fn is_negative(&self) -> bool {
         *self < 0
@@ -219,6 +438,61 @@ impl QuantizedSignedIntegerTrait for i64 {
 
     fn quant_to_enum(value: Self) -> SignedIntegerEnum {
         SignedIntegerEnum::I64(value)
+    }
+
+    fn quant_try_from_isize(value: isize) -> Result<Self, FeagiDataValueQuantizationError> {
+        if value < i64::MIN as isize || value > i64::MAX as isize {
+            return Err(
+                FeagiFailQuantizationOutOfRange::new("Given signed integer value cannot fit in a quantized i64!", value as usize).into(),
+            );
+        }
+        Ok(value as i64)
+    }
+
+    fn quant_to_isize(self) -> isize {
+        self as isize
+    }
+
+    fn quant_to_i8_unchecked(self) -> i8 {
+        self as i8
+    }
+
+    fn quant_to_i16_unchecked(self) -> i16 {
+        self as i16
+    }
+
+    fn quant_to_i32_unchecked(self) -> i32 {
+        self as i32
+    }
+
+    fn quant_to_i64_unchecked(self) -> i64 {
+        self
+    }
+
+    fn from_quantization_unchecked<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        value.quant_to_i64_unchecked()
+    }
+
+    fn from_quantization_clamped<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        Self::quant_from_isize(clamp_isize_for_signed_quant::<Self>(value.quant_to_isize()))
+    }
+
+    fn try_from_quantization<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+        let as_isize = value.quant_to_isize();
+        if !signed_value_fits_quant::<Self>(as_isize) {
+            return Err(
+                FeagiFailQuantizationOutOfRange::new("Quantized signed integer exceeds i64 quantization!", as_isize as usize).into(),
+            );
+        }
+        Ok(value.quant_to_i64_unchecked())
+    }
+
+    fn clamp_for_quantization<ClampFor: QuantizedSignedIntegerTrait>(self) -> Self {
+        self.clamp_for_quantization_level_runtime(ClampFor::LEVEL)
+    }
+
+    fn clamp_for_quantization_level_runtime(self, level: SignedIntegerQuantizationLevel) -> Self {
+        Self::quant_from_isize(clamp_isize_for_signed_quant_level(self.quant_to_isize(), level))
     }
 
     #[inline(always)]
@@ -255,6 +529,50 @@ impl QuantizedSignedIntegerTrait for isize {
 
     fn quant_to_enum(value: Self) -> SignedIntegerEnum {
         SignedIntegerEnum::I64(value as i64)
+    }
+
+    fn quant_try_from_isize(value: isize) -> Result<Self, FeagiDataValueQuantizationError> {
+        Ok(value)
+    }
+
+    fn quant_to_isize(self) -> isize {
+        self
+    }
+
+    fn quant_to_i8_unchecked(self) -> i8 {
+        self as i8
+    }
+
+    fn quant_to_i16_unchecked(self) -> i16 {
+        self as i16
+    }
+
+    fn quant_to_i32_unchecked(self) -> i32 {
+        self as i32
+    }
+
+    fn quant_to_i64_unchecked(self) -> i64 {
+        self as i64
+    }
+
+    fn from_quantization_unchecked<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        value.quant_to_isize()
+    }
+
+    fn from_quantization_clamped<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        clamp_isize_for_signed_quant::<Self>(value.quant_to_isize())
+    }
+
+    fn try_from_quantization<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+        Ok(value.quant_to_isize())
+    }
+
+    fn clamp_for_quantization<ClampFor: QuantizedSignedIntegerTrait>(self) -> Self {
+        self.clamp_for_quantization_level_runtime(ClampFor::LEVEL)
+    }
+
+    fn clamp_for_quantization_level_runtime(self, level: SignedIntegerQuantizationLevel) -> Self {
+        clamp_isize_for_signed_quant_level(self, level)
     }
 
     #[inline(always)]
@@ -315,6 +633,20 @@ impl SignedIntegerEnum {
     // TODO from isize that is CPU dependent to be either 32 bit or 64 bit
 }
 
+fn clamp_isize_for_signed_quant_level(value: isize, level: SignedIntegerQuantizationLevel) -> isize {
+    match level {
+        SignedIntegerQuantizationLevel::I8 => value.clamp(i8::MIN as isize, i8::MAX as isize),
+        SignedIntegerQuantizationLevel::I16 => value.clamp(i16::MIN as isize, i16::MAX as isize),
+        SignedIntegerQuantizationLevel::I32 => value.clamp(i32::MIN as isize, i32::MAX as isize),
+        SignedIntegerQuantizationLevel::I64 => value.clamp(i64::MIN as isize, i64::MAX as isize),
+        SignedIntegerQuantizationLevel::Isize => value,
+    }
+}
+
+fn clamp_isize_for_signed_quant<Quant: QuantizedSignedIntegerTrait>(value: isize) -> isize {
+    clamp_isize_for_signed_quant_level(value, Quant::LEVEL)
+}
+
 fn signed_value_fits_quant<Quant: QuantizedSignedIntegerTrait>(value: isize) -> bool {
     match Quant::LEVEL {
         SignedIntegerQuantizationLevel::I8 => (i8::MIN as isize) <= value && value <= (i8::MAX as isize),
@@ -324,6 +656,10 @@ fn signed_value_fits_quant<Quant: QuantizedSignedIntegerTrait>(value: isize) -> 
         SignedIntegerQuantizationLevel::Isize => true,
     }
 }
+
+//endregion
+
+//region Wrapper
 
 /// Shared behaviour implemented by every strongly-typed wrapper generated by
 /// [`create_wrapped_quantized_signed_integer`].
@@ -336,7 +672,7 @@ fn signed_value_fits_quant<Quant: QuantizedSignedIntegerTrait>(value: isize) -> 
 ///
 /// The bulk of the behaviour is provided here as default methods that delegate to the underlying
 /// [`QuantizedSignedIntegerTrait`] value; the macro only needs to supply [`Self::new`],
-/// [`Self::deref`] and the `Self`-typed constants.
+/// [`Self::dewrap`] and the `Self`-typed constants.
 pub trait WrappedQuantizedSignedInteger:
     Copy
     + Clone
@@ -394,24 +730,99 @@ pub trait WrappedQuantizedSignedInteger:
     fn new(value: Self::Quant) -> Self;
 
     /// Extracts the inner quantized signed integer.
-    fn deref(self) -> Self::Quant;
+    fn dewrap(self) -> Self::Quant;
 
     /// Tries to convert from isize, does NOT check bounds!
     fn quant_from_isize(value: isize) -> Self {
         Self::new(Self::Quant::quant_from_isize(value))
     }
 
+    /// Tries converting from isize, returns an error if out of bounds
+    fn quant_try_from_isize(value: isize) -> Result<Self, FeagiDataValueQuantizationError> {
+        Ok(Self::new(Self::Quant::quant_try_from_isize(value)?))
+    }
+
+    /// Converts to isize.
+    fn quant_to_isize(self) -> isize {
+        self.dewrap().quant_to_isize()
+    }
+
+    /// Tries to convert to i8, does NOT check bounds!
+    fn quant_to_i8_unchecked(self) -> i8 {
+        self.dewrap().quant_to_i8_unchecked()
+    }
+
+    /// Tries to convert to i16, does NOT check bounds!
+    fn quant_to_i16_unchecked(self) -> i16 {
+        self.dewrap().quant_to_i16_unchecked()
+    }
+
+    /// Tries to convert to i32, does NOT check bounds!
+    fn quant_to_i32_unchecked(self) -> i32 {
+        self.dewrap().quant_to_i32_unchecked()
+    }
+
+    /// Tries to convert to i64, does NOT check bounds!
+    fn quant_to_i64_unchecked(self) -> i64 {
+        self.dewrap().quant_to_i64_unchecked()
+    }
+
     /// Will wrap whatever quant this is to a [`SignedIntegerEnum`]
     fn quant_to_enum(self) -> SignedIntegerEnum {
-        Self::Quant::quant_to_enum(self.deref())
+        Self::Quant::quant_to_enum(self.dewrap())
+    }
+
+    /// Creates from a value of another quantization. Does not check for validity of ranges!
+    fn from_quantization_unchecked<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        Self::new(Self::Quant::from_quantization_unchecked(value))
+    }
+
+    /// Creates from a value of another quantization, clamping its values to ensure it fits
+    fn from_quantization_clamped<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        Self::new(Self::Quant::from_quantization_clamped(value))
+    }
+
+    /// Tries to create a value of another quantization, returns an error if it would break the bounds
+    fn try_from_quantization<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+        Ok(Self::new(Self::Quant::try_from_quantization(value)?))
+    }
+
+    /// Converts to another quantization. Does not check for validity of ranges!
+    fn to_quantization_unchecked<ToQuant: QuantizedSignedIntegerTrait>(self) -> ToQuant {
+        self.dewrap().to_quantization_unchecked()
+    }
+
+    /// Converts to another quantization, clamping its values to ensure it fits
+    fn to_quantization_clamped<ToQuant: QuantizedSignedIntegerTrait>(self) -> ToQuant {
+        self.dewrap().to_quantization_clamped()
+    }
+
+    /// Tries to convert to another quantization, returns an error if it would break the bounds
+    fn try_to_quantization<ToQuant: QuantizedSignedIntegerTrait>(self) -> Result<ToQuant, FeagiDataValueQuantizationError> {
+        self.dewrap().try_to_quantization()
+    }
+
+    /// Clamps the value for another quantization, but does not actually change the quantization itself
+    fn clamp_for_quantization<ClampFor: QuantizedSignedIntegerTrait>(self) -> Self {
+        Self::new(self.dewrap().clamp_for_quantization::<ClampFor>())
+    }
+
+    /// Clamps the value for a runtime-provided quantization level, but does not actually change the quantization itself
+    fn clamp_for_quantization_level_runtime(self, level: SignedIntegerQuantizationLevel) -> Self {
+        Self::new(self.dewrap().clamp_for_quantization_level_runtime(level))
+    }
+
+    /// Returns true if the value is zero
+    fn is_zero(self) -> bool {
+        self == Self::QUANT_ZERO
     }
 
     fn is_negative(&self) -> bool {
-        self.deref().is_negative()
+        self.dewrap().is_negative()
     }
 
     fn is_zero_or_negative(&self) -> bool {
-        self.deref().is_zero_or_negative()
+        self.dewrap().is_zero_or_negative()
     }
 }
 
@@ -729,3 +1140,5 @@ macro_rules! create_wrapped_quantized_signed_integer {
         }
     };
 }
+
+//endregion
