@@ -1,10 +1,7 @@
 use crate::burst_engine::implementations::tokio_rayon::tokio_rayon_burst_engine::RayonBurstEngine;
 use crate::engines_common::EditableEngine::EditableEngine;
-use crate::visualization::CorticalAreaFireSnapshot;
-use ahash::HashMap;
 use feagi_data::collections::BiDirectionHashmap;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
 use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
@@ -84,22 +81,6 @@ impl DynamicNPU {
 
     pub fn execute_single_burst(&mut self) {
         self.rayon_burst_engine.execute_single_burst();
-    }
-
-    /// The neurons that fired in the most recent burst, keyed by the cortical IDs the connectome
-    /// knows rather than the engine indexes it assigns internally.
-    ///
-    /// Areas with no activity are absent. An engine index with no registered cortical ID is
-    /// skipped, since there is nothing a consumer could attribute it to.
-    pub fn fire_queue_snapshot(&self) -> Vec<(CorticalID, CorticalAreaFireSnapshot<FeagiIndexQuantizationGenomic>)> {
-        self.rayon_burst_engine
-            .fire_queue_snapshot()
-            .into_iter()
-            .filter_map(|snapshot| {
-                let slot = snapshot.cortical_index.deref().quant_to_usize();
-                self.cortical_ids_by_engine_index.get(slot).map(|cortical_id| (*cortical_id, snapshot))
-            })
-            .collect()
     }
 
     /// Every cortical area the NPU currently holds, in engine index order.

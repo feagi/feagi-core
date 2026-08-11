@@ -22,7 +22,7 @@ use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::{
     FeagiIndexQuantization, FeagiIndexQuantizationGenomic,
 };
-use feagi_data::values::quantizable::QuantizedIndexCountTrait;
+use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 use feagi_evolutionary::runtime::RuntimeGenome;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
 use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;

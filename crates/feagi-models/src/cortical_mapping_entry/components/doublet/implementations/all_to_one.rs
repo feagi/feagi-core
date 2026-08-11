@@ -1,9 +1,9 @@
 use crate::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use crate::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
-use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
-use feagi_data::neurons::{DimensionalCorticalArea4DCoordinate, NeuronCorticalLocalIndex, NeuronVoxelDensityIndex};
+use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDensityIndex};
+use feagi_data::neurons::{CorticalAreaNeuronCount, DimensionalCorticalArea4DCoordinate, NeuronCorticalLocalIndex};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
+use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedUnsignedInteger};
 
 /// Maps every neuron of the source cortical area to every neuron of a single destination voxel
 /// (its full density column). The inverse of
@@ -15,7 +15,7 @@ pub struct DoubletIteratorAllToOne<FIQ: FeagiIndexQuantization> {
     /// Distance between two neurons of the same voxel at consecutive densities
     destination_density_stride: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
     destination_density_count: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
-    source_count: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
+    source_count: CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>,
     source_cursor: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
     destination_cursor: NeuronCorticalLocalIndex<FIQ::NeuronIndexQuant>,
 }
@@ -30,7 +30,7 @@ impl<FIQ: FeagiIndexQuantization> DoubletIteratorAllToOne<FIQ> {
         let probe =
             DimensionalCorticalArea4DCoordinate::new_from_voxel_and_density(destination_voxel_coordinate, NeuronVoxelDensityIndex::QUANT_ZERO);
         let source_count = source_layout.dimensions.number_contained_elements();
-        if !destination_dimensions.contains_coordinate(&probe) || source_count == NeuronCorticalLocalIndex::QUANT_ZERO {
+        if !destination_dimensions.contains_coordinate(&probe) || source_count.is_zero() {
             return Self::empty();
         }
 
@@ -55,7 +55,7 @@ impl<FIQ: FeagiIndexQuantization> DoubletIteratorAllToOne<FIQ> {
             destination_base_index: NeuronCorticalLocalIndex::QUANT_ZERO,
             destination_density_stride: NeuronCorticalLocalIndex::QUANT_ZERO,
             destination_density_count: NeuronCorticalLocalIndex::QUANT_ZERO,
-            source_count: NeuronCorticalLocalIndex::QUANT_ZERO,
+            source_count: CorticalAreaNeuronCount::QUANT_ZERO,
             source_cursor: NeuronCorticalLocalIndex::QUANT_ZERO,
             destination_cursor: NeuronCorticalLocalIndex::QUANT_ZERO,
         }
@@ -69,7 +69,7 @@ impl<FIQ: FeagiIndexQuantization> Iterator for DoubletIteratorAllToOne<FIQ> {
     );
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.source_cursor >= self.source_count {
+        if self.source_cursor.deref() >= self.source_count.deref() {
             return None;
         }
         let pair = (
@@ -102,6 +102,6 @@ impl<FIQ: FeagiIndexQuantization> DoubletIterator<FIQ, CorticalAreaLayoutDimensi
 
     fn get_number_of_synapses(&self) -> FIQ::SynapseIndexCountQuant {
         // Multiplied in usize: the product of two neuron counts can exceed a neuron index.
-        FIQ::SynapseIndexCountQuant::quant_from_usize(self.source_count.quant_to_usize() * self.destination_density_count.quant_to_usize())
+        FIQ::SynapseIndexCountQuant::quant_from_usize_unchecked(self.source_count.quant_to_usize() * self.destination_density_count.quant_to_usize())
     }
 }

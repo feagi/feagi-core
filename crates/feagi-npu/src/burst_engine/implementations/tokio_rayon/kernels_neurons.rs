@@ -1,13 +1,13 @@
 use crate::burst_engine::implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
 use crate::burst_engine::implementations::tokio_rayon::data::RayonEngineData;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::{QuantizedIndexCountTrait, WrappedQuantizedIndexCount};
 use feagi_models::cortical_area::neuron::layout_specific_implementations::dimensional::DimensionalNeuronModel;
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
 use feagi_models::cortical_area::neuron_model_implementations::generated_enums::NeuronModelTypeAndQuantizationPacked;
 use feagi_models::wrapped_index_collections::NeuronEngineIndex;
 use feagi_models::wrapped_indexes::BurstIndex;
 use rayon::prelude::*;
+use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedUnsignedInteger};
 
 pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>) {
     let burst_index = data.burst_index;
@@ -34,7 +34,7 @@ pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineDat
 
                 let cortical_lookup = data.cortical_index_lookup_table.get_par(cortical_engine_index);
 
-                let neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant> = NeuronEngineIndex::quant_from_usize(neuron_index);
+                let neuron_engine_index: NeuronEngineIndex<FIQ::NeuronIndexQuant> = NeuronEngineIndex::quant_from_usize_unchecked(neuron_index);
                 let neuron_runtime_flags = data.neuron_runtime_flags.get_mut_par(neuron_engine_index);
                 let neuron_indexes_lookup = data.cortical_neuron_index_lookup_table.get_par(cortical_engine_index);
 
@@ -48,9 +48,9 @@ pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineDat
                 );
 
                 // Override if neuron is firing, with force off taking priority
-                if neuron_runtime_flags.get_force_off() {
+                if neuron_runtime_flags.get_debug_force_off() {
                     is_neuron_firing = false;
-                } else if neuron_runtime_flags.get_force_fire() {
+                } else if neuron_runtime_flags.get_debug_force_fire() {
                     is_neuron_firing = true;
                 }
 
@@ -82,7 +82,7 @@ pub(crate) fn pack_firing_bitmap<FIQ: FeagiIndexQuantization>(data: &RayonEngine
             .deref()
             .quant_to_usize();
 
-        let bitmap_index = FIQ::CorticalAreaIndexCountQuant::quant_from_usize(cortical_area);
+        let bitmap_index = FIQ::CorticalAreaIndexCountQuant::quant_from_usize_unchecked(cortical_area);
         let Some((bitmap, _)) = data.neuron_voxel_is_firing.get_slice_by_index(bitmap_index) else {
             return;
         };
@@ -104,7 +104,7 @@ pub(crate) fn pack_firing_bitmap<FIQ: FeagiIndexQuantization>(data: &RayonEngine
             // one worker, and areas own disjoint byte ranges of the shared buffer. No
             // other reference to this byte exists for the duration of the write.
             unsafe {
-                *bitmap.get_byte_mut_par(FIQ::NeuronIndexQuant::quant_from_usize(byte_index)) = packed;
+                *bitmap.get_byte_mut_par(FIQ::NeuronIndexQuant::quant_from_usize_unchecked(byte_index)) = packed;
             }
         });
     });

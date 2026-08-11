@@ -7,7 +7,7 @@ use crate::cortical_area::neuron_model_implementations::feagi_advanced::quantiza
 use crate::wrapped_indexes::BurstIndex;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::{WrappedQuantizedDecimal, WrappedQuantizedIndexCount};
+use feagi_data::values::quantizable::WrappedQuantizedUnsignedInteger;
 
 pub struct FeagiAdvancedModel<FIQ, NMQ>
 where

@@ -12,16 +12,16 @@
 
 use core::marker::PhantomData;
 use core::ops::Range;
-use feagi_data::values::quantizable::QuantizedIndexCountTrait;
+use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 /// The shared byte buffer that every run is carved out of.
 #[derive(Debug, Clone)]
-pub struct MultiBitPackedVector<Q: QuantizedIndexCountTrait> {
+pub struct MultiBitPackedVector<Q: QuantizedUnsignedIntegerTrait> {
     data: Vec<u8>,
     phantom_data: PhantomData<Q>,
 }
 
-impl<Q: QuantizedIndexCountTrait> MultiBitPackedVector<Q> {
+impl<Q: QuantizedUnsignedIntegerTrait> MultiBitPackedVector<Q> {
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
@@ -38,7 +38,7 @@ impl<Q: QuantizedIndexCountTrait> MultiBitPackedVector<Q> {
     }
 
     pub fn number_bytes(&self) -> Q {
-        Q::quant_from_usize(self.data.len())
+        Q::quant_from_usize_unchecked(self.data.len())
     }
 
     /// Grows the buffer by `additional_bytes` zeroed bytes and returns the byte index the new
@@ -54,19 +54,19 @@ impl<Q: QuantizedIndexCountTrait> MultiBitPackedVector<Q> {
     }
 }
 
-impl<Q: QuantizedIndexCountTrait> Default for MultiBitPackedVector<Q> {
+impl<Q: QuantizedUnsignedIntegerTrait> Default for MultiBitPackedVector<Q> {
     fn default() -> Self {
         Self::new()
     }
 }
 
 /// A borrowed view of one run's bytes.
-pub struct MultiBitPackedSlice<'a, Q: QuantizedIndexCountTrait> {
+pub struct MultiBitPackedSlice<'a, Q: QuantizedUnsignedIntegerTrait> {
     data: &'a [u8],
     phantom_data: PhantomData<Q>,
 }
 
-impl<'a, Q: QuantizedIndexCountTrait> MultiBitPackedSlice<'a, Q> {
+impl<'a, Q: QuantizedUnsignedIntegerTrait> MultiBitPackedSlice<'a, Q> {
     pub fn new(data: &'a [u8]) -> Self {
         Self {
             data,
@@ -79,7 +79,7 @@ impl<'a, Q: QuantizedIndexCountTrait> MultiBitPackedSlice<'a, Q> {
     }
 
     pub fn number_bytes(&self) -> Q {
-        Q::quant_from_usize(self.data.len())
+        Q::quant_from_usize_unchecked(self.data.len())
     }
 
     /// Reads one bit, or `None` if the run does not extend that far.
@@ -106,7 +106,7 @@ impl<'a, Q: QuantizedIndexCountTrait> MultiBitPackedSlice<'a, Q> {
             let mut remaining = *byte;
             while remaining != 0 {
                 let bit = remaining.trailing_zeros() as usize;
-                visit(Q::quant_from_usize((byte_index << 3) | bit));
+                visit(Q::quant_from_usize_unchecked((byte_index << 3) | bit));
                 remaining &= remaining - 1;
             }
         }
@@ -153,7 +153,7 @@ impl<'a, Q: QuantizedIndexCountTrait> MultiBitPackedSlice<'a, Q> {
 /// Hands out byte-aligned bit runs from one shared buffer, addressed by allocation id.
 ///
 /// `QI` indexes the runs (one per cortical area); `QV` indexes bits and bytes within a run.
-pub struct MultiBitPackedVectorManager<QI: QuantizedIndexCountTrait, QV: QuantizedIndexCountTrait> {
+pub struct MultiBitPackedVectorManager<QI: QuantizedUnsignedIntegerTrait, QV: QuantizedUnsignedIntegerTrait> {
     /// Every run's bytes, back to back.
     vector: MultiBitPackedVector<QV>,
     /// Per run: the byte range it owns and how many bits of that range are in use. `None` marks a
@@ -170,7 +170,7 @@ pub struct MultiBitPackedVectorManager<QI: QuantizedIndexCountTrait, QV: Quantiz
     skipped_indexes: Vec<QI>,
 }
 
-impl<QI: QuantizedIndexCountTrait, QV: QuantizedIndexCountTrait> MultiBitPackedVectorManager<QI, QV> {
+impl<QI: QuantizedUnsignedIntegerTrait, QV: QuantizedUnsignedIntegerTrait> MultiBitPackedVectorManager<QI, QV> {
     pub fn new() -> Self {
         Self {
             vector: MultiBitPackedVector::new(),
@@ -189,8 +189,8 @@ impl<QI: QuantizedIndexCountTrait, QV: QuantizedIndexCountTrait> MultiBitPackedV
         let number_bytes = number_bits_to_number_bytes(number_bits.quant_to_usize());
         let first_byte = self.vector.append_zeroed_bytes(number_bytes);
 
-        let range = QV::quant_from_usize(first_byte)..QV::quant_from_usize(first_byte + number_bytes);
-        let id_index = QI::quant_from_usize(self.used_ranges.len());
+        let range = QV::quant_from_usize_unchecked(first_byte)..QV::quant_from_usize_unchecked(first_byte + number_bytes);
+        let id_index = QI::quant_from_usize_unchecked(self.used_ranges.len());
         self.used_ranges.push(Some((range, number_bits)));
 
         id_index
@@ -198,7 +198,7 @@ impl<QI: QuantizedIndexCountTrait, QV: QuantizedIndexCountTrait> MultiBitPackedV
 
     /// Number of run ids handed out so far, including released ones.
     pub fn len(&self) -> QI {
-        QI::quant_from_usize(self.used_ranges.len())
+        QI::quant_from_usize_unchecked(self.used_ranges.len())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -285,7 +285,7 @@ impl<QI: QuantizedIndexCountTrait, QV: QuantizedIndexCountTrait> MultiBitPackedV
     }
 }
 
-impl<QI: QuantizedIndexCountTrait, QV: QuantizedIndexCountTrait> Default for MultiBitPackedVectorManager<QI, QV> {
+impl<QI: QuantizedUnsignedIntegerTrait, QV: QuantizedUnsignedIntegerTrait> Default for MultiBitPackedVectorManager<QI, QV> {
     fn default() -> Self {
         Self::new()
     }

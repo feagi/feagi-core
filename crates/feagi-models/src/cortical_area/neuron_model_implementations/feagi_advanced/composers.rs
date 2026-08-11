@@ -11,7 +11,7 @@ use crate::cortical_area::neuron_model_implementations::feagi_advanced::quantiza
 use core::marker::PhantomData;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use feagi_data::values::quantizable::{PercentageUnsigned, WrappedQuantizedIndexCount};
+use feagi_data::values::quantizable::{PercentageUnsigned, WrappedQuantizedUnsignedInteger};
 
 #[derive(Debug, Clone, Copy)]
 pub enum FeagiAdvancedModelCorticalWriter<NMQ>

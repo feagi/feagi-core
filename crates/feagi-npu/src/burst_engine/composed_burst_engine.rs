@@ -19,7 +19,7 @@ pub trait ComposableBurstEngine<FIQ: FeagiIndexQuantization>: BurstEngine<FIQ>
 
 
 pub enum BurstEngineEnum<FIQ: FeagiIndexQuantization> {
-
+    A(FIQ)
 }
 
 impl<FIQ: FeagiIndexQuantization> BurstEngine<FIQ> for BurstEngineEnum<FIQ> {

@@ -2,14 +2,14 @@ use crate::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantiza
 use crate::cortical_area::neuron::neuron_model_quantization_level::NeuronModelQuantizationLevel;
 use crate::cortical_area::neuron_model_implementations::generated_enums::{NeuronModelType, NeuronModelTypeAndQuantizationNested};
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedIndexCountTrait};
+use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedUnsignedIntegerTrait};
 use half::bf16;
 
 pub trait FeagiAdvancedModelQuantization: NeuronModelQuantization {
     const MODEL_QUANTIZATION_LEVEL: FeagiAdvancedModelQuantizationLevel;
 
-    type NeuronCountdownQuants: QuantizedIndexCountTrait;
-    type CorticalLimitAndSnoozeQuants: QuantizedIndexCountTrait;
+    type NeuronCountdownQuants: QuantizedUnsignedIntegerTrait;
+    type CorticalLimitAndSnoozeQuants: QuantizedUnsignedIntegerTrait;
     type PercentageQuant: QuantizedDecimalTrait;
     type DegeneracyConstantQuant: QuantizedDecimalTrait;
 }

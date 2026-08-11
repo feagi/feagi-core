@@ -1,5 +1,5 @@
 use crate::cortical_area::components::cortical_area_layout::enums::{CorticalAreaLayoutNested, CorticalAreaLayoutTypePacked};
-use crate::cortical_area::components::cortical_area_layout::CorticalAreaLayout;
+use crate::cortical_area::components::cortical_area_layout::cortical_area_layout::CorticalAreaLayout;
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 

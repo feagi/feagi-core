@@ -8,7 +8,6 @@ use crate::cortical_area::neuron_model_implementations::generated_enums::{
 };
 use crate::wrapped_indexes::BurstIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 
 /// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data,
 pub trait NeuronModel<FIQ, NMQ>: Sized

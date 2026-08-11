@@ -1,7 +1,7 @@
 use crate::burst_engine::implementations::tokio_rayon::data::RayonEngineData;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedIndexCount};
+use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedUnsignedInteger};
 use feagi_models::cortical_area::components::neuron_history::implementations::none::NeuronModelNoNeuronHistory;
 use feagi_models::cortical_mapping_entry::synapse::synapse_model::SynapseModel;
 use feagi_models::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
@@ -17,7 +17,7 @@ pub(crate) fn process_synapses<FIQ: FeagiIndexQuantization>(data: &RayonEngineDa
     // owns whole destinations rather than whole synapses.
     unsafe {
         for (synapse_index, &mapping_entry_index) in data.cortical_mapping_entry_indexes.as_slice().iter().enumerate() {
-            let synapse_engine_index: SynapseEngineIndex<FIQ::SynapseIndexCountQuant> = SynapseEngineIndex::quant_from_usize(synapse_index);
+            let synapse_engine_index: SynapseEngineIndex<FIQ::SynapseIndexCountQuant> = SynapseEngineIndex::quant_from_usize_unchecked(synapse_index);
 
             let mapping_entry_properties = data.cortical_mapping_entry_properties.get_par(mapping_entry_index);
             if mapping_entry_properties.flags.get_is_mapping_entry_disabled() {

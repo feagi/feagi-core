@@ -4,7 +4,7 @@ use crate::cortical_mapping_entry::synapse::synapse_data::SynapseModelSynapseDat
 use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
 use crate::cortical_mapping_entry::synapse::synapse_properties::SynapseProperties;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::QuantizedIndexCountTrait;
+use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 pub trait SynapseModelCorticalWriter<SMQ, SMCMD, SMSD>
 where
@@ -57,7 +57,7 @@ where
     fn number_synapses_needed<FIQ: FeagiIndexQuantization>(&self) -> Result<FIQ::SynapseIndexCountQuant, ()> {
         match self {
             RootSynapseModelCorticalWriter::CompleteRawData { synapse_data, .. } => {
-                Ok(FIQ::SynapseIndexCountQuant::quant_from_usize(synapse_data.len()))
+                Ok(FIQ::SynapseIndexCountQuant::quant_from_usize_unchecked(synapse_data.len()))
             }
             RootSynapseModelCorticalWriter::ModelSpecific(SE) => SE.number_synapses_needed::<FIQ>(),
         }
