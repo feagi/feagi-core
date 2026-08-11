@@ -610,19 +610,19 @@ pub trait WrappedQuantizedUnsignedInteger:
     const QUANT_CLAMPED_USIZE: usize = <Self::Quant as QuantizedUnsignedIntegerTrait>::QUANT_CLAMPED_USIZE;
 
     /// Wraps a raw quantized value into this wrapper type.
-    fn new(value: Self::Quant) -> Self;
+    fn wrap(value: Self::Quant) -> Self;
 
     /// Extracts the inner quantized index / count.
     fn deref(self) -> Self::Quant;
 
     /// Tries to convert from usize, does NOT check bounds!
     fn quant_from_usize_unchecked(value: usize) -> Self {
-        Self::new(Self::Quant::quant_from_usize_unchecked(value))
+        Self::wrap(Self::Quant::quant_from_usize_unchecked(value))
     }
 
     /// Tries converting from usize, returns an error if out of bounds
     fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
-        Ok(Self::new(Self::Quant::quant_try_from_usize(value)?))
+        Ok(Self::wrap(Self::Quant::quant_try_from_usize(value)?))
     }
 
     /// Converts to usize. No need to check as we have no indexes that will exceed a usize on a
@@ -653,17 +653,17 @@ pub trait WrappedQuantizedUnsignedInteger:
 
     /// Creates from an index of another quantization. Does not check for validity of ranges!
     fn from_quantization_unchecked<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
-        Self::new(Self::Quant::from_quantization_unchecked(value))
+        Self::wrap(Self::Quant::from_quantization_unchecked(value))
     }
 
     /// Creates from an index of another quantization, clamping its values to ensure it fits
     fn from_quantization_clamped<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
-        Self::new(Self::Quant::from_quantization_clamped(value))
+        Self::wrap(Self::Quant::from_quantization_clamped(value))
     }
 
     /// Tries to create an index of another quantization, returns an error if it would break the bounds
     fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
-        Ok(Self::new(Self::Quant::try_from_quantization(value)?))
+        Ok(Self::wrap(Self::Quant::try_from_quantization(value)?))
     }
 
     /// Converts to an index of another quantization. Does not check for validity of ranges!
@@ -684,13 +684,13 @@ pub trait WrappedQuantizedUnsignedInteger:
     /// Clamps the value of this index for another quantization, but does not actually change the
     /// quantization itself
     fn clamp_for_quantization<ClampFor: QuantizedUnsignedIntegerTrait>(self) -> Self {
-        Self::new(self.deref().clamp_for_quantization::<ClampFor>())
+        Self::wrap(self.deref().clamp_for_quantization::<ClampFor>())
     }
 
     /// Clamps the value of this index for a runtime-provided quantization level, but does not
     /// actually change the quantization itself
     fn clamp_for_quantization_level_runtime(self, level: UnsignedIntegerQuantizationLevel) -> Self {
-        Self::new(self.deref().clamp_for_quantization_level_runtime(level))
+        Self::wrap(self.deref().clamp_for_quantization_level_runtime(level))
     }
 
     /// Returns true if the value is zero
@@ -724,7 +724,7 @@ pub trait WrappedQuantizedUnsignedIntegerCount: WrappedQuantizedUnsignedInteger 
         if self.deref().is_zero() {
             return None;
         }
-        Some(Self::Index::new(self.deref() - Self::Quant::QUANT_ONE))
+        Some(Self::Index::wrap(self.deref() - Self::Quant::QUANT_ONE))
     }
 
     // TODO Iterators? From 0 - size, par iterator?
@@ -817,7 +817,7 @@ macro_rules! _create_wrapped_quantized_unsigned_integer {
             const QUANT_MAX_U32: Self = Self::const_new(Q::QUANT_MAX_U32);
             const QUANT_MAX_U64: Self = Self::const_new(Q::QUANT_MAX_U64);
 
-            fn new(value: Q) -> Self {
+            fn wrap(value: Q) -> Self {
                 Self(value)
             }
 
