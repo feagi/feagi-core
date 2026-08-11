@@ -317,7 +317,7 @@ pub trait WrappedUnsignedIntegerSpatialCoordinate<Quant: QuantizedUnsignedIntege
 pub trait WrappedUnsignedIntegerSpatialDimensions<Quant: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>: WrappedUnsignedIntegerSpatial<Quant, NUM_DIMS>
 {
     type LinearIndex: WrappedQuantizedUnsignedIntegerIndex<Quant>;
-    type LinearCount: WrappedQuantizedUnsignedIntegerCount<Quant>;
+    type LinearCount: WrappedQuantizedUnsignedIntegerCount<Quant, Self::LinearIndex>;
     type Coordinate: WrappedUnsignedIntegerSpatialCoordinate<Quant, NUM_DIMS>;
 
     /// Total number of discrete coordinates contained within these dimensions (the product of

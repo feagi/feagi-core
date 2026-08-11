@@ -1,16 +1,30 @@
 use crate::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use crate::values::spatial::unsigned_integer::{QuantizedIndexCoord3D, QuantizedIndexDimension3D};
-use crate::{
-    create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate,
-    create_wrapped_quantized_index_dimension,
-};
+use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_count, create_wrapped_quantized_unsigned_integer_index};
 use serde::{Deserialize, Serialize};
 
 create_wrapped_quantized_decimal!(
     /// Represents the Membrane Potential of the neuron(s) in a voxel. Most of the time, each
     /// voxel contains a single neuron, but in cases where there are more, they are averaged to
     /// make this
-    pub NeuronVoxelPotential);
+    pub NeuronVoxelPotential
+);
+
+create_wrapped_quantized_unsigned_integer_index!(
+    /// Index of a neuron within a voxel. Most voxels only have 1 neuron, but some have more
+    pub NeuronVoxelDensityIndex
+);
+
+create_wrapped_quantized_unsigned_integer_count!(
+    /// The number of neurons within a voxel (normally 1)
+    pub PerVoxelNeuronCount NeuronVoxelDensityIndex
+);
+
+create_wrapped_quantized_unsigned_integer_index!(
+    /// Index of a neuron within a voxel. Most voxels only have 1 neuron, but some have more
+    pub NeuronVoxelCoordinateAxis
+);
+
+
 
 create_wrapped_quantized_index!(
     /// Represents the index of a voxel in a collection using a single uint value that represents

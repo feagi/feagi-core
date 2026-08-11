@@ -700,13 +700,10 @@ pub trait WrappedQuantizedUnsignedIntegerIndex<Quant: QuantizedUnsignedIntegerTr
 }
 
 /// Denotes the wrapped uint as a count / size of something. Also needs a definition of an index.
-pub trait WrappedQuantizedUnsignedIntegerCount<Quant: QuantizedUnsignedIntegerTrait>: WrappedQuantizedUnsignedInteger<Quant> {
-
-    /// The Index type corresponding to this count type
-    type Index: WrappedQuantizedUnsignedIntegerIndex<Quant>;
+pub trait WrappedQuantizedUnsignedIntegerCount<Quant: QuantizedUnsignedIntegerTrait, Index: WrappedQuantizedUnsignedIntegerIndex<Quant>>: WrappedQuantizedUnsignedInteger<Quant> {
 
     /// Returns true if the index can fit in this count (less than)
-    fn can_contain_index(&self, index: &Self::Index) -> bool {
+    fn can_contain_index(&self, index: &Index) -> bool {
         index.deref() < self.deref()
     }
 
@@ -717,7 +714,7 @@ pub trait WrappedQuantizedUnsignedIntegerCount<Quant: QuantizedUnsignedIntegerTr
 
     /// Returns the value of the maximum possible valid index. Returns None if the size is zero
     /// (no index possible).
-    fn maximum_possible_index(&self) -> Option<Self::Index> {
+    fn maximum_possible_index(&self) -> Option<Index> {
         if self.deref().is_zero() {
             return None;
         }
@@ -904,19 +901,19 @@ macro_rules! _create_wrapped_quantized_unsigned_integer {
                 ) -> Self {
                     match FromQuant::LEVEL {
                         $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8 => {
-                            Self::U8($struct_name::<u8>::new(<u8 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization(value.deref())))
+                            Self::U8($struct_name::<u8>::new(<u8 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization_unchecked(value.deref())))
                         }
                         $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16 => {
-                            Self::U16($struct_name::<u16>::new(<u16 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization(value.deref())))
+                            Self::U16($struct_name::<u16>::new(<u16 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization_unchecked(value.deref())))
                         }
                         $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U32 => {
-                            Self::U32($struct_name::<u32>::new(<u32 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization(value.deref())))
+                            Self::U32($struct_name::<u32>::new(<u32 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization_unchecked(value.deref())))
                         }
                         $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64 => {
-                            Self::U64($struct_name::<u64>::new(<u64 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization(value.deref())))
+                            Self::U64($struct_name::<u64>::new(<u64 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization_unchecked(value.deref())))
                         }
                         $crate::values::quantizable::UnsignedIntegerQuantizationLevel::Usize => {
-                            Self::U64($struct_name::<u64>::new(<u64 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization(value.deref())))
+                            Self::U64($struct_name::<u64>::new(<u64 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization_unchecked(value.deref())))
                         }
                     }
                 }
@@ -946,26 +943,8 @@ macro_rules! _create_wrapped_quantized_unsigned_integer {
                         Self::U64(v) => $crate::values::quantizable::UnsignedIntegerEnum::U64(v.deref()),
                     }
                 }
-
-                pub fn try_into_wrapped_quant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
-                    self
-                ) -> Result<$struct_name<Quant>, $crate::values::quantizable::FeagiDataValueQuantizationError> {
-                    Ok($struct_name::<Quant>::new(
-                        <Self as $crate::values::quantizable::WrappedQuantizedUnsignedIntegerEnum>::try_into_quant::<Quant>(self)?
-                    ))
-                }
-
-                pub fn into_wrapped_quant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
-                    self
-                ) -> $struct_name<Quant> {
-                    $struct_name::<Quant>::new(
-                        <Self as $crate::values::quantizable::WrappedQuantizedUnsignedIntegerEnum>::into_quant::<Quant>(self)
-                    )
-                }
-            }
-
-            impl $crate::values::quantizable::WrappedQuantizedUnsignedIntegerEnum for [<$struct_name Enum>] {
-                fn get_level(&self) -> $crate::values::quantizable::UnsignedIntegerQuantizationLevel {
+                
+                pub fn get_level(&self) -> $crate::values::quantizable::UnsignedIntegerQuantizationLevel {
                     match self {
                         Self::U8(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U8,
                         Self::U16(_) => $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U16,
@@ -974,7 +953,7 @@ macro_rules! _create_wrapped_quantized_unsigned_integer {
                     }
                 }
 
-                fn try_into_quant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
+                pub fn try_into_quant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                     self
                 ) -> Result<Quant, $crate::values::quantizable::FeagiDataValueQuantizationError> {
                     match self {
@@ -985,16 +964,17 @@ macro_rules! _create_wrapped_quantized_unsigned_integer {
                     }
                 }
 
-                fn into_quant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Quant {
+                pub fn into_quant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(self) -> Quant {
+                    // TODO assert Debug Check!
                     match self {
-                        Self::U8(value) => Quant::from_quantization(value.deref()),
-                        Self::U16(value) => Quant::from_quantization(value.deref()),
-                        Self::U32(value) => Quant::from_quantization(value.deref()),
-                        Self::U64(value) => Quant::from_quantization(value.deref()),
+                        Self::U8(value) => Quant::from_quantization_unchecked(value.deref()),
+                        Self::U16(value) => Quant::from_quantization_unchecked(value.deref()),
+                        Self::U32(value) => Quant::from_quantization_unchecked(value.deref()),
+                        Self::U64(value) => Quant::from_quantization_unchecked(value.deref()),
                     }
                 }
 
-                fn to_usize(self) -> usize {
+                pub fn to_usize(self) -> usize {
                     match self {
                         Self::U8(value) => value.deref() as usize,
                         Self::U16(value) => value.deref() as usize,
@@ -1019,7 +999,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer_data {
 
         _create_wrapped_quantized_unsigned_integer!(
             $(#[$meta])*
-            $vis $struct_name,
+            $vis $struct_name
         );
 
         impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
@@ -1035,9 +1015,9 @@ macro_rules! create_wrapped_quantized_unsigned_integer_index {
         $(#[$meta:meta])*
         $vis:vis $struct_index_name:ident
     ) => {
-        $crate:_create_wrapped_quantized_unsigned_integer!(
+        $crate::_create_wrapped_quantized_unsigned_integer!(
             $(#[$meta])*
-            $vis $struct_index_name,
+            $vis $struct_index_name
         );
 
         impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
@@ -1056,13 +1036,13 @@ macro_rules! create_wrapped_quantized_unsigned_integer_count {
 
         _create_wrapped_quantized_unsigned_integer!(
             $(#[$meta])*
-            $vis $struct_count_name,
+            $vis $struct_count_name
         );
-
+                
         impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>
-        $crate::values::quantizable::WrappedQuantizedUnsignedIntegerCount<Q>
+        $crate::values::quantizable::WrappedQuantizedUnsignedIntegerCount<Q, $struct_index_name<Q>>
         for  $struct_count_name<Q> {
-            type Index: $struct_index_name<Q>;
+            
         }
     };
 }

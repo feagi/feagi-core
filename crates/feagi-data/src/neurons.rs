@@ -1,50 +1,58 @@
-use crate::_create_wrapped_quantized_unsigned_integer;
+use crate::{_create_wrapped_quantized_unsigned_integer, create_wrapped_quantized_unsigned_integer_count, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
 use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
 use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_index};
+use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 create_wrapped_quantized_decimal!(
     /// The membrane potential of a single neuron (NOT VOXEL)
     pub NeuronMembranePotential
 );
 
+
+
 create_wrapped_quantized_unsigned_integer_index!(
     /// Index of a neuron within a voxel. Most voxels only have 1 neuron, but some have more
     pub NeuronVoxelDensityIndex
 );
 
-create_wrapped_quantized_index!(
+
+create_wrapped_quantized_unsigned_integer_index!(
+    /// Index of a neuron within a voxel. Most voxels only have 1 neuron, but some have more
+    pub NeuronVoxelCoordinateAxis
+);
+
+
+create_wrapped_quantized_unsigned_integer_index!(
     /// Index of a neuron relative to its parent cortical area
     pub NeuronCorticalLocalIndex
 );
 
-create_wrapped_quantized_index_coordinate!(
-    /// Represents a 4D coordinate of a neuron within a dimensional cortical_area area, with the
-    /// 4th dimension being the density index
-    pub DimensionalCorticalArea4DCoordinate,
-    QuantizedIndexCoord4D,
-    (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis), (3, d, NeuronVoxelDensityIndex)
+create_wrapped_quantized_unsigned_integer_count!(
+    /// The number of neurons within a cortical area
+    pub CorticalAreaNeuronCount NeuronCorticalLocalIndex
 );
 
-impl<Q: QuantizedIndexCountTrait> DimensionalCorticalArea4DCoordinate<Q> {
+create_wrapped_unsigned_integer_spatial_coordinate!(
+        /// Represents a 4D coordinate of a neuron within a dimensional cortical_area area, with the
+        /// 4th dimension being the density index
+        pub DimensionalCorticalArea4DCoordinate,
+        4,
+        (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis), (3, d, NeuronVoxelDensityIndex)
+);
+
+
+impl<Q: QuantizedUnsignedIntegerTrait> DimensionalCorticalArea4DCoordinate<Q> {
     pub fn new_from_voxel_and_density(voxel_coord: NeuronVoxelCoordinate<Q>, density: NeuronVoxelDensityIndex<Q>) -> Self {
         DimensionalCorticalArea4DCoordinate::new(*voxel_coord.get_x(), *voxel_coord.get_y(), *voxel_coord.get_z(), density)
     }
 }
 
-create_wrapped_quantized_index_dimension!(
+create_wrapped_unsigned_integer_spatial_dimensions!(
     /// Represents the dimensions and density of a dimensional cortical_area area
     pub DimensionalCorticalArea4DDimensions,
-    QuantizedIndexDimension4D,
     DimensionalCorticalArea4DCoordinate,
     NeuronCorticalLocalIndex,
+    CorticalAreaNeuronCount,
+    4,
     (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis), (3, d, NeuronVoxelDensityIndex)
 );
-
-impl<Q: QuantizedIndexCountTrait> DimensionalCorticalArea4DDimensions<Q> {
-    pub fn try_new_from_voxel_and_density(
-        voxel_dim: NeuronVoxelDimensions<Q>,
-        density: NeuronVoxelDensityIndex<Q>,
-    ) -> Result<Self, FeagiDataValuesSpatialError> {
-        DimensionalCorticalArea4DDimensions::try_new(*voxel_dim.get_x(), *voxel_dim.get_y(), *voxel_dim.get_z(), density)
-    }
-}
