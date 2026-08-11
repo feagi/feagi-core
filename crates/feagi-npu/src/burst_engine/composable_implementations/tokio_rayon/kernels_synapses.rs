@@ -1,4 +1,4 @@
-use crate::burst_engine::implementations::tokio_rayon::data::RayonEngineData;
+use crate::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedUnsignedInteger};
@@ -10,7 +10,7 @@ use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform
 use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelStandardQuant;
 use feagi_models::wrapped_index_collections::{MappingEntryModelIndex, NeuronMPIndex, SynapseEngineIndex};
 
-pub(crate) fn process_synapses<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>) {
+pub(crate) fn process_synapses<FIQ: FeagiIndexQuantization>(data: &TokioRayonEngineData<FIQ>) {
     // Walked serially: synapses converge, so several of them accumulate into the same destination
     // slot, and scattering those writes across threads would alias what `get_mut_par` requires to
     // be disjoint. Parallelising this needs a destination indexed reverse mapping so each thread
@@ -43,7 +43,7 @@ pub(crate) fn process_synapses<FIQ: FeagiIndexQuantization>(data: &RayonEngineDa
 
 #[inline(always)]
 unsafe fn synapse_dynamics<FIQ: FeagiIndexQuantization>(
-    data: &RayonEngineData<FIQ>,
+    data: &TokioRayonEngineData<FIQ>,
     source_neuron_mp_quant: DecimalQuantizationLevel,
     source_neuron_mp_index: NeuronMPIndex<FIQ::NeuronIndexQuant>,
     destination_neuron_mp_quant: DecimalQuantizationLevel,
@@ -80,7 +80,7 @@ unsafe fn synapse_dynamics<FIQ: FeagiIndexQuantization>(
 }
 
 unsafe fn source_to_junction<FIQ: FeagiIndexQuantization, JunctionQuant: QuantizedDecimalTrait>(
-    data: &RayonEngineData<FIQ>,
+    data: &TokioRayonEngineData<FIQ>,
     source_quant: &DecimalQuantizationLevel,
     source_index: NeuronMPIndex<FIQ::NeuronIndexQuant>,
 ) -> NeuronMembranePotential<JunctionQuant> {
@@ -109,7 +109,7 @@ unsafe fn source_to_junction<FIQ: FeagiIndexQuantization, JunctionQuant: Quantiz
 }
 
 unsafe fn junction_to_destination<FIQ: FeagiIndexQuantization, JunctionQuant: QuantizedDecimalTrait>(
-    data: &RayonEngineData<FIQ>,
+    data: &TokioRayonEngineData<FIQ>,
     value: NeuronMembranePotential<JunctionQuant>,
     destination_quant: &DecimalQuantizationLevel,
     destination_index: NeuronMPIndex<FIQ::NeuronIndexQuant>,

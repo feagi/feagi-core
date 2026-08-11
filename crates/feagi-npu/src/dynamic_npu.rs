@@ -1,4 +1,4 @@
-use crate::burst_engine::implementations::tokio_rayon::tokio_rayon_burst_engine::RayonBurstEngine;
+use crate::burst_engine::composable_implementations::tokio_rayon::tokio_rayon_burst_engine::TokioRayonBurstEngine;
 use crate::engines_common::EditableEngine::EditableEngine;
 use feagi_data::collections::BiDirectionHashmap;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
@@ -19,7 +19,7 @@ type NeuronQuant = <FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::Ne
 
 pub struct DynamicNPU {
     // TODO support multi burst engine setups
-    rayon_burst_engine: RayonBurstEngine<FeagiIndexQuantizationGenomic>,
+    rayon_burst_engine: TokioRayonBurstEngine<FeagiIndexQuantizationGenomic>,
     cortical_id_engine_mapping: BiDirectionHashmap<CorticalID, CorticalEngineIndex<CorticalQuant>>,
     /// Cortical IDs positioned by their engine index. The engine hands out indexes sequentially
     /// from zero, so position is the index, which makes the reverse lookup a bounds-checked read
@@ -30,7 +30,7 @@ pub struct DynamicNPU {
 impl DynamicNPU {
     pub fn new() -> Self {
         Self {
-            rayon_burst_engine: RayonBurstEngine::<FeagiIndexQuantizationGenomic>::new(),
+            rayon_burst_engine: TokioRayonBurstEngine::<FeagiIndexQuantizationGenomic>::new(),
             cortical_id_engine_mapping: BiDirectionHashmap::new(),
             cortical_ids_by_engine_index: Vec::new(),
         }

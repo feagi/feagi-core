@@ -1,5 +1,5 @@
-use crate::burst_engine::implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
-use crate::burst_engine::implementations::tokio_rayon::data::RayonEngineData;
+use crate::burst_engine::composable_implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
+use crate::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::cortical_area::neuron::layout_specific_implementations::dimensional::DimensionalNeuronModel;
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
@@ -9,7 +9,7 @@ use feagi_models::wrapped_indexes::BurstIndex;
 use rayon::prelude::*;
 use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedUnsignedInteger};
 
-pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>) {
+pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &TokioRayonEngineData<FIQ>) {
     let burst_index = data.burst_index;
 
     // We access `data` through a shared `&` and mutate disjoint slots via the
@@ -70,7 +70,7 @@ pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineDat
 ///
 /// Each byte is written whole rather than or-ed in, so last burst's bits are cleared by the same
 /// store that sets this burst's.
-pub(crate) fn pack_firing_bitmap<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>) {
+pub(crate) fn pack_firing_bitmap<FIQ: FeagiIndexQuantization>(data: &TokioRayonEngineData<FIQ>) {
     let neuron_counts = data.cortical_neuron_count.as_slice();
     let neuron_index_lookups = data.cortical_neuron_index_lookup_table.as_slice();
     let neuron_runtime_flags = data.neuron_runtime_flags.as_slice();
@@ -114,7 +114,7 @@ pub(crate) fn pack_firing_bitmap<FIQ: FeagiIndexQuantization>(data: &RayonEngine
 
 #[inline(always)]
 unsafe fn neuron_dynamics<FIQ: FeagiIndexQuantization>(
-    data: &RayonEngineData<FIQ>,
+    data: &TokioRayonEngineData<FIQ>,
     model: NeuronModelTypeAndQuantizationPacked,
     burst_index: BurstIndex<FIQ::GlobalBurstIndexQuant>,
     cortical_lookup_table: &CorticalIndexLookupTable<FIQ>,

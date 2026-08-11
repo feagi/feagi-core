@@ -60,13 +60,15 @@ paste = { workspace = true}
 half = {workspace = true}
 ahash = { workspace = true}
 # Runtime taps only; std-gated along with the `runtime_taps` module.
-parking_lot = { version = "0.12", optional = true }
 serde = { workspace = true, optional = true}
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 
-
-
+# TODO we should tie these to workspace
+parking_lot = { version = "0.12", optional = true }
+tokio = {version = "1.53.1"} # TODO Optional
+tokio-util = { version = "0.7.19", features = ["full"] }
+futures = {version =  "0.3.34" }
 
 [lints]
 workspace = true

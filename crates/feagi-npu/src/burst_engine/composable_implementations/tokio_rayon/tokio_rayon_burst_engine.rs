@@ -1,59 +1,68 @@
-use crate::burst_engine::implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
-use crate::burst_engine::implementations::tokio_rayon::data::synapse::synapse_sub_data::{
-    CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties, SynapseMappingMPQuants,
-};
-use crate::burst_engine::implementations::tokio_rayon::data::RayonEngineData;
-use crate::burst_engine::implementations::tokio_rayon::kernels_neurons;
-use crate::burst_engine::implementations::tokio_rayon::kernels_synapses;
-use crate::engines_common::EditableEngine::EditableEngine;
-use crate::burst_engine::common_cpu_structs::flags::cortical_mapping_entry_runtime_flags::CorticalMappingEntryRuntimeFlags;
-use crate::burst_engine::common_cpu_structs::flags::cortical_runtime_flags::CorticalRuntimeFlags;
-use crate::burst_engine::common_cpu_structs::flags::neuron_runtime_flags::NeuronRuntimeFlags;
-use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
-use feagi_data::neurons::NeuronMembranePotential;
+use crate::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedUnsignedIntegerTrait};
-use feagi_models::cortical_area::components::cortical_area_layout::enums::CorticalAreaLayoutNested;
-use feagi_models::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
-use feagi_models::cortical_area::components::neuron_history::implementations::full::NeuronModelFullNeuronHistory;
-use feagi_models::cortical_area::components::neuron_history::neuron_history::NeuronModelHistory;
-use feagi_models::cortical_area::genome_compose::cortical_writer::NeuronModelCorticalWriter;
-use feagi_models::cortical_area::neuron::neuron_model::NeuronModel;
-use feagi_models::cortical_area::neuron::neuron_model_quantization::NeuronModelQuantization;
-use feagi_models::cortical_area::neuron::neuron_model_quantization_level::NeuronModelQuantizationLevel;
-use feagi_models::cortical_area::neuron::neuron_properties::NeuronProperties;
-use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
-use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
-use feagi_models::cortical_area::neuron_model_implementations::generated_enums::{
-    NeuronModelTypeAndQuantizationNested, NeuronModelTypeAndQuantizationPacked,
-};
-use feagi_models::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
-use feagi_models::cortical_mapping_entry::components::doublet::doublet_iterator_type::DoubletIteratorDimensionalTypeGenomic;
-use feagi_models::cortical_mapping_entry::components::doublet::implementations::all_to_one::DoubletIteratorAllToOne;
-use feagi_models::cortical_mapping_entry::components::doublet::implementations::one_to_all::DoubletIteratorOneToAll;
-use feagi_models::cortical_mapping_entry::components::doublet::implementations::one_to_one::DoubletIteratorOneToOne;
-use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer::SynapseModelCorticalWriter;
-use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::UniformWriter;
-use feagi_models::cortical_mapping_entry::synapse::synapse_data::EmptyPerSynapseData;
-use feagi_models::cortical_mapping_entry::synapse::synapse_model::SynapseModel;
-use feagi_models::cortical_mapping_entry::synapse::synapse_properties::SynapseProperties;
-use feagi_models::cortical_mapping_entry::synapse_model_implementations::generated_enums::SynapseModelTypeAndQuantizationPacked;
-use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::composers::UniformSynapseWriter;
-use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::data::UniformSynapseModelCorticalMappingEntryData;
-use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelStandardQuant;
 use feagi_models::wrapped_index_collections::{
     CorticalEngineIndex, CorticalLayoutIndex, CorticalModelIndex, MappingEntryEngineIndex, NeuronEngineIndex, NeuronEngineIndexedVector,
     NeuronHistoryIndex, NeuronMPIndex, NeuronModelIndex,
 };
-use feagi_models::wrapped_indexes::BurstIndex;
+use crate::burst_engine::burst_engine::BurstEngine;
+use crate::burst_engine::composed_burst_engine::ComposableBurstEngine;
 
-pub struct RayonBurstEngine<FIQ: FeagiIndexQuantization> {
-    data: RayonEngineData<FIQ>,
+pub struct TokioRayonBurstEngine<FIQ: FeagiIndexQuantization> {
+    data: TokioRayonEngineData<FIQ>,
     // dyn stuff
     latest_cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
     latest_mapping_entry_index: MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant>,
 }
 
+
+impl<FIQ: FeagiIndexQuantization> TokioRayonBurstEngine<FIQ>
+{
+
+}
+
+impl<FIQ: FeagiIndexQuantization> BurstEngine<FIQ> for TokioRayonBurstEngine<FIQ> {
+    async fn run_bursts(&mut self, number_bursts: FIQ::GlobalBurstIndexQuant) {
+        todo!()
+    }
+
+    fn exchange_data_for_sensor_motor_probes_and_potentials(&mut self) {
+        todo!()
+    }
+
+    fn exchange_synapse_propagation_data(&mut self) {
+        todo!()
+    }
+
+    fn edit_in_place_cortical_areas(&mut self) {
+        todo!()
+    }
+}
+
+impl<FIQ: FeagiIndexQuantization> ComposableBurstEngine<FIQ> for TokioRayonBurstEngine<FIQ> {
+    fn add_cortical_areas(&mut self) {
+        todo!()
+    }
+
+    fn remove_cortical_areas(&mut self) {
+        todo!()
+    }
+
+    fn overwrite_neuron_firings(&mut self) {
+        todo!()
+    }
+
+    fn add_cortical_mappings(&mut self) {
+        todo!()
+    }
+
+    fn remove_cortical_mappings(&mut self) {
+        todo!()
+    }
+}
+
+
+
+/*
 impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ> {
     pub fn new() -> Self {
         Self {
@@ -445,3 +454,6 @@ impl<FIQ: FeagiIndexQuantization> EditableEngine<FIQ> for RayonBurstEngine<FIQ> 
 
      */
 }
+
+
+ */

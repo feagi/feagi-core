@@ -3,4 +3,4 @@ mod engine_data;
 pub mod neuron;
 pub mod synapse;
 
-pub use engine_data::RayonEngineData;
+pub use engine_data::TokioRayonEngineData;

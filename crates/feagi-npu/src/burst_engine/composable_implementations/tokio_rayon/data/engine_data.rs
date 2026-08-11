@@ -1,8 +1,8 @@
-use crate::burst_engine::implementations::tokio_rayon::data::neuron::model_quantized_data::NeuronModelData;
-use crate::burst_engine::implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
-use crate::burst_engine::implementations::tokio_rayon::data::neuron::potential_quantized_data::NeuronQuantizedData;
-use crate::burst_engine::implementations::tokio_rayon::data::synapse::model_quantized_data::SynapseModelData;
-use crate::burst_engine::implementations::tokio_rayon::data::synapse::synapse_sub_data::{CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties};
+use crate::burst_engine::composable_implementations::tokio_rayon::data::neuron::model_quantized_data::NeuronModelData;
+use crate::burst_engine::composable_implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
+use crate::burst_engine::composable_implementations::tokio_rayon::data::neuron::potential_quantized_data::NeuronQuantizedData;
+use crate::burst_engine::composable_implementations::tokio_rayon::data::synapse::model_quantized_data::SynapseModelData;
+use crate::burst_engine::composable_implementations::tokio_rayon::data::synapse::synapse_sub_data::{CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties};
 use crate::burst_engine::common_cpu_structs::multi_bitpacked_vector::MultiBitPackedVectorManager;
 use crate::burst_engine::common_cpu_structs::flags::cortical_runtime_flags::CorticalRuntimeFlags;
 use crate::burst_engine::common_cpu_structs::flags::neuron_runtime_flags::NeuronRuntimeFlags;
@@ -16,7 +16,7 @@ use feagi_models::wrapped_index_collections::{
 };
 use feagi_models::wrapped_indexes::BurstIndex;
 
-pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
+pub struct TokioRayonEngineData<FIQ: FeagiIndexQuantization> {
     /// The current burst index
     pub burst_index: BurstIndex<FIQ::GlobalBurstIndexQuant>,
 
@@ -78,7 +78,7 @@ pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
 // Not `#[derive(Default)]`: that would require `FIQ: Default`, but `FIQ` is only ever used
 // through its associated types here (it's a zero-sized quantization-level marker). Every field
 // below already has its own `Default` impl that doesn't require `FIQ: Default`.
-impl<FIQ: FeagiIndexQuantization> Default for RayonEngineData<FIQ> {
+impl<FIQ: FeagiIndexQuantization> Default for TokioRayonEngineData<FIQ> {
     fn default() -> Self {
         Self {
             burst_index: Default::default(),

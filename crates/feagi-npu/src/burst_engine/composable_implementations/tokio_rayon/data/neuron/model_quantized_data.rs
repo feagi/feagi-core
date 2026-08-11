@@ -1,4 +1,4 @@
-use crate::burst_engine::implementations::tokio_rayon::data::neuron::model_quantized_data::feagi_advanced_model::ModelFeagiAdvanced;
+use crate::burst_engine::composable_implementations::tokio_rayon::data::neuron::model_quantized_data::feagi_advanced_model::ModelFeagiAdvanced;
 /// Helper structs to make dealing with multiple quantizations / models less annoying
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 

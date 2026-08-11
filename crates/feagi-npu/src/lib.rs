@@ -7,6 +7,8 @@ pub mod genome;
 // Needs `OnceLock` and the system clock, so it is std-only.
 #[cfg(feature = "std")]
 pub mod burst_engine;
+pub mod burst_engine_enum;
+pub mod composable_npu;
 // TODO: `npu_requests::npu_request_builder` references a `NPURequests` type that was never
 // defined (pre-refactor scaffolding). Re-enable once that request model is designed;
 // `dynamic_npu::DynamicNPU` currently uses `feagi_models::connectome_requests` instead.

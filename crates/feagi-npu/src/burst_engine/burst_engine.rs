@@ -7,7 +7,9 @@ pub trait BurstEngine<FIQ: FeagiIndexQuantization> {
     // run if the async run_burst is running
 
     /// Run a number of bursts before stopping
-    async fn run_bursts(&mut self, number_bursts: FIQ::GlobalBurstIndexQuant);
+    async fn run_bursts(&mut self);
+
+    // TODO a function for half a burst for exchanging synapse data?
 
     /// Load into the engine sensor data and firing neuron data (from other engines) and export motor data and visualization data
     fn exchange_data_for_sensor_motor_probes_and_potentials(&mut self);
