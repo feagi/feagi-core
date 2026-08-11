@@ -43,6 +43,29 @@ impl Default for AgentLivenessConfig {
     }
 }
 
+/// Point-in-time liveness view of one registered agent.
+///
+/// Produced by [`FeagiAgentHandler::get_agent_liveness`] for diagnostics. All ages in a
+/// single call are measured against the same [`Instant`], so entries are directly
+/// comparable with each other and with [`AgentLivenessConfig::heartbeat_timeout`].
+#[derive(Debug, Clone)]
+pub struct AgentLivenessRecord {
+    pub agent_id: AgentID,
+    pub descriptor: AgentDescriptor,
+    pub capabilities: Vec<AgentCapabilities>,
+    /// Time since anything touched this agent: inbound command/control messages as
+    /// well as outbound motor/visualization pushes. This is the value
+    /// [`FeagiAgentHandler::try_prune_stale_agents`] compares against the timeout.
+    /// `None` means the handler holds no activity entry for a registered agent, which
+    /// is an internal inconsistency rather than a fresh agent, and is reported as such
+    /// instead of being rendered as zero age.
+    pub last_activity_age: Option<Duration>,
+    /// Time since the agent itself last sent a command/control message (heartbeat,
+    /// configuration). `None` when no such message was ever recorded, which means the
+    /// agent has produced no liveness signal of its own since registration.
+    pub last_command_control_age: Option<Duration>,
+}
+
 pub struct FeagiAgentHandler {
     agent_auth_backend: Box<dyn AgentAuth>,
     available_publishers: Vec<Box<dyn FeagiServerPublisherProperties>>,
@@ -163,6 +186,44 @@ impl FeagiAgentHandler {
         &self,
     ) -> &HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)> {
         &self.all_registered_agents
+    }
+
+    /// Liveness configuration this handler prunes against.
+    pub fn get_liveness_config(&self) -> &AgentLivenessConfig {
+        &self.liveness_config
+    }
+
+    /// Snapshot how long each registered agent has been quiet.
+    ///
+    /// Registration alone does not keep an agent alive: [`Self::try_prune_stale_agents`]
+    /// removes any agent whose `last_activity_age` exceeds
+    /// [`AgentLivenessConfig::heartbeat_timeout`], and that teardown drops the agent's
+    /// motor/visualization publishers, closing its sockets. Exposing the ages lets
+    /// callers see an agent approaching that threshold instead of only observing the
+    /// disconnect after the fact.
+    ///
+    /// Records are ordered by base64 agent id so repeated calls are deterministic.
+    pub fn get_agent_liveness(&self) -> Vec<AgentLivenessRecord> {
+        let now = Instant::now();
+        let mut records: Vec<AgentLivenessRecord> = self
+            .all_registered_agents
+            .iter()
+            .map(|(agent_id, (descriptor, capabilities))| AgentLivenessRecord {
+                agent_id: *agent_id,
+                descriptor: descriptor.clone(),
+                capabilities: capabilities.clone(),
+                last_activity_age: self
+                    .last_activity_by_agent
+                    .get(agent_id)
+                    .map(|seen| now.saturating_duration_since(*seen)),
+                last_command_control_age: self
+                    .last_command_control_activity_by_agent
+                    .get(agent_id)
+                    .map(|seen| now.saturating_duration_since(*seen)),
+            })
+            .collect();
+        records.sort_by_key(|record| record.agent_id.to_base64());
+        records
     }
 
     pub fn get_all_registered_sensors(&self) -> HashSet<AgentID> {
