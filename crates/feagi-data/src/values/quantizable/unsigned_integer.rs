@@ -709,9 +709,10 @@ pub trait WrappedQuantizedUnsignedIntegerIndex: WrappedQuantizedUnsignedInteger 
 }
 
 /// Denotes the wrapped uint as a count / size of something. Also needs a definition of an index.
-pub trait WrappedQuantizedUnsignedIntegerCount: WrappedQuantizedUnsignedInteger {
+pub trait WrappedQuantizedUnsignedIntegerCount: WrappedQuantizedUnsignedInteger
+{
     /// The index type paired with this count wrapper.
-    type Index: WrappedQuantizedUnsignedIntegerIndex;
+    type Index: WrappedQuantizedUnsignedIntegerIndex<Quant = Self::Quant >;
 
     /// Returns true if the index can fit in this count (less than)
     fn can_contain_index(&self, index: &Self::Index) -> bool {
@@ -957,9 +958,6 @@ macro_rules! _create_wrapped_quantized_unsigned_integer {
                             Self::U32($struct_name::<u32>::new(<u32 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization_unchecked(value.deref())))
                         }
                         $crate::values::quantizable::UnsignedIntegerQuantizationLevel::U64 => {
-                            Self::U64($struct_name::<u64>::new(<u64 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization_unchecked(value.deref())))
-                        }
-                        $crate::values::quantizable::UnsignedIntegerQuantizationLevel::Usize => {
                             Self::U64($struct_name::<u64>::new(<u64 as $crate::values::quantizable::QuantizedUnsignedIntegerTrait>::from_quantization_unchecked(value.deref())))
                         }
                     }
