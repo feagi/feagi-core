@@ -208,19 +208,21 @@ impl FeagiAgentHandler {
         let mut records: Vec<AgentLivenessRecord> = self
             .all_registered_agents
             .iter()
-            .map(|(agent_id, (descriptor, capabilities))| AgentLivenessRecord {
-                agent_id: *agent_id,
-                descriptor: descriptor.clone(),
-                capabilities: capabilities.clone(),
-                last_activity_age: self
-                    .last_activity_by_agent
-                    .get(agent_id)
-                    .map(|seen| now.saturating_duration_since(*seen)),
-                last_command_control_age: self
-                    .last_command_control_activity_by_agent
-                    .get(agent_id)
-                    .map(|seen| now.saturating_duration_since(*seen)),
-            })
+            .map(
+                |(agent_id, (descriptor, capabilities))| AgentLivenessRecord {
+                    agent_id: *agent_id,
+                    descriptor: descriptor.clone(),
+                    capabilities: capabilities.clone(),
+                    last_activity_age: self
+                        .last_activity_by_agent
+                        .get(agent_id)
+                        .map(|seen| now.saturating_duration_since(*seen)),
+                    last_command_control_age: self
+                        .last_command_control_activity_by_agent
+                        .get(agent_id)
+                        .map(|seen| now.saturating_duration_since(*seen)),
+                },
+            )
             .collect();
         records.sort_by_key(|record| record.agent_id.to_base64());
         records
