@@ -689,29 +689,70 @@ jobs:
     name: tag & GitHub release
     needs: [prep, publish_crates]
     runs-on: ubuntu-latest
+    env:
+      RELEASE_SHA: ${{ needs.prep.outputs.release_sha }}
     steps:
+      - name: Guard - require release SHA
+        run: |
+          if [ -z "${RELEASE_SHA}" ]; then
+            echo "Missing release SHA from prep job"
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || 'staging' }}
+          ref: ${{ needs.prep.outputs.release_sha }}
           fetch-depth: 0
 
-      - name: Create release tag
-        id: tag
+      - name: Resolve release version from published commit
+        id: version
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          FEAGI_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
-          if [ -z "$FEAGI_VERSION" ]; then
-            echo "Failed to detect feagi version from Cargo.toml"
+          set -euo pipefail
+          ROOT_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
+          WORKSPACE_VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
+          if [ -z "${ROOT_VERSION}" ] || [ -z "${WORKSPACE_VERSION}" ]; then
+            echo "Failed to detect root/workspace versions from Cargo.toml"
             exit 1
           fi
-          TAG_NAME="v${FEAGI_VERSION}"
+          if [ "${ROOT_VERSION}" != "${WORKSPACE_VERSION}" ]; then
+            echo "Root/workspace version mismatch: root=${ROOT_VERSION} workspace=${WORKSPACE_VERSION}"
+            exit 1
+          fi
+          TAG_NAME="v${ROOT_VERSION}"
+          echo "version=${ROOT_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or validate release tag
+        id: tag
+        run: |
+          set -euo pipefail
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          TAG_NAME="${{ steps.version.outputs.tag_name }}"
+          RELEASE_SHA="${RELEASE_SHA}"
           if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
-            echo "Release tag already exists: $TAG_NAME"
+            TAG_SHA="$(git rev-list -n 1 "${TAG_NAME}")"
+            if [ "${TAG_SHA}" != "${RELEASE_SHA}" ]; then
+              echo "Existing tag ${TAG_NAME} points to ${TAG_SHA}, expected ${RELEASE_SHA}"
+              exit 1
+            fi
+            echo "Release tag already exists and matches published commit: $TAG_NAME"
           else
-            echo "Creating release tag: $TAG_NAME"
-            git tag "$TAG_NAME"
+            echo "Creating release tag ${TAG_NAME} at ${RELEASE_SHA}"
+            git tag "$TAG_NAME" "$RELEASE_SHA"
             git push origin "$TAG_NAME"
           fi
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
@@ -741,8 +782,8 @@ jobs:
             ## Release info
 
             - **Tag:** ${{ steps.tag.outputs.tag_name }}
-            - **Ref:** ${{ github.event.inputs.ref || 'staging' }}
-            - **Commit:** ${{ github.sha }}
+            - **Version:** ${{ steps.version.outputs.version }}
+            - **Commit:** ${{ needs.prep.outputs.release_sha }}
           draft: false
           prerelease: true
 
