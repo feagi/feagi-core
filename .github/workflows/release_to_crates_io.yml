@@ -95,6 +95,15 @@ jobs:
             echo "Failed to detect [workspace.package] version from Cargo.toml"
             exit 1
           fi
+          ROOT_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
+          if [ -z "${ROOT_VERSION}" ]; then
+            echo "Failed to detect root [package] version from Cargo.toml"
+            exit 1
+          fi
+          if [ "${ROOT_VERSION}" != "${WORKSPACE_VERSION}" ]; then
+            echo "Root package version (${ROOT_VERSION}) must match workspace version (${WORKSPACE_VERSION})"
+            exit 1
+          fi
           declare -A CRATE_VERSIONS
           for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
             [ -f "$manifest" ] || continue

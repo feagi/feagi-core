@@ -240,37 +240,64 @@ jobs:
       run: |
         echo "Verifying unified versioning policy..."
         echo ""
-        
-        FAILED=()
-        
-        # Root must define [workspace.package] version (single source of truth)
-        if ! grep -q '^\[workspace\.package\]' Cargo.toml; then
-          FAILED+=("root: missing [workspace.package]")
-        fi
-        WS_VER=$(awk '/^\[workspace\.package\]/{p=1;next} /^\[/{p=0} p && /^version = /{gsub(/version = |"/,""); print; exit}' Cargo.toml)
-        if [ -z "$WS_VER" ]; then
-          FAILED+=("root: missing version in [workspace.package]")
-        fi
-        
-        for crate_dir in crates/*/ crates/feagi-npu/*/; do
-          [ -f "$crate_dir/Cargo.toml" ] || continue
-          crate_name=$(basename "$crate_dir")
-          if grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
+        python3 - <<'PY'
+        from pathlib import Path
+        import sys
+        import tomllib
+
+        root_manifest = Path("Cargo.toml")
+        root_data = tomllib.loads(root_manifest.read_text(encoding="utf-8"))
+
+        failures: list[str] = []
+
+        workspace_pkg = root_data.get("workspace", {}).get("package", {})
+        ws_version = workspace_pkg.get("version")
+        if not ws_version:
+          failures.append("root: missing [workspace.package].version")
+
+        root_package = root_data.get("package", {})
+        root_version = root_package.get("version")
+        if not root_version:
+          failures.append("root: missing [package].version")
+        elif ws_version and root_version != ws_version:
+          failures.append(
+            f"root: package version {root_version} does not match workspace version {ws_version}"
+          )
+
+        manifests = [
+          *sorted(Path("crates").glob("*/Cargo.toml")),
+          *sorted(Path("crates/feagi-npu").glob("*/Cargo.toml")),
+        ]
+
+        for manifest in manifests:
+          data = tomllib.loads(manifest.read_text(encoding="utf-8"))
+          package = data.get("package", {})
+          name = package.get("name", str(manifest.parent))
+
+          if "version" in package and isinstance(package["version"], str):
+            crate_version = package["version"]
+            if ws_version and crate_version != ws_version:
+              failures.append(
+                f"{name}: explicit version {crate_version} does not match workspace version {ws_version}"
+              )
             continue
-          fi
-          if ! grep -q '^version = ' "$crate_dir/Cargo.toml"; then
-            FAILED+=("$crate_name: missing version or version.workspace = true")
-          fi
-        done
-        
-        if [ ${#FAILED[@]} -gt 0 ]; then
-          echo "Unified versioning policy violations:"
-          for item in "${FAILED[@]}"; do
-            echo "  - $item"
-          done
-          exit 1
-        fi
-        echo "Unified versioning policy OK ([workspace.package] version=$WS_VER; crates use version.workspace or explicit version)"
+
+          version_table = package.get("version")
+          if isinstance(version_table, dict) and version_table.get("workspace") is True:
+            continue
+
+          failures.append(f"{name}: missing explicit version or version.workspace = true")
+
+        if failures:
+          print("Unified versioning policy violations:")
+          for item in failures:
+            print(f"  - {item}")
+          sys.exit(1)
+
+        print(
+          f"Unified versioning policy OK (workspace/package/crate versions aligned at {ws_version})"
+        )
+        PY
     
     - name: Summary
       if: success()
