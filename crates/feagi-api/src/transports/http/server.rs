@@ -724,6 +724,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(cortical_mapping::get_mapping_list),
         )
         .route(
+            "/cortical_mapping/twin_diagnostic",
+            get(cortical_mapping::get_twin_diagnostic),
+        )
+        .route(
             "/cortical_mapping/batch_update",
             axum::routing::post(cortical_mapping::post_batch_update),
         )
@@ -888,6 +892,10 @@ fn create_v1_router() -> Router<ApiState> {
         .route(
             "/burst_engine/fire_queue",
             get(burst_engine::get_fire_queue),
+        )
+        .route(
+            "/burst_engine/fire_queue/detailed",
+            get(burst_engine::get_fire_queue_detailed),
         )
         .route(
             "/burst_engine/fire_queue/neuron",

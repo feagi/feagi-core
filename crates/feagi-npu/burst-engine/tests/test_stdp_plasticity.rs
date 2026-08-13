@@ -6,6 +6,7 @@ use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::npu::{PlasticityMode, StdpMappingParams};
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_burst_engine::FIRE_KIND_STDP_ELIGIBLE;
+use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
@@ -471,4 +472,122 @@ fn test_ltd_reduces_to_zero_and_marks_prunable() {
     assert_eq!(outgoing.len(), 1);
     assert_eq!(outgoing[0].0, dst.0);
     assert_eq!(outgoing[0].1, 0.0, "Weight=0 marks synapse as prunable");
+}
+
+#[test]
+fn test_existing_synapse_ltp_when_both_fire_within_window() {
+    let (mut npu, src_neurons, dst_neurons) = create_stdp_network();
+
+    npu.configure_fire_ledger_window(10, 3).unwrap();
+    npu.configure_fire_ledger_window(11, 3).unwrap();
+
+    let params = stdp_params(3, 1, 1, 2, false, 100.0, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let src = src_neurons[0];
+    let dst = dst_neurons[0];
+
+    npu.add_synapse(
+        src,
+        dst,
+        SynapticWeight(1.0),
+        SynapticPsp(100.0),
+        SynapseType::Excitatory,
+        0,
+        1,
+    )
+    .unwrap();
+    npu.rebuild_synapse_index();
+
+    // Burst 1: co-activation
+    process_burst_with_injection(&mut npu, &[(src, 128.0), (dst, 128.0)]);
+    // Burst 2-3: silence, preserving "co-fired within window" without full-window consistency.
+    process_burst_with_injection(&mut npu, &[]);
+    process_burst_with_injection(&mut npu, &[]);
+
+    let outgoing = npu.get_outgoing_synapses(src.0);
+    assert_eq!(outgoing.len(), 1);
+    assert_eq!(
+        outgoing[0].1, 2.0,
+        "Existing synapse should potentiate when both endpoints fired within the plasticity window"
+    );
+}
+
+#[test]
+fn test_associative_edge_uses_area_activity_when_runtime_ids_shift() {
+    let (mut npu, src_neurons, dst_neurons) = create_stdp_network();
+
+    npu.configure_fire_ledger_window(10, 1).unwrap();
+    npu.configure_fire_ledger_window(11, 1).unwrap();
+
+    let params = stdp_params(1, 1, 1, 0, false, 100.0, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let seeded_src = src_neurons[0];
+    let runtime_src = src_neurons[1];
+    let dst = dst_neurons[0];
+
+    npu.add_synapse(
+        seeded_src,
+        dst,
+        SynapticWeight(1.0),
+        SynapticPsp(100.0),
+        SynapseType::Excitatory,
+        SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+        1,
+    )
+    .unwrap();
+    npu.rebuild_synapse_index();
+
+    // Fire a different source neuron from the same source area together with destination.
+    // Associative mappings should still treat this as correlated area activity.
+    process_burst_with_injection(&mut npu, &[(runtime_src, 128.0), (dst, 128.0)]);
+
+    let outgoing = npu.get_outgoing_synapses(seeded_src.0);
+    assert_eq!(outgoing.len(), 1);
+    assert_eq!(
+        outgoing[0].1, 2.0,
+        "Associative edge should potentiate from same-area co-activity even when source neuron ids differ"
+    );
+}
+
+#[test]
+fn test_directional_associative_mapping_synthesizes_memory_to_memory_synapse() {
+    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+    let (mut npu, src_neurons, dst_neurons) = create_stdp_network();
+
+    npu.configure_fire_ledger_window(10, 1).unwrap();
+    npu.configure_fire_ledger_window(11, 1).unwrap();
+
+    // Directional associative mapping (forward-only).
+    let params = stdp_params(1, 1, 5, 0, false, 100.0, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    // Seed one associative edge so the mapping is recognized as associative for
+    // memory-id activity handling and synthesis eligibility.
+    npu.add_synapse(
+        src_neurons[0],
+        dst_neurons[0],
+        SynapticWeight(1.0),
+        SynapticPsp(100.0),
+        SynapseType::Excitatory,
+        SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+        1,
+    )
+    .unwrap();
+    npu.rebuild_synapse_index();
+
+    let src_mem = NeuronId(MEMORY_NEURON_ID_START + 10);
+    let dst_mem = NeuronId(MEMORY_NEURON_ID_START + 20);
+
+    // Co-activate one memory neuron in each area.
+    npu.inject_memory_neuron_to_fcl_with_kind(src_mem.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst_mem.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let _ = npu.process_burst().unwrap();
+
+    let outgoing = npu.get_outgoing_synapses(src_mem.0);
+    assert!(
+        outgoing.iter().any(|(target, _, _, _)| *target == dst_mem.0),
+        "Directional associative mapping should synthesize forward memory->memory synapse"
+    );
 }

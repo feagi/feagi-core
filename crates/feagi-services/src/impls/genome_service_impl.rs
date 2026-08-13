@@ -2313,8 +2313,6 @@ impl GenomeServiceImpl {
                             if let Ok(exec) = executor.lock() {
                                 let upstream_areas =
                                     manager.get_upstream_cortical_areas(&cortical_id_typed);
-                                let upstream_non_memory =
-                                    manager.filter_non_memory_upstream_areas(&upstream_areas);
                                 let lifecycle_config = MemoryNeuronLifecycleConfig {
                                     initial_lifespan: mem_props.init_lifespan,
                                     lifespan_growth_rate: mem_props.lifespan_growth_rate,
@@ -2326,7 +2324,7 @@ impl GenomeServiceImpl {
                                     cortical_idx,
                                     cortical_id.to_string(),
                                     mem_props.temporal_depth,
-                                    upstream_non_memory,
+                                    upstream_areas,
                                     Some(lifecycle_config),
                                     mem_props.mp_learning_enabled,
                                 );

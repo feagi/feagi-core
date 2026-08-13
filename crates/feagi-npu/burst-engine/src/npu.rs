@@ -4946,6 +4946,25 @@ impl<
             dst_all: RoaringBitmap,
         }
 
+        // Precompute which mappings carry associative-memory edges.
+        // This decouples "memory-neuron IDs are eligible for STDP windows" from
+        // "mapping is bidirectional". Associative mappings are directional now,
+        // but they still rely on memory-neuron IDs (50_000_000+) for learning.
+        let associative_mapping_flags: AHashMap<CorticalMappingKey, bool> = {
+            let synapse_storage = self.synapse_storage.read().unwrap();
+            let mut flags = AHashMap::with_capacity(mapping_index.len());
+            for (key, syn_indices) in &mapping_index {
+                let has_associative_edges = syn_indices.iter().any(|&syn_idx| {
+                    syn_idx < synapse_storage.count()
+                        && synapse_storage.valid_mask()[syn_idx]
+                        && (synapse_storage.edge_flags()[syn_idx] & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY)
+                            != 0
+                });
+                flags.insert(*key, has_associative_edges);
+            }
+            flags
+        };
+
         // Precompute window activity sets per mapping.
         let mut activity_sets: AHashMap<CorticalMappingKey, StdpActivityWindow> =
             AHashMap::with_capacity(mappings.len());
@@ -4987,8 +5006,12 @@ impl<
                 dst_all &= &bm;
             }
 
-            let (src_any, src_all, dst_any, dst_all) = if params.bidirectional_stdp {
-                // Associative memory uses dynamic memory neuron IDs, keep them in the window.
+            let include_memory_neuron_ids = params.bidirectional_stdp
+                || associative_mapping_flags.get(key).copied().unwrap_or(false);
+            let (src_any, src_all, dst_any, dst_all) = if include_memory_neuron_ids {
+                // Keep dynamic memory neuron IDs for:
+                // - legacy bidirectional STDP, and
+                // - directional associative mappings stamped with associative edge flags.
                 (src_any, src_all, dst_any, dst_all)
             } else {
                 (
@@ -5140,16 +5163,28 @@ impl<
                     let mut e_ij = synapse_storage.eligibility_traces()[syn_idx] * trace_decay;
 
                     // Step 2: apply correlation-window stimulus.
-                    let src_any_present = activity.src_any.contains(src_neuron);
-                    let dst_any_present = activity.dst_any.contains(dst_neuron);
-                    if src_any_present || dst_any_present {
-                        let src_all_present = activity.src_all.contains(src_neuron);
-                        let dst_all_present = activity.dst_all.contains(dst_neuron);
-                        if src_all_present && dst_all_present {
-                            e_ij += delta_plus;
-                        } else if delta_minus > 0.0 {
-                            e_ij -= delta_minus;
-                        }
+                    //
+                    // For existing synapses, treat "both ends fired at least once in the
+                    // configured window" as a positive association signal. Reserve LTD for
+                    // one-sided activity in the same window.
+                    //
+                    // `src_all`/`dst_all` remain the stricter criterion for *new synapse*
+                    // synthesis later in this function (`test_bidirectional_stdp_creates_synapse_after_full_window`).
+                    // Associative-memory edges can be seeded with a dense placeholder neuron id
+                    // while runtime activity comes from dynamic memory neuron ids in the same
+                    // cortical area. For these edges, treat "any activity in src/dst area" as
+                    // endpoint activity so learned associations are not blocked by id mismatch.
+                    let associative_edge = (synapse_storage.edge_flags()[syn_idx]
+                        & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY)
+                        != 0;
+                    let src_any_present = activity.src_any.contains(src_neuron)
+                        || (associative_edge && !activity.src_any.is_empty());
+                    let dst_any_present = activity.dst_any.contains(dst_neuron)
+                        || (associative_edge && !activity.dst_any.is_empty());
+                    if src_any_present && dst_any_present {
+                        e_ij += delta_plus;
+                    } else if (src_any_present || dst_any_present) && delta_minus > 0.0 {
+                        e_ij -= delta_minus;
                     }
 
                     synapse_storage.eligibility_traces_mut()[syn_idx] = e_ij;
@@ -5176,10 +5211,16 @@ impl<
             }
         }
 
-        // Create new synapses for bidirectional STDP mappings based on synchronized activity.
+        // Create new synapses for synchronized activity.
+        //
+        // Directional associative-memory mappings (`bidirectional_stdp = false`) still need
+        // forward synapse synthesis between concrete memory neuron ids; only the reverse
+        // direction should require an explicit reverse mapping.
         let mut created_synapses = false;
         for (key @ (_src_area, dst_area), params) in &mappings {
-            if !params.bidirectional_stdp {
+            let allow_synapse_synthesis = params.bidirectional_stdp
+                || associative_mapping_flags.get(key).copied().unwrap_or(false);
+            if !allow_synapse_synthesis {
                 continue;
             }
             let Some(activity) = activity_sets.get(key) else {

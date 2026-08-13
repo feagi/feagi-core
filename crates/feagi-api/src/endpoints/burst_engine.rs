@@ -261,6 +261,83 @@ pub async fn get_fire_queue(
     Ok(Json(response))
 }
 
+/// Get the detailed Fire Queue (FQ) from the latest sampled burst.
+///
+/// Unlike `/v1/burst_engine/fire_queue`, this endpoint includes per-area neuron IDs,
+/// coordinates, and membrane potentials to support deterministic ID-level diagnostics.
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fire_queue/detailed",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Detailed fire queue content", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_fire_queue_detailed(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    let connectome_service = state.connectome_service.as_ref();
+
+    let fq_sample = runtime_service
+        .get_fire_queue_sample()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get fire queue: {}", e)))?;
+
+    let timestep = runtime_service
+        .get_burst_count()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
+
+    let areas = connectome_service
+        .list_cortical_areas()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+    let idx_to_id: HashMap<u32, String> = areas
+        .iter()
+        .map(|a| (a.cortical_idx, a.cortical_id.clone()))
+        .collect();
+
+    let mut cortical_areas: HashMap<String, serde_json::Value> = HashMap::new();
+    let mut total_fired: u64 = 0;
+
+    for (cortical_idx, (neuron_ids, xs, ys, zs, membrane_potentials)) in fq_sample {
+        let cortical_id = idx_to_id.get(&cortical_idx).cloned().ok_or_else(|| {
+            ApiError::internal(format!(
+                "Unmapped cortical_idx in Fire Queue sample: idx={}. Refusing fallback (would corrupt determinism).",
+                cortical_idx
+            ))
+        })?;
+
+        let fired_count = neuron_ids.len() as u64;
+        total_fired += fired_count;
+
+        cortical_areas.insert(
+            cortical_id,
+            serde_json::json!({
+                "cortical_idx": cortical_idx,
+                "fired_count": fired_count,
+                "neuron_ids": neuron_ids,
+                "coordinates_x": xs,
+                "coordinates_y": ys,
+                "coordinates_z": zs,
+                "membrane_potentials": membrane_potentials,
+            }),
+        );
+    }
+
+    let mut response = HashMap::new();
+    response.insert("timestep".to_string(), serde_json::json!(timestep));
+    response.insert("total_fired".to_string(), serde_json::json!(total_fired));
+    response.insert(
+        "cortical_areas".to_string(),
+        serde_json::json!(cortical_areas),
+    );
+
+    Ok(Json(response))
+}
+
 #[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
 #[into_params(parameter_in = Query)]
 pub struct FclNeuronQuery {

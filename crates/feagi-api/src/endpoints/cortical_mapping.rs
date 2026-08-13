@@ -34,6 +34,25 @@ fn f64_from_json_value(v: &serde_json::Value, field: &str) -> Result<f64, ApiErr
         .ok_or_else(|| ApiError::invalid_input(format!("{field} must be numeric")))
 }
 
+/// Parse an integer-like JSON number as i64.
+///
+/// Accepts integer literals and float literals with zero fractional part (e.g. `1.0`),
+/// but rejects non-finite values and fractional values such as `1.5`.
+fn i64_from_integer_like_json_value(v: &serde_json::Value, field: &str) -> Result<i64, ApiError> {
+    if let Some(n) = v.as_i64() {
+        return Ok(n);
+    }
+    let f = v.as_f64().ok_or_else(|| {
+        ApiError::invalid_input(format!("{field} must be an integer-like number"))
+    })?;
+    if !f.is_finite() || f.fract() != 0.0 {
+        return Err(ApiError::invalid_input(format!(
+            "{field} must be an integer-like number"
+        )));
+    }
+    Ok(f as i64)
+}
+
 /// POST /v1/cortical_mapping/afferents
 #[utoipa::path(
     post,
@@ -144,14 +163,11 @@ pub async fn post_mapping_properties(
             let plasticity_flag = arr[3]
                 .as_bool()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
-            let plasticity_constant = arr[4]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
+            let plasticity_constant =
+                i64_from_integer_like_json_value(&arr[4], "plasticity_constant")?;
             let ltp_multiplier = i8_ltd_ltp_from_json_value(&arr[5], "ltp_multiplier")?;
             let ltd_multiplier = i8_ltd_ltp_from_json_value(&arr[6], "ltd_multiplier")?;
-            let plasticity_window = arr[7]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
+            let plasticity_window = i64_from_integer_like_json_value(&arr[7], "plasticity_window")?;
 
             let synaptic_delay_bursts: u64 = if arr.len() >= 9 {
                 arr[8]
@@ -198,10 +214,11 @@ pub async fn post_mapping_properties(
                 .get("plasticity_flag")
                 .and_then(|v| v.as_bool())
                 .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
-            let plasticity_constant = obj
-                .get("plasticity_constant")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
+            let plasticity_constant = i64_from_integer_like_json_value(
+                obj.get("plasticity_constant")
+                    .ok_or_else(|| ApiError::invalid_input("plasticity_constant missing"))?,
+                "plasticity_constant",
+            )?;
             let ltp_multiplier = i8_ltd_ltp_from_json_value(
                 obj.get("ltp_multiplier")
                     .ok_or_else(|| ApiError::invalid_input("ltp_multiplier missing"))?,
@@ -212,10 +229,11 @@ pub async fn post_mapping_properties(
                     .ok_or_else(|| ApiError::invalid_input("ltd_multiplier missing"))?,
                 "ltd_multiplier",
             )?;
-            let plasticity_window = obj
-                .get("plasticity_window")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
+            let plasticity_window = i64_from_integer_like_json_value(
+                obj.get("plasticity_window")
+                    .ok_or_else(|| ApiError::invalid_input("plasticity_window missing"))?,
+                "plasticity_window",
+            )?;
 
             let synaptic_delay_bursts: u64 = obj
                 .get("synaptic_delay_bursts")
@@ -433,6 +451,52 @@ pub async fn get_mapping(
     Ok(Json(response))
 }
 
+/// GET /v1/cortical_mapping/twin_diagnostic
+/// Diagnose memory twin eligibility/status for a mapping pair in one call.
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_mapping/twin_diagnostic",
+    tag = "cortical_mapping",
+    params(
+        ("src_cortical_area" = String, Query, description = "Source cortical area ID (base64)"),
+        ("dst_cortical_area" = String, Query, description = "Destination cortical area ID (base64)")
+    ),
+    responses(
+        (status = 200, description = "Twin diagnostic payload", body = serde_json::Value),
+        (status = 400, description = "Invalid input")
+    )
+)]
+pub async fn get_twin_diagnostic(
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    use feagi_brain_development::ConnectomeManager;
+    use feagi_structures::genomic::cortical_area::CorticalID;
+
+    let src_area = params
+        .get("src_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("src_cortical_area required"))?;
+    let dst_area = params
+        .get("dst_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("dst_cortical_area required"))?;
+
+    let src_id = CorticalID::try_from_base_64(src_area).map_err(|e| {
+        ApiError::invalid_input(format!("Invalid src_cortical_area '{}': {}", src_area, e))
+    })?;
+    let dst_id = CorticalID::try_from_base_64(dst_area).map_err(|e| {
+        ApiError::invalid_input(format!("Invalid dst_cortical_area '{}': {}", dst_area, e))
+    })?;
+
+    let manager = ConnectomeManager::instance();
+    let diagnostic = manager
+        .read()
+        .diagnose_memory_twin_for_mapping(&src_id, &dst_id)
+        .map_err(|e| ApiError::invalid_input(format!("Twin diagnostic failed: {}", e)))?;
+
+    Ok(Json(serde_json::to_value(diagnostic).map_err(|e| {
+        ApiError::internal(format!("Failed to serialize twin diagnostic: {}", e))
+    })?))
+}
+
 /// GET /v1/cortical_mapping/mapping_list
 /// Get list of all cortical mappings
 #[utoipa::path(
@@ -564,7 +628,7 @@ pub async fn delete_mapping(
 
 #[cfg(test)]
 mod tests {
-    use super::f64_from_json_value;
+    use super::{f64_from_json_value, i64_from_integer_like_json_value};
 
     #[test]
     fn f64_parser_accepts_integer_and_float_json() {
@@ -586,6 +650,28 @@ mod tests {
     fn f64_parser_rejects_non_numeric_json() {
         let bad_v = serde_json::json!("1");
         assert!(f64_from_json_value(&bad_v, "postSynapticCurrent_multiplier").is_err());
+    }
+
+    #[test]
+    fn i64_parser_accepts_integer_like_values() {
+        let int_v = serde_json::json!(3);
+        let float_int_v = serde_json::json!(3.0);
+        assert_eq!(
+            i64_from_integer_like_json_value(&int_v, "plasticity_constant")
+                .expect("integer should parse"),
+            3
+        );
+        assert_eq!(
+            i64_from_integer_like_json_value(&float_int_v, "plasticity_constant")
+                .expect("float-shaped integer should parse"),
+            3
+        );
+    }
+
+    #[test]
+    fn i64_parser_rejects_fractional_values() {
+        let fractional = serde_json::json!(3.5);
+        assert!(i64_from_integer_like_json_value(&fractional, "plasticity_constant").is_err());
     }
 }
 

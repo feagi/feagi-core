@@ -1190,8 +1190,6 @@ impl Neuroembryogenesis {
                             }
 
                             if let Ok(exec) = executor.lock() {
-                                let upstream_non_memory =
-                                    manager.filter_non_memory_upstream_areas(&upstream_areas);
                                 let lifecycle_config = MemoryNeuronLifecycleConfig {
                                     initial_lifespan: mem_props.init_lifespan,
                                     lifespan_growth_rate: mem_props.lifespan_growth_rate,
@@ -1203,7 +1201,7 @@ impl Neuroembryogenesis {
                                     area.cortical_idx,
                                     area_id.as_base_64(),
                                     mem_props.temporal_depth,
-                                    upstream_non_memory,
+                                    upstream_areas.clone(),
                                     Some(lifecycle_config),
                                     mem_props.mp_learning_enabled,
                                 );
