@@ -587,7 +587,9 @@ fn test_directional_associative_mapping_synthesizes_memory_to_memory_synapse() {
 
     let outgoing = npu.get_outgoing_synapses(src_mem.0);
     assert!(
-        outgoing.iter().any(|(target, _, _, _)| *target == dst_mem.0),
+        outgoing
+            .iter()
+            .any(|(target, _, _, _)| *target == dst_mem.0),
         "Directional associative mapping should synthesize forward memory->memory synapse"
     );
 }
