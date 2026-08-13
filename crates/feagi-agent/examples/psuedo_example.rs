@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.len() != 4 {
         eprintln!(
             "Usage: {} <registration_endpoint> <heartbeat_interval_ms> <poll_interval_ms>",
-            args.get(0).map(String::as_str).unwrap_or("psuedo_example")
+            args.first().map(String::as_str).unwrap_or("psuedo_example")
         );
         eprintln!("Examples:");
         eprintln!("  tcp://<host>:<port> (ZMQ)");
