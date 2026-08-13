@@ -17,11 +17,13 @@ pub struct TokioRayonBurstEngine<FIQ: FeagiIndexQuantization> {
 
 impl<FIQ: FeagiIndexQuantization> TokioRayonBurstEngine<FIQ>
 {
-
+    pub fn new() -> Self {
+        todo!()
+    }
 }
 
 impl<FIQ: FeagiIndexQuantization> BurstEngine<FIQ> for TokioRayonBurstEngine<FIQ> {
-    async fn run_bursts(&mut self, number_bursts: FIQ::GlobalBurstIndexQuant) {
+    async fn run_burst(&mut self, number_bursts: FIQ::GlobalBurstIndexQuant) {
         todo!()
     }
 

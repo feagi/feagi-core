@@ -1,6 +1,8 @@
 //! This is a true (composable) NPU, however it is currently being wrapped due to phase 1 work.
 //! The job of the NPU is to handle timing, containing the async calls to the burst engine(s)
 
+/// TODO We really shouldnt be using tokio this high up as its an optional feature, this would break wasm. It is to be noted that embedded wouldnt have composable npu anyways though
+
 use futures::future::join_all;
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -11,18 +13,27 @@ use crate::burst_engine::burst_engine::BurstEngine;
 use crate::burst_engine::composed_burst_engine::ComposableBurstEngine;
 use crate::burst_engine_enum::ComposableBurstEngineEnum;
 
-/// Number of bursts per second
-pub type BurstFrequency = f64;
+
 
 
 /// An NPU capable of editing the connectome it has loaded
-pub struct ComposableNPU<FIQ: FeagiIndexQuantization>
+pub struct ComposableNPU<FIQ: FeagiIndexQuantization + Send + 'static>
 {
     engines: Vec<ComposableBurstEngineEnum<FIQ>>,
 }
 
-impl<FIQ: FeagiIndexQuantization> ComposableNPU<FIQ>
+impl<FIQ: FeagiIndexQuantization + Send + 'static> ComposableNPU<FIQ>
 {
+
+    pub fn new() -> ComposableNPU<FIQ> {
+        // TODO for now take no parameters and create a single tokio rayon Burst Engine.
+
+
+
+
+
+        todo!()
+    }
 
     pub fn load_connectome(&mut self) {
 
@@ -58,11 +69,11 @@ impl<FIQ: FeagiIndexQuantization> ComposableNPU<FIQ>
 
 
 
-struct BurstEngineRuntime<FIQ: FeagiIndexQuantization> {
+struct BurstEngineRuntime<FIQ: FeagiIndexQuantization + Send + 'static> {
     burst_state: Option<BurstEngineRuntimeState<FIQ>>, // TODO is this the best rn?
 }
 
-impl<FIQ: FeagiIndexQuantization> BurstEngineRuntime<FIQ>
+impl<FIQ: FeagiIndexQuantization + Send + 'static> BurstEngineRuntime<FIQ>
 {
     pub fn new(engines: Vec<ComposableBurstEngineEnum<FIQ>>) -> BurstEngineRuntime<FIQ>
     {
@@ -92,12 +103,16 @@ impl<FIQ: FeagiIndexQuantization> BurstEngineRuntime<FIQ>
                 // Cancellation is observed ONLY here, while idle between ticks.
                 tokio::select! {
                     _ = ticker.tick() => {}
-                    _ = child.cancelled() => break,
+                    _ = child.cancelled() => break, // TODO this may not be good, wouldnt this interrupt ongoing calculations and leave burst engines in unknown states? We should use a distinct "kill" to denote we are doing this
                 }
 
                 // If ended, only end once everyone is finished
 
-                join_all(inners.iter_mut().map(|i| i.run_bursts())).await;
+                join_all(inners.iter_mut().map(
+                    |i|
+                        i.run_burst())
+                ).await;
+                
                 if child.is_cancelled() {
                     break;
                 }

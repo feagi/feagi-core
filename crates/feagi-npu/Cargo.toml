@@ -66,7 +66,7 @@ rayon = { workspace = true, optional = true}
 
 # TODO we should tie these to workspace
 parking_lot = { version = "0.12", optional = true }
-tokio = {version = "1.53.1"} # TODO Optional
+tokio = {version = "1.53.1", features = ["rt", "macros", "time"]} # TODO Optional
 tokio-util = { version = "0.7.19", features = ["full"] }
 futures = {version =  "0.3.34" }
 

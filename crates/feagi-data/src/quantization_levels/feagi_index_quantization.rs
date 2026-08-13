@@ -7,7 +7,7 @@ use std::hash::Hash;
 // TODO we may want more granular options?
 
 /// Global Indexing across an instance of FEAGI, primarily NPU. Controlled by NPU primarily
-pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq {
+pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq + 'static {
     const QUANTIZATION_LEVEL: FeagiIndexQuantizationLevel;
 
     /// Defines the quantization of the NPU global burst index. This is not model configurable,

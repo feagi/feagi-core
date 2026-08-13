@@ -8,7 +8,7 @@ use crate::burst_engine::composable_implementations::tokio_rayon::tokio_rayon_bu
 macro_rules! proxy_trait {
     ($trait_expr:expr) => {
         match self {
-            
+
         }
     };
 }
@@ -49,7 +49,7 @@ impl<FIQ: FeagiIndexQuantization> ComposableBurstEngine<FIQ> for ComposableBurst
 }
 
 impl<FIQ: FeagiIndexQuantization> BurstEngine<FIQ> for ComposableBurstEngineEnum<FIQ> {
-    async fn run_bursts(&mut self) {
+    async fn run_burst(&mut self) {
         todo!()
     }
 
@@ -57,7 +57,15 @@ impl<FIQ: FeagiIndexQuantization> BurstEngine<FIQ> for ComposableBurstEngineEnum
         todo!()
     }
 
-    fn exchange_synapse_propagation_data(&mut self) {
+    fn import_bridged_synapse_propagation_data(&mut self) {
+        todo!()
+    }
+
+    fn export_bridged_neuron_mp_data(&mut self) {
+        todo!()
+    }
+
+    fn import_bridged_neuron_mp_data(&mut self) {
         todo!()
     }
 
