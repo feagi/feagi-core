@@ -1153,7 +1153,8 @@ impl Neuroembryogenesis {
                 for area_id in manager.get_cortical_area_ids() {
                     if let Some(area) = manager.get_cortical_area(area_id) {
                         if let Some(mem_props) = extract_memory_properties(&area.properties) {
-                            let upstream_areas = manager.get_upstream_cortical_areas(area_id);
+                            let upstream_areas =
+                                manager.get_episodic_memory_upstream_cortical_areas(area_id);
 
                             // Ensure FireLedger tracks upstream areas with at least the required temporal depth.
                             // Dense, burst-aligned tracking is required for correct memory pattern hashing.

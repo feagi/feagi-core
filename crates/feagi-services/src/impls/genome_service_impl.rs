@@ -2277,8 +2277,10 @@ impl GenomeServiceImpl {
                         // to avoid shrinking windows that may be required elsewhere (e.g., other memory areas).
                         if let Some(npu_arc) = manager.get_npu().cloned() {
                             if let Ok(mut npu) = npu_arc.lock() {
-                                let upstream_areas =
-                                    manager.get_upstream_cortical_areas(&cortical_id_typed);
+                                let upstream_areas = manager
+                                    .get_episodic_memory_upstream_cortical_areas(
+                                        &cortical_id_typed,
+                                    );
                                 let existing_configs = npu.get_all_fire_ledger_configs();
                                 let desired = mem_props.temporal_depth as usize;
 
@@ -2311,8 +2313,10 @@ impl GenomeServiceImpl {
                         // Re-register memory area config in PlasticityExecutor so temporal_depth/lifecycle changes apply immediately.
                         if let Some(executor) = manager.get_plasticity_executor() {
                             if let Ok(exec) = executor.lock() {
-                                let upstream_areas =
-                                    manager.get_upstream_cortical_areas(&cortical_id_typed);
+                                let upstream_areas = manager
+                                    .get_episodic_memory_upstream_cortical_areas(
+                                        &cortical_id_typed,
+                                    );
                                 let lifecycle_config = MemoryNeuronLifecycleConfig {
                                     initial_lifespan: mem_props.init_lifespan,
                                     lifespan_growth_rate: mem_props.lifespan_growth_rate,

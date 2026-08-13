@@ -1377,6 +1377,60 @@ impl ConnectomeManager {
         Vec::new()
     }
 
+    /// Get only episodic-memory upstream cortical indices for a target memory area.
+    ///
+    /// This filters upstream sources to mappings that explicitly include an
+    /// `episodic_memory` morphology rule; associative-only upstream links are excluded.
+    pub fn get_episodic_memory_upstream_cortical_areas(
+        &self,
+        target_cortical_id: &CorticalID,
+    ) -> Vec<u32> {
+        let mut episodic_upstream = Vec::new();
+        let upstream = self.get_upstream_cortical_areas(target_cortical_id);
+
+        for src_idx in upstream {
+            let Some(src_id) = self.cortical_idx_to_id.get(&src_idx) else {
+                continue;
+            };
+            let Some(src_area) = self.cortical_areas.get(src_id) else {
+                continue;
+            };
+            let Some(mapping_dst) = src_area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            else {
+                continue;
+            };
+            let Some(rules) =
+                Self::get_mapping_rules_for_destination(mapping_dst, target_cortical_id)
+            else {
+                continue;
+            };
+
+            let has_episodic_rule = rules.iter().any(|rule| {
+                let morphology_id = rule
+                    .as_object()
+                    .and_then(|obj| obj.get("morphology_id"))
+                    .and_then(|v| v.as_str())
+                    .or_else(|| {
+                        rule.as_array()
+                            .and_then(|arr| arr.first())
+                            .and_then(|v| v.as_str())
+                    });
+                morphology_id == Some("episodic_memory")
+            });
+
+            if has_episodic_rule {
+                episodic_upstream.push(src_idx);
+            }
+        }
+
+        episodic_upstream.sort_unstable();
+        episodic_upstream.dedup();
+        episodic_upstream
+    }
+
     /// Filter upstream cortical indices to exclude memory areas.
     pub fn filter_non_memory_upstream_areas(&self, upstream: &[u32]) -> Vec<u32> {
         upstream
@@ -2360,7 +2414,8 @@ impl ConnectomeManager {
 
                 if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
                     if let Some(mem_props) = extract_memory_properties(&dst_area.properties) {
-                        let upstream_areas = self.get_upstream_cortical_areas(dst_area_id);
+                        let upstream_areas =
+                            self.get_episodic_memory_upstream_cortical_areas(dst_area_id);
                         debug!(
                             target: "feagi-bdu",
                             "Registering memory area idx={} id={} upstream={} depth={}",
@@ -8014,6 +8069,19 @@ mod tests {
             upstream_m2.len(),
             2,
             "M2 should keep 2 upstreams after firing"
+        );
+
+        let episodic_upstream_m1 = manager.get_episodic_memory_upstream_cortical_areas(&m1_id);
+        let episodic_upstream_m2 = manager.get_episodic_memory_upstream_cortical_areas(&m2_id);
+        assert_eq!(
+            episodic_upstream_m1,
+            vec![a1_idx],
+            "Episodic upstream list for M1 should exclude associative-only memory source M2"
+        );
+        assert_eq!(
+            episodic_upstream_m2,
+            vec![a2_idx],
+            "Episodic upstream list for M2 should exclude associative-only memory source M1"
         );
     }
 
