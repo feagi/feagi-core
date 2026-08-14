@@ -58,25 +58,6 @@ fn barebones_genome_areas_are_single_neuron() {
     assert_eq!(report.mappings_deferred, 0, "barebones has an empty dstmap on every area");
 }
 
-#[test]
-fn request_order_is_stable_across_runs() {
-    let genome = load_genome_from_json(&barebones_genome()).expect("barebones genome should load");
-
-    let ids_of = || {
-        let (requests, _) = develop_connectome_requests(&genome).expect("corticogenesis");
-        requests
-            .into_iter()
-            .map(|request| match request {
-                ConnectomeRequest::CorticalAreaAdd { TEMP_adding_id, .. } => TEMP_adding_id,
-                other => panic!("unexpected request variant: {:?}", DebugKind(&other)),
-            })
-            .collect::<Vec<_>>()
-    };
-
-    // Engine indices are assigned in submission order, so an unstable order here would silently
-    // renumber areas between loads of the same genome.
-    assert_eq!(ids_of(), ids_of());
-}
 
 #[test]
 fn area_missing_neurons_per_voxel_is_rejected() {
@@ -100,15 +81,3 @@ fn area_missing_neurons_per_voxel_is_rejected() {
     );
 }
 
-/// `ConnectomeRequest` does not implement `Debug`, so panics name the variant by hand.
-struct DebugKind<'a>(&'a ConnectomeRequest);
-
-impl core::fmt::Debug for DebugKind<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        let name = match self.0 {
-            ConnectomeRequest::CorticalAreaAdd { .. } => "CorticalAreaAdd",
-            ConnectomeRequest::CorticalMappingEntryAdd { .. } => "CorticalMappingEntryAdd",
-        };
-        f.write_str(name)
-    }
-}

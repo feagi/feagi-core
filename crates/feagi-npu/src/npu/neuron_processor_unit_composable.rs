@@ -17,7 +17,7 @@ impl<FIQ: FeagiIndexQuantization + Send + 'static> NeuronProcessingUnitComposabl
     pub fn new() -> Self {
         // TODO take in burst engines as a parameter, for now defined for you
         let burst_engine = ComposableBurstEngineEnum::TokioRayonBurstEngine(TokioRayonBurstEngine::new());
-        
+
         let frozen_engine_pool = NPUWorkerPool::Frozen(vec![burst_engine]);
 
         Self {
@@ -38,6 +38,11 @@ impl<FIQ: FeagiIndexQuantization + Send + 'static> NeuronProcessingUnitComposabl
     }
 
     pub fn start_engines(&mut self, set_target_frequency: NPUTargetFrequency) {
+
+        return ();
+
+        // TODO address
+
         match &mut self.frozen_engine_pool {
             NPUWorkerPool::None => {
                 // TODO ???

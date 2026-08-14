@@ -1,8 +1,10 @@
 
 // TODO prevent stupid values from being inserted. 10 s duration limit? no negatives / nan / inf
 
+use serde::{Deserialize, Serialize};
+
 /// Used to represent how many bursts per second we want NPU to run
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct NPUTargetFrequency {
     duration: core::time::Duration
 }
