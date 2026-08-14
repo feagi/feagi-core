@@ -8,26 +8,30 @@ use crate::npu::burst_engine_worker::independent_burst_engine_worker::independen
 // TODO actually have a vector input lol
 
 pub fn burst_engine_worker_pool<'a, FIQ: FeagiIndexQuantization>(
-    burst_engines: (
-        ComposableBurstEngineEnum<FIQ>,
-        BidirectionalChannelSide<'a, ()>,
-        BidirectionalChannelSide<'a, ()>,
-        BidirectionalChannelSide<'a, ()>,
-    ),
+    burst_engines: BurstEngineWorkerContext<FIQ>,
 ) {
 
     let mut worker_queue: BiDirectionalChannelQueue<BurstEngineWorkerCommand, 1, 1>  = BiDirectionalChannelQueue::new();
 
     let (mut command_tx, receive_rx) = worker_queue.split();
 
+    // split apart the incoming struct
+    let BurstEngineWorkerContext {
+        burst_engine,
+        incoming_sensor_buffer,
+        outgoing_motor_buffer,
+        outgoing_visualization_buffer,
+    } = burst_engines;
+    
+    
     let worker_handle = std::thread::spawn(
         || {
             independent_burst_engine_worker(
-                burst_engines.0,
+                burst_engine,
                 receive_rx,
-                burst_engines.1,
-                burst_engines.2,
-                burst_engines.3
+                incoming_sensor_buffer,
+                outgoing_motor_buffer,
+                outgoing_visualization_buffer
             )
         }
     );
@@ -45,8 +49,13 @@ pub fn burst_engine_worker_pool<'a, FIQ: FeagiIndexQuantization>(
         // TODO wait remaining delay
 
     }
+}
 
-
-
-
+/// Used to transport context for a burst engine worker
+pub struct BurstEngineWorkerContext<'a, FIQ: FeagiIndexQuantization>
+{
+    pub burst_engine: ComposableBurstEngineEnum<FIQ>,
+    pub incoming_sensor_buffer: BidirectionalChannelSide<'a, ()>,
+    pub outgoing_motor_buffer: BidirectionalChannelSide<'a, ()>,
+    pub outgoing_visualization_buffer: BidirectionalChannelSide<'a, ()>,
 }
