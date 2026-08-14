@@ -6,7 +6,7 @@
 
 use feagi_data::bidirectional_channel_queue::BidirectionalChannelSide;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::burst_engine_enum::ComposableBurstEngineEnum;
+use crate::npu::burst_engine::ComposableBurstEngineEnum;
 use crate::npu::burst_engine_worker::burst_engine_commands::BurstEngineWorkerCommand;
 
 

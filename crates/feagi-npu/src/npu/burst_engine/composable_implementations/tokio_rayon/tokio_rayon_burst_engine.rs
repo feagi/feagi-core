@@ -1,63 +1,36 @@
-use crate::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use feagi_models::wrapped_index_collections::{
     CorticalEngineIndex, CorticalLayoutIndex, CorticalModelIndex, MappingEntryEngineIndex, NeuronEngineIndex, NeuronEngineIndexedVector,
     NeuronHistoryIndex, NeuronMPIndex, NeuronModelIndex,
 };
-use crate::burst_engine::burst_engine::BurstEngine;
-use crate::burst_engine::composed_burst_engine::ComposableBurstEngine;
+use crate::npu::burst_engine::{BurstEngine, ComposableBurstEngine};
+use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 
 pub struct TokioRayonBurstEngine<FIQ: FeagiIndexQuantization> {
     data: TokioRayonEngineData<FIQ>,
-    // dyn stuff
-    latest_cortical_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
-    latest_mapping_entry_index: MappingEntryEngineIndex<FIQ::CorticalMappingEntryIndexCountQuant>,
+
 }
 
 
 impl<FIQ: FeagiIndexQuantization> TokioRayonBurstEngine<FIQ>
 {
     pub fn new() -> Self {
-        todo!()
+        Self {
+            data: Default::default(),
+        }
     }
 }
 
+
+
 impl<FIQ: FeagiIndexQuantization> BurstEngine<FIQ> for TokioRayonBurstEngine<FIQ> {
-    async fn run_burst(&mut self, number_bursts: FIQ::GlobalBurstIndexQuant) {
-        todo!()
-    }
-
-    fn exchange_data_for_sensor_motor_probes_and_potentials(&mut self) {
-        todo!()
-    }
-
-    fn exchange_synapse_propagation_data(&mut self) {
-        todo!()
-    }
-
-    fn edit_in_place_cortical_areas(&mut self) {
+    async fn run_kernel(&mut self) {
         todo!()
     }
 }
 
 impl<FIQ: FeagiIndexQuantization> ComposableBurstEngine<FIQ> for TokioRayonBurstEngine<FIQ> {
-    fn add_cortical_areas(&mut self) {
-        todo!()
-    }
-
-    fn remove_cortical_areas(&mut self) {
-        todo!()
-    }
-
-    fn overwrite_neuron_firings(&mut self) {
-        todo!()
-    }
-
-    fn add_cortical_mappings(&mut self) {
-        todo!()
-    }
-
-    fn remove_cortical_mappings(&mut self) {
+    async fn edit_connectome(&mut self) {
         todo!()
     }
 }

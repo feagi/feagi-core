@@ -5,3 +5,4 @@ pub mod neuron_processor_unit_composable;
 pub mod burst_engine;
 pub mod burst_engine_worker;
 pub mod neuron_processing_unit_commands;
+pub mod NPUTargetFrequency;

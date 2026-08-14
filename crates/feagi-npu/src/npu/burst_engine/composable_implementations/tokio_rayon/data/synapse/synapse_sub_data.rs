@@ -1,8 +1,8 @@
-use crate::burst_engine::common_cpu_structs::flags::cortical_mapping_entry_runtime_flags::CorticalMappingEntryRuntimeFlags;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizationLevelPacking};
 use feagi_models::cortical_mapping_entry::synapse_model_implementations::generated_enums::SynapseModelTypeAndQuantizationPacked;
 use feagi_models::wrapped_index_collections::{MappingEntryModelIndex, SynapseEngineIndex};
+use crate::npu::burst_engine::common_cpu_structs::flags::cortical_mapping_entry_runtime_flags::CorticalMappingEntryRuntimeFlags;
 
 /// For a cortical mapping entry, contains indexes for some corresponding properties belonging to it
 #[derive(Clone, Copy)]

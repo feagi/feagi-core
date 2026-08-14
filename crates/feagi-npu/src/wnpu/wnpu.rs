@@ -1,8 +1,9 @@
 //! A temporary wrapper
 
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
-use crate::npu::neuron_processing_unit_commands::BurstFrequency;
+
 use crate::npu::neuron_processor_unit_composable::{NeuronProcessingUnitComposable};
+use crate::npu::NPUTargetFrequency::NPUTargetFrequency;
 
 /// Compatibility wrapper for the new NPU as it is developed and as we use the old FEAGI architecture.
 /// Can be owned directly, handles the threading shenanigans internally
@@ -12,14 +13,14 @@ pub struct WrappedNeuronProcessingUnit {
 
 impl WrappedNeuronProcessingUnit {
 
-    pub fn new(initial_frequency: BurstFrequency) -> WrappedNeuronProcessingUnit {
+    pub fn new() -> WrappedNeuronProcessingUnit {
         Self {
-            npu: NeuronProcessingUnitComposable::new(initial_frequency)
+            npu: NeuronProcessingUnitComposable::new()
         }
     }
     
-    pub fn run_at(&mut self, burst_frequency: BurstFrequency) {
-        todo!()
+    pub fn run_at(&mut self, burst_frequency: NPUTargetFrequency) {
+        self.npu.start_engines(burst_frequency)
     }
 
     pub fn pause(&mut self, ) {

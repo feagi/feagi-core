@@ -1,4 +1,3 @@
-use crate::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedUnsignedInteger};
@@ -9,6 +8,7 @@ use feagi_models::cortical_mapping_entry::synapse_model_implementations::generat
 use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::model::UniformSynapseModel;
 use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelStandardQuant;
 use feagi_models::wrapped_index_collections::{MappingEntryModelIndex, NeuronMPIndex, SynapseEngineIndex};
+use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 
 pub(crate) fn process_synapses<FIQ: FeagiIndexQuantization>(data: &TokioRayonEngineData<FIQ>) {
     // Walked serially: synapses converge, so several of them accumulate into the same destination

@@ -1,5 +1,3 @@
-use crate::burst_engine::composable_implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
-use crate::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::cortical_area::neuron::layout_specific_implementations::dimensional::DimensionalNeuronModel;
 use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
@@ -8,6 +6,8 @@ use feagi_models::wrapped_index_collections::NeuronEngineIndex;
 use feagi_models::wrapped_indexes::BurstIndex;
 use rayon::prelude::*;
 use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedUnsignedInteger};
+use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
+use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 
 pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &TokioRayonEngineData<FIQ>) {
     let burst_index = data.burst_index;

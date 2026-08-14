@@ -1,11 +1,3 @@
-use crate::burst_engine::composable_implementations::tokio_rayon::data::neuron::model_quantized_data::NeuronModelData;
-use crate::burst_engine::composable_implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
-use crate::burst_engine::composable_implementations::tokio_rayon::data::neuron::potential_quantized_data::NeuronQuantizedData;
-use crate::burst_engine::composable_implementations::tokio_rayon::data::synapse::model_quantized_data::SynapseModelData;
-use crate::burst_engine::composable_implementations::tokio_rayon::data::synapse::synapse_sub_data::{CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties};
-use crate::burst_engine::common_cpu_structs::multi_bitpacked_vector::MultiBitPackedVectorManager;
-use crate::burst_engine::common_cpu_structs::flags::cortical_runtime_flags::CorticalRuntimeFlags;
-use crate::burst_engine::common_cpu_structs::flags::neuron_runtime_flags::NeuronRuntimeFlags;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use feagi_models::cortical_area::components::neuron_history::implementations::full::NeuronModelFullNeuronHistory;
@@ -15,6 +7,14 @@ use feagi_models::wrapped_index_collections::{
     NeuronEngineIndexedVector, NeuronHistoryIndexedVector, NeuronMPIndex, SynapseEngineIndexedVector,
 };
 use feagi_models::wrapped_indexes::BurstIndex;
+use crate::npu::burst_engine::common_cpu_structs::flags::cortical_runtime_flags::CorticalRuntimeFlags;
+use crate::npu::burst_engine::common_cpu_structs::flags::neuron_runtime_flags::NeuronRuntimeFlags;
+use crate::npu::burst_engine::common_cpu_structs::multi_bitpacked_vector::MultiBitPackedVectorManager;
+use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::neuron::model_quantized_data::NeuronModelData;
+use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
+use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::neuron::potential_quantized_data::NeuronQuantizedData;
+use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::synapse::model_quantized_data::SynapseModelData;
+use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::synapse::synapse_sub_data::{CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties};
 
 pub struct TokioRayonEngineData<FIQ: FeagiIndexQuantization> {
     /// The current burst index
