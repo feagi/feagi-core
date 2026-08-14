@@ -3,7 +3,7 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
 
 use crate::npu::neuron_processor_unit_composable::{NeuronProcessingUnitComposable};
-use crate::npu::NPUTargetFrequency::NPUTargetFrequency;
+use crate::npu::npu_target_frequency::NPUTargetFrequency;
 
 /// Compatibility wrapper for the new NPU as it is developed and as we use the old FEAGI architecture.
 /// Can be owned directly, handles the threading shenanigans internally

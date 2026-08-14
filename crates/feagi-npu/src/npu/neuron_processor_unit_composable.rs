@@ -3,7 +3,7 @@ use crate::npu::burst_engine::ComposableBurstEngineEnum;
 use crate::npu::burst_engine_worker::burst_engine_worker_pool::{
     burst_engine_worker_pool, default_burst_coordinator_loop, BurstEngineWorkerChannels,
 };
-use crate::npu::NPUTargetFrequency::NPUTargetFrequency;
+use crate::npu::npu_target_frequency::NPUTargetFrequency;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub struct NeuronProcessingUnitComposable<FIQ: FeagiIndexQuantization> {

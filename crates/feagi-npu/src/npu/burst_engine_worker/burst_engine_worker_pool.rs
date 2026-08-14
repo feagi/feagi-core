@@ -4,7 +4,7 @@ use crate::npu::burst_engine_worker::independent_burst_engine_worker::independen
 use feagi_data::bidirectional_channel_queue::{BiDirectionalChannelQueue, BidirectionalChannelSide};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
-const CHANNEL_BUFFER_SIZE: usize = 1;
+const CHANNEL_BUFFER_SIZE: usize = 2;
 
 /// Queue storage for one burst-engine worker, owned by the NPU.
 pub struct BurstEngineWorkerChannels {

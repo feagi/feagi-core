@@ -1,4 +1,4 @@
-use crate::npu::NPUTargetFrequency::NPUTargetFrequency;
+use crate::npu::npu_target_frequency::NPUTargetFrequency;
 
 /// Instructs the NPU how to handle its burst engine(s)
 pub enum NeuronProcessingUnitCommands {
