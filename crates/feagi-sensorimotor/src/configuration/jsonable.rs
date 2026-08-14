@@ -1,4 +1,9 @@
 use crate::data_pipeline::PipelineStageProperties;
+use crate::data_types::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex, ImageFrameProperties, MiscDataDimensions,
+    NeuronDepth, PercentageChannelDimensionality, PoseEstimationProperties,
+    SegmentedImageFrameProperties, SpatialPointerProperties,
+};
 use crate::data_types::{
     GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
     Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
@@ -26,6 +31,9 @@ use std::collections::HashMap;
 
 
 use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
+use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
+use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
+use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -150,6 +158,7 @@ impl Default for JSONInputOutputDefinition {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct JSONUnitDefinition {
     pub(crate) friendly_name: Option<String>,
+    #[serde(with = "crate::cortical_unit_index_serde")]
     pub(crate) cortical_unit_index: CorticalUnitIndex,
     pub(crate) io_configuration_flags: serde_json::Map<String, serde_json::Value>, // Due to the diversity contained here, this MUST be a generic dictionary
     pub(crate) device_grouping: Vec<JSONDeviceGrouping>,
@@ -605,7 +614,13 @@ impl JSONDecoderProperties {
                         "Expected one cortical_area id for SpatialPointer!".to_string(),
                     )
                 })?;
-                match cortical_id.extract_io_data_flag()? {
+                let io_data_flag = cortical_id.extract_io_data_flag().map_err(|error| {
+                    feagi_data_etc_error(format!(
+                        "Could not read the IO configuration flag off of cortical area id {}: {}",
+                        cortical_id, error
+                    ))
+                })?;
+                match io_data_flag {
                     IOCorticalAreaConfigurationFlag::SignedPercentage3D(..) => Ok(
                         WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero()),
                     ),

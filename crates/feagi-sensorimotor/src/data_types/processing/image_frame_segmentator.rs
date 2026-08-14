@@ -1,10 +1,10 @@
 use crate::data_types::descriptors::{
-    ColorChannelLayout, ImageFrameProperties, SegmentedImageFrameProperties,
+    ColorChannelLayout, ImageFrameProperties, ImageXYZDimensions, SegmentedImageFrameProperties,
 };
 use crate::data_types::{GazeProperties, ImageFrame, ImageFrameProcessor, SegmentedImageFrame};
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -111,7 +111,7 @@ impl ImageFrameSegmentator {
         gaze: &GazeProperties,
     ) -> Result<[ImageFrameProcessor; 9], FeagiDataError> {
         let center_cortical_resolution = output_properties.get_resolutions().center;
-        let center_cortical_dimensions = CorticalAreaDimensions::new(
+        let center_cortical_dimensions = ImageXYZDimensions::new(
             center_cortical_resolution.width,
             center_cortical_resolution.height,
             *output_properties.get_center_color_channel() as u32,

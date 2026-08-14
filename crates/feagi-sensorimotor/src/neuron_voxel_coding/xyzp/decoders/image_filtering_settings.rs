@@ -1,5 +1,6 @@
 //! Unified decoder for ImageFilteringSettings (brightness, contrast, diff threshold).
 
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::ImageFilteringSettings;
@@ -171,85 +172,85 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         // Collect brightness neuron data
         if let Some(brightness_neurons) = brightness_neuron_array {
             for neuron in brightness_neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
 
-                if neuron.coordinate.x
+                if neuron.neuron_voxel_coordinate.x
                     >= (number_of_channels * BRIGHTNESS_CHANNEL_WIDTH)
-                    || neuron.coordinate.z >= brightness_z_depth
+                    || neuron.neuron_voxel_coordinate.z >= brightness_z_depth
                 {
                     continue;
                 }
 
                 let z_row_vector = self
                     .z_depth_brightness_scratch_space
-                    .get_mut(neuron.coordinate.x as usize)
+                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
                     .unwrap();
-                z_row_vector.push(neuron.coordinate.z);
+                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
             }
         }
 
         // Collect contrast neuron data
         if let Some(contrast_neurons) = contrast_neuron_array {
             for neuron in contrast_neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
 
-                if neuron.coordinate.x >= (number_of_channels * CONTRAST_CHANNEL_WIDTH)
-                    || neuron.coordinate.z >= contrast_z_depth
+                if neuron.neuron_voxel_coordinate.x >= (number_of_channels * CONTRAST_CHANNEL_WIDTH)
+                    || neuron.neuron_voxel_coordinate.z >= contrast_z_depth
                 {
                     continue;
                 }
 
                 let z_row_vector = self
                     .z_depth_contrast_scratch_space
-                    .get_mut(neuron.coordinate.x as usize)
+                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
                     .unwrap();
-                z_row_vector.push(neuron.coordinate.z);
+                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
             }
         }
 
         // Collect diff threshold neuron data
         if let Some(diff_neurons) = diff_neuron_array {
             for neuron in diff_neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
 
-                if neuron.coordinate.x >= (number_of_channels * DIFF_CHANNEL_WIDTH)
-                    || neuron.coordinate.z >= diff_z_depth
+                if neuron.neuron_voxel_coordinate.x >= (number_of_channels * DIFF_CHANNEL_WIDTH)
+                    || neuron.neuron_voxel_coordinate.z >= diff_z_depth
                 {
                     continue;
                 }
 
                 let z_row_vector = self
                     .z_depth_diff_scratch_space
-                    .get_mut(neuron.coordinate.x as usize)
+                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
                     .unwrap();
-                z_row_vector.push(neuron.coordinate.z);
+                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
             }
         }
 
         // Collect image diff threshold neuron data
         if let Some(diff_neurons) = diff_image_neuron_array {
             for neuron in diff_neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
 
-                if neuron.coordinate.x >= (number_of_channels * DIFF_CHANNEL_WIDTH)
-                    || neuron.coordinate.z >= diff_z_depth
+                if neuron.neuron_voxel_coordinate.x >= (number_of_channels * DIFF_CHANNEL_WIDTH)
+                    || neuron.neuron_voxel_coordinate.z >= diff_z_depth
                 {
                     continue;
                 }
 
                 let z_row_vector = self
                     .z_depth_diff_scratch_space
-                    .get_mut(neuron.coordinate.x as usize)
+                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
                     .unwrap();
-                z_row_vector.push(neuron.coordinate.z);
+                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
             }
         }
 

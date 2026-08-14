@@ -1,8 +1,10 @@
+use crate::internal_prelude::*;
+use super::descriptors::MiscDataDimensions;
 use super::ImageFrame;
 use ndarray::{Array3, Zip};
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());

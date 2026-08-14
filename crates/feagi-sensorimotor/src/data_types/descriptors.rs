@@ -4,35 +4,285 @@
 
 use super::{ImageFrame, SegmentedImageFrame};
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
     FeagiFailDataEtc::new(context).into()
 }
 
-// NeuronDepth is used in macro expansion
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+
+/// Generates a 3D dimension descriptor whose axes must all be non-zero.
+macro_rules! define_xyz_dimensions {
+    ($name:ident, $friendly_name:expr, $doc_string:expr) => {
+        #[doc = $doc_string]
+        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
+        pub struct $name {
+            pub width: u32,
+            pub height: u32,
+            pub depth: u32,
+        }
+
+        impl $name {
+            pub fn new(width: u32, height: u32, depth: u32) -> Result<Self, FeagiDataError> {
+                if width == 0 || height == 0 || depth == 0 {
+                    return Err(feagi_data_etc_error(format!(
+                        "No axis of a {} may be zero!",
+                        $friendly_name
+                    )));
+                }
+                Ok(Self {
+                    width,
+                    height,
+                    depth,
+                })
+            }
+
+            pub fn to_tuple(&self) -> (u32, u32, u32) {
+                (self.width, self.height, self.depth)
+            }
+
+            /// Total number of elements enclosed (width * height * depth)
+            pub fn number_elements(&self) -> u32 {
+                self.width * self.height * self.depth
+            }
+
+            /// Whether the given (x, y, z) position falls inside these dimensions
+            pub fn contains(&self, pos: (u32, u32, u32)) -> bool {
+                pos.0 < self.width && pos.1 < self.height && pos.2 < self.depth
+            }
+        }
+
+        impl Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}<{}, {}, {}>",
+                    $friendly_name, self.width, self.height, self.depth
+                )
+            }
+        }
+
+        impl From<$name> for (u32, u32, u32) {
+            fn from(value: $name) -> Self {
+                value.to_tuple()
+            }
+        }
+
+        impl TryFrom<(u32, u32, u32)> for $name {
+            type Error = FeagiDataError;
+            fn try_from(value: (u32, u32, u32)) -> Result<Self, Self::Error> {
+                Self::new(value.0, value.1, value.2)
+            }
+        }
+    };
+}
+
+/// Generates a strongly typed, non-zero `u32` count backed descriptor.
+macro_rules! define_nonzero_count {
+    ($name:ident, $friendly_name:expr, $doc_string:expr) => {
+        #[doc = $doc_string]
+        #[repr(transparent)]
+        #[derive(
+            Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+        )]
+        pub struct $name(u32);
+
+        impl $name {
+            pub fn new(value: u32) -> Result<Self, FeagiDataError> {
+                if value == 0 {
+                    return Err(feagi_data_etc_error(format!(
+                        "A {} must be greater than zero!",
+                        $friendly_name
+                    )));
+                }
+                Ok(Self(value))
+            }
+
+            pub const fn get(&self) -> u32 {
+                self.0
+            }
+        }
+
+        impl std::ops::Deref for $name {
+            type Target = u32;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl From<$name> for u32 {
+            fn from(value: $name) -> Self {
+                value.0
+            }
+        }
+
+        impl TryFrom<u32> for $name {
+            type Error = FeagiDataError;
+            fn try_from(value: u32) -> Result<Self, Self::Error> {
+                Self::new(value)
+            }
+        }
+
+        impl Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+    };
+}
+
+//region Cortical Channels
+
+/// Index addressing a specific channel within an I/O cortical area.
+///
+/// Sensor and motor cortical areas host several channels side by side along x; this index
+/// selects one of them and drives the x offset applied when encoding or decoding a channel.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct CorticalChannelIndex(u32);
+
+impl CorticalChannelIndex {
+    pub const fn from(value: u32) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(&self) -> u32 {
+        self.0
+    }
+}
+
+impl std::ops::Deref for CorticalChannelIndex {
+    type Target = u32;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<CorticalChannelIndex> for u32 {
+    fn from(value: CorticalChannelIndex) -> Self {
+        value.0
+    }
+}
+
+impl From<u32> for CorticalChannelIndex {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl Display for CorticalChannelIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+define_nonzero_count!(
+    CorticalChannelCount,
+    "CorticalChannelCount",
+    "The number of channels hosted by an I/O cortical area."
+);
+
+define_nonzero_count!(
+    NeuronDepth,
+    "NeuronDepth",
+    "How many neurons deep (along z) a sensor / motor channel is. Determines the resolution a value is encoded at."
+);
+
+define_xyz_dimensions!(
+    CorticalChannelDimensions,
+    "CorticalChannelDimensions",
+    "The 3D dimensions of a single I/O cortical channel (width along x, height along y, depth along z)."
+);
+
+//endregion
+
 //region Images
 
 //region Image XY
 
-define_xy_coordinates!(ImageXYPoint, u32, "ImageXYPoint", "Represents a coordinate on an image. +x goes to the right, +y goes downward. (0,0) is in the top_left");
+/// Represents a coordinate on an image. +x goes to the right, +y goes downward. (0,0) is in the
+/// top left
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
+pub struct ImageXYPoint {
+    pub x: u32,
+    pub y: u32,
+}
 
-define_xy_dimensions!(
-    ImageXYResolution,
-    u32,
-    "ImageXYResolution",
-    0,
-    "Describes the resolution of the image (width and height)"
-);
+impl ImageXYPoint {
+    pub fn new(x: u32, y: u32) -> Self {
+        Self { x, y }
+    }
+}
+
+impl From<ImageXYPoint> for (u32, u32) {
+    fn from(value: ImageXYPoint) -> Self {
+        (value.x, value.y)
+    }
+}
+
+impl From<(u32, u32)> for ImageXYPoint {
+    fn from(value: (u32, u32)) -> Self {
+        ImageXYPoint::new(value.0, value.1)
+    }
+}
+
+impl Display for ImageXYPoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "ImageXYPoint({}, {})", self.x, self.y)
+    }
+}
+
+/// Describes the resolution of an image (width and height)
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
+pub struct ImageXYResolution {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl ImageXYResolution {
+    pub fn new(width: u32, height: u32) -> Result<Self, FeagiDataError> {
+        if width == 0 || height == 0 {
+            return Err(feagi_data_etc_error(
+                "Neither axis of an ImageXYResolution may be zero!".into(),
+            ));
+        }
+        Ok(Self { width, height })
+    }
+}
+
+impl Display for ImageXYResolution {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "ImageXYResolution<{}, {}>", self.width, self.height)
+    }
+}
+
+impl From<ImageXYResolution> for (u32, u32) {
+    fn from(value: ImageXYResolution) -> Self {
+        (value.width, value.height)
+    }
+}
+
+impl TryFrom<(u32, u32)> for ImageXYResolution {
+    type Error = FeagiDataError;
+    fn try_from(value: (u32, u32)) -> Result<Self, Self::Error> {
+        ImageXYResolution::new(value.0, value.1)
+    }
+}
 
 //endregion
 
 //region Image XYZ
 
-define_xyz_dimensions!(ImageXYZDimensions, u32, "ImageXYZDimensions", 0, "Describes the 3D dimensions of an image, with the 3rd dimension being the number of color channels");
+define_xyz_dimensions!(
+    ImageXYZDimensions,
+    "ImageXYZDimensions",
+    "Describes the 3D dimensions of an image, with the 3rd dimension being the number of color channels"
+);
 
 //endregion
 
@@ -539,9 +789,31 @@ impl PercentageChannelDimensionality {
 
 //region Misc
 
-define_xyz_dimensions!(MiscDataDimensions, u32, "MiscDataDimensions", 0, "The dimensions of the internal 3D array of a Misc Data Struct. Coordinates align with the position of neuron coordinates in FEAGI");
-define_xyz_mapping!(MiscDataDimensions, ImageXYZDimensions);
-define_xyz_mapping!(MiscDataDimensions, CorticalChannelDimensions);
+define_xyz_dimensions!(
+    MiscDataDimensions,
+    "MiscDataDimensions",
+    "The dimensions of the internal 3D array of a Misc Data Struct. Coordinates align with the position of neuron coordinates in FEAGI"
+);
+
+impl From<MiscDataDimensions> for ImageXYZDimensions {
+    fn from(value: MiscDataDimensions) -> Self {
+        ImageXYZDimensions {
+            width: value.width,
+            height: value.height,
+            depth: value.depth,
+        }
+    }
+}
+
+impl From<ImageXYZDimensions> for MiscDataDimensions {
+    fn from(value: ImageXYZDimensions) -> Self {
+        MiscDataDimensions {
+            width: value.width,
+            height: value.height,
+            depth: value.depth,
+        }
+    }
+}
 
 //endregion
 

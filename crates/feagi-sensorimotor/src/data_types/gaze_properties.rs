@@ -1,9 +1,12 @@
+use crate::data_types::descriptors::{
+    CornerPoints, ImageXYPoint, ImageXYResolution, ImageXYZDimensions,
+};
 use crate::data_types::{Percentage, Percentage2D, Percentage3D};
 use std::cmp;
 use std::fmt::Display;
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -51,7 +54,7 @@ impl GazeProperties {
     pub fn calculate_source_corner_points_for_segmented_video_frame(
         &self,
         source_frame_resolution: ImageXYResolution,
-        destination_segmented_center_cortical_dimensions: CorticalAreaDimensions,
+        destination_segmented_center_cortical_dimensions: ImageXYZDimensions,
     ) -> Result<[CornerPoints; 9], FeagiDataError> {
         if source_frame_resolution.width < 3 || source_frame_resolution.height < 3 {
             return Err(feagi_data_etc_error(
@@ -115,7 +118,7 @@ impl GazeProperties {
     fn calculate_pixel_coordinates_of_center_corners(
         &self,
         source_frame_resolution: ImageXYResolution,
-        destination_segmented_center_cortical_dimensions: CorticalAreaDimensions,
+        destination_segmented_center_cortical_dimensions: ImageXYZDimensions,
     ) -> Result<CornerPoints, FeagiDataError> {
         let modulation_normal: (f32, f32) = // Calculate ranges as per aspect ratio of cortical_area dimensions
         {

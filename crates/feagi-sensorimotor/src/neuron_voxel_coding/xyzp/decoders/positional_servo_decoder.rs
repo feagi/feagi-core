@@ -1,5 +1,6 @@
 //! Decoder for PositionalServo with both absolute and incremental cortical_area areas.
 
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::Percentage;
@@ -255,13 +256,12 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
 mod tests {
     use super::*;
     use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
-    use feagi_genomic_context::cortical_area::descriptors::{
-        CorticalChannelCount, CorticalSubUnitIndex, CorticalUnitIndex,
-    };
+    use crate::data_types::descriptors::CorticalChannelCount;
     use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
     };
-    use feagi_structures::neuron_voxels::xyzp::{
+    use feagi_genomic_context::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
+    use crate::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
     };
 

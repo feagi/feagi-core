@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -67,9 +67,9 @@ impl FeedbackRegistrar {
             return Err(feagi_data_etc_error(format!(
                 "Feedback {} already registered to motor unit {} channel {}, and sensor unit {} channel {}!",
                 compare.1,
-                compare.0.get_motor_unit_index(),
+                compare.0.get_motor_unit_index().deref(),
                 compare.0.get_motor_channel_index(),
-                compare.0.get_sensor_unit_index(),
+                compare.0.get_sensor_unit_index().deref(),
                 compare.0.get_sensor_channel_index(),
             )));
         }

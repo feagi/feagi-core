@@ -1,5 +1,6 @@
 //! Unified encoder for all percentage types (unsigned/signed, 1D-4D, linear/exponential).
 
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,

@@ -14,6 +14,7 @@
 //! `[c*6+0]=a_pos, [c*6+1]=a_neg, [c*6+2]=b_pos, [c*6+3]=b_neg,
 //! [c*6+4]=c_pos, [c*6+5]=c_neg`.
 
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,

@@ -1,11 +1,18 @@
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
+use crate::data_types::descriptors::CorticalChannelIndex;
+use feagi_data::feagi_data_error::FeagiDataError;
+use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
+use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
+use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
 use serde::{Deserialize, Serialize};
 use std::sync::MutexGuard;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FeedbackRegistrationTargets {
+    #[serde(with = "crate::cortical_unit_index_serde")]
     sensor_unit_index: CorticalUnitIndex,
     sensor_channel_index: CorticalChannelIndex,
+    #[serde(with = "crate::cortical_unit_index_serde")]
     motor_unit_index: CorticalUnitIndex,
     motor_channel_index: CorticalChannelIndex,
 }

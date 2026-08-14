@@ -1,3 +1,4 @@
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::JSONInputOutputDefinition;
 use crate::data_pipeline::per_channel_stream_caches::MotorCorticalUnitCache;
 use crate::data_pipeline::{PipelineStageProperties};
@@ -11,6 +12,7 @@ use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning, PoseSchema,
 };
 
+use serde_json::json;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
@@ -19,7 +21,6 @@ use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit
 
 
 use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
-use feagi_genomic_context::motor_cortical_units;
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -745,7 +746,7 @@ impl MotorDeviceCache {
         motor_stream_caches.verify_channel_exists(cortical_channel_index)
     }
 
-    motor_cortical_units!(motor_unit_functions);
+    feagi_genomic_context::motor_cortical_units!(motor_unit_functions);
 
     //region Data IO
 
@@ -765,6 +766,9 @@ impl MotorDeviceCache {
     pub fn try_decode_bytes_to_neural_data(&mut self) -> Result<bool, FeagiDataError> {
         self.byte_data
             .try_update_struct_from_first_found_struct_of_type(&mut self.neuron_data)
+            .map_err(|_| {
+                feagi_data_etc_error("Failed to decode neuron data from byte container".into())
+            })
     }
 
     pub fn try_decode_neural_data_into_cache(
@@ -802,7 +806,7 @@ impl MotorDeviceCache {
                 {
                     return Err(feagi_data_etc_error(format!(
                         "Already registered motor {} of unit index {}!",
-                        *motor_unit, unit_definition.cortical_unit_index
+                        *motor_unit, unit_definition.cortical_unit_index.deref()
                     )));
                 }
 
@@ -860,7 +864,7 @@ impl MotorDeviceCache {
         for ((_motor_unit, cortical_unit_index), unit_cache) in
             self.motor_cortical_unit_caches.iter()
         {
-            let group = cortical_unit_index.get() as u32;
+            let group = cortical_unit_index.deref() as u32;
             let mode = unit_cache.frame_change_mode_str();
             for channel in 0..unit_cache.channel_count_usize() {
                 if updated_only && !unit_cache.channel_updated_last_decode(channel) {
@@ -934,7 +938,7 @@ impl MotorDeviceCache {
         {
             return Err(feagi_data_etc_error(format!(
                 "Already registered motor {} of unit index {}!",
-                motor_type, unit_index
+                motor_type, unit_index.deref()
             )));
         }
 
@@ -1119,7 +1123,7 @@ impl MotorDeviceCache {
         if check.is_none() {
             return Err(feagi_data_etc_error(format!(
                 "Unable to find {} of cortical_area unit index {} in registered motor's list!",
-                motor_type, unit_index
+                motor_type, unit_index.deref()
             )));
         }
         let check = check.unwrap();
@@ -1137,7 +1141,7 @@ impl MotorDeviceCache {
         if check.is_none() {
             return Err(feagi_data_etc_error(format!(
                 "Unable to find {} of cortical_area unit index {} in registered motor's list!",
-                motor_type, unit_index
+                motor_type, unit_index.deref()
             )));
         }
         let check = check.unwrap();

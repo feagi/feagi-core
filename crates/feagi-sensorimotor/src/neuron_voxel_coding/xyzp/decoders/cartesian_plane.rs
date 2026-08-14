@@ -1,3 +1,4 @@
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::descriptors::ImageFrameProperties;
@@ -48,15 +49,15 @@ impl NeuronVoxelXYZPDecoder for CartesianPlaneNeuronVoxelXYZPDecoder {
 
         for neuron in neuron_array.iter() {
             // z should be 0 (R), 1 (G), or 2 (B)
-            if neuron.coordinate.x >= max_possible_x_index
-                || neuron.coordinate.y >= height
-                || neuron.coordinate.z >= 3
+            if neuron.neuron_voxel_coordinate.x >= max_possible_x_index
+                || neuron.neuron_voxel_coordinate.y >= height
+                || neuron.neuron_voxel_coordinate.z >= 3
             {
                 continue;
             }
 
-            let channel_index: u32 = neuron.coordinate.x / width;
-            let in_channel_x_index: u32 = neuron.coordinate.x % width;
+            let channel_index: u32 = neuron.neuron_voxel_coordinate.x / width;
+            let in_channel_x_index: u32 = neuron.neuron_voxel_coordinate.x % width;
 
             let image_frame: &mut ImageFrame = pipelines_with_data_to_update
                 .get_mut(channel_index as usize)
@@ -74,9 +75,9 @@ impl NeuronVoxelXYZPDecoder for CartesianPlaneNeuronVoxelXYZPDecoder {
             // Convert from FEAGI cartesian (bottom-left origin) to image coordinates (top-left origin)
             // FEAGI: y=0 is bottom, y increases upward
             // Image: row=0 is top, row increases downward
-            let row = (height - 1 - neuron.coordinate.y) as usize;
+            let row = (height - 1 - neuron.neuron_voxel_coordinate.y) as usize;
             let col = in_channel_x_index as usize;
-            let color_channel = neuron.coordinate.z as usize;
+            let color_channel = neuron.neuron_voxel_coordinate.z as usize;
 
             // Canonical image decoding (absolute intensity):
             // - Neuron potential (p) carries raw pixel intensity in 0..255.

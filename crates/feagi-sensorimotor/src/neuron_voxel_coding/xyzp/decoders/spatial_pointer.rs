@@ -1,3 +1,4 @@
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::descriptors::SpatialPointerProperties;
@@ -12,7 +13,7 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -118,7 +119,10 @@ impl SpatialPointerNeuronVoxelXYZPDecoder {
         // the decoder properties, keeping a single source of truth for the area's mode.
         // Absolute areas are flagged Percentage3D (unsigned position); Incremental areas
         // are flagged SignedPercentage3D (signed motion).
-        let frame_change_handling = match cortical_read_target.extract_io_data_flag()? {
+        let frame_change_handling = match cortical_read_target
+            .extract_io_data_flag()
+            .map_err(|e| feagi_data_etc_error(format!("{}", e)))?
+        {
             IOCorticalAreaConfigurationFlag::Percentage3D(frame, _) => frame,
             IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame, _) => frame,
             other => {
@@ -463,14 +467,13 @@ mod tests {
     use crate::data_types::descriptors::SpatialPointerProperties;
     use crate::data_types::{Percentage3D, SignedPercentage3D};
     use crate::wrapped_io_data::WrappedIOData;
-    use feagi_genomic_context::cortical_area::descriptors::{
-        CorticalChannelCount, CorticalSubUnitIndex, CorticalUnitIndex,
-    };
+    use crate::data_types::descriptors::CorticalChannelCount;
     use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         spatial_pointer_io_flag, FrameChangeHandling, PercentageNeuronPositioning,
     };
     use feagi_genomic_context::cortical_area::CorticalID;
-    use feagi_structures::neuron_voxels::xyzp::{
+    use feagi_genomic_context::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
+    use crate::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
     };
     use std::time::{Duration, Instant};

@@ -1,12 +1,13 @@
 use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
 use crate::configuration::jsonable::JSONDeviceProperties;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
-use crate::data_pipeline::PipelineStageProperties;
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_types::descriptors::CorticalChannelIndex;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use std::time::Instant;
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());

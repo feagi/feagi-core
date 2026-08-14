@@ -1,3 +1,4 @@
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::{
     JSONDecoderProperties, JSONDeviceGrouping, JSONUnitDefinition,
 };
@@ -9,7 +10,7 @@ use rayon::prelude::*;
 use std::time::Instant;
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -76,7 +77,8 @@ impl MotorCorticalUnitCache {
             .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
                 unit_definition.cortical_unit_index,
                 unit_definition.io_configuration_flags.clone(),
-            )?;
+            )
+            .map_err(|e| feagi_data_etc_error(format!("{}", e)))?;
 
         let initial_value = decoder_definition.default_wrapped_value(&cortical_ids)?;
         let encoder = decoder_definition.to_box_decoder(channel_count, &cortical_ids)?;

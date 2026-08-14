@@ -1,5 +1,6 @@
 use crate::feagi_interfaces::feagi_connection_enums::FeagiInterfaceStatus;
 use crate::feagi_interfaces::feagi_connector_interface_definition::FeagiConnectionInterfaceDefinition;
+use feagi_data::feagi_data_error::FeagiDataError;
 
 #[allow(dead_code)]
 pub trait FeagiConnectorInterface {

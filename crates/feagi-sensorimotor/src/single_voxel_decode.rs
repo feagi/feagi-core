@@ -11,8 +11,11 @@ use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
     decode_unsigned_percentage_from_fractional_exponential_neurons,
     decode_unsigned_percentage_from_linear_neurons,
 };
-use std::fmt;
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
+    IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
+};
 use feagi_genomic_context::cortical_area::CorticalID;
+use std::fmt;
 
 /// Result of decoding a single voxel.
 #[derive(Debug, Clone)]

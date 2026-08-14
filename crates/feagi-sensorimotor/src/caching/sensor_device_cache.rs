@@ -1,3 +1,4 @@
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::JSONInputOutputDefinition;
 use crate::data_pipeline::per_channel_stream_caches::SensoryCorticalUnitCache;
 use crate::data_types::descriptors::PercentageChannelDimensionality;
@@ -641,7 +642,7 @@ impl SensorDeviceCache {
         self.neurons_encoded_signal = FeagiSignal::new();
         self.bytes_encoded_signal = FeagiSignal::new();
     }
-    sensor_cortical_units!(sensor_unit_functions);
+    feagi_genomic_context::sensor_cortical_units!(sensor_unit_functions);
 
     pub fn verify_existence(
         &self,
@@ -762,7 +763,7 @@ impl SensorDeviceCache {
                 {
                     return Err(feagi_data_etc_error(format!(
                         "Already registered sensor {} of unit index {}!",
-                        *sensory_unit, unit_definition.cortical_unit_index
+                        *sensory_unit, unit_definition.cortical_unit_index.deref()
                     )));
                 }
 
@@ -819,7 +820,7 @@ impl SensorDeviceCache {
         {
             return Err(feagi_data_etc_error(format!(
                 "Already registered sensor {} of unit index {}!",
-                sensor_type, unit_index
+                sensor_type, unit_index.deref()
             )));
         }
 
@@ -1026,7 +1027,7 @@ impl SensorDeviceCache {
         if check.is_none() {
             return Err(feagi_data_etc_error(format!(
                 "Unable to find {} of cortical_area unit index {} in registered sensor's list!",
-                sensor_type, unit_index
+                sensor_type, unit_index.deref()
             )));
         }
         let check = check.unwrap();
@@ -1044,7 +1045,7 @@ impl SensorDeviceCache {
         if check.is_none() {
             return Err(feagi_data_etc_error(format!(
                 "Unable to find {} of cortical_area unit index {} in registered sensor's list!",
-                sensor_type, unit_index
+                sensor_type, unit_index.deref()
             )));
         }
         let check = check.unwrap();

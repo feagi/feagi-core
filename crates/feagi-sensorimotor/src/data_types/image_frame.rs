@@ -1,8 +1,13 @@
+use crate::internal_prelude::*;
+use crate::data_types::descriptors::{
+    ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions,
+    MemoryOrderLayout,
+};
 use image::{DynamicImage, GenericImageView};
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -255,7 +260,7 @@ impl ImageFrame {
         ImageXYResolution::new(shape[1] as u32, shape[0] as u32).unwrap() // because nd array is row major, where coords are yx
     }
 
-    /// Returns the total number of elements (height × width × channels).
+    /// Returns the total number of elements (height Ã— width Ã— channels).
     pub fn get_number_elements(&self) -> usize {
         self.pixels.shape()[0] * self.pixels.shape()[1] * self.pixels.shape()[2]
     }

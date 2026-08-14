@@ -6,10 +6,12 @@
 //! mimicking how human vision works with high acuity in the center and lower acuity in
 //! the periphery.
 
+use crate::internal_prelude::*;
 use super::descriptors::{
     ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
 use super::ImageFrame;
+use feagi_data::feagi_data_error::FeagiDataError;
 use ndarray::Array3;
 use rayon::prelude::*;
 

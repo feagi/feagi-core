@@ -1,3 +1,7 @@
+use crate::data_types::descriptors::{
+    ImageFrameProperties, MiscDataDimensions, PoseEstimationProperties,
+    SegmentedImageFrameProperties,
+};
 use crate::data_types::{
     GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
     Percentage3D, Percentage4D, PoseEstimationData, RawIMU, SegmentedImageFrame, SignedPercentage,
@@ -8,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::mem::discriminant;
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());

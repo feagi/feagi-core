@@ -1,8 +1,10 @@
 use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
 use crate::configuration::jsonable::JSONDeviceProperties;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
-use crate::data_pipeline::PipelineStageProperties;
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_types::descriptors::CorticalChannelIndex;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_data::feagi_data_error::FeagiDataError;
 use std::time::Instant;
 
 #[derive(Debug)]

@@ -1,5 +1,6 @@
 //! Unified decoder for GazeProperties (linear or exponential).
 
+use crate::internal_prelude::*;
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::GazeProperties;
@@ -14,7 +15,7 @@ use feagi_genomic_context::cortical_area::CorticalID;
 use std::time::Instant;
 
 
-use feagi_data::feagi_data_error::FeagiFailDataEtc;
+use feagi_data::feagi_data_error::{FeagiDataError, FeagiFailDataEtc};
 
 fn feagi_data_etc_error(message: String) -> FeagiDataError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -133,52 +134,52 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         // Collect eccentricity neuron data
         if let Some(eccentricity_neuron_array) = eccentricity_neuron_array {
             for neuron in eccentricity_neuron_array.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
 
-                if neuron.coordinate.x
+                if neuron.neuron_voxel_coordinate.x
                     >= (number_of_channels * ECCENTRICITY_CHANNEL_WIDTH)
-                    || neuron.coordinate.z >= eccentricity_z_depth
+                    || neuron.neuron_voxel_coordinate.z >= eccentricity_z_depth
                 {
                     continue;
                 }
 
                 let z_row_vector = self
                     .z_depth_eccentricity_scratch_space
-                    .get_mut(neuron.coordinate.x as usize)
+                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
                     .ok_or_else(|| {
                         feagi_data_etc_error(
                             "Eccentricity scratch space indexing error".into(),
                         )
                     })?;
-                z_row_vector.push(neuron.coordinate.z);
+                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
             }
         }
 
         // Collect modularity neuron data
         if let Some(modularity_neuron_array) = modularity_neuron_array {
             for neuron in modularity_neuron_array.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
 
-                if neuron.coordinate.x
+                if neuron.neuron_voxel_coordinate.x
                     >= (number_of_channels * MODULARITY_CHANNEL_WIDTH)
-                    || neuron.coordinate.z >= modularity_z_depth
+                    || neuron.neuron_voxel_coordinate.z >= modularity_z_depth
                 {
                     continue;
                 }
 
                 let z_row_vector = self
                     .z_depth_modularity_scratch_space
-                    .get_mut(neuron.coordinate.x as usize)
+                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
                     .ok_or_else(|| {
                         feagi_data_etc_error(
                             "Modularity scratch space indexing error".into(),
                         )
                     })?;
-                z_row_vector.push(neuron.coordinate.z);
+                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
             }
         }
 
@@ -277,10 +278,10 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_genomic_context::cortical_area::CoreCorticalType;
-    use feagi_structures::neuron_voxels::xyzp::{
+    use crate::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
     };
+    use feagi_genomic_context::cortical_area::CoreCorticalType;
 
     /// Ensures partial gaze packets do not panic.
     #[test]

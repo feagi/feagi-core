@@ -1,4 +1,4 @@
-//use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
+use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::agent_registration_message::AgentRegistrationMessage;
 use crate::command_and_control::health_check_message::HealthCheckMessage;
 use crate::command_and_control::messages::burst_engine::BurstEnginesMessage;
@@ -15,7 +15,7 @@ pub enum FeagiMessage {
     HeartBeat,
     AgentRegistration(AgentRegistrationMessage),
     HealthCheck(HealthCheckMessage),
-    //AgentConfiguration(AgentEmbodimentConfigurationMessage),
+    AgentConfiguration(AgentEmbodimentConfigurationMessage),
     BurstEngine(BurstEnginesMessage),
 }
 
