@@ -39,7 +39,7 @@ impl WrappedNeuronProcessingUnit {
         todo!()
     }
 
-    pub fn register_visualization_agent(&mut self) {
+    pub fn register_agent(&mut self) {
         todo!()
     }
 

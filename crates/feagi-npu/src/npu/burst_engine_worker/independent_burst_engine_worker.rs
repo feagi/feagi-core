@@ -4,81 +4,50 @@
 // TODO We probably shouldnt be doing inputs / outputs one at a time, we should consolidate inputs / outputs
 // TODO some actual error checking would be nice
 
+use feagi_data::bidirectional_channel_queue::BidirectionalChannelSide;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::burst_engine::burst_engine::BurstEngine;
 use crate::burst_engine_enum::ComposableBurstEngineEnum;
 use crate::npu::burst_engine_worker::burst_engine_commands::BurstEngineWorkerCommand;
 
-pub struct IndependentBurstEngineWorker<FIQ: FeagiIndexQuantization> {
-    burst_engine: ComposableBurstEngineEnum<FIQ>,
-    command_rx: std::sync::mpsc::Receiver<BurstEngineWorkerCommand>,
-    completion_tx: std::sync::mpsc::SyncSender<()>,
-    visualization_tx: std::sync::mpsc::SyncSender<()>,
-}
 
-impl<FIQ: FeagiIndexQuantization> IndependentBurstEngineWorker<FIQ> {
+pub fn independent_burst_engine_worker<'a, FIQ: FeagiIndexQuantization>(
+    mut burst_engine: ComposableBurstEngineEnum<FIQ>,
+    mut incoming_command_buffer: BidirectionalChannelSide<'a, BurstEngineWorkerCommand>,
+    mut incoming_sensor_buffer: BidirectionalChannelSide<'a, ()>,
+    mut outgoing_motor_buffer: BidirectionalChannelSide<'a, ()>,
+    mut outgoing_visualization_buffer: BidirectionalChannelSide<'a, ()>,
+)
+{
+    loop {
 
-    /// Creates a new `IndependentBurstEngineWorker` and its in/out channels
-    pub fn new(burst_engine: ComposableBurstEngineEnum<FIQ>) -> IndependentBurstEngineWorkerInstantiation<FIQ> {
-        let (command_tx, command_rx) = std::sync::mpsc::sync_channel(1);
-        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-
-        //let (sensor_tx, sensor_rx) = std::sync::mpsc::sync_channel(1);
-        //let (motor_tx, motor_rx) = std::sync::mpsc::sync_channel(1);
-        let (visualization_tx, visualization_rx) = std::sync::mpsc::sync_channel(1);
-
-        // TODO probe, force fire
-
-        IndependentBurstEngineWorkerInstantiation {
-            worker: IndependentBurstEngineWorker{
-                burst_engine,
-                command_rx,
-                completion_tx,
-                visualization_tx,
-            },
-            command_tx,
-            completion_rx,
-            visualization_rx,
-        }
-    }
-
-    /// Starts a loop internally
-    pub fn burst_engine_loop(&mut self)
-    {
-        loop {
-            let command = self.command_rx.recv().unwrap();
-
-            match command {
-
-                BurstEngineWorkerCommand::RunFullBurst => {
-                    self.burst_engine.run_burst().await;
+        if let Some(command_buffer) = incoming_command_buffer.dequeue() {
+            match command_buffer {
+                BurstEngineWorkerCommand::RunKernel(kernel_command) => {
+                    //burst_engine.run_burst().await
+                }
+                BurstEngineWorkerCommand::EditConnectome() => {
+                    // TODO drain all incoming data to avoid errors
+                    // TODO send edit request over
                 }
                 BurstEngineWorkerCommand::CommitSudoku => {
-                    // TODO handle exiting a bit more gracefully
-                    self.completion_tx.send(()).unwrap();
-                    break;
-                }
-                
-                
-                #[allow(unreachable_patterns)]
-                _ => {
-                    panic!("Unexpected command!");
+                    break; // break out of the loop
                 }
             }
-            
-            self.completion_tx.send(()).unwrap();
         }
+
+        if let Some(incoming_sensor) = incoming_sensor_buffer.dequeue() {
+            // TODO inject sensor, return
+        }
+
+        if let Some(outgoing_motor) = outgoing_motor_buffer.dequeue() {
+            // TODO write to motor, return
+        }
+
+        if let Some(outgoing_visualisation) = outgoing_visualization_buffer.dequeue() {
+            // TODO write to motor, return
+        }
+
+        // No command yet, defer
+        std::thread::yield_now(); // TODO different behavior depending on platform, spinning may be better for latency (std::hint::spin_loop() )
     }
-
-}
-
-// TODO proper deallocation
-
-
-/// a created `IndependentBurstEngineWorker` and the channel interfaces to communicate with it
-pub struct IndependentBurstEngineWorkerInstantiation<FIQ: FeagiIndexQuantization> {
-    pub worker: IndependentBurstEngineWorker<FIQ>,
-    pub command_tx: std::sync::mpsc::SyncSender<BurstEngineWorkerCommand>,
-    pub completion_rx: std::sync::mpsc::Receiver<()>,
-    pub visualization_rx: std::sync::mpsc::Receiver<()>
 }
