@@ -146,7 +146,9 @@ impl SystemService for GenomeSystemService {
     async fn get_burst_count(&self) -> ServiceResult<u64> {
         // The taps record the burst number of the most recent motor publish, which is the burst
         // counter the burst loop last committed.
-        Ok(feagi_npu::runtime_taps::BurstTaps::instance().motor_snapshot().burst_num)
+        //Ok(feagi_npu::runtime_taps::BurstTaps::instance().motor_snapshot().burst_num) // TODO for now for burst reasons
+        
+        Ok(0)
     }
 
     async fn get_runtime_stats(&self) -> ServiceResult<RuntimeStats> {

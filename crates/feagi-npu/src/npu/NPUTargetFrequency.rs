@@ -1,4 +1,6 @@
 
+// TODO prevent stupid values from being inserted. 10 s duration limit? no negatives / nan / inf
+
 /// Used to represent how many bursts per second we want NPU to run
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct NPUTargetFrequency {

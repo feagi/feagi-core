@@ -117,6 +117,8 @@ pub async fn get_sensor_snapshot_last(
     State(_state): State<ApiState>,
     axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
 ) -> ApiResult<Json<SensorSnapshotResponse>> {
+    
+    /*
     let snap = feagi_npu::runtime_taps::BurstTaps::instance().sensor_snapshot();
     let cortical_filter = query.get("cortical_id").cloned();
 
@@ -157,4 +159,8 @@ pub async fn get_sensor_snapshot_last(
         total_neurons,
         areas,
     }))
+    
+     */
+    
+    Err(ApiError::internal("Not yet implemented"))
 }

@@ -673,6 +673,9 @@ pub async fn get_cortical_area_list_types(State(state): State<ApiState>) -> ApiR
     )
 )]
 pub async fn get_memory_neuron(State(_state): State<ApiState>, Query(q): Query<MemoryNeuronQuery>) -> ApiResult<Json<MemoryNeuronDetailResponse>> {
+
+    /*
+
     if !feagi_npu::memory_neuron_ids::NeuronIdManager::is_memory_neuron_id(q.neuron_id) {
         return Err(ApiError::invalid_input(format!(
             "neuron_id must be a memory neuron id in range {}..={}",
@@ -680,6 +683,8 @@ pub async fn get_memory_neuron(State(_state): State<ApiState>, Query(q): Query<M
             feagi_npu::memory_neuron_ids::MEMORY_NEURON_ID_MAX
         )));
     }
+
+     */
 
     // The record itself lives in the plasticity executor's MemoryNeuronArray, and the synapse
     // lists need per-synapse addressing. Neither survives in the current engine. The id-range

@@ -18,7 +18,8 @@ impl WrappedNeuronProcessingUnit {
             npu: NeuronProcessingUnitComposable::new()
         }
     }
-    
+
+    /// Start engines at a frequency or update the frequency
     pub fn run_at(&mut self, burst_frequency: NPUTargetFrequency) {
         self.npu.start_engines(burst_frequency)
     }

@@ -46,9 +46,11 @@ impl RuntimeService for GenomeRuntimeService {
             // The configured rate is the only rate the engine reports; it does not measure the
             // achieved rate separately.
             current_rate_hz: if is_running { frequency_hz } else { 0.0 },
-            last_burst_neuron_count: feagi_npu::runtime_taps::BurstTaps::instance()
+            
+            /*last_burst_neuron_count: feagi_npu::runtime_taps::BurstTaps::instance()
                 .motor_activity_summary()
-                .total_fired_neurons as usize,
+                .total_fired_neurons as usize, */
+            last_burst_neuron_count: 0, // TODO temp added due to refactor
             // No per-burst timing is recorded by the current engine.
             avg_burst_time_ms: 0.0,
         })

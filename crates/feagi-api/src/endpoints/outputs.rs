@@ -146,7 +146,7 @@ pub struct ActivitySummary {
     /// Peak potential across captured firing samples (0.0 when none).
     pub peak_sample_potential: f32,
 }
-
+/*
 impl From<feagi_npu::runtime_taps::BurstActivitySummary> for ActivitySummary {
     fn from(s: feagi_npu::runtime_taps::BurstActivitySummary) -> Self {
         ActivitySummary {
@@ -159,6 +159,8 @@ impl From<feagi_npu::runtime_taps::BurstActivitySummary> for ActivitySummary {
         }
     }
 }
+
+ */
 
 /// Response payload for `GET /v1/output/motor_snapshot/last`.
 #[derive(Serialize, Clone, Debug, utoipa::ToSchema)]
@@ -208,6 +210,10 @@ pub async fn get_motor_snapshot_last(
     State(_state): State<ApiState>,
     axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
 ) -> ApiResult<Json<MotorSnapshotResponse>> {
+
+
+    /*
+
     let snap = feagi_npu::runtime_taps::BurstTaps::instance().motor_snapshot();
     let agent_filter = query.get("agent_id").cloned();
     let area_filter = query.get("cortical_id").cloned();
@@ -276,7 +282,14 @@ pub async fn get_motor_snapshot_last(
         areas,
         agents,
     }))
+        */
+
+
+    Err(ApiError::not_implemented("Unimplemented"))
+
 }
+
+/*
 
 #[cfg(test)]
 mod tests {
@@ -337,3 +350,6 @@ mod tests {
         assert_eq!(summary.peak_area_fired_neurons, 3);
     }
 }
+
+
+ */
