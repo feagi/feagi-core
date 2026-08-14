@@ -17,7 +17,7 @@ impl<FIQ: FeagiIndexQuantization> ComposableBurstEngine<FIQ> for ComposableBurst
     async fn edit_connectome(&mut self) {
         match self {
             ComposableBurstEngineEnum::TokioRayonBurstEngine(engine) => {
-                engine.edit_connectome()
+                engine.edit_connectome().await
             }
         }
     }
