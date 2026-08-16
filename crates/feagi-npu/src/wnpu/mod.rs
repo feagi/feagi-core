@@ -4,3 +4,5 @@
 pub mod wnpu;
 mod genome;
 pub mod connectome_request;
+
+pub mod agents;

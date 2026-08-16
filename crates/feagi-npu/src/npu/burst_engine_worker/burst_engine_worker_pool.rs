@@ -3,15 +3,23 @@ use crate::npu::burst_engine_worker::burst_engine_commands::{BurstEngineWorkerCo
 use crate::npu::burst_engine_worker::independent_burst_engine_worker::independent_burst_engine_worker;
 use feagi_data::bidirectional_channel_queue::{BiDirectionalChannelQueue, BidirectionalChannelSide};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use crate::wnpu::agents::data_exchange::force_fire::VoxelForceFire;
+use crate::wnpu::agents::data_exchange::visualization::VoxelVisualization;
+use crate::wnpu::agents::data_exchange::voxel_potentials::CorticalAreaVoxelPotentials;
 
 const CHANNEL_BUFFER_SIZE: usize = 2;
 
 /// Queue storage for one burst-engine worker, owned by the NPU.
 pub struct BurstEngineWorkerChannels {
     pub command_queue: BiDirectionalChannelQueue<BurstEngineWorkerCommand, CHANNEL_BUFFER_SIZE, CHANNEL_BUFFER_SIZE>,
-    pub incoming_sensor_buffer: BiDirectionalChannelQueue<(), CHANNEL_BUFFER_SIZE, CHANNEL_BUFFER_SIZE>,
-    pub outgoing_motor_buffer: BiDirectionalChannelQueue<(), CHANNEL_BUFFER_SIZE, CHANNEL_BUFFER_SIZE>,
-    pub outgoing_visualization_buffer: BiDirectionalChannelQueue<(), CHANNEL_BUFFER_SIZE, CHANNEL_BUFFER_SIZE>,
+    pub incoming_sensor_buffer:
+        BiDirectionalChannelQueue<CorticalAreaVoxelPotentials<u32, f32>, CHANNEL_BUFFER_SIZE, CHANNEL_BUFFER_SIZE>,
+    pub incoming_force_fire_buffer:
+        BiDirectionalChannelQueue<VoxelForceFire<u32>, CHANNEL_BUFFER_SIZE, CHANNEL_BUFFER_SIZE>,
+    pub outgoing_motor_buffer:
+        BiDirectionalChannelQueue<CorticalAreaVoxelPotentials<u32, f32>, CHANNEL_BUFFER_SIZE, CHANNEL_BUFFER_SIZE>,
+    pub outgoing_visualization_buffer:
+        BiDirectionalChannelQueue<VoxelVisualization<u32>, CHANNEL_BUFFER_SIZE, CHANNEL_BUFFER_SIZE>,
 }
 
 impl BurstEngineWorkerChannels {
@@ -19,6 +27,7 @@ impl BurstEngineWorkerChannels {
         Self {
             command_queue: BiDirectionalChannelQueue::new(),
             incoming_sensor_buffer: BiDirectionalChannelQueue::new(),
+            incoming_force_fire_buffer: BiDirectionalChannelQueue::new(),
             outgoing_motor_buffer: BiDirectionalChannelQueue::new(),
             outgoing_visualization_buffer: BiDirectionalChannelQueue::new(),
         }
@@ -33,6 +42,7 @@ impl BurstEngineWorkerChannels {
     ) {
         let (command_coordinator, command_worker) = self.command_queue.split();
         let (incoming_sensor_coordinator, incoming_sensor_worker) = self.incoming_sensor_buffer.split();
+        let (incoming_force_fire_coordinator, incoming_force_fire_worker) = self.incoming_force_fire_buffer.split();
         let (outgoing_motor_coordinator, outgoing_motor_worker) = self.outgoing_motor_buffer.split();
         let (outgoing_visualization_coordinator, outgoing_visualization_worker) =
             self.outgoing_visualization_buffer.split();
@@ -41,12 +51,14 @@ impl BurstEngineWorkerChannels {
             BurstEngineWorkerCoordinatorSide {
                 command: command_coordinator,
                 incoming_sensor: incoming_sensor_coordinator,
+                incoming_force_fire: incoming_force_fire_coordinator,
                 outgoing_motor: outgoing_motor_coordinator,
                 outgoing_visualization: outgoing_visualization_coordinator,
             },
             BurstEngineWorkerWorkerSide {
                 command: command_worker,
                 incoming_sensor: incoming_sensor_worker,
+                incoming_force_fire: incoming_force_fire_worker,
                 outgoing_motor: outgoing_motor_worker,
                 outgoing_visualization: outgoing_visualization_worker,
             },
@@ -63,17 +75,19 @@ impl Default for BurstEngineWorkerChannels {
 /// NPU/coordinator side of a worker's channels.
 pub struct BurstEngineWorkerCoordinatorSide<'a> {
     pub command: BidirectionalChannelSide<'a, BurstEngineWorkerCommand>,
-    pub incoming_sensor: BidirectionalChannelSide<'a, ()>,
-    pub outgoing_motor: BidirectionalChannelSide<'a, ()>,
-    pub outgoing_visualization: BidirectionalChannelSide<'a, ()>,
+    pub incoming_sensor: BidirectionalChannelSide<'a, CorticalAreaVoxelPotentials<u32, f32>>,
+    pub incoming_force_fire: BidirectionalChannelSide<'a, VoxelForceFire<u32>>,
+    pub outgoing_motor: BidirectionalChannelSide<'a, CorticalAreaVoxelPotentials<u32, f32>>,
+    pub outgoing_visualization: BidirectionalChannelSide<'a, VoxelVisualization<u32>>,
 }
 
 /// Worker-thread side of a worker's channels.
 pub struct BurstEngineWorkerWorkerSide<'a> {
     pub command: BidirectionalChannelSide<'a, BurstEngineWorkerCommand>,
-    pub incoming_sensor: BidirectionalChannelSide<'a, ()>,
-    pub outgoing_motor: BidirectionalChannelSide<'a, ()>,
-    pub outgoing_visualization: BidirectionalChannelSide<'a, ()>,
+    pub incoming_sensor: BidirectionalChannelSide<'a, CorticalAreaVoxelPotentials<u32, f32>>,
+    pub incoming_force_fire: BidirectionalChannelSide<'a, VoxelForceFire<u32>>,
+    pub outgoing_motor: BidirectionalChannelSide<'a, CorticalAreaVoxelPotentials<u32, f32>>,
+    pub outgoing_visualization: BidirectionalChannelSide<'a, VoxelVisualization<u32>>,
 }
 
 /// Runs the coordinator loop while scoped worker threads borrow channel storage from `worker_channels`.
@@ -105,6 +119,7 @@ pub fn burst_engine_worker_pool<'scope, FIQ, F>(
                     burst_engine,
                     worker_side.command,
                     worker_side.incoming_sensor,
+                    worker_side.incoming_force_fire,
                     worker_side.outgoing_motor,
                     worker_side.outgoing_visualization,
                 );
