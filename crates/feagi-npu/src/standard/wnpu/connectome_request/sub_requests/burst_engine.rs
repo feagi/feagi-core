@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::NPUTargetFrequency;
-use crate::wnpu::connectome_request::connectome_request::{ConnectomeRequest, ConnectomeRequestEnum};
+use crate::standard::wnpu::connectome_request::connectome_request::{ConnectomeRequest, ConnectomeRequestEnum};
 
 #[doc(hidden)]
 /// Allows selecting between burst engine options

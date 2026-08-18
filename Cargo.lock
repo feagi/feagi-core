@@ -1494,6 +1494,7 @@ dependencies = [
  "feagi-genomic-context",
  "half",
  "paste",
+ "serde",
 ]
 
 [[package]]
@@ -1503,7 +1504,9 @@ dependencies = [
  "ahash",
  "feagi-data",
  "feagi-genomic-context",
+ "feagi-logging-and-errors",
  "feagi-models",
+ "flume",
  "futures",
  "half",
  "parking_lot",
@@ -1641,6 +1644,17 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
+]
+
+[[package]]
+name = "flume"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "spin",
 ]
 
 [[package]]
@@ -4352,6 +4366,9 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+dependencies = [
+ "lock_api",
+]
 
 [[package]]
 name = "stable_deref_trait"

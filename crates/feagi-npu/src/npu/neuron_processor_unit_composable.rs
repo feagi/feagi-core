@@ -4,7 +4,7 @@ use crate::npu::burst_engine::ComposableBurstEngineEnum;
 use crate::npu::burst_engine_worker::burst_engine_worker_pool::{
     burst_engine_worker_pool, BurstEngineWorkerChannels, BurstEngineWorkerCoordinatorSide,
 };
-use crate::npu::npu_target_frequency::NPUTargetFrequency;
+use crate::standard::npu::npu_target_frequency::NPUTargetFrequency;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::wnpu::agents::data_exchange::force_fire::VoxelForceFire;
 use crate::wnpu::agents::data_exchange::visualization::VoxelVisualization;

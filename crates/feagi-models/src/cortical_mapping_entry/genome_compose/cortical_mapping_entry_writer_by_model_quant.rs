@@ -4,14 +4,17 @@ use crate::cortical_mapping_entry::components::doublet::doublet_iterator_type::D
 use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::data::UniformSynapseMultiplier;
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelStandardQuant;
+use serde::{Deserialize, Serialize};
 
 /// This enum defines what cortical mapping entry will be created and how. Different Synapse
 /// models have different instantiation parameters and quantization levels, and this handles that
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CorticalMappingEntryWriterByModelQuant {
     Uniform(UniformWriter),
 }
 
 // TODO a bit rushed right now, needs some more work as this is a temp solution
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum UniformWriter {
     Standard {
         /// Describes the source / destination neuron pairing. Kept in its genomic form because the

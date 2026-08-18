@@ -12,6 +12,8 @@ pub struct VoxelVisualization<NeuronIndex: QuantizedUnsignedIntegerTrait> {
     pub bytes: Vec<u8>,
 }
 
+// TODO also encode memory at coordinate 0 as firing if any neuron within it is firing (activity > 0)
+
 
 // TODO this is not a well padded header
 /// Describes what cortical area is found where in voxel visualization data

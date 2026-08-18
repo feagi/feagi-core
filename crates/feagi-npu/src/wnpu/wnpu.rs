@@ -2,7 +2,7 @@
 
 use feagi_data::bidirectional_channel_queue::{MpscBiDirectionalChannelQueue, MpscBidirectionalChannelSide};
 use crate::npu::neuron_processor_unit_composable::NeuronProcessingUnitComposable;
-use crate::npu::npu_target_frequency::NPUTargetFrequency;
+use crate::standard::npu::npu_target_frequency::NPUTargetFrequency;
 use crate::wnpu::agents::agent_registration_response::AgentRegistrationResponse;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
 use feagi_genomic_context::cortical_area::CorticalID;
@@ -51,6 +51,8 @@ impl WrappedNeuronProcessingUnit {
     pub fn request_change(&mut self) {
         todo!()
     }
+
+    // TODO rename from register (npu subscribe)
 
     pub fn register_agent(
         &mut self,

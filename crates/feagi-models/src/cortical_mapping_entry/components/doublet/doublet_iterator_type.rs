@@ -1,6 +1,8 @@
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
+use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DoubletIteratorDimensionalTypeGenomic {
     OneToAll {
         source: NeuronVoxelCoordinate<<FeagiIndexQuantizationStandard as FeagiIndexQuantization>::NeuronIndexQuant>,

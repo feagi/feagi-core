@@ -10,10 +10,28 @@ homepage.workspace = true
 documentation.workspace = true
 description = "Contains the definitions and math behind the neuron and synapse models"
 
+[features]
+
+default = [
+    "std",
+]
+
+std = [
+    "alloc",
+    "serde/std",
+]
+
+alloc = [
+    "serde",
+    "serde/alloc",
+    "serde/derive",
+]
+
 [dependencies]
 feagi-data = {path = "../feagi-data" }
-feagi-genomic-context = {path = "../feagi-genomic-context"}
+feagi-genomic-context = {path = "../feagi-genomic-context" }
 
 paste = {workspace = true}
 half = {workspace = true}
+serde = { workspace = true, optional = true }
 

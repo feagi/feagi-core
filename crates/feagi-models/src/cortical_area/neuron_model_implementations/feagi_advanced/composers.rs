@@ -12,14 +12,16 @@ use core::marker::PhantomData;
 use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 use feagi_data::values::quantizable::{PercentageUnsigned, WrappedQuantizedUnsignedInteger};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum FeagiAdvancedModelCorticalWriter<NMQ>
 where
     NMQ: FeagiAdvancedModelQuantization,
 {
     DefaultNewDimensional {
         dimensions: DimensionalCorticalArea4DDimensions<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>,
+        #[serde(skip)]
         _p: PhantomData<NMQ>,
     },
 }

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use feagi_genomic_context::cortical_area::CorticalID;
-use crate::wnpu::connectome_request::connectome_request::{ConnectomeRequest, ConnectomeRequestEnum};
+use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
+use crate::standard::wnpu::connectome_request::connectome_request::{ConnectomeRequest, ConnectomeRequestEnum};
 
 
 #[doc(hidden)]
@@ -23,19 +24,22 @@ impl CorticalAreaRequestBuilder {
 pub struct CorticalAreaAdderRequestBuilder;
 
 impl CorticalAreaAdderRequestBuilder {
-    
+
+    // TODO Core, Sensory, and other typed ones with defaults
+
+    /// With custom context, make a request to make a dimensional cortical area
+    pub fn custom_dimensional(temp_id: CorticalID, writer: CorticalWriterByModelQuant) -> ConnectomeRequest // TODO way writer is organized makes it unclear
+    {
+        CorticalAreaRequestEnum::AddCorticalArea(temp_id, writer).into()
+    }
 }
-
-
-
-
 
 
 
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) enum CorticalAreaRequestEnum {
-    AddCorticalArea(CorticalID, )
+    AddCorticalArea(CorticalID, CorticalWriterByModelQuant) // TODO Dimensions, writer
 }
 
 impl Into<ConnectomeRequest> for CorticalAreaRequestEnum
