@@ -22,7 +22,6 @@ use crate::connectome_manager::ConnectomeManager;
 use crate::models::{CorticalArea, CorticalID};
 use crate::types::{BduError, BduResult};
 use feagi_evolutionary::RuntimeGenome;
-use feagi_npu_neural::types::{Precision, QuantizationSpec};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{debug, error, info, trace, warn};
@@ -125,6 +124,7 @@ impl Neuroembryogenesis {
         self.progress.read().clone()
     }
 
+    /*
     /// Sync existing core neuron parameters with cortical_area area properties.
     ///
     /// This updates neuron parameters in-place without creating new neurons.
@@ -166,6 +166,8 @@ impl Neuroembryogenesis {
 
         Ok(())
     }
+
+     */
 
     /// Incrementally add cortical_area areas to an existing connectome
     ///
@@ -239,23 +241,29 @@ impl Neuroembryogenesis {
             for (core_idx, area) in &core_areas {
                 let existing_core_neurons = {
                     let manager = self.connectome_manager.read();
-                    let npu = manager.get_npu();
-                    match npu {
-                        Some(npu_arc) => {
-                            let npu_lock = npu_arc.lock();
-                            match npu_lock {
-                                Ok(npu_guard) => {
-                                    npu_guard.get_neurons_in_cortical_area(*core_idx).len()
-                                }
-                                Err(_) => 0,
-                            }
-                        }
-                        None => 0,
-                    }
+                    manager
+                        .get_wnpu()
+                        .cortical_area_neuron_count(&area.cortical_id)
+                        .unwrap_or(0)
                 };
 
                 if existing_core_neurons > 0 {
-                    self.sync_core_neuron_params(*core_idx, area)?;
+                    // Neural parameters travel with the area, so an already-populated area is
+                    // brought up to date by reconfiguring it rather than by rewriting neurons.
+                    {
+                        let parameters = ConnectomeManager::wnpu_area_parameters(area);
+                        let mut manager = self.connectome_manager.write();
+                        manager
+                            .get_wnpu_mut()
+                            .reconfigure_cortical_area(&area.cortical_id, parameters)
+                            .map_err(|e| {
+                                BduError::Internal(format!(
+                                    "WNPU failed to reconfigure core area {}: {}",
+                                    area.cortical_id.as_base_64(),
+                                    e
+                                ))
+                            })?;
+                    }
                     let refreshed = {
                         let manager = self.connectome_manager.read();
                         manager.refresh_neuron_count_for_area(&area.cortical_id)
@@ -365,45 +373,10 @@ impl Neuroembryogenesis {
     pub fn develop_from_genome(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         info!(target: "feagi-bdu","🧬 Starting neuroembryogenesis for genome: {}", genome.metadata.genome_id);
 
-        // Phase 5: Parse quantization precision and dispatch to type-specific builder
+        // Quantization is no longer chosen here. The new NPU fixes its data layout when the WNPU
+        // and its burst engines are constructed, so the genome's requested precision is a matter
+        // for that construction rather than for development.
         let _quantization_precision = &genome.physiology.quantization_precision;
-        // Precision parsing handled in genome loader
-        let quant_spec = QuantizationSpec::default();
-
-        info!(target: "feagi-bdu",
-            "   Quantization precision: {:?} (range: [{}, {}] for membrane potential)",
-            quant_spec.precision,
-            quant_spec.membrane_potential_min,
-            quant_spec.membrane_potential_max
-        );
-
-        // Phase 6: Type dispatch - Neuroembryogenesis is now fully generic!
-        // The precision is determined by the type T of this Neuroembryogenesis instance.
-        // All stages (corticogenesis, neurogenesis, synaptogenesis) automatically use the correct type.
-        match quant_spec.precision {
-            Precision::FP32 => {
-                info!(target: "feagi-bdu", "   ✓ Using FP32 (32-bit floating-point) - highest precision");
-                info!(target: "feagi-bdu", "   Memory usage: Baseline (4 bytes/neuron for membrane potential)");
-            }
-            Precision::INT8 => {
-                info!(target: "feagi-bdu", "   ✓ Using INT8 (8-bit integer) - memory efficient");
-                info!(target: "feagi-bdu", "   Memory reduction: 42% (1 byte/neuron for membrane potential)");
-                info!(target: "feagi-bdu", "   Quantization range: [{}, {}]",
-                    quant_spec.membrane_potential_min,
-                    quant_spec.membrane_potential_max);
-                // Note: If this Neuroembryogenesis was created with <f32>, this will warn below
-                // The caller must create Neuroembryogenesis::<INT8Value> to use INT8
-            }
-            Precision::FP16 => {
-                warn!(target: "feagi-bdu", "   FP16 quantization requested but not yet implemented.");
-                warn!(target: "feagi-bdu", "   FP16 support planned for future GPU optimization.");
-                // Note: Requires f16 type and implementation
-            }
-        }
-
-        // Type consistency is now handled by DynamicNPU at creation time
-        // The caller (main.rs) peeks at genome precision and creates the correct DynamicNPU variant
-        info!(target: "feagi-bdu", "   ✓ Quantization handled by DynamicNPU (dispatches at runtime)");
 
         // Update stage: Initialization
         self.update_stage(DevelopmentStage::Initialization, 0);
@@ -585,7 +558,7 @@ impl Neuroembryogenesis {
                   ipu_areas.len(), opu_areas.len(), core_areas.len(), custom_memory_areas.len());
 
             // Build brain region structure following Python's normalize_brain_region_membership()
-            use feagi_genome_definitions::{RegionID};
+            use feagi_genomic_context::brain_region::RegionID;
             let mut regions_map = std::collections::HashMap::new();
 
             // Step 1: Create root region with only IPU/OPU/CORE areas
@@ -889,23 +862,29 @@ impl Neuroembryogenesis {
         for (core_idx, cortical_id, area) in &core_areas {
             let existing_core_neurons = {
                 let manager = self.connectome_manager.read();
-                let npu = manager.get_npu();
-                match npu {
-                    Some(npu_arc) => {
-                        let npu_lock = npu_arc.lock();
-                        match npu_lock {
-                            Ok(npu_guard) => {
-                                npu_guard.get_neurons_in_cortical_area(*core_idx).len()
-                            }
-                            Err(_) => 0,
-                        }
-                    }
-                    None => 0,
-                }
+                manager
+                    .get_wnpu()
+                    .cortical_area_neuron_count(cortical_id)
+                    .unwrap_or(0)
             };
 
             if existing_core_neurons > 0 {
-                self.sync_core_neuron_params(*core_idx, area)?;
+                // Neural parameters travel with the area, so an already-populated area is brought
+                // up to date by reconfiguring it rather than by rewriting neurons.
+                {
+                    let parameters = ConnectomeManager::wnpu_area_parameters(area);
+                    let mut manager = self.connectome_manager.write();
+                    manager
+                        .get_wnpu_mut()
+                        .reconfigure_cortical_area(cortical_id, parameters)
+                        .map_err(|e| {
+                            BduError::Internal(format!(
+                                "WNPU failed to reconfigure core area {}: {}",
+                                cortical_id.as_base_64(),
+                                e
+                            ))
+                        })?;
+                }
                 let refreshed = {
                     let manager = self.connectome_manager.read();
                     manager.refresh_neuron_count_for_area(cortical_id)
@@ -1123,103 +1102,17 @@ impl Neuroembryogenesis {
             });
         }
 
-        // CRITICAL: Rebuild the NPU synapse index so newly created synapses are visible to
-        // queries (e.g. get_outgoing_synapses / synapse counts) and propagation.
-        //
-        // Note: We do this once at the end for performance.
-        let npu_arc = {
-            let manager = self.connectome_manager.read();
-            manager.get_npu().cloned()
-        };
-        if let Some(npu_arc) = npu_arc {
-            let mut npu_lock = npu_arc
-                .lock()
-                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
-            npu_lock.rebuild_synapse_index();
-
-            // Refresh cached counts after index rebuild.
+        // No synapse index rebuild is needed: the engine applies a mapping's synapses atomically
+        // as part of the edit, so queries never observe a half-built index. Refresh the cached
+        // count from the WNPU's shadow state.
+        {
             let manager = self.connectome_manager.read();
             manager.update_cached_synapse_count();
         }
 
-        // CRITICAL: Register memory areas with PlasticityExecutor after all mappings are created
-        // This ensures memory areas have their complete upstream_cortical_areas lists populated.
-        #[cfg(feature = "plasticity")]
-        {
-            use feagi_evolutionary::extract_memory_properties;
-            use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
-
-            let manager = self.connectome_manager.read();
-            if let Some(executor) = manager.get_plasticity_executor() {
-                let mut registered_count = 0;
-
-                // Iterate through all cortical_area areas and register memory areas
-                for area_id in manager.get_cortical_area_ids() {
-                    if let Some(area) = manager.get_cortical_area(area_id) {
-                        if let Some(mem_props) = extract_memory_properties(&area.properties) {
-                            let upstream_areas = manager.get_upstream_cortical_areas(area_id);
-
-                            // Ensure FireLedger tracks upstream areas with at least the required temporal depth.
-                            // Dense, burst-aligned tracking is required for correct memory pattern hashing.
-                            if let Some(npu_arc) = manager.get_npu() {
-                                if let Ok(mut npu) = npu_arc.lock() {
-                                    let existing_configs = npu.get_all_fire_ledger_configs();
-                                    for &upstream_idx in &upstream_areas {
-                                        let existing = existing_configs
-                                            .iter()
-                                            .find(|(idx, _)| *idx == upstream_idx)
-                                            .map(|(_, w)| *w)
-                                            .unwrap_or(0);
-
-                                        let desired = mem_props.temporal_depth as usize;
-                                        let resolved = existing.max(desired);
-                                        if resolved != existing {
-                                            if let Err(e) = npu.configure_fire_ledger_window(
-                                                upstream_idx,
-                                                resolved,
-                                            ) {
-                                                warn!(
-                                                    target: "feagi-bdu",
-                                                    "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
-                                                    upstream_idx,
-                                                    resolved,
-                                                    e
-                                                );
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
-                                }
-                            }
-
-                            if let Ok(exec) = executor.lock() {
-                                let upstream_non_memory =
-                                    manager.filter_non_memory_upstream_areas(&upstream_areas);
-                                let lifecycle_config = MemoryNeuronLifecycleConfig {
-                                    initial_lifespan: mem_props.init_lifespan,
-                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
-                                    longterm_threshold: mem_props.longterm_threshold,
-                                    max_reactivations: 1000,
-                                };
-
-                                exec.register_memory_area(
-                                    area.cortical_idx,
-                                    area_id.as_base_64(),
-                                    mem_props.temporal_depth,
-                                    upstream_non_memory,
-                                    Some(lifecycle_config),
-                                    mem_props.mp_learning_enabled,
-                                );
-
-                                registered_count += 1;
-                            }
-                        }
-                    }
-                }
-                let _ = registered_count; // count retained for future metrics if needed
-            }
-        }
+        // Memory areas need no separate registration: the new NPU treats them as ordinary cortical
+        // areas, so their temporal depth, lifespan and fire ledger settings no longer have an
+        // engine-side counterpart. The genome properties remain on the area for the API layer.
 
         // Verify against genome stats
         if expected_synapses > 0 {

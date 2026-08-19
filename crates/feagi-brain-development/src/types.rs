@@ -55,6 +55,10 @@ pub enum BduError {
     #[error("Internal error: {0}")]
     Internal(String),
 
+    /// Capability the WNPU does not expose yet during the NPU transition.
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
+
     /// Region IO designation policy violation (cross-region mapping vs declared interface)
     #[error("Region IO policy violation: {0}")]
     RegionIoPolicyViolation(String),
