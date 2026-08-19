@@ -17,7 +17,7 @@ pub trait FeagiAdvancedModelQuantization: NeuronModelQuantization {
 //region Discrete Levels
 
 /// The default quantization level for Feagi Advanced
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct FeagiAdvancedModelStandardQuant;
 
 impl FeagiAdvancedModelQuantization for FeagiAdvancedModelStandardQuant {

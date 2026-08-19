@@ -1,6 +1,6 @@
 /// Helper structs to make dealing with multiple quantizations / models less annoying
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::neuron::model_quantized_data::feagi_advanced_model::ModelFeagiAdvanced;
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::neuron::model_quantized_data::feagi_advanced_model::ModelFeagiAdvanced;
 
 macro_rules! quant_default_with_neurons {
     ($struct_name:ident) => {

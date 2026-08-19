@@ -6,10 +6,10 @@ use feagi_models::wrapped_index_collections::NeuronEngineIndex;
 use feagi_models::wrapped_indexes::BurstIndex;
 use rayon::prelude::*;
 use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedUnsignedInteger};
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::RayonEngineData;
 
-pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &TokioRayonEngineData<FIQ>) {
+pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>) {
     let burst_index = data.burst_index;
 
     // We access `data` through a shared `&` and mutate disjoint slots via the
@@ -70,7 +70,7 @@ pub(crate) fn process_neurons<FIQ: FeagiIndexQuantization>(data: &TokioRayonEngi
 ///
 /// Each byte is written whole rather than or-ed in, so last burst's bits are cleared by the same
 /// store that sets this burst's.
-pub(crate) fn pack_firing_bitmap<FIQ: FeagiIndexQuantization>(data: &TokioRayonEngineData<FIQ>) {
+pub(crate) fn pack_firing_bitmap<FIQ: FeagiIndexQuantization>(data: &RayonEngineData<FIQ>) {
     let neuron_counts = data.cortical_neuron_count.as_slice();
     let neuron_index_lookups = data.cortical_neuron_index_lookup_table.as_slice();
     let neuron_runtime_flags = data.neuron_runtime_flags.as_slice();
@@ -114,7 +114,7 @@ pub(crate) fn pack_firing_bitmap<FIQ: FeagiIndexQuantization>(data: &TokioRayonE
 
 #[inline(always)]
 unsafe fn neuron_dynamics<FIQ: FeagiIndexQuantization>(
-    data: &TokioRayonEngineData<FIQ>,
+    data: &RayonEngineData<FIQ>,
     model: NeuronModelTypeAndQuantizationPacked,
     burst_index: BurstIndex<FIQ::GlobalBurstIndexQuant>,
     cortical_lookup_table: &CorticalIndexLookupTable<FIQ>,

@@ -5,3 +5,4 @@ pub mod async_engine_sync_wrapper;
 pub mod burst_engine_enum;
 pub mod burst_engine_communication;
 pub mod burst_engine_error;
+pub mod common_cpu_structs;

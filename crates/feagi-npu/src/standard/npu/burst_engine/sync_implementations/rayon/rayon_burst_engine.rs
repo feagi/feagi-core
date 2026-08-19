@@ -3,16 +3,16 @@ use feagi_models::wrapped_index_collections::{
     CorticalEngineIndex, CorticalLayoutIndex, CorticalModelIndex, MappingEntryEngineIndex, NeuronEngineIndex, NeuronEngineIndexedVector,
     NeuronHistoryIndex, NeuronMPIndex, NeuronModelIndex,
 };
-use crate::npu::burst_engine::{BurstEngine, ComposableBurstEngine};
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::TokioRayonEngineData;
 
-pub struct TokioRayonBurstEngine<FIQ: FeagiIndexQuantization> {
-    data: TokioRayonEngineData<FIQ>,
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::RayonEngineData;
+
+pub struct RayonBurstEngine<FIQ: FeagiIndexQuantization> {
+    data: RayonEngineData<FIQ>,
 
 }
 
 
-impl<FIQ: FeagiIndexQuantization> TokioRayonBurstEngine<FIQ>
+impl<FIQ: FeagiIndexQuantization> RayonBurstEngine<FIQ>
 {
     pub fn new() -> Self {
         Self {
@@ -23,17 +23,7 @@ impl<FIQ: FeagiIndexQuantization> TokioRayonBurstEngine<FIQ>
 
 
 
-impl<FIQ: FeagiIndexQuantization> BurstEngine<FIQ> for TokioRayonBurstEngine<FIQ> {
-    async fn run_kernel(&mut self) {
-        todo!()
-    }
-}
 
-impl<FIQ: FeagiIndexQuantization> ComposableBurstEngine<FIQ> for TokioRayonBurstEngine<FIQ> {
-    async fn edit_connectome(&mut self) {
-        todo!()
-    }
-}
 
 
 

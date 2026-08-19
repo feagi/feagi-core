@@ -15,6 +15,10 @@ use feagi_data::values::quantizable::{PercentageUnsigned, WrappedQuantizedUnsign
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(bound(
+    serialize = "NMQ: Serialize",
+    deserialize = "NMQ: Deserialize<'de>"
+))]
 pub enum FeagiAdvancedModelCorticalWriter<NMQ>
 where
     NMQ: FeagiAdvancedModelQuantization,

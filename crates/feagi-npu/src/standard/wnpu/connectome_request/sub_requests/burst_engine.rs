@@ -40,8 +40,9 @@ pub(crate) enum BurstEngineRequestEnum {
     ResetAndResume(NPUTargetFrequency),
     Pause,
     RunAtFrequency(NPUTargetFrequency),
-    /// While paused, allow moving through burst frames by a specific number of bursts
-    ShiftBurst(i32) // yes, there is a reason this is signed!
+    // TODO
+    // /// While paused, allow moving through burst frames by a specific number of bursts
+    // ShiftBurst(i32) // yes, there is a reason this is signed!
 }
 
 impl Into<ConnectomeRequest> for BurstEngineRequestEnum

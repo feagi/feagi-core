@@ -1,4 +1,8 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
+use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
+use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::CorticalMappingEntryWriterByModelQuant;
 use feagi_models::wrapped_index_collections::CorticalEngineIndex;
 
 /// Instructs a burst engine what type of data processing to do
@@ -10,7 +14,12 @@ pub enum KernelCommand {
 
 pub enum EngineConnectomeEditRequest<FIQ: FeagiIndexQuantization> {
     AddCorticalArea {
-        // TODO contexts
+        writer: CorticalWriterByModelQuant
+    },
+    AddMapping {
+        source: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
+        destination: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>,
+        writer: CorticalMappingEntryWriterByModelQuant
     }
 }
 
@@ -18,5 +27,8 @@ pub enum EngineConnectomeEditRequest<FIQ: FeagiIndexQuantization> {
 pub enum EngineConnectomeEditResponse<FIQ: FeagiIndexQuantization> {
     AddedCorticalArea {
         new_area_index: CorticalEngineIndex<FIQ::CorticalAreaIndexCountQuant>
+    },
+    AddedMapping {
+        // TODO what should we put in here?
     }
 }

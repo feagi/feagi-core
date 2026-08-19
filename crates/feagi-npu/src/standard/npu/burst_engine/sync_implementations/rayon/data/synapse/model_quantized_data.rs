@@ -1,5 +1,5 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::synapse::model_quantized_data::uniform_model::ModelUniform;
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::synapse::model_quantized_data::uniform_model::ModelUniform;
 
 macro_rules! quant_default_without_synapses {
     ($struct_name:ident) => {

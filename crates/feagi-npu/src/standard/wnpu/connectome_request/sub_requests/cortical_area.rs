@@ -27,8 +27,8 @@ impl CorticalAreaAdderRequestBuilder {
 
     // TODO Core, Sensory, and other typed ones with defaults
 
-    /// With custom context, make a request to make a dimensional cortical area
-    pub fn custom_dimensional(temp_id: CorticalID, writer: CorticalWriterByModelQuant) -> ConnectomeRequest // TODO way writer is organized makes it unclear
+    /// With custom context, make a request to make a cortical area
+    pub fn custom(temp_id: CorticalID, writer: CorticalWriterByModelQuant) -> ConnectomeRequest // TODO way writer is organized makes it unclear
     {
         CorticalAreaRequestEnum::AddCorticalArea(temp_id, writer).into()
     }

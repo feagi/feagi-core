@@ -1,6 +1,5 @@
 use feagi_data::bidirectional_channel_queue::{BidirectionalChannelSide, MpscBidirectionalChannelSide};
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::tokio_rayon_burst_engine::TokioRayonBurstEngine;
-use crate::npu::burst_engine::ComposableBurstEngineEnum;
+use crate::standard::npu::burst_engine::sync_implementations::rayon::rayon_burst_engine::RayonBurstEngine;
 use crate::npu::burst_engine_worker::burst_engine_worker_pool::{
     burst_engine_worker_pool, BurstEngineWorkerChannels, BurstEngineWorkerCoordinatorSide,
 };
@@ -20,7 +19,7 @@ impl<FIQ: FeagiIndexQuantization + Send + 'static> NeuronProcessingUnitComposabl
     /// Creates a new NPU with burst engines, but does not start anything
     pub fn new() -> Self {
         // TODO take in burst engines as a parameter, for now defined for you
-        let burst_engine = ComposableBurstEngineEnum::TokioRayonBurstEngine(TokioRayonBurstEngine::new());
+        let burst_engine = ComposableBurstEngineEnum::TokioRayonBurstEngine(RayonBurstEngine::new());
 
         let frozen_engine_pool = NPUWorkerPool::Frozen(vec![burst_engine]);
 

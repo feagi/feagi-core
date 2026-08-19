@@ -7,16 +7,16 @@ use feagi_models::wrapped_index_collections::{
     NeuronEngineIndexedVector, NeuronHistoryIndexedVector, NeuronMPIndex, SynapseEngineIndexedVector,
 };
 use feagi_models::wrapped_indexes::BurstIndex;
-use crate::npu::burst_engine::common_cpu_structs::flags::cortical_runtime_flags::CorticalRuntimeFlags;
-use crate::npu::burst_engine::common_cpu_structs::flags::neuron_runtime_flags::NeuronRuntimeFlags;
-use crate::npu::burst_engine::common_cpu_structs::multi_bitpacked_vector::MultiBitPackedVectorManager;
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::neuron::model_quantized_data::NeuronModelData;
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::neuron::potential_quantized_data::NeuronQuantizedData;
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::synapse::model_quantized_data::SynapseModelData;
-use crate::npu::burst_engine::composable_implementations::tokio_rayon::data::synapse::synapse_sub_data::{CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties};
+use crate::standard::npu::burst_engine::common_cpu_structs::flags::cortical_runtime_flags::CorticalRuntimeFlags;
+use crate::standard::npu::burst_engine::common_cpu_structs::flags::neuron_runtime_flags::NeuronRuntimeFlags;
+use crate::standard::npu::burst_engine::common_cpu_structs::multi_bitpacked_vector::MultiBitPackedVectorManager;
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::neuron::model_quantized_data::NeuronModelData;
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::neuron::potential_quantized_data::NeuronQuantizedData;
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::synapse::model_quantized_data::SynapseModelData;
+use crate::standard::npu::burst_engine::sync_implementations::rayon::data::synapse::synapse_sub_data::{CorticalMappingEntryIndexLookupTable, CorticalMappingEntryProperties};
 
-pub struct TokioRayonEngineData<FIQ: FeagiIndexQuantization> {
+pub struct RayonEngineData<FIQ: FeagiIndexQuantization> {
     /// The current burst index
     pub burst_index: BurstIndex<FIQ::GlobalBurstIndexQuant>,
 
@@ -78,7 +78,7 @@ pub struct TokioRayonEngineData<FIQ: FeagiIndexQuantization> {
 // Not `#[derive(Default)]`: that would require `FIQ: Default`, but `FIQ` is only ever used
 // through its associated types here (it's a zero-sized quantization-level marker). Every field
 // below already has its own `Default` impl that doesn't require `FIQ: Default`.
-impl<FIQ: FeagiIndexQuantization> Default for TokioRayonEngineData<FIQ> {
+impl<FIQ: FeagiIndexQuantization> Default for RayonEngineData<FIQ> {
     fn default() -> Self {
         Self {
             burst_index: Default::default(),
