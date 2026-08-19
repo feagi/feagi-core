@@ -1,4 +1,4 @@
-use crate::cortical_area::components::cortical_area_layout::cortical_area_layout::CorticalAreaLayout;
+use crate::neuron_model::cortical_area::cortical_area_layout::cortical_area_layout::CorticalAreaLayout;
 use crate::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
 use core::marker::PhantomData;
 use feagi_data::neurons::NeuronCorticalLocalIndex;

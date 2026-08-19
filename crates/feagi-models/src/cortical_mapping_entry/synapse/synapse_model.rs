@@ -1,4 +1,4 @@
-use crate::cortical_area::components::neuron_history::neuron_history::NeuronModelHistory;
+use crate::neuron_model::cortical_area::neuron_history::neuron_history::NeuronModelHistory;
 use crate::cortical_mapping_entry::synapse::cortical_mapping_entry_data::SynapseModelCorticalMappingEntryData;
 use crate::cortical_mapping_entry::synapse::synapse_data::SynapseModelSynapseData;
 use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;

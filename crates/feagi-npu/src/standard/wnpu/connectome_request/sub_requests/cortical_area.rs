@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
+use feagi_models::neuron_model::genome_compose::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
 use crate::standard::wnpu::connectome_request::connectome_request::{ConnectomeRequest, ConnectomeRequestEnum};
 
 

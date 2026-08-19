@@ -1,4 +1,4 @@
-use crate::cortical_area::components::neuron_history::implementations::none::NeuronModelNoNeuronHistory;
+use crate::neuron_model::cortical_area::neuron_history::implementations::none::NeuronModelNoNeuronHistory;
 use crate::cortical_mapping_entry::synapse::synapse_data::EmptyPerSynapseData;
 use crate::cortical_mapping_entry::synapse::synapse_model::SynapseModel;
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::data::UniformSynapseModelCorticalMappingEntryData;

@@ -1,4 +1,4 @@
-use crate::cortical_area::components::cortical_area_layout::cortical_area_layout::CorticalAreaLayout;
+use crate::neuron_model::cortical_area::cortical_area_layout::cortical_area_layout::CorticalAreaLayout;
 use feagi_data::neurons::NeuronCorticalLocalIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 

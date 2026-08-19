@@ -1,7 +1,7 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::cortical_area::components::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
-use feagi_models::cortical_area::components::neuron_history::implementations::full::NeuronModelFullNeuronHistory;
-use feagi_models::cortical_area::neuron_model_implementations::generated_enums::NeuronModelTypeAndQuantizationPacked;
+use feagi_models::neuron_model::cortical_area::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
+use feagi_models::neuron_model::cortical_area::neuron_history::implementations::full::NeuronModelFullNeuronHistory;
+use feagi_models::neuron_model::neuron_model_implementations::generated_enums::NeuronModelTypeAndQuantizationPacked;
 use feagi_models::wrapped_index_collections::{
     CorticalEngineIndex, CorticalEngineIndexedVector, CorticalLayoutIndexedVector, MappingEntryEngineIndex, MappingEntryEngineIndexedVector,
     NeuronEngineIndexedVector, NeuronHistoryIndexedVector, NeuronMPIndex, SynapseEngineIndexedVector,

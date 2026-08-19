@@ -1,7 +1,7 @@
 use feagi_data::neurons::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedUnsignedInteger};
-use feagi_models::cortical_area::components::neuron_history::implementations::none::NeuronModelNoNeuronHistory;
+use feagi_models::neuron_model::cortical_area::neuron_history::implementations::none::NeuronModelNoNeuronHistory;
 use feagi_models::cortical_mapping_entry::synapse::synapse_model::SynapseModel;
 use feagi_models::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
 use feagi_models::cortical_mapping_entry::synapse_model_implementations::generated_enums::SynapseModelTypeAndQuantizationPacked;

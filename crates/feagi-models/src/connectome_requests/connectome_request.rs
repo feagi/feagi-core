@@ -1,4 +1,4 @@
-use crate::cortical_area::genome_compose::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
+use crate::neuron_model::genome_compose::cortical_writer_by_model_quant::CorticalWriterByModelQuant;
 use crate::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::CorticalMappingEntryWriterByModelQuant;
 
 use feagi_genomic_context::cortical_area::CorticalID;

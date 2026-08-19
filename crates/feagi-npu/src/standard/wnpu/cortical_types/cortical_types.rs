@@ -1,6 +1,6 @@
 use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
-use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
-use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
+use feagi_models::neuron_model::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
+use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
 
 pub trait CorticalTypeDefaults {
     fn default_cortical_area_writer(&self) -> CorticalWriterByModelQuant;

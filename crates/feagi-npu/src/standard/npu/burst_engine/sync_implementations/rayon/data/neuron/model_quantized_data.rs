@@ -37,10 +37,10 @@ impl<FIQ: FeagiIndexQuantization> Default for NeuronModelData<FIQ> {
 #[doc(hidden)]
 mod feagi_advanced_model {
     use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-    use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::data::{
+    use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::data::{
         FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData,
     };
-    use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
+    use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
     use feagi_models::wrapped_index_collections::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 
     #[doc(hidden)]
