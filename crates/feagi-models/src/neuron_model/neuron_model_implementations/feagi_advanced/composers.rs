@@ -1,5 +1,3 @@
-use crate::neuron_model::cortical_area::cortical_area_layout::enums::CorticalAreaLayoutNested;
-use crate::neuron_model::cortical_area::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use crate::neuron_model::genome_compose::cortical_writer::NeuronModelCorticalWriter;
 use crate::neuron_model::cortical_area::cortical_area_properties::{CorticalAreaProperties, PostCorticalPotential};
 use crate::neuron_model::neuron::neuron_properties::NeuronProperties;

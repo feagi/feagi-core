@@ -1,4 +1,3 @@
-use crate::neuron_model::cortical_area::cortical_area_layout::enums::CorticalAreaLayoutNested;
 use crate::neuron_model::cortical_area::cortical_area_properties::CorticalAreaProperties;
 use crate::neuron_model::cortical_area::cortical_data::NeuronModelCorticalData;
 use crate::neuron_model::neuron::neuron_data::NeuronModelNeuronData;
@@ -6,26 +5,28 @@ use crate::neuron_model::neuron::neuron_model_quantization::NeuronModelQuantizat
 use crate::neuron_model::neuron::neuron_properties::NeuronProperties;
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
+use crate::neuron_model::neuron_model::NeuronModel;
 
 /// Trait for writing the data of newly created cortical areas, used both by the root and model
 /// specific enums
-pub trait NeuronModelCorticalWriter<NMQ, NMCD, NMND>
+pub trait NeuronModelCorticalWriter<FIQ, NMQ, NM>
 where
+    FIQ: FeagiIndexQuantization,
     NMQ: NeuronModelQuantization,
-    NMCD: NeuronModelCorticalData<NMQ>,
-    NMND: NeuronModelNeuronData<NMQ>,
+    NM: NeuronModel<FIQ, NMQ>,
 {
     /// Number of neurons needed
-    fn number_neurons_needed<FIQ: FeagiIndexQuantization>(&self) -> Result<FIQ::NeuronIndexQuant, ()>; // TODO error!
+    fn number_neurons_needed(&self) -> Result<FIQ::NeuronIndexQuant, ()>; // TODO error!
 
-    /// Handles writing the per neuron data and creating the properties.
+    /// Handles writing the per neuron data and creating the properties, overwriting existing data
     /// ALL MEMBERS are to be overwritten!
-    fn write_to_cortical_area<FIQ: FeagiIndexQuantization>(
+    fn write_to_cortical_area(
         self,
-        cortical_data: &mut NMCD,
-        neuron_data: &mut [NMND],
+        cortical_data: &mut NM::CorticalData,
+
+        neuron_data: &mut [NM::NeuronData],
         neuron_properties: &mut [NeuronProperties], // TODO this is messy, we should find a way to get the 'impl iterator' thing to work
-    ) -> Result<(CorticalAreaLayoutNested<FeagiIndexQuantizationGenomic>, CorticalAreaProperties<NMQ>), ()>;
+    ) -> Result<(CorticalAreaProperties<NMQ>,   ), ()>;
 }
 
 /// Root enum used to defining how a cortical area can be created. Enforces some universal methods.
