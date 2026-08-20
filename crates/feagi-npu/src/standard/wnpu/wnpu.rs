@@ -33,14 +33,14 @@ impl WrappedNeuronProcessingUnit {
     /// Initializes the given burst engine configurations (including hardware init) and returns a
     /// ready but empty and paused `WrappedNeuronProcessingUnit`.
     pub fn new(
-        global_quantization: FeagiIndexQuantizationLevel,
+        global_quantization: FeagiIndexQuantizationLevel, // TODO LOAD
         burst_engine_configurations: Vec<()>, // TODO
     ) -> Result<Self, WNPUError> {
         todo!()
     }
 
     /// Sets the burst rate to the given frequency, resuming the engine if it was paused.
-    pub fn run_at_frequency(&mut self, new_frequency: NPUTargetFrequency) -> Result<(), WNPUError> {
+    pub fn run_at_frequency(&mut self, new_frequency: NPUTargetFrequency) -> Result<(), WNPUError> {  // TODO LOAD
         todo!()
     }
 
@@ -56,12 +56,12 @@ impl WrappedNeuronProcessingUnit {
     }
 
     /// Whether the burst engines are currently running, as opposed to paused, failed or stopped.
-    pub fn is_running(&self) -> bool {
+    pub fn is_running(&self) -> bool {  // TODO LOAD
         todo!()
     }
 
     /// Number of bursts the engine has completed since the connectome was last cleared.
-    pub fn bursts_completed(&self) -> Result<u64, WNPUError> {
+    pub fn bursts_completed(&self) -> Result<u64, WNPUError> {  // TODO LOAD
         todo!()
     }
 
@@ -76,7 +76,7 @@ impl WrappedNeuronProcessingUnit {
     /// Creates a cortical area and its neurons in a single step, returning the number of neurons
     /// created. The engine allocates the neurons as part of area creation, so there is no separate
     /// neurogenesis call.
-    pub fn add_cortical_area(
+    pub fn add_cortical_area(  // TODO LOAD
         &mut self,
         cortical_id: &CorticalID,
         parameters: CorticalAreaParameters,
@@ -117,7 +117,7 @@ impl WrappedNeuronProcessingUnit {
     /// previously registered for that pair. Replacement is atomic inside the engine, so stale
     /// synapses from removed or edited rules cannot survive. Passing an empty rule set is
     /// equivalent to [`Self::remove_cortical_mapping`].
-    pub fn set_cortical_mapping(
+    pub fn set_cortical_mapping(  // TODO LOAD
         &mut self,
         source: &CorticalID,
         destination: &CorticalID,
@@ -144,7 +144,7 @@ impl WrappedNeuronProcessingUnit {
     /// Applies many structure edits as one engine transaction, returning one outcome per edit in
     /// submission order. Required for genome load, where submitting each area and mapping
     /// individually would cost one engine round trip per structure.
-    pub fn apply_connectome_edits(
+    pub fn apply_connectome_edits( // TODO Investigate
         &mut self,
         edits: Vec<WnpuConnectomeEdit>,
     ) -> Result<Vec<WnpuConnectomeEditOutcome>, WNPUError> {
@@ -168,6 +168,8 @@ impl WrappedNeuronProcessingUnit {
     }
 
      */
+
+    // TODO Get cortical properties
 
     // ==================================================================================
     // Registry queries
