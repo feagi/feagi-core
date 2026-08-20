@@ -7,12 +7,12 @@ macro_rules! create_spatial_bitpacked_vector {
         $num_dimensions:expr,
     ) => {
         $(#[$meta])*
-        $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> {
+        $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait> {
             pub data: $crate::collections::linear::bitpacked::BitPackedVector<QI>,
             pub dimensions: $dim_impl<QI>
         }
 
-        impl<QI: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> $struct_name<QI>
+        impl<QI: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait> $struct_name<QI>
         {
             pub fn new_uniform(dimensions: $dim_impl<QI>, initial_state: bool) -> $struct_name<QI> {
                 let linear = dimensions.number_contained_elements().deref();

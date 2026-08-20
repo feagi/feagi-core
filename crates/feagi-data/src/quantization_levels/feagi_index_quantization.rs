@@ -1,7 +1,7 @@
 //! Sets the indexing of various data types, where higher quantizations can support bigger
 //! collections of those items but at an increased memory cost
 
-use crate::values::quantizable::{QuantizedUnsignedIntegerTrait};
+use crate::values::quantizable::{QuantizedUnsignedIntegerUnwrappedTrait};
 use std::hash::Hash;
 
 // TODO we may want more granular options?
@@ -13,20 +13,20 @@ pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq + Sync + 
     /// Defines the quantization of the NPU global burst index. This is not model configurable,
     /// rather its in sync with the global setting but also put here since some neuron models need
     /// to have this information to store "burst of last X" as a property
-    type GlobalBurstIndexQuant: QuantizedUnsignedIntegerTrait;
+    type GlobalBurstIndexQuant: QuantizedUnsignedIntegerUnwrappedTrait;
 
     /// Neuron linear indexing, linear count, voxel indexing,
     /// and voxel count quantization
-    type NeuronIndexQuant: QuantizedUnsignedIntegerTrait;
+    type NeuronIndexQuant: QuantizedUnsignedIntegerUnwrappedTrait;
 
     /// Indexing of synapses within the NPU
-    type SynapseIndexCountQuant: QuantizedUnsignedIntegerTrait;
+    type SynapseIndexCountQuant: QuantizedUnsignedIntegerUnwrappedTrait;
 
     /// Indexing of cortical_area areas within the NPU.
-    type CorticalAreaIndexCountQuant: QuantizedUnsignedIntegerTrait;
+    type CorticalAreaIndexCountQuant: QuantizedUnsignedIntegerUnwrappedTrait;
 
     /// Indexing of cortical mapping entries within the NPU.
-    type CorticalMappingEntryIndexCountQuant: QuantizedUnsignedIntegerTrait;
+    type CorticalMappingEntryIndexCountQuant: QuantizedUnsignedIntegerUnwrappedTrait;
 }
 
 //region Discrete Levels

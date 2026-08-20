@@ -6,16 +6,17 @@ use crate::neuron_voxels::wrapped_values::{
 use crate::values::quantizable::{
     QuantizedDecimalTrait,
     QuantizedUnsignedIntegerTrait,
+    QuantizedUnsignedIntegerUnwrappedTrait,
     WrappedQuantizedUnsignedInteger,
 };
 
 /// Dense X/Y/Z packed voxel storage with x-axis  in linear order.
-pub struct VoxelVector<QI: QuantizedUnsignedIntegerTrait, QD: QuantizedDecimalTrait> {
+pub struct VoxelVector<QI: QuantizedUnsignedIntegerUnwrappedTrait, QD: QuantizedDecimalTrait> {
     dimensions: NeuronVoxelDimensions<QI>,
     voxels: Vec<QD>,
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait, QD: QuantizedDecimalTrait> VoxelVector<QI, QD> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, QD: QuantizedDecimalTrait> VoxelVector<QI, QD> {
     /// Creates a dense voxel vector for `dimensions`, initialized to `QD::QUANT_ZERO`.
     pub fn new_zeroed(dimensions: NeuronVoxelDimensions<QI>) -> Self {
         let voxel_count = dimensions.number_contained_elements().quant_to_usize();

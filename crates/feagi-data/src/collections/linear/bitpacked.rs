@@ -1,5 +1,5 @@
 use crate::collections::feagi_data_collections_error::{FeagiDataCollectionError, FeagiFailCollectionInvalidIndex};
-use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
+use crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait;
 use core::ops::{Index, IndexMut, Range};
 
 macro_rules! impl_bitpacked_range_read {
@@ -87,7 +87,7 @@ fn number_bits_to_number_bytes(n: usize) -> usize {
     }
 }
 
-pub trait BitPackedTrait<QI: QuantizedUnsignedIntegerTrait>: Index<QI, Output = u8> + Index<Range<QI>, Output = [u8]> {
+pub trait BitPackedTrait<QI: QuantizedUnsignedIntegerUnwrappedTrait>: Index<QI, Output = u8> + Index<Range<QI>, Output = [u8]> {
     /// Borrows the backing storage as a regular shared byte slice.
     fn as_bytes(&self) -> &[u8];
 
@@ -187,7 +187,7 @@ pub trait BitPackedTrait<QI: QuantizedUnsignedIntegerTrait>: Index<QI, Output = 
 ///
 /// Implementors only need to expose their backing storage via
 /// [`Self::as_mut_bytes`].
-pub trait BitPackedMutTrait<QI: QuantizedUnsignedIntegerTrait>:
+pub trait BitPackedMutTrait<QI: QuantizedUnsignedIntegerUnwrappedTrait>:
     BitPackedTrait<QI> + IndexMut<QI, Output = u8> + IndexMut<Range<QI>, Output = [u8]>
 {
     /// Mutably borrows the backing storage as a regular byte slice.
@@ -267,7 +267,7 @@ pub trait BitPackedMutTrait<QI: QuantizedUnsignedIntegerTrait>:
 ///
 /// Only byte access is offered: individual bits within a byte are not
 /// independently addressable, so there is deliberately no parallel bit access.
-pub trait BitPackedParTrait<QI: QuantizedUnsignedIntegerTrait>: BitPackedTrait<QI> {
+pub trait BitPackedParTrait<QI: QuantizedUnsignedIntegerUnwrappedTrait>: BitPackedTrait<QI> {
     /// Raw pointer to the first byte. Valid for reads of [`Self::number_bytes`]
     /// bytes for as long as `self` is borrowed.
     fn as_byte_ptr(&self) -> *const u8 {
@@ -294,7 +294,7 @@ pub trait BitPackedParTrait<QI: QuantizedUnsignedIntegerTrait>: BitPackedTrait<Q
 /// for a shared/read-only view, since [`Self::get_byte_mut_par`] casts a
 /// `*const u8` to `*mut u8`; writing through such a pointer that aliases a shared
 /// borrow is undefined behaviour.
-pub unsafe trait BitPackedParMutTrait<QI: QuantizedUnsignedIntegerTrait>: BitPackedParTrait<QI> + BitPackedMutTrait<QI> {
+pub unsafe trait BitPackedParMutTrait<QI: QuantizedUnsignedIntegerUnwrappedTrait>: BitPackedParTrait<QI> + BitPackedMutTrait<QI> {
     /// Raw mutable pointer to the first byte, derived from a shared `&self`.
     ///
     /// # Safety
@@ -320,12 +320,12 @@ pub unsafe trait BitPackedParMutTrait<QI: QuantizedUnsignedIntegerTrait>: BitPac
 //region Vector
 
 /// An owned, heap-allocated run of bit-packed booleans.
-pub struct BitPackedVector<QI: QuantizedUnsignedIntegerTrait> {
+pub struct BitPackedVector<QI: QuantizedUnsignedIntegerUnwrappedTrait> {
     data: Vec<u8>, // length is number of bytes
     number_bits: QI,
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait> Clone for BitPackedVector<QI> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> Clone for BitPackedVector<QI> {
     fn clone(&self) -> Self {
         Self {
             data: self.data.clone(),
@@ -334,7 +334,7 @@ impl<QI: QuantizedUnsignedIntegerTrait> Clone for BitPackedVector<QI> {
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait> BitPackedVector<QI> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedVector<QI> {
     /// Builds a vector holding `number_bits` booleans, every one initialised to
     /// `initial_state`. Any dangling bits in the final byte are kept zeroed.
     pub fn new_uniform(number_bits: QI, initial_state: bool) -> BitPackedVector<QI> {
@@ -394,7 +394,7 @@ impl<QI: QuantizedUnsignedIntegerTrait> BitPackedVector<QI> {
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait> BitPackedTrait<QI> for BitPackedVector<QI> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedTrait<QI> for BitPackedVector<QI> {
     fn as_bytes(&self) -> &[u8] {
         &self.data
     }
@@ -404,26 +404,26 @@ impl<QI: QuantizedUnsignedIntegerTrait> BitPackedTrait<QI> for BitPackedVector<Q
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait> BitPackedMutTrait<QI> for BitPackedVector<QI> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedMutTrait<QI> for BitPackedVector<QI> {
     fn as_mut_bytes(&mut self) -> &mut [u8] {
         &mut self.data
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait> BitPackedParTrait<QI> for BitPackedVector<QI> {}
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedParTrait<QI> for BitPackedVector<QI> {}
 
 // SAFETY: the backing `Vec` is owned exclusively by this wrapper, so its storage
 // is writable through a shared `&self` under the trait's disjoint-index contract.
-unsafe impl<QI: QuantizedUnsignedIntegerTrait> BitPackedParMutTrait<QI> for BitPackedVector<QI> {}
+unsafe impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedParMutTrait<QI> for BitPackedVector<QI> {}
 
-impl<QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedVector<QI> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> Index<QI> for BitPackedVector<QI> {
     type Output = u8;
     fn index(&self, index: QI) -> &Self::Output {
         &self.data[index.quant_to_usize()]
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait> IndexMut<QI> for BitPackedVector<QI> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> IndexMut<QI> for BitPackedVector<QI> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
         &mut self.data[index.quant_to_usize()]
     }
@@ -431,16 +431,16 @@ impl<QI: QuantizedUnsignedIntegerTrait> IndexMut<QI> for BitPackedVector<QI> {
 
 impl_bitpacked_range_read_write!(
     BitPackedVector<QI>, QI,
-    [QI: QuantizedUnsignedIntegerTrait]
+    [QI: QuantizedUnsignedIntegerUnwrappedTrait]
 );
 
-impl<QI: QuantizedUnsignedIntegerTrait> From<Vec<u8>> for BitPackedVector<QI> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> From<Vec<u8>> for BitPackedVector<QI> {
     fn from(value: Vec<u8>) -> Self {
         Self::from_vec(value)
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVector<QI>> for Vec<u8> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait> From<BitPackedVector<QI>> for Vec<u8> {
     fn from(value: BitPackedVector<QI>) -> Self {
         value.data
     }
@@ -452,12 +452,12 @@ impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVector<QI>> for Vec<u8> {
 
 /// A borrowed, read-only view over a run of bit-packed booleans.
 #[derive(Clone, Copy)]
-pub struct BitPackedSlice<'a, QI: QuantizedUnsignedIntegerTrait> {
+pub struct BitPackedSlice<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> {
     pub(crate) data: &'a [u8],
     number_bits: QI,
 }
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedSlice<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedSlice<'a, QI> {
     /// Wraps an existing shared byte slice with an explicit bit count.
     /// `number_bits` must not exceed `data.len() * 8`.
     pub fn new(data: &'a [u8], number_bits: QI) -> BitPackedSlice<'a, QI> {
@@ -477,7 +477,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedSlice<'a, QI> {
     }
 }
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedTrait<QI> for BitPackedSlice<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedTrait<QI> for BitPackedSlice<'a, QI> {
     fn as_bytes(&self) -> &[u8] {
         self.data
     }
@@ -489,9 +489,9 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedTrait<QI> for BitPackedSlic
 
 // Read-only parallel access only: this view may alias a shared borrow, so the
 // mutable `BitPackedParMutTrait` is intentionally NOT implemented.
-impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedParTrait<QI> for BitPackedSlice<'a, QI> {}
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedParTrait<QI> for BitPackedSlice<'a, QI> {}
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedSlice<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> Index<QI> for BitPackedSlice<'a, QI> {
     type Output = u8;
     fn index(&self, index: QI) -> &Self::Output {
         &self.data[index.quant_to_usize()]
@@ -500,10 +500,10 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedSlice<'a, QI>
 
 impl_bitpacked_range_read!(
     BitPackedSlice<'a, QI>, QI,
-    ['a, QI: QuantizedUnsignedIntegerTrait]
+    ['a, QI: QuantizedUnsignedIntegerUnwrappedTrait]
 );
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a [u8]> for BitPackedSlice<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> From<&'a [u8]> for BitPackedSlice<'a, QI> {
     fn from(value: &'a [u8]) -> Self {
         Self::from_bytes(value)
     }
@@ -514,12 +514,12 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a [u8]> for BitPackedSlice<'a
 //region Mut Slice
 
 /// A borrowed, mutable view over a run of bit-packed booleans.
-pub struct BitPackedSliceMut<'a, QI: QuantizedUnsignedIntegerTrait> {
+pub struct BitPackedSliceMut<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> {
     pub(crate) data: &'a mut [u8],
     number_bits: QI,
 }
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedSliceMut<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedSliceMut<'a, QI> {
     /// Wraps an existing mutable byte slice with an explicit bit count.
     /// `number_bits` must not exceed `data.len() * 8`.
     pub fn new(data: &'a mut [u8], number_bits: QI) -> BitPackedSliceMut<'a, QI> {
@@ -544,7 +544,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedSliceMut<'a, QI> {
     }
 }
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedTrait<QI> for BitPackedSliceMut<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedTrait<QI> for BitPackedSliceMut<'a, QI> {
     fn as_bytes(&self) -> &[u8] {
         self.data
     }
@@ -554,26 +554,26 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedTrait<QI> for BitPackedSlic
     }
 }
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedMutTrait<QI> for BitPackedSliceMut<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedMutTrait<QI> for BitPackedSliceMut<'a, QI> {
     fn as_mut_bytes(&mut self) -> &mut [u8] {
         self.data
     }
 }
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedParTrait<QI> for BitPackedSliceMut<'a, QI> {}
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedParTrait<QI> for BitPackedSliceMut<'a, QI> {}
 
 // SAFETY: the backing slice is exclusively borrowed, so its storage is writable
 // through a shared `&self` under the trait's disjoint-index contract.
-unsafe impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedParMutTrait<QI> for BitPackedSliceMut<'a, QI> {}
+unsafe impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> BitPackedParMutTrait<QI> for BitPackedSliceMut<'a, QI> {}
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedSliceMut<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> Index<QI> for BitPackedSliceMut<'a, QI> {
     type Output = u8;
     fn index(&self, index: QI) -> &Self::Output {
         &self.data[index.quant_to_usize()]
     }
 }
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> IndexMut<QI> for BitPackedSliceMut<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> IndexMut<QI> for BitPackedSliceMut<'a, QI> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
         &mut self.data[index.quant_to_usize()]
     }
@@ -581,10 +581,10 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> IndexMut<QI> for BitPackedSliceMut<'
 
 impl_bitpacked_range_read_write!(
     BitPackedSliceMut<'a, QI>, QI,
-    ['a, QI: QuantizedUnsignedIntegerTrait]
+    ['a, QI: QuantizedUnsignedIntegerUnwrappedTrait]
 );
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a mut [u8]> for BitPackedSliceMut<'a, QI> {
+impl<'a, QI: QuantizedUnsignedIntegerUnwrappedTrait> From<&'a mut [u8]> for BitPackedSliceMut<'a, QI> {
     fn from(value: &'a mut [u8]) -> Self {
         Self::from_bytes(value)
     }
@@ -602,12 +602,12 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a mut [u8]> for BitPackedSlic
 /// associated index/count type used by the shared trait methods). The logical
 /// bit count may be smaller than `N * 8` when there are dangling bits.
 #[derive(Clone, Copy)]
-pub struct BitPackedArray<QI: QuantizedUnsignedIntegerTrait, const N: usize> {
+pub struct BitPackedArray<QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize> {
     pub(crate) data: [u8; N],
     number_bits: QI,
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedArray<QI, N> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize> BitPackedArray<QI, N> {
     /// Builds an array holding `number_bits` booleans, every one initialised to
     /// `initial_state`. `number_bits` must not exceed `N * 8`. Any dangling bits
     /// in the final byte are kept zeroed.
@@ -636,7 +636,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedArray<QI, N> {
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedTrait<QI> for BitPackedArray<QI, N> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize> BitPackedTrait<QI> for BitPackedArray<QI, N> {
     fn as_bytes(&self) -> &[u8] {
         &self.data
     }
@@ -646,26 +646,26 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedTrait<QI> for B
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedMutTrait<QI> for BitPackedArray<QI, N> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize> BitPackedMutTrait<QI> for BitPackedArray<QI, N> {
     fn as_mut_bytes(&mut self) -> &mut [u8] {
         &mut self.data
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedParTrait<QI> for BitPackedArray<QI, N> {}
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize> BitPackedParTrait<QI> for BitPackedArray<QI, N> {}
 
 // SAFETY: the backing array is owned exclusively by this wrapper, so its storage
 // is writable through a shared `&self` under the trait's disjoint-index contract.
-unsafe impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedParMutTrait<QI> for BitPackedArray<QI, N> {}
+unsafe impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize> BitPackedParMutTrait<QI> for BitPackedArray<QI, N> {}
 
-impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> Index<QI> for BitPackedArray<QI, N> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize> Index<QI> for BitPackedArray<QI, N> {
     type Output = u8;
     fn index(&self, index: QI) -> &Self::Output {
         &self.data[index.quant_to_usize()]
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> IndexMut<QI> for BitPackedArray<QI, N> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize> IndexMut<QI> for BitPackedArray<QI, N> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
         &mut self.data[index.quant_to_usize()]
     }
@@ -673,10 +673,10 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> IndexMut<QI> for BitPack
 
 impl_bitpacked_range_read_write!(
     BitPackedArray<QI, N>, QI,
-    [QI: QuantizedUnsignedIntegerTrait, const N: usize]
+    [QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize]
 );
 
-impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<[u8; N]> for BitPackedArray<QI, N> {
+impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const N: usize> From<[u8; N]> for BitPackedArray<QI, N> {
     fn from(value: [u8; N]) -> Self {
         Self::from_array(value)
     }

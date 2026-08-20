@@ -1,16 +1,16 @@
 use crate::index_range_managers::feagi_index_range_manager_error::{
     FeagiIndexManagerInvalid, FeagiIndexManagerInvalidIndex, FeagiIndexManagerLimit, FeagiIndexRangeManagerError,
 };
-use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
+use crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait;
 
-pub struct IndexManager<Q: QuantizedUnsignedIntegerTrait> {
+pub struct IndexManager<Q: QuantizedUnsignedIntegerUnwrappedTrait> {
     minimum_index: Q,
     maximum_index: Q,
     next_index: Q,
     skipped_indexes: Vec<Q>,
 }
 
-impl<Q: QuantizedUnsignedIntegerTrait> IndexManager<Q> {
+impl<Q: QuantizedUnsignedIntegerUnwrappedTrait> IndexManager<Q> {
     pub fn new(minimum_index: Q, maximum_index: Q, initial_number_indexes: Q) -> Result<IndexManager<Q>, FeagiIndexRangeManagerError> {
         if minimum_index > maximum_index {
             return Err(FeagiIndexManagerInvalid::new("Minimum index is greater than maximum index.").into());

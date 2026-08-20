@@ -22,6 +22,6 @@ pub use signed_integer::{
     SignedIntegerEnum, SignedIntegerQuantizationLevel, WrappedQuantizedSignedIntegerEnum,
 };
 pub use unsigned_integer::{
-    QuantizedUnsignedIntegerTrait, UnsignedIntegerEnum, UnsignedIntegerQuantizationLevel, WrappedQuantizedUnsignedInteger,
-    WrappedQuantizedUnsignedIntegerCount, WrappedQuantizedUnsignedIntegerData, WrappedQuantizedUnsignedIntegerIndex,
+    QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait, QuantizedUnsignedIntegerWrappedTrait,
+    UnsignedIntegerEnum, UnsignedIntegerQuantizationLevel, WrappedQuantizedUnsignedIntegerEnum,
 };

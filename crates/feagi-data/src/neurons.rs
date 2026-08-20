@@ -2,7 +2,7 @@ use crate::{_create_wrapped_quantized_unsigned_integer, create_wrapped_quantized
 use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
 use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_index};
 use crate::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateAxis, NeuronVoxelDensityIndex};
-use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
+use crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait;
 
 create_wrapped_quantized_decimal!(
     /// The membrane potential of a single neuron (NOT VOXEL)
@@ -30,7 +30,7 @@ create_wrapped_unsigned_integer_spatial_coordinate!(
 );
 
 
-impl<Q: QuantizedUnsignedIntegerTrait> DimensionalCorticalArea4DCoordinate<Q> {
+impl<Q: QuantizedUnsignedIntegerUnwrappedTrait> DimensionalCorticalArea4DCoordinate<Q> {
     pub fn new_from_voxel_and_density(voxel_coord: NeuronVoxelCoordinate<Q>, density: NeuronVoxelDensityIndex<Q>) -> Self {
         DimensionalCorticalArea4DCoordinate::new(*voxel_coord.get_x(), *voxel_coord.get_y(), *voxel_coord.get_z(), density)
     }
