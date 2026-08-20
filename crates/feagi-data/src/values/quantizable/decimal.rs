@@ -5,7 +5,7 @@
 
 use crate::values::quantizable::custom_data_types::StorageF8;
 use crate::values::quantizable::quantization_level_packing::QuantizationLevelPacking;
-use crate::values::quantizable::{PercentageUnsigned, QuantizedElementBase};
+use crate::values::quantizable::{PercentageUnsigned, QuantizedElementBase, QuantizedUnsignedPercentageTrait};
 use half::{bf16, f16};
 
 /// Represents a value that is represented as a decimal number, main backbone for computations
@@ -97,11 +97,11 @@ pub trait QuantizedDecimalTrait:
 
     fn scale_by_unsigned_percentage<OTHER: QuantizedDecimalTrait>(self, p: PercentageUnsigned<OTHER>) -> Self {
         // percentages will always be in valid range, we dont need a checked conversion
-        self * Self::from_quantization::<OTHER>(p.get_decimal())
+        self * Self::from_quantization::<OTHER>(QuantizedUnsignedPercentageTrait::get_decimal(p))
     }
 
     fn scale_by_same_quant_unsigned_percentage(self, p: &PercentageUnsigned<Self>) -> Self {
-        self * p.get_decimal()
+        self * QuantizedUnsignedPercentageTrait::get_decimal(*p)
     }
 }
 
@@ -478,7 +478,7 @@ macro_rules! create_wrapped_quantized_decimal {
                 self,
                 p: &$crate::values::quantizable::PercentageUnsigned<Self>,
             ) -> Self {
-                Self::const_new(self.0 * p.get_decimal().dewrap())
+                self * $crate::values::quantizable::QuantizedUnsignedPercentageTrait::get_decimal(*p)
             }
         }
 
@@ -711,11 +711,21 @@ macro_rules! create_wrapped_quantized_decimal {
 
                 fn to_f64(self) -> f64 {
                     match self {
-                        Self::F16(value) => <$crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap()),
-                        Self::BF16(value) => <$crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap()),
-                        Self::F32(value) => <$crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap()),
+                        Self::F16(value) => {
+                            <half::f16 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
+                        }
+                        Self::BF16(value) => {
+                            <half::bf16 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
+                        }
+                        Self::F32(value) => {
+                            <f32 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
+                        }
                         Self::F64(value) => value.dewrap(),
-                        Self::StorageF8(value) => <$crate::values::quantizable::custom_data_types::StorageF8 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap()),
+                        Self::StorageF8(value) => {
+                            <$crate::values::quantizable::custom_data_types::StorageF8 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(
+                                value.dewrap(),
+                            )
+                        }
                     }
                 }
             }

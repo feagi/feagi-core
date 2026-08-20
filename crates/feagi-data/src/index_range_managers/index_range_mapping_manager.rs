@@ -1,9 +1,9 @@
-use crate::values::quantizable::{QuantizedUnsignedIntegerUnwrappedTrait};
+use crate::values::quantizable::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 use core::ops::Range;
 
 // TODO rn very basic implementation just for adding stuff
 
-pub struct IndexRangeMappingManager<HeaderIndex: WrappedQuantizedUnsignedIntegerCount, RangeIndex: WrappedQuantizedUnsignedIntegerCount> {
+pub struct IndexRangeMappingManager<HeaderIndex: QuantizedUnsignedIntegerTrait, RangeIndex: QuantizedUnsignedIntegerTrait> {
     header_indexed_used_ranges: Vec<Option<Range<RangeIndex>>>,
     empty_ranges_decreasing_order: Vec<(HeaderIndex, RangeIndex)>, // header to the current empty range, and the length of it
     skipped_headers: Vec<HeaderIndex>,
@@ -17,7 +17,7 @@ pub struct IndexRangeMappingManager<HeaderIndex: WrappedQuantizedUnsignedInteger
     amount_unused_capacity: RangeIndex,
 }
 
-impl<HeaderIndex: WrappedQuantizedUnsignedIntegerCount, RangeIndex: WrappedQuantizedUnsignedIntegerCount> IndexRangeMappingManager<HeaderIndex, RangeIndex> {
+impl<HeaderIndex: QuantizedUnsignedIntegerTrait, RangeIndex: QuantizedUnsignedIntegerTrait> IndexRangeMappingManager<HeaderIndex, RangeIndex> {
     pub fn new_empty(max_range_allowed: RangeIndex) -> Self {
         Self {
             header_indexed_used_ranges: vec![],
@@ -73,7 +73,7 @@ impl<HeaderIndex: WrappedQuantizedUnsignedIntegerCount, RangeIndex: WrappedQuant
     }
 }
 
-pub struct NewHeaderRangeStruct<HeaderIndex: WrappedQuantizedUnsignedIntegerCount, RangeIndex: WrappedQuantizedUnsignedIntegerCount> {
+pub struct NewHeaderRangeStruct<HeaderIndex: QuantizedUnsignedIntegerTrait, RangeIndex: QuantizedUnsignedIntegerTrait> {
     pub new_header_index: HeaderIndex,
     pub additional_allocation_needed: Option<RangeIndex>,
     pub range: Range<RangeIndex>,

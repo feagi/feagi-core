@@ -1,6 +1,5 @@
 use crate::{create_wrapped_quantized_unsigned_integer, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
-use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
-use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_index};
+use crate::{create_wrapped_quantized_decimal};
 use crate::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateAxis, NeuronVoxelDensityIndex};
 use crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait;
 
