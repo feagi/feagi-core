@@ -18,7 +18,10 @@ pub use decimal::{
     QuantizedDecimalWrappedTrait, WrappedQuantizedDecimalEnum,
 };
 pub use feagi_data_value_quantization_error::FeagiDataValueQuantizationError;
-pub use unsigned_percentage::{PercentageUnsigned, WrappedPercentageUnsigned};
+pub use unsigned_percentage::{
+    PercentageUnsigned, QuantizedUnsignedPercentageTrait, QuantizedUnsignedPercentageUnwrappedTrait,
+    QuantizedUnsignedPercentageWrappedTrait,
+};
 pub use quantization_level_packing::QuantizationLevelPacking;
 pub use signed_integer::{
     QuantizedSignedIntegerTrait, QuantizedSignedIntegerUnwrappedTrait, QuantizedSignedIntegerWrappedTrait,

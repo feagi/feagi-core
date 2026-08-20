@@ -1,13 +1,8 @@
-use crate::neuron_voxels::wrapped_values::{
-    NeuronVoxelCoordinate,
-    NeuronVoxelDimensions,
-    NeuronVoxelLinearIndex,
-};
+use crate::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelLinearIndex};
 use crate::values::quantizable::{
     QuantizedDecimalTrait,
     QuantizedUnsignedIntegerTrait,
     QuantizedUnsignedIntegerUnwrappedTrait,
-    WrappedQuantizedUnsignedInteger,
 };
 
 /// Dense X/Y/Z packed voxel storage with x-axis  in linear order.

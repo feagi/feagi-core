@@ -1,4 +1,4 @@
-use crate::{_create_wrapped_quantized_unsigned_integer, create_wrapped_quantized_unsigned_integer_count, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
+use crate::{create_wrapped_quantized_unsigned_integer, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
 use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
 use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_index};
 use crate::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateAxis, NeuronVoxelDensityIndex};
@@ -11,14 +11,14 @@ create_wrapped_quantized_decimal!(
 
 
 
-create_wrapped_quantized_unsigned_integer_index!(
+create_wrapped_quantized_unsigned_integer!(
     /// Index of a neuron relative to its parent cortical area
     pub NeuronCorticalLocalIndex
 );
 
-create_wrapped_quantized_unsigned_integer_count!(
+create_wrapped_quantized_unsigned_integer!(
     /// The number of neurons within a cortical area
-    pub CorticalAreaNeuronCount NeuronCorticalLocalIndex
+    pub CorticalAreaNeuronCount
 );
 
 create_wrapped_unsigned_integer_spatial_coordinate!(

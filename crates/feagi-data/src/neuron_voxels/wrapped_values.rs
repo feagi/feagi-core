@@ -1,5 +1,5 @@
 use crate::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_count, create_wrapped_quantized_unsigned_integer_index, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
+use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
 use serde::{Deserialize, Serialize};
 
 create_wrapped_quantized_decimal!(
@@ -9,31 +9,31 @@ create_wrapped_quantized_decimal!(
     pub NeuronVoxelPotential
 );
 
-create_wrapped_quantized_unsigned_integer_index!(
+create_wrapped_quantized_unsigned_integer!(
     /// Index of a neuron within a voxel. Most voxels only have 1 neuron, but some have more
     pub NeuronVoxelDensityIndex
 );
 
-create_wrapped_quantized_unsigned_integer_count!(
+create_wrapped_quantized_unsigned_integer!(
     /// The number of neurons within a voxel (normally 1)
-    pub PerVoxelNeuronCount NeuronVoxelDensityIndex
+    pub PerVoxelNeuronCount
 );
 
-create_wrapped_quantized_unsigned_integer_index!(
+create_wrapped_quantized_unsigned_integer!(
     /// Index of a neuron within a voxel. Most voxels only have 1 neuron, but some have more
     pub NeuronVoxelCoordinateAxis
 );
 
 
-create_wrapped_quantized_unsigned_integer_index!(
+create_wrapped_quantized_unsigned_integer!(
     /// Represents the index of a voxel in a collection using a single uint value that represents
     /// the overall index incrementing from X, Y and Z
     pub NeuronVoxelLinearIndex
 );
 
-create_wrapped_quantized_unsigned_integer_count!(
+create_wrapped_quantized_unsigned_integer!(
     /// The number of voxels within a dimensional cortical area
-    pub CorticalAreaVoxelCount NeuronVoxelLinearIndex
+    pub CorticalAreaVoxelCount
 );
 
 create_wrapped_unsigned_integer_spatial_coordinate!(
