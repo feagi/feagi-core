@@ -8,6 +8,13 @@ pub struct FeagiFailQuantizationOutOfRange {
 }
 
 #[derive(FeagiErrorKey)]
+/// Tried bringing a signed value into quantization that was not in possible range of quantization
+pub struct FeagiFailSignedQuantizationOutOfRange {
+    context: &'static str,
+    given_index: isize,
+}
+
+#[derive(FeagiErrorKey)]
 /// Represents some general issue with quantization
 pub struct FeagiFailInvalidQuantization {
     context: &'static str,
@@ -34,6 +41,7 @@ generate_feagi_error! {
     FeagiDataValueQuantizationError,
     keys: {
         QuantizationOutOfRange: FeagiFailQuantizationOutOfRange,
+        QuantizationOutOfRangeSigned: FeagiFailSignedQuantizationOutOfRange,
         InvalidQuantization: FeagiFailInvalidQuantization,
         IncompatibleHardware: FeagiFailHardwareNoLikeQuant,
         PercentageOutOfRange: FeagiFailPercentageOutOfRange,

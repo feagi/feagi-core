@@ -10,7 +10,6 @@ pub enum SignedIntegerQuantizationLevel {
     I16 = 1,
     I32 = 2,
     I64 = 3,
-    Isize = 4,
     // We can support a max of 8
 }
 
@@ -29,14 +28,13 @@ impl TryFrom<u8> for SignedIntegerQuantizationLevel {
             1 => Ok(SignedIntegerQuantizationLevel::I16),
             2 => Ok(SignedIntegerQuantizationLevel::I32),
             3 => Ok(SignedIntegerQuantizationLevel::I64),
-            4 => Ok(SignedIntegerQuantizationLevel::Isize),
             _ => Err(()),
         }
     }
 }
 
 impl QuantizationLevelPacking for SignedIntegerQuantizationLevel {
-    const NUMBER_BITS: usize = 3;
+    const NUMBER_BITS: usize = 2;
 
     unsafe fn from_unpacked_byte(byte: u8) -> Self {
         core::mem::transmute(byte)
@@ -506,86 +504,6 @@ impl QuantizedSignedIntegerTrait for i64 {
     }
 }
 
-// Note: Specifically we will not support isize directly since it can vary in size depending on
-// backend, which could cause some issues with device interoperability
-impl QuantizedSignedIntegerTrait for isize {
-    const LEVEL: SignedIntegerQuantizationLevel = SignedIntegerQuantizationLevel::Isize;
-    const QUANT_MAX: Self = isize::MAX;
-    const QUANT_MAX_I8: Self = i8::MAX as isize;
-    const QUANT_MAX_I16: Self = i16::MAX as isize;
-    const QUANT_MAX_I32: Self = i32::MAX as isize;
-    const QUANT_MAX_I64: Self = isize::MAX;
-    const QUANT_MAX_ISIZE: usize = isize::MAX as usize;
-
-    const QUANT_CLAMPED_I8: i8 = i8::MAX;
-    const QUANT_CLAMPED_I16: i16 = i16::MAX;
-    const QUANT_CLAMPED_I32: i32 = i32::MAX;
-    const QUANT_CLAMPED_I64: i64 = i64::MAX;
-    const QUANT_CLAMPED_ISIZE: isize = isize::MAX;
-
-    fn quant_from_isize(value: isize) -> Self {
-        value
-    }
-
-    fn quant_to_enum(value: Self) -> SignedIntegerEnum {
-        SignedIntegerEnum::I64(value as i64)
-    }
-
-    fn quant_try_from_isize(value: isize) -> Result<Self, FeagiDataValueQuantizationError> {
-        Ok(value)
-    }
-
-    fn quant_to_isize(self) -> isize {
-        self
-    }
-
-    fn quant_to_i8_unchecked(self) -> i8 {
-        self as i8
-    }
-
-    fn quant_to_i16_unchecked(self) -> i16 {
-        self as i16
-    }
-
-    fn quant_to_i32_unchecked(self) -> i32 {
-        self as i32
-    }
-
-    fn quant_to_i64_unchecked(self) -> i64 {
-        self as i64
-    }
-
-    fn from_quantization_unchecked<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
-        value.quant_to_isize()
-    }
-
-    fn from_quantization_clamped<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
-        clamp_isize_for_signed_quant::<Self>(value.quant_to_isize())
-    }
-
-    fn try_from_quantization<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
-        Ok(value.quant_to_isize())
-    }
-
-    fn clamp_for_quantization<ClampFor: QuantizedSignedIntegerTrait>(self) -> Self {
-        self.clamp_for_quantization_level_runtime(ClampFor::LEVEL)
-    }
-
-    fn clamp_for_quantization_level_runtime(self, level: SignedIntegerQuantizationLevel) -> Self {
-        clamp_isize_for_signed_quant_level(self, level)
-    }
-
-    #[inline(always)]
-    fn is_negative(&self) -> bool {
-        *self < 0
-    }
-
-    #[inline(always)]
-    fn is_zero_or_negative(&self) -> bool {
-        *self <= 0
-    }
-}
-
 /// Allows storing all quantized signed integer types under a single enum
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum SignedIntegerEnum {
@@ -639,7 +557,6 @@ fn clamp_isize_for_signed_quant_level(value: isize, level: SignedIntegerQuantiza
         SignedIntegerQuantizationLevel::I16 => value.clamp(i16::MIN as isize, i16::MAX as isize),
         SignedIntegerQuantizationLevel::I32 => value.clamp(i32::MIN as isize, i32::MAX as isize),
         SignedIntegerQuantizationLevel::I64 => value.clamp(i64::MIN as isize, i64::MAX as isize),
-        SignedIntegerQuantizationLevel::Isize => value,
     }
 }
 
@@ -653,7 +570,6 @@ fn signed_value_fits_quant<Quant: QuantizedSignedIntegerTrait>(value: isize) -> 
         SignedIntegerQuantizationLevel::I16 => (i16::MIN as isize) <= value && value <= (i16::MAX as isize),
         SignedIntegerQuantizationLevel::I32 => (i32::MIN as isize) <= value && value <= (i32::MAX as isize),
         SignedIntegerQuantizationLevel::I64 => (i64::MIN as isize) <= value && value <= (i64::MAX as isize),
-        SignedIntegerQuantizationLevel::Isize => true,
     }
 }
 
