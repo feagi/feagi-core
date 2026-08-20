@@ -1,4 +1,4 @@
-use crate::values::quantizable::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait, UnsignedIntegerQuantizationLevel, WrappedQuantizedUnsignedInteger, WrappedQuantizedUnsignedIntegerCount, WrappedQuantizedUnsignedIntegerIndex};
+use crate::values::quantizable::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait, UnsignedIntegerQuantizationLevel};
 use crate::values::spatial::feagi_data_values_spatial_error::{FeagiDataValuesSpatialError, FeagiFailInvalidSpatialIndex};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]

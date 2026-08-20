@@ -13,7 +13,10 @@ pub mod custom_data_types;
 pub mod feagi_data_value_quantization_error;
 
 pub use base_traits::QuantizedElementBase;
-pub use decimal::{DecimalEnum, DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedDecimalEnum};
+pub use decimal::{
+    DecimalEnum, DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait,
+    QuantizedDecimalWrappedTrait, WrappedQuantizedDecimalEnum,
+};
 pub use feagi_data_value_quantization_error::FeagiDataValueQuantizationError;
 pub use unsigned_percentage::{PercentageUnsigned, WrappedPercentageUnsigned};
 pub use quantization_level_packing::QuantizationLevelPacking;
