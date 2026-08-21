@@ -150,6 +150,13 @@ pub struct MemoryCorticalAreaRuntimeInfo {
     pub upstream_pattern_cache_size: usize,
 }
 
+impl MemoryCorticalAreaRuntimeInfo {
+    /// Total active memory neurons in the plasticity layer (ST + LT).
+    pub fn active_memory_neuron_count(&self) -> usize {
+        self.short_term_neuron_count + self.long_term_neuron_count
+    }
+}
+
 /// Plasticity service statistics
 #[derive(Debug, Clone, Default)]
 pub struct PlasticityStats {
@@ -960,7 +967,7 @@ impl PlasticityService {
 
         if let Some(config) = lifecycle_config {
             let mut configs = self.memory_lifecycle_configs.lock().unwrap();
-            configs.insert(area_idx, config);
+            configs.insert(area_idx, self.sanitize_lifecycle_config(config));
         }
 
         // Ensure FireLedger tracks upstream areas for the requested temporal depth (STDP ledger).
@@ -1052,6 +1059,31 @@ impl PlasticityService {
         );
 
         true
+    }
+
+    /// Normalize lifecycle values for runtime safety.
+    ///
+    /// Zero values can leak in from legacy or partially populated memory-area payloads.
+    /// In those cases, fall back to the active plasticity config defaults so ST/LT
+    /// lifecycle remains deterministic and visible.
+    fn sanitize_lifecycle_config(
+        &self,
+        mut config: MemoryNeuronLifecycleConfig,
+    ) -> MemoryNeuronLifecycleConfig {
+        let defaults = self.config.memory_lifecycle_config;
+        if config.initial_lifespan == 0 {
+            config.initial_lifespan = defaults.initial_lifespan;
+        }
+        if config.lifespan_growth_rate <= 0.0 {
+            config.lifespan_growth_rate = defaults.lifespan_growth_rate;
+        }
+        if config.longterm_threshold == 0 {
+            config.longterm_threshold = defaults.longterm_threshold;
+        }
+        if config.max_reactivations == 0 {
+            config.max_reactivations = defaults.max_reactivations;
+        }
+        config
     }
 
     /// Dequeue plasticity commands
@@ -1166,6 +1198,13 @@ impl PlasticityService {
     ///
     /// Returns the number of memory neurons deleted.
     pub fn reset_memory_neurons_in_area(&self, cortical_idx: u32) -> usize {
+        let area_name = self
+            .memory_area_names
+            .lock()
+            .unwrap()
+            .get(&cortical_idx)
+            .cloned();
+
         let mut array = self.memory_neuron_array.lock().unwrap();
 
         // Get all memory neuron IDs in this area before deleting
@@ -1200,6 +1239,17 @@ impl PlasticityService {
 
         // Delete the memory neurons themselves
         let reset_count = array.reset_cortical_area(cortical_idx);
+        drop(array);
+
+        if reset_count > 0 {
+            if let Some(area_name) = area_name {
+                for _ in 0..reset_count {
+                    memory_stats_cache::on_neuron_deleted(&self.memory_stats_cache, &area_name);
+                }
+            }
+            let array = self.memory_neuron_array.lock().unwrap();
+            Self::update_memory_utilization_in_state_manager(&array, &self.config);
+        }
 
         tracing::info!(
             target: "plasticity",
@@ -1320,5 +1370,121 @@ mod tests {
 
         let areas = service.memory_areas.lock().unwrap();
         assert!(areas.contains_key(&100));
+    }
+
+    #[test]
+    fn test_ltm_conversion_preserves_active_memory_neuron_count() {
+        let config = PlasticityConfig::default();
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-test-npu",
+        ));
+        let service = PlasticityService::new(config, cache, npu);
+        service.register_memory_area(100, "mem_ltm_test".to_string(), 1, vec![1], None, false);
+
+        {
+            let mut array = service.memory_neuron_array.lock().unwrap();
+            let mut lifecycle = MemoryNeuronLifecycleConfig::default();
+            lifecycle.longterm_threshold = 2;
+            lifecycle.initial_lifespan = 2;
+            assert!(array.create_memory_neuron(1, 100, 0, &lifecycle).is_some());
+            assert!(array.create_memory_neuron(2, 100, 0, &lifecycle).is_some());
+            let converted = array.check_longterm_conversion(2);
+            assert_eq!(converted.len(), 2);
+        }
+
+        let runtime = service.memory_cortical_area_runtime_info(100);
+        assert_eq!(runtime.short_term_neuron_count, 0);
+        assert_eq!(runtime.long_term_neuron_count, 2);
+        assert_eq!(runtime.active_memory_neuron_count(), 2);
+    }
+
+    #[test]
+    fn test_reset_memory_neurons_syncs_stats_cache() {
+        let config = PlasticityConfig::default();
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-test-npu",
+        ));
+        let service = PlasticityService::new(config, cache.clone(), npu);
+        let area_name = "mem_reset_test";
+        service.register_memory_area(100, area_name.to_string(), 1, vec![1], None, false);
+
+        memory_stats_cache::on_neuron_created(&cache, area_name);
+        memory_stats_cache::on_neuron_created(&cache, area_name);
+        memory_stats_cache::on_neuron_created(&cache, area_name);
+
+        {
+            let mut array = service.memory_neuron_array.lock().unwrap();
+            let lifecycle = MemoryNeuronLifecycleConfig::default();
+            for pattern in 1..=3 {
+                assert!(array
+                    .create_memory_neuron(pattern, 100, 0, &lifecycle)
+                    .is_some());
+            }
+        }
+
+        let reset_count = service.reset_memory_neurons_in_area(100);
+        assert_eq!(reset_count, 3);
+
+        let runtime = service.memory_cortical_area_runtime_info(100);
+        assert_eq!(runtime.active_memory_neuron_count(), 0);
+        assert_eq!(
+            memory_stats_cache::get_area_stats(&cache, area_name)
+                .map(|s| s.neuron_count)
+                .unwrap_or(0),
+            0
+        );
+    }
+
+    #[test]
+    fn test_register_memory_area_sanitizes_zero_lifecycle_values() {
+        let config = PlasticityConfig::default();
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-test-npu",
+        ));
+        let service = PlasticityService::new(config.clone(), cache, npu);
+        let zeroed = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 0,
+            lifespan_growth_rate: 0.0,
+            longterm_threshold: 0,
+            max_reactivations: 0,
+        };
+        assert!(service.register_memory_area(
+            100,
+            "mem_sanitized".to_string(),
+            1,
+            vec![1],
+            Some(zeroed),
+            false,
+        ));
+
+        let lifecycle = service
+            .memory_lifecycle_configs
+            .lock()
+            .unwrap()
+            .get(&100)
+            .copied()
+            .expect("missing lifecycle config");
+        assert_eq!(
+            lifecycle.initial_lifespan,
+            config.memory_lifecycle_config.initial_lifespan
+        );
+        assert_eq!(
+            lifecycle.lifespan_growth_rate,
+            config.memory_lifecycle_config.lifespan_growth_rate
+        );
+        assert_eq!(
+            lifecycle.longterm_threshold,
+            config.memory_lifecycle_config.longterm_threshold
+        );
+        assert_eq!(
+            lifecycle.max_reactivations,
+            config.memory_lifecycle_config.max_reactivations
+        );
     }
 }

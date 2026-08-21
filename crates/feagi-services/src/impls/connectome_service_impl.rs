@@ -1272,9 +1272,18 @@ impl ConnectomeService for ConnectomeServiceImpl {
             mp_charge_accumulation: area.mp_charge_accumulation(),
             neuron_excitability: area.get_f64_property("neuron_excitability", 1.0),
             burst_engine_active: area.burst_engine_active(),
-            init_lifespan: area.init_lifespan(),
-            lifespan_growth_rate: area.get_f64_property("lifespan_growth_rate", 0.0),
-            longterm_mem_threshold: area.longterm_mem_threshold(),
+            init_lifespan: memory_props
+                .as_ref()
+                .map(|p| p.init_lifespan)
+                .unwrap_or_else(|| area.init_lifespan()),
+            lifespan_growth_rate: memory_props
+                .as_ref()
+                .map(|p| p.lifespan_growth_rate as f64)
+                .unwrap_or_else(|| area.get_f64_property("lifespan_growth_rate", 0.0)),
+            longterm_mem_threshold: memory_props
+                .as_ref()
+                .map(|p| p.longterm_threshold)
+                .unwrap_or_else(|| area.longterm_mem_threshold()),
             temporal_depth: memory_props.as_ref().map(|p| p.temporal_depth.max(1)),
             mp_learning_enabled: memory_props.as_ref().map(|p| p.mp_learning_enabled),
             properties: filtered_properties,

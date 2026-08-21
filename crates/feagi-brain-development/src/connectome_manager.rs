@@ -4523,6 +4523,86 @@ impl ConnectomeManager {
         snooze_length: u16,
         mp_charge_accumulation: bool,
     ) -> BduResult<u64> {
+        self.add_neuron_with_area_stats(
+            cortical_id,
+            x,
+            y,
+            z,
+            firing_threshold,
+            firing_threshold_limit,
+            leak_coefficient,
+            resting_potential,
+            neuron_type,
+            refractory_period,
+            excitability,
+            consecutive_fire_limit,
+            snooze_length,
+            mp_charge_accumulation,
+            true,
+        )
+    }
+
+    /// Add an NPU neuron that participates in global capacity accounting but does not
+    /// increment per-cortical-area stats.
+    ///
+    /// Used for LTM bridge twins in memory areas: the plasticity-layer memory neuron is
+    /// already counted in `MemoryNeuronArray`; the twin is auxiliary NPU infrastructure.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_auxiliary_neuron(
+        &mut self,
+        cortical_id: &CorticalID,
+        x: u32,
+        y: u32,
+        z: u32,
+        firing_threshold: f32,
+        firing_threshold_limit: f32,
+        leak_coefficient: f32,
+        resting_potential: f32,
+        neuron_type: u8,
+        refractory_period: u16,
+        excitability: f32,
+        consecutive_fire_limit: u16,
+        snooze_length: u16,
+        mp_charge_accumulation: bool,
+    ) -> BduResult<u64> {
+        self.add_neuron_with_area_stats(
+            cortical_id,
+            x,
+            y,
+            z,
+            firing_threshold,
+            firing_threshold_limit,
+            leak_coefficient,
+            resting_potential,
+            neuron_type,
+            refractory_period,
+            excitability,
+            consecutive_fire_limit,
+            snooze_length,
+            mp_charge_accumulation,
+            false,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn add_neuron_with_area_stats(
+        &mut self,
+        cortical_id: &CorticalID,
+        x: u32,
+        y: u32,
+        z: u32,
+        firing_threshold: f32,
+        firing_threshold_limit: f32,
+        leak_coefficient: f32,
+        resting_potential: f32,
+        neuron_type: u8,
+        refractory_period: u16,
+        excitability: f32,
+        consecutive_fire_limit: u16,
+        snooze_length: u16,
+        mp_charge_accumulation: bool,
+        update_area_stats: bool,
+    ) -> BduResult<u64> {
         // Validate cortical area exists
         if !self.cortical_areas.contains_key(cortical_id) {
             return Err(BduError::InvalidArea(format!(
@@ -4582,7 +4662,9 @@ impl ConnectomeManager {
         let core_state = state_manager.get_core_state();
         core_state.add_neuron_count(1);
         core_state.add_regular_neuron_count(1);
-        state_manager.add_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
+        if update_area_stats {
+            state_manager.add_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
+        }
 
         Ok(neuron_id.0 as u64)
     }
@@ -5066,29 +5148,51 @@ impl ConnectomeManager {
     /// Count is maintained in ConnectomeManager and updated when neurons are created/deleted.
     ///
     pub fn get_neuron_count_in_area(&self, cortical_id: &CorticalID) -> usize {
-        // CRITICAL: Read from cache (lock-free) - never query NPU for healthcheck endpoints
-        let cache = self.cached_neuron_counts_per_area.read();
-        let base_count = cache
-            .get(cortical_id)
-            .map(|count| count.load(Ordering::Relaxed))
-            .unwrap_or(0);
-
-        // Memory areas maintain neurons outside the NPU; add their count from StateManager.
-        let memory_count = self
+        let is_memory_area = self
             .cortical_areas
             .get(cortical_id)
             .and_then(|area| feagi_evolutionary::extract_memory_properties(&area.properties))
-            .and_then(|_| {
-                StateManager::instance()
-                    .try_read()
-                    .and_then(|state_manager| {
-                        state_manager.get_cortical_area_stats(&cortical_id.as_base_64())
-                    })
-            })
-            .map(|stats| stats.neuron_count)
-            .unwrap_or(0);
+            .is_some();
 
-        base_count.saturating_add(memory_count)
+        if is_memory_area {
+            // @cursor:critical-path - MemoryNeuronArray is the single source of truth for
+            // per-area memory neuron counts (ST + LT). LTM bridge twins live in the NPU but are
+            // auxiliary and must not inflate this count.
+            #[cfg(feature = "plasticity")]
+            if let Some(count) = self.active_memory_neuron_count_from_plasticity(cortical_id) {
+                return count;
+            }
+
+            // Plasticity unavailable: use event-driven StateManager cache only.
+            return StateManager::instance()
+                .try_read()
+                .and_then(|state_manager| {
+                    state_manager
+                        .get_cortical_area_stats(&cortical_id.as_base_64())
+                        .map(|stats| stats.neuron_count)
+                })
+                .unwrap_or(0);
+        }
+
+        // CRITICAL: Read from cache (lock-free) - never query NPU for healthcheck endpoints
+        let cache = self.cached_neuron_counts_per_area.read();
+        cache
+            .get(cortical_id)
+            .map(|count| count.load(Ordering::Relaxed))
+            .unwrap_or(0)
+    }
+
+    /// Active memory-neuron count for a memory cortical area from the plasticity layer.
+    #[cfg(feature = "plasticity")]
+    fn active_memory_neuron_count_from_plasticity(
+        &self,
+        cortical_id: &CorticalID,
+    ) -> Option<usize> {
+        let cortical_idx = self.cortical_id_to_idx.get(cortical_id)?;
+        let exec = self.get_plasticity_executor()?;
+        let guard = exec.lock().ok()?;
+        let runtime = guard.memory_cortical_area_runtime_info(*cortical_idx)?;
+        Some(runtime.active_memory_neuron_count())
     }
 
     /// Get all cortical areas that have neurons
