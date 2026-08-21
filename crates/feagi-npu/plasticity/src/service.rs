@@ -1385,9 +1385,11 @@ mod tests {
 
         {
             let mut array = service.memory_neuron_array.lock().unwrap();
-            let mut lifecycle = MemoryNeuronLifecycleConfig::default();
-            lifecycle.longterm_threshold = 2;
-            lifecycle.initial_lifespan = 2;
+            let lifecycle = MemoryNeuronLifecycleConfig {
+                longterm_threshold: 2,
+                initial_lifespan: 2,
+                ..Default::default()
+            };
             assert!(array.create_memory_neuron(1, 100, 0, &lifecycle).is_some());
             assert!(array.create_memory_neuron(2, 100, 0, &lifecycle).is_some());
             let converted = array.check_longterm_conversion(2);
