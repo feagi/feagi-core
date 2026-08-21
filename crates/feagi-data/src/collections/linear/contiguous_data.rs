@@ -3,18 +3,128 @@ use crate::values::quantizable::{QuantizedUnsignedIntegerWrappedTrait};
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
 
-/// Creates Vector, Array, Slice and SliceMut contiguous linear collections, which allow operations
-/// similar to their named counterparts but more natively with quantization and with functions for
-/// (unsafe) parallel mutation
+
+
+/// Creates a strongly-typed wrapper around `QuantizedContiguousVector` with wrapped
+/// index and count types
 #[macro_export]
-macro_rules! create_quantized_contiguous_linear_collections {
-    ($vis:vis, $base_name:ident, $index:ty, $count:ty, $data:ty) => {
-        ::paste::paste! {
-            $vis type [<$base_name Vector>]<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $crate::collections::linear::contiguous_data::QuantizedContiguousVector<$index<Q>, $count<Q>, $data>;
-            $vis type [<$base_name Array>] <Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait, const SIZE: usize> = $crate::collections::linear::contiguous_data::QuantizedContiguousArray<$index<Q>, $count<Q>, $data, SIZE>;
-            $vis type [<$base_name Slice>] <'a, Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $crate::collections::linear::contiguous_data::QuantizedContiguousSlice<'a, $index<Q>, $count<Q>, $data>;
-            $vis type [<$base_name SliceMut>] <'a, Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $crate::collections::linear::contiguous_data::QuantizedContiguousSliceMut<'a, $index<Q>, $count<Q>, $data>;
+macro_rules! create_wrapped_quantized_contiguous_linear_vector {
+    (
+        $(#[$meta:meta])*
+        $vis:vis $struct_name:ident,
+        $index:ident,
+        $count:ident,
+        $data:ident,
+        $index_unwrapped:ident: $index_bound:path,
+        $data_unwrapped:ident: $data_bound:path $(,)?
+    ) => {
+        $(#[$meta])*
+        $vis struct $struct_name<
+            $index_unwrapped: $index_bound,
+            $data_unwrapped: $data_bound,
+        > {
+            data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<
+                $index<$index_unwrapped>,
+                $count<$index_unwrapped>,
+                $data<$data_unwrapped>,
+            >,
         }
+
+        impl<
+            $index_unwrapped: $index_bound,
+            $data_unwrapped: $data_bound,
+        > $crate::collections::linear::contiguous_data::QuantizedContiguousTrait<
+            $index<$index_unwrapped>,
+            $count<$index_unwrapped>,
+            $data<$data_unwrapped>,
+        > for $struct_name<$index_unwrapped, $data_unwrapped> {
+            fn as_slice(&self) -> &[$data<$data_unwrapped>] {
+                self.data.as_slice()
+            }
+        }
+
+        impl<
+            $index_unwrapped: $index_bound,
+            $data_unwrapped: $data_bound,
+        > $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait<
+            $index<$index_unwrapped>,
+            $count<$index_unwrapped>,
+            $data<$data_unwrapped>,
+        > for $struct_name<$index_unwrapped, $data_unwrapped> {
+            fn as_mut_slice(&mut self) -> &mut [$data<$data_unwrapped>] {
+                self.data.as_mut_slice()
+            }
+        }
+
+        impl<
+            $index_unwrapped: $index_bound,
+            $data_unwrapped: $data_bound,
+        > core::ops::Index<$index<$index_unwrapped>>
+            for $struct_name<$index_unwrapped, $data_unwrapped>
+        {
+            type Output = $data<$data_unwrapped>;
+
+            fn index(&self, index: $index<$index_unwrapped>) -> &Self::Output {
+                &self.data[index]
+            }
+        }
+
+        impl<
+            $index_unwrapped: $index_bound,
+            $data_unwrapped: $data_bound,
+        > core::ops::Index<core::ops::Range<$index<$index_unwrapped>>>
+            for $struct_name<$index_unwrapped, $data_unwrapped>
+        {
+            type Output = [$data<$data_unwrapped>];
+
+            fn index(&self, index: core::ops::Range<$index<$index_unwrapped>>) -> &Self::Output {
+                &self.data[index]
+            }
+        }
+
+        impl<
+            $index_unwrapped: $index_bound,
+            $data_unwrapped: $data_bound,
+        > core::ops::IndexMut<$index<$index_unwrapped>>
+            for $struct_name<$index_unwrapped, $data_unwrapped>
+        {
+            fn index_mut(&mut self, index: $index<$index_unwrapped>) -> &mut Self::Output {
+                &mut self.data[index]
+            }
+        }
+
+        impl<
+            $index_unwrapped: $index_bound,
+            $data_unwrapped: $data_bound,
+        > core::ops::IndexMut<core::ops::Range<$index<$index_unwrapped>>>
+            for $struct_name<$index_unwrapped, $data_unwrapped>
+        {
+            fn index_mut(
+                &mut self,
+                index: core::ops::Range<$index<$index_unwrapped>>,
+            ) -> &mut Self::Output {
+                &mut self.data[index]
+            }
+        }
+    };
+
+    (
+        $(#[$meta:meta])*
+        $vis:vis $struct_name:ident,
+        $index:ident,
+        $count:ident,
+        $data:ident,
+        $unwrapped:ident: $bound:path $(,)?
+    ) => {
+        $crate::create_wrapped_quantized_contiguous_linear_vector!(
+            $(#[$meta])*
+            $vis $struct_name,
+            $index,
+            $count,
+            $data,
+            $unwrapped: $bound,
+            $unwrapped: $bound,
+        );
     };
 }
 
