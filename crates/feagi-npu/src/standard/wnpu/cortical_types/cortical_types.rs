@@ -1,4 +1,4 @@
-use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
+use feagi_data::neurons::neuron::neuron::DimensionalCorticalArea4DDimensions;
 use feagi_models::neuron_model::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
 use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
 

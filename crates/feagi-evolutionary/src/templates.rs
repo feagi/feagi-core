@@ -15,7 +15,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig, RuntimeGenome};
-use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
+use feagi_data::neurons::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
 use feagi_genomic_context::brain_region::{BrainRegion, RegionID, RegionType};
 use feagi_genomic_context::cortical_area::{CoreCorticalType, CorticalID};
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;

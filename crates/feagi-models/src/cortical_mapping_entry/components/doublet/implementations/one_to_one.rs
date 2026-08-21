@@ -1,7 +1,7 @@
 use crate::neuron_model::cortical_area::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use crate::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
-use feagi_data::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDensityIndex};
-use feagi_data::neurons::{DimensionalCorticalArea4DCoordinate, NeuronCorticalLocalIndex};
+use feagi_data::neurons::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDensityIndex};
+use feagi_data::neurons::neuron::neuron::{DimensionalCorticalArea4DCoordinate, NeuronCorticalLocalIndex};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedUnsignedInteger};
 

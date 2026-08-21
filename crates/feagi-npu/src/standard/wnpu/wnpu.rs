@@ -1,4 +1,4 @@
-use feagi_data::neuron_voxels::wrapped_values::{
+use feagi_data::neurons::neuron_voxels::wrapped_values::{
     NeuronVoxelCoordinateGenomic, NeuronVoxelDimensionsGenomic,
 };
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;

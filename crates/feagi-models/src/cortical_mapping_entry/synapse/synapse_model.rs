@@ -5,7 +5,7 @@ use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseM
 use crate::cortical_mapping_entry::synapse_model_implementations::generated_enums::{
     SynapseModelType, SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked,
 };
-use feagi_data::neurons::NeuronMembranePotential;
+use feagi_data::neurons::neuron::neuron::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root base trait for defining synapse firing and alteration of

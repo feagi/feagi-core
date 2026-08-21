@@ -155,7 +155,7 @@ mod tests {
     use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, PhysiologyConfig};
     use crate::MorphologyRegistry;
     use crate::RuntimeGenome;
-    use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
+    use feagi_data::neurons::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic;
     use feagi_genomic_context::cortical_area::CustomCorticalType;
 
     fn sample_custom_cortical_id() -> CorticalID {

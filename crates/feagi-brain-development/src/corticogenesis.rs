@@ -18,7 +18,7 @@ with mappings from loading as though it were fully realised.
 
 use core::marker::PhantomData;
 
-use feagi_data::neurons::DimensionalCorticalArea4DDimensions;
+use feagi_data::neurons::neuron::neuron::DimensionalCorticalArea4DDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::{
     FeagiIndexQuantization, FeagiIndexQuantizationGenomic,
 };

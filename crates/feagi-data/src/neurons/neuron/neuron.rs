@@ -1,24 +1,14 @@
 use crate::{create_wrapped_quantized_unsigned_integer, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
 use crate::{create_wrapped_quantized_decimal};
-use crate::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateAxis, NeuronVoxelDensityIndex};
+use crate::neurons::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelCoordinateAxis, NeuronVoxelDensityIndex};
 use crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait;
 
-create_wrapped_quantized_decimal!(
-    /// The membrane potential of a single neuron (NOT VOXEL)
-    pub NeuronMembranePotential
-);
 
 
 
-create_wrapped_quantized_unsigned_integer!(
-    /// Index of a neuron relative to its parent cortical area
-    pub NeuronCorticalLocalIndex
-);
 
-create_wrapped_quantized_unsigned_integer!(
-    /// The number of neurons within a cortical area
-    pub CorticalAreaNeuronCount
-);
+/*
+
 
 create_wrapped_unsigned_integer_spatial_coordinate!(
         /// Represents a 4D coordinate of a neuron within a dimensional cortical_area area, with the
@@ -44,3 +34,6 @@ create_wrapped_unsigned_integer_spatial_dimensions!(
     4,
     (0, x, NeuronVoxelCoordinateAxis), (1, y, NeuronVoxelCoordinateAxis), (2, z, NeuronVoxelCoordinateAxis), (3, d, NeuronVoxelDensityIndex)
 );
+
+
+ */

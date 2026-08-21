@@ -1,4 +1,4 @@
-use feagi_data::neurons::NeuronMembranePotential;
+use feagi_data::neurons::neuron::neuron::NeuronMembranePotential;
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use feagi_data::values::quantizable::QuantizedDecimalTrait;
 
