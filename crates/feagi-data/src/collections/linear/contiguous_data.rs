@@ -10,10 +10,10 @@ use core::ops::{Index, IndexMut, Range};
 macro_rules! create_quantized_contiguous_linear_collections {
     ($vis:vis, $base_name:ident, $index:ty, $count:ty, $data:ty) => {
         ::paste::paste! {
-            $vis [<$base_name Vector>] = QuantizedContiguousVector<$index, $count, $data>;
-            $vis [<$base_name Array>] <const SIZE: usize> = QuantizedContiguousArray<$index, $count, $data, SIZE>;
-            $vis [<$base_name Slice>] <'a> = QuantizedContiguousSlice<'a, $index, $count, $data>;
-            $vis [<$base_name MutSlice>] <'a> = QuantizedContiguousMutSlice<'a, $index, $count, $data>;
+            $vis type [<$base_name Vector>]<Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $crate::collections::linear::contiguous_data::QuantizedContiguousVector<$index<Q>, $count<Q>, $data>;
+            $vis type [<$base_name Array>] <Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait, const SIZE: usize> = $crate::collections::linear::contiguous_data::QuantizedContiguousArray<$index<Q>, $count<Q>, $data, SIZE>;
+            $vis type [<$base_name Slice>] <'a, Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $crate::collections::linear::contiguous_data::QuantizedContiguousSlice<'a, $index<Q>, $count<Q>, $data>;
+            $vis type [<$base_name SliceMut>] <'a, Q: $crate::values::quantizable::QuantizedUnsignedIntegerTrait> = $crate::collections::linear::contiguous_data::QuantizedContiguousSliceMut<'a, $index<Q>, $count<Q>, $data>;
         }
     };
 }
