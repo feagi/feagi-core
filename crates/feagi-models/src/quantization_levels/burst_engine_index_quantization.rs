@@ -1,5 +1,5 @@
 use core::hash::Hash;
-use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 // TODO xxhash?
 
 
@@ -7,16 +7,16 @@ pub trait BurstEngineIndexQuantization: Clone + Copy + Hash + PartialEq + Eq + S
     const LEVEL: BurstEngineIndexQuantizationLevel;
 
     /// Cortical area indexing within the burst engine
-    type CorticalAreaIndexCountQuant: QuantizedUnsignedIntegerTrait;
+    type CorticalAreaIndexCountQuant: QuantizedUnsignedIntegerUnwrappedTrait;
 
     /// Defines all neuron indexing (linear, voxel, etc) within the burst engine
-    type NeuronIndexQuant: QuantizedUnsignedIntegerTrait;
+    type NeuronIndexQuant: QuantizedUnsignedIntegerUnwrappedTrait;
     
     /// Indexing of cortical mapping entries within the burst engine.
-    type CorticalMappingEntryIndexCountQuant: QuantizedUnsignedIntegerTrait;
+    type CorticalMappingEntryIndexCountQuant: QuantizedUnsignedIntegerUnwrappedTrait;
 
     /// Indexing of synapses within the burst engine
-    type SynapseIndexCountQuant: QuantizedUnsignedIntegerTrait;
+    type SynapseIndexCountQuant: QuantizedUnsignedIntegerUnwrappedTrait;
 }
 
 /// The quantization level that is for structures that must be of the same quantization across

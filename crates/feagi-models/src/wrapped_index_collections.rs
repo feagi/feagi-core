@@ -2,8 +2,10 @@
 
 // TODO dissolve this whole subcrate and put it in neuron model
 
+/*
+
 use feagi_data::{
-    create_wrapped_contiguous_slice, create_wrapped_contiguous_slice_mut, create_wrapped_contiguous_vector, create_wrapped_quantized_unsigned_integer_index,
+    create_wrapped_contiguous_slice, create_wrapped_contiguous_slice_mut, create_wrapped_contiguous_vector, create_wrapped_quantized_unsigned_integer,
 };
 
 
@@ -15,7 +17,7 @@ macro_rules! make_index_and_linear_collections {
         $name:ident
     ) => {
         ::paste::paste! {
-            create_wrapped_quantized_unsigned_integer_index!(
+            create_wrapped_quantized_unsigned_integer!(
                 $(#[$meta])*
                 pub [<$name Index>]
             );
@@ -111,3 +113,5 @@ make_index_and_linear_collections!(
 
 
  
+ 
+ */
