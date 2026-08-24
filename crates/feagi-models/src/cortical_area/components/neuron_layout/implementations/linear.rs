@@ -1,53 +1,31 @@
-use feagi_data::neurons::neuron::indexing::NeuronCount;
-use crate::cortical_area::components::neuron_layout::neuron_layout::{NeuronLayoutConfigTrait, NeuronLayoutModelTrait};
+use std::marker::PhantomData;
+use feagi_data::neurons::neuron::indexing::{NeuronCount, NeuronLocalIndex};
+use crate::cortical_area::components::neuron_layout::neuron_layout_config::NeuronLayoutConfigTrait;
+use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayoutModelEnum, NeuronLayoutModelTrait};
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 
-/// Defines any Cortical Area with neurons whos position can only be described by a linear index
-pub struct LinearNeuronLayoutModel<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    _p: core::marker::PhantomData<BEIQ>,
+/// Defines that the neurons are laid out in linear (dense) fashion
+pub struct NeuronLayoutLinearModel;
+
+impl NeuronLayoutModelTrait for NeuronLayoutLinearModel {
+    const NEURON_LAYOUT_MODEL: NeuronLayoutModelEnum = NeuronLayoutModelEnum::Linear;
 }
 
-impl<BEIQ> NeuronLayoutModelTrait<BEIQ> for LinearNeuronLayoutModel<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
 
+/// Defines that the neurons are laid out in linear (dense) fashion
+pub struct NeuronLayoutLinearConfig<BEIQ: BurstEngineIndexQuantization> {
+    pub neuron_count: NeuronCount<BEIQ::NeuronIndexQuant>,
 }
 
-impl<BEIQ> LinearNeuronLayoutModel<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    pub fn new(_p: core::marker::PhantomData<BEIQ>) -> Self {
-        Self { _p }
+impl<BEIQ: BurstEngineIndexQuantization> NeuronLayoutConfigTrait<BEIQ> for NeuronLayoutLinearConfig<BEIQ> {
+    type CorticalLayoutContext = NeuronCount<BEIQ::NeuronIndexQuant>;
+    type NeuronLayoutContext = NeuronLocalIndex<BEIQ::NeuronIndexQuant>;
+
+    fn get_cortical_layout_context(&self) -> &Self::CorticalLayoutContext {
+        &self.neuron_count
     }
-}
 
-/// Defines any Cortical Area with neurons whos position can only be described by a linear index
-pub struct LinearNeuronLayoutConfig<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    pub neuron_count: NeuronCount<BEIQ::NeuronIndexQuant>
-}
-
-impl<BEIQ> NeuronLayoutConfigTrait<BEIQ> for LinearNeuronLayoutConfig<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    fn get_number_of_area_neurons(&self) -> NeuronCount<BEIQ::NeuronIndexQuant> {
-        self.neuron_count
-    }
-}
-
-impl<BEIQ> LinearNeuronLayoutConfig<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    pub fn new(neuron_count: NeuronCount<BEIQ::NeuronIndexQuant>) -> Self {
-        Self { neuron_count }
+    fn get_neuron_layout_context(&self, neuron_index: &NeuronLocalIndex<BEIQ::NeuronIndexQuant>) -> &Self::NeuronLayoutContext {
+        neuron_index // no further details lol
     }
 }

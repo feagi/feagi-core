@@ -1,56 +1,30 @@
-use feagi_data::neurons::neuron::indexing::NeuronCount;
-use crate::cortical_area::components::neuron_layout::neuron_layout::{NeuronLayoutConfigTrait, NeuronLayoutModelTrait};
+use core::marker::PhantomData;
+use feagi_data::neurons::neuron::indexing::NeuronLocalIndex;
+use crate::cortical_area::components::neuron_layout::neuron_layout_config::NeuronLayoutConfigTrait;
+use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayoutModelEnum, NeuronLayoutModelTrait};
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 
-/// Defines any Cortical area that can be represented as voxels (3d with a 4th dimension of density).
-pub struct VoxelNeuronLayoutModel<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    _p: core::marker::PhantomData<BEIQ>,
+/// Defines that the neurons are laid out in xyzd (depth) order linearly in a dense fashion 
+pub struct NeuronLayoutVoxelModel;
+
+impl NeuronLayoutModelTrait for NeuronLayoutVoxelModel {
+    const NEURON_LAYOUT_MODEL: NeuronLayoutModelEnum = NeuronLayoutModelEnum::Dimensional;
 }
 
-impl<BEIQ> NeuronLayoutModelTrait<BEIQ> for VoxelNeuronLayoutModel<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    
+/// Defines that the neurons are laid out in xyzd (depth) order linearly in a dense fashion 
+pub struct NeuronLayoutVoxelConfig<BEIQ: BurstEngineIndexQuantization> {
+    pub cortical_dimensions: BEIQ // TODO
 }
 
-impl<BEIQ> VoxelNeuronLayoutModel<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    pub fn new(_p: core::marker::PhantomData<BEIQ>) -> Self {
-        Self { _p }
-    }
-}
+impl<BEIQ: BurstEngineIndexQuantization> NeuronLayoutConfigTrait<BEIQ> for NeuronLayoutVoxelConfig<BEIQ> {
+    type CorticalLayoutContext = ();
+    type NeuronLayoutContext = ();
 
-/// Defines any Cortical area that can be represented as voxels (3d with a 4th dimension of density).
-pub struct VoxelNeuronLayoutConfig<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    _p: core::marker::PhantomData<BEIQ>,
-    pub dimensions:  // TODO
-}
-
-impl<BEIQ> NeuronLayoutConfigTrait<BEIQ> for VoxelNeuronLayoutConfig<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    fn get_number_of_area_neurons(&self) -> NeuronCount<BEIQ::NeuronIndexQuant> {
+    fn get_cortical_layout_context(&self) -> &Self::CorticalLayoutContext {
         todo!()
     }
-}
 
-impl<BEIQ> VoxelNeuronLayoutConfig<BEIQ>
-where
-    BEIQ: BurstEngineIndexQuantization,
-{
-    pub fn new(_p: core::marker::PhantomData<BEIQ>) -> Self {
-        Self { _p, dimensions: () }
+    fn get_neuron_layout_context(&self, neuron_index: &NeuronLocalIndex<BEIQ::NeuronIndexQuant>) -> &Self::NeuronLayoutContext {
+        todo!()
     }
-    
-    // TODO funcs to convert dim to linear and vice versa
 }
