@@ -1,6 +1,6 @@
+use crate::generic_collections::bitpacked::bitpack_error::{BitPackError, BitPackInvalidRange};
 use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
 use core::ops::{Index, IndexMut, Range};
-use crate::generic_collections::bitpacked::bitpack_error::{BitPackError, BitPackInvalidRange};
 
 /// Minimum byte alignment
 const MIN_U32_BYTE_ALIGNMENT: usize = 4;
@@ -81,8 +81,7 @@ macro_rules! impl_bitpacked_range_read_write {
 }
 
 
-pub trait BitPacked<QI: QuantizedUnsignedIntegerTrait>: Index<QI, Output = u32> + Index<Range<QI>, Output = [u32]> {
-    
+pub trait BitPacked<QI: QuantizedUnsignedIntegerTrait>: Index<QI, Output=u32> + Index<Range<QI>, Output=[u32]> {
     /// Borrows the backing storage as a regular shared bit packed slice.
     fn as_u32s(&self) -> &[u32];
 
@@ -98,7 +97,7 @@ pub trait BitPacked<QI: QuantizedUnsignedIntegerTrait>: Index<QI, Output = u32> 
             .div_ceil(u32s_per_alignment)
             * u32s_per_alignment
     }
-    
+
 
     /// Number of bytes backing this collection.
     fn number_bytes(&self) -> QI {
@@ -159,7 +158,6 @@ pub trait BitPacked<QI: QuantizedUnsignedIntegerTrait>: Index<QI, Output = u32> 
 /// Behaviour for bit-packed collections that track how many bits are logically
 /// in use
 pub trait BitPackedAwareSize<QI: QuantizedUnsignedIntegerTrait>: BitPacked<QI> {
-    
     /// Total number of addressable bits (booleans) held by this collection. Note
     /// that some bits may not be accessible (dangling).
     fn number_addressable_bits(&self) -> QI;
@@ -240,7 +238,7 @@ pub trait BitPackedAwareSize<QI: QuantizedUnsignedIntegerTrait>: BitPacked<QI> {
 /// Implementors only need to expose their backing storage via
 /// [`Self::as_mut_bytes`].
 pub trait BitPackedMut<QI: QuantizedUnsignedIntegerTrait>:
-    BitPacked<QI> + IndexMut<QI, Output = u32> + IndexMut<Range<QI>, Output = [u32]>
+BitPacked<QI> + IndexMut<QI, Output=u32> + IndexMut<Range<QI>, Output=[u32]>
 {
     /// Mutably borrows the backing storage as a regular u32 slice.
     fn as_mut_u32s(&mut self) -> &mut [u32];
@@ -440,7 +438,7 @@ pub trait BitPackedUnawareSize<QI: QuantizedUnsignedIntegerTrait>: BitPacked<QI>
 /// are logically in use. Methods that depend on the logical bit count take
 /// `number_addressable_bits` as an external parameter.
 pub trait BitPackedUnawareSizeMut<QI: QuantizedUnsignedIntegerTrait>:
-    BitPackedMut<QI> + BitPackedUnawareSize<QI>
+BitPackedMut<QI> + BitPackedUnawareSize<QI>
 {
     //region Default impls
 
@@ -583,14 +581,12 @@ impl<QI: QuantizedUnsignedIntegerTrait> BitPackedMut<QI> for BitPackedVectorSize
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedUnawareSize<QI>
-    for BitPackedVectorSizeUnaware<QI>
-{
-}
+for BitPackedVectorSizeUnaware<QI>
+{}
 
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedUnawareSizeMut<QI>
-    for BitPackedVectorSizeUnaware<QI>
-{
-}
+for BitPackedVectorSizeUnaware<QI>
+{}
 
 impl<QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedVectorSizeUnaware<QI> {
     type Output = u32;
@@ -663,9 +659,8 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPacked<QI> for BitPackedSliceSize
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedUnawareSize<QI>
-    for BitPackedSliceSizeUnaware<'a, QI>
-{
-}
+for BitPackedSliceSizeUnaware<'a, QI>
+{}
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedSliceSizeUnaware<'a, QI> {
     type Output = u32;
@@ -736,14 +731,12 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedMut<QI> for BitPackedSliceM
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedUnawareSize<QI>
-    for BitPackedSliceMutSizeUnaware<'a, QI>
-{
-}
+for BitPackedSliceMutSizeUnaware<'a, QI>
+{}
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> BitPackedUnawareSizeMut<QI>
-    for BitPackedSliceMutSizeUnaware<'a, QI>
-{
-}
+for BitPackedSliceMutSizeUnaware<'a, QI>
+{}
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedSliceMutSizeUnaware<'a, QI> {
     type Output = u32;
@@ -829,14 +822,12 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedMut<QI> for Bit
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedUnawareSize<QI>
-    for BitPackedArraySizeUnaware<QI, N>
-{
-}
+for BitPackedArraySizeUnaware<QI, N>
+{}
 
 impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedUnawareSizeMut<QI>
-    for BitPackedArraySizeUnaware<QI, N>
-{
-}
+for BitPackedArraySizeUnaware<QI, N>
+{}
 
 impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> Index<QI> for BitPackedArraySizeUnaware<QI, N> {
     type Output = u32;
@@ -1217,8 +1208,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedMut<QI> for Bit
 
 impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> BitPackedAwareSizeMut<QI>
 for BitPackedArraySizeAware<QI, N>
-{
-}
+{}
 
 impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> Index<QI> for BitPackedArraySizeAware<QI, N> {
     type Output = u32;
@@ -1257,7 +1247,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<[u32; N]> for BitPa
 // the final u32 word become addressable in the unaware target.
 
 impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeUnaware<QI>>
-    for BitPackedVectorSizeAware<QI>
+for BitPackedVectorSizeAware<QI>
 {
     fn from(value: BitPackedVectorSizeUnaware<QI>) -> Self {
         Self::from_vec(value.data)
@@ -1265,7 +1255,7 @@ impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeUnaware<QI>>
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait> From<(BitPackedVectorSizeUnaware<QI>, QI)>
-    for BitPackedVectorSizeAware<QI>
+for BitPackedVectorSizeAware<QI>
 {
     fn from((value, number_bits): (BitPackedVectorSizeUnaware<QI>, QI)) -> Self {
         Self::from_vec_with_bits(value.data, number_bits)
@@ -1273,7 +1263,7 @@ impl<QI: QuantizedUnsignedIntegerTrait> From<(BitPackedVectorSizeUnaware<QI>, QI
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeAware<QI>>
-    for BitPackedVectorSizeUnaware<QI>
+for BitPackedVectorSizeUnaware<QI>
 {
     fn from(value: BitPackedVectorSizeAware<QI>) -> Self {
         Self::from_vec(value.data)
@@ -1281,7 +1271,7 @@ impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeAware<QI>>
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> From<BitPackedSliceSizeUnaware<'a, QI>>
-    for BitPackedSliceSizeAware<'a, QI>
+for BitPackedSliceSizeAware<'a, QI>
 {
     fn from(value: BitPackedSliceSizeUnaware<'a, QI>) -> Self {
         Self::from_u32s(value.data)
@@ -1289,7 +1279,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<BitPackedSliceSizeUnaware<'a, Q
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> From<(BitPackedSliceSizeUnaware<'a, QI>, QI)>
-    for BitPackedSliceSizeAware<'a, QI>
+for BitPackedSliceSizeAware<'a, QI>
 {
     fn from((value, number_bits): (BitPackedSliceSizeUnaware<'a, QI>, QI)) -> Self {
         Self::new(value.data, number_bits)
@@ -1297,7 +1287,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<(BitPackedSliceSizeUnaware<'a, 
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> From<BitPackedSliceSizeAware<'a, QI>>
-    for BitPackedSliceSizeUnaware<'a, QI>
+for BitPackedSliceSizeUnaware<'a, QI>
 {
     fn from(value: BitPackedSliceSizeAware<'a, QI>) -> Self {
         Self::new(value.data)
@@ -1305,7 +1295,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<BitPackedSliceSizeAware<'a, QI>
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> From<BitPackedSliceMutSizeUnaware<'a, QI>>
-    for BitPackedSliceMutSizeAware<'a, QI>
+for BitPackedSliceMutSizeAware<'a, QI>
 {
     fn from(value: BitPackedSliceMutSizeUnaware<'a, QI>) -> Self {
         Self::from_u32s(value.data)
@@ -1313,7 +1303,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<BitPackedSliceMutSizeUnaware<'a
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> From<(BitPackedSliceMutSizeUnaware<'a, QI>, QI)>
-    for BitPackedSliceMutSizeAware<'a, QI>
+for BitPackedSliceMutSizeAware<'a, QI>
 {
     fn from((value, number_bits): (BitPackedSliceMutSizeUnaware<'a, QI>, QI)) -> Self {
         Self::new(value.data, number_bits)
@@ -1321,7 +1311,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<(BitPackedSliceMutSizeUnaware<'
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait> From<BitPackedSliceMutSizeAware<'a, QI>>
-    for BitPackedSliceMutSizeUnaware<'a, QI>
+for BitPackedSliceMutSizeUnaware<'a, QI>
 {
     fn from(value: BitPackedSliceMutSizeAware<'a, QI>) -> Self {
         Self::new(value.data)
@@ -1329,7 +1319,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<BitPackedSliceMutSizeAware<'a, 
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<BitPackedArraySizeUnaware<QI, N>>
-    for BitPackedArraySizeAware<QI, N>
+for BitPackedArraySizeAware<QI, N>
 {
     fn from(value: BitPackedArraySizeUnaware<QI, N>) -> Self {
         Self::from_array(value.data)
@@ -1337,7 +1327,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<BitPackedArraySizeU
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<(BitPackedArraySizeUnaware<QI, N>, QI)>
-    for BitPackedArraySizeAware<QI, N>
+for BitPackedArraySizeAware<QI, N>
 {
     fn from((value, number_bits): (BitPackedArraySizeUnaware<QI, N>, QI)) -> Self {
         Self::from_array_with_bits(value.data, number_bits)
@@ -1345,7 +1335,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<(BitPackedArraySize
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<BitPackedArraySizeAware<QI, N>>
-    for BitPackedArraySizeUnaware<QI, N>
+for BitPackedArraySizeUnaware<QI, N>
 {
     fn from(value: BitPackedArraySizeAware<QI, N>) -> Self {
         Self::from_array(value.data)

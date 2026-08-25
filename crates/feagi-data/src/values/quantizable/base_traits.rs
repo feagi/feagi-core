@@ -8,16 +8,7 @@ use half::{bf16, f16};
 /// Common base for all quantizable types
 #[doc(hidden)]
 pub trait QuantizedElementBase:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + Default
-    + core::fmt::Debug
-    + core::fmt::Display
-    + core::cmp::PartialEq
-    + Sized
-    + 'static
+    Copy + Clone + Send + Sync + Default + core::fmt::Debug + core::fmt::Display + core::cmp::PartialEq + Sized + 'static
 {
     const QUANT_ZERO: Self;
     const QUANT_ONE: Self;

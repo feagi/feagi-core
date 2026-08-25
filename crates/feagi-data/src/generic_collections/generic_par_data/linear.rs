@@ -83,7 +83,7 @@ macro_rules! impl_par_data_range_read_write {
 /// Shared read behaviour for quantized-indexed collections backed by contiguous
 /// generic data.
 pub trait ParData<QI: QuantizedUnsignedIntegerTrait, D: Clone>:
-    Index<QI, Output = D> + Index<Range<QI>, Output = [D]>
+Index<QI, Output=D> + Index<Range<QI>, Output=[D]>
 {
     /// Borrows the backing storage as a regular shared slice.
     fn as_slice(&self) -> &[D];
@@ -173,7 +173,7 @@ pub trait ParData<QI: QuantizedUnsignedIntegerTrait, D: Clone>:
 /// exclusively borrow their storage ([`ParDataVector`], [`ParDataSliceMut`], and
 /// [`ParDataArray`]).
 pub trait ParDataMut<QI: QuantizedUnsignedIntegerTrait, D: Clone>:
-    ParData<QI, D> + IndexMut<QI, Output = D> + IndexMut<Range<QI>, Output = [D]>
+ParData<QI, D> + IndexMut<QI, Output=D> + IndexMut<Range<QI>, Output=[D]>
 {
     /// Mutably borrows the backing storage as a regular slice.
     fn as_mut_slice(&mut self) -> &mut [D];
@@ -311,7 +311,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataVector<QI, D> {
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParData<QI, D>
-    for ParDataVector<QI, D>
+for ParDataVector<QI, D>
 {
     fn as_slice(&self) -> &[D] {
         &self.data
@@ -319,7 +319,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParData<QI, D>
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataMut<QI, D>
-    for ParDataVector<QI, D>
+for ParDataVector<QI, D>
 {
     fn as_mut_slice(&mut self) -> &mut [D] {
         &mut self.data
@@ -390,7 +390,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataSlice<'a, QI, D> {
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> ParData<QI, D>
-    for ParDataSlice<'a, QI, D>
+for ParDataSlice<'a, QI, D>
 {
     fn as_slice(&self) -> &[D] {
         self.data
@@ -412,7 +412,7 @@ impl_par_data_range_read!(
 );
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> From<&'a [D]>
-    for ParDataSlice<'a, QI, D>
+for ParDataSlice<'a, QI, D>
 {
     fn from(value: &'a [D]) -> Self {
         Self::from_slice(value)
@@ -455,7 +455,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataSliceMut<'a, QI, D>
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> ParData<QI, D>
-    for ParDataSliceMut<'a, QI, D>
+for ParDataSliceMut<'a, QI, D>
 {
     fn as_slice(&self) -> &[D] {
         self.data
@@ -463,7 +463,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> ParData<QI, D>
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataMut<QI, D>
-    for ParDataSliceMut<'a, QI, D>
+for ParDataSliceMut<'a, QI, D>
 {
     fn as_mut_slice(&mut self) -> &mut [D] {
         self.data
@@ -471,7 +471,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataMut<QI, D>
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> Index<QI>
-    for ParDataSliceMut<'a, QI, D>
+for ParDataSliceMut<'a, QI, D>
 {
     type Output = D;
     fn index(&self, index: QI) -> &Self::Output {
@@ -480,7 +480,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> Index<QI>
 }
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> IndexMut<QI>
-    for ParDataSliceMut<'a, QI, D>
+for ParDataSliceMut<'a, QI, D>
 {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
         &mut self.data[index.quant_to_usize()]
@@ -495,7 +495,7 @@ impl_par_data_range_read_write!(
 );
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> From<&'a mut [D]>
-    for ParDataSliceMut<'a, QI, D>
+for ParDataSliceMut<'a, QI, D>
 {
     fn from(value: &'a mut [D]) -> Self {
         Self::from_slice_mut(value)
@@ -538,7 +538,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParDataArray<Q
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParData<QI, D>
-    for ParDataArray<QI, D, N>
+for ParDataArray<QI, D, N>
 {
     fn as_slice(&self) -> &[D] {
         &self.data
@@ -546,7 +546,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParData<QI, D>
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParDataMut<QI, D>
-    for ParDataArray<QI, D, N>
+for ParDataArray<QI, D, N>
 {
     fn as_mut_slice(&mut self) -> &mut [D] {
         &mut self.data
@@ -554,7 +554,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParDataMut<QI,
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> Index<QI>
-    for ParDataArray<QI, D, N>
+for ParDataArray<QI, D, N>
 {
     type Output = D;
     fn index(&self, index: QI) -> &Self::Output {
@@ -563,7 +563,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> Index<QI>
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> IndexMut<QI>
-    for ParDataArray<QI, D, N>
+for ParDataArray<QI, D, N>
 {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
         &mut self.data[index.quant_to_usize()]
@@ -578,7 +578,7 @@ impl_par_data_range_read_write!(
 );
 
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> From<[D; N]>
-    for ParDataArray<QI, D, N>
+for ParDataArray<QI, D, N>
 {
     fn from(value: [D; N]) -> Self {
         Self::from_array(value)

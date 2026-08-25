@@ -1,4 +1,3 @@
-
 macro_rules! create_spatial_quantized_contiguous_vector {
     (
         $(#[$meta:meta])*
