@@ -8,7 +8,7 @@ macro_rules! create_spatial_bitpacked_vector {
     ) => {
         $(#[$meta])*
         $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait> {
-            pub data: $crate::collections::linear::bitpacked::BitPackedVector<QI>,
+            pub data: $crate::generic_collections::linear::bitpacked::BitPackedVector<QI>,
             pub dimensions: $dim_impl<QI>
         }
 
@@ -18,7 +18,7 @@ macro_rules! create_spatial_bitpacked_vector {
                 let linear = dimensions.number_contained_elements().deref();
 
                 Self {
-                    data: $crate::collections::linear::bitpacked::BitPackedVector::new_uniform(linear, initial_state),
+                    data: $crate::generic_collections::linear::bitpacked::BitPackedVector::new_uniform(linear, initial_state),
                     dimensions
                 }
             }

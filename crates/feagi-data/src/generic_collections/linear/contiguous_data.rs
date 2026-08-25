@@ -1,4 +1,4 @@
-use crate::collections::feagi_data_collections_error::{FeagiDataCollectionError, FeagiFailCollectionInvalidIndex};
+use crate::generic_collections::feagi_data_collections_error::{FeagiDataCollectionError, FeagiFailCollectionInvalidIndex};
 use crate::values::quantizable::{QuantizedUnsignedIntegerWrappedTrait};
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
@@ -23,7 +23,7 @@ macro_rules! create_wrapped_quantized_contiguous_linear_vector {
             $index_unwrapped: $index_bound,
             $data_unwrapped: $data_bound,
         > {
-            data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<
+            data: $crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector<
                 $index<$index_unwrapped>,
                 $count<$index_unwrapped>,
                 $data<$data_unwrapped>,
@@ -33,7 +33,7 @@ macro_rules! create_wrapped_quantized_contiguous_linear_vector {
         impl<
             $index_unwrapped: $index_bound,
             $data_unwrapped: $data_bound,
-        > $crate::collections::linear::contiguous_data::QuantizedContiguousTrait<
+        > $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait<
             $index<$index_unwrapped>,
             $count<$index_unwrapped>,
             $data<$data_unwrapped>,
@@ -46,7 +46,7 @@ macro_rules! create_wrapped_quantized_contiguous_linear_vector {
         impl<
             $index_unwrapped: $index_bound,
             $data_unwrapped: $data_bound,
-        > $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait<
+        > $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait<
             $index<$index_unwrapped>,
             $count<$index_unwrapped>,
             $data<$data_unwrapped>,

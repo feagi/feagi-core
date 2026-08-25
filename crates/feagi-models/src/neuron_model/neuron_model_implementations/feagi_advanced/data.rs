@@ -1,7 +1,7 @@
 use crate::neuron_model::cortical_area::cortical_data::NeuronModelCorticalData;
 use crate::neuron_model::neuron::neuron_data::NeuronModelNeuronData;
 use crate::neuron_model::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
-use feagi_data::neurons::neuron::neuron::NeuronMembranePotential;
+use feagi_data::neurons::neuron_potentials::neuron::NeuronMembranePotential;
 use feagi_data::values::quantizable::PercentageUnsigned;
 use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer_index};
 

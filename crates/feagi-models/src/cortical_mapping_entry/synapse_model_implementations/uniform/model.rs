@@ -3,7 +3,7 @@ use crate::cortical_mapping_entry::synapse::synapse_data::EmptyPerSynapseData;
 use crate::cortical_mapping_entry::synapse::synapse_model::SynapseModel;
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::data::UniformSynapseModelCorticalMappingEntryData;
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelQuantization;
-use feagi_data::neurons::neuron::neuron::NeuronMembranePotential;
+use feagi_data::neurons::neuron_potentials::neuron::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub struct UniformSynapseModel<FIQ, SMQ>

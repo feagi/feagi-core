@@ -9,7 +9,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
     ) => {
         $(#[$meta])*
         $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait, V: Clone + Copy> {
-            pub data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<QI, V>,
+            pub data: $crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector<QI, V>,
             pub dimensions: $dim_impl<QI>,
         }
 
@@ -32,7 +32,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn new_uniform(dimensions: $dim_impl<QI>, filling_value: V) -> $struct_name<QI, V> {
                 let number_values = dimensions.number_contained_elements().deref();
                 Self {
-                    data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector::new_uniform(number_values, filling_value),
+                    data: $crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector::new_uniform(number_values, filling_value),
                     dimensions,
                 }
             }
@@ -40,12 +40,12 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             /// Wraps an existing linear vector, checking that its length matches the
             /// number of elements described by `dimensions`.
             pub fn try_from_linear_vector(
-                data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<QI, V>,
+                data: $crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector<QI, V>,
                 dimensions: $dim_impl<QI>,
-            ) -> Result<$struct_name<QI, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+            ) -> Result<$struct_name<QI, V>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 if data.len() != dimensions.number_contained_elements().deref() {
-                    return Err($crate::collections::feagi_data_collections_error::FeagiFailCollectionDimensionMismatch::new(
+                    return Err($crate::generic_collections::feagi_data_collections_error::FeagiFailCollectionDimensionMismatch::new(
                         "backing vector length does not match the given dimensions",
                     )
                     .into());
@@ -58,16 +58,16 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn try_from_vec(
                 data: Vec<V>,
                 dimensions: $dim_impl<QI>,
-            ) -> Result<$struct_name<QI, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
+            ) -> Result<$struct_name<QI, V>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
                 Self::try_from_linear_vector(
-                    $crate::collections::linear::contiguous_data::QuantizedContiguousVector::from_vec(data),
+                    $crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector::from_vec(data),
                     dimensions,
                 )
             }
 
             /// Total number of elements, expressed in the quantized index/count type.
             pub fn number_contained_elements(&self) -> QI {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.data.len()
             }
 
@@ -83,7 +83,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
 
             /// Converts a coordinate into its linear index, with the first axis
             /// varying fastest.
-            pub fn coordinate_to_linear_index(&self, coordinate: $coord_impl<QI>) ->  Result<QI, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
+            pub fn coordinate_to_linear_index(&self, coordinate: $coord_impl<QI>) ->  Result<QI, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
                 self.dimensions
                     .coordinate_to_linear_index(coordinate)
                     .map(|index| index.deref())
@@ -91,7 +91,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             }
 
             /// Converts an index to a coordinate
-            pub fn linear_index_to_coordinate(&self, linear_index: QI) ->  Result<$coord_impl<QI>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
+            pub fn linear_index_to_coordinate(&self, linear_index: QI) ->  Result<$coord_impl<QI>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
                 self.dimensions
                     .linear_index_to_coordinate(QuantizedIndexLinearIndex::new(linear_index))
                     .map_err(Into::into)
@@ -111,7 +111,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             /// Consumes the wrapper, returning the backing linear vector.
             pub fn into_linear_vector(
                 self,
-            ) -> $crate::collections::linear::contiguous_data::QuantizedContiguousVector<QI, V> {
+            ) -> $crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector<QI, V> {
                 self.data
             }
 
@@ -127,7 +127,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
 
             /// Returns `true` if there are no elements.
             pub fn is_empty(&self) -> bool {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.data.is_empty()
             }
 
@@ -136,21 +136,21 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             /// Copies out the element at the given linear `index`, or `None` if out
             /// of bounds.
             pub fn get(&self, index: QI) -> Option<V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.data.get(index)
             }
 
             /// Mutably borrows the element at the given linear `index`, or `None` if
             /// out of bounds.
             pub fn get_mut(&mut self, index: QI) -> Option<&mut V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.data.get_mut(index)
             }
 
             /// Overwrites the element at the given linear `index`, returning the
             /// previous value if the index was in bounds.
             pub fn set(&mut self, index: QI, value: V) -> Option<V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.data.set(index, value)
             }
 
@@ -194,22 +194,22 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             /// Borrows the whole collection's backing storage as a regular shared
             /// slice, in linear (x-fastest) order.
             pub fn as_slice(&self) -> &[V] {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.data.as_slice()
             }
 
             /// Mutably borrows the whole collection's backing storage as a regular
             /// slice, in linear (x-fastest) order.
             pub fn as_mut_slice(&mut self) -> &mut [V] {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.data.as_mut_slice()
             }
 
             /// Borrows the whole collection as a read-only quantized slice view.
             pub fn as_quantized_slice(
                 &self,
-            ) -> $crate::collections::linear::contiguous_data::QuantizedContiguousSlice<'_, QI, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+            ) -> $crate::generic_collections::linear::contiguous_data::QuantizedContiguousSlice<'_, QI, V> {
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.data.as_quantized_slice()
             }
 
@@ -219,19 +219,19 @@ macro_rules! create_spatial_quantized_contiguous_vector {
 
             /// Iterates over shared references to the elements, in linear order.
             pub fn iter(&self) -> core::slice::Iter<'_, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.data.iter()
             }
 
             /// Iterates over mutable references to the elements, in linear order.
             pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.data.iter_mut()
             }
 
             /// Iterates over `(linear_index, &value)` pairs, in linear order.
             pub fn iter_with_index(&self) -> impl Iterator<Item = (QI, &V)> + '_ {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.data
                     .iter()
                     .enumerate()
@@ -240,7 +240,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
 
             /// Iterates over `(linear_index, &mut value)` pairs, in linear order.
             pub fn iter_mut_with_index(&mut self) -> impl Iterator<Item = (QI, &mut V)> + '_ {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.data
                     .iter_mut()
                     .enumerate()
@@ -249,7 +249,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
 
             /// Iterates over `(coordinate, &value)` pairs, in linear order.
             pub fn iter_with_coordinate(&self) -> impl Iterator<Item = ($coord_impl<QI>, &V)> + '_ {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let dimensions = &self.dimensions;
                 self.data.iter().enumerate().map(move |(i, v)| {
                     (
@@ -265,7 +265,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn iter_mut_with_coordinate(
                 &mut self,
             ) -> impl Iterator<Item = ($coord_impl<QI>, &mut V)> + '_ {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let dimensions = &self.dimensions;
                 self.data.iter_mut().enumerate().map(move |(i, v)| {
                     (
@@ -282,7 +282,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn iter_with_index_and_coordinate(
                 &self,
             ) -> impl Iterator<Item = (QI, $coord_impl<QI>, &V)> + '_ {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let dimensions = &self.dimensions;
                 self.data.iter().enumerate().map(move |(i, v)| {
                     let linear_index = QI::quant_from_usize_unchecked(i);
@@ -301,7 +301,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn iter_mut_with_index_and_coordinate(
                 &mut self,
             ) -> impl Iterator<Item = (QI, $coord_impl<QI>, &mut V)> + '_ {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let dimensions = &self.dimensions;
                 self.data.iter_mut().enumerate().map(move |(i, v)| {
                     let linear_index = QI::quant_from_usize_unchecked(i);

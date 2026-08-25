@@ -1,6 +1,6 @@
 use crate::create_wrapped_quantized_decimal;
 use crate::create_wrapped_quantized_contiguous_linear_vector;
-use crate::neurons::neuron::indexing::{NeuronCount, NeuronLocalIndex};
+use crate::neurons::neuron_potentials::indexing::{NeuronCount, NeuronLocalIndex};
 use crate::values::quantizable::{QuantizedDecimalUnwrappedTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 
 create_wrapped_quantized_decimal!(

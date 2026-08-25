@@ -1,5 +1,5 @@
 //! Macros that generate strongly-typed *wrappers* around the contiguous
-//! quantized collections defined in [`crate::collections::linear::contiguous_data`].
+//! quantized collections defined in [`crate::generic_collections::linear::contiguous_data`].
 //!
 //! Just like [`crate::create_wrapped_quantized_unsigned_integer_index`] produces a distinct
 //! newtype around a single quantized index value, these macros produce distinct
@@ -24,7 +24,7 @@
 //! ```
 
 /// Generates a strongly-typed wrapper around
-/// [`QuantizedContiguousSlice`](crate::collections::linear::contiguous_data::QuantizedContiguousSlice).
+/// [`QuantizedContiguousSlice`](crate::generic_collections::linear::contiguous_data::QuantizedContiguousSlice).
 ///
 /// Parameters: `$(#[meta])* $vis $StructName, $WrappedIndex`.
 #[macro_export]
@@ -37,7 +37,7 @@ macro_rules! create_wrapped_contiguous_slice {
         $(#[$meta])*
         #[repr(transparent)]
         $vis struct $struct_name<'a, Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait, V: Clone >(
-            $crate::collections::linear::contiguous_data::QuantizedContiguousSlice<'a, Q, V>
+            $crate::generic_collections::linear::contiguous_data::QuantizedContiguousSlice<'a, Q, V>
         );
 
         impl<'a, Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait, V: Clone > Clone
@@ -53,12 +53,12 @@ macro_rules! create_wrapped_contiguous_slice {
         {
             /// Wraps a raw shared slice.
             pub fn new(data: &'a [V]) -> Self {
-                Self($crate::collections::linear::contiguous_data::QuantizedContiguousSlice::new(data))
+                Self($crate::generic_collections::linear::contiguous_data::QuantizedContiguousSlice::new(data))
             }
 
             /// Wraps the underlying (unwrapped) collection type.
             pub fn from_inner(
-                inner: $crate::collections::linear::contiguous_data::QuantizedContiguousSlice<'a, Q, V>,
+                inner: $crate::generic_collections::linear::contiguous_data::QuantizedContiguousSlice<'a, Q, V>,
             ) -> Self {
                 Self(inner)
             }
@@ -66,31 +66,31 @@ macro_rules! create_wrapped_contiguous_slice {
             /// Unwraps into the underlying collection type.
             pub fn into_inner(
                 self,
-            ) -> $crate::collections::linear::contiguous_data::QuantizedContiguousSlice<'a, Q, V> {
+            ) -> $crate::generic_collections::linear::contiguous_data::QuantizedContiguousSlice<'a, Q, V> {
                 self.0
             }
 
             /// Borrows the backing storage as a regular shared slice.
             pub fn as_slice(&self) -> &[V] {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.as_slice()
             }
 
             /// Number of elements, expressed in the wrapped index type.
             pub fn len(&self) -> $index<Q> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 <$index<Q>>::from(self.0.len())
             }
 
             /// Returns `true` if there are no elements.
             pub fn is_empty(&self) -> bool {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.is_empty()
             }
 
             /// Copies out the element at `index`, or `None` if out of bounds.
             pub fn get(&self, index: $index<Q>) -> Option<V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.get(index.const_deref())
             }
 
@@ -98,15 +98,15 @@ macro_rules! create_wrapped_contiguous_slice {
             pub fn subslice(
                 &self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$struct_name<'_, Q, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+            ) -> Result<$struct_name<'_, Q, V>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let inner = self.0.subslice(range.start.const_deref()..range.end.const_deref())?;
                 Ok($struct_name(inner))
             }
 
             /// Iterates over shared references to the elements.
             pub fn iter(&self) -> core::slice::Iter<'_, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.iter()
             }
 
@@ -116,7 +116,7 @@ macro_rules! create_wrapped_contiguous_slice {
             /// # Safety
             /// - `index` must be in bounds.
             pub unsafe fn get_par(&self, index: $index<Q>) -> &V {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousParTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousParTrait;
                 unsafe { self.0.get_par(index.const_deref()) }
             }
         }
@@ -141,7 +141,7 @@ macro_rules! create_wrapped_contiguous_slice {
 }
 
 /// Generates a strongly-typed wrapper around
-/// [`QuantizedContiguousSliceMut`](crate::collections::linear::contiguous_data::QuantizedContiguousSliceMut).
+/// [`QuantizedContiguousSliceMut`](crate::generic_collections::linear::contiguous_data::QuantizedContiguousSliceMut).
 ///
 /// Parameters: `$(#[meta])* $vis $StructName, $WrappedIndex, $WrappedSlice`.
 /// `$WrappedSlice` is the read-only wrapped slice type returned by the immutable
@@ -157,7 +157,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
         $(#[$meta])*
         #[repr(transparent)]
         $vis struct $struct_name<'a, Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait, V: Clone >(
-            $crate::collections::linear::contiguous_data::QuantizedContiguousSliceMut<'a, Q, V>
+            $crate::generic_collections::linear::contiguous_data::QuantizedContiguousSliceMut<'a, Q, V>
         );
 
         impl<'a, Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait, V: Clone >
@@ -165,12 +165,12 @@ macro_rules! create_wrapped_contiguous_slice_mut {
         {
             /// Wraps a raw mutable slice.
             pub fn new(data: &'a mut [V]) -> Self {
-                Self($crate::collections::linear::contiguous_data::QuantizedContiguousSliceMut::new(data))
+                Self($crate::generic_collections::linear::contiguous_data::QuantizedContiguousSliceMut::new(data))
             }
 
             /// Wraps the underlying (unwrapped) collection type.
             pub fn from_inner(
-                inner: $crate::collections::linear::contiguous_data::QuantizedContiguousSliceMut<'a, Q, V>,
+                inner: $crate::generic_collections::linear::contiguous_data::QuantizedContiguousSliceMut<'a, Q, V>,
             ) -> Self {
                 Self(inner)
             }
@@ -178,7 +178,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             /// Unwraps into the underlying collection type.
             pub fn into_inner(
                 self,
-            ) -> $crate::collections::linear::contiguous_data::QuantizedContiguousSliceMut<'a, Q, V> {
+            ) -> $crate::generic_collections::linear::contiguous_data::QuantizedContiguousSliceMut<'a, Q, V> {
                 self.0
             }
 
@@ -194,44 +194,44 @@ macro_rules! create_wrapped_contiguous_slice_mut {
 
             /// Borrows the backing storage as a regular shared slice.
             pub fn as_slice(&self) -> &[V] {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.as_slice()
             }
 
             /// Mutably borrows the backing storage as a regular slice.
             pub fn as_mut_slice(&mut self) -> &mut [V] {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.as_mut_slice()
             }
 
             /// Number of elements, expressed in the wrapped index type.
             pub fn len(&self) -> $index<Q> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 <$index<Q>>::from(self.0.len())
             }
 
             /// Returns `true` if there are no elements.
             pub fn is_empty(&self) -> bool {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.is_empty()
             }
 
             /// Copies out the element at `index`, or `None` if out of bounds.
             pub fn get(&self, index: $index<Q>) -> Option<V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.get(index.const_deref())
             }
 
             /// Mutably borrows the element at `index`, or `None` if out of bounds.
             pub fn get_mut(&mut self, index: $index<Q>) -> Option<&mut V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.get_mut(index.const_deref())
             }
 
             /// Overwrites the element at `index`, returning the previous value if
             /// the index was in bounds.
             pub fn set(&mut self, index: $index<Q>, value: V) -> Option<V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.set(index.const_deref(), value)
             }
 
@@ -239,8 +239,8 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             pub fn subslice(
                 &self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice<'_, Q, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+            ) -> Result<$slice<'_, Q, V>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let inner = self.0.subslice(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice::from_inner(inner))
             }
@@ -249,21 +249,21 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             pub fn subslice_mut(
                 &mut self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$struct_name<'_, Q, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+            ) -> Result<$struct_name<'_, Q, V>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let inner = self.0.subslice_mut(range.start.const_deref()..range.end.const_deref())?;
                 Ok($struct_name(inner))
             }
 
             /// Iterates over shared references to the elements.
             pub fn iter(&self) -> core::slice::Iter<'_, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.iter()
             }
 
             /// Iterates over mutable references to the elements.
             pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.iter_mut()
             }
 
@@ -273,7 +273,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             /// # Safety
             /// - `index` must be in bounds.
             pub unsafe fn get_par(&self, index: $index<Q>) -> &V {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousParTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousParTrait;
                 unsafe { self.0.get_par(index.const_deref()) }
             }
 
@@ -284,7 +284,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
             /// - `index` must be in bounds.
             /// - Concurrent callers must only ever target disjoint indices.
             pub unsafe fn get_mut_par(&self, index: $index<Q>) -> &mut V {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousParMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousParMutTrait;
                 unsafe { self.0.get_mut_par(index.const_deref()) }
             }
         }
@@ -317,7 +317,7 @@ macro_rules! create_wrapped_contiguous_slice_mut {
 }
 
 /// Generates a strongly-typed wrapper around
-/// [`QuantizedContiguousVector`](crate::collections::linear::contiguous_data::QuantizedContiguousVector).
+/// [`QuantizedContiguousVector`](crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector).
 ///
 /// Parameters:
 /// `$(#[meta])* $vis $StructName, $WrappedIndex, $WrappedSlice, $WrappedSliceMut`.
@@ -333,7 +333,7 @@ macro_rules! create_wrapped_contiguous_vector {
         $(#[$meta])*
         #[repr(transparent)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait, V: Clone >(
-            $crate::collections::linear::contiguous_data::QuantizedContiguousVector<Q, V>
+            $crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector<Q, V>
         );
 
         impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait, V: Clone > Clone
@@ -358,12 +358,12 @@ macro_rules! create_wrapped_contiguous_vector {
 
             /// Starts with an empty vector
             pub fn new_empty() -> Self {
-                Self($crate::collections::linear::contiguous_data::QuantizedContiguousVector::new_empty())
+                Self($crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector::new_empty())
             }
 
             /// Builds a vector of `number_values` elements, each set to `filling_value`.
             pub fn new_uniform(number_values: $index<Q>, filling_value: V) -> Self {
-                Self($crate::collections::linear::contiguous_data::QuantizedContiguousVector::new_uniform(
+                Self($crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector::new_uniform(
                     number_values.const_deref(),
                     filling_value,
                 ))
@@ -371,7 +371,7 @@ macro_rules! create_wrapped_contiguous_vector {
 
             /// Wraps an existing `Vec` without copying.
             pub fn from_vec(data: Vec<V>) -> Self {
-                Self($crate::collections::linear::contiguous_data::QuantizedContiguousVector::from_vec(data))
+                Self($crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector::from_vec(data))
             }
 
             /// Consumes the wrapper, returning the backing `Vec`.
@@ -386,7 +386,7 @@ macro_rules! create_wrapped_contiguous_vector {
             /// Appends a single element to the end of the vector, returning a
             /// mutable reference to the newly appended element.
             pub fn append_single_mut(&mut self, value: V) -> &mut V {
-                use $crate::collections::linear::contiguous_data::{QuantizedContiguousTrait, QuantizedContiguousMutTrait};
+                use $crate::generic_collections::linear::contiguous_data::{QuantizedContiguousTrait, QuantizedContiguousMutTrait};
                 let new_index = self.0.as_slice().len();
                 self.0.extend(Q::QUANT_ONE, value);
                 &mut self.0.as_mut_slice()[new_index]
@@ -396,7 +396,7 @@ macro_rules! create_wrapped_contiguous_vector {
             /// vector, returning a mutable slice over just the newly appended
             /// elements.
             pub fn extend_mut(&mut self, number_values: $index<Q>, extend_with: V) -> &mut [V] {
-                use $crate::collections::linear::contiguous_data::{QuantizedContiguousTrait, QuantizedContiguousMutTrait};
+                use $crate::generic_collections::linear::contiguous_data::{QuantizedContiguousTrait, QuantizedContiguousMutTrait};
                 let start_index = self.0.as_slice().len();
                 self.0.extend(number_values.const_deref(), extend_with);
                 &mut self.0.as_mut_slice()[start_index..]
@@ -404,7 +404,7 @@ macro_rules! create_wrapped_contiguous_vector {
 
             /// Wraps the underlying (unwrapped) collection type.
             pub fn from_inner(
-                inner: $crate::collections::linear::contiguous_data::QuantizedContiguousVector<Q, V>,
+                inner: $crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector<Q, V>,
             ) -> Self {
                 Self(inner)
             }
@@ -412,62 +412,62 @@ macro_rules! create_wrapped_contiguous_vector {
             /// Unwraps into the underlying collection type.
             pub fn into_inner(
                 self,
-            ) -> $crate::collections::linear::contiguous_data::QuantizedContiguousVector<Q, V> {
+            ) -> $crate::generic_collections::linear::contiguous_data::QuantizedContiguousVector<Q, V> {
                 self.0
             }
 
             /// Borrows the backing storage as a regular shared slice.
             pub fn as_slice(&self) -> &[V] {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.as_slice()
             }
 
             /// Mutably borrows the backing storage as a regular slice.
             pub fn as_mut_slice(&mut self) -> &mut [V] {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.as_mut_slice()
             }
 
             /// Number of elements, expressed in the wrapped index type.
             pub fn len(&self) -> $index<Q> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 <$index<Q>>::from(self.0.len())
             }
 
             /// Returns `true` if there are no elements.
             pub fn is_empty(&self) -> bool {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.is_empty()
             }
 
             /// Copies out the element at `index`, or `None` if out of bounds.
             pub fn get(&self, index: $index<Q>) -> Option<V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.get(index.const_deref())
             }
 
             /// Mutably borrows the element at `index`, or `None` if out of bounds.
             pub fn get_mut(&mut self, index: $index<Q>) -> Option<&mut V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.get_mut(index.const_deref())
             }
 
             /// Overwrites the element at `index`, returning the previous value if
             /// the index was in bounds.
             pub fn set(&mut self, index: $index<Q>, value: V) -> Option<V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.set(index.const_deref(), value)
             }
 
             /// Borrows the whole vector as a read-only wrapped slice.
             pub fn as_quantized_slice(&self) -> $slice<'_, Q, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 $slice::from_inner(self.0.as_quantized_slice())
             }
 
             /// Mutably borrows the whole vector as a wrapped mutable slice.
             pub fn as_quantized_slice_mut(&mut self) -> $slice_mut<'_, Q, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 $slice_mut::new(self.0.as_mut_slice())
             }
 
@@ -475,8 +475,8 @@ macro_rules! create_wrapped_contiguous_vector {
             pub fn subslice(
                 &self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice<'_, Q, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+            ) -> Result<$slice<'_, Q, V>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let inner = self.0.subslice(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice::from_inner(inner))
             }
@@ -485,21 +485,21 @@ macro_rules! create_wrapped_contiguous_vector {
             pub fn subslice_mut(
                 &mut self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice_mut<'_, Q, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+            ) -> Result<$slice_mut<'_, Q, V>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let inner = self.0.subslice_mut(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice_mut::from_inner(inner))
             }
 
             /// Iterates over shared references to the elements.
             pub fn iter(&self) -> core::slice::Iter<'_, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.iter()
             }
 
             /// Iterates over mutable references to the elements.
             pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.iter_mut()
             }
 
@@ -509,7 +509,7 @@ macro_rules! create_wrapped_contiguous_vector {
             /// # Safety
             /// - `index` must be in bounds.
             pub unsafe fn get_par(&self, index: $index<Q>) -> &V {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousParTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousParTrait;
                 unsafe { self.0.get_par(index.const_deref()) }
             }
 
@@ -520,7 +520,7 @@ macro_rules! create_wrapped_contiguous_vector {
             /// - `index` must be in bounds.
             /// - Concurrent callers must only ever target disjoint indices.
             pub unsafe fn get_mut_par(&self, index: $index<Q>) -> &mut V {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousParMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousParMutTrait;
                 unsafe { self.0.get_mut_par(index.const_deref()) }
             }
         }
@@ -553,7 +553,7 @@ macro_rules! create_wrapped_contiguous_vector {
 }
 
 /// Generates a strongly-typed wrapper around
-/// [`QuantizedContiguousArray`](crate::collections::linear::contiguous_data::QuantizedContiguousArray).
+/// [`QuantizedContiguousArray`](crate::generic_collections::linear::contiguous_data::QuantizedContiguousArray).
 ///
 /// Parameters:
 /// `$(#[meta])* $vis $StructName, $WrappedIndex, $WrappedSlice, $WrappedSliceMut`.
@@ -569,7 +569,7 @@ macro_rules! create_wrapped_contiguous_array {
         $(#[$meta])*
         #[repr(transparent)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait, V: Clone , const N: usize>(
-            $crate::collections::linear::contiguous_data::QuantizedContiguousArray<Q, V, N>
+            $crate::generic_collections::linear::contiguous_data::QuantizedContiguousArray<Q, V, N>
         );
 
         impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait, V: Clone , const N: usize> Clone
@@ -585,12 +585,12 @@ macro_rules! create_wrapped_contiguous_array {
         {
             /// Builds an array with every element set to `filling_value`.
             pub fn new_uniform(filling_value: V) -> Self {
-                Self($crate::collections::linear::contiguous_data::QuantizedContiguousArray::new_uniform(filling_value))
+                Self($crate::generic_collections::linear::contiguous_data::QuantizedContiguousArray::new_uniform(filling_value))
             }
 
             /// Wraps an existing array.
             pub fn from_array(data: [V; N]) -> Self {
-                Self($crate::collections::linear::contiguous_data::QuantizedContiguousArray::from_array(data))
+                Self($crate::generic_collections::linear::contiguous_data::QuantizedContiguousArray::from_array(data))
             }
 
             /// Consumes the wrapper, returning the backing array.
@@ -600,7 +600,7 @@ macro_rules! create_wrapped_contiguous_array {
 
             /// Wraps the underlying (unwrapped) collection type.
             pub fn from_inner(
-                inner: $crate::collections::linear::contiguous_data::QuantizedContiguousArray<Q, V, N>,
+                inner: $crate::generic_collections::linear::contiguous_data::QuantizedContiguousArray<Q, V, N>,
             ) -> Self {
                 Self(inner)
             }
@@ -608,62 +608,62 @@ macro_rules! create_wrapped_contiguous_array {
             /// Unwraps into the underlying collection type.
             pub fn into_inner(
                 self,
-            ) -> $crate::collections::linear::contiguous_data::QuantizedContiguousArray<Q, V, N> {
+            ) -> $crate::generic_collections::linear::contiguous_data::QuantizedContiguousArray<Q, V, N> {
                 self.0
             }
 
             /// Borrows the backing storage as a regular shared slice.
             pub fn as_slice(&self) -> &[V] {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.as_slice()
             }
 
             /// Mutably borrows the backing storage as a regular slice.
             pub fn as_mut_slice(&mut self) -> &mut [V] {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.as_mut_slice()
             }
 
             /// Number of elements, expressed in the wrapped index type.
             pub fn len(&self) -> $index<Q> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 <$index<Q>>::from(self.0.len())
             }
 
             /// Returns `true` if there are no elements.
             pub fn is_empty(&self) -> bool {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.is_empty()
             }
 
             /// Copies out the element at `index`, or `None` if out of bounds.
             pub fn get(&self, index: $index<Q>) -> Option<V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.get(index.const_deref())
             }
 
             /// Mutably borrows the element at `index`, or `None` if out of bounds.
             pub fn get_mut(&mut self, index: $index<Q>) -> Option<&mut V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.get_mut(index.const_deref())
             }
 
             /// Overwrites the element at `index`, returning the previous value if
             /// the index was in bounds.
             pub fn set(&mut self, index: $index<Q>, value: V) -> Option<V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.set(index.const_deref(), value)
             }
 
             /// Borrows the whole array as a read-only wrapped slice.
             pub fn as_quantized_slice(&self) -> $slice<'_, Q, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 $slice::from_inner(self.0.as_quantized_slice())
             }
 
             /// Mutably borrows the whole array as a wrapped mutable slice.
             pub fn as_quantized_slice_mut(&mut self) -> $slice_mut<'_, Q, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 $slice_mut::new(self.0.as_mut_slice())
             }
 
@@ -671,8 +671,8 @@ macro_rules! create_wrapped_contiguous_array {
             pub fn subslice(
                 &self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice<'_, Q, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+            ) -> Result<$slice<'_, Q, V>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 let inner = self.0.subslice(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice::from_inner(inner))
             }
@@ -681,21 +681,21 @@ macro_rules! create_wrapped_contiguous_array {
             pub fn subslice_mut(
                 &mut self,
                 range: core::ops::Range<$index<Q>>,
-            ) -> Result<$slice_mut<'_, Q, V>, $crate::collections::feagi_data_collections_error::FeagiDataCollectionError> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+            ) -> Result<$slice_mut<'_, Q, V>, $crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError> {
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 let inner = self.0.subslice_mut(range.start.const_deref()..range.end.const_deref())?;
                 Ok($slice_mut::from_inner(inner))
             }
 
             /// Iterates over shared references to the elements.
             pub fn iter(&self) -> core::slice::Iter<'_, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousTrait;
                 self.0.iter()
             }
 
             /// Iterates over mutable references to the elements.
             pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, V> {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousMutTrait;
                 self.0.iter_mut()
             }
 
@@ -705,7 +705,7 @@ macro_rules! create_wrapped_contiguous_array {
             /// # Safety
             /// - `index` must be in bounds.
             pub unsafe fn get_par(&self, index: $index<Q>) -> &V {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousParTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousParTrait;
                 unsafe { self.0.get_par(index.const_deref()) }
             }
 
@@ -716,7 +716,7 @@ macro_rules! create_wrapped_contiguous_array {
             /// - `index` must be in bounds.
             /// - Concurrent callers must only ever target disjoint indices.
             pub unsafe fn get_mut_par(&self, index: $index<Q>) -> &mut V {
-                use $crate::collections::linear::contiguous_data::QuantizedContiguousParMutTrait;
+                use $crate::generic_collections::linear::contiguous_data::QuantizedContiguousParMutTrait;
                 unsafe { self.0.get_mut_par(index.const_deref()) }
             }
         }

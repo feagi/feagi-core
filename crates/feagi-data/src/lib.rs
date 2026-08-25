@@ -1,4 +1,4 @@
-pub mod collections;
+pub mod generic_collections;
 pub mod feagi_data_error;
 pub mod index_range_managers;
 pub mod quantization_levels;
