@@ -16,7 +16,7 @@ use crate::types::{BduError, BduResult, Position};
 // Core types, re-homed after `feagi-genome-definitions` was split up: the cortical type and ID
 // moved to feagi-genomic-context, the area struct to feagi-genomic-data, and the dimension type
 // became the genomic-quantized voxel dimensions in feagi-data.
-pub use feagi_data::neurons::neuron_voxels::wrapped_values::NeuronVoxelDimensionsGenomic as CorticalAreaDimensions;
+pub use feagi_data::neurons::voxel_potentials::wrapped_values::NeuronVoxelDimensionsGenomic as CorticalAreaDimensions;
 pub use feagi_genomic_context::cortical_area::{CoreCorticalType, CorticalID};
 pub use feagi_genomic_data::cortical_area_prev::CorticalArea;
 

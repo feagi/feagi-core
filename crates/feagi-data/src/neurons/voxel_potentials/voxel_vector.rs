@@ -1,4 +1,4 @@
-use crate::neurons::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelLinearIndex};
+use crate::neurons::voxel_potentials::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelLinearIndex};
 use crate::values::quantizable::{
     QuantizedDecimalTrait,
     QuantizedUnsignedIntegerTrait,

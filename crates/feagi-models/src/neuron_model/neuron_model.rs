@@ -1,4 +1,4 @@
-use feagi_data::neurons::neuron_potentials::neuron::{NeuronCorticalLocalIndex, NeuronMembranePotential};
+use feagi_data::neurons::potentials::neuron::{NeuronCorticalLocalIndex, NeuronMembranePotential};
 use crate::neuron_model::cortical_area::burst_index_rollover_handling::neuron_burst_index_rollover_handling::NeuronModelBurstIndexRolloverHandling;
 use crate::neuron_model::cortical_area::neuron_history::neuron_history::NeuronModelHistory;
 use crate::neuron_model::cortical_area::cortical_data::NeuronModelCorticalData;

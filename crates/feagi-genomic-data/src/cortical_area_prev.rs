@@ -9,7 +9,7 @@ Transformation methods live in feagi-bdu.
 Moved from feagi-core/crates/feagi-bdu/src/models/cortical_area.rs
 */
 
-use feagi_data::neurons::neuron_voxels::wrapped_values::{NeuronVoxelDimensionsGenomic};
+use feagi_data::neurons::voxel_potentials::wrapped_values::{NeuronVoxelDimensionsGenomic};
 use feagi_genomic_context::cortical_area::{CorticalAreaType, CorticalID};
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use serde::{Deserialize, Serialize};

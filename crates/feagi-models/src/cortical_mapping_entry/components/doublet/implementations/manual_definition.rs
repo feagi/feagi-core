@@ -1,7 +1,7 @@
 use crate::neuron_model::cortical_area::cortical_area_layout::cortical_area_layout::CorticalAreaLayout;
 use crate::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
 use core::marker::PhantomData;
-use feagi_data::neurons::neuron_potentials::neuron::NeuronCorticalLocalIndex;
+use feagi_data::neurons::potentials::neuron::NeuronCorticalLocalIndex;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 

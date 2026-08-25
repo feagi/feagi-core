@@ -1,4 +1,4 @@
-use feagi_data::neurons::neuron_potentials::indexing::NeuronLocalIndex;
+use feagi_data::neurons::potentials::indexing::NeuronLocalIndex;
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 
 

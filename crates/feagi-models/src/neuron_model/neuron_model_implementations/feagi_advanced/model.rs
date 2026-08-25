@@ -5,7 +5,7 @@ use crate::neuron_model::neuron_model::NeuronModel;
 use crate::neuron_model::neuron_model_implementations::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
 use crate::neuron_model::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
 use crate::wrapped_indexes::BurstIndex;
-use feagi_data::neurons::neuron_potentials::neuron::{NeuronCorticalLocalIndex, NeuronMembranePotential};
+use feagi_data::neurons::potentials::neuron::{NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::WrappedQuantizedUnsignedInteger;
 

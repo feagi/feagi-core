@@ -1,4 +1,4 @@
-use feagi_data::neurons::neuron_potentials::neuron::NeuronMembranePotential;
+use feagi_data::neurons::potentials::neuron::NeuronMembranePotential;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, WrappedQuantizedDecimal, WrappedQuantizedUnsignedInteger};
 use feagi_models::neuron_model::cortical_area::neuron_history::implementations::none::NeuronModelNoNeuronHistory;

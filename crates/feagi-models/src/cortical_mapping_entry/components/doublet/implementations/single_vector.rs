@@ -1,4 +1,4 @@
-use feagi_data::neurons::neuron_voxels::wrapped_values::NeuronVoxelCoordinate;
+use feagi_data::neurons::voxel_potentials::wrapped_values::NeuronVoxelCoordinate;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
 

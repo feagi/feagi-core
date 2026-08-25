@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use feagi_data::neurons::neuron_potentials::indexing::{NeuronCount, NeuronLocalIndex};
+use feagi_data::neurons::potentials::indexing::{NeuronCount, NeuronLocalIndex};
 use crate::cortical_area::components::neuron_layout::neuron_layout_config::NeuronLayoutConfigTrait;
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayoutModelEnum, NeuronLayoutModelTrait};
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;

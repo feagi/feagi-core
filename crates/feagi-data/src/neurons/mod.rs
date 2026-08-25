@@ -1,4 +1,7 @@
 
-pub mod neuron_potentials;
-pub mod neuron_voxels;
-pub mod neuron_activations;
+pub mod potentials;
+pub mod voxel_potentials;
+pub mod activations;
+pub mod wrapped_types;
+pub mod collections;
+pub mod neuron_error;

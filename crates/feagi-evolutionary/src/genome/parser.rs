@@ -41,7 +41,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::types::{EvoError, EvoResult};
-use feagi_data::neurons::neuron_voxels::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDimensionsGenomic};
+use feagi_data::neurons::voxel_potentials::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDimensionsGenomic};
 use feagi_genomic_context::brain_region::BrainRegion;
 use feagi_genomic_context::brain_region::RegionID;
 use feagi_genomic_context::brain_region::RegionType;

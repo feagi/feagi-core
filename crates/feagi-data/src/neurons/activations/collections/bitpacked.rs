@@ -1,6 +1,6 @@
 use core::ops::{Index, IndexMut, Range};
 
-use crate::neurons::neuron_activations::neuron_activation_error::{
+use crate::neurons::activations::neuron_activation_error::{
     FeagiNeuronActivationError, FeagiNeuronActivationInvalidRange,
 };
 use crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait;
