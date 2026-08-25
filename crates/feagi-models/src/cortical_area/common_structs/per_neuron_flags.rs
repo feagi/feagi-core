@@ -16,5 +16,5 @@ impl PerNeuronFlags {
         todo!()
     }
 
-    // TODO functions forr getting individual bits and setting them
+    // TODO functions for getting individual bits and setting them
 }

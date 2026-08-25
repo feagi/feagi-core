@@ -2,6 +2,5 @@
 
 
 pub trait CorticalAreaDynamics {
-
     
 }

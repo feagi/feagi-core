@@ -6,8 +6,6 @@ use crate::cortical_area::cortical_area_model_quantization::CorticalAreaModelQua
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
 
-// TODO storage backend should probably not be here
-
 // TODO Neuron Membrane Type should be configurable
 
 /// Describes a cortical area model with all its dynamics
