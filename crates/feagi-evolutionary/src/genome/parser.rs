@@ -41,7 +41,6 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::types::{EvoError, EvoResult};
-use feagi_data::neurons::voxel_potentials::wrapped_values::{NeuronVoxelCoordinate, NeuronVoxelDimensionsGenomic};
 use feagi_genomic_context::brain_region::BrainRegion;
 use feagi_genomic_context::brain_region::RegionID;
 use feagi_genomic_context::brain_region::RegionType;
@@ -52,6 +51,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
+use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]
@@ -413,11 +413,11 @@ impl GenomeParser {
                         boundaries.len()
                     )));
                 }
-                NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(boundaries[0] as usize, boundaries[1] as usize, boundaries[2] as usize)
+                CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(boundaries[0] as usize, boundaries[1] as usize, boundaries[2] as usize)
             } else {
                 // Default to 1x1x1 if not specified (should not happen in valid genomes)
                 warn!(target: "feagi-evo","Cortical area {} missing block_boundaries, defaulting to 1x1x1", cortical_id_str);
-                NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1)
+                CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1)
             };
 
             let position = if let Some(coords) = &raw_area.relative_coordinate {

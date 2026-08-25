@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use feagi_data::neurons::potentials::indexing::NeuronLocalIndex;
+use feagi_data::neurons::wrapped_types::CorticalNeuronLocalIndex;
 use crate::cortical_area::components::neuron_layout::neuron_layout_config::NeuronLayoutConfigTrait;
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayoutModelEnum, NeuronLayoutModelTrait};
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
@@ -24,7 +24,7 @@ impl<BEIQ: BurstEngineIndexQuantization> NeuronLayoutConfigTrait<BEIQ> for Neuro
         todo!()
     }
 
-    fn get_neuron_layout_context(&self, neuron_index: &NeuronLocalIndex<BEIQ::NeuronIndexQuant>) -> &Self::NeuronLayoutContext {
+    fn get_neuron_layout_context(&self, neuron_index: &CorticalNeuronLocalIndex<BEIQ::NeuronIndexQuant>) -> Self::NeuronLayoutContext {
         todo!()
     }
 }

@@ -1,6 +1,6 @@
-use feagi_data::neurons::voxel_potentials::wrapped_values::{
-    NeuronVoxelCoordinateGenomic, NeuronVoxelDimensionsGenomic,
-};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
 use feagi_genomic_context::cortical_area::CorticalID;
 
@@ -41,28 +41,34 @@ impl WrappedNeuronProcessingUnit {
 
     /// Sets the burst rate to the given frequency, resuming the engine if it was paused.
     pub fn run_at_frequency(&mut self, new_frequency: NPUTargetFrequency) -> Result<(), WNPUError> {  // TODO LOAD
-        todo!()
+        
+        
+        Ok(())
     }
 
     /// Pauses burst calculations without clearing any data; connectome data continues to exist
     /// inside the NPU.
     pub fn pause(&mut self) -> Result<(), WNPUError> {
-        todo!()
+        
+        Ok(())
     }
 
     /// Terminates the burst engines. Intended for shutdown; the NPU is unusable afterwards.
     pub fn stop(&mut self) -> Result<(), WNPUError> {
-        todo!()
+        
+        Ok(())
     }
 
     /// Whether the burst engines are currently running, as opposed to paused, failed or stopped.
     pub fn is_running(&self) -> bool {  // TODO LOAD
-        todo!()
+
+        true
     }
 
     /// Number of bursts the engine has completed since the connectome was last cleared.
     pub fn bursts_completed(&self) -> Result<u64, WNPUError> {  // TODO LOAD
-        todo!()
+        
+        Ok(0)
     }
 
     // ==================================================================================
@@ -81,7 +87,12 @@ impl WrappedNeuronProcessingUnit {
         cortical_id: &CorticalID,
         parameters: CorticalAreaParameters,
     ) -> Result<usize, WNPUError> {
-        todo!()
+
+        let a = serde_json::json!(parameters);
+        
+        println!("{}", a.to_string());
+        
+        Ok(1)
     }
 
     /// Applies new parameters to an existing cortical area. If `parameters` changes the dimensions
@@ -92,7 +103,7 @@ impl WrappedNeuronProcessingUnit {
         cortical_id: &CorticalID,
         parameters: CorticalAreaParameters,
     ) -> Result<(), WNPUError> {
-        todo!()
+        Ok(())
     }
 
     /// Rebinds an existing cortical area to a new `CorticalID`. This only updates the translation
@@ -102,7 +113,7 @@ impl WrappedNeuronProcessingUnit {
         current_cortical_id: &CorticalID,
         new_cortical_id: &CorticalID,
     ) -> Result<(), WNPUError> {
-        todo!()
+        Ok(())
     }
 
     /// Removes a cortical area, its neurons, and every mapping that references it.
@@ -110,7 +121,10 @@ impl WrappedNeuronProcessingUnit {
         &mut self,
         cortical_id: &CorticalID,
     ) -> Result<CorticalAreaRemovalCounts, WNPUError> {
-        todo!()
+        Ok(CorticalAreaRemovalCounts{
+            neurons_removed: 0,
+            synapses_removed: 0,
+        })
     }
 
     /// Sets the complete rule set for one source to destination mapping, replacing whatever was
@@ -123,7 +137,7 @@ impl WrappedNeuronProcessingUnit {
         destination: &CorticalID,
         rules: Vec<CorticalMappingRuleParameters>,
     ) -> Result<CorticalMappingSynapseChange, WNPUError> {
-        todo!()
+        Ok(CorticalMappingSynapseChange{ synapses_created: 0, synapses_removed: 0 })
     }
 
     /// Removes a mapping and all synapses it created, returning how many synapses were removed.
@@ -154,7 +168,7 @@ impl WrappedNeuronProcessingUnit {
     /// Discards the entire connectome, leaving the NPU empty and paused. Used when preparing to
     /// load a different genome.
     pub fn clear_connectome(&mut self) -> Result<(), WNPUError> {
-        todo!()
+        Ok(())
     }
 
     /*
@@ -179,45 +193,45 @@ impl WrappedNeuronProcessingUnit {
 
     /// Whether a cortical area with this ID exists in the NPU.
     pub fn has_cortical_area(&self, cortical_id: &CorticalID) -> bool {
-        todo!()
+        true
     }
 
     /// Every cortical area currently present in the NPU.
     pub fn cortical_area_ids(&self) -> Vec<CorticalID> {
-        todo!()
+        vec![]
     }
 
     /// Voxel dimensions of an area, or `None` if the area does not exist.
     pub fn cortical_area_dimensions(
         &self,
         cortical_id: &CorticalID,
-    ) -> Option<NeuronVoxelDimensionsGenomic> {
-        todo!()
+    ) -> Option<CorticalVoxelDimensionsGenomic> {
+        None
     }
 
     /// Neurons per voxel for an area, or `None` if the area does not exist.
     pub fn cortical_area_neurons_per_voxel(&self, cortical_id: &CorticalID) -> Option<u32> {
-        todo!()
+        None
     }
 
     /// Neuron count of one area, or `None` if the area does not exist.
     pub fn cortical_area_neuron_count(&self, cortical_id: &CorticalID) -> Option<usize> {
-        todo!()
+        None
     }
 
     /// Neuron count across the whole connectome.
     pub fn total_neuron_count(&self) -> usize {
-        todo!()
+        0
     }
 
     /// Synapse count across the whole connectome.
     pub fn total_synapse_count(&self) -> usize {
-        todo!()
+        0
     }
 
     /// Whether a mapping is registered for this source to destination pair.
     pub fn has_cortical_mapping(&self, source: &CorticalID, destination: &CorticalID) -> bool {
-        todo!()
+        false
     }
 
     /// Rule set currently registered for a mapping, or `None` if there is no such mapping.
@@ -226,7 +240,7 @@ impl WrappedNeuronProcessingUnit {
         source: &CorticalID,
         destination: &CorticalID,
     ) -> Option<Vec<CorticalMappingRuleParameters>> {
-        todo!()
+        None
     }
 
     /// Synapses created by one mapping, or `None` if there is no such mapping.
@@ -235,7 +249,7 @@ impl WrappedNeuronProcessingUnit {
         source: &CorticalID,
         destination: &CorticalID,
     ) -> Option<usize> {
-        todo!()
+        None
     }
 
     /// Destination areas this area maps to.
@@ -358,9 +372,9 @@ impl WrappedNeuronProcessingUnit {
 ///
 /// `dimensions` counts voxels only; `neurons_per_voxel` supplies the density that the new NPU
 /// folds into its own four dimensional area description.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CorticalAreaParameters {
-    pub dimensions: NeuronVoxelDimensionsGenomic,
+    pub dimensions: CorticalVoxelDimensionsGenomic,
     pub neurons_per_voxel: u32,
     pub fire_threshold: f32,
     pub fire_threshold_increment_x: f32,

@@ -1,4 +1,4 @@
-use feagi_data::neurons::potentials::indexing::NeuronLocalIndex;
+use feagi_data::neurons::wrapped_types::CorticalNeuronLocalIndex;
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 
 
@@ -15,5 +15,5 @@ pub trait NeuronLayoutConfigTrait<BEIQ: BurstEngineIndexQuantization>
     
     fn get_cortical_layout_context(&self) -> &Self::CorticalLayoutContext;
     
-    fn get_neuron_layout_context(&self, neuron_index: &NeuronLocalIndex<BEIQ::NeuronIndexQuant>) -> &Self::NeuronLayoutContext;
+    fn get_neuron_layout_context(&self, neuron_index: &CorticalNeuronLocalIndex<BEIQ::NeuronIndexQuant>) -> Self::NeuronLayoutContext;
 }

@@ -1,5 +1,5 @@
 use core::hash::Hash;
-use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 // TODO xxhash?
 
 /// The quantization level that is for structures that must be of the same quantization across
@@ -10,7 +10,7 @@ pub trait NeuronProcessingUnitIndexQuantization: Clone + Copy + Hash + PartialEq
     /// Defines the quantization of the NPU global burst index. This is not model configurable,
     /// rather its in sync with the global setting but also put here since some neuron models need
     /// to have this information to store "burst of last X" as a property
-    type BurstIndexQuant: QuantizedUnsignedIntegerTrait;
+    type BurstIndexQuant: QuantizedUnsignedIntegerUnwrappedTrait;
 }
 
 /// The quantization level that is for structures that must be of the same quantization across

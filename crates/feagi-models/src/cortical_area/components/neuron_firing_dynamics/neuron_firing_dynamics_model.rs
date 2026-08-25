@@ -1,3 +1,4 @@
+use feagi_data::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
 use crate::cortical_area::components::neuron_firing_dynamics::components::cortical_data_properties::CorticalDataProperties;
 use crate::cortical_area::components::neuron_firing_dynamics::components::cortical_data_work::CorticalDataWork;
 use crate::cortical_area::components::neuron_firing_dynamics::components::neuron_data_properties::NeuronDataProperties;
@@ -33,13 +34,13 @@ where
 
 
     fn process_neuron_dynamics(
-        incoming_potential: &NeuronMembranePotential<CAMQ::MembranePotentialQuant>,
+        incoming_potential: &CorticalNeuronPotential<CAMQ::MembranePotentialQuant>,
         burst_index: &BurstIndex<NPUIQ::BurstIndexQuant>,
-        neuron_linear_index: &NeuronCorticalLocalIndex<BEIQ::NeuronIndexQuant>,
+        neuron_linear_index: &CorticalNeuronLocalIndex<BEIQ::NeuronIndexQuant>,
         layout_context: &Layout,
-
-
-
-    )
+    ) -> ()
+    {
+        
+    }
 
 }

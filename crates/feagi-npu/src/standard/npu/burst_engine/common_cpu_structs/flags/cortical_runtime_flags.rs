@@ -1,5 +1,4 @@
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_models::neuron_model::cortical_area::cortical_area_properties::{CorticalAreaProperties, PostCorticalPotential};
 
 /// Per cortical area flags
 /// bit 0 - IsCorticalAreaFrozenInput -> Cortical area will not respond to input, never running neuron dynamics and thus appearing in a frozen state

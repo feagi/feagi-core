@@ -15,13 +15,13 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig, RuntimeGenome};
-use feagi_data::neurons::voxel_potentials::wrapped_values::NeuronVoxelDimensionsGenomic;
 use feagi_genomic_context::brain_region::{BrainRegion, RegionID, RegionType};
 use feagi_genomic_context::cortical_area::{CoreCorticalType, CorticalID};
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
+use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
 
 /// Embedded essential genome (loaded at compile time)
 pub const ESSENTIAL_GENOME_JSON: &str = include_str!("../genomes/essential_genome.json");
@@ -73,7 +73,7 @@ pub fn create_death_area() -> CorticalArea {
         cortical_id,
         0, // cortical_idx = 0 (reserved)
         "Death".to_string(),
-        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
         GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
@@ -95,7 +95,7 @@ pub fn create_power_area() -> CorticalArea {
         cortical_id,
         1, // cortical_idx = 1 (reserved)
         "Brain_Power".to_string(),
-        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
         GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
@@ -120,7 +120,7 @@ pub fn create_fatigue_area() -> CorticalArea {
         cortical_id,
         2, // cortical_idx = 2 (reserved)
         "Fatigue".to_string(),
-        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
         GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
@@ -142,7 +142,7 @@ pub fn create_pain_area() -> CorticalArea {
         cortical_id,
         3, // cortical_idx = 3 (reserved)
         "Pain".to_string(),
-        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
         GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
@@ -164,7 +164,7 @@ pub fn create_pleasure_area() -> CorticalArea {
         cortical_id,
         4, // cortical_idx = 4 (reserved)
         "Pleasure".to_string(),
-        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
         GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
@@ -186,7 +186,7 @@ pub fn create_fear_area() -> CorticalArea {
         cortical_id,
         5, // cortical_idx = 5 (reserved)
         "Fear".to_string(),
-        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
         GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
@@ -208,7 +208,7 @@ pub fn create_hope_area() -> CorticalArea {
         cortical_id,
         6, // cortical_idx = 6 (reserved)
         "Hope".to_string(),
-        NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+        CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
         GenomeCoordinate3D::new(0, 0, 20),
         cortical_type,
     )
@@ -1184,7 +1184,7 @@ mod tests {
             cortical_id,
             genome.cortical_areas.len() as u32,
             legacy_name.to_string(),
-            NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(size, size, size),
+            CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(size, size, size),
             GenomeCoordinate3D::new(position.0, position.1, position.2),
             cortical_id.as_cortical_type().expect("custom ID maps to a cortical type"),
         )
@@ -1293,7 +1293,7 @@ mod tests {
         let anchor = crate::genome::parser::string_to_cortical_id("_power").expect("core area name resolves");
         let mut power = create_power_area();
         power.position = GenomeCoordinate3D::new(0, 0, 0);
-        power.dimensions = NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(200, 10, 10);
+        power.dimensions = CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(200, 10, 10);
         genome.cortical_areas.insert(anchor, power);
         add_custom_area(&mut genome, "c__lef", (0, 0, 0), 4);
 

@@ -16,7 +16,6 @@ use crate::types::{BduError, BduResult, Position};
 // Core types, re-homed after `feagi-genome-definitions` was split up: the cortical type and ID
 // moved to feagi-genomic-context, the area struct to feagi-genomic-data, and the dimension type
 // became the genomic-quantized voxel dimensions in feagi-data.
-pub use feagi_data::neurons::voxel_potentials::wrapped_values::NeuronVoxelDimensionsGenomic as CorticalAreaDimensions;
 pub use feagi_genomic_context::cortical_area::{CoreCorticalType, CorticalID};
 pub use feagi_genomic_data::cortical_area_prev::CorticalArea;
 
@@ -412,6 +411,7 @@ impl CorticalAreaExt for CorticalArea {
 
 #[cfg(test)]
 mod tests {
+    use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
     use super::*;
 
     #[test]
@@ -420,7 +420,7 @@ mod tests {
         let cortical_type = cortical_id
             .as_cortical_type()
             .expect("Failed to get cortical_area type");
-        let dims = CorticalAreaDimensions::try_new_from_usizes(10, 10, 10).unwrap();
+        let dims = CorticalVoxelDimensionsGenomic::try_new_from_usizes(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -443,7 +443,7 @@ mod tests {
         let cortical_type = cortical_id
             .as_cortical_type()
             .expect("Failed to get cortical_area type");
-        let dims = CorticalAreaDimensions::try_new_from_usizes(10, 10, 10).unwrap();
+        let dims = CorticalVoxelDimensionsGenomic::try_new_from_usizes(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -474,7 +474,7 @@ mod tests {
         let cortical_type = cortical_id
             .as_cortical_type()
             .expect("Failed to get cortical_area type");
-        let dims = CorticalAreaDimensions::try_new_from_usizes(10, 10, 10).unwrap();
+        let dims = CorticalVoxelDimensionsGenomic::try_new_from_usizes(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
             0,

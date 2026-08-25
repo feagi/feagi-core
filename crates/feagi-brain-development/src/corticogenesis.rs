@@ -17,17 +17,13 @@ with mappings from loading as though it were fully realised.
 */
 
 use core::marker::PhantomData;
-
-use feagi_data::neurons::potentials::neuron::DimensionalCorticalArea4DDimensions;
+use feagi_data::neurons::wrapped_types::CorticalNeuronDimensions;
 use feagi_data::quantization_levels::feagi_index_quantization::{
     FeagiIndexQuantization, FeagiIndexQuantizationGenomic,
 };
 use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 use feagi_evolutionary::runtime::RuntimeGenome;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
-use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
-use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
-use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
 
 use crate::types::{BduError, BduResult};
 
@@ -55,6 +51,8 @@ pub struct CorticogenesisReport {
     /// Mapping entries present in the genome that were not translated.
     pub mappings_deferred: usize,
 }
+
+
 
 /// Translates a genome into the requests that realise it in an NPU.
 ///
@@ -96,10 +94,10 @@ pub fn develop_connectome_requests(
 /// per-voxel neuron count as the fourth axis.
 fn engine_dimensions(
     area: &CorticalArea,
-) -> BduResult<DimensionalCorticalArea4DDimensions<NeuronQuant>> {
+) -> BduResult<CorticalNeuronDimensions<NeuronQuant>> {
     let (x, y, z, d) = axis_lengths(area)?;
 
-    DimensionalCorticalArea4DDimensions::<NeuronQuant>::try_new_from_usizes(x, y, z, d).map_err(
+    CorticalNeuronDimensions::<NeuronQuant>::try_new_from_usizes(x, y, z, d).map_err(
         |_| {
             BduError::InvalidArea(format!(
                 "cortical area '{}' dimensions {x}x{y}x{z}x{d} are not representable in the engine's index quantization",

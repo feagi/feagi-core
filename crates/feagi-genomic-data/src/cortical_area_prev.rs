@@ -9,11 +9,11 @@ Transformation methods live in feagi-bdu.
 Moved from feagi-core/crates/feagi-bdu/src/models/cortical_area.rs
 */
 
-use feagi_data::neurons::voxel_potentials::wrapped_values::{NeuronVoxelDimensionsGenomic};
 use feagi_genomic_context::cortical_area::{CorticalAreaType, CorticalID};
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
 use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 /// Cortical area metadata (genome representation)
@@ -34,7 +34,7 @@ pub struct CorticalArea {
     pub name: String,
 
     /// 3D dimensions (width, height, depth in voxels)
-    pub dimensions: NeuronVoxelDimensionsGenomic,
+    pub dimensions: CorticalVoxelDimensionsGenomic,
 
     /// 3D position in genome space
     pub position: GenomeCoordinate3D,
@@ -68,7 +68,7 @@ impl CorticalArea {
         cortical_id: CorticalID,
         cortical_idx: u32,
         name: String,
-        dimensions: NeuronVoxelDimensionsGenomic,
+        dimensions: CorticalVoxelDimensionsGenomic,
         position: GenomeCoordinate3D,
         cortical_type: CorticalAreaType,
     ) -> Result<Self, ()> {

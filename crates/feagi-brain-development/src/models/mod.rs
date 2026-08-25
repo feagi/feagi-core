@@ -31,7 +31,6 @@ pub mod brain_region_hierarchy;
 pub mod cortical_area;
 
 // Re-export CorticalArea types from their post-split homes (single source of truth)
-pub use feagi_data::neurons::voxel_potentials::wrapped_values::NeuronVoxelDimensionsGenomic as CorticalAreaDimensions;
 pub use feagi_genomic_context::cortical_area::CorticalID;
 pub use feagi_genomic_data::cortical_area_prev::CorticalArea;
 

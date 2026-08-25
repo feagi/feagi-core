@@ -155,7 +155,7 @@ mod tests {
     use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, PhysiologyConfig};
     use crate::MorphologyRegistry;
     use crate::RuntimeGenome;
-    use feagi_data::neurons::voxel_potentials::wrapped_values::NeuronVoxelDimensionsGenomic;
+    use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
     use feagi_genomic_context::cortical_area::CustomCorticalType;
 
     fn sample_custom_cortical_id() -> CorticalID {
@@ -172,7 +172,7 @@ mod tests {
             old_id,
             0,
             "test-area".to_string(),
-            NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
+            CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(1, 1, 1),
             GenomeCoordinate3D::new(0, 0, 0),
             CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
         )

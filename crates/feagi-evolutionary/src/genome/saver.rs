@@ -128,8 +128,8 @@ impl GenomeSaver {
 
 #[cfg(test)]
 mod tests {
+    use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
     use super::*;
-    use feagi_data::neurons::voxel_potentials::wrapped_values::NeuronVoxelDimensionsGenomic;
     use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
     use feagi_genomic_context::brain_region::{RegionID, RegionType};
     use feagi_genomic_context::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
@@ -146,7 +146,7 @@ mod tests {
             cortical_id,
             0,
             "Test Area".to_string(),
-            NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(10, 10, 10),
+            CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(10, 10, 10),
             GenomeCoordinate3D::new(0, 0, 0),
             CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
         )
@@ -191,7 +191,7 @@ mod tests {
             cortical_id,
             0,
             "Test Area".to_string(),
-            NeuronVoxelDimensionsGenomic::new_from_usizes_unchecked(10, 10, 10),
+            CorticalVoxelDimensionsGenomic::new_from_usizes_unchecked(10, 10, 10),
             GenomeCoordinate3D::new(5, 5, 5),
             CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )
