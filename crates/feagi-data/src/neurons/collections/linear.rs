@@ -1,9 +1,27 @@
+use crate::generic_collections::bitpacked::linear::{BitPackedArraySizeAware, BitPackedSliceMutSizeAware, BitPackedSliceSizeAware, BitPackedVectorSizeAware};
 use crate::generic_collections::generic_par_data::linear::{ParDataArray, ParDataSlice, ParDataSliceMut, ParDataVector};
 use crate::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
 use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
 
+// TODO size aware vs unaware?
 
+// Neuron Linear Activations (Size Aware)
+
+pub type LinearCorticalNeuronActivationVector<QI: QuantizedUnsignedIntegerTrait> =
+BitPackedVectorSizeAware<CorticalNeuronLocalIndex<QI>>;
+
+pub type LinearCorticalNeuronActivationSlice<'a, QI: QuantizedUnsignedIntegerTrait> =
+BitPackedSliceSizeAware<'a, CorticalNeuronLocalIndex<QI>>;
+
+pub type LinearCorticalNeuronActivationSliceMut<'a, QI: QuantizedUnsignedIntegerTrait> =
+BitPackedSliceMutSizeAware<'a, CorticalNeuronLocalIndex<QI>>;
+
+pub type LinearCorticalNeuronActivationArray<QI: QuantizedUnsignedIntegerTrait, const N: usize> =
+BitPackedArraySizeAware<CorticalNeuronLocalIndex<QI>, N>;
+
+
+// Neuron Linear Potentials
 
 pub type LinearCorticalNeuronPotentialVector<QI: QuantizedUnsignedIntegerTrait, Q: MembranePotentialQuantization> =
     ParDataVector<CorticalNeuronLocalIndex<QI>, CorticalNeuronPotential<Q::MembranePotentialQuant>>;
@@ -16,3 +34,4 @@ pub type LinearCorticalNeuronPotentialSliceMut<'a, QI: QuantizedUnsignedIntegerT
 
 pub type LinearCorticalNeuronPotentialArray<QI: QuantizedUnsignedIntegerTrait, Q: MembranePotentialQuantization, const N: usize> =
     ParDataArray<CorticalNeuronLocalIndex<QI>, CorticalNeuronPotential<Q::MembranePotentialQuant>, N>;
+

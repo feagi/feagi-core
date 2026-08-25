@@ -26,6 +26,16 @@ create_wrapped_quantized_unsigned_integer!(
     pub NeuronCount
 );
 
+create_wrapped_quantized_unsigned_integer!(
+    /// Index of the uint storing the bitpacked information of neuron activations
+    pub NeuronActivationBitBatchIndex
+);
+
+create_wrapped_quantized_unsigned_integer!(
+    /// Defines the number of BitBatched values encoding neuron activations. Likely has padding
+    pub NeuronActivationBitBatchCount
+);
+
 //region Spatial
 
 create_wrapped_quantized_unsigned_integer!(
