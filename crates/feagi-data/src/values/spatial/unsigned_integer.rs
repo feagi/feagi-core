@@ -146,7 +146,7 @@ pub trait UnsignedIntegerSpatialWrappedCoordinateTrait<Q: QuantizedUnsignedInteg
 ///
 /// Per-axis typing and linear-index wrapping are supplied by
 /// [`create_wrapped_unsigned_integer_spatial_dimensions`].
-pub trait UnsignedIntegerSpatialWrappedDimensionsTrait<Q: QuantizedUnsignedIntegerUnwrappedTrait, const NUM_DIMS: usize>:
+pub trait UnsignedIntegerSpatialWrappedDimensionsTrait<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>:
     UnsignedIntegerSpatialWrappedTrait<Q, NUM_DIMS>
 {
     /// The type of linear index.
