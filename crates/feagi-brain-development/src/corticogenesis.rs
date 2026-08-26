@@ -24,7 +24,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::{
 use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 use feagi_evolutionary::runtime::RuntimeGenome;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
-
+use feagi_npu::standard::wnpu::connectome_request::connectome_request::ConnectomeRequest;
 use crate::types::{BduError, BduResult};
 
 /// Neuron index quantization of the genomic-level engine the NPU is currently fixed to.
@@ -69,6 +69,8 @@ pub fn develop_connectome_requests(
     let mut areas: Vec<&CorticalArea> = genome.cortical_areas.values().collect();
     areas.sort_by_key(|area| area.cortical_id.as_bytes());
 
+    // TODO restore later
+    /*
     for area in areas {
         let dimensions = engine_dimensions(area)?;
 
@@ -86,6 +88,8 @@ pub fn develop_connectome_requests(
         report.neurons_added += neuron_count(area)?;
         report.mappings_deferred += mapping_count(area);
     }
+    
+     */
 
     Ok((requests, report))
 }

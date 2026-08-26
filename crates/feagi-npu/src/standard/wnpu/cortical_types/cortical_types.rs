@@ -1,11 +1,9 @@
-use feagi_data::neurons::potentials::neuron::DimensionalCorticalArea4DDimensions;
-use feagi_models::neuron_model::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
-use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
 
 pub trait CorticalTypeDefaults {
-    fn default_cortical_area_writer(&self) -> CorticalWriterByModelQuant;
+    fn default_cortical_area_writer(&self) -> ();//CorticalWriterByModelQuant;
 }
 
+/*
 
 /// Cortical Types with default generation
 pub enum WCorticalType {
@@ -13,7 +11,7 @@ pub enum WCorticalType {
 }
 
 impl CorticalTypeDefaults for WCorticalType {
-    fn default_cortical_area_writer(&self) -> CorticalWriterByModelQuant {
+    fn default_cortical_area_writer(&self) -> ()//CorticalWriterByModelQuant {
         match self {
             WCorticalType::Core(core_type) => {
                 core_type.default_cortical_area_writer()
@@ -30,7 +28,7 @@ pub enum WCoreCorticalType {
 }
 
 impl CorticalTypeDefaults for WCoreCorticalType {
-    fn default_cortical_area_writer(&self) -> CorticalWriterByModelQuant {
+    fn default_cortical_area_writer(&self) -> ()/*CorticalWriterByModelQuant*/ {
         match self {
             WCoreCorticalType::Power => {
                 CorticalWriterByModelQuant::FeagiAdvanced(
@@ -55,3 +53,5 @@ impl CorticalTypeDefaults for WCoreCorticalType {
         }
     }
 }
+
+ */

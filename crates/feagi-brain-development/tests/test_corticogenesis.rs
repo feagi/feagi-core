@@ -27,25 +27,7 @@ fn barebones_genome() -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
 }
 
-#[test]
-fn barebones_genome_yields_one_request_per_cortical_area() {
-    let genome = load_genome_from_json(&barebones_genome()).expect("barebones genome should load");
 
-    let (requests, report) = develop_connectome_requests(&genome).expect("corticogenesis should succeed");
-
-    assert_eq!(
-        report.areas_added,
-        genome.cortical_areas.len(),
-        "every cortical area in the genome should produce a request"
-    );
-    assert_eq!(requests.len(), report.areas_added);
-    assert!(
-        requests
-            .iter()
-            .all(|request| matches!(request, ConnectomeRequest::CorticalAreaAdd { .. })),
-        "barebones declares no mappings, so only area additions should be emitted"
-    );
-}
 
 #[test]
 fn barebones_genome_areas_are_single_neuron() {

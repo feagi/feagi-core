@@ -1,12 +1,12 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
-use crate::NPUTargetFrequency;
 use crate::standard::npu::burst_engine::burst_engine_communication::KernelCommand;
 use crate::standard::npu::burst_engine_worker::burst_engine_worker_communication::{
     BurstEngineWorkerCommand, BurstEngineWorkerResponse,
 };
 use crate::standard::npu::burst_engine_worker_pool::burst_engine_worker_pool_channels::BurstEngineWorkerPoolChannels;
 use crate::standard::npu::npu_communication::NPUCommand;
+use crate::standard::npu::npu_target_frequency::NPUTargetFrequency;
 
 /// Runs the burst engine worker pool loop on its own thread.
 pub fn burst_engine_worker_pool<FIQ: FeagiIndexQuantization + Send + 'static>(

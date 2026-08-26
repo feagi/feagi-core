@@ -13,7 +13,7 @@
 //! record of what the engine can and cannot do today.
 
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
+use feagi_npu::standard::wnpu::connectome_request::connectome_request::ConnectomeRequest;
 
 /// A cortical area as the engine holds it.
 #[derive(Debug, Clone)]

@@ -6,3 +6,4 @@ pub mod burst_engine_enum;
 pub mod burst_engine_communication;
 pub mod burst_engine_error;
 pub mod common_cpu_structs;
+pub mod wrapped_indexes;

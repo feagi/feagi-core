@@ -9,7 +9,7 @@
 //! area and is therefore unsigned and bounded by that area's dimensions. Keeping the two in
 //! separate types is what stops a placement from being silently truncated into a voxel index.
 
-use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
+use feagi_data::values::spatial::integer_signed::SignedIntegerSpatial;
 
 /// Quantization of a genome-space axis.
 ///
@@ -17,13 +17,18 @@ use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
 /// room to spare while staying compact enough for the wire formats that carry it.
 pub type GenomeAxisQuant = i32;
 
+const GENOME_COORDINATE_DIMS: usize = 3;
+
+/// Signed 3D coordinate in genome space.
+pub type SignedCoordinate3D<Q> = SignedIntegerSpatial<Q, GENOME_COORDINATE_DIMS>;
+
 /// Where a structure sits in genome space.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GenomeCoordinate3D(SignedCoordinate3D<GenomeAxisQuant>);
 
 impl GenomeCoordinate3D {
     pub fn new(x: GenomeAxisQuant, y: GenomeAxisQuant, z: GenomeAxisQuant) -> Self {
-        Self(SignedCoordinate3D::new(x, y, z))
+        Self(SignedIntegerSpatial::new_from_array([x, y, z]))
     }
 
     /// The genome-space origin.
@@ -32,15 +37,15 @@ impl GenomeCoordinate3D {
     }
 
     pub fn x(&self) -> GenomeAxisQuant {
-        *self.0.get_x()
+        self.0.as_slice()[0]
     }
 
     pub fn y(&self) -> GenomeAxisQuant {
-        *self.0.get_y()
+        self.0.as_slice()[1]
     }
 
     pub fn z(&self) -> GenomeAxisQuant {
-        *self.0.get_z()
+        self.0.as_slice()[2]
     }
 
     /// The underlying quantized coordinate, for callers doing spatial math in `feagi-data`.

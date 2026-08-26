@@ -31,6 +31,7 @@ impl CorticalRuntimeFlags {
         self.get_bit(Self::BITMASK_CORTICAL_AREA_FROZEN_INPUT)
     }
 
+    /*
     /// Packs the genome-level properties of a cortical area into the runtime flags the burst
     /// kernels read
     pub fn from_cortical_area_properties<MPQ: MembranePotentialQuantization>(properties: &CorticalAreaProperties<MPQ>) -> Self {
@@ -51,6 +52,8 @@ impl CorticalRuntimeFlags {
 
         CorticalRuntimeFlags(flags)
     }
+    
+     */
 
     #[inline(always)]
     fn set_bit(&mut self, bitmask: u8, value: bool) {

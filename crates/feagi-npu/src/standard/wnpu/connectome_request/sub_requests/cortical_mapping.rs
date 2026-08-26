@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_models::cortical_mapping_entry::genome_compose::cortical_mapping_entry_writer_by_model_quant::CorticalMappingEntryWriterByModelQuant;
 use crate::standard::wnpu::connectome_request::connectome_request::{ConnectomeRequest, ConnectomeRequestEnum};
 
 #[doc(hidden)]
@@ -8,14 +7,17 @@ use crate::standard::wnpu::connectome_request::connectome_request::{ConnectomeRe
 pub struct CorticalMappingRequestBuilder;
 
 impl CorticalMappingRequestBuilder {
-    
+    /*
     /// Add a cortical mapping between 2 cortical areas
     pub fn create_mapping() -> CorticalMappingAdderRequestBuilder {
         CorticalMappingAdderRequestBuilder
     }
     
+     */
+    
 }
 
+/*
 #[doc(hidden)]
 /// Add a cortical mapping of a type
 pub struct CorticalMappingAdderRequestBuilder;
@@ -43,3 +45,5 @@ impl Into<ConnectomeRequest> for CorticalMappingRequestEnum
         a.into()
     }
 }
+
+ */
