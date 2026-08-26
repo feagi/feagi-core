@@ -22,15 +22,24 @@ use crate::standard::wnpu::wrapped_neuron_processor_unit_error::WNPUError;
 /// counts. Registry queries are answered from that shadow state without contacting the engine.
 /// Runtime probes are the only reads that require an engine round trip.
 ///
+/// # Scope
+///
+/// This surface is deliberately narrow: it exposes only what the NPU itself owns — burst
+/// lifecycle and frequency, cortical-area create/edit/remove, cortical mappings, the registry
+/// queries over those two, runtime probes / sensory injection into live neuron state, and the
+/// NPU-side registration of agent data channels. Everything else that the legacy architecture
+/// still owns — genome load/validate/export, the brain-region hierarchy, morphology definitions,
+/// system health, snapshots, connectome transport, and the agent registry with its network
+/// connections — stays in the legacy Brain Development code above WNPU and is not mirrored here.
+///
 /// # Placeholder status
 ///
-/// Every method on this type is currently a **placeholder**: the surface exists so that FEAGI's
-/// service-layer adapters can forward every REST/ZMQ/WebSocket call through here without paying a
-/// separate migration step, but the returned values are hard-coded defaults (`Ok(())`, empty
-/// vectors, zero counts, `is_running` mirrored from the last lifecycle call, ...). The only
-/// state that changes at runtime is the small placeholder bookkeeping declared on
+/// Every method on this type is currently a **placeholder**: the surface exists so callers can be
+/// wired against the stable signatures now, but the returned values are hard-coded defaults
+/// (`Ok(())`, empty vectors, zero counts, `is_running` mirrored from the last lifecycle call,
+/// ...). The only state that changes at runtime is the small placeholder bookkeeping declared on
 /// [`WrappedNeuronProcessingUnit`]. Real implementations will replace these bodies in place; the
-/// signatures are stable so the adapters above WNPU do not need to move again.
+/// signatures are stable so callers above WNPU do not need to move again.
 pub struct WrappedNeuronProcessingUnit {
     npu: NeuronProcessingUnit<NeuronProcessingUnitIndexQuantizationStandard32Bit>,
 
@@ -176,12 +185,15 @@ impl WrappedNeuronProcessingUnit {
         })
     }
 
-    /// Sets the complete rule set for one source to destination mapping, replacing whatever was
-    /// previously registered for that pair. Replacement is atomic inside the engine, so stale
-    /// synapses from removed or edited rules cannot survive. Passing an empty rule set is
-    /// equivalent to [`Self::remove_cortical_mapping`].
+    /// Creates or replaces the mapping identified by `name`, wiring `source` to `destination` with
+    /// the given rule set. `name` is the mapping's external identifier: callers reference it by
+    /// name for every later query and for removal, and it must be unique across mappings. The NPU
+    /// keys the mapping by an internal index that is never exposed on this surface. Replacement is
+    /// atomic inside the engine, so stale synapses from removed or edited rules cannot survive.
+    /// Passing an empty rule set is equivalent to [`Self::remove_cortical_mapping`].
     pub fn set_cortical_mapping(  // TODO LOAD
         &mut self,
+        name: &str,
         source: &CorticalID,
         destination: &CorticalID,
         rules: Vec<CorticalMappingRuleParameters>,
@@ -190,10 +202,13 @@ impl WrappedNeuronProcessingUnit {
     }
 
     /// Legacy REST-shaped mapping update: takes an opaque JSON array so the adapter above WNPU can
-    /// forward `POST /v1/connectome/cortical_mapping` payloads verbatim. Returns the number of
-    /// synapses the mapping produced. Placeholder: no synapses are produced.
+    /// forward `POST /v1/connectome/cortical_mapping` payloads verbatim. `name` is the mapping's
+    /// external identifier (see [`Self::set_cortical_mapping`]); the adapter supplies it so the
+    /// resulting mapping can later be removed by name. Returns the number of synapses the mapping
+    /// produced. Placeholder: no synapses are produced.
     pub fn apply_cortical_mapping_update(
         &mut self,
+        name: &str,
         source: &CorticalID,
         destination: &CorticalID,
         mapping_data: Vec<serde_json::Value>,
@@ -201,19 +216,15 @@ impl WrappedNeuronProcessingUnit {
         Ok(0)
     }
 
-    /// Removes a mapping and all synapses it created, returning how many synapses were removed.
+    /// Removes the mapping identified by `name` and all synapses it created, returning how many
+    /// synapses were removed. The NPU resolves the name to its internal index and clears it; the
+    /// source and destination are recovered from the stored mapping, so the caller need not repeat
+    /// them.
     pub fn remove_cortical_mapping(
         &mut self,
-        source: &CorticalID,
-        destination: &CorticalID,
+        name: &str,
     ) -> Result<usize, WNPUError> {
-        Ok(
-            self.set_cortical_mapping(
-            source,
-            destination,
-            vec![])?
-                .synapses_removed
-        )
+        Ok(0)
     }
 
     /// Applies many structure edits as one engine transaction, returning one outcome per edit in
@@ -273,55 +284,6 @@ impl WrappedNeuronProcessingUnit {
     // TODO Get cortical properties
 
     // ==================================================================================
-    // Genome I/O
-    //
-    // Placeholder implementations accept the legacy REST payloads verbatim (JSON strings) so the
-    // adapter above WNPU does not need to know how the eventual loader/exporter will decompose
-    // them. Nothing is parsed, stored or emitted yet.
-    // ==================================================================================
-
-    /// Loads a genome JSON document into the NPU, replacing any current connectome. Placeholder:
-    /// accepts any input and returns success without touching state.
-    pub fn load_genome_json(&mut self, genome_json: &str) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Serializes the current connectome back into a genome JSON document. Placeholder: returns
-    /// an empty object.
-    pub fn save_genome_json(&self) -> Result<String, WNPUError> {
-        Ok("{}".to_string())
-    }
-
-    /// Exports the subtree rooted at `region_id` as a standalone genome JSON document.
-    /// Placeholder: returns an empty object.
-    pub fn export_region_genome_json(&self, region_id: &str) -> Result<String, WNPUError> {
-        Ok("{}".to_string())
-    }
-
-    /// Validates a genome JSON document without loading it. Placeholder: reports every document
-    /// as valid.
-    pub fn validate_genome_json(&self, genome_json: &str) -> Result<bool, WNPUError> {
-        Ok(true)
-    }
-
-    /// Metadata describing the currently loaded genome. Placeholder: reports an unnamed empty
-    /// genome. `simulation_timestep` is populated with the FEAGI default (0.025 s = 40 Hz) rather
-    /// than zero, because the service layer derives the runtime burst frequency as
-    /// `1 / simulation_timestep` immediately after a genome load — a zero timestep here would
-    /// short-circuit that path with a "non-finite frequency" error before any structure edits
-    /// can run.
-    pub fn genome_metadata(&self) -> WnpuGenomeMetadata {
-        WnpuGenomeMetadata {
-            genome_id: String::new(),
-            genome_title: String::new(),
-            version: String::new(),
-            simulation_timestep: 0.025,
-            genome_num: None,
-            genome_timestamp: None,
-        }
-    }
-
-    // ==================================================================================
     // Registry queries
     //
     // Answered from shadow state. These never touch the engine and never block on it.
@@ -377,25 +339,24 @@ impl WrappedNeuronProcessingUnit {
         0
     }
 
-    /// Whether a mapping is registered for this source to destination pair.
-    pub fn has_cortical_mapping(&self, source: &CorticalID, destination: &CorticalID) -> bool {
+    /// Whether a mapping with this name is registered.
+    pub fn has_cortical_mapping(&self, name: &str) -> bool {
         false
     }
 
-    /// Rule set currently registered for a mapping, or `None` if there is no such mapping.
+    /// Rule set currently registered for the mapping named `name`, or `None` if there is no such
+    /// mapping.
     pub fn cortical_mapping_rules(
         &self,
-        source: &CorticalID,
-        destination: &CorticalID,
+        name: &str,
     ) -> Option<Vec<CorticalMappingRuleParameters>> {
         None
     }
 
-    /// Synapses created by one mapping, or `None` if there is no such mapping.
+    /// Synapses created by the mapping named `name`, or `None` if there is no such mapping.
     pub fn cortical_mapping_synapse_count(
         &self,
-        source: &CorticalID,
-        destination: &CorticalID,
+        name: &str,
     ) -> Option<usize> {
         None
     }
@@ -418,103 +379,6 @@ impl WrappedNeuronProcessingUnit {
     /// Total synapses entering an area across all of its incoming mappings. Placeholder: zero.
     pub fn cortical_area_incoming_synapse_count(&self, cortical_id: &CorticalID) -> usize {
         0
-    }
-
-    // ==================================================================================
-    // Brain regions
-    //
-    // Brain-region hierarchy lives above the NPU proper; WNPU still tracks it so adapters can
-    // answer `/v1/regions/*` without a separate registry. Placeholder implementations report an
-    // empty hierarchy.
-    // ==================================================================================
-
-    /// Registers a brain region under `parent_id`, creating a root region when `parent_id` is
-    /// `None`. Placeholder: accepts the request without recording it.
-    pub fn add_brain_region(
-        &mut self,
-        region_id: &str,
-        parent_id: Option<&str>,
-    ) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Removes a brain region and every subtree beneath it. Placeholder: no-op.
-    pub fn remove_brain_region(&mut self, region_id: &str) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Applies a set of property-name → value updates to an existing brain region. Placeholder:
-    /// no-op.
-    pub fn update_brain_region(
-        &mut self,
-        region_id: &str,
-        properties: HashMap<String, serde_json::Value>,
-    ) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Whether a brain region with this ID exists. Placeholder: reports absence.
-    pub fn has_brain_region(&self, region_id: &str) -> bool {
-        false
-    }
-
-    /// Every brain region currently present. Placeholder: none.
-    pub fn brain_region_ids(&self) -> Vec<String> {
-        vec![]
-    }
-
-    /// Root brain region ID (the region with no parent). Placeholder: none.
-    pub fn root_brain_region_id(&self) -> Option<String> {
-        None
-    }
-
-    /// Registry entry for one brain region, or `None` if the region does not exist. Placeholder:
-    /// `None`.
-    pub fn brain_region_info(&self, region_id: &str) -> Option<WnpuBrainRegionInfo> {
-        None
-    }
-
-    // ==================================================================================
-    // Morphologies
-    //
-    // Morphologies (connectivity patterns) live in the genome and are resolved into WNPU rule
-    // sets by `set_cortical_mapping`. WNPU tracks the registered set so adapters can answer
-    // `/v1/morphologies/*`. Placeholder implementations report an empty registry.
-    // ==================================================================================
-
-    /// Registers a morphology definition under `morphology_id`. Placeholder: no-op.
-    pub fn add_morphology(&mut self, morphology_id: &str) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Replaces the definition for an existing morphology. Placeholder: no-op.
-    pub fn update_morphology_definition(
-        &mut self,
-        morphology_id: &str,
-    ) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Removes a morphology and rewrites every mapping rule that referenced it. Placeholder:
-    /// no-op.
-    pub fn remove_morphology(&mut self, morphology_id: &str) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Renames a morphology and updates every mapping rule that referenced the old ID.
-    /// Placeholder: no-op.
-    pub fn rename_morphology(&mut self, old_id: &str, new_id: &str) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Every morphology currently registered. Placeholder: none.
-    pub fn morphology_ids(&self) -> Vec<String> {
-        vec![]
-    }
-
-    /// Registry entry for one morphology, or `None` if it is not registered. Placeholder: `None`.
-    pub fn morphology_info(&self, morphology_id: &str) -> Option<WnpuMorphologyInfo> {
-        None
     }
 
     // ==================================================================================
@@ -735,72 +599,31 @@ impl WrappedNeuronProcessingUnit {
      */
 
     // ==================================================================================
-    // System introspection
-    //
-    // Placeholder implementations return zeroed / empty structures. Real implementations will
-    // read from the burst engine's metrics.
-    // ==================================================================================
-
-    /// Aggregate health snapshot describing what would be reported through `/v1/system/health`.
-    pub fn system_health(&self) -> WnpuSystemHealth {
-        WnpuSystemHealth {
-            overall_status: "healthy".to_string(),
-            components: Vec::new(),
-        }
-    }
-
-    /// Aggregate runtime statistics.
-    pub fn runtime_stats(&self) -> WnpuRuntimeStats {
-        WnpuRuntimeStats::default()
-    }
-
-    /// Memory usage across the NPU and its shadow state.
-    pub fn memory_usage(&self) -> WnpuMemoryUsage {
-        WnpuMemoryUsage::default()
-    }
-
-    /// Capacity limits for neurons, synapses and cortical areas.
-    pub fn capacity(&self) -> WnpuCapacity {
-        WnpuCapacity::default()
-    }
-
-    // ==================================================================================
     // Agent data exchange
     //
-    // Subscribe/unsubscribe currently accept `()` because the eventual subscription record has
-    // not been designed yet. Placeholder implementations acknowledge the request without doing
-    // anything, and expose enough read-side surface for adapters to answer `/v1/agents/*`.
+    // The NPU side of agent data exchange: registering an agent as a data source/sink returns the
+    // channels used to feed data in and read data out. Only that channel-level registration lives
+    // here. The agent registry itself — network connections, transport negotiation, agent
+    // identity/properties — is owned by the legacy code above WNPU, not by the NPU.
+    //
+    // Subscribe/unsubscribe currently accept `()` because the eventual channel-handle type has not
+    // been designed yet. Placeholder implementations acknowledge the request without doing
+    // anything.
     // ==================================================================================
 
-    /// Subscribes an agent to some NPU data and vice versa. Placeholder: accepts every request.
+    /// Registers an agent as a data source/sink on the NPU, wiring up the channels used to feed
+    /// data in and read data out. Placeholder: accepts every request.
     pub fn subscribe_agent_to_npu(&mut self, subscription_details: ()) -> Result<(), WNPUError> {
         Ok(())
     }
 
-    /// Returns a subscription of an agent, which allows the NPU to free the memory. Placeholder:
-    /// accepts every request.
+    /// Tears down an agent's data channels, allowing the NPU to free the associated memory.
+    /// Placeholder: accepts every request.
     pub fn unsubscribe_agent_from_npu(
         &mut self,
         subscription_details: (),
     ) -> Result<(), WNPUError> {
         Ok(())
-    }
-
-    /// IDs of every subscribed agent. Placeholder: none.
-    pub fn subscribed_agent_ids(&self) -> Vec<String> {
-        vec![]
-    }
-
-    /// Property snapshot for one agent, or `None` if it is not subscribed. Placeholder: `None`.
-    pub fn subscribed_agent_properties(&self, agent_id: &str) -> Option<WnpuAgentProperties> {
-        None
-    }
-
-    /// Shared-memory descriptors for subscribed agents, keyed by agent ID. Placeholder: empty.
-    pub fn shared_memory_info(
-        &self,
-    ) -> HashMap<String, HashMap<String, serde_json::Value>> {
-        HashMap::new()
     }
 
     /// Manual stimulation, as `{cortical_id_base64 -> [[x, y, z, potential], ...]}`. Placeholder:
@@ -812,70 +635,6 @@ impl WrappedNeuronProcessingUnit {
         Ok(stimulation_payload.values().map(|v| v.len()).sum())
     }
 
-    // ==================================================================================
-    // Snapshots
-    //
-    // Placeholder implementations acknowledge snapshot lifecycle calls without persisting
-    // anything and report an empty snapshot list.
-    // ==================================================================================
-
-    /// Creates a snapshot of the current connectome (and optionally runtime state) and returns
-    /// its metadata. Placeholder: fabricates metadata whose `snapshot_id` is a monotonic token
-    /// but persists no data.
-    pub fn create_snapshot(
-        &mut self,
-        name: Option<String>,
-        description: Option<String>,
-        stateful: bool,
-    ) -> WnpuSnapshotMetadata {
-        WnpuSnapshotMetadata {
-            snapshot_id: String::new(),
-            created_at: String::new(),
-            name: name.unwrap_or_default(),
-            description,
-            stateful,
-            size_bytes: 0,
-        }
-    }
-
-    /// Restores a previously-created snapshot. Placeholder: no-op.
-    pub fn restore_snapshot(&mut self, snapshot_id: &str) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Every snapshot currently retained. Placeholder: none.
-    pub fn list_snapshots(&self) -> Vec<WnpuSnapshotMetadata> {
-        vec![]
-    }
-
-    /// Deletes a snapshot. Placeholder: no-op.
-    pub fn delete_snapshot(&mut self, snapshot_id: &str) -> Result<(), WNPUError> {
-        Ok(())
-    }
-
-    /// Raw artifact bytes for one snapshot in the requested `format` (`json`, `binary`, ...).
-    /// Placeholder: empty.
-    pub fn snapshot_artifact_bytes(&self, snapshot_id: &str, format: &str) -> Vec<u8> {
-        Vec::new()
-    }
-
-    // ==================================================================================
-    // Connectome import / export (transport-level)
-    //
-    // The service layer's `ConnectomeSnapshot` type is defined outside WNPU; these functions deal
-    // in the raw bytes so WNPU does not need to depend on the service crate. Adapters serialize
-    // the DTO around this call.
-    // ==================================================================================
-
-    /// Serializes the current connectome to opaque bytes. Placeholder: empty.
-    pub fn export_connectome_bytes(&self) -> Result<Vec<u8>, WNPUError> {
-        Ok(Vec::new())
-    }
-
-    /// Restores a previously-exported connectome from opaque bytes. Placeholder: no-op.
-    pub fn import_connectome_bytes(&mut self, bytes: &[u8]) -> Result<(), WNPUError> {
-        Ok(())
-    }
 }
 
 // ======================================================================================
@@ -995,13 +754,15 @@ pub enum WnpuConnectomeEdit {
         cortical_id: CorticalID,
     },
     SetCorticalMapping {
+        /// External identifier of the mapping; see [`WrappedNeuronProcessingUnit::set_cortical_mapping`].
+        name: String,
         source: CorticalID,
         destination: CorticalID,
         rules: Vec<CorticalMappingRuleParameters>,
     },
     RemoveCorticalMapping {
-        source: CorticalID,
-        destination: CorticalID,
+        /// External identifier of the mapping to remove.
+        name: String,
     },
 }
 
@@ -1015,117 +776,3 @@ pub enum WnpuConnectomeEditOutcome {
     CorticalMappingRemoved { synapses_removed: usize },
 }
 
-// ======================================================================================
-// Extra placeholder types used by the read-only surfaces
-//
-// These mirror the shapes the REST adapters need so WNPU does not have to depend on
-// `feagi-services` (which would create a dependency cycle). Adapters map field-for-field.
-// ======================================================================================
-
-/// Metadata for the currently-loaded genome.
-#[derive(Debug, Clone, Default)]
-pub struct WnpuGenomeMetadata {
-    pub genome_id: String,
-    pub genome_title: String,
-    pub version: String,
-    pub simulation_timestep: f64,
-    pub genome_num: Option<i32>,
-    pub genome_timestamp: Option<i64>,
-}
-
-/// Registry entry for one brain region.
-#[derive(Debug, Clone, Default)]
-pub struct WnpuBrainRegionInfo {
-    pub region_id: String,
-    pub name: String,
-    pub region_type: String,
-    pub parent_id: Option<String>,
-    pub cortical_areas: Vec<String>,
-    pub child_regions: Vec<String>,
-    pub properties: HashMap<String, serde_json::Value>,
-}
-
-/// Registry entry for one morphology definition.
-#[derive(Debug, Clone, Default)]
-pub struct WnpuMorphologyInfo {
-    pub morphology_type: String,
-    pub class: String,
-    pub parameters: serde_json::Value,
-}
-
-/// Overall system health, as reported through `/v1/system/health`.
-#[derive(Debug, Clone, Default)]
-pub struct WnpuSystemHealth {
-    pub overall_status: String,
-    pub components: Vec<WnpuComponentHealth>,
-}
-
-/// One component within [`WnpuSystemHealth`].
-#[derive(Debug, Clone, Default)]
-pub struct WnpuComponentHealth {
-    pub name: String,
-    pub status: String,
-    pub message: Option<String>,
-}
-
-/// Aggregate runtime statistics.
-#[derive(Debug, Clone, Default)]
-pub struct WnpuRuntimeStats {
-    pub total_bursts: u64,
-    pub total_neurons_fired: u64,
-    pub total_processing_time_ms: u64,
-    pub avg_burst_time_ms: f64,
-    pub avg_neurons_per_burst: f64,
-    pub current_rate_hz: f64,
-    pub peak_rate_hz: f64,
-    pub uptime_seconds: u64,
-}
-
-/// Memory usage across NPU and shadow state.
-#[derive(Debug, Clone, Default)]
-pub struct WnpuMemoryUsage {
-    pub npu_neurons_bytes: usize,
-    pub npu_synapses_bytes: usize,
-    pub npu_total_bytes: usize,
-    pub connectome_metadata_bytes: usize,
-    pub total_allocated_bytes: usize,
-    pub system_total_bytes: usize,
-    pub system_available_bytes: usize,
-}
-
-/// Capacity limits.
-#[derive(Debug, Clone, Default)]
-pub struct WnpuCapacity {
-    pub current_neurons: usize,
-    pub max_neurons: usize,
-    pub neuron_utilization_percent: f64,
-    pub current_synapses: usize,
-    pub max_synapses: usize,
-    pub synapse_utilization_percent: f64,
-    pub current_cortical_areas: usize,
-    pub max_cortical_areas: usize,
-}
-
-/// Property snapshot for one subscribed agent.
-#[derive(Debug, Clone, Default)]
-pub struct WnpuAgentProperties {
-    pub agent_type: String,
-    pub agent_ip: String,
-    pub agent_data_port: u16,
-    pub agent_router_address: String,
-    pub agent_version: String,
-    pub controller_version: String,
-    pub capabilities: HashMap<String, serde_json::Value>,
-    pub chosen_transport: Option<String>,
-}
-
-/// Snapshot metadata.
-#[derive(Debug, Clone, Default)]
-pub struct WnpuSnapshotMetadata {
-    pub snapshot_id: String,
-    pub created_at: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub stateful: bool,
-    pub size_bytes: u64,
-}

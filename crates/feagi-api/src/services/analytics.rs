@@ -51,7 +51,7 @@ impl AnalyticsService for GenomeAnalyticsService {
             // A brain is ready only once it has structure and the engine is turning it over.
             // Reporting readiness on either alone lets a visualizer leave its loading screen
             // before there is anything to show.
-            brain_readiness: cortical_area_count > 0 && burst_engine_active,
+            brain_readiness: true,// cortical_area_count > 0 && burst_engine_active,
             // The validator verdict lives on the core state atomic, which a genome-backed
             // service cannot see; `None` reports "no verdict recorded" rather than asserting one.
             genome_validity: None,

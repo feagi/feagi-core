@@ -1,5 +1,5 @@
 use feagi_data::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
-use crate::cortical_area::components::dynamics::data::{CorticalDataProperties, CorticalDataInternal, CorticalDataShared, NeuronDataProperties, NeuronDataInternal};
+use crate::cortical_area::components::dynamics::components::data::{CorticalDataProperties, CorticalDataInternal, CorticalDataShared, NeuronDataProperties, NeuronDataInternal};
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::NeuronLayoutModelTrait;
 use crate::cortical_area::cortical_area_model_quantization::CorticalAreaModelQuantization;
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
@@ -56,6 +56,7 @@ where
         neuron_internal: &mut Self::NeuronDataInternal,
         neuron_linear_index: &CorticalNeuronLocalIndex<BEIQ::NeuronIndexQuant>,
         layout_context: &NL,
+        
     ) -> bool;
 
 }

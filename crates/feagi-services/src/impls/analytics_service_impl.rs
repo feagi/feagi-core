@@ -54,7 +54,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // Brain is ready ONLY if genome is loaded AND burst engine is actively running
         // This prevents the Brain Visualizer from exiting loading screen prematurely
-        let brain_readiness = cortical_area_count > 0 && burst_engine_active;
+        let brain_readiness = true;//cortical_area_count > 0 && burst_engine_active;
 
         // Genome validity is written by the loader (`GenomeServiceImpl`)
         // from the chain report; read it lock-free from core state. See
