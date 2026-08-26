@@ -3,7 +3,8 @@ use serde_json::json;
 use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
 use feagi_genomic_context::cortical_area::CorticalID;
-
+use feagi_models::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantizationStandard32Bit;
+use crate::standard::npu::neural_processing_unit::NeuronProcessingUnit;
 use crate::standard::npu::npu_target_frequency::NPUTargetFrequency;
 use crate::standard::wnpu::connectome_request::connectome_request::ConnectomeRequest;
 use crate::standard::wnpu::wrapped_neuron_processor_unit_error::WNPUError;
@@ -20,6 +21,8 @@ use crate::standard::wnpu::wrapped_neuron_processor_unit_error::WNPUError;
 /// counts. Registry queries are answered from that shadow state without contacting the engine.
 /// Runtime probes are the only reads that require an engine round trip.
 pub struct WrappedNeuronProcessingUnit {
+    npu: NeuronProcessingUnit<NeuronProcessingUnitIndexQuantizationStandard32Bit>
+
     // TODO owns the NPU, the CorticalID <-> engine index table, and the shadow registry state
 }
 
@@ -36,26 +39,28 @@ impl WrappedNeuronProcessingUnit {
         global_quantization: FeagiIndexQuantizationLevel, // TODO LOAD
         burst_engine_configurations: Vec<()>, // TODO
     ) -> Result<Self, WNPUError> {
-        todo!()
+        Ok(Self {
+            npu: NeuronProcessingUnit::new()
+        })
     }
 
     /// Sets the burst rate to the given frequency, resuming the engine if it was paused.
     pub fn run_at_frequency(&mut self, new_frequency: NPUTargetFrequency) -> Result<(), WNPUError> {  // TODO LOAD
-        
-        
+
+
         Ok(())
     }
 
     /// Pauses burst calculations without clearing any data; connectome data continues to exist
     /// inside the NPU.
     pub fn pause(&mut self) -> Result<(), WNPUError> {
-        
+
         Ok(())
     }
 
     /// Terminates the burst engines. Intended for shutdown; the NPU is unusable afterwards.
     pub fn stop(&mut self) -> Result<(), WNPUError> {
-        
+
         Ok(())
     }
 
@@ -67,7 +72,7 @@ impl WrappedNeuronProcessingUnit {
 
     /// Number of bursts the engine has completed since the connectome was last cleared.
     pub fn bursts_completed(&self) -> Result<u64, WNPUError> {  // TODO LOAD
-        
+
         Ok(0)
     }
 
@@ -89,9 +94,9 @@ impl WrappedNeuronProcessingUnit {
     ) -> Result<usize, WNPUError> {
 
         let a = serde_json::json!(parameters);
-        
+
         println!("{}", a.to_string());
-        
+
         Ok(1)
     }
 
