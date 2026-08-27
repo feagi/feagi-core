@@ -1,7 +1,7 @@
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayout};
-use crate::cortical_area::parameters::dynamics::components::data::NullData;
-use crate::cortical_area::parameters::dynamics::components::quantization::quantization::CorticalAreaQuantization;
-use crate::cortical_area::parameters::dynamics::cortical_area_dynamics::CorticalAreaDynamics;
+use crate::cortical_area::parameters::body::dynamics::components::data::NullData;
+use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
+use crate::cortical_area::parameters::body::dynamics::cortical_area_dynamics::CorticalAreaDynamics;
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
 use crate::wrapped_indexes::BurstIndex;

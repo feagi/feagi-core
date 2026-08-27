@@ -1,7 +1,7 @@
 use feagi_data::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
-use crate::cortical_area::parameters::dynamics::components::data::{CorticalDataProperties, CorticalDataInternal, CorticalDataShared, NeuronDataProperties, NeuronDataInternal};
+use crate::cortical_area::parameters::body::dynamics::components::data::{CorticalDataProperties, CorticalDataInternal, CorticalDataShared, NeuronDataProperties, NeuronDataInternal};
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayout};
-use crate::cortical_area::parameters::dynamics::components::quantization::quantization::CorticalAreaQuantization;
+use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
 use crate::wrapped_indexes::BurstIndex;
@@ -15,6 +15,12 @@ where
     NL: NeuronLayout<BEIQ>,
     CAMQ: CorticalAreaQuantization,
 {
+    /// Defines if we can configure the usage of MP as the PSP or not
+    type MPDrivenPSPConfigurability;
+
+    /// Defines if we can configure the cortical level of PSP
+    type CorticalLevelPSPConfigurability;
+    
     /// The cortical level data that should be exposed to genome developers
     type CorticalDataProperties: CorticalDataProperties<CAMQ>;
 
@@ -31,6 +37,8 @@ where
     /// The per neuron level data that is for internal processing, will not be
     /// exposed to genome developers
     type NeuronDataInternal: NeuronDataInternal<CAMQ>;
+
+
 
     // TODO we should probably break the processing functions also into subtraits
     
