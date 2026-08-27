@@ -4,6 +4,7 @@
 // internal, do not expose!
 //mod npu;
 pub mod standard;
+pub mod a;
 
 
 

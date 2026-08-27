@@ -7,7 +7,7 @@ use crate::quantization_levels::neuron_processing_unit_index_quantization::Neuro
 // TODO Neuron Membrane Type should be configurable
 
 /// Describes a cortical area model with all its dynamics
-pub trait CorticalAreaModel<NPUIQ, BEIQ, CAMQ, PPPP>:
+pub trait CorticalAreaModel<NPUIQ, BEIQ, CAMQ>:
 
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,

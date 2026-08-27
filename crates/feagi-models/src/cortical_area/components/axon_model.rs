@@ -110,7 +110,7 @@ where
     BEIQ: BurstEngineIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
-
+    
 }
 
 //endregion
