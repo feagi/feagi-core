@@ -4,7 +4,10 @@ use feagi_data::values::quantizable::DecimalQuantizationLevel;
 
 /// Common root trait shared by all Neuron Model Quantizations. This trait should be extended
 /// by the given neuron model to add any quantization parameters for their given data
-pub trait CorticalAreaModelQuantization: MembranePotentialQuantization + Default + Clone {
+pub trait CorticalAreaQuantization: MembranePotentialQuantization {
+
+
+
     // /// A flat enum value denoting what type of cortical area model this cortical area 
     // /// model instance is
     //const NEURON_MODEL: NeuronModelType;
@@ -28,9 +31,3 @@ pub trait CorticalAreaModelQuantization: MembranePotentialQuantization + Default
     // const USED_DECIMAL_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel]; // Don't include a default, as we then forget about it
 }
 
-pub trait CorticalAreaModelQuantizationLevel: Clone + Copy + Hash + Eq + PartialEq + Default {
-    // /// Calculate the membrane potential level from the given cortical model quantization level. Note
-    // /// that we do not expect that this be directly encoded in the byte, and should be calculated.
-    // /// This is alright since this is not used in extremely performance sensitive use cases.
-    // fn get_membrane_potential_level(&self) -> DecimalQuantizationLevel;
-}

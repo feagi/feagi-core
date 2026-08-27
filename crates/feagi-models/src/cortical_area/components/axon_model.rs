@@ -1,5 +1,5 @@
 use feagi_data::values::quantizable::DecimalQuantizationLevel;
-use crate::cortical_area::cortical_area_model_quantization::{CorticalAreaModelQuantization};
+use crate::cortical_area::parameters::dynamics::components::quantization::quantization::{CorticalAreaQuantization};
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
 
@@ -8,7 +8,7 @@ pub trait AxonModelTrait<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
     
 }
@@ -18,7 +18,7 @@ pub trait AxonConfigTrait<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -27,7 +27,7 @@ pub trait PerNeuronPotentialAxonModelTrait<NPUIQ, BEIQ, CAMQ>: AxonModelTrait<NP
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
     const INCOMING_POTENTIAL_QUANTIZATION: DecimalQuantizationLevel = CAMQ::MEMBRANE_POTENTIAL_QUANT_LEVEL;
 }
@@ -37,7 +37,7 @@ pub trait PerNeuronPotentialAxonConfigTrait<NPUIQ, BEIQ, CAMQ>: AxonConfigTrait<
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
     const INCOMING_POTENTIAL_QUANTIZATION: DecimalQuantizationLevel = CAMQ::MEMBRANE_POTENTIAL_QUANT_LEVEL;
 }
@@ -49,13 +49,13 @@ pub struct NullAxonModel<NPUIQ, BEIQ, CAMQ>(core::marker::PhantomData<(NPUIQ, BE
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization;
+    CAMQ: CorticalAreaQuantization;
 
 impl<NPUIQ, BEIQ, CAMQ> AxonModelTrait<NPUIQ, BEIQ, CAMQ> for NullAxonModel<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -68,13 +68,13 @@ pub struct LinearPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>(core::marker::Ph
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization;
+    CAMQ: CorticalAreaQuantization;
 
 impl<NPUIQ, BEIQ, CAMQ> AxonModelTrait<NPUIQ, BEIQ, CAMQ> for LinearPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -82,7 +82,7 @@ impl<NPUIQ, BEIQ, CAMQ> LinearPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -94,13 +94,13 @@ pub struct DimensionalPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>(core::marke
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization;
+    CAMQ: CorticalAreaQuantization;
 
 impl<NPUIQ, BEIQ, CAMQ> AxonModelTrait<NPUIQ, BEIQ, CAMQ> for DimensionalPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -108,7 +108,7 @@ impl<NPUIQ, BEIQ, CAMQ> DimensionalPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 
 }

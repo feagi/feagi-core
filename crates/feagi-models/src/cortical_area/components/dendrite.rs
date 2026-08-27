@@ -1,4 +1,4 @@
-use crate::cortical_area::cortical_area_model_quantization::CorticalAreaModelQuantization;
+use crate::cortical_area::parameters::dynamics::components::quantization::quantization::CorticalAreaQuantization;
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
@@ -9,7 +9,7 @@ pub trait DendriteModelTrait<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -18,7 +18,7 @@ pub trait DendriteConfigTrait<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -27,7 +27,7 @@ pub trait PerNeuronPotentialDendriteModelTrait<NPUIQ, BEIQ, CAMQ>: DendriteModel
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
     const INCOMING_POTENTIAL_QUANTIZATION: DecimalQuantizationLevel = CAMQ::MEMBRANE_POTENTIAL_QUANT_LEVEL;
 }
@@ -37,7 +37,7 @@ pub trait PerNeuronPotentialDendriteConfigTrait<NPUIQ, BEIQ, CAMQ>: DendriteConf
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
     const INCOMING_POTENTIAL_QUANTIZATION: DecimalQuantizationLevel = CAMQ::MEMBRANE_POTENTIAL_QUANT_LEVEL;
 }
@@ -49,13 +49,13 @@ pub struct NullDendriteModel<NPUIQ, BEIQ, CAMQ>(core::marker::PhantomData<(NPUIQ
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization;
+    CAMQ: CorticalAreaQuantization;
 
 impl<NPUIQ, BEIQ, CAMQ> DendriteModelTrait<NPUIQ, BEIQ, CAMQ> for NullDendriteModel<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -68,13 +68,13 @@ pub struct LinearPerNeuronPotentialDendriteModel<NPUIQ, BEIQ, CAMQ>(core::marker
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization;
+    CAMQ: CorticalAreaQuantization;
 
 impl<NPUIQ, BEIQ, CAMQ> DendriteModelTrait<NPUIQ, BEIQ, CAMQ> for LinearPerNeuronPotentialDendriteModel<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -82,7 +82,7 @@ impl<NPUIQ, BEIQ, CAMQ> LinearPerNeuronPotentialDendriteModel<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -94,13 +94,13 @@ pub struct DimensionalPerNeuronPotentialDendriteModel<NPUIQ, BEIQ, CAMQ>(core::m
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization;
+    CAMQ: CorticalAreaQuantization;
 
 impl<NPUIQ, BEIQ, CAMQ> DendriteModelTrait<NPUIQ, BEIQ, CAMQ> for DimensionalPerNeuronPotentialDendriteModel<NPUIQ, BEIQ, CAMQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 
@@ -108,7 +108,7 @@ impl<NPUIQ, BEIQ, CAMQ> DimensionalPerNeuronPotentialDendriteModel<NPUIQ, BEIQ, 
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
     
 }
@@ -124,7 +124,7 @@ pub trait AreaActivityHashingDendriteModelTrait<NPUIQ, BEIQ, CAMQ>: DendriteMode
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
-    CAMQ: CorticalAreaModelQuantization,
+    CAMQ: CorticalAreaQuantization,
 {
 }
 

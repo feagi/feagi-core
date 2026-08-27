@@ -2,4 +2,3 @@
 
 pub mod neuron_layout_model;
 pub mod implementations;
-pub mod neuron_layout_config;

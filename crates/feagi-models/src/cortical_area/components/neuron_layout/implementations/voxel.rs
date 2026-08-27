@@ -1,30 +1,25 @@
-use core::marker::PhantomData;
-use feagi_data::neurons::wrapped_types::CorticalNeuronLocalIndex;
-use crate::cortical_area::components::neuron_layout::neuron_layout_config::NeuronLayoutConfigTrait;
-use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayoutModelEnum, NeuronLayoutModelTrait};
+use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayout, NeuronLayoutEnum};
 use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
+use core::marker::PhantomData;
+use feagi_data::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalVoxelCoordinate, CorticalVoxelDimensions, CorticalVoxelLinearIndex};
 
-/// Defines that the neurons are laid out in xyzd (depth) order linearly in a dense fashion 
-pub struct NeuronLayoutVoxelModel;
-
-impl NeuronLayoutModelTrait for NeuronLayoutVoxelModel {
-    const NEURON_LAYOUT_MODEL: NeuronLayoutModelEnum = NeuronLayoutModelEnum::Dimensional;
+/// Defines that the neurons are laid out in xyzd (depth) order linearly in a dense fashion
+pub struct NeuronLayoutVoxel<BEIQ: BurstEngineIndexQuantization> {
+    pub cortical_dimensions: CorticalVoxelDimensions<BEIQ::NeuronIndexQuant>,
 }
 
-/// Defines that the neurons are laid out in xyzd (depth) order linearly in a dense fashion 
-pub struct NeuronLayoutVoxelConfig<BEIQ: BurstEngineIndexQuantization> {
-    pub cortical_dimensions: BEIQ // TODO
-}
+impl<BEIQ: BurstEngineIndexQuantization> NeuronLayout<BEIQ> for NeuronLayoutVoxel<BEIQ> {
+    const NEURON_LAYOUT_MODEL: NeuronLayoutEnum = NeuronLayoutEnum::Voxel;
 
-impl<BEIQ: BurstEngineIndexQuantization> NeuronLayoutConfigTrait<BEIQ> for NeuronLayoutVoxelConfig<BEIQ> {
-    type CorticalLayoutContext = ();
-    type NeuronLayoutContext = ();
+    type CorticalLayoutContext = CorticalVoxelDimensions<BEIQ::NeuronIndexQuant>;
+    type NeuronLayoutContext = CorticalVoxelCoordinate<BEIQ::NeuronIndexQuant>;
 
     fn get_cortical_layout_context(&self) -> &Self::CorticalLayoutContext {
-        todo!()
+        &self.cortical_dimensions
     }
 
     fn get_neuron_layout_context(&self, neuron_index: &CorticalNeuronLocalIndex<BEIQ::NeuronIndexQuant>) -> Self::NeuronLayoutContext {
-        todo!()
+        let neuron_index = CorticalVoxelLinearIndex::new(neuron_index.deref());
+        self.cortical_dimensions.linear_index_to_coordinate_unchecked(neuron_index)
     }
 }

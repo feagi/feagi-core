@@ -7,7 +7,7 @@ use half::{bf16, f16};
 /// areas must have this property. This quantization is set per cortical area, and
 /// is controlled by the Neuron Model Quantization state, although this cortical level neuron
 /// potential quantization has discrete steps that must be followed.
-pub trait MembranePotentialQuantization: Clone + Copy + Hash {
+pub trait MembranePotentialQuantization: Clone + Copy + core::fmt::Debug {
     /// Defines the quantization of the membrane potential of a neuron within a cortical area.
     type MembranePotentialQuant: QuantizedDecimalUnwrappedTrait; // TODO wrap this actually
 

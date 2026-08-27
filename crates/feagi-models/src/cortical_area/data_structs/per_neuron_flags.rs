@@ -10,12 +10,12 @@ impl PerNeuronFlags {
     const MASK_NEURON_IS_FORCED_NOT_TO_FIRE: u8 = 1 << 6; // Setting this to true forces the neuron to not fire unless force fire is on (lower priority)
     const MASK_NEURON_IS_ALIVE: u8 = 1 << 7;
 
-    /// Returns true if the neuron is currently firing.
-    pub fn is_neuron_firing(&self) -> bool {
+    /// Returns true if the neuron model labeled the neuron as firing (ignoring all other flags).
+    pub fn is_neuron_firing_bit(&self) -> bool {
         self.get_bit(Self::MASK_NEURON_IS_FIRING)
     }
 
-    pub fn set_neuron_firing(&mut self, value: bool) {
+    pub fn set_neuron_firing_bit(&mut self, value: bool) {
         self.set_bit(Self::MASK_NEURON_IS_FIRING, value);
     }
 
