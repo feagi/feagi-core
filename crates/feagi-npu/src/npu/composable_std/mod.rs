@@ -1,3 +1,1 @@
-pub mod composable_burst_engine_worker;
 pub mod composable_neural_processing_unit;
-pub mod composable_burst_engine_worker_pool;

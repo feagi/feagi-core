@@ -1,15 +1,15 @@
-use feagi_data::neurons::wrapped_types::CorticalNeuronLocalIndex;
 use feagi_models::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
 use feagi_models::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
 use feagi_npu_burst_core::burst_engine_definitions::burst_engine::{BurstEngine, ComposableBurstEngine};
 use feagi_npu_burst_core::burst_engine_definitions::burst_phase_output::BurstPhaseOutput;
 use feagi_npu_burst_core::burst_engine_definitions::burst_phases::RunBurstPhase;
-use feagi_npu_burst_core::wrapped_values::EngineCorticalIndex;
 use feagi_npu_burst_core::errors::BurstEngineError;
 use core::future::Future;
 use feagi_npu_burst_rayon::rayon_burst_engine::RayonBurstEngine;
 
-pub enum ComposableBurstEngineEnum<NPUIQ, BEIQ>
+// TODO feature gate composable engines // noncposable engines
+
+pub enum BurstEngineEnum<NPUIQ, BEIQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
@@ -17,23 +17,25 @@ where
     CPURayon(RayonBurstEngine<NPUIQ, BEIQ>),
 }
 
-impl<NPUIQ, BEIQ> BurstEngine<NPUIQ, BEIQ> for ComposableBurstEngineEnum<NPUIQ, BEIQ>
+impl<NPUIQ, BEIQ> BurstEngine<NPUIQ, BEIQ> for BurstEngineEnum<NPUIQ, BEIQ>
 where
     BEIQ: BurstEngineIndexQuantization,
     NPUIQ: NeuronProcessingUnitIndexQuantization,
 {
     fn execute_phase(&mut self, phases: RunBurstPhase) -> impl Future<Output = Result<BurstPhaseOutput, BurstEngineError>> {
         match self {
-            ComposableBurstEngineEnum::CPURayon(e) => {e.execute_phase(phases)}
+            BurstEngineEnum::CPURayon(e) => {e.execute_phase(phases)}
         }
     }
 }
 
-impl<NPUIQ, BEIQ> ComposableBurstEngine<NPUIQ, BEIQ> for ComposableBurstEngineEnum<NPUIQ, BEIQ>
+impl<NPUIQ, BEIQ> ComposableBurstEngine<NPUIQ, BEIQ> for BurstEngineEnum<NPUIQ, BEIQ>
 where
     NPUIQ: NeuronProcessingUnitIndexQuantization,
     BEIQ: BurstEngineIndexQuantization,
 {
+    // TODO single method for passing instructions
+    
     /*
     fn add_cortical_area<CA>(
         &mut self,
