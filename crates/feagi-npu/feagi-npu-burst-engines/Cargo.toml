@@ -1,0 +1,18 @@
+[package]
+name = "feagi-npu-burst-engines"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Contains the Burst Engines for various hardwares, which handle the processing of the connectome"
+
+# TODO features to control what burst engines are accessible
+
+
+[dependencies]
+feagi-npu-burst-core = {path = "feagi-npu-burst-core"}
+feagi-npu-burst-rayon = {path = "feagi-npu-burst-rayon"}
