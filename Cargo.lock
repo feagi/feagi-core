@@ -1536,6 +1536,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-npu-burst-engines"
+version = "0.1.1"
+dependencies = [
+ "feagi-npu-burst-core",
+ "feagi-npu-burst-rayon",
+]
+
+[[package]]
 name = "feagi-npu-burst-rayon"
 version = "0.1.1"
 dependencies = [

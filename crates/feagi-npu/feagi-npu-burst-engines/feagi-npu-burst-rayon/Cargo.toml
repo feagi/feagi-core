@@ -12,10 +12,10 @@ description = "Rayon burst engine logic for multithread / core CPU neuron proces
 
 
 [dependencies]
-feagi-data = {path = "../../feagi-data"}
-feagi-models = {path = "../../feagi-models" }
-feagi-logging-and-errors = {path = "../../feagi-logging-and-errors"}
-feagi-genomic-context = {path = "../../feagi-genomic-context"}
+feagi-data = {path = "../../../feagi-data" }
+feagi-models = {path = "../../../feagi-models" }
+feagi-logging-and-errors = {path = "../../../feagi-logging-and-errors" }
+feagi-genomic-context = {path = "../../../feagi-genomic-context" }
 
 # External crates
 paste = { workspace = true}

@@ -54,8 +54,8 @@ feagi-data = {path = "../feagi-data"}
 feagi-models = {path = "../feagi-models" }
 feagi-logging-and-errors = {path = "../feagi-logging-and-errors"}
 feagi-genomic-context = {path = "../feagi-genomic-context"}
-feagi-npu-burst-core = {path = "feagi-npu-burst-core"}
-feagi-npu-burst-rayon = {path = "feagi-npu-burst-rayon"}
+feagi-npu-burst-core = {path = "feagi-npu-burst-engines/feagi-npu-burst-core" }
+feagi-npu-burst-rayon = {path = "feagi-npu-burst-engines/feagi-npu-burst-rayon" }
 
 
 # External crates
