@@ -11,7 +11,7 @@ that a genome file goes through before corticogenesis ever sees it.
 
 use feagi_brain_development::corticogenesis::develop_connectome_requests;
 use feagi_evolutionary::load_genome_from_json;
-use feagi_models::connectome_requests::connectome_request::ConnectomeRequest;
+use feagi_models::connectome_requests_2::connectome_request::ConnectomeRequest;
 
 /// The smallest genome FEAGI ships: two 1x1x1 areas (Brain_Power, Brain_Death) and no mappings.
 ///

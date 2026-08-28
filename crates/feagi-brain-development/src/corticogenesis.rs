@@ -24,7 +24,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::{
 use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
 use feagi_evolutionary::runtime::RuntimeGenome;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
-use feagi_npu::standard::wnpu::connectome_request::connectome_request::ConnectomeRequest;
+use feagi_npu::wnpu::connectome_request::connectome_request::ConnectomeRequest;
 use crate::types::{BduError, BduResult};
 
 /// Neuron index quantization of the genomic-level engine the NPU is currently fixed to.

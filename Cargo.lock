@@ -1506,7 +1506,9 @@ dependencies = [
  "feagi-genomic-context",
  "feagi-logging-and-errors",
  "feagi-models",
- "flume",
+ "feagi-npu-burst-core",
+ "feagi-npu-burst-rayon",
+ "flume 0.11.1",
  "futures",
  "half",
  "parking_lot",
@@ -1516,6 +1518,35 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "feagi-npu-burst-core"
+version = "0.1.1"
+dependencies = [
+ "ahash",
+ "feagi-data",
+ "feagi-genomic-context",
+ "feagi-logging-and-errors",
+ "feagi-models",
+ "flume 0.12.0",
+ "half",
+ "paste",
+ "serde",
+]
+
+[[package]]
+name = "feagi-npu-burst-rayon"
+version = "0.1.1"
+dependencies = [
+ "ahash",
+ "feagi-data",
+ "feagi-genomic-context",
+ "feagi-logging-and-errors",
+ "feagi-models",
+ "half",
+ "paste",
+ "rayon",
 ]
 
 [[package]]
@@ -1651,6 +1682,17 @@ name = "flume"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "spin",
+]
+
+[[package]]
+name = "flume"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e139bc46ca777eb5efaf62df0ab8cc5fd400866427e56c68b22e414e53bd3be"
 dependencies = [
  "futures-core",
  "futures-sink",

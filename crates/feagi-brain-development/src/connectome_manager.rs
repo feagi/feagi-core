@@ -56,7 +56,7 @@ use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 //use feagi_models::cortical_area::genome_compose::cortical_writer_by_model_quant::{CorticalWriterByModelQuant, FeagiAdvancedModelWriter};
 //use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::composers::FeagiAdvancedModelCorticalWriter;
 //use feagi_models::cortical_area::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelStandardQuant;
-use feagi_npu::standard::wnpu::wnpu::{
+use feagi_npu::wnpu::wnpu::{
     CorticalAreaParameters, WrappedNeuronProcessingUnit,
 };
 // State manager access for fatigue calculation
@@ -177,7 +177,7 @@ pub struct ConnectomeManager {
     last_fatigue_calculation: Arc<Mutex<std::time::Instant>>,
 
     /// The wrapper holding the new NPU
-    wnpu: feagi_npu::standard::wnpu::wnpu::WrappedNeuronProcessingUnit,
+    wnpu: feagi_npu::wnpu::wnpu::WrappedNeuronProcessingUnit,
 }
 
 /*

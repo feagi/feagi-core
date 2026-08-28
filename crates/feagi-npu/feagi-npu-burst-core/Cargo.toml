@@ -1,0 +1,24 @@
+[package]
+name = "feagi-npu-burst-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Shared logic / traits for burst engines"
+
+[dependencies]
+feagi-data = {path = "../../feagi-data"}
+feagi-models = {path = "../../feagi-models" }
+feagi-logging-and-errors = {path = "../../feagi-logging-and-errors"}
+feagi-genomic-context = {path = "../../feagi-genomic-context"}
+
+paste = { workspace = true}
+half = {workspace = true}
+ahash = { workspace = true}
+
+flume = { version = "0.12", default-features = false, features = ["async"] } # TODO tie to workspace
+serde = {workspace = true} # TODO for some reason FeagiError is tied to this?
