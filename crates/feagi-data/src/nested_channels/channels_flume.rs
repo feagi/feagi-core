@@ -1,25 +1,21 @@
 use std::time::Duration;
 use flume::{TryRecvError, TrySendError};
-use crate::errors::{
-    ChannelError, FeagiFailChannelReceiveEmpty, FeagiFailChannelReceiveFailed,
-    FeagiFailChannelReceiveTimeout, FeagiFailChannelSendFailed, FeagiFailChannelSendFull,
-    FeagiFailChannelSendTimeout,
-};
+use crate::nested_channels::nested_channels::{FeagiFailChannelReceiveEmpty, FeagiFailChannelReceiveFailed, FeagiFailChannelReceiveTimeout, FeagiFailChannelSendFailed, FeagiFailChannelSendFull, FeagiFailChannelSendTimeout, NestedChannelError, NestedChannelPair};
 
-// TODO seperate out funcs into trait
 
-pub type OuterChannelPair<GoingInside: Send, ComingFromInside: Send> =  FlumeChannelPair<GoingInside, ComingFromInside>;
-pub type InnerChannelPair<ComingFromOutside: Send, GoingOutside: Send> =  FlumeChannelPair<ComingFromOutside, GoingOutside>;
+pub type InnerFlumeChannelPair<ComingFromOutside: Send, GoingOutside: Send> =  FlumeChannelPair<ComingFromOutside, GoingOutside>;
+pub type OuterFlumeChannelPair<GoingInside: Send, ComingFromInside: Send> =  FlumeChannelPair<GoingInside, ComingFromInside>;
 
 pub struct FlumeChannelPair<ToIn: Send, ToOut: Send> {
     a_sender: flume::Sender<ToIn>,
     b_receiver: flume::Receiver<ToOut>,
 }
 
-impl<ToIn: Send, ToOut: Send> FlumeChannelPair<ToIn, ToOut> {
+impl<ToIn: Send, ToOut: Send> NestedChannelPair<ToIn, ToOut> for FlumeChannelPair<ToIn, ToOut> {
+    type InnerChannelPair = InnerFlumeChannelPair<ToOut, ToIn>;
+    type OuterChannelPair = OuterFlumeChannelPair<ToIn, ToOut>;
 
-
-    pub fn new_pairs(going_in_length: usize, going_out_length: usize) -> (OuterChannelPair<ToIn, ToOut>, InnerChannelPair<ToOut, ToIn>) {
+    fn new_pairs(going_in_length: usize, going_out_length: usize) -> (OuterFlumeChannelPair<ToIn, ToOut>, InnerFlumeChannelPair<ToOut, ToIn>) {
         let (to_in_tx, to_in_rx) = flume::bounded(going_in_length);
         let (to_out_tx, to_out_rx) = flume::bounded(going_out_length);
         (
@@ -33,15 +29,13 @@ impl<ToIn: Send, ToOut: Send> FlumeChannelPair<ToIn, ToOut> {
             },
         )
     }
-
-    pub fn block_send(&mut self, to_in: ToIn) -> Result<(), ChannelError> {
+    fn block_send(&mut self, to_in: ToIn) -> Result<(), NestedChannelError> {
         self.a_sender.send(to_in).map_err(
             |_|
                 FeagiFailChannelSendFailed::new("Failed to block send data over channel").into()
         )
     }
-
-    pub fn try_send(&mut self, to_in: ToIn) -> Result<(), ChannelError> {
+    fn try_send(&mut self, to_in: ToIn) -> Result<(), NestedChannelError> {
         self.a_sender.try_send(to_in).map_err(
             |e|
                 match e {
@@ -54,8 +48,7 @@ impl<ToIn: Send, ToOut: Send> FlumeChannelPair<ToIn, ToOut> {
                 }
         )
     }
-
-    pub fn send_timeout(&mut self, to_in: ToIn, timeout: Duration) -> Result<(), ChannelError> {
+    fn send_timeout(&mut self, to_in: ToIn, timeout: Duration) -> Result<(), NestedChannelError> {
         self.a_sender.send_timeout(to_in, timeout).map_err(
             |e| match e {
                 flume::SendTimeoutError::Timeout(_) => {
@@ -67,14 +60,12 @@ impl<ToIn: Send, ToOut: Send> FlumeChannelPair<ToIn, ToOut> {
             },
         )
     }
-
-    pub fn block_receive(&mut self) -> Result<ToOut, ChannelError> {
+    fn block_receive(&mut self) -> Result<ToOut, NestedChannelError> {
         self.b_receiver.recv().map_err(
             |_| FeagiFailChannelReceiveFailed::new("Failed to block receive data over channel").into(),
         )
     }
-
-    pub fn try_receive(&mut self) -> Result<ToOut, ChannelError> {
+    fn try_receive(&mut self) -> Result<ToOut, NestedChannelError> {
         self.b_receiver.try_recv().map_err(
             |e| match e {
                 TryRecvError::Empty => {
@@ -86,8 +77,7 @@ impl<ToIn: Send, ToOut: Send> FlumeChannelPair<ToIn, ToOut> {
             },
         )
     }
-
-    pub fn receive_timeout(&mut self, timeout: Duration) -> Result<ToOut, ChannelError> {
+    fn receive_timeout(&mut self, timeout: Duration) -> Result<ToOut, NestedChannelError> {
         self.b_receiver.recv_timeout(timeout).map_err(
             |e| match e {
                 flume::RecvTimeoutError::Timeout => {
@@ -99,6 +89,7 @@ impl<ToIn: Send, ToOut: Send> FlumeChannelPair<ToIn, ToOut> {
             },
         )
     }
-
 }
+
+
 

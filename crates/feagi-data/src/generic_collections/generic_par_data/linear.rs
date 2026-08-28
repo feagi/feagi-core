@@ -339,6 +339,15 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> IndexMut<QI> for ParDataVector
     }
 }
 
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> Default for ParDataVector<QI, D> {
+    fn default() -> Self {
+        Self {
+            data: vec![],
+            _marker: Default::default(),
+        }
+    }
+}
+
 impl_par_data_range_read_write!(
     ParDataVector<QI, D>,
     QI,

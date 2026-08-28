@@ -224,6 +224,7 @@ enum_delegate  = {version = "0.2.0"}
 heapless = {version = "0.9.3"}
 half = {version = "2.7.1", default-features = false}
 futures = {version = "0.3.33"}
+flume = {version = "0.12.0"}
 
 # TODO update and review below
 image = { version = "0.25.10" } # TODO this shouldnt be here, this should be in the feagi sensiomotor specifically

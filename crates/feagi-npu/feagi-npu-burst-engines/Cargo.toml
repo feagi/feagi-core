@@ -16,3 +16,7 @@ description = "Contains the Burst Engines for various hardwares, which handle th
 [dependencies]
 feagi-npu-burst-core = {path = "feagi-npu-burst-core"}
 feagi-npu-burst-rayon = {path = "feagi-npu-burst-rayon"}
+
+feagi-data = {path = "../../feagi-data" }
+feagi-models = {path = "../../feagi-models" }
+feagi-logging-and-errors = {path = "../../feagi-logging-and-errors" }
