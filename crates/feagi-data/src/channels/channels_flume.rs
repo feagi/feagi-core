@@ -1,7 +1,8 @@
 use std::time::Duration;
 use flume::{TryRecvError, TrySendError};
-use crate::nested_channels::nested_channels::{FeagiFailChannelReceiveEmpty, FeagiFailChannelReceiveFailed, FeagiFailChannelReceiveTimeout, FeagiFailChannelSendFailed, FeagiFailChannelSendFull, FeagiFailChannelSendTimeout, NestedChannelError, NestedChannelPair};
+use crate::channels::channels::{ChannelReceivingError, ChannelSendingError, FeagiFailChannelReceiveEtc, FeagiFailChannelReceiveTimeout, FeagiFailChannelSendEtc, FeagiFailChannelSendFull, FeagiFailChannelSendTimeout, ChannelPair};
 
+// TODO fix in out naming conventions
 
 pub type InnerFlumeChannelPair<ComingFromOutside: Send, GoingOutside: Send> =  FlumeChannelPair<ComingFromOutside, GoingOutside>;
 pub type OuterFlumeChannelPair<GoingInside: Send, ComingFromInside: Send> =  FlumeChannelPair<GoingInside, ComingFromInside>;
@@ -11,9 +12,9 @@ pub struct FlumeChannelPair<ToIn: Send, ToOut: Send> {
     b_receiver: flume::Receiver<ToOut>,
 }
 
-impl<ToIn: Send, ToOut: Send> NestedChannelPair<ToIn, ToOut> for FlumeChannelPair<ToIn, ToOut> {
-    type InnerChannelPair = InnerFlumeChannelPair<ToOut, ToIn>;
-    type OuterChannelPair = OuterFlumeChannelPair<ToIn, ToOut>;
+impl<ToIn: Send, ToOut: Send> ChannelPair<ToIn, ToOut> for FlumeChannelPair<ToIn, ToOut> {
+    type AChannelPair = InnerFlumeChannelPair<ToOut, ToIn>;
+    type BChannelPair = OuterFlumeChannelPair<ToIn, ToOut>;
 
     fn new_pairs(going_in_length: usize, going_out_length: usize) -> (OuterFlumeChannelPair<ToIn, ToOut>, InnerFlumeChannelPair<ToOut, ToIn>) {
         let (to_in_tx, to_in_rx) = flume::bounded(going_in_length);
@@ -29,13 +30,13 @@ impl<ToIn: Send, ToOut: Send> NestedChannelPair<ToIn, ToOut> for FlumeChannelPai
             },
         )
     }
-    fn block_send(&mut self, to_in: ToIn) -> Result<(), NestedChannelError> {
+    fn block_send(&mut self, to_in: ToIn) -> Result<(), ChannelSendingError> {
         self.a_sender.send(to_in).map_err(
             |_|
-                FeagiFailChannelSendFailed::new("Failed to block send data over channel").into()
+                FeagiFailChannelSendEtc::new("Failed to block send data over channel").into()
         )
     }
-    fn try_send(&mut self, to_in: ToIn) -> Result<(), NestedChannelError> {
+    fn try_send(&mut self, to_in: ToIn) -> Result<(), ChannelSendingError> {
         self.a_sender.try_send(to_in).map_err(
             |e|
                 match e {
@@ -43,48 +44,54 @@ impl<ToIn: Send, ToOut: Send> NestedChannelPair<ToIn, ToOut> for FlumeChannelPai
                         FeagiFailChannelSendFull::new("Failed to try send data, channel is full!").into()
                     }
                     TrySendError::Disconnected(_) => {
-                        FeagiFailChannelSendFailed::new("Failed to try send data over disconnected channel").into()
+                        FeagiFailChannelSendEtc::new("Failed to try send data over disconnected channel").into()
                     }
                 }
         )
     }
-    fn send_timeout(&mut self, to_in: ToIn, timeout: Duration) -> Result<(), NestedChannelError> {
+    fn send_timeout(&mut self, to_in: ToIn, timeout: Duration) -> Result<(), ChannelSendingError> {
         self.a_sender.send_timeout(to_in, timeout).map_err(
             |e| match e {
                 flume::SendTimeoutError::Timeout(_) => {
                     FeagiFailChannelSendTimeout::new("Failed to send data over channel before timeout expired").into()
                 }
                 flume::SendTimeoutError::Disconnected(_) => {
-                    FeagiFailChannelSendFailed::new("Failed to send data over disconnected channel").into()
+                    FeagiFailChannelSendEtc::new("Failed to send data over disconnected channel").into()
                 }
             },
         )
     }
-    fn block_receive(&mut self) -> Result<ToOut, NestedChannelError> {
+    fn block_receive(&mut self) -> Result<ToOut, ChannelReceivingError> {
         self.b_receiver.recv().map_err(
-            |_| FeagiFailChannelReceiveFailed::new("Failed to block receive data over channel").into(),
+            |_| FeagiFailChannelReceiveEtc::new("Failed to block receive data over channel").into(),
         )
     }
-    fn try_receive(&mut self) -> Result<ToOut, NestedChannelError> {
-        self.b_receiver.try_recv().map_err(
-            |e| match e {
-                TryRecvError::Empty => {
-                    FeagiFailChannelReceiveEmpty::new("Failed to try receive data, channel is empty!").into()
+    fn try_receive(&mut self) -> Result<Option<ToOut>, ChannelReceivingError> {
+        let res = self.b_receiver.try_recv();
+        match res {
+            Ok(o) => {
+                Ok(Some(o))
+            }
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => {
+                        Ok(None)
+                    }
+                    TryRecvError::Disconnected => {
+                        Err(FeagiFailChannelReceiveEtc::new("Failed to try receive data over disconnected channel").into())
+                    }
                 }
-                TryRecvError::Disconnected => {
-                    FeagiFailChannelReceiveFailed::new("Failed to try receive data over disconnected channel").into()
-                }
-            },
-        )
+            }
+        }
     }
-    fn receive_timeout(&mut self, timeout: Duration) -> Result<ToOut, NestedChannelError> {
+    fn receive_timeout(&mut self, timeout: Duration) -> Result<ToOut, ChannelReceivingError> {
         self.b_receiver.recv_timeout(timeout).map_err(
             |e| match e {
                 flume::RecvTimeoutError::Timeout => {
                     FeagiFailChannelReceiveTimeout::new("Failed to receive data over channel before timeout expired").into()
                 }
                 flume::RecvTimeoutError::Disconnected => {
-                    FeagiFailChannelReceiveFailed::new("Failed to receive data over disconnected channel").into()
+                    FeagiFailChannelReceiveEtc::new("Failed to receive data over disconnected channel").into()
                 }
             },
         )

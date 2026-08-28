@@ -6,4 +6,4 @@ pub mod ui_parameters;
 pub mod values;
 pub mod bidirectional_channel_queue;
 pub mod neurons;
-pub mod nested_channels;
+pub mod channels;

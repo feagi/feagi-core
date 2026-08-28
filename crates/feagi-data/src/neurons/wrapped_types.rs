@@ -6,7 +6,6 @@
 //! which NPU operates in
 
 use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
-use crate::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 
 
 create_wrapped_quantized_decimal!(
@@ -124,9 +123,9 @@ create_wrapped_unsigned_integer_spatial_dimensions!(
 
 // TODO temp
 
-pub type CorticalVoxelLinearIndexGenomic = CorticalVoxelLinearIndex<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>;
-pub type CorticalVoxelCoordinateGenomic = CorticalVoxelCoordinate<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>;
-pub type CorticalVoxelDimensionsGenomic = CorticalVoxelDimensions<<FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant>;
+pub type CorticalVoxelLinearIndexGenomic = CorticalVoxelLinearIndex<u32>;
+pub type CorticalVoxelCoordinateGenomic = CorticalVoxelCoordinate<u32>;
+pub type CorticalVoxelDimensionsGenomic = CorticalVoxelDimensions<u32>;
 
 //endregion
 
