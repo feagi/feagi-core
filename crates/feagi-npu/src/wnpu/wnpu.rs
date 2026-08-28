@@ -6,7 +6,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantiz
 use feagi_genomic_context::cortical_area::CorticalID;
 use feagi_models::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantizationStandard32Bit;
 use crate::npu_3::neural_processing_unit::NeuronProcessingUnit;
-use crate::npu_3::npu_target_frequency::NPUTargetFrequency;
+use crate::npu::npu_target_frequency::NPUTargetFrequency;
 use crate::wnpu::connectome_request::connectome_request::ConnectomeRequest;
 use crate::wnpu::wrapped_neuron_processor_unit_error::WNPUError;
 

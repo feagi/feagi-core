@@ -1,7 +1,7 @@
 use crate::npu::composable_std::composable_burst_engine_worker::{
     composable_burst_engine_worker, make_commander_follower, ComposableBurstEngineWorkerCommand,
 };
-use crate::npu_3::npu_target_frequency::NPUTargetFrequency;
+use crate::npu::npu_target_frequency::NPUTargetFrequency;
 use feagi_data::channels::channels::{ChannelPair, ChannelReceivingError};
 use feagi_data::channels::channels_flume::{InnerFlumeChannelPair, OuterFlumeChannelPair};
 use feagi_models::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantizationQuantizationNormal;
@@ -34,53 +34,38 @@ pub fn composable_burst_engine_worker_pool<NPUIQ: NeuronProcessingUnitIndexQuant
             worker_commanders.push(outer);
         }
 
-
-
         loop {
             let possible_command = if bursts_paused {
-                let command = feedback_channels.block_receive();
-                if let Err(e) = command {
-                    match e {
-                        ChannelReceivingError::ReceiveFailed(_) => {
-                            // Something went wrong
-                            _ = feedback_channels.try_send(ComposableBurstEngineWorkerFeedback::UnknownFailure("Pool receiver failure"));
-                            break;
-                        }
-                        ChannelReceivingError::ReceiveTimeout(_) => {
-                            // Not sure how we would get this on block receive, skip and restart
-                            continue;
-                        }
-                    }
-                }
-                Some(command.unwrap())
                 // If its not an error, assume its a command that could unpause us
+                match feedback_channels.block_receive() {
+                    Ok(command) => Some(command),
+                    Err(ChannelReceivingError::ReceiveFailed(_)) => {
+                        // Something went wrong
+                        _ = feedback_channels.try_send(ComposableBurstEngineWorkerFeedback::UnknownFailure("Pool receiver failure"));
+                        break;
+                    }
+                    // Not sure how we would get this on block receive, skip and restart
+                    Err(ChannelReceivingError::ReceiveTimeout(_)) => continue,
+                }
             } else {
                 // We are unpaused
-                let command = feedback_channels.try_receive();
-                if let Err(e) = command {
-                    match e {
-                        ChannelReceivingError::ReceiveFailed(_) => {
-                            // Something went wrong
-                            _ = feedback_channels.try_send(ComposableBurstEngineWorkerFeedback::UnknownFailure("Pool receiver failure"));
-                            break;
-                        }
-                        ChannelReceivingError::ReceiveTimeout(_) => {
-                            // Not sure how we would get this on block receive, skip and restart
-                            continue;
-                        }
+                match feedback_channels.try_receive() {
+                    Ok(command) => command,
+                    Err(ChannelReceivingError::ReceiveFailed(_)) => {
+                        // Something went wrong
+                        _ = feedback_channels.try_send(ComposableBurstEngineWorkerFeedback::UnknownFailure("Pool receiver failure"));
+                        break;
                     }
+                    // Not sure how we would get this on block receive, skip and restart
+                    Err(ChannelReceivingError::ReceiveTimeout(_)) => continue,
                 }
-                command.unwrap()
             };
 
             if let Some(command) = possible_command {
                 // We got a command to change something
 
                 match command {
-                    ComposableBurstEngineWorkerPoolCommand::SpecificEngineCommand {
-                        burst_engine_index,
-                        command } => {
-
+                    ComposableBurstEngineWorkerPoolCommand::SpecificEngineCommand { burst_engine_index, command } => {
                         let worker_commander = worker_commanders.get_mut(burst_engine_index as usize);
 
                         if let Some(commander) = worker_commander {
@@ -89,9 +74,7 @@ pub fn composable_burst_engine_worker_pool<NPUIQ: NeuronProcessingUnitIndexQuant
                             continue;
                         }
                         // Why did NPU send us an invalid index?
-                        _ = feedback_channels.try_send(
-                            ComposableBurstEngineWorkerFeedback::UnknownFailure("Invalid Burst Engine Index Sent")
-                        );
+                        _ = feedback_channels.try_send(ComposableBurstEngineWorkerFeedback::UnknownFailure("Invalid Burst Engine Index Sent"));
                         break;
                     }
                     ComposableBurstEngineWorkerPoolCommand::Pause => {
@@ -105,10 +88,8 @@ pub fn composable_burst_engine_worker_pool<NPUIQ: NeuronProcessingUnitIndexQuant
                     }
                     ComposableBurstEngineWorkerPoolCommand::StopAllWorkersAndClose => {
                         for worker_commander in &mut worker_commanders {
-                            worker_commander.block_send(
-                                ComposableBurstEngineWorkerCommand::CommitSudoku
-                            ); //TODO error handling!
-
+                            worker_commander.block_send(ComposableBurstEngineWorkerCommand::CommitSudoku);
+                            //TODO error handling!
                         }
                         break;
                     }
@@ -123,7 +104,7 @@ pub fn composable_burst_engine_worker_pool<NPUIQ: NeuronProcessingUnitIndexQuant
 
             // Send command to all
             for worker_commander in &mut worker_commanders {
-                _ =worker_commander.try_send(ComposableBurstEngineWorkerCommand::RunPhases {
+                _ = worker_commander.try_send(ComposableBurstEngineWorkerCommand::RunPhases {
                     burst_index: burst_index,
                     phase: Default::default(),
                 });
@@ -134,7 +115,7 @@ pub fn composable_burst_engine_worker_pool<NPUIQ: NeuronProcessingUnitIndexQuant
                 _ = worker_commander.block_receive()
             }
 
-
+            // TODO thread sleep close to time to loop and then spin loop till final time to maintain freq
         }
     })
 }
@@ -160,6 +141,7 @@ pub enum ComposableBurstEngineWorkerPoolCommand<NPUIQ: NeuronProcessingUnitIndex
 pub enum ComposableBurstEngineWorkerFeedback<NPUIQ: NeuronProcessingUnitIndexQuantization> {
     SafelyStopped,
     BrainDeathTriggered,
+    BurstIndexAboutToOverflow(NPUIQ),
     /// Hes dead, jim
     WorkerCrashed(u16, &'static str),
     UnknownFailure(&'static str),

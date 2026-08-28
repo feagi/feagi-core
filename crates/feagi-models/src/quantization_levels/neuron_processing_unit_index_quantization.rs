@@ -4,7 +4,7 @@ use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, QuantizedUn
 
 /// The quantization level that is for structures that must be of the same quantization across
 /// all burst engines in the Neural Processing Unit
-pub trait NeuronProcessingUnitIndexQuantization: Clone + Copy + Hash + PartialEq + Eq + Sync + 'static  {
+pub trait NeuronProcessingUnitIndexQuantization: Clone + Copy + Hash + PartialEq + Eq + Sync + Send + 'static  {
     const LEVEL: NeuronProcessingUnitIndexQuantizationLevel;
 
     /// Defines the quantization of the NPU global burst index. This is not model configurable,

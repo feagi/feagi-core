@@ -1,5 +1,5 @@
+use feagi_data::channels::channels::{ChannelPair, ChannelReceivingError};
 use feagi_data::channels::channels_flume::{FlumeChannelPair, InnerFlumeChannelPair, OuterFlumeChannelPair};
-use feagi_data::channels::channels::{ChannelReceivingError, ChannelPair};
 use feagi_models::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantizationQuantizationNormal;
 use feagi_models::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
@@ -17,42 +17,35 @@ pub fn composable_burst_engine_worker<NPUIQ: NeuronProcessingUnitIndexQuantizati
     // TODO Init
 
     loop {
-        let command = follower_channels.block_receive();
+        // Wait for incoming command
+        let command = match follower_channels.block_receive() {
+            Ok(command) => command,
+            Err(ChannelReceivingError::ReceiveFailed(e)) => {
+                _ = follower_channels.try_send(ComposableBurstEngineWorkerResponse::Crashed("Burst Engine Channel Failed to Receive!"));
+                break;
+            }
+            Err(ChannelReceivingError::ReceiveTimeout(e)) => {
+                // We shouldn't be using timeouts here? This should be impossible
+                panic!("Burst Engine Channel Failed to Receive before Timeout!");
+            }
+        };
 
         match command {
-            Err(error) => {
-                match error {
-                    ChannelReceivingError::ReceiveFailed(e) => {
-                        _ = follower_channels.try_send(ComposableBurstEngineWorkerResponse::Crashed("Burst Engine Channel Failed to Receive!"));
-                        break;
-                    }
-                    ChannelReceivingError::ReceiveTimeout(e) => {
-                        // We shouldn't be using timeouts here? This should be impossible
-                        panic!("Burst Engine Channel Failed to Receive before Timeout!");
-                    }
-                }
+            ComposableBurstEngineWorkerCommand::RunPhases { burst_index, phase } => {
+                let res = futures::executor::block_on(burst_engine.execute_phase(phase));
             }
-            Ok(command) => {
-                match command {
-                    ComposableBurstEngineWorkerCommand::RunPhases { burst_index, phase } => {
-                        let res = burst_engine.execute_phase(phase).await;
-
-                    }
-                    ComposableBurstEngineWorkerCommand::BurstIndexRollback { burst_index } => {
-                        panic!("not implemented!")
-                    }
-                    ComposableBurstEngineWorkerCommand::CommitSudoku => {
-                        // type kill in console right now
-                        break;
-                    }
-                }
+            ComposableBurstEngineWorkerCommand::BurstIndexRollback { burst_index } => {
+                panic!("not implemented!")
+            }
+            ComposableBurstEngineWorkerCommand::CommitSudoku => {
+                // type kill in console right now
+                break;
             }
         }
     }
 
     // loop exited, announce we are closing. Then killbind
     _ = follower_channels.try_send(ComposableBurstEngineWorkerResponse::Stopped);
-
 }
 
 /// Creates commander and follower channel pairs

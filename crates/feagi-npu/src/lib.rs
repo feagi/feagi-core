@@ -5,7 +5,6 @@
 //mod npu;
 
 pub mod a;
-pub mod npu_3;
 pub mod wnpu;
 pub mod npu;
 

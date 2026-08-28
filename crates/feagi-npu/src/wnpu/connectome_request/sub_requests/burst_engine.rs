@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::npu_3::npu_target_frequency::NPUTargetFrequency;
+use crate::npu::npu_target_frequency::NPUTargetFrequency;
 use crate::wnpu::connectome_request::connectome_request::{ConnectomeRequest, ConnectomeRequestEnum};
 
 #[doc(hidden)]
