@@ -3,13 +3,13 @@ use crate::data_channels::errors::{ChannelReceivingError, ChannelSendingError};
 
 /// Allows creations of `DataTransmitter` and `DataReceiver` easily
 pub trait DataChannelPair<T: Send> {
-    type Transmitter;
-    type Receiver;
+    type Transmitter: Send;
+    type Receiver: Send;
     fn new_pair(buffer_length: usize) -> (Self::Transmitter, Self::Receiver);
 }
 
 /// Generic trait for a struct that can send data to a paired `DataReceiver`
-pub trait DataTransmitter<T: Send> {
+pub trait DataTransmitter<T: Send>: Send {
     /// Send data over the channel, blocking the thread until it does (or erroring)
     fn block_send(&mut self, sending: T) -> Result<(), ChannelSendingError>;
 
@@ -21,7 +21,7 @@ pub trait DataTransmitter<T: Send> {
 }
 
 /// Generic trait for a struct that can get data from a paired `DataTransmitter`
-pub trait DataReceiver<T: Send> {
+pub trait DataReceiver<T: Send>: Send {
     /// Waits to receive data over the channel, blocking the thread until it does (or erroring)
     fn block_receive(&mut self) -> Result<T, ChannelReceivingError>;
 

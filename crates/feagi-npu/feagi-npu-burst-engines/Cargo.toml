@@ -12,11 +12,39 @@ description = "Contains the Burst Engines for various hardwares, which handle th
 
 # TODO features to control what burst engines are accessible
 
+[features]
+
+default = [
+    "std",
+    "composable-engines",
+    "engine-rayon"
+]
+
+std = [
+    "alloc",
+]
+
+alloc = [
+
+]
+
+composable-engines = [
+    "alloc",
+    "feagi-npu-burst-core/composable-engines",
+    "feagi-npu-burst-rayon/composable-engines",
+]
+
+engine-rayon = [
+    "std",
+    "feagi-npu-burst-rayon"
+]
 
 [dependencies]
 feagi-npu-burst-core = {path = "feagi-npu-burst-core"}
-feagi-npu-burst-rayon = {path = "feagi-npu-burst-rayon"}
+feagi-npu-burst-rayon = {path = "feagi-npu-burst-rayon", optional = true, default-features = false}
 
 feagi-data = {path = "../../feagi-data" }
 feagi-models = {path = "../../feagi-models" }
 feagi-logging-and-errors = {path = "../../feagi-logging-and-errors" }
+
+paste = {workspace = true}

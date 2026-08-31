@@ -2,8 +2,8 @@ use std::ops::ControlFlow;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::npu::npu_target_frequency::NPUTargetFrequency;
-use crate::npu::worker::command_and_response::{BurstEngineWorkerCommand, BurstEngineWorkerResponse};
-use crate::npu::worker_pool::command_and_response::{BurstEngineWorkerFeedback, BurstEngineWorkerPoolCommand};
+use crate::npu::worker::communication::{BurstEngineWorkerCommand, BurstEngineWorkerResponse};
+use crate::npu::worker_pool::communication::{BurstEngineWorkerFeedback, BurstEngineWorkerPoolCommand};
 
 /// Channel the pool uses to talk to the NPU: sends feedback, receives pool commands.
 pub type PoolFeedbackChannel<FIQ: FeagiIndexQuantization> =

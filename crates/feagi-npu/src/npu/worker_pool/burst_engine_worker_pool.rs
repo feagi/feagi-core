@@ -1,19 +1,21 @@
-use feagi_data::data_channels::data_channel::DataChannelPair;
+use core::ops::ControlFlow;
+use feagi_data::data_channels::data_channel::{DataChannelPair, DataReceiver, DataTransmitter};
 use feagi_data::data_channels::data_cycler::DataCycleEndpoint;
+use feagi_data::data_channels::errors::ChannelReceivingError;
 use crate::npu::npu_target_frequency::NPUTargetFrequency;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
-use feagi_npu_burst_engines::BurstEngineEnum;
-use crate::npu::worker::burst_engine_package::BurstEnginePackage;
+use feagi_npu_burst_engines::burst_engine_package::implementations::standard_flume::BurstEnginePackage;
 use crate::npu::worker::burst_engine_timeout_logic::BurstEngineTimeoutLogic;
 use crate::npu::worker::burst_engine_worker::{burst_engine_worker};
-use crate::npu::worker_pool::command_and_response::{BurstEngineWorkerFeedback, BurstEngineWorkerPoolCommand};
-use crate::npu::worker_pool::pool_struct::{BurstEngineWorkerPool, PoolFeedbackChannel};
-
+use crate::npu::worker::communication::{BurstEngineWorkerCommand, BurstEngineWorkerResponse};
+use crate::npu::worker_pool::communication::{BurstEnginePoolConclusion, BurstEngineWorkerPoolCommand, BurstEngineWorkerPoolFeedback};
 
 /// Entry point for a pool thread: spawns one worker per burst engine, then runs the control loop.
 pub fn composable_burst_engine_worker_pool<
     FIQ: FeagiIndexQuantization,
+    CommandReceiver: DataReceiver<BurstEngineWorkerPoolCommand<FIQ>>,
+    ResponseTransmitter: DataTransmitter<BurstEngineWorkerPoolFeedback<FIQ>>,
     VisualizationTransmitter: DataCycleEndpoint<u8>,
     MotorTransmitter: DataCycleEndpoint<u8>,
     SensorReceiver: DataCycleEndpoint<u8>,
@@ -24,17 +26,19 @@ pub fn composable_burst_engine_worker_pool<
         MotorTransmitter,
         SensorReceiver
     >>,
-    feedback_channels: PoolFeedbackChannel<FIQ>,
+    mut npu_command_receiver: CommandReceiver,
+    mut npu_response_transmitter: ResponseTransmitter,
     initial_frequency: NPUTargetFrequency,
     starting_burst_index: BurstIndex<FIQ::BurstIndexQuant>,
     timeout_config: BurstEngineTimeoutLogic
 ) {
     std::thread::scope(|scope| {
 
-        // Init the worker threads
+        // Init the worker threads and vars
 
-        let mut worker_command_transmitters = Vec::with_capacity(burst_engine_packages.len());
-        let mut worker_response_receivers = Vec::with_capacity(burst_engine_packages.len());
+        let mut paused: bool = true;
+        let mut worker_command_transmitters: Vec<DataTransmitter<BurstEngineWorkerCommand<FIQ>>> = Vec::with_capacity(burst_engine_packages.len());
+        let mut worker_response_receivers: Vec<BurstEngineWorkerResponse<FIQ>> = Vec::with_capacity(burst_engine_packages.len());
 
         // Each worker owns exactly one burst engine and lives for the whole scope; the scope joins
         // every spawned worker on exit, so we do not need to retain the join handles here.
@@ -52,6 +56,32 @@ pub fn composable_burst_engine_worker_pool<
 
         let final_return = loop {
 
+            if paused {
+                let npu_command = npu_command_receiver.block_receive();
+
+                match npu_command {
+                    Err(e) => {
+                        // Failed to get NPU connection, exit
+                        
+                        for worker_transmitter in worker_command_transmitters {
+                            worker_transmitter.
+                        }
+                        
+                        break BurstEnginePoolConclusion {
+                            burst_engines: vec![],
+                            error: None,
+                        }
+                    }
+
+                    Ok(_) => {}
+
+                }
+
+
+
+
+            }
+            // not paused
 
 
 
@@ -62,7 +92,9 @@ pub fn composable_burst_engine_worker_pool<
     })
 }
 
+fn paused_flow(paused: &mut bool,) -> ControlFlow<Option<()>> {
 
+}
 
 
 

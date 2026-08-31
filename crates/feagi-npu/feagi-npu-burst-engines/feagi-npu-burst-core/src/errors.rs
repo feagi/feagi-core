@@ -1,24 +1,20 @@
 use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
 
 #[derive(FeagiErrorKey)]
-pub struct FeagiFailNPUEtc {
+pub struct FeagiFailNPUInvalidArguments {
     context: &'static str,
 }
 
-#[derive(FeagiErrorKey)]
-pub struct FeagiFailChannelFail {
-    context: &'static str,
-}
+
 
 //region Burst Engine
 
 generate_feagi_error! {
     BurstEngineError,
     keys: {
-        NPUEtc: FeagiFailNPUEtc,
+        NPUInvalidArguments: FeagiFailNPUInvalidArguments,
         Phase: FeagiFailPhase,
-        DataCorruption: FeagiFailBurstEngineDataCorruption,
-        ChannelFail: FeagiFailChannelFail,
+        DataCorruption: FeagiFailConnectomeCorruption,
     },
     sub_errors: {
         
@@ -31,42 +27,8 @@ pub struct FeagiFailPhase {
 }
 
 #[derive(FeagiErrorKey)]
-pub struct FeagiFailBurstEngineDataCorruption {
+pub struct FeagiFailConnectomeCorruption {
     context: &'static str,
 }
 
 //endregion
-
-generate_feagi_error! {
-    BurstEngineWorkerError,
-    keys: {
-        NPUEtc: FeagiFailNPUEtc,
-        ChannelFail: FeagiFailChannelFail,
-    },
-    sub_errors: {
-        EngineError: BurstEngineError
-    },
-}
-
-generate_feagi_error! {
-    BurstEngineWorkerPoolError,
-    keys: {
-        NPUEtc: FeagiFailNPUEtc,
-        ChannelFail: FeagiFailChannelFail,
-    },
-    sub_errors: {
-    },
-}
-
-generate_feagi_error! {
-    NPUError,
-    keys: {
-        NPUEtc: FeagiFailNPUEtc,
-        ChannelFail: FeagiFailChannelFail,
-    },
-    sub_errors: {
-        BurstEngine: BurstEngineError,
-        BurstEngineWorker: BurstEngineWorkerError,
-        BurstEngineWorkerPool: BurstEngineWorkerPoolError,
-    },
-}

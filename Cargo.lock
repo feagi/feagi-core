@@ -1547,6 +1547,7 @@ dependencies = [
  "feagi-models",
  "feagi-npu-burst-core",
  "feagi-npu-burst-rayon",
+ "paste",
 ]
 
 [[package]]

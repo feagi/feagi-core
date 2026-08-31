@@ -1,34 +1,25 @@
-use feagi_data::data_channels::data_channel::{DataReceiver, DataTransmitter};
-use feagi_data::data_channels::data_cycler::DataCycleEndpoint;
-use feagi_data::data_channels::errors::ChannelReceivingError;
+use feagi_npu_burst_engines::burst_engine_package::burst_engine_package::BurstEnginePackage;
 use crate::npu::worker::burst_engine_timeout_logic::BurstEngineTimeoutLogic;
-use crate::npu::worker::command_and_response::{BurstEngineWorkerCommand, BurstEngineWorkerConclusion, BurstEngineWorkerResponse};
+use crate::npu::worker::communication::{BurstEngineWorkerCommand, BurstEngineWorkerConclusion, BurstEngineWorkerResponse};
+use feagi_data::data_channels::data_channel::{DataReceiver, DataTransmitter};
+use feagi_data::data_channels::errors::ChannelReceivingError;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_npu_burst_engines::feagi_npu_burst_core::burst_engine_definitions::burst_engine::BurstEngine;
 use feagi_npu_burst_engines::feagi_npu_burst_core::burst_engine_definitions::burst_phase_output::BurstPhaseOutput;
-use crate::npu::worker::burst_engine_package::BurstEnginePackage;
+use feagi_npu_burst_engines::feagi_npu_burst_core::errors::BurstEngineWorkerError;
 
 /// Execute burst engine, burst by burst, command by command. Return engine when done
 pub fn burst_engine_worker<
     FIQ: FeagiIndexQuantization,
     CommandReceiver: DataReceiver<BurstEngineWorkerCommand<FIQ>>,
     ResponseTransmitter: DataTransmitter<BurstEngineWorkerResponse<FIQ>>,
-    VisualizationTransmitter: DataCycleEndpoint<u8>,
-    MotorTransmitter: DataCycleEndpoint<u8>,
-    SensorReceiver: DataCycleEndpoint<u8>,
->
-(
-    mut burst_engine: BurstEnginePackage<
-        FIQ,
-        VisualizationTransmitter,
-        MotorTransmitter,
-        SensorReceiver
-    >,
+    EnginePackage: BurstEnginePackage<FIQ>,
+>(
     mut command_receiver: CommandReceiver,
     mut response_transmitter: ResponseTransmitter,
+    mut burst_engine_package: EnginePackage,
     timeout_logic: BurstEngineTimeoutLogic,
-) -> BurstEngineWorkerConclusion<FIQ>
-{
+) -> BurstEngineWorkerConclusion<FIQ, EnginePackage> {
     // Run a loop, start by blocking this thread until we get a command. The command will have
     // us execute a burst, make an edit (if engine is composable), or something in between. Try
     // to do the task, and send an output message of completion. Return the burst engine when
@@ -39,7 +30,7 @@ pub fn burst_engine_worker<
         let incoming_command = match command_receiver.block_receive() {
             Ok(command) => command,
             Err(ChannelReceivingError::ReceiveFailed(e)) => {
-                /// Shouldn't be possible? Just wait for the thread
+                // Shouldn't be possible? Just wait for the thread
                 continue;
             }
             Err(ChannelReceivingError::ReceiveTimeout(e)) => {
@@ -51,13 +42,12 @@ pub fn burst_engine_worker<
         // We have a command. Execute it. Send response if needed, or shut down if theres an issue
         let option_error = match incoming_command {
             BurstEngineWorkerCommand::RunPhases { burst_index, phase } => {
-
-                // TODO motor
-                // TODO sensor
-                // TODO vis (again)
-
+                // TODO data interface
                 // TODO use timeout_logic
-                let engine_response = futures::executor::block_on(burst_engine.execute_phase(phase, burst_index));
+                let engine_response = 
+                    futures::executor::block_on(
+                        burst_engine_package.get_engine_mut().execute_phase(phase, burst_index)
+                    );
                 match engine_response {
                     Ok(burst_output) => {
                         let worker_response = match burst_output {
@@ -78,12 +68,16 @@ pub fn burst_engine_worker<
                         if pool_send_result.is_ok() {
                             continue;
                         }
-                        Some(pool_send_result.unwrap_err().into())
+                        // For some reason the queue is backed up?
+                        Some(BurstEngineWorkerError::ChannelSendError(pool_send_result.unwrap_err()))
                     }
-                    Err(e) => Some(e.into()),
+                    Err(e) => Some(BurstEngineWorkerError::EngineError(e)),
                 }
             }
-            BurstEngineWorkerCommand::BurstIndexRollback { burst_index } => {
+            BurstEngineWorkerCommand::BurstIndexRollback {
+                new_burst_index,
+                previous_burst_index,
+            } => {
                 panic!("not implemented!")
             }
             BurstEngineWorkerCommand::CommitSudoku => {
@@ -94,7 +88,7 @@ pub fn burst_engine_worker<
         };
 
         // At this point, we are exiting the loop
-        break BurstEngineWorkerConclusion::new(burst_engine, option_error);
+        break BurstEngineWorkerConclusion::new(burst_engine_package, option_error);
     };
     // loop exited, We have our conclusion, return with it
     conclusion

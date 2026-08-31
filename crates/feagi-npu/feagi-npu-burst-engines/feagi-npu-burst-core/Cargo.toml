@@ -10,6 +10,24 @@ homepage.workspace = true
 documentation.workspace = true
 description = "Shared logic / traits for burst engines"
 
+[features]
+
+default = [
+    "std",
+]
+
+std = [
+    "alloc",
+]
+
+alloc = [
+
+]
+
+composable-engines = [
+    "alloc"
+]
+
 [dependencies]
 feagi-data = {path = "../../../feagi-data" }
 feagi-models = {path = "../../../feagi-models" }
@@ -20,5 +38,5 @@ paste = { workspace = true}
 half = {workspace = true}
 ahash = { workspace = true}
 
-flume = { version = "0.12", default-features = false, features = ["async"] } # TODO tie to workspace
+flume = { version = "0.12", default-features = false} # TODO tie to workspace
 serde = {workspace = true} # TODO for some reason FeagiError is tied to this?

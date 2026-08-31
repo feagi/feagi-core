@@ -1,7 +1,7 @@
 use std::time::Duration;
 use crate::data_channels::errors::{ChannelReceivingError, ChannelSendingError};
 
-pub trait DataCycleEndpoint<T: Send>: Sized {
+pub trait DataCycleEndpoint<T: Send>: Send + Sized {
     fn new_data_cycle_endpoint_pair(buffer_length: usize) -> (Self, Self);
 
     /// Waits to receive data over the cycle, blocking the thread until it does (or erroring)

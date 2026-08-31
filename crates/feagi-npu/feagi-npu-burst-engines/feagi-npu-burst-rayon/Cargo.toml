@@ -10,6 +10,23 @@ homepage.workspace = true
 documentation.workspace = true
 description = "Rayon burst engine logic for multithread / core CPU neuron processing"
 
+[features]
+
+default = [
+    "std",
+]
+
+std = [
+    "alloc",
+]
+
+alloc = [
+
+]
+
+composable-engines = [
+    "alloc"
+]
 
 [dependencies]
 feagi-data = {path = "../../../feagi-data" }
@@ -22,4 +39,4 @@ feagi-npu-burst-core = {path = "../feagi-npu-burst-core"}
 paste = { workspace = true}
 half = {workspace = true}
 ahash = { workspace = true}
-rayon = { workspace = true, optional = true}
+rayon = { workspace = true}
