@@ -174,6 +174,8 @@ pub struct StdpMappingParams {
     /// See `ltp_multiplier` (LTD / `delta_minus` path).
     pub ltd_multiplier: i8,
     pub bidirectional_stdp: bool,
+    /// Enables directed associative synaptogenesis without pre-existing synapses.
+    pub associative_memory_mapping: bool,
     pub synapse_psp: f32,
     pub synapse_type: SynapseType,
     /// Plasticity mode (Off / Stdp / RStdp). See `PlasticityMode`.
@@ -220,6 +222,7 @@ impl Default for StdpMappingParams {
             ltp_multiplier: 0,
             ltd_multiplier: 0,
             bidirectional_stdp: false,
+            associative_memory_mapping: false,
             synapse_psp: 0.0,
             synapse_type: SynapseType::Excitatory,
             plasticity_mode: PlasticityMode::Off,
@@ -4804,6 +4807,7 @@ impl<
 
         let synapse_storage = self.synapse_storage.read().unwrap();
         let neuron_storage = self.neuron_storage.read().unwrap();
+        let propagation_engine = self.propagation_engine.read().unwrap();
 
         let mut index: AHashMap<CorticalMappingKey, Vec<usize>> =
             AHashMap::with_capacity(mappings.len());
@@ -4815,16 +4819,24 @@ impl<
 
             let src_neuron = synapse_storage.source_neurons()[syn_idx] as usize;
             let dst_neuron = synapse_storage.target_neurons()[syn_idx] as usize;
-            if src_neuron >= neuron_storage.count() || dst_neuron >= neuron_storage.count() {
+            let cortical_area_for_neuron = |neuron_id: usize| {
+                if neuron_id < neuron_storage.count() && neuron_storage.valid_mask()[neuron_id] {
+                    return Some(neuron_storage.cortical_areas()[neuron_id]);
+                }
+                if neuron_id >= MEMORY_NEURON_ID_START as usize {
+                    return propagation_engine
+                        .neuron_to_area
+                        .get(&NeuronId(neuron_id as u32))
+                        .and_then(|id| self.get_cortical_area_id(id.as_base_64().as_str()));
+                }
+                None
+            };
+            let Some(src_area) = cortical_area_for_neuron(src_neuron) else {
                 continue;
-            }
-            if !neuron_storage.valid_mask()[src_neuron] || !neuron_storage.valid_mask()[dst_neuron]
-            {
+            };
+            let Some(dst_area) = cortical_area_for_neuron(dst_neuron) else {
                 continue;
-            }
-
-            let src_area = neuron_storage.cortical_areas()[src_neuron];
-            let dst_area = neuron_storage.cortical_areas()[dst_neuron];
+            };
             let key: CorticalMappingKey = (src_area, dst_area);
 
             if mappings.contains_key(&key) {
@@ -4905,7 +4917,10 @@ impl<
 
         let mapping_index = self.stdp_mapping_index.read().unwrap().clone();
         let has_bidirectional = mappings.values().any(|params| params.bidirectional_stdp);
-        if mapping_index.is_empty() && !has_bidirectional {
+        let has_associative_memory_mapping = mappings
+            .values()
+            .any(|params| params.associative_memory_mapping);
+        if mapping_index.is_empty() && !has_bidirectional && !has_associative_memory_mapping {
             return Ok(());
         }
 
@@ -4946,21 +4961,25 @@ impl<
             dst_all: RoaringBitmap,
         }
 
-        // Precompute which mappings carry associative-memory edges.
+        // Precompute which mappings carry associative-memory behavior.
         // This decouples "memory-neuron IDs are eligible for STDP windows" from
         // "mapping is bidirectional". Associative mappings are directional now,
         // but they still rely on memory-neuron IDs (50_000_000+) for learning.
         let associative_mapping_flags: AHashMap<CorticalMappingKey, bool> = {
             let synapse_storage = self.synapse_storage.read().unwrap();
-            let mut flags = AHashMap::with_capacity(mapping_index.len());
-            for (key, syn_indices) in &mapping_index {
+            let mut flags = AHashMap::with_capacity(mappings.len());
+            for (key, params) in &mappings {
+                let syn_indices = mapping_index.get(key).cloned().unwrap_or_default();
                 let has_associative_edges = syn_indices.iter().any(|&syn_idx| {
                     syn_idx < synapse_storage.count()
                         && synapse_storage.valid_mask()[syn_idx]
                         && (synapse_storage.edge_flags()[syn_idx] & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY)
                             != 0
                 });
-                flags.insert(*key, has_associative_edges);
+                flags.insert(
+                    *key,
+                    params.associative_memory_mapping || has_associative_edges,
+                );
             }
             flags
         };
@@ -5168,8 +5187,10 @@ impl<
                     // configured window" as a positive association signal. Reserve LTD for
                     // one-sided activity in the same window.
                     //
-                    // `src_all`/`dst_all` remain the stricter criterion for *new synapse*
-                    // synthesis later in this function (`test_bidirectional_stdp_creates_synapse_after_full_window`).
+                    // `src_all`/`dst_all` remain the stricter criterion for generic
+                    // bidirectional STDP synthesis. Directed associative mappings use
+                    // `src_any`/`dst_any`, allowing either pair to fire at any point in
+                    // their configured plasticity window.
                     // Associative-memory edges can be seeded with a dense placeholder neuron id
                     // while runtime activity comes from dynamic memory neuron ids in the same
                     // cortical area. For these edges, treat "any activity in src/dst area" as
@@ -5181,9 +5202,13 @@ impl<
                         || (associative_edge && !activity.src_any.is_empty());
                     let dst_any_present = activity.dst_any.contains(dst_neuron)
                         || (associative_edge && !activity.dst_any.is_empty());
-                    if src_any_present && dst_any_present {
+                    let co_fired_within_window = src_any_present && dst_any_present;
+                    if co_fired_within_window {
                         e_ij += delta_plus;
-                    } else if (src_any_present || dst_any_present) && delta_minus > 0.0 {
+                    } else if !params.associative_memory_mapping
+                        && (src_any_present || dst_any_present)
+                        && delta_minus > 0.0
+                    {
                         e_ij -= delta_minus;
                     }
 
@@ -5197,7 +5222,10 @@ impl<
                     // without bound under sustained reward. Negative deltas are floored at
                     // `0.0` as before so LTD / punishment can still drive a synapse to zero
                     // regardless of `max_weight`.
-                    if reward != 0.0 && e_ij != 0.0 {
+                    if reward != 0.0
+                        && e_ij != 0.0
+                        && (!params.associative_memory_mapping || co_fired_within_window)
+                    {
                         let delta_w = params.plasticity_eta * reward * e_ij;
                         let old = synapse_storage.weights()[syn_idx];
                         let new_w = if delta_w >= 0.0 {
@@ -5219,6 +5247,7 @@ impl<
         let mut created_synapses = false;
         for (key @ (_src_area, dst_area), params) in &mappings {
             let allow_synapse_synthesis = params.bidirectional_stdp
+                || params.associative_memory_mapping
                 || associative_mapping_flags.get(key).copied().unwrap_or(false);
             if !allow_synapse_synthesis {
                 continue;
@@ -5228,7 +5257,13 @@ impl<
             };
 
             let delta_plus = params.delta_plus_u8();
-            if delta_plus == 0 || activity.src_all.is_empty() || activity.dst_all.is_empty() {
+            let (source_candidates, destination_candidates) = if params.associative_memory_mapping {
+                (&activity.src_any, &activity.dst_any)
+            } else {
+                (&activity.src_all, &activity.dst_all)
+            };
+            if delta_plus == 0 || source_candidates.is_empty() || destination_candidates.is_empty()
+            {
                 continue;
             }
 
@@ -5246,7 +5281,7 @@ impl<
                 let neuron_storage = self.neuron_storage.read().unwrap();
                 let neuron_count = neuron_storage.count();
 
-                for src_neuron in activity.src_all.iter() {
+                for src_neuron in source_candidates.iter() {
                     let source = NeuronId(src_neuron);
                     let mut existing_targets = AHashSet::new();
                     if let Some(indices) = prop_engine.synapse_index.get(&source) {
@@ -5269,7 +5304,7 @@ impl<
                         }
                     }
 
-                    for dst_neuron in activity.dst_all.iter() {
+                    for dst_neuron in destination_candidates.iter() {
                         if existing_targets.contains(&dst_neuron) {
                             continue;
                         }

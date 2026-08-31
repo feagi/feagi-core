@@ -2081,6 +2081,7 @@ impl ConnectomeManager {
     ) -> BduResult<()> {
         use tracing::info;
 
+        self.validate_memory_outbound_mapping_contract(src_area_id, dst_area_id, &mapping_data)?;
         crate::region_io_designation::validate_cross_region_mapping_proposal(
             self,
             src_area_id,
@@ -2137,6 +2138,52 @@ impl ConnectomeManager {
 
         self.refresh_cortical_mappings_hash();
 
+        Ok(())
+    }
+
+    /// Enforce the directed memory retrieval contract for outbound memory mappings.
+    ///
+    /// A memory area can connect to a non-memory area only through associative plasticity.
+    /// That rule starts without physical synapses; the NPU creates directed synapses only when
+    /// source and destination neurons co-fire within the configured plasticity window.
+    pub fn validate_memory_outbound_mapping_contract(
+        &self,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+        mapping_data: &[serde_json::Value],
+    ) -> BduResult<()> {
+        if mapping_data.is_empty() {
+            return Ok(());
+        }
+        let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+        })?;
+        let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+        })?;
+        if !matches!(src_area.cortical_type, CorticalAreaType::Memory(_))
+            || matches!(dst_area.cortical_type, CorticalAreaType::Memory(_))
+        {
+            return Ok(());
+        }
+
+        for rule in mapping_data {
+            let morphology_id = rule
+                .as_object()
+                .and_then(|rule_obj| rule_obj.get("morphology_id"))
+                .and_then(|value| value.as_str())
+                .or_else(|| {
+                    rule.as_array()
+                        .and_then(|rule_array| rule_array.first())
+                        .and_then(|value| value.as_str())
+                });
+            if morphology_id != Some("associative_memory") {
+                return Err(BduError::InvalidMorphology(format!(
+                    "Memory-to-non-memory mapping {} -> {} only supports associative_memory",
+                    src_area_id, dst_area_id
+                )));
+            }
+        }
         Ok(())
     }
 
@@ -2812,6 +2859,10 @@ impl ConnectomeManager {
             ltp_multiplier,
             ltd_multiplier,
             bidirectional_stdp,
+            associative_memory_mapping: rule_obj
+                .get("morphology_id")
+                .and_then(|value| value.as_str())
+                == Some("associative_memory"),
             synapse_psp,
             synapse_type,
             plasticity_mode,
@@ -8187,6 +8238,54 @@ mod tests {
             vec![a2_idx],
             "Episodic upstream list for M2 should exclude associative-only memory source M1"
         );
+    }
+
+    #[test]
+    fn test_memory_to_non_memory_requires_associative_morphology() {
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+            MemoryCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        let memory_id = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+        let destination_id = CorticalID::try_from_bytes(b"csrc0001").unwrap();
+        let memory_area = CorticalArea::new(
+            memory_id,
+            0,
+            "Memory Area".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        let destination_area = CorticalArea::new(
+            destination_id,
+            0,
+            "Destination Area".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        manager.add_cortical_area(memory_area).unwrap();
+        manager.add_cortical_area(destination_area).unwrap();
+
+        let invalid = manager.update_cortical_mapping(
+            &memory_id,
+            &destination_id,
+            vec![serde_json::json!({"morphology_id": "episodic_memory"})],
+        );
+        assert!(matches!(invalid, Err(BduError::InvalidMorphology(_))));
+
+        manager
+            .update_cortical_mapping(
+                &memory_id,
+                &destination_id,
+                vec![serde_json::json!({"morphology_id": "associative_memory"})],
+            )
+            .unwrap();
     }
 
     #[test]

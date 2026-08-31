@@ -23,7 +23,7 @@ use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
 
 type RstdpTestNetwork = (
     RustNPU<StdRuntime, f32, CPUBackend>,
@@ -44,10 +44,30 @@ fn create_rstdp_network() -> RstdpTestNetwork {
     npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
     npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
-    npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
-    npu.register_cortical_area(11, CoreCorticalType::Death.to_cortical_id().as_base_64());
-    npu.register_cortical_area(12, CoreCorticalType::Death.to_cortical_id().as_base_64());
-    npu.register_cortical_area(13, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(
+        10,
+        CorticalID::try_from_bytes(b"csrc0001")
+            .unwrap()
+            .as_base_64(),
+    );
+    npu.register_cortical_area(
+        11,
+        CorticalID::try_from_bytes(b"cdst0001")
+            .unwrap()
+            .as_base_64(),
+    );
+    npu.register_cortical_area(
+        12,
+        CorticalID::try_from_bytes(b"crew0001")
+            .unwrap()
+            .as_base_64(),
+    );
+    npu.register_cortical_area(
+        13,
+        CorticalID::try_from_bytes(b"cpun0001")
+            .unwrap()
+            .as_base_64(),
+    );
 
     let mut src = Vec::new();
     let mut dst = Vec::new();
@@ -90,6 +110,7 @@ fn rstdp_params(
         ltp_multiplier: 2,
         ltd_multiplier: 1,
         bidirectional_stdp: false,
+        associative_memory_mapping: false,
         synapse_psp: 100.0,
         synapse_type: SynapseType::Excitatory,
         plasticity_mode: mode,
@@ -135,6 +156,60 @@ fn synapse_weight(npu: &RustNPU<StdRuntime, f32, CPUBackend>, src: NeuronId) -> 
     let outgoing = npu.get_outgoing_synapses(src.0);
     assert_eq!(outgoing.len(), 1, "expected exactly one outgoing synapse");
     outgoing[0].1
+}
+
+/// A directional associative R-STDP mapping begins without synapses, creates its forward
+/// memory-to-non-memory edge on co-firing, then changes the edge only on later co-firing.
+#[test]
+fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse() {
+    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+    let (mut npu, _src, dst, reward, _pain) = create_rstdp_network();
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    params.associative_memory_mapping = true;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let source_memory_neuron = NeuronId(MEMORY_NEURON_ID_START + 10);
+    let destination_neuron = dst[0];
+    let second_source_memory_neuron = NeuronId(MEMORY_NEURON_ID_START + 11);
+    npu.register_dynamic_neuron_mapping(
+        source_memory_neuron.0,
+        CorticalID::try_from_bytes(b"csrc0001").unwrap(),
+    );
+    npu.register_dynamic_neuron_mapping(
+        second_source_memory_neuron.0,
+        CorticalID::try_from_bytes(b"csrc0001").unwrap(),
+    );
+    npu.inject_memory_neuron_to_fcl_with_kind(
+        source_memory_neuron.0,
+        10,
+        2.0,
+        feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE,
+    );
+    npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0), (reward, 128.0)]);
+    npu.process_burst().unwrap();
+
+    let initial_weight = synapse_weight(&npu, source_memory_neuron);
+    assert!(
+        initial_weight > 0.0,
+        "co-firing must create a forward associative synapse"
+    );
+
+    npu.inject_memory_neuron_to_fcl_with_kind(
+        second_source_memory_neuron.0,
+        10,
+        2.0,
+        feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE,
+    );
+    npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0), (reward, 128.0)]);
+    npu.process_burst().unwrap();
+
+    let updated_weight = synapse_weight(&npu, source_memory_neuron);
+    assert!(
+        updated_weight > initial_weight,
+        "co-firing with reward must strengthen the associative R-STDP synapse; initial={}, updated={}",
+        initial_weight,
+        updated_weight
+    );
 }
 
 /// `PlasticityMode::Off` must not change weights, even on perfect co-firing.

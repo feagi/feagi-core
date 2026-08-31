@@ -2403,6 +2403,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
             }
         }
 
+        // Reject invalid memory-outbound morphologies before mutating RuntimeGenome.
+        // ConnectomeManager repeats this validation for direct callers.
+        self.connectome
+            .read()
+            .validate_memory_outbound_mapping_contract(&src_id, &dst_id, &normalized_mapping_data)
+            .map_err(|error| ServiceError::InvalidInput(error.to_string()))?;
+
         debug!(
             target: "feagi-services",
             "Mapping update request: {} -> {} (existing_rules={}, new_rules={})",
