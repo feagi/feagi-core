@@ -1,6 +1,7 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_genomic_context::cortical_area::CorticalID;
-use crate::npu_3::burst_engine::wrapped_indexes::EngineCorticalIndex;
+use feagi_npu_burst_engines::feagi_npu_burst_core::wrapped_values::EngineCorticalIndex;
+
 
 pub struct CorticalArea<FIQ: FeagiIndexQuantization> {
     id: CorticalID,

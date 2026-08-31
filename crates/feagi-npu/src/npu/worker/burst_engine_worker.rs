@@ -1,45 +1,46 @@
-use std::time::Duration;
-use crate::npu::worker::command_and_response::{BurstEngineWorkerCommand, BurstEngineWorkerResponse};
-use feagi_data::channels::channels::{ChannelPair, ChannelReceivingError};
-use feagi_data::channels::channels_flume::{FlumeChannelPair, InnerFlumeChannelPair, OuterFlumeChannelPair};
-use feagi_models::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantizationQuantizationNormal;
-use feagi_models::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
+use feagi_data::data_channels::data_channel::{DataReceiver, DataTransmitter};
+use feagi_data::data_channels::data_cycler::DataCycleEndpoint;
+use feagi_data::data_channels::errors::ChannelReceivingError;
+use crate::npu::worker::burst_engine_timeout_logic::BurstEngineTimeoutLogic;
+use crate::npu::worker::command_and_response::{BurstEngineWorkerCommand, BurstEngineWorkerConclusion, BurstEngineWorkerResponse};
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_npu_burst_engines::feagi_npu_burst_core::burst_engine_definitions::burst_engine::BurstEngine;
-use feagi_npu_burst_engines::BurstEngineEnum;
 use feagi_npu_burst_engines::feagi_npu_burst_core::burst_engine_definitions::burst_phase_output::BurstPhaseOutput;
-use feagi_npu_burst_engines::feagi_npu_burst_core::burst_engine_definitions::burst_phases::RunBurstPhase;
-use feagi_npu_burst_engines::feagi_npu_burst_core::errors::BurstEngineError;
+use crate::npu::worker::burst_engine_package::BurstEnginePackage;
 
-/// Channel for sending commands to a burst engine worker
-pub type BurstEngineWorkerCommander<NPUIQ: NeuronProcessingUnitIndexQuantization> =
-    OuterFlumeChannelPair<BurstEngineWorkerCommand<NPUIQ>, BurstEngineWorkerResponse<NPUIQ>>;
+/// Execute burst engine, burst by burst, command by command. Return engine when done
+pub fn burst_engine_worker<
+    FIQ: FeagiIndexQuantization,
+    CommandReceiver: DataReceiver<BurstEngineWorkerCommand<FIQ>>,
+    ResponseTransmitter: DataTransmitter<BurstEngineWorkerResponse<FIQ>>,
+    VisualizationTransmitter: DataCycleEndpoint<u8>,
+    MotorTransmitter: DataCycleEndpoint<u8>,
+    SensorReceiver: DataCycleEndpoint<u8>,
+>
+(
+    mut burst_engine: BurstEnginePackage<
+        FIQ,
+        VisualizationTransmitter,
+        MotorTransmitter,
+        SensorReceiver
+    >,
+    mut command_receiver: CommandReceiver,
+    mut response_transmitter: ResponseTransmitter,
+    timeout_logic: BurstEngineTimeoutLogic,
+) -> BurstEngineWorkerConclusion<FIQ>
+{
+    // Run a loop, start by blocking this thread until we get a command. The command will have
+    // us execute a burst, make an edit (if engine is composable), or something in between. Try
+    // to do the task, and send an output message of completion. Return the burst engine when
+    // closing, including during a crash
 
-
-/// Creates commander and follower channel pairs
-pub fn make_commander_follower<NPUIQ: NeuronProcessingUnitIndexQuantization>(
-    input_buffer_size: usize,
-    output_buffer_size: usize,
-) -> (
-    BurstEngineWorkerCommander<NPUIQ>,
-    InnerFlumeChannelPair<BurstEngineWorkerResponse<NPUIQ>, BurstEngineWorkerCommand<NPUIQ>>,
-) {
-    FlumeChannelPair::new_pairs(input_buffer_size, output_buffer_size)
-}
-
-
-pub fn burst_engine_worker<NPUIQ: NeuronProcessingUnitIndexQuantization>(
-    mut burst_engine: BurstEngineEnum<NPUIQ, BurstEngineIndexQuantizationQuantizationNormal>, // TODO BEIQ quant enum!
-    mut follower_channels: InnerFlumeChannelPair<BurstEngineWorkerResponse<NPUIQ>, BurstEngineWorkerCommand<NPUIQ>>,
-    timeout_time: Duration
-) {
-
-    loop {
+    let conclusion = loop {
         // Block thread and wait for incoming command
-        let command = match follower_channels.block_receive() {
+        let incoming_command = match command_receiver.block_receive() {
             Ok(command) => command,
             Err(ChannelReceivingError::ReceiveFailed(e)) => {
-                _ = follower_channels.try_send(BurstEngineWorkerResponse::Crashed("Burst Engine Channel Failed to Receive!"));
-                break;
+                /// Shouldn't be possible? Just wait for the thread
+                continue;
             }
             Err(ChannelReceivingError::ReceiveTimeout(e)) => {
                 // We shouldn't be using timeouts here? This should be impossible
@@ -47,54 +48,54 @@ pub fn burst_engine_worker<NPUIQ: NeuronProcessingUnitIndexQuantization>(
             }
         };
 
-        match command {
+        // We have a command. Execute it. Send response if needed, or shut down if theres an issue
+        let option_error = match incoming_command {
             BurstEngineWorkerCommand::RunPhases { burst_index, phase } => {
-                let res = futures::executor::block_on(burst_engine.execute_phase(phase));
 
+                // TODO motor
+                // TODO sensor
+                // TODO vis (again)
+
+                // TODO use timeout_logic
+                let engine_response = futures::executor::block_on(burst_engine.execute_phase(phase, burst_index));
+                match engine_response {
+                    Ok(burst_output) => {
+                        let worker_response = match burst_output {
+                            BurstPhaseOutput::NoFurtherActionNeeded => {
+                                // Inform worker that we are fine
+                                BurstEngineWorkerResponse::NoFurtherActionNeeded
+                            }
+                            BurstPhaseOutput::MoreAllocationNeeded(allocations) => {
+                                // this isnt a final message, just send and continue
+                                BurstEngineWorkerResponse::MoreAllocationNeeded(allocations)
+                            }
+                            BurstPhaseOutput::BrainDeathTriggered => {
+                                BurstEngineWorkerResponse::BrainDeathTriggered // not an error but the next iteration will have the worker get closed by the npu
+                            }
+                        };
+                        // We should be able to do this since the pool immediately takes all messages from this queue before calling again
+                        let pool_send_result = response_transmitter.try_send(worker_response);
+                        if pool_send_result.is_ok() {
+                            continue;
+                        }
+                        Some(pool_send_result.unwrap_err().into())
+                    }
+                    Err(e) => Some(e.into()),
+                }
             }
             BurstEngineWorkerCommand::BurstIndexRollback { burst_index } => {
                 panic!("not implemented!")
             }
             BurstEngineWorkerCommand::CommitSudoku => {
                 // type kill in console right now
-                break;
+                // TODO should we tell the engine itself to stop? If so, here is the spot
+                None // no errors to report while closing!
             }
-        }
-    }
+        };
 
-    // loop exited, announce we are closing. Then killbind
-    _ = follower_channels.try_send(BurstEngineWorkerResponse::Stopped);
-}
-
-fn run_burst_engine_phases<NPUIQ: NeuronProcessingUnitIndexQuantization>(
-    burst_engine: &mut BurstEngineEnum<NPUIQ, BurstEngineIndexQuantizationQuantizationNormal>,
-    phase: RunBurstPhase,
-    timeout: Duration)
-    -> Result<BurstPhaseOutput, BurstEngineError>
-{
-    // TODO timeout for this call specifically?
-    let res = futures::executor::block_on(burst_engine.execute_phase(phase));
-
-    if let Err(e) = res {
-        match e {
-            BurstEngineError::NPUEtc(e) => {
-
-            }
-            BurstEngineError::Phase(e) => {}
-            BurstEngineError::DataCorruption(e) => {}
-        }
-    }
-
-    match res {
-        Ok(_) => {}
-        Err(_) => {}
-    }
-
-}
-
-// TODO maybe make crash errors their own sub enum?
-
-/// closes the worker by first sending the optional request (attempting to be error), then closing. Handles timeouts as best as possible
-fn close_worker<NPUIQ: NeuronProcessingUnitIndexQuantization>(attempting_final_error: Option<BurstEngineWorkerResponse<NPUIQ>>) {
-
+        // At this point, we are exiting the loop
+        break BurstEngineWorkerConclusion::new(burst_engine, option_error);
+    };
+    // loop exited, We have our conclusion, return with it
+    conclusion
 }

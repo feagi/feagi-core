@@ -1,7 +1,8 @@
 use crate::npu::npu_target_frequency::NPUTargetFrequency;
-use std::time::Duration;
+use core::time::Duration;
 
-/// Used to calculate timeout times
+/// Used to calculate timeout times in various contexts
+#[derive(Debug, Copy, Clone, Hash)]
 pub struct BurstEngineTimeoutLogic {
     pub minimum_time: Duration,
     pub burst_length_multiplier: u32,

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use feagi_genomic_context::cortical_area::CorticalID;
-use crate::wnpu::connectome_request::connectome_request::{ConnectomeRequest, ConnectomeRequestEnum};
+use crate::wnpu::connectome_composer::connectome_request::connectome_request::{ConnectomeRequest, ConnectomeRequestEnum};
 
 #[doc(hidden)]
 /// Add or Remove a Cortical Mapping

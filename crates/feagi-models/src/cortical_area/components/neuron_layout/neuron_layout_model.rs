@@ -1,8 +1,8 @@
-use feagi_data::neurons::wrapped_types::CorticalNeuronLocalIndex;
-use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
+use feagi_data::neurons::wrapped_types::{CorticalNeuronLocalIndex, NeuronCount};
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root trait for defining Neuron Layout
-pub trait NeuronLayout<BEIQ: BurstEngineIndexQuantization>
+pub trait NeuronLayout<FIQ: FeagiIndexQuantization>
 {
     /// What layout the neurons are using
     const NEURON_LAYOUT_MODEL: NeuronLayoutEnum;
@@ -15,9 +15,12 @@ pub trait NeuronLayout<BEIQ: BurstEngineIndexQuantization>
     /// cortical area
     type NeuronLayoutContext; // TODO bind with requirements for serialization, clone, etc
 
+    /// Gets the (max) number of neurons that this layout encloses
+    fn get_neuron_count(&self) -> NeuronCount<FIQ::NeuronIndexQuant>;
+    
     fn get_cortical_layout_context(&self) -> &Self::CorticalLayoutContext;
 
-    fn get_neuron_layout_context(&self, neuron_index: &CorticalNeuronLocalIndex<BEIQ::NeuronIndexQuant>) -> Self::NeuronLayoutContext;
+    fn get_neuron_layout_context(&self, neuron_index: &CorticalNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> Self::NeuronLayoutContext;
 }
 
 pub enum NeuronLayoutEnum {

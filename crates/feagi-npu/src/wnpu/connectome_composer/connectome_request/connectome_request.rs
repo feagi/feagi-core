@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use crate::wnpu::connectome_request::sub_requests::burst_engine::{BurstEngineRequestBuilder, BurstEngineRequestEnum};
-use crate::wnpu::connectome_request::sub_requests::cortical_area::CorticalAreaRequestEnum;
+use crate::wnpu::connectome_composer::connectome_request::sub_requests::burst_engine::{BurstEngineRequestBuilder, BurstEngineRequestEnum};
+use crate::wnpu::connectome_composer::connectome_request::sub_requests::cortical_area::CorticalAreaRequestEnum;
 //use crate::standard::wnpu::connectome_request::sub_requests::cortical_mapping::CorticalMappingRequestEnum;
 
 /// Can be passed into a Wrapped NPU to request some change to the connectome.

@@ -1,73 +1,52 @@
-use feagi_models::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
-use feagi_models::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_npu_burst_core::burst_engine_definitions::burst_engine::{BurstEngine, ComposableBurstEngine};
 use feagi_npu_burst_core::burst_engine_definitions::burst_phase_output::BurstPhaseOutput;
 use feagi_npu_burst_core::burst_engine_definitions::burst_phases::RunBurstPhase;
 use feagi_npu_burst_core::errors::BurstEngineError;
 use core::future::Future;
+use feagi_models::wrapped_indexes::BurstIndex;
+use feagi_npu_burst_core::burst_engine_definitions::connectome_change_messaging::{EngineConnectomeChangeRequest, EngineConnectomeChangeResponse};
 use feagi_npu_burst_rayon::rayon_burst_engine::RayonBurstEngine;
 
 // TODO feature gate composable engines // noncposable engines
 
-pub enum BurstEngineEnum<NPUIQ, BEIQ>
+pub enum BurstEngineEnum<FIQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
 {
-    CPURayon(RayonBurstEngine<NPUIQ, BEIQ>),
+    CPURayon(RayonBurstEngine<FIQ>),
 }
 
-impl<NPUIQ, BEIQ> BurstEngine<NPUIQ, BEIQ> for BurstEngineEnum<NPUIQ, BEIQ>
+impl<FIQ> BurstEngineEnum<FIQ>
 where
-    BEIQ: BurstEngineIndexQuantization,
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
+    FIQ: FeagiIndexQuantization,
 {
-    fn execute_phase(&mut self, phases: RunBurstPhase) -> impl Future<Output = Result<BurstPhaseOutput, BurstEngineError>> {
+    pub fn new_cpu_rayon() -> Self {
+        BurstEngineEnum::CPURayon(RayonBurstEngine::new())
+    }
+}
+
+impl<FIQ> BurstEngine<FIQ> for BurstEngineEnum<FIQ>
+where
+    FIQ: FeagiIndexQuantization,
+{
+    fn execute_phase(&mut self, phases: RunBurstPhase, burst_index: BurstIndex<FIQ::BurstIndexQuant>) -> impl Future<Output = Result<BurstPhaseOutput<FIQ>, BurstEngineError>> {
         match self {
             BurstEngineEnum::CPURayon(e) => {e.execute_phase(phases)}
         }
     }
 }
 
-impl<NPUIQ, BEIQ> ComposableBurstEngine<NPUIQ, BEIQ> for BurstEngineEnum<NPUIQ, BEIQ>
+impl<FIQ> ComposableBurstEngine<FIQ> for BurstEngineEnum<FIQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
 {
-    // TODO single method for passing instructions
+    fn request_connectome_change(&mut self, request: EngineConnectomeChangeRequest<FIQ>) -> impl Future<Output=Result<EngineConnectomeChangeResponse<FIQ>, BurstEngineError>> {
+        match self {
+            BurstEngineEnum::CPURayon(r) => {r.request_connectome_change(request)}
+        }
+    }
+
     
-    /*
-    fn add_cortical_area<CA>(
-        &mut self,
-        cortical_area_writer: CA,
-    ) -> impl Future<Output = Result<EngineCorticalIndex<BEIQ::CorticalAreaIndexCountQuant>, BurstEngineError>> {
-        todo!()
-    }
 
-    fn remove_cortical_area<CA>(
-        &mut self,
-        cortical_area_index: EngineCorticalIndex<BEIQ::CorticalAreaIndexCountQuant>,
-    ) -> impl Future<Output = Result<(), BurstEngineError>> {
-        todo!()
-    }
-
-    fn inplace_edit_cortical_area<CA>(
-        &mut self,
-        cortical_area_index: EngineCorticalIndex<BEIQ::CorticalAreaIndexCountQuant>,
-    ) -> impl Future<Output = Result<(), BurstEngineError>> {
-        todo!()
-    }
-
-    fn add_cortical_mapping<CM>(&mut self, cortical_mapping_writer: CM) -> impl Future<Output = Result<(), BurstEngineError>> {
-        todo!()
-    }
-
-    fn add_force_fires(
-        &mut self,
-        force_fires_to_add: &[CorticalNeuronLocalIndex<BEIQ::NeuronIndexQuant>],
-    ) -> impl Future<Output = Result<(), BurstEngineError>> {
-        todo!()
-    }
-    
-     */
 }

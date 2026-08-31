@@ -1,8 +1,5 @@
 use std::marker::PhantomData;
-use feagi_data::values::quantizable::PercentageUnsigned;
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
-use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
-use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
 
 /// Any cortical level data that should be configurable by genome developers
 pub trait CorticalDataProperties<CAMQ>: Clone + core::fmt::Debug + Default

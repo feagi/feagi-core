@@ -1,35 +1,33 @@
 use std::ops::ControlFlow;
-use feagi_data::channels::channels::{ChannelPair, ChannelReceivingError};
-use feagi_data::channels::channels_flume::{InnerFlumeChannelPair, OuterFlumeChannelPair};
-use feagi_models::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::npu::npu_target_frequency::NPUTargetFrequency;
 use crate::npu::worker::command_and_response::{BurstEngineWorkerCommand, BurstEngineWorkerResponse};
 use crate::npu::worker_pool::command_and_response::{BurstEngineWorkerFeedback, BurstEngineWorkerPoolCommand};
 
 /// Channel the pool uses to talk to the NPU: sends feedback, receives pool commands.
-pub type PoolFeedbackChannel<NPUIQ: NeuronProcessingUnitIndexQuantization> =
-    InnerFlumeChannelPair<BurstEngineWorkerFeedback<NPUIQ>, BurstEngineWorkerPoolCommand<NPUIQ>>;
+pub type PoolFeedbackChannel<FIQ: FeagiIndexQuantization> =
+    InnerFlumeChannelPair<BurstEngineWorkerFeedback<FIQ>, BurstEngineWorkerPoolCommand<FIQ>>;
 
 /// Channel the pool uses to drive a single worker: sends commands, receives responses.
-type WorkerCommandChannel<NPUIQ: NeuronProcessingUnitIndexQuantization> =
-OuterFlumeChannelPair<BurstEngineWorkerCommand<NPUIQ>, BurstEngineWorkerResponse<NPUIQ>>;
+type WorkerCommandChannel<FIQ: FeagiIndexQuantization> =
+OuterFlumeChannelPair<BurstEngineWorkerCommand<FIQ>, BurstEngineWorkerResponse<FIQ>>;
 
 /// Runtime state for a burst engine worker pool
-pub struct BurstEngineWorkerPool<NPUIQ: NeuronProcessingUnitIndexQuantization> {
-    feedback_channels: PoolFeedbackChannel<NPUIQ>,
-    worker_commanders: Vec<WorkerCommandChannel<NPUIQ>>,
+pub struct BurstEngineWorkerPool<FIQ: FeagiIndexQuantization> {
+    feedback_channels: PoolFeedbackChannel<FIQ>,
+    worker_commanders: Vec<WorkerCommandChannel<FIQ>>,
     frequency: NPUTargetFrequency,
     bursts_paused: bool,
-    burst_index: BurstIndex<NPUIQ::BurstIndexQuant>,
+    burst_index: BurstIndex<FIQ::BurstIndexQuant>,
 }
 
-impl<NPUIQ: NeuronProcessingUnitIndexQuantization> BurstEngineWorkerPool<NPUIQ> {
+impl<FIQ: FeagiIndexQuantization> BurstEngineWorkerPool<FIQ> {
     
     /// Create a new instance
     pub fn new(
-        feedback_channels: PoolFeedbackChannel<NPUIQ>,
-        worker_commanders: Vec<WorkerCommandChannel<NPUIQ>>,
+        feedback_channels: PoolFeedbackChannel<FIQ>,
+        worker_commanders: Vec<WorkerCommandChannel<FIQ>>,
         initial_frequency: NPUTargetFrequency,
     ) -> Self {
         Self {
@@ -59,7 +57,7 @@ impl<NPUIQ: NeuronProcessingUnitIndexQuantization> BurstEngineWorkerPool<NPUIQ> 
     fn run_iteration(&mut self) -> ControlFlow<()> {
         
         // Get next step enum depending on if/what we receive as an incoming command
-        let next_step = self.receive_next();
+        let next_step = self.receive_next_command();
         
         match next_step {
             PoolNextStep::HandleIncomingCommand(command) => {
@@ -78,7 +76,7 @@ impl<NPUIQ: NeuronProcessingUnitIndexQuantization> BurstEngineWorkerPool<NPUIQ> 
 
     /// Obtain the next thing to do. Paused blocks for a command; unpaused polls, treating "nothing
     /// pending" as permission to run a burst this iteration (even though that shouldnt happen?)
-    fn receive_next(&mut self) -> PoolNextStep<NPUIQ> {
+    fn receive_next_command(&mut self) -> PoolNextStep<FIQ> {
         
         // If paused, we block the thread for the next command, otherwise we just try quickly
         let received = if self.bursts_paused {
@@ -103,7 +101,7 @@ impl<NPUIQ: NeuronProcessingUnitIndexQuantization> BurstEngineWorkerPool<NPUIQ> 
 
     /// Apply a command from the NPU. Returns `Break` when the command (or a fatal error handling it)
     /// should stop the pool.
-    fn handle_npu_command(&mut self, command: BurstEngineWorkerPoolCommand<NPUIQ>) -> ControlFlow<()> {
+    fn handle_npu_command(&mut self, command: BurstEngineWorkerPoolCommand<FIQ>) -> ControlFlow<()> {
         match command {
             BurstEngineWorkerPoolCommand::SpecificEngineCommand { burst_engine_index, command } => {
                 let Some(commander) = self.worker_commanders.get_mut(burst_engine_index as usize)
@@ -186,9 +184,9 @@ impl<NPUIQ: NeuronProcessingUnitIndexQuantization> BurstEngineWorkerPool<NPUIQ> 
     /// Interpret a worker's response. Normal completions continue the loop.
     /// Crashes and brain death are forwarded to the NPU and the pool is stopped
     fn handle_worker_response(
-        feedback_channels: &mut PoolFeedbackChannel<NPUIQ>,
+        feedback_channels: &mut PoolFeedbackChannel<FIQ>,
         burst_engine_index: u16,
-        response: BurstEngineWorkerResponse<NPUIQ>,
+        response: BurstEngineWorkerResponse<FIQ>,
     ) -> ControlFlow<()> {
         match response {
             BurstEngineWorkerResponse::KernelRan { .. } => ControlFlow::Continue(()),
@@ -217,9 +215,9 @@ impl<NPUIQ: NeuronProcessingUnitIndexQuantization> BurstEngineWorkerPool<NPUIQ> 
 }
 
 /// Intent of the pool
-enum PoolNextStep<NPUIQ: NeuronProcessingUnitIndexQuantization> {
+enum PoolNextStep<FIQ: FeagiIndexQuantization> {
     /// A command from the NPU is ready to process.
-    HandleIncomingCommand(BurstEngineWorkerPoolCommand<NPUIQ>),
+    HandleIncomingCommand(BurstEngineWorkerPoolCommand<FIQ>),
     /// Nothing pending while unpaused: run a burst.
     RunBurst,
     /// Do nothing this iteration and loop again.

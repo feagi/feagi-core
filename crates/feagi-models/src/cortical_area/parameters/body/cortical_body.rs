@@ -1,16 +1,13 @@
 use feagi_data::neurons::wrapped_types::CorticalNeuronPotential;
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::NeuronLayout;
-use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
-use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
-use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// A body of a cortical area
-pub trait CorticalBody<NPUIQ, BEIQ, NL, CAMQ>
+pub trait CorticalBody<FIQ, NL, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
-    NL: NeuronLayout<BEIQ>,
+    FIQ: FeagiIndexQuantization,
+    NL: NeuronLayout<FIQ>,
     CAMQ: MembranePotentialQuantization,
 {
     /// Defines if we can configure the usage of MP as the PSP or not

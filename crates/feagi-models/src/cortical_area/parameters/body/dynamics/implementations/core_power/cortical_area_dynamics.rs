@@ -4,29 +4,26 @@ use crate::cortical_area::parameters::body::dynamics::components::data::NullData
 use crate::cortical_area::parameters::body::dynamics::components::mp_driven_psp_configurability::MPDrivenPSPForcedOff;
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
 use crate::cortical_area::parameters::body::dynamics::cortical_area_dynamics::{CorticalAreaDynamics, NeuronDynamicsOutput};
-use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
-use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::wrapped_indexes::BurstIndex;
 use feagi_data::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
 use std::marker::PhantomData;
 use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 
 /// Simply fires every burst lol
-pub struct CorePowerCorticalAreaDynamics<NPUIQ, BEIQ, NL, CAMQ>
+pub struct CorePowerCorticalAreaDynamics<FIQ, NL, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
-    NL: NeuronLayout<BEIQ>,
+    FIQ: FeagiIndexQuantization,
+    NL: NeuronLayout<FIQ>,
     CAMQ: CorticalAreaQuantization,
 {
-    _p: PhantomData<(NPUIQ, BEIQ, NL, CAMQ)>,
+    _p: PhantomData<(FIQ, NL, CAMQ)>,
 }
 
-impl<NPUIQ, BEIQ, CAMQ> CorticalAreaDynamics<NPUIQ, BEIQ, NeuronLayoutVoxel<BEIQ>, CAMQ>
-    for CorePowerCorticalAreaDynamics<NPUIQ, BEIQ, NeuronLayoutVoxel<BEIQ>, CAMQ>
+impl<FIQ, CAMQ> CorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>
+    for CorePowerCorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
     type MPDrivenPSPConfigurability = MPDrivenPSPForcedOff<CAMQ>;
@@ -40,25 +37,25 @@ where
     const HAS_NEURON_DYNAMICS_PROCESSING: bool = true;
 
     fn process_cortical_dynamics(
-        burst_index: &BurstIndex<NPUIQ::BurstIndexQuant>,
+        burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
         cortical_properties: &mut Self::CorticalDataProperties,
         cortical_internal: &mut Self::CorticalDataInternal,
         cortical_shared: &mut Self::CorticalDataShared,
-        layout_context: &NeuronLayoutVoxel<BEIQ>,
+        layout_context: &NeuronLayoutVoxel<FIQ>,
     ) -> () {
         
     }
 
     fn process_neuron_dynamics(
         _: &CorticalNeuronPotential<<CAMQ as MembranePotentialQuantization>::MembranePotentialQuant>,
-        _: &BurstIndex<<NPUIQ as NeuronProcessingUnitIndexQuantization>::BurstIndexQuant>,
-        _: &<Self as CorticalAreaDynamics<NPUIQ, BEIQ, NeuronLayoutVoxel<BEIQ>, CAMQ>>::CorticalDataProperties,
-        _: &<Self as CorticalAreaDynamics<NPUIQ, BEIQ, NeuronLayoutVoxel<BEIQ>, CAMQ>>::CorticalDataInternal,
-        _: &<Self as CorticalAreaDynamics<NPUIQ, BEIQ, NeuronLayoutVoxel<BEIQ>, CAMQ>>::CorticalDataShared,
-        _: &mut <Self as CorticalAreaDynamics<NPUIQ, BEIQ, NeuronLayoutVoxel<BEIQ>, CAMQ>>::NeuronDataProperties,
-        _: &mut <Self as CorticalAreaDynamics<NPUIQ, BEIQ, NeuronLayoutVoxel<BEIQ>, CAMQ>>::NeuronDataInternal,
-        _: &CorticalNeuronLocalIndex<<BEIQ as BurstEngineIndexQuantization>::NeuronIndexQuant>,
-        _: &NeuronLayoutVoxel<BEIQ>,
+        _: &BurstIndex<<FIQ as FeagiIndexQuantization>::BurstIndexQuant>,
+        _: &<Self as CorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>>::CorticalDataProperties,
+        _: &<Self as CorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>>::CorticalDataInternal,
+        _: &<Self as CorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>>::CorticalDataShared,
+        _: &mut <Self as CorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>>::NeuronDataProperties,
+        _: &mut <Self as CorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>>::NeuronDataInternal,
+        _: &CorticalNeuronLocalIndex<<FIQ as FeagiIndexQuantization>::NeuronIndexQuant>,
+        _: &NeuronLayoutVoxel<FIQ>,
     ) -> NeuronDynamicsOutput<CAMQ> {
         NeuronDynamicsOutput::Firing(CorticalNeuronPotential::QUANT_ONE)
     }

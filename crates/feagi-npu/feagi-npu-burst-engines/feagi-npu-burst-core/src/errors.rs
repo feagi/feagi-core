@@ -5,6 +5,11 @@ pub struct FeagiFailNPUEtc {
     context: &'static str,
 }
 
+#[derive(FeagiErrorKey)]
+pub struct FeagiFailChannelFail {
+    context: &'static str,
+}
+
 //region Burst Engine
 
 generate_feagi_error! {
@@ -12,7 +17,8 @@ generate_feagi_error! {
     keys: {
         NPUEtc: FeagiFailNPUEtc,
         Phase: FeagiFailPhase,
-        DataCorruption: FeagiFailBurstEngineDataCorruption
+        DataCorruption: FeagiFailBurstEngineDataCorruption,
+        ChannelFail: FeagiFailChannelFail,
     },
     sub_errors: {
         
@@ -35,9 +41,10 @@ generate_feagi_error! {
     BurstEngineWorkerError,
     keys: {
         NPUEtc: FeagiFailNPUEtc,
+        ChannelFail: FeagiFailChannelFail,
     },
     sub_errors: {
-
+        EngineError: BurstEngineError
     },
 }
 
@@ -45,6 +52,7 @@ generate_feagi_error! {
     BurstEngineWorkerPoolError,
     keys: {
         NPUEtc: FeagiFailNPUEtc,
+        ChannelFail: FeagiFailChannelFail,
     },
     sub_errors: {
     },
@@ -54,6 +62,7 @@ generate_feagi_error! {
     NPUError,
     keys: {
         NPUEtc: FeagiFailNPUEtc,
+        ChannelFail: FeagiFailChannelFail,
     },
     sub_errors: {
         BurstEngine: BurstEngineError,

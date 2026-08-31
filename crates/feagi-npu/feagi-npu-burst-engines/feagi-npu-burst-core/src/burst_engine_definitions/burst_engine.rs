@@ -1,21 +1,25 @@
 use crate::burst_engine_definitions::burst_phase_output::BurstPhaseOutput;
 use crate::burst_engine_definitions::burst_phases::RunBurstPhase;
-use crate::wrapped_values::EngineCorticalIndex;
 use crate::errors::BurstEngineError;
-use feagi_data::neurons::wrapped_types::CorticalNeuronLocalIndex;
-use feagi_models::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
-use feagi_models::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
-
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_models::wrapped_indexes::BurstIndex;
+use crate::burst_engine_definitions::connectome_change_messaging::{EngineConnectomeChangeRequest, EngineConnectomeChangeResponse};
 // TODO Seperate Async and Nonasync?
 
 /// Base trait for all burst engines. Bursts are executed by phases in an async manner
-pub trait BurstEngine<NPUIQ: NeuronProcessingUnitIndexQuantization, BEIQ: BurstEngineIndexQuantization> {
-    fn execute_phase(&mut self, phases: RunBurstPhase) -> impl core::future::Future<Output = Result<BurstPhaseOutput, BurstEngineError>>;
+pub trait BurstEngine<FIQ: FeagiIndexQuantization> {
+    fn execute_phase(&mut self, phases: RunBurstPhase, burst_index: BurstIndex<FIQ::BurstIndexQuant>) -> impl core::future::Future<Output = Result<BurstPhaseOutput<FIQ>, BurstEngineError>>;
 }
 
 /// Any burst engine that supports connectome editing AKA composition
-pub trait ComposableBurstEngine<NPUIQ: NeuronProcessingUnitIndexQuantization, BEIQ: BurstEngineIndexQuantization>: BurstEngine<NPUIQ, BEIQ> {
+pub trait ComposableBurstEngine<FIQ: FeagiIndexQuantization>: BurstEngine<FIQ> {
 
+    
+    fn request_connectome_change(
+        &mut self, request: EngineConnectomeChangeRequest<FIQ>
+    ) -> impl core::future::Future<Output = Result<EngineConnectomeChangeResponse<FIQ>, BurstEngineError>>;
+
+    
     /*
     fn add_cortical_area<CA>(
         &mut self,
@@ -47,7 +51,7 @@ pub trait ComposableBurstEngine<NPUIQ: NeuronProcessingUnitIndexQuantization, BE
 }
 
 /// A marker trait to denote a burst engine as not being editable
-pub trait NonComposableBurstEngine<NPUIQ: NeuronProcessingUnitIndexQuantization, BEIQ: BurstEngineIndexQuantization>: BurstEngine<NPUIQ, BEIQ>
+pub trait NonComposableBurstEngine<FIQ: FeagiIndexQuantization>: BurstEngine<FIQ>
 {
 
 }

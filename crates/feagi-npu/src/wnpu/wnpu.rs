@@ -2,12 +2,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel;
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_models::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantizationStandard32Bit;
-use crate::npu_3::neural_processing_unit::NeuronProcessingUnit;
+use feagi_data::quantization_levels::feagi_index_quantization::NeuronProcessingUnitIndexQuantizationStandard32Bit;
 use crate::npu::npu_target_frequency::NPUTargetFrequency;
-use crate::wnpu::connectome_request::connectome_request::ConnectomeRequest;
+use crate::wnpu::connectome_composer::connectome_request::connectome_request::ConnectomeRequest;
 use crate::wnpu::wrapped_neuron_processor_unit_error::WNPUError;
 
 /// Translation layer between the legacy (genome / metadata) architecture and the new NPU.

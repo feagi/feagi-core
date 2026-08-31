@@ -1,42 +1,37 @@
 use feagi_data::values::quantizable::DecimalQuantizationLevel;
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::{CorticalAreaQuantization};
-use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
-use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// The direct output of a cortical area, this is what mappings will extend out of
-pub trait AxonModelTrait<NPUIQ, BEIQ, CAMQ>
+pub trait AxonModelTrait<FIQ, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
     
 }
 
 /// The direct output of a cortical area, this is what mappings will extend out of
-pub trait AxonConfigTrait<NPUIQ, BEIQ, CAMQ>
+pub trait AxonConfigTrait<FIQ, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
 }
 
 /// An output surface that allows synapses to map to a neuron from here by its local neuron index
-pub trait PerNeuronPotentialAxonModelTrait<NPUIQ, BEIQ, CAMQ>: AxonModelTrait<NPUIQ, BEIQ, CAMQ>
+pub trait PerNeuronPotentialAxonModelTrait<FIQ, CAMQ>: AxonModelTrait<FIQ, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
     const INCOMING_POTENTIAL_QUANTIZATION: DecimalQuantizationLevel = CAMQ::MEMBRANE_POTENTIAL_QUANT_LEVEL;
 }
 
 /// An output surface that allows synapses to map to a neuron from here by its local neuron index
-pub trait PerNeuronPotentialAxonConfigTrait<NPUIQ, BEIQ, CAMQ>: AxonConfigTrait<NPUIQ, BEIQ, CAMQ>
+pub trait PerNeuronPotentialAxonConfigTrait<FIQ, CAMQ>: AxonConfigTrait<FIQ, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
     const INCOMING_POTENTIAL_QUANTIZATION: DecimalQuantizationLevel = CAMQ::MEMBRANE_POTENTIAL_QUANT_LEVEL;
@@ -45,16 +40,14 @@ where
 //region Null
 
 /// An axon model that does nothing. No synapse outputs are possible
-pub struct NullAxonModel<NPUIQ, BEIQ, CAMQ>(core::marker::PhantomData<(NPUIQ, BEIQ, CAMQ)>)
+pub struct NullAxonModel<FIQ, CAMQ>(core::marker::PhantomData<(FIQ, CAMQ)>)
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization;
 
-impl<NPUIQ, BEIQ, CAMQ> AxonModelTrait<NPUIQ, BEIQ, CAMQ> for NullAxonModel<NPUIQ, BEIQ, CAMQ>
+impl<FIQ, CAMQ> AxonModelTrait<FIQ, CAMQ> for NullAxonModel<FIQ, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
 }
@@ -64,24 +57,22 @@ where
 //region Per Neuron - Linear
 
 ///
-pub struct LinearPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>(core::marker::PhantomData<(NPUIQ, BEIQ, CAMQ)>)
+pub struct LinearPerNeuronPotentialAxonModel<FIQ, CAMQ>(core::marker::PhantomData<(FIQ, CAMQ)>)
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization;
 
-impl<NPUIQ, BEIQ, CAMQ> AxonModelTrait<NPUIQ, BEIQ, CAMQ> for LinearPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>
+impl<FIQ, CAMQ> AxonModelTrait<FIQ, CAMQ> for LinearPerNeuronPotentialAxonModel<FIQ, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
+
     CAMQ: CorticalAreaQuantization,
 {
 }
 
-impl<NPUIQ, BEIQ, CAMQ> LinearPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>
+impl<FIQ, CAMQ> LinearPerNeuronPotentialAxonModel<FIQ, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
 }
@@ -90,24 +81,21 @@ where
 
 //region Per Neuron - Dimensional
 
-pub struct DimensionalPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>(core::marker::PhantomData<(NPUIQ, BEIQ, CAMQ)>)
+pub struct DimensionalPerNeuronPotentialAxonModel<FIQ, CAMQ>(core::marker::PhantomData<(FIQ, CAMQ)>)
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization;
 
-impl<NPUIQ, BEIQ, CAMQ> AxonModelTrait<NPUIQ, BEIQ, CAMQ> for DimensionalPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>
+impl<FIQ, CAMQ> AxonModelTrait<FIQ, CAMQ> for DimensionalPerNeuronPotentialAxonModel<FIQ, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
 }
 
-impl<NPUIQ, BEIQ, CAMQ> DimensionalPerNeuronPotentialAxonModel<NPUIQ, BEIQ, CAMQ>
+impl<FIQ, CAMQ> DimensionalPerNeuronPotentialAxonModel<FIQ, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
+    FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
 {
     

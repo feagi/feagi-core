@@ -4,17 +4,15 @@ use crate::cortical_area::parameters::body::dynamics::components::data::{Cortica
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayout};
 use crate::cortical_area::parameters::body::dynamics::components::mp_driven_psp_configurability::MPDrivenPSPConfigurability;
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
-use crate::quantization_levels::burst_engine_index_quantization::BurstEngineIndexQuantization;
-use crate::quantization_levels::neuron_processing_unit_index_quantization::NeuronProcessingUnitIndexQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::wrapped_indexes::BurstIndex;
 
 // TODO maybe we should allow the BEIQ type in here so people can better use the layout information (tie it to a unique data struct that is not saved, that must instead be generated at instantiation / layout edit)
 
-pub trait CorticalAreaDynamics<NPUIQ, BEIQ, NL, CAMQ>
+pub trait CorticalAreaDynamics<FIQ, NL, CAMQ>
 where
-    NPUIQ: NeuronProcessingUnitIndexQuantization,
-    BEIQ: BurstEngineIndexQuantization,
-    NL: NeuronLayout<BEIQ>,
+    FIQ: FeagiIndexQuantization,
+    NL: NeuronLayout<FIQ>,
     CAMQ: CorticalAreaQuantization,
 {
     /// Defines if we can configure the usage of MP as the PSP or not
@@ -51,7 +49,7 @@ where
     
     /// called per area. Called before neuron call
     fn process_cortical_dynamics(
-        burst_index: &BurstIndex<NPUIQ::BurstIndexQuant>, 
+        burst_index: &BurstIndex<FIQ::BurstIndexQuant>, 
         cortical_properties: &mut Self::CorticalDataProperties,
         cortical_internal: &mut Self::CorticalDataInternal,
         cortical_shared: &mut Self::CorticalDataShared,
@@ -61,13 +59,13 @@ where
     /// called per neuron, outputs the firing potential to be further post processed (or ignored)
     fn process_neuron_dynamics(
         incoming_potential: &CorticalNeuronPotential<CAMQ::MembranePotentialQuant>,
-        burst_index: &BurstIndex<NPUIQ::BurstIndexQuant>,
+        burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
         cortical_properties: &Self::CorticalDataProperties,
         cortical_internal: &Self::CorticalDataInternal,
         cortical_shared: &Self::CorticalDataShared,
         neuron_properties: &mut Self::NeuronDataProperties,
         neuron_internal: &mut Self::NeuronDataInternal,
-        neuron_linear_index: &CorticalNeuronLocalIndex<BEIQ::NeuronIndexQuant>,
+        neuron_linear_index: &CorticalNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         layout_context: &NL,
     ) -> NeuronDynamicsOutput<CAMQ>; // This is used immediately 
 
