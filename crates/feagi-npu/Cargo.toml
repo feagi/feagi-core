@@ -14,40 +14,47 @@ description = "Contains the logic for the neural processing unit and their inter
 [features]
 
 default = [
-    "std",
-    "use-rayon",
-    "editable"
+    "std", "composable", "engine-composable-rayon"
 ]
 
-# ========================= Toggleable Features ========================= #
-# Features that add certain libraries/crates that extend the functionality
-# and performance of the FEAGI application
-# In order of Directly activated crates, other features here, external crate features, feagi crate features
-
-# Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
-use-rayon = [
-    "rayon",
-    "std",
-]
-
-# Enables interfaces for editing connectomes, such as adding / removing cortical areas and mappings
-editable = [
-    "std"
-]
-
+# ========================= Standard Toggleable Features ========================= #
 
 std = [
     "alloc",
-    "parking_lot",
-    "serde/std", "serde_json/std", "ahash/std"
+    "feagi-npu-burst-engines/std",
+    "futures/std", "futures/executor",
+    "ahash/std", "ahash/runtime-rng",
+    "serde/std",
+    "serde_json/std",
+
 ]
 
 alloc = [
-    "serde", "serde_json",
-    "serde/alloc", "serde/derive", "serde_json/alloc", "ahash/serde",
+    "serde_json",
+    'feagi-npu-burst-engines/alloc',
+    'futures/alloc',
+    "serde/alloc",
 ]
 
+# ========================= Crate Level Features ========================= #
 
+# Enables interfaces for editing connectomes, such as adding / removing cortical areas and mappings
+composable = [
+    "std",
+    "feagi-npu-burst-engines/composable"
+]
+
+# CPU burst composable engine that uses multiple cpu threads to process neurons
+engine-composable-rayon = [
+    "std",
+    "composable",
+    "feagi-npu-burst-engines/engine-composable-rayon"
+]
+
+# A non-composable engine for the ESP32 family of microcontrollers
+engine-noncomposable-esp32 = [
+    "feagi-npu-burst-engines/engine-noncomposable-esp32"
+]
 
 [dependencies]
 feagi-data = {path = "../feagi-data"}
@@ -56,22 +63,16 @@ feagi-logging-and-errors = {path = "../feagi-logging-and-errors"}
 feagi-genomic-context = {path = "../feagi-genomic-context"}
 feagi-npu-burst-engines = {path = "feagi-npu-burst-engines"}
 
-
 # External crates
 paste = { workspace = true}
-half = {workspace = true}
-ahash = { workspace = true}
-# Runtime taps only; std-gated along with the `runtime_taps` module.
-serde = { workspace = true, optional = true}
+futures = {workspace = true, default-features = false}
+ahash = { workspace = true, default-features = false}
+serde = { workspace = true, default-features = false}
+# Toggled external crates
 serde_json = { workspace = true, optional = true}
-rayon = { workspace = true, optional = true}
 
 # TODO we should tie these to workspace
-parking_lot = { version = "0.12", optional = true }
-tokio = {version = "1.53.1", features = ["rt", "macros", "time"]} # TODO Optional
-tokio-util = { version = "0.7.19", features = ["full"] }
-futures = {version =  "0.3.34" }
-flume = { version = "0.11", default-features = false, features = ["async"] } # TODO tie to workspace
+
 
 [lints]
 workspace = true

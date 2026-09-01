@@ -12,9 +12,9 @@ description = "Rayon burst engine logic for multithread / core CPU neuron proces
 
 [features]
 
-default = [
-    "std",
-]
+# Note: nested sub crates should not have default features in order to prevent confusion upstream
+
+# ========================= Standard Toggleable Features ========================= #
 
 std = [
     "alloc",
@@ -22,10 +22,6 @@ std = [
 
 alloc = [
 
-]
-
-composable-engines = [
-    "alloc"
 ]
 
 [dependencies]

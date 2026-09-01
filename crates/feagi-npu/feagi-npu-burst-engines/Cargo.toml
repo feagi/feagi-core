@@ -14,11 +14,9 @@ description = "Contains the Burst Engines for various hardwares, which handle th
 
 [features]
 
-default = [
-    "std",
-    "composable-engines",
-    "engine-rayon"
-]
+# Note: nested sub crates should not have default features in order to prevent confusion upstream
+
+# ========================= Standard Toggleable Features ========================= #
 
 std = [
     "alloc",
@@ -28,20 +26,28 @@ alloc = [
 
 ]
 
-composable-engines = [
-    "alloc",
-    "feagi-npu-burst-core/composable-engines",
-    "feagi-npu-burst-rayon/composable-engines",
+# ========================= Standard Toggleable Features ========================= #
+
+# Enables interfaces for editing connectomes, such as adding / removing cortical areas and mappings
+composable = [
+    "std"
 ]
 
-engine-rayon = [
+# CPU burst composable engine that uses multiple cpu threads to process neurons
+engine-composable-rayon = [
     "std",
+    "composable",
     "feagi-npu-burst-rayon"
+]
+
+# A non composable engine for the ESP32 family of microcontrollers
+engine-noncomposable-esp32 = [
+
 ]
 
 [dependencies]
 feagi-npu-burst-core = {path = "feagi-npu-burst-core"}
-feagi-npu-burst-rayon = {path = "feagi-npu-burst-rayon", optional = true, default-features = false}
+feagi-npu-burst-rayon = {path = "feagi-npu-burst-rayon", optional = true}
 
 feagi-data = {path = "../../feagi-data" }
 feagi-models = {path = "../../feagi-models" }

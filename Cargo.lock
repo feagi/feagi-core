@@ -35,6 +35,7 @@ checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
  "cfg-if",
  "const-random",
+ "getrandom 0.3.4",
  "once_cell",
  "serde",
  "version_check",
@@ -1399,7 +1400,7 @@ version = "0.1.1"
 dependencies = [
  "ahash",
  "feagi-logging-and-errors",
- "flume 0.12.0",
+ "flume",
  "half",
  "heapless 0.9.3",
  "paste",
@@ -1511,16 +1512,10 @@ dependencies = [
  "feagi-logging-and-errors",
  "feagi-models",
  "feagi-npu-burst-engines",
- "flume 0.11.1",
  "futures",
- "half",
- "parking_lot",
  "paste",
- "rayon",
  "serde",
  "serde_json",
- "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -1532,7 +1527,7 @@ dependencies = [
  "feagi-genomic-context",
  "feagi-logging-and-errors",
  "feagi-models",
- "flume 0.12.0",
+ "flume",
  "half",
  "paste",
  "serde",
@@ -1691,17 +1686,6 @@ checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
-]
-
-[[package]]
-name = "flume"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
-dependencies = [
- "futures-core",
- "futures-sink",
- "spin",
 ]
 
 [[package]]
@@ -4830,11 +4814,8 @@ dependencies = [
  "futures-core",
  "futures-io",
  "futures-sink",
- "futures-util",
- "hashbrown 0.15.5",
  "libc",
  "pin-project-lite",
- "slab",
  "tokio",
 ]
 

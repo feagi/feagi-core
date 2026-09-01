@@ -12,9 +12,9 @@ description = "Shared logic / traits for burst engines"
 
 [features]
 
-default = [
-    "std",
-]
+# Note: nested sub crates should not have default features in order to prevent confusion upstream
+
+# ========================= Standard Toggleable Features ========================= #
 
 std = [
     "alloc",
@@ -24,8 +24,11 @@ alloc = [
 
 ]
 
-composable-engines = [
-    "alloc"
+# ========================= Standard Toggleable Features ========================= #
+
+# Enables interfaces for editing connectomes, such as adding / removing cortical areas and mappings
+composable = [
+    "std"
 ]
 
 [dependencies]
