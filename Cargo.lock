@@ -1541,8 +1541,20 @@ dependencies = [
  "feagi-logging-and-errors",
  "feagi-models",
  "feagi-npu-burst-core",
+ "feagi-npu-burst-esp32",
  "feagi-npu-burst-rayon",
  "paste",
+]
+
+[[package]]
+name = "feagi-npu-burst-esp32"
+version = "0.1.1"
+dependencies = [
+ "feagi-data",
+ "feagi-genomic-context",
+ "feagi-logging-and-errors",
+ "feagi-models",
+ "feagi-npu-burst-core",
 ]
 
 [[package]]

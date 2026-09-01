@@ -192,6 +192,7 @@ members = [
     "crates/feagi-npu/feagi-npu-burst-engines",
     "crates/feagi-npu/feagi-npu-burst-engines/feagi-npu-burst-core",
     "crates/feagi-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon",
+    "crates/feagi-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
     "crates/feagi-observability",
     "crates/feagi-sensorimotor",
     "crates/feagi-serialization",

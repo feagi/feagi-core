@@ -57,11 +57,12 @@ engine-noncomposable-esp32 = [
 ]
 
 [dependencies]
+feagi-npu-burst-engines = {path = "feagi-npu-burst-engines"}
 feagi-data = {path = "../feagi-data"}
 feagi-models = {path = "../feagi-models" }
 feagi-logging-and-errors = {path = "../feagi-logging-and-errors"}
 feagi-genomic-context = {path = "../feagi-genomic-context"}
-feagi-npu-burst-engines = {path = "feagi-npu-burst-engines"}
+
 
 # External crates
 paste = { workspace = true}

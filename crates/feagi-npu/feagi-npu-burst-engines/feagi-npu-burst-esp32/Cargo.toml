@@ -1,0 +1,34 @@
+[package]
+name = "feagi-npu-burst-esp32"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "A burst engine for running on the ESP32 family of SOCs"
+
+[features]
+
+# Note: nested sub crates should not have default features in order to prevent confusion upstream
+
+# ========================= Standard Toggleable Features ========================= #
+
+# TODO should this embedded crate have no STD mode?
+
+std = [
+    "alloc",
+]
+
+alloc = [
+
+]
+
+[dependencies]
+feagi-data = {path = "../../../feagi-data" }
+feagi-models = {path = "../../../feagi-models" }
+feagi-logging-and-errors = {path = "../../../feagi-logging-and-errors" }
+feagi-genomic-context = {path = "../../../feagi-genomic-context" }
+feagi-npu-burst-core = {path = "../feagi-npu-burst-core"}

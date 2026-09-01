@@ -42,12 +42,13 @@ engine-composable-rayon = [
 
 # A non composable engine for the ESP32 family of microcontrollers
 engine-noncomposable-esp32 = [
-
+    "feagi-npu-burst-esp32"
 ]
 
 [dependencies]
 feagi-npu-burst-core = {path = "feagi-npu-burst-core"}
 feagi-npu-burst-rayon = {path = "feagi-npu-burst-rayon", optional = true}
+feagi-npu-burst-esp32 = {path = "feagi-npu-burst-esp32", optional = true}
 
 feagi-data = {path = "../../feagi-data" }
 feagi-models = {path = "../../feagi-models" }
