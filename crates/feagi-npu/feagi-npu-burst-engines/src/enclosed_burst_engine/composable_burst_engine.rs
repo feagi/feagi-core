@@ -32,6 +32,9 @@ impl<FIQ: FeagiIndexQuantization> ComposableBurstEngine<FIQ> {
 enum ComposableBurstEngineEnum<FIQ: FeagiIndexQuantization> {
     #[cfg(feature = "engine-composable-rayon")]
     CPURayon(RayonBurstEngine<FIQ>),
+    // Keeps `FIQ` live when every engine variant is cfg'd out.
+    #[cfg(not(feature = "engine-composable-rayon"))]
+    Impossible(core::marker::PhantomData<FIQ>), // Only here to get the compiler to shut up as it is blind to multi-feature setups
 }
 
 #[cfg(feature = "composable")]
@@ -45,6 +48,10 @@ impl<FIQ: FeagiIndexQuantization> ComposableBurstEngineEnum<FIQ> {
         match self {
             #[cfg(feature = "engine-composable-rayon")]
             ComposableBurstEngineEnum::CPURayon(e) => e.execute_phase(phases, burst_index),
+            #[cfg(not(feature = "engine-composable-rayon"))]
+            ComposableBurstEngineEnum::Impossible(_) => async move {
+                unreachable!("no composable burst engine feature is enabled")
+            },
         }
     }
 }
