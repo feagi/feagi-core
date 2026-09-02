@@ -1070,6 +1070,20 @@ where
         }
     }
 
+    /// Remove the replay target owned by one memory/upstream cortical-area pair.
+    ///
+    /// Returns `true` when a runtime replay route was present.
+    pub fn unregister_memory_twin_mapping(
+        &mut self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+    ) -> bool {
+        dispatch_mut!(
+            self,
+            unregister_memory_twin_mapping(memory_area_idx, upstream_area_idx)
+        )
+    }
+
     pub fn configure_fire_ledger_window(
         &mut self,
         cortical_idx: u32,

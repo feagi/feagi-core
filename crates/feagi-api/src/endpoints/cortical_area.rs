@@ -2230,6 +2230,8 @@ pub async fn get_ipu_types(
         let snake_name = unit.get_snake_case_name();
         let formats = if snake_name == "vision"
             || snake_name == "segmented_vision"
+            || snake_name == "depth_map"
+            || snake_name == "misc_data"
             || snake_name == "miscellaneous"
         {
             vec![]
@@ -2242,6 +2244,8 @@ pub async fn get_ipu_types(
             vec![64, 64, 1] // Vision sensors typically 64x64
         } else if snake_name == "segmented_vision" {
             vec![32, 32, 1] // Segmented vision segments are smaller
+        } else if snake_name == "depth_map" {
+            vec![64, 64, 64] // Depth map uses XY topology plus depth bins on Z
         } else {
             vec![1, 1, 1] // Most sensors are scalar (1x1x1)
         };

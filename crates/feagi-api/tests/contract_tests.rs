@@ -825,6 +825,32 @@ fn sample_multi_segmented_vision_device_registrations() -> Value {
 }
 
 #[cfg(feature = "feagi-agent")]
+fn sample_depth_map_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "DepthMap": [
+                [
+                    {
+                        "friendly_name": "front_depth_camera",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}],
+                        "io_configuration_flags": {
+                            "frame_change_handling": "Absolute"
+                        }
+                    },
+                    {
+                        "dimension_x": 64,
+                        "dimension_y": 64,
+                        "dimension_z": 64
+                    }
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
 fn sample_segmented_vision_group1_only_device_registrations() -> Value {
     json!({
         "input_units_and_encoder_properties": {
@@ -1686,6 +1712,224 @@ async fn test_auto_create_sets_firing_threshold_for_segmented_vision() {
             area.cortical_id
         );
     }
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_sets_depth_map_threshold_defaults() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    let registrations = sample_depth_map_device_registrations();
+    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving sensory cortical IDs for depth map");
+    let cortical_id = sensory_ids
+        .iter()
+        .next()
+        .cloned()
+        .expect("Expected derived depth map cortical ID");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let depth_area = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected depth map area to be auto-created");
+
+    assert_eq!(
+        depth_area.firing_threshold, 0.01,
+        "Expected depth map auto-created area firing_threshold=0.01"
+    );
+    assert_eq!(
+        depth_area.firing_threshold_increment,
+        [0.0, 0.0, 0.01],
+        "Expected depth map firing threshold increment [0.0, 0.0, 0.01]"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_migrates_existing_depth_map_legacy_thresholds() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_depth_map_device_registrations();
+    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving sensory cortical IDs for depth map");
+    let cortical_id = sensory_ids
+        .iter()
+        .next()
+        .cloned()
+        .expect("Expected derived depth map cortical ID");
+
+    let mut props: HashMap<String, serde_json::Value> = HashMap::new();
+    props.insert("firing_threshold".to_string(), serde_json::json!(150.0));
+    props.insert(
+        "firing_threshold_increment_x".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert(
+        "firing_threshold_increment_y".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert(
+        "firing_threshold_increment_z".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert("dev_count".to_string(), serde_json::json!(1));
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "legacy_depth".to_string(),
+            dimensions: (64, 64, 64),
+            position: (-140, 30, 0),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(props),
+        }])
+        .await
+        .expect("Failed to pre-create legacy depth map area");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let depth_area = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected depth map area to exist after auto-create reconciliation");
+
+    assert_eq!(
+        depth_area.firing_threshold, 0.01,
+        "Expected legacy depth map threshold to migrate to 0.01"
+    );
+    assert_eq!(
+        depth_area.firing_threshold_increment,
+        [0.0, 0.0, 0.01],
+        "Expected legacy depth map threshold increment to migrate to [0.0, 0.0, 0.01]"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_migrates_depth_map_threshold_from_legacy_35() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_depth_map_device_registrations();
+    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving sensory cortical IDs for depth map");
+    let cortical_id = sensory_ids
+        .iter()
+        .next()
+        .cloned()
+        .expect("Expected derived depth map cortical ID");
+
+    let mut props: HashMap<String, serde_json::Value> = HashMap::new();
+    props.insert("firing_threshold".to_string(), serde_json::json!(35.0));
+    props.insert(
+        "firing_threshold_increment_x".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert(
+        "firing_threshold_increment_y".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert(
+        "firing_threshold_increment_z".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert("dev_count".to_string(), serde_json::json!(1));
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "legacy_depth_35".to_string(),
+            dimensions: (64, 64, 64),
+            position: (-140, 30, 0),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(props),
+        }])
+        .await
+        .expect("Failed to pre-create legacy depth map area");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let depth_area = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected depth map area to exist after auto-create reconciliation");
+
+    assert_eq!(
+        depth_area.firing_threshold, 0.01,
+        "Expected legacy 35.0 depth map threshold to migrate to 0.01"
+    );
+    assert_eq!(
+        depth_area.firing_threshold_increment,
+        [0.0, 0.0, 0.01],
+        "Expected legacy depth map threshold increment to migrate to [0.0, 0.0, 0.01]"
+    );
 }
 
 #[cfg(feature = "feagi-agent")]

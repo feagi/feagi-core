@@ -1926,6 +1926,124 @@ impl ConnectomeManager {
         Ok(())
     }
 
+    /// Remove the generated replay twin exclusively owned by one upstream-to-memory mapping.
+    ///
+    /// The ownership backreferences must match the requested pair before the twin is deleted.
+    /// This prevents teardown for one upstream from affecting sibling twins of the same memory area.
+    pub fn teardown_owned_memory_twin_for_mapping(
+        &mut self,
+        memory_area_id: &CorticalID,
+        upstream_area_id: &CorticalID,
+    ) -> BduResult<Option<CorticalID>> {
+        let upstream_id = upstream_area_id.as_base_64();
+        let twin_id = self
+            .cortical_areas
+            .get(memory_area_id)
+            .and_then(|memory_area| memory_area.properties.get("memory_twin_areas"))
+            .and_then(|value| value.as_object())
+            .and_then(|twins| twins.get(&upstream_id))
+            .and_then(|value| value.as_str())
+            .map(CorticalID::try_from_base_64)
+            .transpose()
+            .map_err(|error| {
+                BduError::InvalidArea(format!(
+                    "Invalid owned memory twin ID for {} -> {}: {}",
+                    upstream_area_id.as_base_64(),
+                    memory_area_id.as_base_64(),
+                    error
+                ))
+            })?;
+        let Some(twin_id) = twin_id else {
+            return Ok(None);
+        };
+
+        let twin = self.cortical_areas.get(&twin_id).ok_or_else(|| {
+            BduError::InvalidArea(format!(
+                "Owned memory twin {} for {} -> {} does not exist",
+                twin_id.as_base_64(),
+                upstream_area_id.as_base_64(),
+                memory_area_id.as_base_64()
+            ))
+        })?;
+        let owned_by_source = twin
+            .properties
+            .get("memory_twin_of")
+            .and_then(|value| value.as_str())
+            == Some(upstream_id.as_str());
+        let owned_by_memory = twin
+            .properties
+            .get("memory_twin_for")
+            .and_then(|value| value.as_str())
+            == Some(memory_area_id.as_base_64().as_str());
+        if !owned_by_source || !owned_by_memory {
+            return Err(BduError::InvalidArea(format!(
+                "Cortical area {} is not the generated twin owned by {} -> {}",
+                twin_id.as_base_64(),
+                upstream_area_id.as_base_64(),
+                memory_area_id.as_base_64()
+            )));
+        }
+
+        let memory_idx = *self.cortical_id_to_idx.get(memory_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!(
+                "Memory area idx missing for {}",
+                memory_area_id.as_base_64()
+            ))
+        })?;
+        let upstream_idx = *self
+            .cortical_id_to_idx
+            .get(upstream_area_id)
+            .ok_or_else(|| {
+                BduError::InvalidArea(format!(
+                    "Upstream area idx missing for {}",
+                    upstream_area_id.as_base_64()
+                ))
+            })?;
+
+        self.update_cortical_mapping(memory_area_id, &twin_id, Vec::new())?;
+        let _ = self.regenerate_synapses_for_mapping(memory_area_id, &twin_id)?;
+        if let Some(npu) = &self.npu {
+            npu.lock()
+                .unwrap()
+                .unregister_memory_twin_mapping(memory_idx, upstream_idx);
+        }
+
+        let memory_area = self.cortical_areas.get_mut(memory_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!(
+                "Memory area {} not found",
+                memory_area_id.as_base_64()
+            ))
+        })?;
+        let twins = memory_area
+            .properties
+            .get_mut("memory_twin_areas")
+            .and_then(|value| value.as_object_mut())
+            .ok_or_else(|| {
+                BduError::InvalidArea(format!(
+                    "Memory area {} has invalid memory_twin_areas metadata",
+                    memory_area_id.as_base_64()
+                ))
+            })?;
+        twins.remove(&upstream_id);
+        if twins.is_empty() {
+            memory_area.properties.remove("memory_twin_areas");
+        }
+
+        for region_id in self
+            .get_brain_region_ids()
+            .into_iter()
+            .cloned()
+            .collect::<Vec<_>>()
+        {
+            if let Some(region) = self.get_brain_region_mut(&region_id) {
+                region.remove_area(&twin_id);
+            }
+        }
+        self.remove_cortical_area(&twin_id)?;
+        self.refresh_cortical_mappings_hash();
+        Ok(Some(twin_id))
+    }
+
     /// Remove an upstream cortical area from a target area's upstream list
     ///
     /// This should be called when all synapses from src_cortical_idx to target_cortical_id are deleted.
@@ -2143,9 +2261,10 @@ impl ConnectomeManager {
 
     /// Enforce the directed memory retrieval contract for outbound memory mappings.
     ///
-    /// A memory area can connect to a non-memory area only through associative plasticity.
-    /// That rule starts without physical synapses; the NPU creates directed synapses only when
-    /// source and destination neurons co-fire within the configured plasticity window.
+    /// A memory area can connect to a non-memory area only through associative plasticity,
+    /// except for its server-managed `memory_replay` edge to one of its replay twins.
+    /// Associative rules start without physical synapses; the NPU creates directed synapses
+    /// only when source and destination neurons co-fire within the configured plasticity window.
     pub fn validate_memory_outbound_mapping_contract(
         &self,
         src_area_id: &CorticalID,
@@ -2177,9 +2296,16 @@ impl ConnectomeManager {
                         .and_then(|rule_array| rule_array.first())
                         .and_then(|value| value.as_str())
                 });
-            if morphology_id != Some("associative_memory") {
+            let is_replay_edge_to_own_twin = morphology_id == Some("memory_replay")
+                && dst_area
+                    .properties
+                    .get("memory_twin_for")
+                    .and_then(|value| value.as_str())
+                    == Some(src_area_id.as_base_64().as_str());
+            if morphology_id != Some("associative_memory") && !is_replay_edge_to_own_twin {
                 return Err(BduError::InvalidMorphology(format!(
-                    "Memory-to-non-memory mapping {} -> {} only supports associative_memory",
+                    "Memory-to-non-memory mapping {} -> {} only supports associative_memory \
+                     (or memory_replay to its own twin)",
                     src_area_id, dst_area_id
                 )));
             }
@@ -2553,6 +2679,14 @@ impl ConnectomeManager {
         } else {
             // Mapping deleted - remove from upstream tracking
             self.remove_upstream_area(dst_area_id, src_idx_for_upstream);
+
+            let destination_is_memory = self
+                .cortical_areas
+                .get(dst_area_id)
+                .is_some_and(|area| matches!(area.cortical_type, CorticalAreaType::Memory(_)));
+            if destination_is_memory {
+                self.teardown_owned_memory_twin_for_mapping(dst_area_id, src_area_id)?;
+            }
 
             // Ensure any STDP mapping parameters for this pair are removed when the mapping is gone.
             let mut npu = npu_arc.lock().unwrap();

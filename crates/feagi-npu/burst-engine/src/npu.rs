@@ -1994,6 +1994,21 @@ impl<
         );
     }
 
+    /// Remove the replay target owned by one memory/upstream cortical-area pair.
+    ///
+    /// Returns `true` when a runtime replay route was present.
+    pub fn unregister_memory_twin_mapping(
+        &mut self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+    ) -> bool {
+        self.memory_replay_twin_map
+            .write()
+            .unwrap()
+            .remove(&(memory_area_idx, upstream_area_idx))
+            .is_some()
+    }
+
     fn schedule_memory_replay_from_fire_queue(
         &self,
         fire_queue: &FireQueue,
@@ -5077,11 +5092,9 @@ impl<
         //   2. if co-fire across the plasticity window:                e_ij += delta_plus
         //      else if uncorrelated firing across the window:          e_ij -= delta_minus
         //   3. w_ij += R(t) * e_ij        (clamp at 0 on negative deltas)
-        {
+        let reward_signals: AHashMap<CorticalMappingKey, f32> = {
             let neuron_storage = self.neuron_storage.read().unwrap();
-            let mut synapse_storage = self.synapse_storage.write().unwrap();
-
-            // Pre-compute R(t) per mapping. Stdp mappings always get R=1. R-STDP mappings sample
+            // Pre-compute R(t) per mapping. STDP mappings always get R=1. R-STDP mappings sample
             // current-burst firing density of their reward / punishment source areas. Mappings
             // with `Off` plasticity_mode are filtered out at registration; defensively skip here.
             let mut reward_signals: AHashMap<CorticalMappingKey, f32> =
@@ -5118,7 +5131,12 @@ impl<
                 };
                 reward_signals.insert(*key, r);
             }
+            reward_signals
+        };
 
+        {
+            let neuron_storage = self.neuron_storage.read().unwrap();
+            let mut synapse_storage = self.synapse_storage.write().unwrap();
             for (key, params) in &mappings {
                 if matches!(params.plasticity_mode, PlasticityMode::Off) {
                     continue;
@@ -5255,6 +5273,13 @@ impl<
             let Some(activity) = activity_sets.get(key) else {
                 continue;
             };
+            let reward = *reward_signals.get(key).unwrap_or(&0.0);
+            // R-STDP requires a positive net reward to commit the initial LTP that creates
+            // an associative edge. Neutral activity records no connection; punishment cannot
+            // depress a synapse that does not yet exist.
+            if matches!(params.plasticity_mode, PlasticityMode::RStdp) && reward <= 0.0 {
+                continue;
+            }
 
             let delta_plus = params.delta_plus_u8();
             let (source_candidates, destination_candidates) = if params.associative_memory_mapping {

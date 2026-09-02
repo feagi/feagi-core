@@ -158,8 +158,8 @@ fn synapse_weight(npu: &RustNPU<StdRuntime, f32, CPUBackend>, src: NeuronId) -> 
     outgoing[0].1
 }
 
-/// A directional associative R-STDP mapping begins without synapses, creates its forward
-/// memory-to-non-memory edge on co-firing, then changes the edge only on later co-firing.
+/// A directional associative R-STDP mapping begins without synapses. Co-firing without reward
+/// must not create an edge; positive reward gates its creation and later strengthening.
 #[test]
 fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse() {
     const MEMORY_NEURON_ID_START: u32 = 50_000_000;
@@ -185,13 +185,11 @@ fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse()
         2.0,
         feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE,
     );
-    npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0), (reward, 128.0)]);
+    npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0)]);
     npu.process_burst().unwrap();
-
-    let initial_weight = synapse_weight(&npu, source_memory_neuron);
     assert!(
-        initial_weight > 0.0,
-        "co-firing must create a forward associative synapse"
+        npu.get_outgoing_synapses(source_memory_neuron.0).is_empty(),
+        "co-firing without reward must not create an associative R-STDP synapse"
     );
 
     npu.inject_memory_neuron_to_fcl_with_kind(
@@ -203,7 +201,22 @@ fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse()
     npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0), (reward, 128.0)]);
     npu.process_burst().unwrap();
 
-    let updated_weight = synapse_weight(&npu, source_memory_neuron);
+    let initial_weight = synapse_weight(&npu, second_source_memory_neuron);
+    assert!(
+        initial_weight > 0.0,
+        "co-firing with reward must create a forward associative synapse"
+    );
+
+    npu.inject_memory_neuron_to_fcl_with_kind(
+        source_memory_neuron.0,
+        10,
+        2.0,
+        feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE,
+    );
+    npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0), (reward, 128.0)]);
+    npu.process_burst().unwrap();
+
+    let updated_weight = synapse_weight(&npu, second_source_memory_neuron);
     assert!(
         updated_weight > initial_weight,
         "co-firing with reward must strengthen the associative R-STDP synapse; initial={}, updated={}",

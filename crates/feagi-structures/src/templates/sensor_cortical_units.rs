@@ -170,6 +170,23 @@ macro_rules! sensor_cortical_units {
 
 
 
+                #[doc = "Depth map input where X/Y encode sensor canvas topology and Z encodes quantized depth bins."]
+                DepthMap => {
+                    friendly_name: "Depth Map",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"dpt",
+                    number_cortical_areas: 1,
+                    default_firing_threshold: 0.01,
+                    default_firing_threshold_increment: [0.0, 0.0, 0.01],
+                    default_mp_charge_accumulation: false,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-140, 30, 0], channel_dimensions_default: [64, 64, 64], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
+                    }
+                },
+
                 #[doc = "Segmented vision processing, with a higher resolution center and lower resolution peripherals"]
                 SegmentedVision => {
                     friendly_name: "Segmented Vision",

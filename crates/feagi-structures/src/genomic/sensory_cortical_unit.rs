@@ -38,6 +38,15 @@ macro_rules! default_mp_charge_accumulation_impl {
     };
 }
 
+macro_rules! default_firing_threshold_increment_impl {
+    () => {
+        None
+    };
+    ([$x:expr, $y:expr, $z:expr]) => {
+        Some([$x, $y, $z])
+    };
+}
+
 macro_rules! define_sensory_cortical_units_enum {
     (
         SensoryCorticalUnit {
@@ -49,6 +58,7 @@ macro_rules! define_sensory_cortical_units_enum {
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
                     $(default_firing_threshold: $default_firing_threshold:expr,)?
+                    $(default_firing_threshold_increment: [$default_firing_threshold_increment_x:expr, $default_firing_threshold_increment_y:expr, $default_firing_threshold_increment_z:expr],)?
                     $(default_mp_charge_accumulation: $default_mp_charge_accumulation:expr,)?
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
@@ -162,6 +172,20 @@ macro_rules! define_sensory_cortical_units_enum {
                     $(
                         SensoryCorticalUnit::$variant_name => {
                             default_firing_threshold_impl!($($default_firing_threshold)?)
+                        }
+                    )*
+                }
+            }
+
+            /// Returns template-defined default per-axis firing threshold increment [x, y, z].
+            /// `None` means no template override is defined.
+            pub const fn get_default_firing_threshold_increment(&self) -> Option<[f64; 3]> {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => {
+                            default_firing_threshold_increment_impl!(
+                                $([$default_firing_threshold_increment_x, $default_firing_threshold_increment_y, $default_firing_threshold_increment_z])?
+                            )
                         }
                     )*
                 }
@@ -322,6 +346,9 @@ impl SensoryCorticalUnit {
             }
             SensoryCorticalUnit::Vision => {
                 Self::get_cortical_ids_array_for_vision_with_parameters(fh, group_index)[0]
+            }
+            SensoryCorticalUnit::DepthMap => {
+                Self::get_cortical_ids_array_for_depth_map_with_parameters(fh, group_index)[0]
             }
             SensoryCorticalUnit::SegmentedVision => {
                 Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)

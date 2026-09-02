@@ -123,6 +123,7 @@ pub enum SensoryUnit {
     TextEnglishInput,
     CountInput,
     Vision,
+    DepthMap,
     SegmentedVision,
     /// Composite linear-vector IMU: 3 sub-cortical-areas (accelerometer,
     /// gyroscope, magnetometer), each a 3-axis signed percentage.

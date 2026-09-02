@@ -810,6 +810,37 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let manager = self.connectome.read();
             manager.get_cortical_idx(&cortical_id_typed)
         };
+        let owned_memory_twin_ids = {
+            let manager = self.connectome.read();
+            let mut twin_ids = Vec::new();
+            for memory_id in manager.get_cortical_area_ids() {
+                let Some(memory_area) = manager.get_cortical_area(memory_id) else {
+                    continue;
+                };
+                let Some(twins) = memory_area
+                    .properties
+                    .get("memory_twin_areas")
+                    .and_then(|value| value.as_object())
+                else {
+                    continue;
+                };
+                if memory_id == &cortical_id_typed {
+                    twin_ids.extend(
+                        twins
+                            .values()
+                            .filter_map(|value| value.as_str())
+                            .filter_map(|value| CorticalID::try_from_base_64(value).ok()),
+                    );
+                } else if let Some(twin_id) = twins
+                    .get(&deleted_id_base64)
+                    .and_then(|value| value.as_str())
+                    .and_then(|value| CorticalID::try_from_base_64(value).ok())
+                {
+                    twin_ids.push(twin_id);
+                }
+            }
+            twin_ids
+        };
         let mut removed_mapping_count = 0usize;
         let mut removed_upstream_count = 0usize;
 
@@ -951,8 +982,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // CRITICAL: Persist deletion into RuntimeGenome (source of truth for save/export).
         if let Some(genome) = self.current_genome.write().as_mut() {
             let removed = genome.cortical_areas.remove(&cortical_id_typed).is_some();
+            for twin_id in &owned_memory_twin_ids {
+                genome.cortical_areas.remove(twin_id);
+            }
             for region in genome.brain_regions.values_mut() {
                 region.remove_area(&cortical_id_typed);
+                for twin_id in &owned_memory_twin_ids {
+                    region.remove_area(twin_id);
+                }
             }
             for area in genome.cortical_areas.values_mut() {
                 update_cortical_mapping_dst_in_properties(
@@ -960,6 +997,23 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     &deleted_id_base64,
                     &[],
                 )?;
+                for twin_id in &owned_memory_twin_ids {
+                    update_cortical_mapping_dst_in_properties(
+                        &mut area.properties,
+                        &twin_id.as_base_64(),
+                        &[],
+                    )?;
+                }
+                if let Some(twins) = area
+                    .properties
+                    .get_mut("memory_twin_areas")
+                    .and_then(|value| value.as_object_mut())
+                {
+                    twins.remove(&deleted_id_base64);
+                    if twins.is_empty() {
+                        area.properties.remove("memory_twin_areas");
+                    }
+                }
                 if let Some(deleted_idx) = deleted_cortical_idx {
                     if let Some(upstream) = area
                         .properties
@@ -2326,6 +2380,25 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 get_cortical_mapping_dst_from_properties(&area.properties, &dst_area_id)
             })
         };
+        let removed_owned_twin_id = if mapping_data.is_empty() {
+            self.connectome
+                .read()
+                .get_cortical_area(&dst_id)
+                .and_then(|memory_area| memory_area.properties.get("memory_twin_areas"))
+                .and_then(|value| value.as_object())
+                .and_then(|twins| twins.get(&src_area_id))
+                .and_then(|value| value.as_str())
+                .map(CorticalID::try_from_base_64)
+                .transpose()
+                .map_err(|error| {
+                    ServiceError::Backend(format!(
+                        "Invalid owned memory twin ID for {} -> {}: {}",
+                        src_area_id, dst_area_id, error
+                    ))
+                })?
+        } else {
+            None
+        };
 
         let mut existing_plasticity_by_morphology: HashMap<
             String,
@@ -2488,6 +2561,29 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         // Persist updated region IO into RuntimeGenome so genome save/export stays consistent.
         if let Some(genome) = self.current_genome.write().as_mut() {
+            if let Some(twin_id) = removed_owned_twin_id {
+                genome.cortical_areas.remove(&twin_id);
+                for region in genome.brain_regions.values_mut() {
+                    region.remove_area(&twin_id);
+                }
+                if let Some(memory_area) = genome.cortical_areas.get_mut(&dst_id) {
+                    update_cortical_mapping_dst_in_properties(
+                        &mut memory_area.properties,
+                        &twin_id.as_base_64(),
+                        &[],
+                    )?;
+                    if let Some(twins) = memory_area
+                        .properties
+                        .get_mut("memory_twin_areas")
+                        .and_then(|value| value.as_object_mut())
+                    {
+                        twins.remove(&src_area_id);
+                        if twins.is_empty() {
+                            memory_area.properties.remove("memory_twin_areas");
+                        }
+                    }
+                }
+            }
             for (region_id, (inputs, outputs)) in region_io.1 {
                 if let Some(region) = genome.brain_regions.get_mut(&region_id) {
                     if inputs.is_empty() {
@@ -2656,10 +2752,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
 mod tests {
     use super::{
         collect_morphology_usage_pairs, parse_cortical_id_flexible, replace_morphology_id_in_value,
-        update_cortical_mapping_dst_in_properties,
+        update_cortical_mapping_dst_in_properties, ConnectomeServiceImpl,
     };
     use crate::types::ServiceResult;
+    use feagi_brain_development::ConnectomeManager;
+    use feagi_structures::genomic::cortical_area::CorticalID;
+    use parking_lot::RwLock;
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     #[test]
     fn empty_mapping_deletes_destination_key_and_prunes_container() -> ServiceResult<()> {
@@ -3701,6 +3801,341 @@ mod tests {
                 "DELETE mapping must drop all synapses for the src->dst pair"
             );
             assert!(npu.get_outgoing_synapses(s0 as u32).is_empty());
+        }
+
+        Ok(())
+    }
+
+    fn owned_memory_twin_fixture() -> (
+        ConnectomeServiceImpl,
+        Arc<RwLock<ConnectomeManager>>,
+        Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
+        Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        CorticalID,
+        CorticalID,
+        CorticalID,
+    ) {
+        use super::ConnectomeServiceImpl;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType,
+            IOCorticalAreaConfigurationFlag, MemoryCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        let source_a_id = CorticalID::try_from_bytes(b"cowna001").expect("source A ID");
+        let source_b_id = CorticalID::try_from_bytes(b"cownb001").expect("source B ID");
+        let memory_id = CorticalID::try_from_bytes(b"mmem0001").expect("memory ID");
+        let dimensions = CorticalAreaDimensions::new(1, 1, 1).expect("valid dimensions");
+
+        let source_a = CorticalArea::new(
+            source_a_id,
+            0,
+            "source_a".to_string(),
+            dimensions,
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .expect("source A area");
+        let source_b = CorticalArea::new(
+            source_b_id,
+            0,
+            "source_b".to_string(),
+            dimensions,
+            (1, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .expect("source B area");
+        let mut memory = CorticalArea::new(
+            memory_id,
+            0,
+            "memory".to_string(),
+            dimensions,
+            (2, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .expect("memory area");
+        memory
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        memory
+            .properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: String::new(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([
+                (source_a_id, source_a.clone()),
+                (source_b_id, source_b.clone()),
+                (memory_id, memory.clone()),
+            ]),
+            brain_regions: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let npu =
+            RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).expect("test NPU");
+        let dynamic_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            dynamic_npu.clone(),
+        )));
+        {
+            let mut manager = connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.add_cortical_area(source_a).expect("add source A");
+            manager.add_cortical_area(source_b).expect("add source B");
+            manager.add_cortical_area(memory).expect("add memory");
+        }
+        let current_genome = Arc::new(RwLock::new(Some(genome)));
+        let service = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+        (
+            service,
+            connectome,
+            current_genome,
+            dynamic_npu,
+            source_a_id,
+            source_b_id,
+            memory_id,
+        )
+    }
+
+    #[tokio::test]
+    async fn delete_episodic_mapping_removes_only_its_owned_twin_and_persists() -> ServiceResult<()>
+    {
+        use crate::traits::ConnectomeService;
+
+        let (service, connectome, current_genome, dynamic_npu, source_a_id, source_b_id, memory_id) =
+            owned_memory_twin_fixture();
+        let episodic_mapping = vec![serde_json::json!({
+            "morphology_id": "episodic_memory",
+            "morphology_scalar": 1,
+            "postSynapticCurrent_multiplier": 1.0,
+        })];
+        service
+            .update_cortical_mapping(
+                source_a_id.as_base_64(),
+                memory_id.as_base_64(),
+                episodic_mapping.clone(),
+            )
+            .await?;
+        service
+            .update_cortical_mapping(
+                source_b_id.as_base_64(),
+                memory_id.as_base_64(),
+                episodic_mapping,
+            )
+            .await?;
+
+        let (twin_a_id, twin_b_id, memory_idx, source_a_idx, source_b_idx) = {
+            let manager = connectome.read();
+            let twins = manager
+                .get_cortical_area(&memory_id)
+                .and_then(|area| area.properties.get("memory_twin_areas"))
+                .and_then(|value| value.as_object())
+                .expect("memory twin index");
+            (
+                CorticalID::try_from_base_64(
+                    twins
+                        .get(&source_a_id.as_base_64())
+                        .and_then(|value| value.as_str())
+                        .expect("source A twin"),
+                )
+                .expect("valid source A twin"),
+                CorticalID::try_from_base_64(
+                    twins
+                        .get(&source_b_id.as_base_64())
+                        .and_then(|value| value.as_str())
+                        .expect("source B twin"),
+                )
+                .expect("valid source B twin"),
+                manager.get_cortical_idx(&memory_id).expect("memory index"),
+                manager
+                    .get_cortical_idx(&source_a_id)
+                    .expect("source A index"),
+                manager
+                    .get_cortical_idx(&source_b_id)
+                    .expect("source B index"),
+            )
+        };
+
+        service
+            .update_cortical_mapping(source_a_id.as_base_64(), memory_id.as_base_64(), vec![])
+            .await?;
+
+        {
+            let manager = connectome.read();
+            assert!(!manager.has_cortical_area(&twin_a_id));
+            assert!(manager.has_cortical_area(&twin_b_id));
+            let memory = manager
+                .get_cortical_area(&memory_id)
+                .expect("memory remains");
+            let twins = memory
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .expect("sibling twin index remains");
+            assert!(!twins.contains_key(&source_a_id.as_base_64()));
+            assert_eq!(
+                twins
+                    .get(&source_b_id.as_base_64())
+                    .and_then(|value| value.as_str()),
+                Some(twin_b_id.as_base_64().as_str())
+            );
+            let mappings = memory
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|value| value.as_object())
+                .expect("sibling replay mapping remains");
+            assert!(!mappings.contains_key(&twin_a_id.as_base_64()));
+            assert!(mappings.contains_key(&twin_b_id.as_base_64()));
+        }
+        {
+            let mut npu = dynamic_npu.lock().expect("NPU lock");
+            assert!(
+                !npu.unregister_memory_twin_mapping(memory_idx, source_a_idx),
+                "source A replay route must be unregistered during teardown"
+            );
+            assert!(
+                npu.unregister_memory_twin_mapping(memory_idx, source_b_idx),
+                "source B replay route must remain registered"
+            );
+        }
+        {
+            let genome = current_genome.read();
+            let genome = genome.as_ref().expect("runtime genome");
+            assert!(!genome.cortical_areas.contains_key(&twin_a_id));
+            assert!(genome.cortical_areas.contains_key(&twin_b_id));
+            let memory = genome
+                .cortical_areas
+                .get(&memory_id)
+                .expect("memory persists");
+            let twins = memory
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .expect("persisted sibling twin index");
+            assert!(!twins.contains_key(&source_a_id.as_base_64()));
+            assert!(twins.contains_key(&source_b_id.as_base_64()));
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delete_upstream_area_removes_only_its_owned_twin_and_persists() -> ServiceResult<()> {
+        use crate::traits::ConnectomeService;
+
+        let (
+            service,
+            connectome,
+            current_genome,
+            _dynamic_npu,
+            source_a_id,
+            source_b_id,
+            memory_id,
+        ) = owned_memory_twin_fixture();
+        let episodic_mapping = vec![serde_json::json!({
+            "morphology_id": "episodic_memory",
+            "morphology_scalar": 1,
+            "postSynapticCurrent_multiplier": 1.0,
+        })];
+        service
+            .update_cortical_mapping(
+                source_a_id.as_base_64(),
+                memory_id.as_base_64(),
+                episodic_mapping.clone(),
+            )
+            .await?;
+        service
+            .update_cortical_mapping(
+                source_b_id.as_base_64(),
+                memory_id.as_base_64(),
+                episodic_mapping,
+            )
+            .await?;
+
+        let (twin_a_id, twin_b_id) = {
+            let manager = connectome.read();
+            let twins = manager
+                .get_cortical_area(&memory_id)
+                .and_then(|area| area.properties.get("memory_twin_areas"))
+                .and_then(|value| value.as_object())
+                .expect("memory twin index");
+            (
+                CorticalID::try_from_base_64(
+                    twins
+                        .get(&source_a_id.as_base_64())
+                        .and_then(|value| value.as_str())
+                        .expect("source A twin"),
+                )
+                .expect("valid source A twin"),
+                CorticalID::try_from_base_64(
+                    twins
+                        .get(&source_b_id.as_base_64())
+                        .and_then(|value| value.as_str())
+                        .expect("source B twin"),
+                )
+                .expect("valid source B twin"),
+            )
+        };
+
+        service
+            .delete_cortical_area(&source_a_id.as_base_64())
+            .await?;
+
+        {
+            let manager = connectome.read();
+            assert!(!manager.has_cortical_area(&source_a_id));
+            assert!(!manager.has_cortical_area(&twin_a_id));
+            assert!(manager.has_cortical_area(&source_b_id));
+            assert!(manager.has_cortical_area(&twin_b_id));
+            let memory = manager
+                .get_cortical_area(&memory_id)
+                .expect("memory remains");
+            let twins = memory
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .expect("sibling twin index remains");
+            assert!(!twins.contains_key(&source_a_id.as_base_64()));
+            assert!(twins.contains_key(&source_b_id.as_base_64()));
+        }
+        {
+            let genome = current_genome.read();
+            let genome = genome.as_ref().expect("runtime genome");
+            assert!(!genome.cortical_areas.contains_key(&source_a_id));
+            assert!(!genome.cortical_areas.contains_key(&twin_a_id));
+            assert!(genome.cortical_areas.contains_key(&source_b_id));
+            assert!(genome.cortical_areas.contains_key(&twin_b_id));
+            let memory = genome
+                .cortical_areas
+                .get(&memory_id)
+                .expect("memory persists");
+            let twins = memory
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .expect("persisted sibling twin index");
+            assert!(!twins.contains_key(&source_a_id.as_base_64()));
+            assert!(twins.contains_key(&source_b_id.as_base_64()));
         }
 
         Ok(())

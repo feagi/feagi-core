@@ -303,7 +303,9 @@ fn resolve_registration_name(unit_def: &Value, default_name: &str) -> String {
 }
 
 fn should_auto_rename(current_name: &str, cortical_id: &str, legacy_default_name: &str) -> bool {
-    current_name == cortical_id || current_name == legacy_default_name
+    current_name == cortical_id
+        || current_name == legacy_default_name
+        || current_name.starts_with("vsg_rgbd_")
 }
 
 fn build_io_config_map_from_unit_def(
@@ -425,6 +427,14 @@ fn extract_segmented_vision_dimensions(
     Some((width, height, channels))
 }
 
+fn extract_misc_dimensions(encoder_properties: &Value) -> Option<(usize, usize, usize)> {
+    let payload = encoder_variant_payload(encoder_properties, "MiscData")?;
+    let width = as_nonzero_usize(payload.get("width"))?;
+    let height = as_nonzero_usize(payload.get("height"))?;
+    let depth = as_nonzero_usize(payload.get("depth"))?;
+    Some((width, height, depth))
+}
+
 fn resolve_sensory_dimensions_from_encoder_properties(
     encoder_properties: Option<&Value>,
     sub_unit_index: usize,
@@ -435,6 +445,7 @@ fn resolve_sensory_dimensions_from_encoder_properties(
     };
     extract_cartesian_plane_dimensions(encoder_properties)
         .or_else(|| extract_segmented_vision_dimensions(encoder_properties, sub_unit_index))
+        .or_else(|| extract_misc_dimensions(encoder_properties))
         .unwrap_or(fallback)
 }
 
@@ -1175,6 +1186,70 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             }
                         }
 
+                        // DepthMap migration: if an existing area still carries legacy threshold
+                        // defaults (or no per-axis increment), reconcile it to the template
+                        // defaults so reconnects immediately reflect expected activation.
+                        if sensory_unit == SensoryCorticalUnit::DepthMap {
+                            let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
+                            if let Some(default_firing_threshold) =
+                                sensory_unit.get_default_firing_threshold()
+                            {
+                                // Legacy DepthMap areas may carry historical defaults from
+                                // previous templates (e.g., 150.0) or generic sensory defaults
+                                // inherited from older runtime state (e.g., 35.0). Reconcile both.
+                                let legacy_threshold = current.firing_threshold;
+                                const LEGACY_THRESHOLD_TOLERANCE: f64 = 1e-3;
+                                let should_migrate_threshold =
+                                    (legacy_threshold - 150.0).abs()
+                                        <= LEGACY_THRESHOLD_TOLERANCE
+                                        || (legacy_threshold - 35.0).abs()
+                                            <= LEGACY_THRESHOLD_TOLERANCE;
+                                if should_migrate_threshold {
+                                    changes.insert(
+                                        "firing_threshold".to_string(),
+                                        serde_json::json!(default_firing_threshold),
+                                    );
+                                }
+                            }
+                            if let Some(default_firing_threshold_increment) =
+                                sensory_unit.get_default_firing_threshold_increment()
+                            {
+                                let current_increment = current.firing_threshold_increment;
+                                const LEGACY_INCREMENT_TOLERANCE: f64 = 1e-6;
+                                let is_legacy_zero_increment =
+                                    current_increment[0].abs() <= LEGACY_INCREMENT_TOLERANCE
+                                        && current_increment[1].abs()
+                                            <= LEGACY_INCREMENT_TOLERANCE
+                                        && current_increment[2].abs()
+                                            <= LEGACY_INCREMENT_TOLERANCE;
+                                if is_legacy_zero_increment {
+                                    changes.insert(
+                                        "firing_threshold_increment_x".to_string(),
+                                        serde_json::json!(default_firing_threshold_increment[0]),
+                                    );
+                                    changes.insert(
+                                        "firing_threshold_increment_y".to_string(),
+                                        serde_json::json!(default_firing_threshold_increment[1]),
+                                    );
+                                    changes.insert(
+                                        "firing_threshold_increment_z".to_string(),
+                                        serde_json::json!(default_firing_threshold_increment[2]),
+                                    );
+                                }
+                            }
+                            if !changes.is_empty() {
+                                if let Err(e) = genome_service
+                                    .update_cortical_area(&cortical_id_b64, changes)
+                                    .await
+                                {
+                                    warn!(
+                                        "⚠️ [API] Failed to migrate existing depth-map cortical area '{}' threshold defaults: {}",
+                                        cortical_id_b64, e
+                                    );
+                                }
+                            }
+                        }
+
                         // If the area already exists but still has a placeholder name (often equal to the cortical_id),
                         // update it to a deterministic friendly name so UIs (e.g., Brain Visualizer) show readable labels.
                         // IMPORTANT: We only auto-rename if the current name is clearly a placeholder.
@@ -1241,6 +1316,22 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         properties.insert(
                             "firing_threshold".to_string(),
                             serde_json::json!(default_firing_threshold),
+                        );
+                    }
+                    if let Some(default_firing_threshold_increment) =
+                        sensory_unit.get_default_firing_threshold_increment()
+                    {
+                        properties.insert(
+                            "firing_threshold_increment_x".to_string(),
+                            serde_json::json!(default_firing_threshold_increment[0]),
+                        );
+                        properties.insert(
+                            "firing_threshold_increment_y".to_string(),
+                            serde_json::json!(default_firing_threshold_increment[1]),
+                        );
+                        properties.insert(
+                            "firing_threshold_increment_z".to_string(),
+                            serde_json::json!(default_firing_threshold_increment[2]),
                         );
                     }
                     if let Some(default_mp_charge_accumulation) =
@@ -1591,6 +1682,46 @@ mod sensory_registration_frame_mode_tests {
             "Expected derived sensory IDs to include incremental Servo cortical ID {}",
             expected_incremental
         );
+    }
+}
+
+#[cfg(test)]
+mod sensory_dimension_extraction_tests {
+    use super::resolve_sensory_dimensions_from_encoder_properties;
+    use serde_json::json;
+
+    #[test]
+    fn resolve_sensory_dimensions_reads_misc_data_encoder_dimensions() {
+        let encoder = json!({
+            "MiscData": {
+                "width": 160,
+                "height": 120,
+                "depth": 48
+            }
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (64, 64, 64));
+        assert_eq!(resolved, (160, 120, 48));
+    }
+}
+
+#[cfg(test)]
+mod registration_name_helpers_tests {
+    use super::should_auto_rename;
+
+    #[test]
+    fn should_auto_rename_placeholder_names() {
+        assert!(should_auto_rename("abc", "abc", "legacy"));
+        assert!(should_auto_rename("legacy", "abc", "legacy"));
+    }
+
+    #[test]
+    fn should_auto_rename_legacy_generated_rgbd_names() {
+        assert!(should_auto_rename(
+            "vsg_rgbd_camera_D02B5B0F9957BD6DD450FD3CC7FF6E29CBB78003_g0_depth",
+            "aWRwdAoAAAA=",
+            "Depth Map"
+        ));
     }
 }
 

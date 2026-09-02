@@ -365,6 +365,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
         "tac", // Tactile
         "olf", // Olfactory
         "vis", // Vision (generic)
+        "dpt", // DepthMap
     ];
 
     // Known valid OPU prefixes from feagi-data-processing templates
