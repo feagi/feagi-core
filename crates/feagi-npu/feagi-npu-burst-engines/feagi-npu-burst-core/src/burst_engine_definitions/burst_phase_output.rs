@@ -15,7 +15,7 @@ pub struct BurstPhaseOutput<FIQ: FeagiIndexQuantization> {
 }
 
 impl<FIQ: FeagiIndexQuantization> BurstPhaseOutput<FIQ> {
-    pub fn new() -> Self {
+    pub fn new_empty() -> Self {
         Self {
             output: heapless::Vec::new()
         }

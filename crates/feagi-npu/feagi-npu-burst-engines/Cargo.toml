@@ -23,7 +23,7 @@ std = [
 ]
 
 alloc = [
-
+    "feagi-npu-burst-esp32/alloc"
 ]
 
 # ========================= Standard Toggleable Features ========================= #
@@ -40,9 +40,10 @@ engine-composable-rayon = [
     "feagi-npu-burst-rayon"
 ]
 
-# A non composable engine for the ESP32 family of microcontrollers
-engine-noncomposable-esp32 = [
-    "feagi-npu-burst-esp32"
+# A noncomposable engine for the original ESP32 in the ESP32 family of microcontrollers
+engine-noncomposable-esp32-esp32 = [
+    "feagi-npu-burst-esp32",
+    "feagi-npu-burst-esp32/board-esp-32"
 ]
 
 [dependencies]
@@ -55,3 +56,4 @@ feagi-models = {path = "../../feagi-models" }
 feagi-logging-and-errors = {path = "../../feagi-logging-and-errors" }
 
 paste = {workspace = true}
+heapless = {workspace = true}

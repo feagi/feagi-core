@@ -1,14 +1,7 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! This library holds burst engine definitions for the family of ESP32 devices. Use crate features
+//! to select which one you want to use. Please select only one at a time!
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// The original ESP32 chip (Why Expressif, did you give this product the same name as the family???)
+#[cfg(feature = "board-esp-32")]
+pub mod esp_32;

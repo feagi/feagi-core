@@ -14,7 +14,7 @@ description = "Contains the logic for the neural processing unit and their inter
 [features]
 
 default = [
-    "std", "composable", "engine-composable-rayon"
+    "std", "composable", # "engine-composable-rayon"
 ]
 
 # ========================= Standard Toggleable Features ========================= #
@@ -51,9 +51,9 @@ engine-composable-rayon = [
     "feagi-npu-burst-engines/engine-composable-rayon"
 ]
 
-# A non-composable engine for the ESP32 family of microcontrollers
-engine-noncomposable-esp32 = [
-    "feagi-npu-burst-engines/engine-noncomposable-esp32"
+# A non-composable engine for the original ESP32 from the ESP32 family of microcontrollers
+engine-noncomposable-esp32-esp32 = [
+    "feagi-npu-burst-engines/engine-noncomposable-esp32-esp32"
 ]
 
 [dependencies]

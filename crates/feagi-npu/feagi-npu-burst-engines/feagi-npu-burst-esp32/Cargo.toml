@@ -26,9 +26,21 @@ alloc = [
 
 ]
 
+# ========================= Platform ========================= #
+# Only have one enabled at a time!
+
+# The original ESP32
+board-esp-32 = []
+
+# TODO seperate features for PSRAM amount?
+
+
 [dependencies]
+feagi-npu-burst-core = {path = "../feagi-npu-burst-core"}
+
 feagi-data = {path = "../../../feagi-data" }
 feagi-models = {path = "../../../feagi-models" }
 feagi-logging-and-errors = {path = "../../../feagi-logging-and-errors" }
 feagi-genomic-context = {path = "../../../feagi-genomic-context" }
-feagi-npu-burst-core = {path = "../feagi-npu-burst-core"}
+
+heapless = {workspace = true}

@@ -1540,6 +1540,7 @@ dependencies = [
  "feagi-npu-burst-core",
  "feagi-npu-burst-esp32",
  "feagi-npu-burst-rayon",
+ "heapless 0.9.3",
  "paste",
 ]
 
@@ -1552,6 +1553,7 @@ dependencies = [
  "feagi-logging-and-errors",
  "feagi-models",
  "feagi-npu-burst-core",
+ "heapless 0.9.3",
 ]
 
 [[package]]

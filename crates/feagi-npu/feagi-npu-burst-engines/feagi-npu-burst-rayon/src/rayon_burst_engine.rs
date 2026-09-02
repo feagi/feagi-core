@@ -6,7 +6,6 @@ use feagi_models::wrapped_indexes::BurstIndex;
 use feagi_npu_burst_core::burst_engine_definitions::burst_engine::BurstEngine;
 use feagi_npu_burst_core::burst_engine_definitions::burst_phase_output::BurstPhaseOutput;
 use feagi_npu_burst_core::burst_engine_definitions::burst_phases::RunBurstPhase;
-use feagi_npu_burst_core::burst_engine_definitions::composable::composable_burst_engine::ComposableBurstEngine;
 use feagi_npu_burst_core::errors::BurstEngineError;
 
 

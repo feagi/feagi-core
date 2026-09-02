@@ -2,6 +2,13 @@ pub use feagi_logging_and_errors_derive::{FeagiError, FeagiErrorKey};
 
 // TODO print error as a feagi log?
 
+/// Impossible error, this is an error that should not fundamentally be reachable, so something is
+/// wrong with the code if it is
+#[derive(FeagiErrorKey)]
+pub struct FeagiFailImpossible {
+    context: &'static str,
+}
+
 #[macro_export]
 macro_rules! generate_feagi_error {
     (

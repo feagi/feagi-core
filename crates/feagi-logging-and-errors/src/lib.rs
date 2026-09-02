@@ -8,5 +8,5 @@ extern crate self as feagi_logging_and_errors;
 mod feagi_error;
 mod feagi_logging;
 
-pub use feagi_error::{FeagiError, FeagiErrorKey, FeagiErrorKeyTrait, FeagiErrorTrait};
+pub use feagi_error::{FeagiError, FeagiErrorKey, FeagiErrorKeyTrait, FeagiErrorTrait, FeagiFailImpossible};
 pub use feagi_logging::FeagiLogLevel;
