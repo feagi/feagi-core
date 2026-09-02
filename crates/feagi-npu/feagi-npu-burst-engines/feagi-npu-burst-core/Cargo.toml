@@ -21,25 +21,28 @@ std = [
 ]
 
 alloc = [
-
+    "serde/alloc",
+    "heapless/alloc"
 ]
 
 # ========================= Standard Toggleable Features ========================= #
 
 # Enables interfaces for editing connectomes, such as adding / removing cortical areas and mappings
 composable = [
-    "std"
+    "std",
+    "growable"
+]
+
+# Allows for individual structures to allocate more memory than what was initially allocated
+growable = [
+    "alloc"
 ]
 
 [dependencies]
 feagi-data = {path = "../../../feagi-data" }
 feagi-models = {path = "../../../feagi-models" }
 feagi-logging-and-errors = {path = "../../../feagi-logging-and-errors" }
-feagi-genomic-context = {path = "../../../feagi-genomic-context" }
 
 paste = { workspace = true}
-half = {workspace = true}
-ahash = { workspace = true}
-
-flume = { version = "0.12", default-features = false} # TODO tie to workspace
-serde = {workspace = true} # TODO for some reason FeagiError is tied to this?
+serde = {workspace = true} # Required by FeagiError
+heapless = {workspace = true, default-features = false}

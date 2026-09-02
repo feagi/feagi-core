@@ -1522,13 +1522,10 @@ dependencies = [
 name = "feagi-npu-burst-core"
 version = "0.1.1"
 dependencies = [
- "ahash",
  "feagi-data",
- "feagi-genomic-context",
  "feagi-logging-and-errors",
  "feagi-models",
- "flume",
- "half",
+ "heapless 0.9.3",
  "paste",
  "serde",
 ]

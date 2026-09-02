@@ -1,7 +1,6 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::errors::BurstEngineError;
 
-#[cfg(feature = "composable")]
 /// Actually applies the changes for connectome edits to the given burst engines connectome data
 pub trait ComposableEngineAllocator<FIQ: FeagiIndexQuantization> {
     
@@ -17,6 +16,5 @@ pub trait ComposableEngineAllocator<FIQ: FeagiIndexQuantization> {
     
 }
 
-#[cfg(feature = "composable")]
 /// The actual struct holding the instructions specific for this engine
 pub trait ComposableEngineConnectomeChangeInstructions<FIQ: FeagiIndexQuantization> {}

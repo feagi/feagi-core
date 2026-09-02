@@ -1,9 +1,9 @@
+//! Descriptors for what processing step a burst engine is doing / should do
 
-// TODO data exchanges?
 
 #[derive(Debug, Clone, Copy, Default)]
 pub enum RunBurstPhase{
-    /// Runs starting from Neuron Burst Phase
+    /// Runs starting from Neuron Burst Phase, the entire burst
     #[default]
     Full,
     // TODO multiple?
@@ -12,7 +12,9 @@ pub enum RunBurstPhase{
 
 #[derive(Debug, Clone, Copy)]
 pub enum SpecificBurstPhase{
+    /// Individual neuron / cortical processing step
     NeuronPhase(NeuronBurstPhase),
+    /// Synaptic propagation processing step
     SynapsePhase(SynapseBurstPhase),
 }
 

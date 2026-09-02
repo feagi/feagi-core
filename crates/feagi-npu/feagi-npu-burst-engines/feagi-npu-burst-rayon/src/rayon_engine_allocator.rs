@@ -3,7 +3,7 @@ use crate::rayon_engine_change_instructions::RayonEngineChangeInstructions;
 use core::future::Future;
 use core::marker::PhantomData;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_npu_burst_core::burst_engine_definitions::composable_engine_allocator::ComposableEngineAllocator;
+use feagi_npu_burst_core::burst_engine_definitions::composable::composable_engine_allocator::ComposableEngineAllocator;
 use feagi_npu_burst_core::errors::BurstEngineError;
 
 pub struct RayonEngineAllocator<FIQ: FeagiIndexQuantization> {
