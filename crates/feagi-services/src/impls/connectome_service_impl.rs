@@ -3806,7 +3806,7 @@ mod tests {
         Ok(())
     }
 
-    fn owned_memory_twin_fixture() -> (
+    type OwnedMemoryTwinFixture = (
         ConnectomeServiceImpl,
         Arc<RwLock<ConnectomeManager>>,
         Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
@@ -3814,7 +3814,9 @@ mod tests {
         CorticalID,
         CorticalID,
         CorticalID,
-    ) {
+    );
+
+    fn owned_memory_twin_fixture() -> OwnedMemoryTwinFixture {
         use super::ConnectomeServiceImpl;
         use feagi_brain_development::ConnectomeManager;
         use feagi_npu_burst_engine::backend::CPUBackend;

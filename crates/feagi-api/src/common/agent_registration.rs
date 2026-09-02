@@ -1199,11 +1199,10 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                 // inherited from older runtime state (e.g., 35.0). Reconcile both.
                                 let legacy_threshold = current.firing_threshold;
                                 const LEGACY_THRESHOLD_TOLERANCE: f64 = 1e-3;
-                                let should_migrate_threshold =
-                                    (legacy_threshold - 150.0).abs()
-                                        <= LEGACY_THRESHOLD_TOLERANCE
-                                        || (legacy_threshold - 35.0).abs()
-                                            <= LEGACY_THRESHOLD_TOLERANCE;
+                                let should_migrate_threshold = (legacy_threshold - 150.0).abs()
+                                    <= LEGACY_THRESHOLD_TOLERANCE
+                                    || (legacy_threshold - 35.0).abs()
+                                        <= LEGACY_THRESHOLD_TOLERANCE;
                                 if should_migrate_threshold {
                                     changes.insert(
                                         "firing_threshold".to_string(),
@@ -1216,12 +1215,10 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             {
                                 let current_increment = current.firing_threshold_increment;
                                 const LEGACY_INCREMENT_TOLERANCE: f64 = 1e-6;
-                                let is_legacy_zero_increment =
-                                    current_increment[0].abs() <= LEGACY_INCREMENT_TOLERANCE
-                                        && current_increment[1].abs()
-                                            <= LEGACY_INCREMENT_TOLERANCE
-                                        && current_increment[2].abs()
-                                            <= LEGACY_INCREMENT_TOLERANCE;
+                                let is_legacy_zero_increment = current_increment[0].abs()
+                                    <= LEGACY_INCREMENT_TOLERANCE
+                                    && current_increment[1].abs() <= LEGACY_INCREMENT_TOLERANCE
+                                    && current_increment[2].abs() <= LEGACY_INCREMENT_TOLERANCE;
                                 if is_legacy_zero_increment {
                                     changes.insert(
                                         "firing_threshold_increment_x".to_string(),
