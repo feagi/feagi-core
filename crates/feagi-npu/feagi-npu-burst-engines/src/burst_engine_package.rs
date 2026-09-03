@@ -2,7 +2,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantiz
 use crate::data_interface_set::DataInterfaceChannelSet;
 use crate::enclosed_burst_engine::EnclosedBurstEngine;
 
-// TODO dont do pub access
+// TODO dont do pub access of members
 /// Structure grouping a burst engine and the channels of it in a single struct
 pub struct BurstEnginePackage<FIQ, DICS>
 where

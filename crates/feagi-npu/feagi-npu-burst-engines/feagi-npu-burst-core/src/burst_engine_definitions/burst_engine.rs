@@ -3,7 +3,7 @@ use crate::burst_engine_definitions::burst_phases::RunBurstPhase;
 use crate::errors::BurstEngineError;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
-use crate::burst_engine_definitions::bust_engine_spawning::BurstEngineSpawner;
+use crate::burst_engine_definitions::burst_engine_spawning::BurstEngineSpawner;
 #[cfg(feature = "alloc")]
 use crate::burst_engine_definitions::composable_burst_engine_allocator::ComposableBurstEngineAllocator;
 #[cfg(feature = "alloc")]

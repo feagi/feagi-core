@@ -6,7 +6,6 @@ pub use data_interface_set::DataInterfaceChannelSet;
 pub use implementations::flume::FlumeDataInterfaceSet;
 
 /// Channels using the channels from the embedded `Embassy` crate
-#[cfg(not(feature = "std"))]
 pub use implementations::embassy_channel::EmbassyDataInterfaceSet;
 
 mod data_interface_set;

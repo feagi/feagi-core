@@ -27,10 +27,6 @@ alloc = [
 ]
 
 # ========================= Platform ========================= #
-# Only have one enabled at a time!
-
-# The original ESP32
-board-esp-32 = []
 
 # TODO seperate features for PSRAM amount?
 

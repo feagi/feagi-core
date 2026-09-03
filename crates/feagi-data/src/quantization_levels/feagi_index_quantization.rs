@@ -54,6 +54,10 @@ pub enum FeagiIndexQuantizationLevel {
     /// Used throughout genome contexts. Fits most cases without taking too much memory
     #[default]
     StandardQuantization = 0,
+
+    LowQuantization = 1,
+
+    MiniQuantization = 2,
 }
 
 /// Should work with most genomes without using too much data on most desktop deployments
@@ -70,3 +74,34 @@ impl FeagiIndexQuantization for FeagiIndexQuantizationStandard {
     type SynapseIndexCountQuant = u32;
     type SynapseAggregatorIndexCountQuant = u32;
 }
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub struct FeagiIndexQuantizationLow;
+
+impl FeagiIndexQuantization for FeagiIndexQuantizationLow {
+    const LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::LowQuantization;
+    type BurstIndexQuant = u16;
+    type CorticalAreaIndexCountQuant = u16;
+    type NeuronIndexQuant = u16;
+    type NeuronBitBatchIndexQuant = u16;
+    type CorticalMappingEntryIndexCountQuant = u16;
+    type SynapseIndexCountQuant = u16;
+    type SynapseAggregatorIndexCountQuant = u16;
+}
+
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub struct FeagiIndexQuantizationMini;
+
+impl FeagiIndexQuantization for FeagiIndexQuantizationMini {
+    const LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::MiniQuantization;
+    type BurstIndexQuant = u16;
+    type CorticalAreaIndexCountQuant = u8;
+    type NeuronIndexQuant = u16;
+    type NeuronBitBatchIndexQuant = u16;
+    type CorticalMappingEntryIndexCountQuant = u8;
+    type SynapseIndexCountQuant = u16;
+    type SynapseAggregatorIndexCountQuant = u16;
+}
+
+

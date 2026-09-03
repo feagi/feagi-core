@@ -3,7 +3,7 @@
 pub mod burst_phases;
 pub mod burst_phase_output;
 
-pub mod bust_engine_spawning;
+pub mod burst_engine_spawning;
 pub mod burst_engine;
 
 #[cfg(feature = "alloc")]
