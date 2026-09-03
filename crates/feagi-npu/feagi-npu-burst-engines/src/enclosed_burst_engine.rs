@@ -22,17 +22,18 @@ pub enum EnclosedBurstEngine<FIQ: FeagiIndexQuantization> {
 }
 
 impl<FIQ: FeagiIndexQuantization> EnclosedBurstEngine<FIQ> {
-    pub fn execute_phase(
+    pub async fn execute_phase(
         &mut self,
         phases: RunBurstPhase,
         burst_index: BurstIndex<FIQ::BurstIndexQuant>,
-    ) -> impl Future<Output = Result<BurstPhaseOutput<FIQ>, BurstEngineError>> {
+    ) -> Result<BurstPhaseOutput<FIQ>, BurstEngineError> {
         match self {
+            #[cfg(feature = "alloc")]
             EnclosedBurstEngine::Composable(c) => {
-                c.execute_phase(phases, burst_index)
+                c.execute_phase(phases, burst_index).await
             },
             EnclosedBurstEngine::NonComposable(n) => {
-                n.execute_phase(phases, burst_index)
+                n.execute_phase(phases, burst_index).await
             }
         }
     }
