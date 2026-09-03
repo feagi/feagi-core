@@ -17,12 +17,7 @@ pub mod burst_engines {
 
 
 mod npu_errors;
-
-
-
-
-
-
+pub mod neural_processing_units;
 // TODO reorganize all of this for feature stuff
 
 //mod wnpu;

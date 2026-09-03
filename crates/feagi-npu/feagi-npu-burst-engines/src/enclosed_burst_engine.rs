@@ -1,6 +1,7 @@
 use core::future::Future;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
+use feagi_npu_burst_core::burst_engine_definitions::burst_engine::BurstEngine;
 use feagi_npu_burst_core::burst_engine_definitions::burst_phase_output::BurstPhaseOutput;
 use feagi_npu_burst_core::burst_engine_definitions::burst_phases::RunBurstPhase;
 use feagi_npu_burst_core::errors::BurstEngineError;
@@ -22,7 +23,7 @@ pub enum EnclosedBurstEngine<FIQ: FeagiIndexQuantization> {
 }
 
 impl<FIQ: FeagiIndexQuantization> EnclosedBurstEngine<FIQ> {
-    pub async fn execute_phase(
+    pub async fn execute_phase( // TODO stacking asyncs like this isnt good
         &mut self,
         phases: RunBurstPhase,
         burst_index: BurstIndex<FIQ::BurstIndexQuant>,
@@ -48,7 +49,7 @@ pub enum ComposableBurstEngine<FIQ: FeagiIndexQuantization> {
     CPURayon(RayonBurstEngine<FIQ>),
 
     // Keeps `FIQ` live when every engine variant is cfg'd out.
-    #[cfg(not(any(feature = "engines-rayon", feature = "engines-esp32")))]
+    #[cfg(not(any(feature = "engines-rayon")))]
     Impossible(core::marker::PhantomData<FIQ>), // Only here to get the compiler to shut up as it is blind to multi-feature setups
 }
 
