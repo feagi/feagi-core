@@ -5,3 +5,4 @@
 // need a lot of neurons and dont care about speed, nor have a device that is using a lot of RAM as well
 
 pub mod burst_engine;
+pub mod spawner;

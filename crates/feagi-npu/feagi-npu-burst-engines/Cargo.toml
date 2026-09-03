@@ -26,25 +26,33 @@ alloc = [
     "feagi-npu-burst-esp32/alloc"
 ]
 
-# ========================= Standard Toggleable Features ========================= #
+# ========================= Burst Engines to enable ========================= #
 
-# Enables interfaces for editing connectomes, such as adding / removing cortical areas and mappings
-composable = [
-    "std"
-]
-
-# CPU burst composable engine that uses multiple cpu threads to process neurons
-engine-composable-rayon = [
-    "std",
-    "composable",
+# CPU burst engine that uses multiple cpu threads to process neurons (includes variants that are optimized for different uses, cpus)
+engines-rayon = [
+    "std",  
     "feagi-npu-burst-rayon"
 ]
 
-# A noncomposable engine for the original ESP32 in the ESP32 family of microcontrollers
-engine-noncomposable-esp32-esp32 = [
-    "feagi-npu-burst-esp32",
-    "feagi-npu-burst-esp32/board-esp-32"
-]
+# Family of engines for the ESP32 family of chips and boards
+engines-esp32 = ["feagi-npu-burst-esp32"]
+
+# ========================= Platform Specific Dependencies ========================= #
+
+# NOTE: Right now none of these are being used, but that may change later
+
+# For MicroSlop operating systems
+#[target.'cfg(windows)'.dependencies]
+
+# For Pingu and Tim Apple operating systems
+#[target.'cfg(unix)'.dependencies]
+
+# For Internet Explorer 6
+#[target.'cfg(target_arch = "wasm32")'.dependencies]
+
+# For ESP32 Xtensa boards (not all ESP32 devices are Xtensa! Some are Risc-V!)
+#[target.'cfg(target_arch = "xtensa")'.dependencies]
+
 
 [dependencies]
 feagi-npu-burst-core = {path = "feagi-npu-burst-core"}

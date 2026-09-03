@@ -2,7 +2,7 @@ use feagi_data::neurons::wrapped_types::NeuronCount;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::wrapped_values::EngineCorticalIndex;
 
-
+#[cfg(feature = "alloc")]
 /// Change requests for the connectome
 pub enum EngineConnectomeChangeRequest<FIQ: FeagiIndexQuantization> {
     AddCorticalArea { } , // writer enum
@@ -15,6 +15,7 @@ pub enum EngineConnectomeChangeRequest<FIQ: FeagiIndexQuantization> {
     IncreaseCorticalBufferSizes { },
 }
 
+#[cfg(feature = "alloc")]
 pub enum EngineConnectomeChangeResponse<FIQ: FeagiIndexQuantization> {
     CorticalAreaAdded{
         cortical_index: EngineCorticalIndex <FIQ::CorticalAreaIndexCountQuant>,

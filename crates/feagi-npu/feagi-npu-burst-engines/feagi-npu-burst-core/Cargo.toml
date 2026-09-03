@@ -25,19 +25,6 @@ alloc = [
     "heapless/alloc"
 ]
 
-# ========================= Standard Toggleable Features ========================= #
-
-# Enables interfaces for editing connectomes, such as adding / removing cortical areas and mappings
-composable = [
-    "std",
-    "growable"
-]
-
-# Allows for individual structures to allocate more memory than what was initially allocated
-growable = [
-    "alloc"
-]
-
 [dependencies]
 feagi-data = {path = "../../../feagi-data" }
 feagi-models = {path = "../../../feagi-models" }

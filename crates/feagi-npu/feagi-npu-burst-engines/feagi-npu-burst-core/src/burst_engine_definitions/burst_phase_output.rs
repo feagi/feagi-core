@@ -3,12 +3,7 @@ use crate::wrapped_values::EngineCorticalIndex;
 
 
 // Possible notifications: memory cortical area allocation request, brain death
-#[cfg(feature = "growable")]
 const MAX_NUMBER_NOTIFICATIONS: usize = 2;
-
-// Only notification possible is brain death
-#[cfg(not(feature = "growable"))]
-const MAX_NUMBER_NOTIFICATIONS: usize = 1;
 
 pub struct BurstPhaseOutput<FIQ: FeagiIndexQuantization> {
     output: heapless::Vec<BurstEngineAttentionNotification<FIQ>, MAX_NUMBER_NOTIFICATIONS>
@@ -47,7 +42,7 @@ impl<FIQ: FeagiIndexQuantization> BurstPhaseOutput<FIQ> {
 pub enum BurstEngineAttentionNotification<FIQ: FeagiIndexQuantization> {
     /// Brain is killbinding. Cease operations
     BrainDeathTriggered{from_cortical_index: EngineCorticalIndex<FIQ::CorticalAreaIndexCountQuant>},
-    #[cfg(feature = "growable")]
+    #[cfg(feature = "alloc")]
     /// A memory cortical area needs to increase its allocation
     MemoryCorticalAreaNeedsAllocation(Vec<EngineCorticalIndex<FIQ::CorticalAreaIndexCountQuant>>)
 }

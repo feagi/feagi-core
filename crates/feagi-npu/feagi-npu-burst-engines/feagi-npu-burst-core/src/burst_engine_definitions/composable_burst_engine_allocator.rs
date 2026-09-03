@@ -2,7 +2,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantiz
 use crate::errors::BurstEngineError;
 
 /// Actually applies the changes for connectome edits to the given burst engines connectome data
-pub trait ComposableEngineAllocator<FIQ: FeagiIndexQuantization> {
+pub trait ComposableBurstEngineAllocator<FIQ: FeagiIndexQuantization> {
     
     /// The struct that is holding the connectome data of the engine
     type EngineData;

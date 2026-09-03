@@ -1,7 +1,6 @@
-use feagi_data::data_channels::data_cycler::DataCycleEndpoint;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::data_interface_set::data_interface_set::DataInterfaceChannelSet;
-use crate::enclosed_burst_engine::enclosed_burst_engine::EnclosedBurstEngine;
+use crate::data_interface_set::DataInterfaceChannelSet;
+use crate::enclosed_burst_engine::EnclosedBurstEngine;
 
 // TODO dont do pub access
 /// Structure grouping a burst engine and the channels of it in a single struct
