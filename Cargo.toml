@@ -180,6 +180,8 @@ members = [
     "crates/feagi-brain-development",
     "crates/feagi-config",
     "crates/feagi-data",
+    "crates/feagi-data/feagi-data-quantization",
+    "crates/feagi-data/feagi-data-neuron",
     #"crates/feagi-dataset-contracts",
     "crates/feagi-evolutionary",
     "crates/feagi-genomic-context",

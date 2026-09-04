@@ -1,0 +1,43 @@
+[package]
+name = "feagi-data-quantization"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "A Data Quantization system used to represent values for FEAGI"
+
+[features]
+
+# subcrates should not have default in order to avoid confusion
+
+std = [
+    "alloc",
+    "half/std", "serde/std", "serde_json/std"
+]
+
+alloc = [
+    "half/alloc", "serde/alloc", "serde_json/alloc"
+]
+
+expose_rayon = [
+    "std",
+    "rayon",
+]
+
+expose_json = [
+    "serde_json"
+]
+
+[dependencies]
+feagi-logging-and-errors = {path = "../../feagi-logging-and-errors"}
+
+# External
+paste = { workspace = true }
+half = {workspace = true, default-features = false}
+serde = { workspace = true, default-features = false}
+serde_json = { workspace = true, optional = true, default-features = false}
+rayon = {workspace = true, optional = true, default-features = false}

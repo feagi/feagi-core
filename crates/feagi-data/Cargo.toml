@@ -41,6 +41,8 @@ alloc = [
 
 
 [dependencies]
+feagi-data-quantization = {path = "feagi-data-quantization"}
+feagi-data-neuron = {path = "feagi-data-neuron"}
 feagi-logging-and-errors = {path = "../feagi-logging-and-errors"} # This should be the ONLY FEAGI sibling crate!
 
 # External crates

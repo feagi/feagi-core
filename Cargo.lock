@@ -1399,10 +1399,36 @@ name = "feagi-data"
 version = "0.1.1"
 dependencies = [
  "ahash",
+ "feagi-data-neuron",
+ "feagi-data-quantization",
  "feagi-logging-and-errors",
  "flume",
  "half",
  "heapless 0.9.3",
+ "paste",
+ "rayon",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "feagi-data-neuron"
+version = "0.1.1"
+dependencies = [
+ "feagi-data-quantization",
+ "feagi-logging-and-errors",
+ "half",
+ "paste",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "feagi-data-quantization"
+version = "0.1.1"
+dependencies = [
+ "feagi-logging-and-errors",
+ "half",
  "paste",
  "rayon",
  "serde",

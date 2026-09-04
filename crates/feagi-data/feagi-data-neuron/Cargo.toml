@@ -1,0 +1,35 @@
+[package]
+name = "feagi-data-neuron"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Structures related to Neuron Data used in FEAGI"
+
+[features]
+
+# subcrates should not have default in order to avoid confusion
+
+std = [
+    "alloc"
+]
+
+alloc = []
+
+rayon = [
+    "std"
+]
+
+[dependencies]
+feagi-data-quantization = {path = "../feagi-data-quantization"} # This should be the ONLY FEAGI sibling crate!
+feagi-logging-and-errors = {path = "../../feagi-logging-and-errors"}
+
+# External
+paste = { workspace = true }
+half = {workspace = true}
+serde = { workspace = true}
+serde_json = { workspace = true, optional = true}
