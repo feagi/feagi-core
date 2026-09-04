@@ -6,7 +6,7 @@ pub mod errors {
 }
 
 pub mod burst_engines {
-    pub use feagi_npu_burst_engines::burst_engine_spawning::{EngineStartingConnectomeData, NoStartingConnectomeData, BurstEngineSpawner};
+    pub use feagi_npu_burst_core::composable::burst_engine_spawning::{EngineStartingConnectomeData, NoStartingConnectomeData, BurstEngineSpawner};
     pub use feagi_npu_burst_engines::data_interface_set; // TODO dont expose this directly, have some sort of enum setting
 
     #[cfg(feature = "engines-esp32")]

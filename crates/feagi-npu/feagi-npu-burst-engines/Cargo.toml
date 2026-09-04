@@ -23,6 +23,7 @@ std = [
 ]
 
 alloc = [
+    "feagi-npu-burst-core/alloc",
     "feagi-npu-burst-esp32/alloc"
 ]
 
@@ -30,7 +31,7 @@ alloc = [
 
 # CPU burst engine that uses multiple cpu threads to process neurons (includes variants that are optimized for different uses, cpus)
 engines-rayon = [
-    "std",  
+    "std",
     "feagi-npu-burst-rayon"
 ]
 

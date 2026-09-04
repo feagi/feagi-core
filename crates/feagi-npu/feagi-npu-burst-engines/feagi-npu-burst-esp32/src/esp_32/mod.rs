@@ -4,7 +4,9 @@
 // it to the camera for sensiomotor stuff. We should only consider the PSRAM for deployments where we
 // need a lot of neurons and dont care about speed, nor have a device that is using a lot of RAM as well
 
-pub mod burst_engine;
-pub use spawner::ESP32BoardESP32Spawner;
+pub use burst_engine::ESP32BoardESP32Spawner;
+pub mod npu_sealed {
+    pub use super::burst_engine::ESP32BoardESP32BurstEngine;
+}
 
-mod spawner;
+mod burst_engine;
