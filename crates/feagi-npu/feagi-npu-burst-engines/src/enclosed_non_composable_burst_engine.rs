@@ -3,7 +3,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantiz
 use feagi_models::wrapped_indexes::BurstIndex;
 use feagi_npu_burst_core::burst_phases::RunBurstPhase;
 use feagi_npu_burst_core::errors::BurstEngineError;
-use feagi_npu_burst_core::non_composable::npu_sealed::{NonComposableBurstEngine, NonComposableBurstPhaseOutput};
+use feagi_npu_burst_core::npu_sealed::non_composable::{NonComposableBurstEngine, NonComposableBurstPhaseOutput};
 #[cfg(feature = "feagi-npu-burst-esp32")]
 use feagi_npu_burst_esp32::esp_32::npu_sealed::ESP32BoardESP32BurstEngine;
 use crate::burst_engine_package::EnclosedEngine;
@@ -13,6 +13,7 @@ pub enum EnclosedNonComposableBurstEngine<FIQ: FeagiIndexQuantization> {
     ESP32BoardESP32(ESP32BoardESP32BurstEngine<FIQ>),
 
     /// Only here to get the compiler to shut up as it is blind to multi-feature setups
+    #[cfg(not(any(feature = "engines-esp32")))]
     Impossible(core::marker::PhantomData<FIQ>),
 }
 
@@ -26,7 +27,12 @@ impl<FIQ: FeagiIndexQuantization> EnclosedNonComposableBurstEngine<FIQ> {
         match self {
             #[cfg(feature = "engines-esp32")]
             EnclosedNonComposableBurstEngine::ESP32BoardESP32(e) => e.execute_phase(phases, burst_index),
-            _ => core::future::ready(unreachable!("no non-composable burst engine feature is enabled")),
+            #[cfg(not(any(feature = "engines-esp32")))]
+            EnclosedNonComposableBurstEngine::Impossible(_) => {
+                async move {
+                    unreachable!("Invalid Burst engine for execution")
+                }
+            }
         }
     }
 }

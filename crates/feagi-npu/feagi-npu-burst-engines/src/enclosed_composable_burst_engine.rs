@@ -3,13 +3,14 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantiz
 use feagi_models::wrapped_indexes::BurstIndex;
 use feagi_npu_burst_core::burst_phases::RunBurstPhase;
 use feagi_npu_burst_core::errors::BurstEngineError;
-use feagi_npu_burst_core::composable::npu_sealed::ComposableBurstPhaseOutput;
+use feagi_npu_burst_core::npu_sealed::composable::ComposableBurstPhaseOutput;
 use crate::burst_engine_package::EnclosedEngine;
 
 pub enum EnclosedComposableBurstEngine<FIQ: FeagiIndexQuantization> {
     #[cfg(feature = "engines-rayon")]
     CPURayon(RayonBurstEngine<FIQ>),
     /// Only here to get the compiler to shut up as it is blind to multi-feature setups
+    #[cfg(not(any(feature = "engines-rayon")))]
     Impossible(core::marker::PhantomData<FIQ>),
 }
 
@@ -23,7 +24,12 @@ impl<FIQ: FeagiIndexQuantization> EnclosedComposableBurstEngine<FIQ> {
         match self {
             #[cfg(feature = "engines-rayon")]
             EnclosedComposableBurstEngine::CPURayon(e) => e.execute_phase(phases, burst_index),
-            _ => core::future::ready(unreachable!("no composable burst engine feature is enabled")),
+            #[cfg(not(any(feature = "engines-rayon")))]
+            EnclosedComposableBurstEngine::Impossible(_) => {
+                async move {
+                    unreachable!("Invalid Burst engine for execution")
+                }
+            }
         }
     }
 

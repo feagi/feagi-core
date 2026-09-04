@@ -3,18 +3,19 @@
 
 pub use feagi_npu_burst_core::errors; // Should be exposed outside the NPU
 
-pub use feagi_npu_burst_core::wrapped_values; // Should NOT be exposed outside NPU
-pub mod data_interface_set; // Should NOT be exposed outside NPU
+pub mod npu_sealed {
+    pub use feagi_npu_burst_core::npu_sealed::*;
 
-
-
-
-pub mod enclosed_non_composable_burst_engine;
-
-#[cfg(feature = "alloc")]
-pub mod enclosed_composable_burst_engine;
-
-mod burst_engine_package;
+    pub use super::enclosed_non_composable_burst_engine::EnclosedNonComposableBurstEngine;
+    #[cfg(feature = "alloc")]
+    pub use super::enclosed_composable_burst_engine::EnclosedComposableBurstEngine;
+    pub use super::burst_engine_package::{BurstEnginePackage, EnclosedEngine};
+    
+    pub mod data_interface_set {
+        pub use super::super::data_interface_set::*;
+    }
+    
+}
 
 //region Specific Burst Engine Sets
 
@@ -27,8 +28,8 @@ pub extern crate feagi_npu_burst_rayon;
 //endregion
 
 
-
-
-
-
-
+mod data_interface_set; // Should NOT be exposed outside NPU
+mod enclosed_non_composable_burst_engine;
+#[cfg(feature = "alloc")]
+mod enclosed_composable_burst_engine;
+mod burst_engine_package;
