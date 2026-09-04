@@ -1,5 +1,5 @@
 use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
-use crate::BurstPhaseOutput;
+use crate::burst_phase_output::BurstPhaseOutput;
 use crate::composable::composable_phase_notification::ComposablePhaseNotification;
 
 // quant level is irrelevant

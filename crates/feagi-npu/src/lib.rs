@@ -1,24 +1,26 @@
 //! System for managing backends that execute neuron and synaptic dynamics. The heart of FEAGI.
 
 pub mod errors {
-    pub use super::npu_errors::{BurstEngineWorkerPoolError, BurstEngineWorkerError, NPUError};
+    pub use super::npu_errors::*;
     pub use feagi_npu_burst_engines::errors::{BurstEngineError};
 }
 
-pub mod burst_engines {
-    pub use feagi_npu_burst_core::composable::burst_engine_spawning::{EngineStartingConnectomeData, NoStartingConnectomeData, BurstEngineSpawner};
-    pub use feagi_npu_burst_engines::data_interface_set; // TODO dont expose this directly, have some sort of enum setting
-
+/// Neuron Processing Units
+pub mod npu {
     #[cfg(feature = "engines-esp32")]
-    pub use feagi_npu_burst_engines::feagi_npu_burst_esp32;
+    pub use super::neural_processing_units::embedded_npu::neural_processing_unit::EmbeddedNPU;
+    // TODO standard
+}
+
+/// Allows for instantiation of specific burst engines with required parameters
+pub mod burst_engine_spawners {
+    #[cfg(feature = "engines-esp32")]
+    pub use feagi_npu_burst_engines::feagi_npu_burst_esp32::esp_32::ESP32BoardESP32Spawner;
 }
 
 
-
-
 mod npu_errors;
-pub mod neural_processing_units;
-// TODO reorganize all of this for feature stuff
+mod neural_processing_units;
 
 //mod wnpu;
 //pub use standard::npu::npu_target_frequency::NPUTargetFrequency; // this is an exception! Do not expose anything else!

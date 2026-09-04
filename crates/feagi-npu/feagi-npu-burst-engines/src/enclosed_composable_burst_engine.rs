@@ -39,12 +39,12 @@ impl<FIQ: FeagiIndexQuantization> EnclosedComposableBurstEngine<FIQ> {
 impl<FIQ: FeagiIndexQuantization> EnclosedEngine<FIQ> for EnclosedComposableBurstEngine<FIQ> {}
 
 /// Implemented on the burst engines to easily make them a `EnclosedComposableBurstEngine`
-pub trait SpawnerToEnclosedComposable<FIQ: FeagiIndexQuantization> {
+pub trait ComposableEngineToEnclosedComposable<FIQ: FeagiIndexQuantization> {
     fn to_enclosed_burst_engine(self) -> EnclosedComposableBurstEngine<FIQ>;
 }
 
 #[cfg(feature = "engines-rayon")]
-impl<FIQ: FeagiIndexQuantization> SpawnerToEnclosedComposable<FIQ> for RayonBurstEngine<FIQ> {
+impl<FIQ: FeagiIndexQuantization> ComposableEngineToEnclosedComposable<FIQ> for RayonBurstEngine<FIQ> {
     fn to_enclosed_burst_engine(self) -> EnclosedComposableBurstEngine<FIQ> {
         EnclosedComposableBurstEngine::CPURayon(self)
     }

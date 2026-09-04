@@ -2,7 +2,6 @@
 
 pub mod errors;
 pub mod burst_phases;
-pub use burst_phase_output::BurstPhaseOutput;
 pub use non_composable::NonComposableBurstEngineSpawner;
 #[cfg(feature = "alloc")]
 pub use composable::ComposableBurstEngineSpawner;
@@ -10,6 +9,9 @@ pub use composable::ComposableBurstEngineSpawner;
 /// Structs that should be public of this crate but not leave the NPU crate
 pub mod npu_sealed {
 
+    pub use super::burst_phase_output::BurstPhaseOutput;
+    
+    
     #[cfg(feature = "alloc")]
     pub mod composable {
         pub use super::super::composable::npu_sealed::*;
@@ -24,8 +26,9 @@ pub mod npu_sealed {
     }
 }
 
+mod wrapped_values;
+mod burst_phase_output;
 mod non_composable; // manages npu sealing inside
 #[cfg(feature = "alloc")]
 mod composable;  // manages npu sealing inside
-mod wrapped_values;
-mod burst_phase_output;
+

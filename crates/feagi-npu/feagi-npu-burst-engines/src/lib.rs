@@ -2,13 +2,14 @@
 //! burst engines themselves (feature gated)
 
 pub use feagi_npu_burst_core::errors; // Should be exposed outside the NPU
+pub use feagi_npu_burst_core::burst_phases; // Should be exposed outside the NPU
 
 pub mod npu_sealed {
     pub use feagi_npu_burst_core::npu_sealed::*;
 
-    pub use super::enclosed_non_composable_burst_engine::EnclosedNonComposableBurstEngine;
+    pub use super::enclosed_non_composable_burst_engine::{EnclosedNonComposableBurstEngine, NonComposableEngineToEnclosedNonComposable};
     #[cfg(feature = "alloc")]
-    pub use super::enclosed_composable_burst_engine::EnclosedComposableBurstEngine;
+    pub use super::enclosed_composable_burst_engine::{EnclosedComposableBurstEngine, ComposableEngineToEnclosedComposable};
     pub use super::burst_engine_package::{BurstEnginePackage, EnclosedEngine};
     
     pub mod data_interface_set {

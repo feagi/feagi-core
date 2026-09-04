@@ -40,12 +40,12 @@ impl<FIQ: FeagiIndexQuantization> EnclosedNonComposableBurstEngine<FIQ> {
 impl<FIQ: FeagiIndexQuantization> EnclosedEngine<FIQ> for EnclosedNonComposableBurstEngine<FIQ> {}
 
 /// Implemented on the burst engines to easily make them a `EnclosedNonComposableBurstEngine`
-pub trait SpawnerToEnclosedNonComposable<FIQ: FeagiIndexQuantization> {
+pub trait NonComposableEngineToEnclosedNonComposable<FIQ: FeagiIndexQuantization> {
     fn to_enclosed_burst_engine(self) -> EnclosedNonComposableBurstEngine<FIQ>;
 }
 
 #[cfg(feature = "engines-esp32")]
-impl<FIQ: FeagiIndexQuantization> SpawnerToEnclosedNonComposable<FIQ> for ESP32BoardESP32BurstEngine<FIQ> {
+impl<FIQ: FeagiIndexQuantization> NonComposableEngineToEnclosedNonComposable<FIQ> for ESP32BoardESP32BurstEngine<FIQ> {
     fn to_enclosed_burst_engine(self) -> EnclosedNonComposableBurstEngine<FIQ> {
         EnclosedNonComposableBurstEngine::ESP32BoardESP32(self)
     }
