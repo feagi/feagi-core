@@ -692,6 +692,10 @@ where
         dispatch_mut!(self, update_synapse_weight(source, target, new_weight))
     }
 
+    pub fn set_synapse_eligibility_trace(&mut self, synapse_idx: usize, trace: f32) -> bool {
+        dispatch_mut!(self, set_synapse_eligibility_trace(synapse_idx, trace))
+    }
+
     pub fn rebuild_synapse_index(&mut self) {
         dispatch_mut!(self, rebuild_synapse_index())
     }

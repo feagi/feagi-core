@@ -1582,6 +1582,18 @@ impl<
         }
     }
 
+    /// Set R-STDP eligibility trace for a synapse index.
+    ///
+    /// Returns `true` when the index exists and the trace is updated.
+    pub fn set_synapse_eligibility_trace(&mut self, synapse_idx: usize, trace: f32) -> bool {
+        let mut synapse_storage = self.synapse_storage.write().unwrap();
+        if synapse_idx >= synapse_storage.count() {
+            return false;
+        }
+        synapse_storage.eligibility_traces_mut()[synapse_idx] = trace;
+        true
+    }
+
     /// Rebuild indexes after modifications (call after bulk modifications)
     pub fn rebuild_indexes(&mut self) {
         // ZERO-COPY: Pass synapse_storage by reference
@@ -3337,6 +3349,7 @@ impl<
             power_amount: self.get_power_amount(),
             fire_ledger_window: 20, // Default value (fire_ledger doesn't expose window)
             metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
             plastic_mappings: Vec::new(),
@@ -7833,6 +7846,7 @@ mod tests {
             power_amount: 1.0,
             fire_ledger_window: 8,
             metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
             plastic_mappings: Vec::new(),

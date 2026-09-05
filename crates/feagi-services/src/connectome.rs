@@ -250,6 +250,7 @@ mod tests {
             power_amount: 1.0,
             fire_ledger_window: 20,
             metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
             plastic_mappings: Vec::new(),

@@ -58,6 +58,14 @@ pub struct MemoryNeuronQuery {
     pub neuron_id: u32,
 }
 
+/// Query for connectome download persistence mode.
+#[derive(Debug, Clone, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct ConnectomeDownloadQuery {
+    /// Snapshot mode: `full` (default) or `lite`.
+    pub mode: Option<feagi_npu_neural::types::connectome::ConnectomePersistMode>,
+}
+
 /// Full memory neuron detail: plasticity lifecycle fields plus connectome synapses.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct MemoryNeuronDetailResponse {
@@ -857,17 +865,22 @@ pub async fn get_path_query(
     get,
     path = "/v1/connectome/download",
     tag = "connectome",
+    params(ConnectomeDownloadQuery),
     responses(
         (status = 200, description = "Filesystem path of the saved connectome file", body = HashMap<String, String>)
     )
 )]
 pub async fn get_download_connectome(
     State(state): State<ApiState>,
+    Query(query): Query<ConnectomeDownloadQuery>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     info!("[API] GET /v1/connectome/download - Saving connectome to filesystem");
+    let mode = query
+        .mode
+        .unwrap_or(feagi_npu_neural::types::connectome::ConnectomePersistMode::Full);
     let snapshot = state
         .connectome_service
-        .export_connectome()
+        .export_connectome(mode)
         .await
         .map_err(ApiError::from)?;
     let file_name = connectome_file_name("saved_connectome", &connectome_timestamp());
@@ -899,7 +912,7 @@ pub async fn get_download_cortical_area(
         .map_err(ApiError::from)?;
     let snapshot = state
         .connectome_service
-        .export_connectome()
+        .export_connectome(feagi_npu_neural::types::connectome::ConnectomePersistMode::Full)
         .await
         .map_err(ApiError::from)?;
     let filtered = snapshot.filter_to_cortical_idx(area_info.cortical_idx);
@@ -1042,7 +1055,7 @@ pub async fn post_upload_cortical_area(
         .ok_or_else(|| ApiError::invalid_input("Missing cortical_area_names key".to_string()))?;
     let live = state
         .connectome_service
-        .export_connectome()
+        .export_connectome(feagi_npu_neural::types::connectome::ConnectomePersistMode::Full)
         .await
         .map_err(ApiError::from)?;
     let merged = live.replace_cortical_idx(cortical_idx, &area_snapshot);
@@ -1438,6 +1451,7 @@ mod tests {
             power_amount: 1.0,
             fire_ledger_window: 20,
             metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
             genome_json: None,
             memory_area_ids: Vec::new(),
             plastic_mappings: Vec::new(),

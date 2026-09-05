@@ -280,6 +280,26 @@ impl Default for ConnectomeMetadata {
     }
 }
 
+/// Snapshot persistence mode.
+///
+/// - `Full`: full neuron + synapse state is persisted and imported directly.
+/// - `Lite`: baseline structure is reconstructed from `genome_json`; snapshot carries
+///   memory/plastic synapse overlays and long-term memory artifacts.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnectomePersistMode {
+    Full,
+    Lite,
+}
+
+#[cfg(feature = "std")]
+impl Default for ConnectomePersistMode {
+    fn default() -> Self {
+        Self::Full
+    }
+}
+
 /// Complete connectome snapshot
 ///
 /// This structure captures the entire state of a RustNPU, including:
@@ -313,6 +333,10 @@ pub struct ConnectomeSnapshot {
 
     /// Metadata (optional, for debugging/tracking)
     pub metadata: ConnectomeMetadata,
+
+    /// Snapshot persistence mode (`full` by default for backwards compatibility).
+    #[serde(default)]
+    pub persist_mode: ConnectomePersistMode,
 
     /// Flat genome JSON captured at export (areas, mappings, regions, morphologies, physiology).
     #[serde(default)]
@@ -367,6 +391,10 @@ impl std::fmt::Display for ConnectomeStatistics {
 
 #[cfg(feature = "std")]
 impl ConnectomeSnapshot {
+    pub fn is_lite_mode(&self) -> bool {
+        self.persist_mode == ConnectomePersistMode::Lite
+    }
+
     /// Get human-readable summary of the connectome
     pub fn summary(&self) -> String {
         std::format!(
@@ -381,6 +409,19 @@ impl ConnectomeSnapshot {
 
     /// Validate the connectome structure
     pub fn validate(&self) -> Result<(), String> {
+        if self.is_lite_mode() {
+            if self.genome_json.is_none() {
+                return Err(
+                    "Lite connectome snapshot requires embedded genome_json".to_string(),
+                );
+            }
+            return self.validate_synapses_only();
+        }
+
+        self.validate_full_snapshot()
+    }
+
+    fn validate_full_snapshot(&self) -> Result<(), String> {
         // NPU export serializes used neurons/synapses (`count`), not the preallocated
         // NPU buffer (`capacity`). Field lengths must cover `count`.
         let n = self.neurons.count;
@@ -517,6 +558,43 @@ impl ConnectomeSnapshot {
             }
         }
 
+        Ok(())
+    }
+
+    fn validate_synapses_only(&self) -> Result<(), String> {
+        let s = self.synapses.count;
+        if self.synapses.capacity < s {
+            return Err(std::format!(
+                "Synapse capacity {} is less than count {}",
+                self.synapses.capacity,
+                s
+            ));
+        }
+        require_len(
+            "synapses.source_neurons",
+            self.synapses.source_neurons.len(),
+            s,
+        )?;
+        require_len(
+            "synapses.target_neurons",
+            self.synapses.target_neurons.len(),
+            s,
+        )?;
+        require_len("synapses.weights", self.synapses.weights.len(), s)?;
+        require_len(
+            "synapses.postsynaptic_potentials",
+            self.synapses.postsynaptic_potentials.len(),
+            s,
+        )?;
+        require_len("synapses.types", self.synapses.types.len(), s)?;
+        require_len("synapses.valid_mask", self.synapses.valid_mask.len(), s)?;
+        require_optional_len("synapses.delay_bursts", self.synapses.delay_bursts.len(), s)?;
+        require_optional_len("synapses.edge_flags", self.synapses.edge_flags.len(), s)?;
+        require_optional_len(
+            "synapses.eligibility_traces",
+            self.synapses.eligibility_traces.len(),
+            s,
+        )?;
         Ok(())
     }
 
@@ -696,6 +774,7 @@ impl ConnectomeSnapshot {
             power_amount: self.power_amount,
             fire_ledger_window: self.fire_ledger_window,
             metadata: self.metadata.clone(),
+            persist_mode: self.persist_mode,
             genome_json: self.genome_json.clone(),
             memory_area_ids: self.memory_area_ids.clone(),
             plastic_mappings: self.plastic_mappings.clone(),
@@ -771,6 +850,7 @@ impl ConnectomeSnapshot {
             power_amount: self.power_amount,
             fire_ledger_window: self.fire_ledger_window,
             metadata: self.metadata.clone(),
+            persist_mode: self.persist_mode,
             genome_json: self.genome_json.clone(),
             memory_area_ids: self.memory_area_ids.clone(),
             plastic_mappings: self.plastic_mappings.clone(),
@@ -839,6 +919,7 @@ impl ConnectomeSnapshot {
             power_amount: self.power_amount,
             fire_ledger_window: self.fire_ledger_window,
             metadata: self.metadata.clone(),
+            persist_mode: self.persist_mode,
             genome_json: self.genome_json.clone(),
             memory_area_ids: self.memory_area_ids.clone(),
             plastic_mappings: self.plastic_mappings.clone(),
@@ -849,6 +930,16 @@ impl ConnectomeSnapshot {
                 &ltm_ids,
             ),
         }
+    }
+
+    /// Convert a full snapshot into a lite snapshot by retaining only memory/plastic
+    /// synapses and dropping full neuron-array payload.
+    pub fn to_lite_snapshot(mut self) -> Self {
+        self.persist_mode = ConnectomePersistMode::Lite;
+        self.neurons = SerializableNeuronArray::default();
+        self.burst_count = 0;
+        self.power_amount = 1.0;
+        self
     }
 }
 
@@ -1063,6 +1154,7 @@ mod tests {
             power_amount: 1.0,
             fire_ledger_window: 20,
             metadata: ConnectomeMetadata::default(),
+            persist_mode: ConnectomePersistMode::Full,
             genome_json: Some("{\"version\":\"3.0\"}".to_string()),
             memory_area_ids: vec!["mmem".to_string()],
             plastic_mappings: vec![("a".to_string(), "b".to_string())],
@@ -1188,5 +1280,19 @@ mod tests {
             snapshot.long_term_memory_replay_frames[0].1[0].coords,
             vec![(1, 2, 3)]
         );
+    }
+
+    #[test]
+    fn lite_snapshot_validation_requires_genome_json() {
+        let mut snapshot = snapshot_with_two_areas().to_lite_snapshot();
+        snapshot.genome_json = None;
+        let err = snapshot.validate().expect_err("lite snapshot must require genome");
+        assert!(err.contains("genome_json"));
+    }
+
+    #[test]
+    fn lite_snapshot_allows_empty_payload_when_genome_present() {
+        let snapshot = snapshot_with_two_areas().to_lite_snapshot();
+        assert!(snapshot.validate().is_ok());
     }
 }

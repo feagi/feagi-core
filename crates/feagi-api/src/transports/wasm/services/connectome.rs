@@ -484,6 +484,7 @@ impl ConnectomeService for WasmConnectomeService {
     #[cfg(feature = "connectome-io")]
     async fn export_connectome(
         &self,
+        _mode: feagi_npu_neural::types::connectome::ConnectomePersistMode,
     ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot> {
         Err(ServiceError::NotImplemented(
             "WASM connectome export is not supported".to_string(),
