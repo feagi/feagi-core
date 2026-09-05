@@ -234,7 +234,9 @@ fn calculate_checksum(data: &[u8]) -> u64 {
 mod tests {
     use super::*;
     use feagi_npu_neural::types::connectome::{
-        ConnectomeMetadata, SerializableNeuronArray, SerializableSynapseArray,
+        ConnectomeMetadata, SerializableLongTermMemoryNeuron, SerializableMemoryReplayFrame,
+        SerializableNeuronArray, SerializableNeuronReference, SerializableSemanticSynapse,
+        SerializableSynapseArray,
     };
     use tempfile::NamedTempFile;
 
@@ -257,6 +259,7 @@ mod tests {
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         };
 
         // Save to temp file
@@ -274,6 +277,111 @@ mod tests {
         let bytes = std::fs::read(temp_file.path()).unwrap();
         let from_bytes = load_connectome_from_bytes(&bytes).unwrap();
         assert_eq!(from_bytes.burst_count, snapshot.burst_count);
+    }
+
+    #[test]
+    fn test_save_load_roundtrip_lite_with_memory_and_plasticity_payload() {
+        let snapshot = ConnectomeSnapshot {
+            version: FORMAT_VERSION,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: ahash::AHashMap::new(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata {
+                tags: ahash::AHashMap::from_iter([(
+                    feagi_npu_neural::types::connectome::LITE_EDGE_ENCODING_TAG.to_string(),
+                    feagi_npu_neural::types::connectome::LITE_EDGE_ENCODING_SEMANTIC_V1.to_string(),
+                )]),
+                ..ConnectomeMetadata::default()
+            },
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite,
+            genome_json: Some("{\"version\":\"3.0\"}".to_string()),
+            memory_area_ids: vec!["mmem0001".to_string()],
+            plastic_mappings: vec![("csrc0001".to_string(), "cdst0001".to_string())],
+            brain_region_ids: vec!["region-1".to_string()],
+            long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
+                neuron_id: 50_000_000,
+                cortical_area_idx: 13,
+                cortical_id: Some("bXZpc3VhbO4=".to_string()),
+                pattern_hash: Some(0xBEEF),
+                is_longterm_memory: true,
+                is_active: true,
+                lifespan_current: 100,
+                lifespan_initial: 20,
+                lifespan_growth_rate: 2.0,
+                creation_burst: 1,
+                last_activation_burst: 2,
+                activation_count: 3,
+            }],
+            long_term_memory_replay_frames: vec![(
+                50_000_000,
+                vec![SerializableMemoryReplayFrame {
+                    offset: 0,
+                    upstream_area_idx: 7,
+                    upstream_cortical_id: Some("csrc0001".to_string()),
+                    coords: vec![(0, 0, 0)],
+                    membrane_potentials: Some(vec![0.42]),
+                }],
+            )],
+            lite_synapses: vec![
+                SerializableSemanticSynapse {
+                    source: SerializableNeuronReference::Regular {
+                        cortical_id: "csrc0001".to_string(),
+                        x: 0,
+                        y: 0,
+                        z: 0,
+                        neuron_index: 0,
+                    },
+                    target: SerializableNeuronReference::Regular {
+                        cortical_id: "cdst0001".to_string(),
+                        x: 0,
+                        y: 0,
+                        z: 0,
+                        neuron_index: 0,
+                    },
+                    weight: 0.95,
+                    postsynaptic_potential: 1.1,
+                    synapse_type: 0,
+                    delay_bursts: 1,
+                    edge_flags: 1,
+                    eligibility_trace: 0.45,
+                },
+                SerializableSemanticSynapse {
+                    source: SerializableNeuronReference::LongTermMemory {
+                        snapshot_neuron_id: 50_000_000,
+                        cortical_id: "mmem0001".to_string(),
+                    },
+                    target: SerializableNeuronReference::Regular {
+                        cortical_id: "cdst0001".to_string(),
+                        x: 0,
+                        y: 0,
+                        z: 0,
+                        neuron_index: 0,
+                    },
+                    weight: 662.0,
+                    postsynaptic_potential: 500.0,
+                    synapse_type: 0,
+                    delay_bursts: 1,
+                    edge_flags: 0,
+                    eligibility_trace: 0.0,
+                },
+            ],
+        };
+
+        let temp_file = NamedTempFile::new().unwrap();
+        save_connectome(&snapshot, temp_file.path()).unwrap();
+        let loaded = load_connectome(temp_file.path()).unwrap();
+        assert!(loaded.is_lite_mode());
+        assert_eq!(loaded.synapses.count, 0);
+        assert_eq!(loaded.lite_synapses.len(), 2);
+        assert_eq!(loaded.long_term_memory_neurons.len(), 1);
+        assert_eq!(
+            loaded.long_term_memory_neurons[0].cortical_id.as_deref(),
+            Some("bXZpc3VhbO4=")
+        );
+        assert_eq!(loaded.long_term_memory_replay_frames.len(), 1);
     }
 
     #[test]

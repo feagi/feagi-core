@@ -41,5 +41,16 @@ impl NeuronService for MyTransport {
 
 Services sit between transport adapters (HTTP/ZMQ/etc.) and domain logic (BDU/NPU/etc.), providing a stable interface that doesn't change when either layer changes.
 
+## Connectome persistence
+
+Full snapshots restore the serialized NPU state directly. Lite snapshots rebuild
+the genome baseline and then apply memory and plasticity overlays.
+
+During lite import, long-term-memory pattern hashes are recomputed from persisted
+replay-frame cortical areas and voxel coordinates after neuroembryogenesis. This
+keeps recall aligned with rebuilt runtime neuron IDs while leaving full import
+and runtime pattern detection unchanged. Rehashing fails explicitly when a
+replay coordinate is missing or resolves ambiguously.
+
 Part of the [FEAGI](https://github.com/feagi/feagi-core) ecosystem.
 

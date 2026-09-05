@@ -27,6 +27,10 @@ use std::prelude::rust_2021::*; // Import Vec, String, etc. from std prelude
 pub const MEMORY_NEURON_ID_START: u32 = 50_000_000;
 #[cfg(feature = "std")]
 pub const MEMORY_NEURON_ID_MAX: u32 = 99_999_999;
+#[cfg(feature = "std")]
+pub const LITE_EDGE_ENCODING_TAG: &str = "lite_edge_encoding";
+#[cfg(feature = "std")]
+pub const LITE_EDGE_ENCODING_SEMANTIC_V1: &str = "semantic-v1";
 
 /// True when `neuron_id` is in the memory-neuron ID partition.
 #[cfg(feature = "std")]
@@ -42,6 +46,8 @@ pub fn is_memory_neuron_id(neuron_id: u32) -> bool {
 pub struct SerializableLongTermMemoryNeuron {
     pub neuron_id: u32,
     pub cortical_area_idx: u32,
+    #[serde(default)]
+    pub cortical_id: Option<String>,
     pub pattern_hash: Option<u64>,
     pub is_longterm_memory: bool,
     pub is_active: bool,
@@ -62,8 +68,45 @@ pub struct SerializableLongTermMemoryNeuron {
 pub struct SerializableMemoryReplayFrame {
     pub offset: u32,
     pub upstream_area_idx: u32,
+    #[serde(default)]
+    pub upstream_cortical_id: Option<String>,
     pub coords: Vec<(u32, u32, u32)>,
     pub membrane_potentials: Option<Vec<f32>>,
+}
+
+/// Stable neuron identity used by lite snapshots.
+///
+/// Regular neurons are addressed by genome identity and position instead of
+/// runtime neuron ID. Long-term-memory neurons use their snapshot-local ID,
+/// which is resolved after the LTM array is restored.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum SerializableNeuronReference {
+    Regular {
+        cortical_id: String,
+        x: u32,
+        y: u32,
+        z: u32,
+        neuron_index: u32,
+    },
+    LongTermMemory {
+        snapshot_neuron_id: u32,
+        cortical_id: String,
+    },
+}
+
+/// Complete non-reconstructible edge state stored by a lite snapshot.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SerializableSemanticSynapse {
+    pub source: SerializableNeuronReference,
+    pub target: SerializableNeuronReference,
+    pub weight: f32,
+    pub postsynaptic_potential: f32,
+    pub synapse_type: u8,
+    pub delay_bursts: u8,
+    pub edge_flags: u8,
+    pub eligibility_trace: f32,
 }
 
 /// Serializable version of NeuronArray
@@ -286,18 +329,12 @@ impl Default for ConnectomeMetadata {
 /// - `Lite`: baseline structure is reconstructed from `genome_json`; snapshot carries
 ///   memory/plastic synapse overlays and long-term memory artifacts.
 #[cfg(feature = "std")]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ConnectomePersistMode {
+    #[default]
     Full,
     Lite,
-}
-
-#[cfg(feature = "std")]
-impl Default for ConnectomePersistMode {
-    fn default() -> Self {
-        Self::Full
-    }
 }
 
 /// Complete connectome snapshot
@@ -361,6 +398,10 @@ pub struct ConnectomeSnapshot {
     /// Replay frames keyed by long-term memory neuron id. STM frames are omitted.
     #[serde(default)]
     pub long_term_memory_replay_frames: Vec<(u32, Vec<SerializableMemoryReplayFrame>)>,
+
+    /// Stable memory/plastic edge overlay used only by lite snapshots.
+    #[serde(default)]
+    pub lite_synapses: Vec<SerializableSemanticSynapse>,
 }
 
 /// Statistics about a connectome
@@ -411,8 +452,18 @@ impl ConnectomeSnapshot {
     pub fn validate(&self) -> Result<(), String> {
         if self.is_lite_mode() {
             if self.genome_json.is_none() {
+                return Err("Lite connectome snapshot requires embedded genome_json".to_string());
+            }
+            if self
+                .metadata
+                .tags
+                .get(LITE_EDGE_ENCODING_TAG)
+                .map(String::as_str)
+                != Some(LITE_EDGE_ENCODING_SEMANTIC_V1)
+            {
                 return Err(
-                    "Lite connectome snapshot requires embedded genome_json".to_string(),
+                    "Legacy lite connectome uses raw neuron IDs and cannot be restored safely; re-export it with the current FEAGI version"
+                        .to_string(),
                 );
             }
             return self.validate_synapses_only();
@@ -562,6 +613,15 @@ impl ConnectomeSnapshot {
     }
 
     fn validate_synapses_only(&self) -> Result<(), String> {
+        for (index, synapse) in self.lite_synapses.iter().enumerate() {
+            if synapse.delay_bursts == 0 {
+                return Err(std::format!(
+                    "lite_synapses[{}].delay_bursts must be at least 1",
+                    index
+                ));
+            }
+        }
+
         let s = self.synapses.count;
         if self.synapses.capacity < s {
             return Err(std::format!(
@@ -784,6 +844,7 @@ impl ConnectomeSnapshot {
                 &self.long_term_memory_replay_frames,
                 &ltm_ids,
             ),
+            lite_synapses: self.lite_synapses.clone(),
         }
     }
 
@@ -857,6 +918,7 @@ impl ConnectomeSnapshot {
             brain_region_ids: self.brain_region_ids.clone(),
             long_term_memory_neurons,
             long_term_memory_replay_frames,
+            lite_synapses: self.lite_synapses.clone(),
         }
     }
 
@@ -929,6 +991,7 @@ impl ConnectomeSnapshot {
                 &self.long_term_memory_replay_frames,
                 &ltm_ids,
             ),
+            lite_synapses: self.lite_synapses.clone(),
         }
     }
 
@@ -936,7 +999,12 @@ impl ConnectomeSnapshot {
     /// synapses and dropping full neuron-array payload.
     pub fn to_lite_snapshot(mut self) -> Self {
         self.persist_mode = ConnectomePersistMode::Lite;
+        self.metadata.tags.insert(
+            LITE_EDGE_ENCODING_TAG.to_string(),
+            LITE_EDGE_ENCODING_SEMANTIC_V1.to_string(),
+        );
         self.neurons = SerializableNeuronArray::default();
+        self.synapses = SerializableSynapseArray::default();
         self.burst_count = 0;
         self.power_amount = 1.0;
         self
@@ -1161,6 +1229,7 @@ mod tests {
             brain_region_ids: vec!["root".to_string()],
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         }
     }
 
@@ -1216,6 +1285,7 @@ mod tests {
         snapshot.long_term_memory_neurons = vec![SerializableLongTermMemoryNeuron {
             neuron_id: 50_000_001,
             cortical_area_idx: 1,
+            cortical_id: Some("memcort".to_string()),
             pattern_hash: Some(1),
             is_longterm_memory: true,
             is_active: true,
@@ -1259,6 +1329,7 @@ mod tests {
                 vec![SerializableMemoryReplayFrame {
                     offset: 0,
                     upstream_area_idx: 7,
+                    upstream_cortical_id: Some("area-a".to_string()),
                     coords: vec![(1, 2, 3)],
                     membrane_potentials: Some(vec![0.4]),
                 }],
@@ -1268,6 +1339,7 @@ mod tests {
                 vec![SerializableMemoryReplayFrame {
                     offset: 1,
                     upstream_area_idx: 7,
+                    upstream_cortical_id: Some("area-a".to_string()),
                     coords: vec![(4, 5, 6)],
                     membrane_potentials: None,
                 }],
@@ -1286,7 +1358,9 @@ mod tests {
     fn lite_snapshot_validation_requires_genome_json() {
         let mut snapshot = snapshot_with_two_areas().to_lite_snapshot();
         snapshot.genome_json = None;
-        let err = snapshot.validate().expect_err("lite snapshot must require genome");
+        let err = snapshot
+            .validate()
+            .expect_err("lite snapshot must require genome");
         assert!(err.contains("genome_json"));
     }
 
@@ -1294,5 +1368,17 @@ mod tests {
     fn lite_snapshot_allows_empty_payload_when_genome_present() {
         let snapshot = snapshot_with_two_areas().to_lite_snapshot();
         assert!(snapshot.validate().is_ok());
+    }
+
+    #[test]
+    fn lite_snapshot_rejects_legacy_raw_id_encoding() {
+        let mut snapshot = snapshot_with_two_areas().to_lite_snapshot();
+        snapshot.metadata.tags.remove(LITE_EDGE_ENCODING_TAG);
+
+        let error = snapshot
+            .validate()
+            .expect_err("legacy lite snapshots must be rejected");
+        assert!(error.contains("raw neuron IDs"));
+        assert!(error.contains("re-export"));
     }
 }

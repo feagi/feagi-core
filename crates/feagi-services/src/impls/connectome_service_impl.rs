@@ -12,8 +12,8 @@ use crate::traits::ConnectomeService;
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
-use feagi_brain_development::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
+use feagi_brain_development::Neuroembryogenesis;
 use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_npu_neural::types::{NeuronId, SynapseType, SynapticPsp, SynapticWeight};
@@ -2897,7 +2897,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         if mode == feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite {
             snapshot = build_lite_snapshot(snapshot)?;
         } else {
-            snapshot.persist_mode = feagi_npu_neural::types::connectome::ConnectomePersistMode::Full;
+            snapshot.persist_mode =
+                feagi_npu_neural::types::connectome::ConnectomePersistMode::Full;
         }
 
         Ok(snapshot)
@@ -2916,6 +2917,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         })?;
 
         let mut snapshot = snapshot;
+        let mut lite_overlay_needed = false;
         if snapshot.is_lite_mode() {
             let genome_json = snapshot.genome_json.clone().ok_or_else(|| {
                 ServiceError::InvalidInput(
@@ -2934,15 +2936,18 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 let manager = self.connectome.read();
                 remap_snapshot_cortical_indexes(&manager, &mut snapshot)?;
             }
-            apply_lite_synapse_overlay(&self.connectome, &snapshot)?;
+            #[cfg(feature = "plasticity")]
+            rehash_lite_long_term_memory_patterns(&self.connectome, &mut snapshot)?;
+            lite_overlay_needed = true;
         } else {
             if let Some(ref genome_json) = snapshot.genome_json {
-                let genome = feagi_evolutionary::load_genome_from_json(genome_json).map_err(|e| {
-                    ServiceError::InvalidInput(format!(
-                        "Connectome snapshot genome_json is invalid: {}",
-                        e
-                    ))
-                })?;
+                let genome =
+                    feagi_evolutionary::load_genome_from_json(genome_json).map_err(|e| {
+                        ServiceError::InvalidInput(format!(
+                            "Connectome snapshot genome_json is invalid: {}",
+                            e
+                        ))
+                    })?;
                 self.apply_runtime_genome_to_connectome(&genome)?;
                 *self.current_genome.write() = Some(genome);
             }
@@ -2966,6 +2971,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         #[cfg(feature = "plasticity")]
         restore_long_term_memory_from_snapshot(&self.connectome, &snapshot)?;
+
+        if lite_overlay_needed {
+            apply_lite_synapse_overlay(&self.connectome, &snapshot)?;
+        }
 
         restore_episodic_runtime_from_snapshot(&self.connectome, &snapshot)?;
 
@@ -3001,6 +3010,10 @@ fn attach_long_term_memory_to_snapshot(
         .map(|detail| SerializableLongTermMemoryNeuron {
             neuron_id: detail.neuron_id,
             cortical_area_idx: detail.cortical_area_idx,
+            cortical_id: connectome
+                .read()
+                .get_cortical_id(detail.cortical_area_idx)
+                .map(|id| id.as_base_64()),
             pattern_hash: detail.pattern_hash,
             is_longterm_memory: detail.is_longterm_memory,
             is_active: detail.is_active,
@@ -3048,6 +3061,10 @@ fn attach_long_term_memory_replay_frames(
                     .map(|frame| SerializableMemoryReplayFrame {
                         offset: frame.offset,
                         upstream_area_idx: frame.upstream_area_idx,
+                        upstream_cortical_id: snapshot
+                            .cortical_area_names
+                            .get(&frame.upstream_area_idx)
+                            .cloned(),
                         coords: frame.coords,
                         membrane_potentials: frame.membrane_potentials,
                     })
@@ -3063,99 +3080,188 @@ fn build_lite_snapshot(
     mut snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
 ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot> {
     use feagi_npu_neural::types::connectome::{
-        ConnectomePersistMode, SerializableSynapseArray,
+        ConnectomePersistMode, SerializableNeuronReference, SerializableSemanticSynapse,
+        SerializableSynapseArray,
     };
-    let idx_by_cortical_id: HashMap<String, u32> = snapshot
-        .cortical_area_names
-        .iter()
-        .map(|(idx, cortical_id)| (cortical_id.clone(), *idx))
-        .collect();
 
-    let plastic_idx_pairs: HashSet<(u32, u32)> = snapshot
-        .plastic_mappings
-        .iter()
-        .filter_map(|(src_id, dst_id)| match (idx_by_cortical_id.get(src_id), idx_by_cortical_id.get(dst_id)) {
-            (Some(src), Some(dst)) => Some((*src, *dst)),
-            _ => None,
-        })
-        .collect();
-
-    let mut regular_neuron_area: HashMap<u32, u32> = HashMap::new();
-    let regular_limit = snapshot
-        .neurons
-        .count
-        .min(snapshot.neurons.cortical_areas.len());
-    for neuron_id in 0..regular_limit {
-        regular_neuron_area.insert(neuron_id as u32, snapshot.neurons.cortical_areas[neuron_id]);
+    if snapshot.genome_json.is_none() {
+        return Err(ServiceError::InvalidState(
+            "Lite connectome export requires a loaded runtime genome".to_string(),
+        ));
     }
 
-    let mut ltm_area: HashMap<u32, u32> = HashMap::new();
-    let mut ltm_ids: HashSet<u32> = HashSet::new();
+    let plastic_pairs: HashSet<(String, String)> =
+        snapshot.plastic_mappings.iter().cloned().collect();
+    let memory_ids: HashSet<String> = snapshot.memory_area_ids.iter().cloned().collect();
+    let mut endpoint_by_neuron_id: HashMap<u32, SerializableNeuronReference> = HashMap::new();
+    let mut coordinate_ordinals: HashMap<(u32, u32, u32, u32), u32> = HashMap::new();
+
+    for neuron_id in 0..snapshot.neurons.count {
+        if !snapshot
+            .neurons
+            .valid_mask
+            .get(neuron_id)
+            .copied()
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let cortical_idx = *snapshot
+            .neurons
+            .cortical_areas
+            .get(neuron_id)
+            .ok_or_else(|| {
+                ServiceError::InvalidInput(format!(
+                    "Neuron {} has no cortical area in full snapshot",
+                    neuron_id
+                ))
+            })?;
+        let cortical_id = snapshot
+            .cortical_area_names
+            .get(&cortical_idx)
+            .cloned()
+            .ok_or_else(|| {
+                ServiceError::InvalidInput(format!(
+                    "Neuron {} references unregistered cortical idx {}",
+                    neuron_id, cortical_idx
+                ))
+            })?;
+        let coordinate_offset = neuron_id.saturating_mul(3);
+        let x = *snapshot
+            .neurons
+            .coordinates
+            .get(coordinate_offset)
+            .ok_or_else(|| ServiceError::InvalidInput("Missing neuron X coordinate".to_string()))?;
+        let y = *snapshot
+            .neurons
+            .coordinates
+            .get(coordinate_offset + 1)
+            .ok_or_else(|| ServiceError::InvalidInput("Missing neuron Y coordinate".to_string()))?;
+        let z = *snapshot
+            .neurons
+            .coordinates
+            .get(coordinate_offset + 2)
+            .ok_or_else(|| ServiceError::InvalidInput("Missing neuron Z coordinate".to_string()))?;
+        let ordinal = coordinate_ordinals
+            .entry((cortical_idx, x, y, z))
+            .or_insert(0);
+        endpoint_by_neuron_id.insert(
+            neuron_id as u32,
+            SerializableNeuronReference::Regular {
+                cortical_id,
+                x,
+                y,
+                z,
+                neuron_index: *ordinal,
+            },
+        );
+        *ordinal += 1;
+    }
+
     for neuron in &snapshot.long_term_memory_neurons {
         if neuron.is_longterm_memory && neuron.is_active {
-            ltm_ids.insert(neuron.neuron_id);
-            ltm_area.insert(neuron.neuron_id, neuron.cortical_area_idx);
+            let cortical_id = neuron
+                .cortical_id
+                .clone()
+                .or_else(|| {
+                    snapshot
+                        .cortical_area_names
+                        .get(&neuron.cortical_area_idx)
+                        .cloned()
+                })
+                .ok_or_else(|| {
+                    ServiceError::InvalidInput(format!(
+                        "LTM neuron {} has no stable cortical identity",
+                        neuron.neuron_id
+                    ))
+                })?;
+            endpoint_by_neuron_id.insert(
+                neuron.neuron_id,
+                SerializableNeuronReference::LongTermMemory {
+                    snapshot_neuron_id: neuron.neuron_id,
+                    cortical_id,
+                },
+            );
         }
     }
 
-    let mut keep_indices: Vec<usize> = Vec::new();
+    let mut lite_synapses: Vec<SerializableSemanticSynapse> = Vec::new();
     for i in 0..snapshot.synapses.count {
         if i < snapshot.synapses.valid_mask.len() && !snapshot.synapses.valid_mask[i] {
             continue;
         }
-        let src = snapshot.synapses.source_neurons[i];
-        let dst = snapshot.synapses.target_neurons[i];
-        let touches_ltm = ltm_ids.contains(&src) || ltm_ids.contains(&dst);
-        let src_idx = if ltm_ids.contains(&src) {
-            ltm_area.get(&src).copied()
-        } else {
-            regular_neuron_area.get(&src).copied()
-        };
-        let dst_idx = if ltm_ids.contains(&dst) {
-            ltm_area.get(&dst).copied()
-        } else {
-            regular_neuron_area.get(&dst).copied()
-        };
-        let in_plastic_mapping = match (src_idx, dst_idx) {
-            (Some(s), Some(d)) => plastic_idx_pairs.contains(&(s, d)),
-            _ => false,
-        };
-        if touches_ltm || in_plastic_mapping {
-            keep_indices.push(i);
+        let source_id = snapshot.synapses.source_neurons[i];
+        let target_id = snapshot.synapses.target_neurons[i];
+        let source = endpoint_by_neuron_id
+            .get(&source_id)
+            .cloned()
+            .ok_or_else(|| {
+                ServiceError::InvalidInput(format!(
+                    "Cannot create lite snapshot: synapse {} source {} has no semantic identity",
+                    i, source_id
+                ))
+            })?;
+        let target = endpoint_by_neuron_id
+            .get(&target_id)
+            .cloned()
+            .ok_or_else(|| {
+                ServiceError::InvalidInput(format!(
+                    "Cannot create lite snapshot: synapse {} target {} has no semantic identity",
+                    i, target_id
+                ))
+            })?;
+        let source_cortical_id = semantic_reference_cortical_id(&source);
+        let target_cortical_id = semantic_reference_cortical_id(&target);
+        let touches_ltm = matches!(source, SerializableNeuronReference::LongTermMemory { .. })
+            || matches!(target, SerializableNeuronReference::LongTermMemory { .. });
+        let touches_memory_area =
+            memory_ids.contains(source_cortical_id) || memory_ids.contains(target_cortical_id);
+        let in_plastic_mapping = plastic_pairs.contains(&(
+            source_cortical_id.to_string(),
+            target_cortical_id.to_string(),
+        ));
+        if touches_ltm || touches_memory_area || in_plastic_mapping {
+            lite_synapses.push(SerializableSemanticSynapse {
+                source,
+                target,
+                weight: snapshot.synapses.weights[i],
+                postsynaptic_potential: snapshot.synapses.postsynaptic_potentials[i],
+                synapse_type: snapshot.synapses.types[i],
+                delay_bursts: snapshot
+                    .synapses
+                    .delay_bursts
+                    .get(i)
+                    .copied()
+                    .unwrap_or(1)
+                    .max(1),
+                edge_flags: snapshot.synapses.edge_flags.get(i).copied().unwrap_or(0),
+                eligibility_trace: snapshot
+                    .synapses
+                    .eligibility_traces
+                    .get(i)
+                    .copied()
+                    .unwrap_or(0.0),
+            });
         }
     }
 
-    let mut lite_synapses = SerializableSynapseArray::new(keep_indices.len());
-    lite_synapses.count = keep_indices.len();
-    for (new_idx, old_idx) in keep_indices.iter().enumerate() {
-        let old = *old_idx;
-        lite_synapses.source_neurons[new_idx] = snapshot.synapses.source_neurons[old];
-        lite_synapses.target_neurons[new_idx] = snapshot.synapses.target_neurons[old];
-        lite_synapses.weights[new_idx] = snapshot.synapses.weights[old];
-        lite_synapses.postsynaptic_potentials[new_idx] =
-            snapshot.synapses.postsynaptic_potentials[old];
-        lite_synapses.types[new_idx] = snapshot.synapses.types[old];
-        lite_synapses.valid_mask[new_idx] = true;
-        if old < snapshot.synapses.delay_bursts.len() {
-            lite_synapses.delay_bursts[new_idx] = snapshot.synapses.delay_bursts[old];
-        }
-        if old < snapshot.synapses.edge_flags.len() {
-            lite_synapses.edge_flags[new_idx] = snapshot.synapses.edge_flags[old];
-        }
-        if old < snapshot.synapses.eligibility_traces.len() {
-            lite_synapses.eligibility_traces[new_idx] = snapshot.synapses.eligibility_traces[old];
-        }
-        lite_synapses
-            .source_index
-            .entry(lite_synapses.source_neurons[new_idx])
-            .or_insert_with(Vec::new)
-            .push(new_idx);
-    }
-
-    snapshot.synapses = lite_synapses;
+    snapshot.lite_synapses = lite_synapses;
+    snapshot.synapses = SerializableSynapseArray::default();
     snapshot.persist_mode = ConnectomePersistMode::Lite;
     snapshot = snapshot.to_lite_snapshot();
     Ok(snapshot)
+}
+
+#[cfg(feature = "connectome-io")]
+fn semantic_reference_cortical_id(
+    reference: &feagi_npu_neural::types::connectome::SerializableNeuronReference,
+) -> &str {
+    use feagi_npu_neural::types::connectome::SerializableNeuronReference;
+
+    match reference {
+        SerializableNeuronReference::Regular { cortical_id, .. }
+        | SerializableNeuronReference::LongTermMemory { cortical_id, .. } => cortical_id,
+    }
 }
 
 #[cfg(feature = "connectome-io")]
@@ -3165,8 +3271,12 @@ fn rebuild_connectome_from_genome(
 ) -> ServiceResult<()> {
     {
         let mut manager = connectome.write();
-        manager.prepare_for_new_genome().map_err(ServiceError::from)?;
-        manager.resize_for_genome(genome).map_err(ServiceError::from)?;
+        manager
+            .prepare_for_new_genome()
+            .map_err(ServiceError::from)?;
+        manager
+            .resize_for_genome(genome)
+            .map_err(ServiceError::from)?;
     }
     let mut neuro = Neuroembryogenesis::new(connectome.clone());
     neuro
@@ -3186,19 +3296,63 @@ fn apply_lite_synapse_overlay(
     connectome: &Arc<RwLock<ConnectomeManager>>,
     snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
 ) -> ServiceResult<()> {
-    if snapshot.synapses.count == 0 {
+    use feagi_npu_neural::types::connectome::SerializableNeuronReference;
+
+    if snapshot.lite_synapses.is_empty()
+        && snapshot.plastic_mappings.is_empty()
+        && snapshot.memory_area_ids.is_empty()
+    {
         return Ok(());
+    }
+
+    let mut replaced_mappings: HashSet<(String, String)> =
+        snapshot.plastic_mappings.iter().cloned().collect();
+    let memory_ids: HashSet<&str> = snapshot
+        .memory_area_ids
+        .iter()
+        .map(String::as_str)
+        .collect();
+    let genome_json = snapshot.genome_json.as_deref().ok_or_else(|| {
+        ServiceError::InvalidInput(
+            "Lite connectome snapshot requires embedded genome_json".to_string(),
+        )
+    })?;
+    let genome = feagi_evolutionary::load_genome_from_json(genome_json).map_err(|e| {
+        ServiceError::InvalidInput(format!("Connectome snapshot genome_json is invalid: {}", e))
+    })?;
+    for (source_id, area) in &genome.cortical_areas {
+        let source_id_b64 = source_id.as_base_64();
+        let Some(destinations) = area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(serde_json::Value::as_object)
+        else {
+            continue;
+        };
+        for target_id_b64 in destinations.keys() {
+            if memory_ids.contains(source_id_b64.as_str())
+                || memory_ids.contains(target_id_b64.as_str())
+            {
+                replaced_mappings.insert((source_id_b64.clone(), target_id_b64.clone()));
+            }
+        }
     }
 
     let mapping_neurons: Vec<(Vec<NeuronId>, Vec<NeuronId>)> = {
         let manager = connectome.read();
         let mut result = Vec::new();
-        for (src_id, dst_id) in &snapshot.plastic_mappings {
-            let src = CorticalID::try_from_base_64(src_id).map_err(|e| {
-                ServiceError::InvalidInput(format!("Invalid plastic mapping source '{}': {}", src_id, e))
+        for (src_id, dst_id) in replaced_mappings {
+            let src = CorticalID::try_from_base_64(&src_id).map_err(|e| {
+                ServiceError::InvalidInput(format!(
+                    "Invalid plastic mapping source '{}': {}",
+                    src_id, e
+                ))
             })?;
-            let dst = CorticalID::try_from_base_64(dst_id).map_err(|e| {
-                ServiceError::InvalidInput(format!("Invalid plastic mapping destination '{}': {}", dst_id, e))
+            let dst = CorticalID::try_from_base_64(&dst_id).map_err(|e| {
+                ServiceError::InvalidInput(format!(
+                    "Invalid plastic mapping destination '{}': {}",
+                    dst_id, e
+                ))
             })?;
             let src_neurons: Vec<NeuronId> = manager
                 .get_neurons_in_area(&src)
@@ -3217,12 +3371,78 @@ fn apply_lite_synapse_overlay(
         result
     };
 
+    let resolve_reference = |reference: &SerializableNeuronReference| -> ServiceResult<NeuronId> {
+        match reference {
+            SerializableNeuronReference::LongTermMemory {
+                snapshot_neuron_id,
+                cortical_id,
+            } => {
+                let cortical_id_parsed =
+                    CorticalID::try_from_base_64(cortical_id).map_err(|e| {
+                        ServiceError::InvalidInput(format!(
+                            "Invalid LTM cortical id '{}': {}",
+                            cortical_id, e
+                        ))
+                    })?;
+                let manager = connectome.read();
+                if manager.get_cortical_idx(&cortical_id_parsed).is_none() {
+                    return Err(ServiceError::InvalidInput(format!(
+                        "LTM cortical area '{}' is not registered after genome rebuild",
+                        cortical_id
+                    )));
+                }
+                Ok(NeuronId(*snapshot_neuron_id))
+            }
+            SerializableNeuronReference::Regular {
+                cortical_id,
+                x,
+                y,
+                z,
+                neuron_index,
+            } => {
+                let cortical_id_parsed =
+                    CorticalID::try_from_base_64(cortical_id).map_err(|e| {
+                        ServiceError::InvalidInput(format!(
+                            "Invalid regular cortical id '{}': {}",
+                            cortical_id, e
+                        ))
+                    })?;
+                let manager = connectome.read();
+                let mut matches: Vec<u32> = manager
+                    .get_neurons_in_area(&cortical_id_parsed)
+                    .into_iter()
+                    .filter_map(|neuron_id| {
+                        (manager.get_neuron_coordinates(neuron_id) == (*x, *y, *z))
+                            .then_some(neuron_id as u32)
+                    })
+                    .collect();
+                matches.sort_unstable();
+                matches
+                    .get(*neuron_index as usize)
+                    .copied()
+                    .map(NeuronId)
+                    .ok_or_else(|| {
+                        ServiceError::InvalidInput(format!(
+                            "Cannot resolve neuron {} at ({},{},{}) index {} after genome rebuild",
+                            cortical_id, x, y, z, neuron_index
+                        ))
+                    })
+            }
+        }
+    };
+
+    let mut resolved_synapses = Vec::with_capacity(snapshot.lite_synapses.len());
+    for semantic_synapse in &snapshot.lite_synapses {
+        let source = resolve_reference(&semantic_synapse.source)?;
+        let target = resolve_reference(&semantic_synapse.target)?;
+        resolved_synapses.push((source, target, semantic_synapse));
+    }
+
     let npu_arc = {
         let manager = connectome.read();
-        manager
-            .get_npu()
-            .cloned()
-            .ok_or_else(|| ServiceError::Backend("NPU not connected to ConnectomeManager".to_string()))?
+        manager.get_npu().cloned().ok_or_else(|| {
+            ServiceError::Backend("NPU not connected to ConnectomeManager".to_string())
+        })?
     };
     let mut npu = npu_arc
         .lock()
@@ -3232,65 +3452,35 @@ fn apply_lite_synapse_overlay(
         npu.remove_synapses_from_sources_to_targets(sources, targets);
     }
 
-    let mut synapse_rows: Vec<(
-        NeuronId,
-        NeuronId,
-        SynapticWeight,
-        SynapticPsp,
-        SynapseType,
-        u8,
-        u8,
-        f32,
-    )> = Vec::new();
-    for i in 0..snapshot.synapses.count {
-        if i < snapshot.synapses.valid_mask.len() && !snapshot.synapses.valid_mask[i] {
-            continue;
-        }
-        let source = NeuronId(snapshot.synapses.source_neurons[i]);
-        let target = NeuronId(snapshot.synapses.target_neurons[i]);
-        let weight = SynapticWeight(snapshot.synapses.weights[i]);
-        let psp = SynapticPsp(snapshot.synapses.postsynaptic_potentials[i]);
-        let synapse_type = match snapshot.synapses.types[i] {
+    for (source, target, semantic_synapse) in resolved_synapses {
+        let synapse_type = match semantic_synapse.synapse_type {
             1 => SynapseType::Inhibitory,
             _ => SynapseType::Excitatory,
         };
-        let edge_flag = *snapshot.synapses.edge_flags.get(i).unwrap_or(&0);
-        let delay = (*snapshot.synapses.delay_bursts.get(i).unwrap_or(&1)).max(1);
-        let eligibility = snapshot
-            .synapses
-            .eligibility_traces
-            .get(i)
-            .copied()
-            .unwrap_or(0.0);
-        synapse_rows.push((
-            source,
-            target,
-            weight,
-            psp,
-            synapse_type,
-            edge_flag,
-            delay,
-            eligibility,
-        ));
-    }
-
-    if !synapse_rows.is_empty() {
-        for (source, target, weight, psp, synapse_type, edge_flag, delay, eligibility) in synapse_rows
+        let _ = npu.remove_synapse(source, target);
+        let syn_idx = npu
+            .add_synapse(
+                source,
+                target,
+                SynapticWeight(semantic_synapse.weight),
+                SynapticPsp(semantic_synapse.postsynaptic_potential),
+                synapse_type,
+                semantic_synapse.edge_flags,
+                semantic_synapse.delay_bursts,
+            )
+            .map_err(|e| {
+                ServiceError::Backend(format!("Failed to apply lite synapse overlay: {}", e))
+            })?;
+        if semantic_synapse.eligibility_trace != 0.0
+            && !npu.set_synapse_eligibility_trace(syn_idx, semantic_synapse.eligibility_trace)
         {
-            let syn_idx = npu
-                .add_synapse(source, target, weight, psp, synapse_type, edge_flag, delay)
-                .map_err(|e| {
-                    ServiceError::Backend(format!("Failed to apply lite synapse overlay: {}", e))
-                })?;
-            if eligibility != 0.0 && !npu.set_synapse_eligibility_trace(syn_idx, eligibility) {
-                return Err(ServiceError::Backend(format!(
-                    "Failed to apply eligibility trace for synapse index {}",
-                    syn_idx
-                )));
-            }
+            return Err(ServiceError::Backend(format!(
+                "Failed to apply eligibility trace for synapse index {}",
+                syn_idx
+            )));
         }
-        npu.rebuild_synapse_index();
     }
+    npu.rebuild_synapse_index();
     Ok(())
 }
 
@@ -3310,6 +3500,193 @@ fn collect_long_term_memory_neurons(
         .map_err(|_| ServiceError::Backend("Failed to lock plasticity executor".to_string()))?;
     exec.export_long_term_memory_neurons()
         .map_err(ServiceError::Backend)
+}
+
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn rehash_lite_long_term_memory_patterns(
+    connectome: &RwLock<ConnectomeManager>,
+    snapshot: &mut feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+) -> ServiceResult<()> {
+    use feagi_npu_plasticity::{PatternConfig, PatternDetector};
+
+    struct RehashPlan {
+        neuron_id: u32,
+        memory_area_idx: u32,
+        temporal_depth: u32,
+        upstream_areas: Vec<u32>,
+    }
+    type VoxelCoordinate = (u32, u32, u32);
+    type NeuronsByVoxel = HashMap<VoxelCoordinate, Vec<u32>>;
+    type NeuronsByAreaAndVoxel = HashMap<u32, NeuronsByVoxel>;
+
+    let plans = {
+        let manager = connectome.read();
+        let mut plans = Vec::new();
+        for neuron in &snapshot.long_term_memory_neurons {
+            if !neuron.is_longterm_memory || !neuron.is_active {
+                continue;
+            }
+            let memory_id = manager
+                .get_cortical_id(neuron.cortical_area_idx)
+                .copied()
+                .ok_or_else(|| {
+                    ServiceError::InvalidInput(format!(
+                        "Cannot rehash LTM neuron {}: memory cortical idx {} is not registered",
+                        neuron.neuron_id, neuron.cortical_area_idx
+                    ))
+                })?;
+            let memory_area = manager.get_cortical_area(&memory_id).ok_or_else(|| {
+                ServiceError::InvalidInput(format!(
+                    "Cannot rehash LTM neuron {}: memory area '{}' is unavailable",
+                    neuron.neuron_id,
+                    memory_id.as_base_64()
+                ))
+            })?;
+            let memory_properties = feagi_evolutionary::extract_memory_properties(
+                &memory_area.properties,
+            )
+            .ok_or_else(|| {
+                ServiceError::InvalidInput(format!(
+                    "Cannot rehash LTM neuron {}: cortical area '{}' is not a memory area",
+                    neuron.neuron_id,
+                    memory_id.as_base_64()
+                ))
+            })?;
+            let mut upstream_areas =
+                manager.get_episodic_memory_upstream_cortical_areas(&memory_id);
+            upstream_areas.sort_unstable();
+            if upstream_areas.is_empty() {
+                continue;
+            }
+            plans.push(RehashPlan {
+                neuron_id: neuron.neuron_id,
+                memory_area_idx: neuron.cortical_area_idx,
+                temporal_depth: memory_properties.temporal_depth,
+                upstream_areas,
+            });
+        }
+        plans
+    };
+    if plans.is_empty() {
+        return Ok(());
+    }
+    let npu_arc = connectome
+        .read()
+        .get_npu()
+        .cloned()
+        .ok_or_else(|| ServiceError::Backend("NPU is not connected".to_string()))?;
+
+    let detector = PatternDetector::new(PatternConfig::default());
+    let npu = npu_arc
+        .lock()
+        .map_err(|_| ServiceError::Backend("Failed to lock NPU for LTM rehash".to_string()))?;
+    let mut rebuilt_hashes = HashMap::new();
+    let mut neurons_by_area_and_voxel = NeuronsByAreaAndVoxel::new();
+    for upstream_area_idx in plans
+        .iter()
+        .flat_map(|plan| plan.upstream_areas.iter().copied())
+        .collect::<HashSet<_>>()
+    {
+        let mut neurons_by_voxel = NeuronsByVoxel::new();
+        for neuron_id in npu.get_neurons_in_cortical_area(upstream_area_idx) {
+            let coordinates = npu.get_neuron_coordinates(neuron_id).ok_or_else(|| {
+                ServiceError::InvalidState(format!(
+                    "Cannot rehash lite LTM patterns: rebuilt neuron {} has no coordinates",
+                    neuron_id
+                ))
+            })?;
+            neurons_by_voxel
+                .entry(coordinates)
+                .or_default()
+                .push(neuron_id);
+        }
+        neurons_by_area_and_voxel.insert(upstream_area_idx, neurons_by_voxel);
+    }
+
+    for plan in plans {
+        let frames = snapshot
+            .long_term_memory_replay_frames
+            .iter()
+            .find_map(|(neuron_id, frames)| (*neuron_id == plan.neuron_id).then_some(frames))
+            .ok_or_else(|| {
+                ServiceError::InvalidInput(format!(
+                    "Cannot rehash LTM neuron {}: lite snapshot has no replay frames",
+                    plan.neuron_id
+                ))
+            })?;
+        let upstream_count = plan.upstream_areas.len();
+        let mut timestep_bitmaps =
+            vec![HashSet::new(); plan.temporal_depth as usize * upstream_count];
+
+        for frame in frames {
+            let upstream_position = plan
+                .upstream_areas
+                .binary_search(&frame.upstream_area_idx)
+                .map_err(|_| {
+                    ServiceError::InvalidInput(format!(
+                        "Cannot rehash LTM neuron {}: replay upstream area {} is not configured",
+                        plan.neuron_id, frame.upstream_area_idx
+                    ))
+                })?;
+            if frame.offset >= plan.temporal_depth {
+                return Err(ServiceError::InvalidInput(format!(
+                    "Cannot rehash LTM neuron {}: replay offset {} exceeds temporal depth {}",
+                    plan.neuron_id, frame.offset, plan.temporal_depth
+                )));
+            }
+            let unique_coords: HashSet<(u32, u32, u32)> = frame.coords.iter().copied().collect();
+            if unique_coords.len() != frame.coords.len() {
+                return Err(ServiceError::InvalidInput(format!(
+                    "Cannot rehash LTM neuron {}: replay frame contains multiple neurons at one voxel",
+                    plan.neuron_id
+                )));
+            }
+            let bitmap_index = frame.offset as usize * upstream_count + upstream_position;
+            for &(x, y, z) in &frame.coords {
+                let matches = neurons_by_area_and_voxel
+                    .get(&frame.upstream_area_idx)
+                    .and_then(|neurons_by_voxel| neurons_by_voxel.get(&(x, y, z)))
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                if matches.len() != 1 {
+                    return Err(ServiceError::InvalidInput(format!(
+                        "Cannot rehash LTM neuron {}: expected one rebuilt neuron at area {} voxel ({},{},{}), found {}",
+                        plan.neuron_id,
+                        frame.upstream_area_idx,
+                        x,
+                        y,
+                        z,
+                        matches.len()
+                    )));
+                }
+                timestep_bitmaps[bitmap_index].insert(matches[0]);
+            }
+        }
+
+        let pattern = detector
+            .detect_pattern(
+                plan.memory_area_idx,
+                &plan.upstream_areas,
+                0,
+                timestep_bitmaps,
+                Some(plan.temporal_depth),
+            )
+            .ok_or_else(|| {
+                ServiceError::InvalidInput(format!(
+                    "Cannot rehash LTM neuron {}: replay frames contain no activity",
+                    plan.neuron_id
+                ))
+            })?;
+        rebuilt_hashes.insert(plan.neuron_id, pattern.pattern_hash);
+    }
+    drop(npu);
+
+    for neuron in &mut snapshot.long_term_memory_neurons {
+        if let Some(pattern_hash) = rebuilt_hashes.get(&neuron.neuron_id) {
+            neuron.pattern_hash = Some(*pattern_hash);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
@@ -3395,12 +3772,34 @@ fn remap_snapshot_cortical_indexes(
     for neuron in &mut snapshot.long_term_memory_neurons {
         if let Some(live_idx) = snapshot_idx_to_live.get(&neuron.cortical_area_idx) {
             neuron.cortical_area_idx = *live_idx;
+            continue;
+        }
+        if let Some(cortical_id_b64) = neuron.cortical_id.as_deref() {
+            if let Ok(cortical_id) = CorticalID::try_from_base_64(cortical_id_b64) {
+                if let Some(live_idx) = manager.get_cortical_idx(&cortical_id) {
+                    neuron.cortical_area_idx = live_idx;
+                }
+            }
         }
     }
     for (_neuron_id, frames) in &mut snapshot.long_term_memory_replay_frames {
         for frame in frames {
             if let Some(live_idx) = snapshot_idx_to_live.get(&frame.upstream_area_idx) {
                 frame.upstream_area_idx = *live_idx;
+            } else if let Some(cortical_id_b64) = frame.upstream_cortical_id.as_deref() {
+                let cortical_id = CorticalID::try_from_base_64(cortical_id_b64).map_err(|e| {
+                    ServiceError::InvalidInput(format!(
+                        "Replay frame cortical id '{}' is invalid: {}",
+                        cortical_id_b64, e
+                    ))
+                })?;
+                frame.upstream_area_idx =
+                    manager.get_cortical_idx(&cortical_id).ok_or_else(|| {
+                        ServiceError::InvalidInput(format!(
+                        "Replay frame cortical area '{}' is not registered after genome rebuild",
+                        cortical_id_b64
+                    ))
+                    })?;
             }
         }
     }
@@ -3491,8 +3890,18 @@ fn register_dynamic_neuron_mappings_for_ltm(
             if !neuron.is_longterm_memory || !neuron.is_active {
                 continue;
             }
-            let Some(cortical_id) = manager.get_cortical_id(neuron.cortical_area_idx).copied()
-            else {
+            let cortical_id = if let Some(cortical_id) =
+                manager.get_cortical_id(neuron.cortical_area_idx).copied()
+            {
+                cortical_id
+            } else if let Some(cortical_id_b64) = neuron.cortical_id.as_deref() {
+                CorticalID::try_from_base_64(cortical_id_b64).map_err(|e| {
+                    ServiceError::Backend(format!(
+                        "Cannot map LTM neuron {}: cortical idx {} is not registered and cortical_id '{}' is invalid: {}",
+                        neuron.neuron_id, neuron.cortical_area_idx, cortical_id_b64, e
+                    ))
+                })?
+            } else {
                 return Err(ServiceError::Backend(format!(
                     "Cannot map LTM neuron {}: cortical idx {} is not registered",
                     neuron.neuron_id, neuron.cortical_area_idx
@@ -5018,6 +5427,7 @@ mod tests {
             brain_region_ids: vec![region_key.clone()],
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         };
         svc.import_connectome(snapshot).await?;
 
@@ -5117,7 +5527,9 @@ mod tests {
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
-        };
+            lite_synapses: Vec::new(),
+        }
+        .to_lite_snapshot();
 
         svc.import_connectome(snapshot).await?;
 
@@ -5260,6 +5672,7 @@ mod tests {
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         };
         svc.import_connectome(snapshot).await?;
 
@@ -5306,6 +5719,867 @@ mod tests {
             );
         }
         Ok(())
+    }
+
+    #[cfg(all(
+        feature = "connectome-io",
+        feature = "connectome-serialization",
+        feature = "plasticity"
+    ))]
+    #[tokio::test]
+    async fn full_connectome_download_reload_preserves_memory_and_plasticity() -> ServiceResult<()>
+    {
+        use crate::connectome::{load_connectome, save_connectome};
+        use crate::traits::ConnectomeService;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::npu::MemoryReplayFrame;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
+        use feagi_npu_neural::types::connectome::ConnectomePersistMode;
+        use feagi_npu_neural::types::{NeuronId, SynapseType, SynapticPsp, SynapticWeight};
+        use feagi_npu_plasticity::executor::PlasticityExecutor;
+        use feagi_npu_plasticity::{AsyncPlasticityExecutor, MemoryNeuronDetail, PlasticityConfig};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+        use tempfile::NamedTempFile;
+
+        let src_id = CorticalID::try_from_bytes(b"cfulsrc1").expect("src id");
+        let mem_id = CorticalID::try_from_bytes(b"mfulmem1").expect("mem id");
+        let twin_id = CorticalID::try_from_bytes(b"cfultwn1").expect("twin id");
+        let dims = CorticalAreaDimensions::new(1, 1, 1).expect("dims");
+
+        let mut src = CorticalArea::new(
+            src_id,
+            0,
+            "full-src".to_string(),
+            dims,
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )?;
+        src.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "episodic_memory",
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": false,
+                    "synaptic_delay_bursts": 1
+                }]
+            }),
+        );
+        let mut mem = CorticalArea::new(
+            mem_id,
+            0,
+            "full-mem".to_string(),
+            dims,
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )?;
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+        mem.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                twin_id.as_base_64(): [{
+                    "morphology_id": "memory_replay",
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": false
+                }]
+            }),
+        );
+        mem.properties.insert(
+            "memory_twin_areas".to_string(),
+            serde_json::json!({ src_id.as_base_64(): twin_id.as_base_64() }),
+        );
+        let mut twin = CorticalArea::new(
+            twin_id,
+            0,
+            "full-twin".to_string(),
+            dims,
+            (2, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )?;
+        twin.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(src_id.as_base_64()),
+        );
+
+        let region = BrainRegion::new(
+            RegionID::new(),
+            "full-memory-region".to_string(),
+            RegionType::Undefined,
+        )?
+        .with_areas([src_id, mem_id, twin_id]);
+        let region_id = region.region_id.to_string();
+
+        let mut cortical_areas = HashMap::new();
+        cortical_areas.insert(src_id, src.clone());
+        cortical_areas.insert(mem_id, mem.clone());
+        cortical_areas.insert(twin_id, twin.clone());
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "full-roundtrip".to_string(),
+                genome_title: "full-roundtrip".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: Some(region_id.clone()),
+            },
+            cortical_areas,
+            brain_regions: HashMap::from([(region_id.clone(), region)]),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+
+        let source_npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(RustNPU::new(StdRuntime, CPUBackend::new(), 1024, 2048, 8)?),
+            "full-roundtrip-source-npu",
+        ));
+        let source_connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            source_npu.clone(),
+        )));
+        let source_exec = Arc::new(std::sync::Mutex::new(AsyncPlasticityExecutor::new(
+            PlasticityConfig::default(),
+            feagi_npu_plasticity::create_memory_stats_cache(),
+            source_npu.clone(),
+        )));
+        let source_current_genome = Arc::new(RwLock::new(Some(genome.clone())));
+        let source_service =
+            ConnectomeServiceImpl::new(source_connectome.clone(), source_current_genome);
+
+        let (twin_regular_neuron, ltm_id) = {
+            let mut manager = source_connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.set_plasticity_executor(source_exec.clone());
+            manager.add_cortical_area(src)?;
+            manager.add_cortical_area(mem)?;
+            manager.add_cortical_area(twin)?;
+            let src_idx = manager.get_cortical_idx(&src_id).expect("src idx");
+            let mem_idx = manager.get_cortical_idx(&mem_id).expect("mem idx");
+            let src_neuron =
+                manager.add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)?;
+            let mem_regular =
+                manager.add_neuron(&mem_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)?;
+            let twin_regular = manager.add_neuron(
+                &twin_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )?;
+            manager.create_synapse(src_neuron, mem_regular, 0.8, 0.9, 0)?;
+            let ltm_id = 50_000_000u32;
+            {
+                let exec = source_exec.lock().expect("source exec lock");
+                PlasticityExecutor::register_memory_area(
+                    &*exec,
+                    mem_idx,
+                    "full-mem".to_string(),
+                    1,
+                    vec![src_idx],
+                    None,
+                    false,
+                );
+                exec.restore_long_term_memory_neurons(&[MemoryNeuronDetail {
+                    neuron_id: ltm_id,
+                    cortical_area_idx: mem_idx,
+                    pattern_hash: Some(0xF00D),
+                    is_longterm_memory: true,
+                    is_active: true,
+                    lifespan_current: 100,
+                    lifespan_initial: 20,
+                    lifespan_growth_rate: 2.0,
+                    creation_burst: 1,
+                    last_activation_burst: 2,
+                    activation_count: 3,
+                }])
+                .map_err(crate::types::ServiceError::Backend)?;
+            }
+            {
+                let mut npu = source_npu.lock().expect("source npu lock");
+                let _ =
+                    npu.remove_synapse(NeuronId(src_neuron as u32), NeuronId(mem_regular as u32));
+                npu.add_synapse(
+                    NeuronId(src_neuron as u32),
+                    NeuronId(mem_regular as u32),
+                    SynapticWeight(0.95),
+                    SynapticPsp(1.25),
+                    SynapseType::Excitatory,
+                    SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+                    1,
+                )?;
+                npu.add_synapse(
+                    NeuronId(ltm_id),
+                    NeuronId(twin_regular as u32),
+                    SynapticWeight(662.0),
+                    SynapticPsp(500.0),
+                    SynapseType::Excitatory,
+                    0,
+                    1,
+                )?;
+                npu.register_memory_replay_frames(
+                    ltm_id,
+                    vec![MemoryReplayFrame {
+                        offset: 0,
+                        upstream_area_idx: src_idx,
+                        coords: vec![(0, 0, 0)],
+                        membrane_potentials: Some(vec![0.42]),
+                    }],
+                );
+                npu.rebuild_synapse_index();
+            }
+            (twin_regular as u32, ltm_id)
+        };
+
+        let exported = source_service
+            .export_connectome(ConnectomePersistMode::Full)
+            .await?;
+        assert_eq!(exported.persist_mode, ConnectomePersistMode::Full);
+        assert!(!exported.long_term_memory_neurons.is_empty());
+        assert!(!exported.long_term_memory_replay_frames.is_empty());
+        assert!(exported
+            .long_term_memory_neurons
+            .iter()
+            .any(|n| n.cortical_id.is_some()));
+
+        let temp = NamedTempFile::new().expect("temp file");
+        save_connectome(&exported, temp.path())
+            .map_err(|e| crate::types::ServiceError::Backend(e.to_string()))?;
+        let loaded = load_connectome(temp.path())
+            .map_err(|e| crate::types::ServiceError::Backend(e.to_string()))?;
+        assert_eq!(loaded.persist_mode, ConnectomePersistMode::Full);
+
+        let target_npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(RustNPU::new(StdRuntime, CPUBackend::new(), 1024, 2048, 8)?),
+            "full-roundtrip-target-npu",
+        ));
+        let target_connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            target_npu.clone(),
+        )));
+        let target_exec = Arc::new(std::sync::Mutex::new(AsyncPlasticityExecutor::new(
+            PlasticityConfig::default(),
+            feagi_npu_plasticity::create_memory_stats_cache(),
+            target_npu.clone(),
+        )));
+        {
+            let mut manager = target_connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.set_plasticity_executor(target_exec.clone());
+        }
+        let target_service =
+            ConnectomeServiceImpl::new(target_connectome.clone(), Arc::new(RwLock::new(None)));
+
+        target_service.import_connectome(loaded).await?;
+
+        let target_manager = target_connectome.read();
+        assert!(target_manager.get_cortical_area(&mem_id).is_some());
+        let imported_src_idx = target_manager
+            .get_cortical_idx(&src_id)
+            .expect("imported src area idx");
+        let imported_mem_idx = target_manager
+            .get_cortical_idx(&mem_id)
+            .expect("imported memory area idx");
+        assert_eq!(
+            target_manager.get_neuron_cortical_idx_opt(ltm_id as u64),
+            Some(imported_mem_idx)
+        );
+        drop(target_manager);
+
+        let target_npu_guard = target_npu.lock().expect("target npu lock");
+        assert!(
+            !target_npu_guard.get_outgoing_synapses(ltm_id).is_empty(),
+            "LTM synapses must survive full download/reload"
+        );
+        let replay = target_npu_guard
+            .get_memory_replay_frames(ltm_id)
+            .expect("LTM replay frames restored");
+        assert_eq!(replay[0].upstream_area_idx, imported_src_idx);
+        assert!(
+            replay[0].coords.contains(&(0, 0, 0)),
+            "replay coordinates should be preserved"
+        );
+        assert!(
+            target_npu_guard
+                .get_incoming_synapses(twin_regular_neuron)
+                .iter()
+                .any(|(source, _, _, _)| *source == ltm_id),
+            "twin neuron should receive incoming signal from restored LTM neuron"
+        );
+        Ok(())
+    }
+
+    #[cfg(all(
+        feature = "connectome-io",
+        feature = "connectome-serialization",
+        feature = "plasticity"
+    ))]
+    #[tokio::test]
+    async fn lite_connectome_roundtrip_preserves_learned_ltm_to_ltm_weight() -> ServiceResult<()> {
+        use crate::connectome::{load_connectome, save_connectome};
+        use crate::traits::ConnectomeService;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE;
+        use feagi_npu_burst_engine::npu::MemoryReplayFrame;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
+        use feagi_npu_neural::types::connectome::ConnectomePersistMode;
+        use feagi_npu_neural::types::{NeuronId, SynapseType, SynapticPsp, SynapticWeight};
+        use feagi_npu_plasticity::executor::PlasticityExecutor;
+        use feagi_npu_plasticity::{
+            AsyncPlasticityExecutor, MemoryNeuronDetail, PatternConfig, PatternDetector,
+            PlasticityConfig,
+        };
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+        use tempfile::NamedTempFile;
+
+        let src_id = CorticalID::try_from_bytes(b"clitsrc1").expect("src id");
+        let mem_id = CorticalID::try_from_bytes(b"mlitmem1").expect("mem id");
+        let assoc_mem_id = CorticalID::try_from_bytes(b"mlitasc1").expect("assoc memory id");
+        let twin_id = CorticalID::try_from_bytes(b"clittwn1").expect("twin id");
+        let dims = CorticalAreaDimensions::new(1, 1, 1).expect("dims");
+
+        let mut src = CorticalArea::new(
+            src_id,
+            0,
+            "lite-src".to_string(),
+            dims,
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )?;
+        src.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "episodic_memory",
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": false,
+                    "synaptic_delay_bursts": 1
+                }]
+            }),
+        );
+        let mut mem = CorticalArea::new(
+            mem_id,
+            0,
+            "lite-mem".to_string(),
+            dims,
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )?;
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+        mem.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                twin_id.as_base_64(): [{
+                    "morphology_id": "memory_replay",
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": false
+                }],
+                assoc_mem_id.as_base_64(): [{
+                    "morphology_id": "associative_memory",
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": true,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 1,
+                    "synaptic_delay_bursts": 1
+                }]
+            }),
+        );
+        mem.properties.insert(
+            "memory_twin_areas".to_string(),
+            serde_json::json!({ src_id.as_base_64(): twin_id.as_base_64() }),
+        );
+        let mut twin = CorticalArea::new(
+            twin_id,
+            0,
+            "lite-twin".to_string(),
+            dims,
+            (2, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )?;
+        twin.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(src_id.as_base_64()),
+        );
+        let mut assoc_mem = CorticalArea::new(
+            assoc_mem_id,
+            0,
+            "lite-associative-memory".to_string(),
+            dims,
+            (3, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )?;
+        assoc_mem
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        assoc_mem
+            .properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+
+        let region = BrainRegion::new(
+            RegionID::new(),
+            "lite-memory-region".to_string(),
+            RegionType::Undefined,
+        )?
+        .with_areas([src_id, mem_id, twin_id, assoc_mem_id]);
+        let region_id = region.region_id.to_string();
+
+        let mut cortical_areas = HashMap::new();
+        cortical_areas.insert(src_id, src.clone());
+        cortical_areas.insert(mem_id, mem.clone());
+        cortical_areas.insert(twin_id, twin.clone());
+        cortical_areas.insert(assoc_mem_id, assoc_mem.clone());
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "lite-roundtrip".to_string(),
+                genome_title: "lite-roundtrip".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: Some(region_id.clone()),
+            },
+            cortical_areas,
+            brain_regions: HashMap::from([(region_id.clone(), region)]),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+
+        let source_npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(RustNPU::new(StdRuntime, CPUBackend::new(), 1024, 2048, 8)?),
+            "lite-roundtrip-source-npu",
+        ));
+        let source_connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            source_npu.clone(),
+        )));
+        let source_exec = Arc::new(std::sync::Mutex::new(AsyncPlasticityExecutor::new(
+            PlasticityConfig::default(),
+            feagi_npu_plasticity::create_memory_stats_cache(),
+            source_npu.clone(),
+        )));
+        let source_current_genome = Arc::new(RwLock::new(Some(genome.clone())));
+        let source_service =
+            ConnectomeServiceImpl::new(source_connectome.clone(), source_current_genome);
+
+        let (first_ltm_id, second_ltm_id, learned_weight_before_export) = {
+            let mut manager = source_connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.set_plasticity_executor(source_exec.clone());
+            manager.add_cortical_area(src)?;
+            manager.add_cortical_area(mem)?;
+            manager.add_cortical_area(twin)?;
+            manager.add_cortical_area(assoc_mem)?;
+            let src_idx = manager.get_cortical_idx(&src_id).expect("src idx");
+            let mem_idx = manager.get_cortical_idx(&mem_id).expect("mem idx");
+            let assoc_mem_idx = manager
+                .get_cortical_idx(&assoc_mem_id)
+                .expect("associative memory idx");
+            // Leave a deleted runtime-ID slot so this test fails if lite edges
+            // are restored by raw neuron ID instead of semantic identity.
+            let deleted_src_neuron =
+                manager.add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)?;
+            assert!(
+                source_npu
+                    .lock()
+                    .expect("source npu lock")
+                    .delete_neuron(deleted_src_neuron as u32),
+                "adversarial source neuron should be deleted"
+            );
+            let src_neuron =
+                manager.add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)?;
+            let mem_regular =
+                manager.add_neuron(&mem_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)?;
+            let twin_regular = manager.add_neuron(
+                &twin_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )?;
+            manager.create_synapse(src_neuron, mem_regular, 0.7, 0.8, 0)?;
+            let first_ltm_id = 50_000_000u32;
+            let second_ltm_id = 50_000_001u32;
+            {
+                let exec = source_exec.lock().expect("source exec lock");
+                PlasticityExecutor::register_memory_area(
+                    &*exec,
+                    mem_idx,
+                    "lite-mem".to_string(),
+                    1,
+                    vec![src_idx],
+                    None,
+                    false,
+                );
+                exec.restore_long_term_memory_neurons(&[
+                    MemoryNeuronDetail {
+                        neuron_id: first_ltm_id,
+                        cortical_area_idx: mem_idx,
+                        pattern_hash: Some(0xBEEF),
+                        is_longterm_memory: true,
+                        is_active: true,
+                        lifespan_current: 120,
+                        lifespan_initial: 30,
+                        lifespan_growth_rate: 2.5,
+                        creation_burst: 3,
+                        last_activation_burst: 4,
+                        activation_count: 5,
+                    },
+                    MemoryNeuronDetail {
+                        neuron_id: second_ltm_id,
+                        cortical_area_idx: assoc_mem_idx,
+                        pattern_hash: Some(0xCAFE),
+                        is_longterm_memory: true,
+                        is_active: true,
+                        lifespan_current: 90,
+                        lifespan_initial: 30,
+                        lifespan_growth_rate: 2.0,
+                        creation_burst: 5,
+                        last_activation_burst: 6,
+                        activation_count: 4,
+                    },
+                ])
+                .map_err(crate::types::ServiceError::Backend)?;
+            }
+            manager.rebind_npu_runtime_after_connectome_apply()?;
+            {
+                let mut npu = source_npu.lock().expect("source npu lock");
+                let _ =
+                    npu.remove_synapse(NeuronId(src_neuron as u32), NeuronId(mem_regular as u32));
+                npu.add_synapse(
+                    NeuronId(src_neuron as u32),
+                    NeuronId(mem_regular as u32),
+                    SynapticWeight(0.98),
+                    SynapticPsp(1.33),
+                    SynapseType::Excitatory,
+                    SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+                    1,
+                )?;
+                npu.add_synapse(
+                    NeuronId(first_ltm_id),
+                    NeuronId(twin_regular as u32),
+                    SynapticWeight(700.0),
+                    SynapticPsp(500.0),
+                    SynapseType::Excitatory,
+                    0,
+                    1,
+                )?;
+                npu.register_dynamic_neuron_mapping(first_ltm_id, mem_id);
+                npu.register_dynamic_neuron_mapping(second_ltm_id, assoc_mem_id);
+                npu.register_memory_replay_frames(
+                    first_ltm_id,
+                    vec![MemoryReplayFrame {
+                        offset: 0,
+                        upstream_area_idx: src_idx,
+                        coords: vec![(0, 0, 0)],
+                        membrane_potentials: Some(vec![0.91]),
+                    }],
+                );
+                npu.rebuild_synapse_index();
+                npu.configure_fire_ledger_window(mem_idx, 1)?;
+                npu.configure_fire_ledger_window(assoc_mem_idx, 1)?;
+                for _ in 0..2 {
+                    npu.inject_memory_neuron_to_fcl_with_kind(
+                        first_ltm_id,
+                        mem_idx,
+                        2.0,
+                        FIRE_KIND_STDP_ELIGIBLE,
+                    );
+                    npu.inject_memory_neuron_to_fcl_with_kind(
+                        second_ltm_id,
+                        assoc_mem_idx,
+                        2.0,
+                        FIRE_KIND_STDP_ELIGIBLE,
+                    );
+                    npu.process_burst()?;
+                }
+                assert!(
+                    npu.get_outgoing_synapses(first_ltm_id)
+                        .iter()
+                        .any(|(target, weight, _, _)| {
+                            *target == second_ltm_id && *weight > 1.0
+                        }),
+                    "test setup invalid: associative-memory learning must create and potentiate the LTM-to-LTM edge before export"
+                );
+                npu.inject_memory_neuron_to_fcl_with_kind(
+                    first_ltm_id,
+                    mem_idx,
+                    2.0,
+                    FIRE_KIND_STDP_ELIGIBLE,
+                );
+                npu.process_burst()?;
+                let source_burst = npu.process_burst()?.burst;
+                let source_assoc_activity =
+                    npu.get_fire_ledger_dense_window_bitmaps(assoc_mem_idx, source_burst, 1)?;
+                assert!(
+                    source_assoc_activity
+                        .first()
+                        .is_some_and(|(_, neurons)| neurons.contains(second_ltm_id)),
+                    "test setup invalid: the learned LTM association must activate its target before export"
+                );
+            }
+            let learned_weight_before_export = source_npu
+                .lock()
+                .expect("source npu lock")
+                .get_outgoing_synapses(first_ltm_id)
+                .into_iter()
+                .find(|(target, _, _, _)| *target == second_ltm_id)
+                .map(|(_, weight, _, _)| weight)
+                .expect("source LTM association");
+            (first_ltm_id, second_ltm_id, learned_weight_before_export)
+        };
+
+        let exported = source_service
+            .export_connectome(ConnectomePersistMode::Lite)
+            .await?;
+        assert_eq!(exported.persist_mode, ConnectomePersistMode::Lite);
+        assert_eq!(
+            exported.neurons.count, 0,
+            "lite snapshot should omit neurons"
+        );
+        assert!(!exported.long_term_memory_neurons.is_empty());
+        assert!(!exported.long_term_memory_replay_frames.is_empty());
+        assert!(
+            exported.synapses.count == 0 && exported.lite_synapses.len() >= 2,
+            "lite snapshot should omit raw-ID edges and retain semantic memory/plastic edges"
+        );
+
+        let temp = NamedTempFile::new().expect("temp file");
+        save_connectome(&exported, temp.path())
+            .map_err(|e| crate::types::ServiceError::Backend(e.to_string()))?;
+        let loaded = load_connectome(temp.path())
+            .map_err(|e| crate::types::ServiceError::Backend(e.to_string()))?;
+        assert_eq!(loaded.persist_mode, ConnectomePersistMode::Lite);
+
+        let target_npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(RustNPU::new(StdRuntime, CPUBackend::new(), 1024, 2048, 8)?),
+            "lite-roundtrip-target-npu",
+        ));
+        let target_connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            target_npu.clone(),
+        )));
+        let target_exec = Arc::new(std::sync::Mutex::new(AsyncPlasticityExecutor::new(
+            PlasticityConfig::default(),
+            feagi_npu_plasticity::create_memory_stats_cache(),
+            target_npu.clone(),
+        )));
+        {
+            let mut manager = target_connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.set_plasticity_executor(target_exec.clone());
+        }
+        let target_service =
+            ConnectomeServiceImpl::new(target_connectome.clone(), Arc::new(RwLock::new(None)));
+
+        target_service.import_connectome(loaded).await?;
+
+        let target_manager = target_connectome.read();
+        assert!(target_manager.get_cortical_area(&mem_id).is_some());
+        let imported_src_idx = target_manager
+            .get_cortical_idx(&src_id)
+            .expect("imported src area idx");
+        let imported_mem_idx = target_manager
+            .get_cortical_idx(&mem_id)
+            .expect("imported memory area idx");
+        let imported_assoc_mem_idx = target_manager
+            .get_cortical_idx(&assoc_mem_id)
+            .expect("imported associative memory area idx");
+        let imported_src_neuron = target_manager
+            .get_neurons_in_area(&src_id)
+            .into_iter()
+            .next()
+            .expect("imported source neuron") as u32;
+        let expected_rebuilt_hash = PatternDetector::new(PatternConfig::default())
+            .detect_pattern(
+                imported_mem_idx,
+                &[imported_src_idx],
+                1,
+                vec![std::collections::HashSet::from([imported_src_neuron])],
+                Some(1),
+            )
+            .expect("rebuilt semantic source pattern")
+            .pattern_hash;
+        let restored_pattern_hash = target_exec
+            .lock()
+            .expect("target plasticity executor lock")
+            .memory_neuron_detail(first_ltm_id)
+            .and_then(|detail| detail.pattern_hash)
+            .expect("restored LTM pattern hash");
+        assert_eq!(
+            restored_pattern_hash, expected_rebuilt_hash,
+            "lite import must rehash restored LTM patterns against rebuilt runtime neuron IDs"
+        );
+        let imported_twin_neuron = target_manager
+            .get_neurons_in_area(&twin_id)
+            .into_iter()
+            .next()
+            .expect("imported twin neuron") as u32;
+        assert_eq!(
+            target_manager.get_neuron_cortical_idx_opt(first_ltm_id as u64),
+            Some(imported_mem_idx)
+        );
+        assert_eq!(
+            target_manager.get_neuron_cortical_idx_opt(second_ltm_id as u64),
+            Some(imported_assoc_mem_idx)
+        );
+        drop(target_manager);
+
+        let target_npu_guard = target_npu.lock().expect("target npu lock");
+        assert!(
+            !target_npu_guard
+                .get_outgoing_synapses(first_ltm_id)
+                .is_empty(),
+            "LTM synapses must survive lite download/reload"
+        );
+        let replay = target_npu_guard
+            .get_memory_replay_frames(first_ltm_id)
+            .expect("LTM replay frames restored in lite path");
+        assert_eq!(replay[0].upstream_area_idx, imported_src_idx);
+        assert!(
+            replay[0].coords.contains(&(0, 0, 0)),
+            "replay coordinates should be preserved"
+        );
+        let restored_source_to_memory: Vec<_> = target_npu_guard
+            .get_outgoing_synapses(imported_src_neuron)
+            .into_iter()
+            .filter(|(target, _, _, _)| {
+                target_npu_guard.get_neuron_cortical_area(*target) == Some(imported_mem_idx)
+            })
+            .collect();
+        assert_eq!(
+            restored_source_to_memory.len(),
+            1,
+            "lite import must replace the genome baseline with the exact learned edge set"
+        );
+        assert!(
+            (restored_source_to_memory[0].1 - 0.98).abs() < f32::EPSILON
+                && (restored_source_to_memory[0].2 - 1.33).abs() < f32::EPSILON,
+            "source neuron should retain learned edge parameters"
+        );
+        assert!(
+            target_npu_guard
+                .get_incoming_synapses(imported_twin_neuron)
+                .iter()
+                .any(|(source, _, _, _)| *source == first_ltm_id),
+            "twin neuron should receive incoming signal from restored LTM neuron"
+        );
+        let restored_ltm_association: Vec<_> = target_npu_guard
+            .get_outgoing_synapses(first_ltm_id)
+            .into_iter()
+            .filter(|(target, _, _, _)| *target == second_ltm_id)
+            .collect();
+        assert_eq!(
+            restored_ltm_association.len(),
+            1,
+            "lite reload lost the learned synaptic connection between LTM neurons"
+        );
+        assert!(
+            (restored_ltm_association[0].1 - learned_weight_before_export).abs() < f32::EPSILON,
+            "lite reload changed the learned LTM-to-LTM weight: expected {}, got {}",
+            learned_weight_before_export,
+            restored_ltm_association[0].1
+        );
+        drop(target_npu_guard);
+
+        {
+            let mut target_npu_guard = target_npu.lock().expect("target npu lock");
+            target_npu_guard.inject_memory_neuron_to_fcl_with_kind(
+                first_ltm_id,
+                imported_mem_idx,
+                2.0,
+                FIRE_KIND_STDP_ELIGIBLE,
+            );
+            target_npu_guard.process_burst()?;
+            let restored_burst = target_npu_guard.process_burst()?.burst;
+            let restored_assoc_activity = target_npu_guard.get_fire_ledger_dense_window_bitmaps(
+                imported_assoc_mem_idx,
+                restored_burst,
+                1,
+            )?;
+            assert!(
+                restored_assoc_activity
+                    .first()
+                    .is_some_and(|(_, neurons)| neurons.contains(second_ltm_id)),
+                "lite reload preserved the LTM edge data but lost its associative-memory effect: firing LTM neuron {} no longer activates associated LTM neuron {}",
+                first_ltm_id,
+                second_ltm_id
+            );
+            target_npu_guard.inject_memory_neuron_to_fcl_with_kind(
+                first_ltm_id,
+                imported_mem_idx,
+                2.0,
+                FIRE_KIND_STDP_ELIGIBLE,
+            );
+            target_npu_guard.inject_memory_neuron_to_fcl_with_kind(
+                second_ltm_id,
+                imported_assoc_mem_idx,
+                2.0,
+                FIRE_KIND_STDP_ELIGIBLE,
+            );
+            target_npu_guard.process_burst()?;
+            let weight_after_post_reload_learning = target_npu_guard
+                .get_outgoing_synapses(first_ltm_id)
+                .into_iter()
+                .find(|(target, _, _, _)| *target == second_ltm_id)
+                .map(|(_, weight, _, _)| weight)
+                .expect("restored LTM association after post-reload learning");
+            assert!(
+                weight_after_post_reload_learning > learned_weight_before_export,
+                "lite reload preserved the stored LTM edge but broke its weight adjustment: expected a value above {}, got {}",
+                learned_weight_before_export,
+                weight_after_post_reload_learning
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn raw_pattern_hash_changes_when_runtime_neuron_id_changes() {
+        use feagi_npu_plasticity::{PatternConfig, PatternDetector};
+
+        fn single_neuron_pattern_hash(detector: &PatternDetector, neuron_id: u32) -> u64 {
+            detector
+                .detect_pattern(
+                    1,
+                    &[1],
+                    1,
+                    vec![std::collections::HashSet::from([neuron_id])],
+                    Some(1),
+                )
+                .expect("single-neuron pattern")
+                .pattern_hash
+        }
+
+        let detector = PatternDetector::new(PatternConfig::default());
+        let pre_export_neuron_id = 1896;
+        let rebuilt_neuron_id = 7;
+        let persisted_ltm_hash = single_neuron_pattern_hash(&detector, pre_export_neuron_id);
+        let recalled_pattern_hash = single_neuron_pattern_hash(&detector, rebuilt_neuron_id);
+
+        assert_ne!(
+            persisted_ltm_hash, recalled_pattern_hash,
+            "test precondition failed: runtime neuron ID change {} to {} must require lite-import LTM rehash",
+            pre_export_neuron_id, rebuilt_neuron_id
+        );
     }
 
     #[cfg(feature = "connectome-io")]
@@ -5358,6 +6632,7 @@ mod tests {
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         };
 
         super::remap_snapshot_cortical_indexes(&manager, &mut snapshot)?;
@@ -5372,7 +6647,7 @@ mod tests {
 
     #[cfg(feature = "connectome-io")]
     #[test]
-    fn build_lite_snapshot_keeps_plastic_and_ltm_synapses_only() -> ServiceResult<()> {
+    fn build_lite_snapshot_keeps_plastic_ltm_and_memory_area_synapses() -> ServiceResult<()> {
         use feagi_npu_neural::types::connectome::{
             ConnectomeMetadata, ConnectomePersistMode, ConnectomeSnapshot, SerializableNeuronArray,
             SerializableSynapseArray,
@@ -5420,13 +6695,14 @@ mod tests {
             metadata: ConnectomeMetadata::default(),
             persist_mode: ConnectomePersistMode::Full,
             genome_json: Some("{\"version\":\"3.0\"}".to_string()),
-            memory_area_ids: vec!["mmem".to_string()],
+            memory_area_ids: vec![dst.as_base_64()],
             plastic_mappings: vec![(src.as_base_64(), dst.as_base_64())],
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: vec![
                 feagi_npu_neural::types::connectome::SerializableLongTermMemoryNeuron {
                     neuron_id: 50_000_001,
                     cortical_area_idx: 8,
+                    cortical_id: Some(dst.as_base_64()),
                     pattern_hash: Some(1),
                     is_longterm_memory: true,
                     is_active: true,
@@ -5439,14 +6715,35 @@ mod tests {
                 },
             ],
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         };
 
         let lite = super::build_lite_snapshot(snapshot)?;
         assert_eq!(lite.persist_mode, ConnectomePersistMode::Lite);
         assert_eq!(lite.neurons.count, 0);
-        assert_eq!(lite.synapses.count, 2);
-        assert_eq!(lite.synapses.source_neurons[..2], [0, 50_000_001]);
-        assert_eq!(lite.synapses.target_neurons[..2], [1, 0]);
+        assert_eq!(lite.synapses.count, 0);
+        assert_eq!(lite.lite_synapses.len(), 3);
+        assert!(lite.lite_synapses.iter().any(|synapse| {
+            matches!(
+                synapse.source,
+                feagi_npu_neural::types::connectome::SerializableNeuronReference::Regular {
+                    ref cortical_id,
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                    neuron_index: 0,
+                } if cortical_id == &src.as_base_64()
+            ) && matches!(
+                synapse.target,
+                feagi_npu_neural::types::connectome::SerializableNeuronReference::Regular {
+                    ref cortical_id,
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                    neuron_index: 0,
+                } if cortical_id == &dst.as_base_64()
+            )
+        }));
         Ok(())
     }
 
@@ -5539,6 +6836,7 @@ mod tests {
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         };
         super::restore_long_term_memory_from_snapshot(&connectome, &snapshot)
     }
@@ -5569,6 +6867,7 @@ mod tests {
             long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
                 neuron_id: 50_000_000,
                 cortical_area_idx: 1,
+                cortical_id: None,
                 pattern_hash: Some(1),
                 is_longterm_memory: true,
                 is_active: true,
@@ -5580,6 +6879,7 @@ mod tests {
                 activation_count: 1,
             }],
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         };
         let err = super::restore_long_term_memory_from_snapshot(&connectome, &snapshot)
             .expect_err("missing executor must fail when LTM is present");
@@ -5646,6 +6946,7 @@ mod tests {
             long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
                 neuron_id: 50_000_001,
                 cortical_area_idx: 1,
+                cortical_id: None,
                 pattern_hash: Some(11),
                 is_longterm_memory: true,
                 is_active: true,
@@ -5657,6 +6958,7 @@ mod tests {
                 activation_count: 1,
             }],
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         };
         super::attach_long_term_memory_replay_frames(
             &connectome,
@@ -5788,6 +7090,7 @@ mod tests {
                 brain_region_ids: Vec::new(),
                 long_term_memory_neurons: Vec::new(),
                 long_term_memory_replay_frames: Vec::new(),
+                lite_synapses: Vec::new(),
             })
             .expect("apply snapshot");
             assert!(npu
@@ -5908,6 +7211,7 @@ mod tests {
                 brain_region_ids: Vec::new(),
                 long_term_memory_neurons: Vec::new(),
                 long_term_memory_replay_frames: Vec::new(),
+                lite_synapses: Vec::new(),
             })
             .expect("apply snapshot");
             assert!(npu

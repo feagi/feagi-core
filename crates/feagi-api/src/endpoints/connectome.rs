@@ -63,7 +63,7 @@ pub struct MemoryNeuronQuery {
 #[into_params(parameter_in = Query)]
 pub struct ConnectomeDownloadQuery {
     /// Snapshot mode: `full` (default) or `lite`.
-    pub mode: Option<feagi_npu_neural::types::connectome::ConnectomePersistMode>,
+    pub mode: Option<String>,
 }
 
 /// Full memory neuron detail: plasticity lifecycle fields plus connectome synapses.
@@ -875,9 +875,7 @@ pub async fn get_download_connectome(
     Query(query): Query<ConnectomeDownloadQuery>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     info!("[API] GET /v1/connectome/download - Saving connectome to filesystem");
-    let mode = query
-        .mode
-        .unwrap_or(feagi_npu_neural::types::connectome::ConnectomePersistMode::Full);
+    let mode = parse_connectome_download_mode(query.mode.as_deref())?;
     let snapshot = state
         .connectome_service
         .export_connectome(mode)
@@ -893,6 +891,19 @@ pub async fn get_download_connectome(
             "Connectome saved successfully".to_string(),
         ),
     ])))
+}
+
+fn parse_connectome_download_mode(
+    mode: Option<&str>,
+) -> ApiResult<feagi_npu_neural::types::connectome::ConnectomePersistMode> {
+    match mode.unwrap_or("full").to_ascii_lowercase().as_str() {
+        "full" => Ok(feagi_npu_neural::types::connectome::ConnectomePersistMode::Full),
+        "lite" => Ok(feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite),
+        other => Err(ApiError::invalid_input(format!(
+            "Invalid mode '{}'. Supported values: full, lite",
+            other
+        ))),
+    }
 }
 
 /// GET /v1/connectome/download-cortical-area/{cortical_area}

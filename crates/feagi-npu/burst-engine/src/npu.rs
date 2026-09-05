@@ -3356,6 +3356,7 @@ impl<
             brain_region_ids: Vec::new(),
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
         }
     }
 
