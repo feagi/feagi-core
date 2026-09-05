@@ -146,12 +146,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Cast to GenomeServiceImpl to access get_current_genome_arc()
     let genome_service_impl = Arc::new(GenomeServiceImpl::new(connectome.clone()));
     let current_genome = genome_service_impl.get_current_genome_arc();
+    let genome_load_counter = genome_service_impl.get_genome_load_counter_arc();
+    let genome_load_timestamp = genome_service_impl.get_genome_load_timestamp_arc();
     let genome_service = genome_service_impl as Arc<dyn GenomeService + Send + Sync>;
 
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(
-        connectome.clone(),
-        current_genome.clone(),
-    )) as Arc<dyn ConnectomeService + Send + Sync>;
+    let mut connectome_service_impl =
+        ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+    connectome_service_impl.set_genome_load_signals(genome_load_counter, genome_load_timestamp);
+    let connectome_service =
+        Arc::new(connectome_service_impl) as Arc<dyn ConnectomeService + Send + Sync>;
 
     let neuron_service = Arc::new(NeuronServiceImpl::new(connectome.clone()))
         as Arc<dyn NeuronService + Send + Sync>;

@@ -942,10 +942,12 @@ pub async fn post_cortical_area(
         data_type_configs_by_subunit
     );
 
-    // Determine number of units and get topology
-    let (num_units, unit_topology) = if cortical_type_str == "IPU" {
+    // Determine number of units and get topology. `resolved_sensory_unit` is carried into the
+    // per-subunit loop below so IPU creation can apply the unit's template-defined neural
+    // tunables (firing threshold / increment) instead of generic zeros.
+    let (num_units, unit_topology, resolved_sensory_unit) = if cortical_type_str == "IPU" {
         // Find the matching sensory cortical unit
-        let unit = SensoryCorticalUnit::list_all()
+        let unit = *SensoryCorticalUnit::list_all()
             .iter()
             .find(|u| {
                 let id_ref = u.get_cortical_id_unit_reference();
@@ -959,6 +961,7 @@ pub async fn post_cortical_area(
         (
             unit.get_number_cortical_areas(),
             unit.get_unit_default_topology(),
+            Some(unit),
         )
     } else if cortical_type_str == "OPU" {
         // Find the matching motor cortical unit
@@ -976,6 +979,7 @@ pub async fn post_cortical_area(
         (
             unit.get_number_cortical_areas(),
             unit.get_unit_default_topology(),
+            None,
         )
     } else {
         return Err(ApiError::invalid_input("cortical_type must be IPU or OPU"));
@@ -1089,6 +1093,77 @@ pub async fn post_cortical_area(
                 per_device_dimensions.2
             ]),
         );
+
+        // Apply per-unit neural tunables. `CreateCorticalAreaParams.properties` fully replaces
+        // `area.properties` for non-Memory area types (see GenomeServiceImpl::create_cortical_areas),
+        // so these must be set here rather than via the (unused-for-IPU/OPU) typed
+        // firing_threshold_increment/limit fields below.
+        //
+        // DepthMap ("dpt") encodes a normalized [0.0, 1.0] scalar per pixel across
+        // `dimensions.2` quantized Z-layers (see SensoryCorticalUnit::DepthMap and
+        // VideoController::to_depth_map). Its firing threshold must track the *actual*
+        // configured depth resolution rather than a fixed template constant, otherwise a
+        // `depth_bins` value that differs from the template default silently breaks the
+        // depth-to-threshold quantization (a given depth would fail to reach the threshold of
+        // its own Z-layer, or overshoot it). Other IPU types fall back to their static
+        // template defaults.
+        if let Some(sensory_unit) = resolved_sensory_unit {
+            if sensory_unit == SensoryCorticalUnit::DepthMap {
+                // MiscData values produced for DepthMap are normalized to [0.0, 1.0]
+                // (see MiscData::new_from_image_frame / VideoController::to_depth_map).
+                const DEPTH_MAP_VALUE_RANGE: f64 = 1.0;
+                let z_layers = dimensions.2.max(1) as f64;
+                let firing_threshold_increment_z = DEPTH_MAP_VALUE_RANGE / z_layers;
+                properties.insert(
+                    "firing_threshold".to_string(),
+                    serde_json::json!(f64::EPSILON),
+                );
+                properties.insert(
+                    "firing_threshold_increment_x".to_string(),
+                    serde_json::json!(0.0),
+                );
+                properties.insert(
+                    "firing_threshold_increment_y".to_string(),
+                    serde_json::json!(0.0),
+                );
+                properties.insert(
+                    "firing_threshold_increment_z".to_string(),
+                    serde_json::json!(firing_threshold_increment_z),
+                );
+            } else {
+                if let Some(default_firing_threshold) = sensory_unit.get_default_firing_threshold()
+                {
+                    properties.insert(
+                        "firing_threshold".to_string(),
+                        serde_json::json!(default_firing_threshold),
+                    );
+                }
+                if let Some(default_increment) =
+                    sensory_unit.get_default_firing_threshold_increment()
+                {
+                    properties.insert(
+                        "firing_threshold_increment_x".to_string(),
+                        serde_json::json!(default_increment[0]),
+                    );
+                    properties.insert(
+                        "firing_threshold_increment_y".to_string(),
+                        serde_json::json!(default_increment[1]),
+                    );
+                    properties.insert(
+                        "firing_threshold_increment_z".to_string(),
+                        serde_json::json!(default_increment[2]),
+                    );
+                }
+                if let Some(default_mp_charge_accumulation) =
+                    sensory_unit.get_default_mp_charge_accumulation()
+                {
+                    properties.insert(
+                        "mp_charge_accumulation".to_string(),
+                        serde_json::json!(default_mp_charge_accumulation),
+                    );
+                }
+            }
+        }
 
         let params = CreateCorticalAreaParams {
             cortical_id: cortical_id.clone(),

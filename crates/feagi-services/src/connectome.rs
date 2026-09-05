@@ -132,17 +132,25 @@ pub fn save_connectome<P: AsRef<Path>>(snapshot: &ConnectomeSnapshot, path: P) -
 /// The deserialized connectome snapshot
 pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
     let mut file = File::open(path)?;
+    load_connectome_from_reader(&mut file)
+}
 
+/// Load a connectome from an in-memory `.connectome` file payload.
+pub fn load_connectome_from_bytes(bytes: &[u8]) -> Result<ConnectomeSnapshot> {
+    load_connectome_from_reader(&mut std::io::Cursor::new(bytes))
+}
+
+fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnapshot> {
     // Read and verify magic number
     let mut magic = [0u8; 5];
-    file.read_exact(&mut magic)?;
+    reader.read_exact(&mut magic)?;
     if &magic != MAGIC {
         return Err(ConnectomeError::InvalidMagic(magic));
     }
 
     // Read and verify version
     let mut version_bytes = [0u8; 4];
-    file.read_exact(&mut version_bytes)?;
+    reader.read_exact(&mut version_bytes)?;
     let version = u32::from_le_bytes(version_bytes);
 
     // Support version 1 (no compression) and version 2 (with compression)
@@ -156,12 +164,12 @@ pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
     // Read flags (only in version 2)
     let (is_compressed, uncompressed_size) = if version == 2 {
         let mut flags = [0u8; 1];
-        file.read_exact(&mut flags)?;
+        reader.read_exact(&mut flags)?;
         let compressed = (flags[0] & 1) != 0;
 
         // Read uncompressed size
         let mut size_bytes = [0u8; 8];
-        file.read_exact(&mut size_bytes)?;
+        reader.read_exact(&mut size_bytes)?;
         let size = u64::from_le_bytes(size_bytes);
 
         (compressed, size as usize)
@@ -171,12 +179,12 @@ pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
 
     // Read checksum
     let mut checksum_bytes = [0u8; 8];
-    file.read_exact(&mut checksum_bytes)?;
+    reader.read_exact(&mut checksum_bytes)?;
     let expected_checksum = u64::from_le_bytes(checksum_bytes);
 
     // Read data
     let mut compressed_data = Vec::new();
-    file.read_to_end(&mut compressed_data)?;
+    reader.read_to_end(&mut compressed_data)?;
 
     // Verify checksum
     let actual_checksum = calculate_checksum(&compressed_data);
@@ -242,6 +250,12 @@ mod tests {
             power_amount: 1.0,
             fire_ledger_window: 20,
             metadata: ConnectomeMetadata::default(),
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
         };
 
         // Save to temp file
@@ -255,6 +269,10 @@ mod tests {
         assert_eq!(loaded.version, snapshot.version);
         assert_eq!(loaded.burst_count, snapshot.burst_count);
         assert_eq!(loaded.power_amount, snapshot.power_amount);
+
+        let bytes = std::fs::read(temp_file.path()).unwrap();
+        let from_bytes = load_connectome_from_bytes(&bytes).unwrap();
+        assert_eq!(from_bytes.burst_count, snapshot.burst_count);
     }
 
     #[test]

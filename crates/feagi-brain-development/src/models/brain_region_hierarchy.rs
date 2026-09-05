@@ -138,6 +138,17 @@ impl BrainRegionHierarchy {
         Ok(())
     }
 
+    /// Remove every region and reset parent/child maps.
+    ///
+    /// Used when a full connectome import replaces the live hierarchy. Incremental
+    /// `remove_region` cannot delete the root, so import must clear first.
+    pub fn clear(&mut self) {
+        self.regions.clear();
+        self.parent_map.clear();
+        self.children_map.clear();
+        self.root_id = None;
+    }
+
     /// Remove a region and reassign its children to its parent
     ///
     /// # Arguments
@@ -452,6 +463,40 @@ mod tests {
 
         assert_eq!(hierarchy.region_count(), 2);
         assert_eq!(hierarchy.get_parent(&visual_id), Some(&root_id));
+    }
+
+    #[test]
+    fn test_cannot_remove_root() {
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
+
+        let mut hierarchy = BrainRegionHierarchy::with_root(root);
+        let root_id = hierarchy.get_root_id().unwrap().clone();
+
+        let err = hierarchy.remove_region(&root_id).expect_err("root stays");
+        assert!(
+            format!("{err}").contains("Cannot remove root region"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(hierarchy.region_count(), 1);
+    }
+
+    #[test]
+    fn test_clear_removes_root_and_children() {
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
+
+        let mut hierarchy = BrainRegionHierarchy::with_root(root);
+        let root_id = hierarchy.get_root_id().unwrap().clone();
+
+        let child =
+            BrainRegion::new(RegionID::new(), "Child".to_string(), RegionType::Undefined).unwrap();
+        hierarchy.add_region(child, Some(root_id)).unwrap();
+
+        hierarchy.clear();
+
+        assert_eq!(hierarchy.region_count(), 0);
+        assert!(hierarchy.get_root_id().is_none());
     }
 
     #[test]

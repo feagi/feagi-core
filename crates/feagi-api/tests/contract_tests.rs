@@ -111,6 +111,8 @@ fn build_test_state() -> ApiState {
     // Create services
     let genome_service_impl = Arc::new(GenomeServiceImpl::new(Arc::clone(&manager)));
     let current_genome = genome_service_impl.get_current_genome_arc();
+    let genome_load_counter = genome_service_impl.get_genome_load_counter_arc();
+    let genome_load_timestamp = genome_service_impl.get_genome_load_timestamp_arc();
     {
         let mut genome_guard = current_genome.write();
         *genome_guard = Some(create_genome_with_core_areas(
@@ -119,10 +121,10 @@ fn build_test_state() -> ApiState {
         ));
     }
     let genome_service = genome_service_impl;
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(
-        Arc::clone(&manager),
-        current_genome.clone(),
-    ));
+    let mut connectome_service_impl =
+        ConnectomeServiceImpl::new(Arc::clone(&manager), current_genome.clone());
+    connectome_service_impl.set_genome_load_signals(genome_load_counter, genome_load_timestamp);
+    let connectome_service = Arc::new(connectome_service_impl);
     // For tests, use empty version info
     let version_info = feagi_services::types::VersionInfo::default();
     let system_service = Arc::new(SystemServiceImpl::new(

@@ -1976,6 +1976,37 @@ impl<
         replay_frames.get(&neuron_id).cloned()
     }
 
+    /// Export all stored replay frames. The service layer keeps LTM ids only.
+    pub fn export_memory_replay_frames(&self) -> Vec<(u32, Vec<MemoryReplayFrame>)> {
+        let replay_frames = self.memory_replay_frames.read().unwrap();
+        let mut exported: Vec<(u32, Vec<MemoryReplayFrame>)> = replay_frames
+            .iter()
+            .map(|(neuron_id, frames)| (*neuron_id, (**frames).clone()))
+            .collect();
+        exported.sort_by_key(|(neuron_id, _)| *neuron_id);
+        exported
+    }
+
+    /// Restore replay frames after connectome apply. Replaces frames for each given neuron id.
+    pub fn restore_memory_replay_frames(&mut self, frames: &[(u32, Vec<MemoryReplayFrame>)]) {
+        for (neuron_id, neuron_frames) in frames {
+            self.register_memory_replay_frames(*neuron_id, neuron_frames.clone());
+        }
+    }
+
+    /// Query the replay twin registered for one memory/upstream pair.
+    pub fn get_memory_twin_mapping(
+        &self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+    ) -> Option<(u32, f32)> {
+        self.memory_replay_twin_map
+            .read()
+            .unwrap()
+            .get(&(memory_area_idx, upstream_area_idx))
+            .map(|target| (target.twin_area_idx, target.potential))
+    }
+
     /// Register the twin cortical area for replay from a memory area and upstream area.
     pub fn register_memory_twin_mapping(
         &mut self,
@@ -3231,7 +3262,7 @@ impl<
         let neuron_storage = self.neuron_storage.read().unwrap();
         let neurons = SerializableNeuronArray {
             count: neuron_storage.count(),
-            capacity: neuron_storage.capacity(),
+            capacity: neuron_storage.count(),
             // Convert T to f32 for serialization
             membrane_potentials: neuron_storage
                 .membrane_potentials()
@@ -3256,6 +3287,15 @@ impl<
             cortical_areas: neuron_storage.cortical_areas().to_vec(),
             coordinates: neuron_storage.coordinates().to_vec(),
             valid_mask: neuron_storage.valid_mask().to_vec(),
+            threshold_limits: neuron_storage
+                .threshold_limits()
+                .iter()
+                .map(|&v| v.to_f32())
+                .collect(),
+            consecutive_fire_counts: neuron_storage.consecutive_fire_counts().to_vec(),
+            consecutive_fire_limits: neuron_storage.consecutive_fire_limits().to_vec(),
+            snooze_periods: neuron_storage.snooze_periods().to_vec(),
+            mp_charge_accumulation: neuron_storage.mp_charge_accumulation().to_vec(),
         };
         drop(neuron_storage); // Release lock
 
@@ -3274,7 +3314,7 @@ impl<
 
         let synapses = SerializableSynapseArray {
             count: synapse_storage.count(),
-            capacity: synapse_storage.capacity(),
+            capacity: synapse_storage.count(),
             source_neurons,
             target_neurons: synapse_storage.target_neurons().to_vec(),
             weights: synapse_storage.weights().to_vec(),
@@ -3283,6 +3323,8 @@ impl<
             delay_bursts: synapse_storage.delay_bursts().to_vec(),
             valid_mask: synapse_storage.valid_mask().to_vec(),
             source_index,
+            edge_flags: synapse_storage.edge_flags().to_vec(),
+            eligibility_traces: synapse_storage.eligibility_traces().to_vec(),
         };
         drop(synapse_storage); // Release lock
 
@@ -3295,7 +3337,199 @@ impl<
             power_amount: self.get_power_amount(),
             fire_ledger_window: 20, // Default value (fire_ledger doesn't expose window)
             metadata: ConnectomeMetadata::default(),
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
         }
+    }
+
+    /// Replace NPU neuron/synapse arrays with a previously exported snapshot.
+    ///
+    /// Architecture (regions, memory flags, plastic mappings) is not applied here;
+    /// the service layer restores genome JSON first, then calls this method.
+    #[cfg(feature = "connectome-io")]
+    pub fn apply_connectome_snapshot(
+        &mut self,
+        snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    ) -> Result<()> {
+        snapshot
+            .validate()
+            .map_err(|e| FeagiError::RuntimeError(format!("Invalid connectome snapshot: {}", e)))?;
+
+        self.reset_for_new_genome()?;
+
+        // Area names must be restored before add_neurons_batch. That method looks up
+        // each neuron's cortical index in `area_id_to_name`; reset clears that map.
+        *self.area_id_to_name.write().unwrap() = snapshot.cortical_area_names.clone();
+
+        let n = snapshot.neurons.count;
+        if n > 0 {
+            let pad_f32 = |src: &[f32], fill: f32| -> Vec<f32> {
+                if src.len() == n {
+                    src.to_vec()
+                } else {
+                    std::vec::from_elem(fill, n)
+                }
+            };
+            let pad_u16 = |src: &[u16]| -> Vec<u16> {
+                if src.len() == n {
+                    src.to_vec()
+                } else {
+                    std::vec::from_elem(0, n)
+                }
+            };
+            let pad_bool = |src: &[bool]| -> Vec<bool> {
+                if src.len() == n {
+                    src.to_vec()
+                } else {
+                    std::vec::from_elem(false, n)
+                }
+            };
+
+            let mut x_coords = Vec::with_capacity(n);
+            let mut y_coords = Vec::with_capacity(n);
+            let mut z_coords = Vec::with_capacity(n);
+            for i in 0..n {
+                x_coords.push(snapshot.neurons.coordinates[i * 3]);
+                y_coords.push(snapshot.neurons.coordinates[i * 3 + 1]);
+                z_coords.push(snapshot.neurons.coordinates[i * 3 + 2]);
+            }
+
+            let thresholds: Vec<T> = snapshot
+                .neurons
+                .thresholds
+                .iter()
+                .map(|&v| T::from_f32(v))
+                .collect();
+            let threshold_limits: Vec<T> = pad_f32(&snapshot.neurons.threshold_limits, 0.0)
+                .iter()
+                .map(|&v| T::from_f32(v))
+                .collect();
+            let resting: Vec<T> = snapshot
+                .neurons
+                .resting_potentials
+                .iter()
+                .map(|&v| T::from_f32(v))
+                .collect();
+
+            self.add_neurons_batch(
+                thresholds,
+                threshold_limits,
+                pad_f32(&snapshot.neurons.leak_coefficients, 0.0),
+                resting,
+                snapshot.neurons.neuron_types.clone(),
+                snapshot.neurons.refractory_periods.clone(),
+                pad_f32(&snapshot.neurons.excitabilities, 1.0),
+                pad_u16(&snapshot.neurons.consecutive_fire_limits),
+                pad_u16(&snapshot.neurons.snooze_periods),
+                pad_bool(&snapshot.neurons.mp_charge_accumulation),
+                snapshot.neurons.cortical_areas.clone(),
+                x_coords,
+                y_coords,
+                z_coords,
+            );
+
+            {
+                let mut storage = self.neuron_storage.write().unwrap();
+                for i in 0..n {
+                    storage.membrane_potentials_mut()[i] =
+                        T::from_f32(snapshot.neurons.membrane_potentials[i]);
+                    if i < snapshot.neurons.refractory_countdowns.len() {
+                        storage.refractory_countdowns_mut()[i] =
+                            snapshot.neurons.refractory_countdowns[i];
+                    }
+                    if i < snapshot.neurons.consecutive_fire_counts.len() {
+                        storage.consecutive_fire_counts_mut()[i] =
+                            snapshot.neurons.consecutive_fire_counts[i];
+                    }
+                    if i < snapshot.neurons.valid_mask.len() {
+                        storage.valid_mask_mut()[i] = snapshot.neurons.valid_mask[i];
+                    }
+                }
+            }
+        }
+
+        let s = snapshot.synapses.count;
+        if s > 0 {
+            let sources: Vec<NeuronId> = snapshot
+                .synapses
+                .source_neurons
+                .iter()
+                .take(s)
+                .map(|&id| NeuronId(id))
+                .collect();
+            let targets: Vec<NeuronId> = snapshot
+                .synapses
+                .target_neurons
+                .iter()
+                .take(s)
+                .map(|&id| NeuronId(id))
+                .collect();
+            let weights: Vec<SynapticWeight> = snapshot
+                .synapses
+                .weights
+                .iter()
+                .take(s)
+                .map(|&w| SynapticWeight(w))
+                .collect();
+            let psps: Vec<SynapticPsp> = snapshot
+                .synapses
+                .postsynaptic_potentials
+                .iter()
+                .take(s)
+                .map(|&p| SynapticPsp(p))
+                .collect();
+            let types: Vec<SynapseType> = snapshot
+                .synapses
+                .types
+                .iter()
+                .take(s)
+                .map(|&t| {
+                    if t == 1 {
+                        SynapseType::Inhibitory
+                    } else {
+                        SynapseType::Excitatory
+                    }
+                })
+                .collect();
+            let delays: Vec<u8> = if snapshot.synapses.delay_bursts.len() == s {
+                snapshot.synapses.delay_bursts.clone()
+            } else {
+                std::vec::from_elem(1, s)
+            };
+            let edge_flags = if snapshot.synapses.edge_flags.len() == s {
+                Some(snapshot.synapses.edge_flags.clone())
+            } else {
+                None
+            };
+
+            self.add_synapses_batch(sources, targets, weights, psps, types, edge_flags, delays)?;
+
+            if snapshot.synapses.eligibility_traces.len() == s {
+                let mut storage = self.synapse_storage.write().unwrap();
+                storage
+                    .eligibility_traces_mut()
+                    .copy_from_slice(&snapshot.synapses.eligibility_traces);
+            }
+            if snapshot.synapses.valid_mask.len() == s {
+                let mut storage = self.synapse_storage.write().unwrap();
+                storage
+                    .valid_mask_mut()
+                    .copy_from_slice(&snapshot.synapses.valid_mask);
+            }
+        }
+
+        // add_synapses_batch updates storage only. Voxel/outgoing queries and
+        // burst propagation read the propagation-engine index, which reset cleared.
+        self.rebuild_synapse_index();
+
+        self.burst_count
+            .store(snapshot.burst_count, std::sync::atomic::Ordering::SeqCst);
+        self.set_power_amount(snapshot.power_amount);
+        Ok(())
     }
 
     // TODO: import_connectome needs refactoring for trait-based storage
@@ -7562,6 +7796,155 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         // Names are registered successfully
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[test]
+    fn apply_connectome_snapshot_maps_neurons_using_saved_area_indexes() {
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                32, 32, 8,
+            );
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
+        let area_name = CoreCorticalType::Death.to_cortical_id().as_base_64();
+        let mut cortical_area_names = ahash::AHashMap::new();
+        cortical_area_names.insert(25, area_name.clone());
+
+        let mut neurons = SerializableNeuronArray::new(1);
+        neurons.count = 1;
+        neurons.capacity = 1;
+        neurons.cortical_areas[0] = 25;
+        neurons.valid_mask[0] = true;
+        neurons.thresholds[0] = 1.0;
+        neurons.excitabilities[0] = 1.0;
+
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons,
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names,
+            burst_count: 4,
+            power_amount: 1.0,
+            fire_ledger_window: 8,
+            metadata: ConnectomeMetadata::default(),
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+        };
+
+        npu.apply_connectome_snapshot(&snapshot)
+            .expect("apply snapshot");
+        assert_eq!(
+            npu.get_cortical_area_name(25).as_deref(),
+            Some(area_name.as_str())
+        );
+        let mapped = npu
+            .propagation_engine
+            .read()
+            .unwrap()
+            .neuron_to_area
+            .get(&NeuronId(0))
+            .cloned();
+        assert_eq!(mapped.map(|id| id.as_base_64()), Some(area_name));
+        assert_eq!(npu.get_burst_count(), 4);
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[test]
+    fn apply_connectome_snapshot_restores_outgoing_synapses_for_queries() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                32, 32, 8,
+            );
+        let area_name = CoreCorticalType::Death.to_cortical_id().as_base_64();
+        npu.register_cortical_area(1, area_name);
+
+        let src = npu
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, false, 1, 0, 0, 0)
+            .unwrap();
+        let dst = npu
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, false, 1, 1, 0, 0)
+            .unwrap();
+        npu.add_synapse(
+            src,
+            dst,
+            SynapticWeight(1.0),
+            SynapticPsp(1.0),
+            SynapseType::Excitatory,
+            0,
+            1,
+        )
+        .unwrap();
+        npu.rebuild_synapse_index();
+        assert_eq!(npu.get_outgoing_synapses(src.0).len(), 1);
+
+        let snapshot = npu.export_connectome();
+        npu.apply_connectome_snapshot(&snapshot)
+            .expect("apply snapshot");
+        assert_eq!(
+            npu.get_outgoing_synapses(src.0).len(),
+            1,
+            "imported synapses must be visible to outgoing queries"
+        );
+        assert_eq!(npu.get_incoming_synapses(dst.0).len(), 1);
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[test]
+    fn apply_connectome_snapshot_clears_replay_frames_until_restored() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                32, 32, 8,
+            );
+        let ltm_id = 50_000_001;
+        let stm_id = 50_000_002;
+        npu.register_memory_replay_frames(
+            ltm_id,
+            vec![MemoryReplayFrame {
+                offset: 0,
+                upstream_area_idx: 3,
+                coords: vec![(1, 0, 0)],
+                membrane_potentials: Some(vec![0.8]),
+            }],
+        );
+        npu.register_memory_replay_frames(
+            stm_id,
+            vec![MemoryReplayFrame {
+                offset: 1,
+                upstream_area_idx: 3,
+                coords: vec![(2, 0, 0)],
+                membrane_potentials: None,
+            }],
+        );
+        npu.register_memory_twin_mapping(10, 3, 11, 1.5);
+
+        let exported = npu.export_memory_replay_frames();
+        assert_eq!(exported.len(), 2);
+
+        let snapshot = npu.export_connectome();
+        npu.apply_connectome_snapshot(&snapshot)
+            .expect("apply snapshot");
+        assert!(npu.get_memory_replay_frames(ltm_id).is_none());
+        assert!(npu.get_memory_twin_mapping(10, 3).is_none());
+
+        let ltm_frames: Vec<(u32, Vec<MemoryReplayFrame>)> = exported
+            .into_iter()
+            .filter(|(neuron_id, _)| *neuron_id == ltm_id)
+            .collect();
+        npu.restore_memory_replay_frames(&ltm_frames);
+        let restored = npu.get_memory_replay_frames(ltm_id).expect("LTM frames");
+        assert_eq!(restored[0].coords, vec![(1, 0, 0)]);
+        assert_eq!(restored[0].membrane_potentials.as_deref(), Some(&[0.8][..]));
+        assert!(npu.get_memory_replay_frames(stm_id).is_none());
     }
 
     // ═══════════════════════════════════════════════════════════

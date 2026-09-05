@@ -10,7 +10,7 @@ pub mod descriptors;
 mod motor_cortical_unit;
 mod sensory_cortical_unit;
 
-pub use brain_regions::{BrainRegion, RegionType};
+pub use brain_regions::{BrainRegion, RegionType, ROOT_BRAIN_REGION_NAME};
 pub use motor_cortical_unit::MotorCorticalUnit;
 pub use sensory_cortical_unit::SensoryCorticalUnit;
 pub use sensory_cortical_unit::UnitTopology;

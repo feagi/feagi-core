@@ -31,7 +31,7 @@ Licensed under the Apache License, Version 2.0
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -456,6 +456,20 @@ impl ConnectomeManager {
     pub fn refresh_cortical_mappings_hash(&self) {
         let hash = self.compute_cortical_mappings_hash();
         self.update_state_hashes(None, None, None, None, Some(hash));
+    }
+
+    /// Recompute every connectome hash published on health_check.
+    ///
+    /// Connectome import replaces areas/regions/mappings in place, which does not
+    /// go through add/remove helpers. Brain Visualizer polls these hashes.
+    pub fn refresh_all_connectome_hashes(&self) {
+        self.update_state_hashes(
+            Some(self.compute_brain_regions_hash()),
+            Some(self.compute_cortical_areas_hash()),
+            Some(self.compute_brain_geometry_hash()),
+            Some(self.compute_morphologies_hash()),
+            Some(self.compute_cortical_mappings_hash()),
+        );
     }
 
     /// Refresh cortical area-related hashes based on the affected data.
@@ -1379,22 +1393,18 @@ impl ConnectomeManager {
 
     /// Get only episodic-memory upstream cortical indices for a target memory area.
     ///
-    /// This filters upstream sources to mappings that explicitly include an
-    /// `episodic_memory` morphology rule; associative-only upstream links are excluded.
+    /// Reads `cortical_mapping_dst` rules directly. The cached
+    /// `upstream_cortical_areas` list is a derived index and can be empty after
+    /// connectome import even when the episodic mapping rule is present.
     pub fn get_episodic_memory_upstream_cortical_areas(
         &self,
         target_cortical_id: &CorticalID,
     ) -> Vec<u32> {
         let mut episodic_upstream = Vec::new();
-        let upstream = self.get_upstream_cortical_areas(target_cortical_id);
-
-        for src_idx in upstream {
-            let Some(src_id) = self.cortical_idx_to_id.get(&src_idx) else {
+        for (src_id, src_area) in &self.cortical_areas {
+            if src_id == target_cortical_id {
                 continue;
-            };
-            let Some(src_area) = self.cortical_areas.get(src_id) else {
-                continue;
-            };
+            }
             let Some(mapping_dst) = src_area
                 .properties
                 .get("cortical_mapping_dst")
@@ -1407,28 +1417,33 @@ impl ConnectomeManager {
             else {
                 continue;
             };
-
-            let has_episodic_rule = rules.iter().any(|rule| {
-                let morphology_id = rule
-                    .as_object()
-                    .and_then(|obj| obj.get("morphology_id"))
-                    .and_then(|v| v.as_str())
-                    .or_else(|| {
-                        rule.as_array()
-                            .and_then(|arr| arr.first())
-                            .and_then(|v| v.as_str())
-                    });
-                morphology_id == Some("episodic_memory")
-            });
-
-            if has_episodic_rule {
-                episodic_upstream.push(src_idx);
+            if !Self::mapping_has_episodic_rule(rules) {
+                continue;
             }
+            let Some(&src_idx) = self.cortical_id_to_idx.get(src_id) else {
+                continue;
+            };
+            episodic_upstream.push(src_idx);
         }
 
         episodic_upstream.sort_unstable();
         episodic_upstream.dedup();
         episodic_upstream
+    }
+
+    fn mapping_has_episodic_rule(rules: &[serde_json::Value]) -> bool {
+        rules.iter().any(|rule| {
+            let morphology_id = rule
+                .as_object()
+                .and_then(|obj| obj.get("morphology_id"))
+                .and_then(|v| v.as_str())
+                .or_else(|| {
+                    rule.as_array()
+                        .and_then(|arr| arr.first())
+                        .and_then(|v| v.as_str())
+                });
+            morphology_id == Some("episodic_memory")
+        })
     }
 
     /// Filter upstream cortical indices to exclude memory areas.
@@ -1467,7 +1482,9 @@ impl ConnectomeManager {
                 .and_then(|v| v.as_object())
             {
                 if mapping.contains_key(&target_id_str) {
-                    upstream_idxs.insert(src_area.cortical_idx);
+                    if let Some(&src_idx) = self.cortical_id_to_idx.get(src_id) {
+                        upstream_idxs.insert(src_idx);
+                    }
                 }
             }
         }
@@ -2100,6 +2117,15 @@ impl ConnectomeManager {
         self.brain_regions.remove_region(region_id)?;
         self.refresh_brain_regions_hash();
         Ok(())
+    }
+
+    /// Drop the entire brain-region hierarchy.
+    ///
+    /// Connectome import uses this instead of deleting regions one-by-one because
+    /// `remove_brain_region` refuses to delete the live root.
+    pub fn clear_brain_regions(&mut self) {
+        self.brain_regions.clear();
+        self.refresh_brain_regions_hash();
     }
 
     /// Change the parent of an existing brain region.
@@ -4285,6 +4311,471 @@ impl ConnectomeManager {
     ) -> Option<&Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>
     {
         self.npu.as_ref()
+    }
+
+    /// Re-register NPU runtime that `apply_connectome_snapshot` clears.
+    ///
+    /// Neurons, synapses, and LTM rows are restored from the snapshot. Twin routes,
+    /// STDP mapping parameters, and memory-area fire-ledger *windows* come from the
+    /// live genome/manager. Fire-ledger *contents* are not restored.
+    pub fn rebind_npu_runtime_after_connectome_apply(&mut self) -> BduResult<()> {
+        self.refresh_all_upstream_cortical_areas_from_mappings();
+        self.rebuild_memory_twin_mappings()?;
+        self.rebind_memory_twin_mappings_to_npu()?;
+        self.rebind_stdp_mappings_to_npu()?;
+        #[cfg(feature = "plasticity")]
+        self.reregister_memory_areas_with_plasticity()?;
+        Ok(())
+    }
+
+    /// Rebuild `upstream_cortical_areas` for every area from live mapping rules.
+    ///
+    /// Connectome import copies `cortical_mapping_dst` but not the derived
+    /// upstream index. Plasticity registration and STDP both read that index.
+    /// Fire-ledger *contents* are not restored; only the watch list is.
+    pub fn refresh_all_upstream_cortical_areas_from_mappings(&mut self) {
+        let area_ids: Vec<CorticalID> = self.cortical_areas.keys().copied().collect();
+        for area_id in area_ids {
+            self.refresh_upstream_cortical_areas_from_mappings(&area_id);
+        }
+    }
+
+    /// Rebuild `memory_twin_areas` from existing twins and episodic mappings.
+    ///
+    /// Connectome import copies twin cortical areas and `memory_replay` rules but
+    /// often omits the reverse index on the memory area. NPU rebind, twin
+    /// diagnostics, and replay injection all key off that index, so recall cannot
+    /// target the saved twin neurons until it is restored.
+    ///
+    /// Existing twins are re-indexed in place. Synapses are not regenerated when
+    /// a `memory_replay` mapping is already present.
+    pub fn rebuild_memory_twin_mappings(&mut self) -> BduResult<usize> {
+        let jobs = self.collect_memory_twin_rebuild_jobs()?;
+        let mut restored = 0usize;
+        for (memory_id, upstream_id, known_twin) in jobs {
+            match known_twin {
+                Some(twin_id) => {
+                    self.restore_memory_twin_index(&memory_id, &upstream_id, &twin_id)?;
+                    restored += 1;
+                }
+                None => {
+                    self.ensure_memory_twin_area(&memory_id, &upstream_id)?;
+                    restored += 1;
+                }
+            }
+        }
+        if restored > 0 {
+            info!(
+                target: "feagi-bdu",
+                "Rebuilt {} memory twin mapping(s) after connectome apply",
+                restored
+            );
+            self.refresh_cortical_mappings_hash();
+        }
+        Ok(restored)
+    }
+
+    fn collect_memory_twin_rebuild_jobs(
+        &self,
+    ) -> BduResult<Vec<(CorticalID, CorticalID, Option<CorticalID>)>> {
+        let mut jobs: Vec<(CorticalID, CorticalID, Option<CorticalID>)> = Vec::new();
+        let mut seen: HashSet<(CorticalID, CorticalID)> = HashSet::new();
+
+        for (memory_id, memory_area) in &self.cortical_areas {
+            if !Self::area_is_memory(memory_area) {
+                continue;
+            }
+            let Some(dstmap) = memory_area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|value| value.as_object())
+            else {
+                continue;
+            };
+            for (dst_b64, rules) in dstmap {
+                if !Self::mapping_rules_use_morphology(rules, "memory_replay") {
+                    continue;
+                }
+                let twin_id = match CorticalID::try_from_base_64(dst_b64) {
+                    Ok(id) => id,
+                    Err(_) => continue,
+                };
+                let Some(twin_area) = self.cortical_areas.get(&twin_id) else {
+                    continue;
+                };
+                let Some(upstream_b64) = twin_area
+                    .properties
+                    .get("memory_twin_of")
+                    .and_then(|value| value.as_str())
+                else {
+                    continue;
+                };
+                let upstream_id = CorticalID::try_from_base_64(upstream_b64).map_err(|error| {
+                    BduError::InvalidArea(format!(
+                        "Invalid memory_twin_of '{}' on {}: {}",
+                        upstream_b64,
+                        twin_id.as_base_64(),
+                        error
+                    ))
+                })?;
+                if seen.insert((*memory_id, upstream_id)) {
+                    jobs.push((*memory_id, upstream_id, Some(twin_id)));
+                }
+            }
+        }
+
+        for (twin_id, twin_area) in &self.cortical_areas {
+            let Some(upstream_b64) = twin_area
+                .properties
+                .get("memory_twin_of")
+                .and_then(|value| value.as_str())
+            else {
+                continue;
+            };
+            let Some(memory_b64) = twin_area
+                .properties
+                .get("memory_twin_for")
+                .and_then(|value| value.as_str())
+            else {
+                continue;
+            };
+            let upstream_id = CorticalID::try_from_base_64(upstream_b64).map_err(|error| {
+                BduError::InvalidArea(format!(
+                    "Invalid memory_twin_of '{}' on {}: {}",
+                    upstream_b64,
+                    twin_id.as_base_64(),
+                    error
+                ))
+            })?;
+            let memory_id = CorticalID::try_from_base_64(memory_b64).map_err(|error| {
+                BduError::InvalidArea(format!(
+                    "Invalid memory_twin_for '{}' on {}: {}",
+                    memory_b64,
+                    twin_id.as_base_64(),
+                    error
+                ))
+            })?;
+            if !self.cortical_areas.contains_key(&memory_id)
+                || !self.cortical_areas.contains_key(&upstream_id)
+            {
+                continue;
+            }
+            if seen.insert((memory_id, upstream_id)) {
+                jobs.push((memory_id, upstream_id, Some(*twin_id)));
+            }
+        }
+
+        let mut episodic_pairs: Vec<(CorticalID, CorticalID)> = Vec::new();
+        for (src_id, src_area) in &self.cortical_areas {
+            if Self::area_is_memory(src_area) {
+                continue;
+            }
+            let Some(dstmap) = src_area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|value| value.as_object())
+            else {
+                continue;
+            };
+            for (dst_b64, rules) in dstmap {
+                if !Self::mapping_rules_use_morphology(rules, "episodic_memory") {
+                    continue;
+                }
+                let Ok(memory_id) = CorticalID::try_from_base_64(dst_b64) else {
+                    continue;
+                };
+                let Some(memory_area) = self.cortical_areas.get(&memory_id) else {
+                    continue;
+                };
+                if !Self::area_is_memory(memory_area) {
+                    continue;
+                }
+                episodic_pairs.push((memory_id, *src_id));
+            }
+        }
+
+        for (memory_id, upstream_id) in episodic_pairs {
+            if !seen.insert((memory_id, upstream_id)) {
+                continue;
+            }
+            let indexed_twin = self
+                .cortical_areas
+                .get(&memory_id)
+                .and_then(|area| area.properties.get("memory_twin_areas"))
+                .and_then(|value| value.as_object())
+                .and_then(|map| map.get(&upstream_id.as_base_64()))
+                .and_then(|value| value.as_str())
+                .and_then(|twin_b64| CorticalID::try_from_base_64(twin_b64).ok());
+            if let Some(twin_id) = indexed_twin {
+                jobs.push((memory_id, upstream_id, Some(twin_id)));
+                continue;
+            }
+            if let Ok(hash_twin_id) = self.build_memory_twin_id(&memory_id, &upstream_id) {
+                if self.cortical_areas.contains_key(&hash_twin_id) {
+                    jobs.push((memory_id, upstream_id, Some(hash_twin_id)));
+                    continue;
+                }
+            }
+            jobs.push((memory_id, upstream_id, None));
+        }
+
+        Ok(jobs)
+    }
+
+    fn restore_memory_twin_index(
+        &mut self,
+        memory_area_id: &CorticalID,
+        upstream_area_id: &CorticalID,
+        twin_id: &CorticalID,
+    ) -> BduResult<()> {
+        let expected_source = upstream_area_id.as_base_64();
+        let expected_target = memory_area_id.as_base_64();
+        let Some(existing) = self.cortical_areas.get_mut(twin_id) else {
+            return Err(BduError::InvalidArea(format!(
+                "Twin area {} not found while restoring memory twin index",
+                twin_id.as_base_64()
+            )));
+        };
+        let existing_source = existing
+            .properties
+            .get("memory_twin_of")
+            .and_then(|value| value.as_str())
+            .map(ToString::to_string);
+        let existing_target = existing
+            .properties
+            .get("memory_twin_for")
+            .and_then(|value| value.as_str())
+            .map(ToString::to_string);
+        if existing_source.as_deref() != Some(expected_source.as_str())
+            || existing_target.as_deref() != Some(expected_target.as_str())
+        {
+            existing.properties.insert(
+                "memory_twin_of".to_string(),
+                serde_json::json!(expected_source),
+            );
+            existing.properties.insert(
+                "memory_twin_for".to_string(),
+                serde_json::json!(expected_target),
+            );
+        }
+        self.set_memory_twin_mapping(memory_area_id, upstream_area_id, twin_id);
+
+        let has_replay = self
+            .cortical_areas
+            .get(memory_area_id)
+            .and_then(|area| area.properties.get("cortical_mapping_dst"))
+            .and_then(|value| value.as_object())
+            .and_then(|map| map.get(&twin_id.as_base_64()))
+            .is_some_and(|rules| Self::mapping_rules_use_morphology(rules, "memory_replay"));
+        if !has_replay {
+            self.ensure_memory_replay_mapping(memory_area_id, twin_id)?;
+        }
+        Ok(())
+    }
+
+    fn area_is_memory(area: &CorticalArea) -> bool {
+        matches!(area.cortical_type, CorticalAreaType::Memory(_))
+            || area
+                .properties
+                .get("is_mem_type")
+                .and_then(|value| value.as_bool())
+                == Some(true)
+    }
+
+    fn mapping_rules_use_morphology(rules: &serde_json::Value, morphology_id: &str) -> bool {
+        rules.as_array().is_some_and(|arr| {
+            arr.iter().any(|rule| {
+                rule.as_object()
+                    .and_then(|obj| obj.get("morphology_id"))
+                    .and_then(|value| value.as_str())
+                    == Some(morphology_id)
+            })
+        })
+    }
+
+    fn rebind_memory_twin_mappings_to_npu(&mut self) -> BduResult<()> {
+        use crate::models::CorticalAreaExt;
+
+        let Some(npu_arc) = self.npu.clone() else {
+            return Ok(());
+        };
+        let mut bindings: Vec<(u32, u32, u32, f32)> = Vec::new();
+        for (memory_id, area) in &self.cortical_areas {
+            if !matches!(area.cortical_type, CorticalAreaType::Memory(_)) {
+                continue;
+            }
+            let Some(twins) = area
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+            else {
+                continue;
+            };
+            let Some(&memory_idx) = self.cortical_id_to_idx.get(memory_id) else {
+                continue;
+            };
+            for (upstream_b64, twin_val) in twins {
+                let Some(twin_b64) = twin_val.as_str() else {
+                    return Err(BduError::InvalidArea(format!(
+                        "memory_twin_areas entry for {} is not a string",
+                        upstream_b64
+                    )));
+                };
+                let upstream_id = CorticalID::try_from_base_64(upstream_b64).map_err(|error| {
+                    BduError::InvalidArea(format!(
+                        "Invalid upstream cortical ID {}: {}",
+                        upstream_b64, error
+                    ))
+                })?;
+                let twin_id = CorticalID::try_from_base_64(twin_b64).map_err(|error| {
+                    BduError::InvalidArea(format!(
+                        "Invalid twin cortical ID {}: {}",
+                        twin_b64, error
+                    ))
+                })?;
+                let Some(&upstream_idx) = self.cortical_id_to_idx.get(&upstream_id) else {
+                    continue;
+                };
+                let Some(&twin_idx) = self.cortical_id_to_idx.get(&twin_id) else {
+                    continue;
+                };
+                let Some(twin_area) = self.cortical_areas.get(&twin_id) else {
+                    continue;
+                };
+                let potential =
+                    twin_area.firing_threshold() + twin_area.firing_threshold_increment();
+                bindings.push((memory_idx, upstream_idx, twin_idx, potential));
+            }
+        }
+        let mut npu = npu_arc.lock().unwrap();
+        for (memory_idx, upstream_idx, twin_idx, potential) in bindings {
+            npu.register_memory_twin_mapping(memory_idx, upstream_idx, twin_idx, potential);
+        }
+        Ok(())
+    }
+
+    fn rebind_stdp_mappings_to_npu(&mut self) -> BduResult<()> {
+        let Some(npu_arc) = self.npu.clone() else {
+            return Ok(());
+        };
+        let mut jobs: Vec<(CorticalID, CorticalID, u32, u32, Vec<serde_json::Value>)> = Vec::new();
+        for (src_id, src_area) in &self.cortical_areas {
+            let Some(dst_map) = src_area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|value| value.as_object())
+            else {
+                continue;
+            };
+            let Some(&src_idx) = self.cortical_id_to_idx.get(src_id) else {
+                continue;
+            };
+            for (dst_b64, rules) in dst_map {
+                let dst_id = CorticalID::try_from_base_64(dst_b64).map_err(|error| {
+                    BduError::InvalidArea(format!(
+                        "Invalid destination cortical ID {}: {}",
+                        dst_b64, error
+                    ))
+                })?;
+                let Some(&dst_idx) = self.cortical_id_to_idx.get(&dst_id) else {
+                    continue;
+                };
+                let Some(rules_arr) = rules.as_array() else {
+                    continue;
+                };
+                jobs.push((*src_id, dst_id, src_idx, dst_idx, rules_arr.clone()));
+            }
+        }
+
+        for (src_id, dst_id, src_idx, dst_idx, rules) in jobs {
+            for rule in &rules {
+                let morphology_id = rule
+                    .as_object()
+                    .and_then(|obj| obj.get("morphology_id"))
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("");
+                let mut plasticity_flag = rule
+                    .as_object()
+                    .and_then(|obj| obj.get("plasticity_flag"))
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(false);
+                if morphology_id == "associative_memory" {
+                    plasticity_flag = true;
+                }
+                if !plasticity_flag {
+                    continue;
+                }
+                let Some(rule_obj) = rule.as_object() else {
+                    return Err(BduError::InvalidMorphology(
+                        "Plasticity mapping rule must be an object format".to_string(),
+                    ));
+                };
+                let (_weight, psp, synapse_type, _delay) =
+                    self.resolve_synapse_params_for_rule(&src_id, rule)?;
+                Self::register_stdp_mapping_for_rule(
+                    &npu_arc,
+                    &src_id,
+                    &dst_id,
+                    src_idx,
+                    dst_idx,
+                    rule_obj,
+                    false,
+                    psp,
+                    synapse_type,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "plasticity")]
+    fn reregister_memory_areas_with_plasticity(&mut self) -> BduResult<()> {
+        use feagi_evolutionary::extract_memory_properties;
+        use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
+
+        let Some(executor) = self.plasticity_executor.clone() else {
+            return Ok(());
+        };
+        let memory_ids: Vec<CorticalID> = self
+            .cortical_areas
+            .iter()
+            .filter(|(_, area)| matches!(area.cortical_type, CorticalAreaType::Memory(_)))
+            .map(|(id, _)| *id)
+            .collect();
+
+        for memory_id in memory_ids {
+            let Some(area) = self.cortical_areas.get(&memory_id) else {
+                continue;
+            };
+            let Some(mem_props) = extract_memory_properties(&area.properties) else {
+                continue;
+            };
+            let Some(&area_idx) = self.cortical_id_to_idx.get(&memory_id) else {
+                continue;
+            };
+            let area_name = memory_id.as_base_64();
+            let upstream_areas = self.get_episodic_memory_upstream_cortical_areas(&memory_id);
+            let lifecycle_config = MemoryNeuronLifecycleConfig {
+                initial_lifespan: mem_props.init_lifespan,
+                lifespan_growth_rate: mem_props.lifespan_growth_rate,
+                longterm_threshold: mem_props.longterm_threshold,
+                max_reactivations: 1000,
+            };
+            let exec = executor.lock().map_err(|_| {
+                BduError::Internal(
+                    "Failed to lock PlasticityExecutor for memory-area rebind".to_string(),
+                )
+            })?;
+            exec.register_memory_area(
+                area_idx,
+                area_name,
+                mem_props.temporal_depth,
+                upstream_areas,
+                Some(lifecycle_config),
+                mem_props.mp_learning_enabled,
+            );
+        }
+        Ok(())
     }
 
     /// Set the PlasticityExecutor reference (optional, only if plasticity feature enabled)
@@ -7497,6 +7988,41 @@ mod tests {
     }
 
     #[test]
+    fn refresh_all_connectome_hashes_publishes_mappings() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CustomCorticalType,
+        };
+
+        let src_id = CorticalID::try_from_bytes(b"chashsrc").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"chashdst").unwrap();
+        let mut src = CorticalArea::new(
+            src_id,
+            1,
+            "src".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        src.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                dst_id.as_base_64(): [{ "morphology_id": "projector" }]
+            }),
+        );
+        let mut manager = ConnectomeManager::new_for_testing();
+        manager.add_cortical_area(src).unwrap();
+        manager.refresh_all_connectome_hashes();
+        let mappings_hash = feagi_state_manager::StateManager::instance()
+            .read()
+            .get_cortical_mappings_hash();
+        assert_ne!(
+            mappings_hash, 0,
+            "refresh_all_connectome_hashes must publish cortical_mappings_hash"
+        );
+    }
+
+    #[test]
     fn test_cortical_area_lookups() {
         ConnectomeManager::reset_for_testing();
 
@@ -8737,6 +9263,207 @@ mod tests {
                 .and_then(|v| v.as_str()),
             Some(mem_id.as_base_64().as_str())
         );
+    }
+
+    #[test]
+    fn test_rebuild_memory_twin_index_from_replay_without_hash_map() {
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            IOCorticalAreaConfigurationFlag, MemoryCorticalType,
+        };
+        use std::sync::Arc;
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+
+        let src_id = CorticalID::try_from_bytes(b"csrc0003").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmem0003").unwrap();
+        let twin_id = CorticalID::try_from_bytes(b"ctwin003").unwrap();
+
+        let mut src_area = CorticalArea::new(
+            src_id,
+            0,
+            "Source Area".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        src_area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "episodic_memory",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1
+                }]
+            }),
+        );
+
+        let mut mem_area = CorticalArea::new(
+            mem_id,
+            0,
+            "Memory Area".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem_area
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem_area
+            .properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+        mem_area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                twin_id.as_base_64(): [{
+                    "morphology_id": "memory_replay",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": false
+                }]
+            }),
+        );
+
+        let mut twin_area = CorticalArea::new(
+            twin_id,
+            0,
+            "Source Area_twin".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        twin_area.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(src_id.as_base_64()),
+        );
+
+        manager.add_cortical_area(src_area).unwrap();
+        manager.add_cortical_area(mem_area).unwrap();
+        manager.add_cortical_area(twin_area).unwrap();
+
+        let diagnostic_before = manager
+            .diagnose_memory_twin_for_mapping(&src_id, &mem_id)
+            .expect("diagnostic before rebuild");
+        assert!(diagnostic_before.twin_expected);
+        assert!(!diagnostic_before.twin_present);
+
+        manager
+            .rebind_npu_runtime_after_connectome_apply()
+            .expect("rebind should rebuild twin index");
+
+        let diagnostic_after = manager
+            .diagnose_memory_twin_for_mapping(&src_id, &mem_id)
+            .expect("diagnostic after rebuild");
+        assert!(diagnostic_after.twin_present);
+        assert_eq!(
+            diagnostic_after.twin_cortical_area.as_deref(),
+            Some(twin_id.as_base_64().as_str())
+        );
+
+        let mem_area = manager.get_cortical_area(&mem_id).unwrap();
+        let twin_map = mem_area
+            .properties
+            .get("memory_twin_areas")
+            .and_then(|v| v.as_object())
+            .expect("memory_twin_areas should be restored");
+        assert_eq!(
+            twin_map.get(&src_id.as_base_64()).and_then(|v| v.as_str()),
+            Some(twin_id.as_base_64().as_str())
+        );
+
+        let twin_area = manager.get_cortical_area(&twin_id).unwrap();
+        assert_eq!(
+            twin_area
+                .properties
+                .get("memory_twin_for")
+                .and_then(|v| v.as_str()),
+            Some(mem_id.as_base_64().as_str())
+        );
+
+        let memory_idx = manager.get_cortical_idx(&mem_id).expect("memory idx");
+        let upstream_idx = manager.get_cortical_idx(&src_id).expect("src idx");
+        let twin_idx = manager.get_cortical_idx(&twin_id).expect("twin idx");
+        let npu = dyn_npu.lock().unwrap();
+        let (bound_twin, _) = npu
+            .get_memory_twin_mapping(memory_idx, upstream_idx)
+            .expect("NPU twin route restored");
+        assert_eq!(bound_twin, twin_idx);
+    }
+
+    #[test]
+    fn test_episodic_upstream_reads_mapping_when_cache_empty() {
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        let src_id = CorticalID::try_from_bytes(b"csrc0004").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmem0004").unwrap();
+
+        let mut src_area = CorticalArea::new(
+            src_id,
+            0,
+            "pattern in".to_string(),
+            CorticalAreaDimensions::new(10, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        src_area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "episodic_memory",
+                    "postSynapticCurrent_multiplier": 1
+                }]
+            }),
+        );
+        let mut mem_area = CorticalArea::new(
+            mem_id,
+            0,
+            "pattern mem".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem_area
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem_area
+            .properties
+            .insert("upstream_cortical_areas".to_string(), serde_json::json!([]));
+
+        let src_idx = manager.add_cortical_area(src_area).unwrap();
+        manager.add_cortical_area(mem_area).unwrap();
+
+        assert!(
+            manager.get_upstream_cortical_areas(&mem_id).is_empty(),
+            "cache stays empty until refresh"
+        );
+        assert_eq!(
+            manager.get_episodic_memory_upstream_cortical_areas(&mem_id),
+            vec![src_idx],
+            "episodic upstream must come from the mapping rule, not the cache"
+        );
+
+        manager.refresh_all_upstream_cortical_areas_from_mappings();
+        assert_eq!(manager.get_upstream_cortical_areas(&mem_id), vec![src_idx]);
     }
 
     #[test]

@@ -363,6 +363,13 @@ impl SensoryCorticalUnit {
                 Self::get_cortical_ids_array_for_smart_i_m_u_with_parameters(fh, pos, group_index)
                     [0]
             }
+            SensoryCorticalUnit::CartesianPosition => {
+                Self::get_cortical_ids_array_for_cartesian_position_with_parameters(
+                    fh,
+                    pos,
+                    group_index,
+                )[0]
+            }
         }
     }
 }

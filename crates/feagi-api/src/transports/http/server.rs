@@ -872,8 +872,16 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_download_cortical_area),
         )
         .route(
+            "/connectome/directory",
+            get(connectome::get_connectome_directory),
+        )
+        .route(
             "/connectome/upload",
             axum::routing::post(connectome::post_upload_connectome),
+        )
+        .route(
+            "/connectome/upload-saved",
+            axum::routing::post(connectome::post_upload_connectome_saved),
         )
         .route(
             "/connectome/upload-cortical-area",

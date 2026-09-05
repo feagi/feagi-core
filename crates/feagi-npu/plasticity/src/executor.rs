@@ -151,6 +151,33 @@ impl AsyncPlasticityExecutor {
             .and_then(|s| s.memory_neuron_detail(neuron_id))
     }
 
+    /// Active long-term memory neurons only (STM is excluded).
+    pub fn export_long_term_memory_neurons(&self) -> Result<Vec<MemoryNeuronDetail>, String> {
+        let guard = self
+            .service
+            .lock()
+            .map_err(|_| "Failed to lock plasticity service".to_string())?;
+        let service = guard
+            .as_ref()
+            .ok_or_else(|| "Plasticity service is not initialized".to_string())?;
+        Ok(service.export_long_term_memory_neurons())
+    }
+
+    /// Replace in-memory STM/LTM state with restored long-term memory neurons.
+    pub fn restore_long_term_memory_neurons(
+        &self,
+        neurons: &[MemoryNeuronDetail],
+    ) -> Result<usize, String> {
+        let guard = self
+            .service
+            .lock()
+            .map_err(|_| "Failed to lock plasticity service".to_string())?;
+        let service = guard
+            .as_ref()
+            .ok_or_else(|| "Plasticity service is not initialized".to_string())?;
+        service.restore_long_term_memory_neurons(neurons)
+    }
+
     /// Active memory neuron ids for a cortical area (sorted), paginated: `(page, total)`.
     pub fn paginated_memory_neuron_ids_in_area(
         &self,

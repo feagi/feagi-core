@@ -19,6 +19,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
+use crate::log_rate_limiter::BurstLogRateLimiter;
 use crate::memory_neuron_array::{
     MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig,
 };
@@ -28,6 +29,9 @@ use crate::stdp::STDPConfig;
 use ahash::AHashSet;
 use feagi_npu_neural::types::NeuronId;
 use serde::{Deserialize, Serialize};
+
+/// Default burst gap between repeated MP-unavailable warnings.
+pub const DEFAULT_MP_UNAVAILABLE_WARN_PERIOD_BURSTS: u64 = 100;
 
 type MpWindowFrame = (u64, ahash::AHashMap<u32, f32>);
 type PerAreaMpWindow = (u32, Vec<MpWindowFrame>);
@@ -57,6 +61,10 @@ pub struct PlasticityConfig {
 
     /// Memory neuron lifecycle configuration
     pub memory_lifecycle_config: MemoryNeuronLifecycleConfig,
+
+    /// Minimum burst gap between repeated "MP window unavailable" warnings
+    /// for the same upstream area. `0` logs every burst.
+    pub mp_unavailable_warn_period_bursts: u64,
 }
 
 impl Default for PlasticityConfig {
@@ -68,6 +76,7 @@ impl Default for PlasticityConfig {
             stdp: Some(STDPConfig::default()),
             pattern_config: PatternConfig::default(),
             memory_lifecycle_config: MemoryNeuronLifecycleConfig::default(),
+            mp_unavailable_warn_period_bursts: DEFAULT_MP_UNAVAILABLE_WARN_PERIOD_BURSTS,
         }
     }
 }
@@ -199,6 +208,9 @@ pub struct PlasticityService {
 
     // Memory area stats cache (for health check)
     memory_stats_cache: MemoryStatsCache,
+
+    /// Rate-limits repeating MP-unavailable warnings (keyed by upstream area idx).
+    mp_window_warn_limiter: Arc<Mutex<BurstLogRateLimiter>>,
 }
 
 impl PlasticityService {
@@ -236,6 +248,7 @@ impl PlasticityService {
             })));
         }
 
+        let mp_warn_period = config.mp_unavailable_warn_period_bursts;
         Self {
             config,
             npu,
@@ -248,6 +261,7 @@ impl PlasticityService {
             command_queue: Arc::new(Mutex::new(Vec::new())),
             stats: Arc::new(Mutex::new(PlasticityStats::default())),
             memory_stats_cache,
+            mp_window_warn_limiter: Arc::new(Mutex::new(BurstLogRateLimiter::new(mp_warn_period))),
         }
     }
 
@@ -279,6 +293,7 @@ impl PlasticityService {
         let config = self.config.clone();
         let memory_stats_cache = self.memory_stats_cache.clone();
         let npu = Arc::clone(&self.npu); // Clone NPU reference for thread
+        let mp_window_warn_limiter = Arc::clone(&self.mp_window_warn_limiter);
 
         tracing::info!(target: "plasticity", "🧠 Starting PlasticityService background thread...");
 
@@ -312,6 +327,7 @@ impl PlasticityService {
                     &stats,
                     &config,
                     &memory_stats_cache,
+                    &mp_window_warn_limiter,
                 );
             }
         })
@@ -339,6 +355,7 @@ impl PlasticityService {
         stats: &Arc<Mutex<PlasticityStats>>,
         config: &PlasticityConfig,
         memory_stats_cache: &MemoryStatsCache,
+        mp_window_warn_limiter: &Arc<Mutex<BurstLogRateLimiter>>,
     ) {
         let memory_areas_snapshot = memory_areas.lock().unwrap().clone();
 
@@ -566,12 +583,28 @@ impl PlasticityService {
                                     ) {
                                         Ok(mp_window) => mp_wins.push((upstream_idx, mp_window)),
                                         Err(e) => {
-                                            tracing::warn!(
-                                                target: "plasticity",
-                                                "[PLASTICITY] MP window unavailable for upstream {}: {}",
-                                                upstream_idx,
-                                                e
-                                            );
+                                            let emit = mp_window_warn_limiter
+                                                .lock()
+                                                .unwrap()
+                                                .should_emit(upstream_idx, current_timestep);
+                                            if let Some(suppressed) = emit {
+                                                if suppressed == 0 {
+                                                    tracing::warn!(
+                                                        target: "plasticity",
+                                                        "[PLASTICITY] MP window unavailable for upstream {}: {}",
+                                                        upstream_idx,
+                                                        e
+                                                    );
+                                                } else {
+                                                    tracing::warn!(
+                                                        target: "plasticity",
+                                                        "[PLASTICITY] MP window unavailable for upstream {}: {} (suppressed {} repeats)",
+                                                        upstream_idx,
+                                                        e,
+                                                        suppressed
+                                                    );
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1194,6 +1227,25 @@ impl PlasticityService {
         Arc::clone(&self.memory_neuron_array)
     }
 
+    /// Active long-term memory neurons only (STM is excluded).
+    pub fn export_long_term_memory_neurons(&self) -> Vec<MemoryNeuronDetail> {
+        self.memory_neuron_array
+            .lock()
+            .unwrap()
+            .export_long_term_memory_neurons()
+    }
+
+    /// Replace in-memory STM/LTM state with restored long-term memory neurons.
+    pub fn restore_long_term_memory_neurons(
+        &self,
+        neurons: &[MemoryNeuronDetail],
+    ) -> Result<usize, String> {
+        self.memory_neuron_array
+            .lock()
+            .unwrap()
+            .restore_long_term_memory_neurons(neurons)
+    }
+
     /// Reset (delete) all memory neurons and their synapses in a cortical area.
     ///
     /// Returns the number of memory neurons deleted.
@@ -1352,6 +1404,16 @@ mod tests {
 
         let stats = service.get_stats();
         assert_eq!(stats.memory_neurons_created, 0);
+    }
+
+    #[test]
+    fn test_mp_unavailable_warn_period_default_is_configured() {
+        let config = PlasticityConfig::default();
+        assert_eq!(
+            config.mp_unavailable_warn_period_bursts,
+            DEFAULT_MP_UNAVAILABLE_WARN_PERIOD_BURSTS
+        );
+        assert!(config.mp_unavailable_warn_period_bursts > 0);
     }
 
     #[test]

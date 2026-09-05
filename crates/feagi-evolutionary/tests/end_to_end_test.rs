@@ -251,3 +251,131 @@ fn test_flat_dstmap_object_rules_preserved() {
     assert_eq!(rules[0]["postSynapticCurrent_multiplier"], 1);
     assert_eq!(rules[0]["plasticity_flag"], false);
 }
+
+#[test]
+fn test_save_load_roundtrip_memory_plastic_and_regions() {
+    use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+    use feagi_structures::genomic::cortical_area::{
+        CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        MemoryCorticalType,
+    };
+    use std::collections::HashMap;
+
+    let src_id = CorticalID::try_from_bytes(b"csrc_e2e").expect("src id");
+    let mem_id = CorticalID::try_from_bytes(b"mmem_e2e").expect("mem id");
+
+    let mut src = CorticalArea::new(
+        src_id,
+        7,
+        "src".to_string(),
+        CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+        (0, 0, 0).into(),
+        CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+    )
+    .unwrap();
+    src.properties.insert(
+        "cortical_mapping_dst".to_string(),
+        serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "projector",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": true,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 3
+                }]
+        }),
+    );
+
+    let mut mem = CorticalArea::new(
+        mem_id,
+        8,
+        "memory".to_string(),
+        CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+        (5, 0, 0).into(),
+        CorticalAreaType::Memory(MemoryCorticalType::Memory),
+    )
+    .unwrap();
+    mem.properties
+        .insert("is_mem_type".to_string(), serde_json::json!(true));
+    mem.properties.insert(
+        "memory_twin_of".to_string(),
+        serde_json::json!(src_id.as_base_64()),
+    );
+
+    let region = BrainRegion::new(
+        RegionID::new(),
+        "e2e-region".to_string(),
+        RegionType::Undefined,
+    )
+    .unwrap()
+    .with_areas([src_id, mem_id]);
+    let region_key = region.region_id.to_string();
+
+    let mut morphologies = feagi_evolutionary::MorphologyRegistry::new();
+    morphologies.add_morphology(
+        "projector".to_string(),
+        feagi_evolutionary::Morphology {
+            morphology_type: feagi_evolutionary::MorphologyType::Functions,
+            parameters: feagi_evolutionary::MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    let mut cortical_areas = HashMap::new();
+    cortical_areas.insert(src_id, src);
+    cortical_areas.insert(mem_id, mem);
+    let mut brain_regions = HashMap::new();
+    brain_regions.insert(region_key.clone(), region);
+
+    let genome = feagi_evolutionary::RuntimeGenome {
+        metadata: feagi_evolutionary::GenomeMetadata {
+            genome_id: "e2e_full".to_string(),
+            genome_title: "E2E full".to_string(),
+            genome_description: "".to_string(),
+            version: "2.0".to_string(),
+            timestamp: 1.0,
+            brain_regions_root: Some(region_key.clone()),
+        },
+        cortical_areas,
+        brain_regions,
+        morphologies,
+        physiology: feagi_evolutionary::PhysiologyConfig::default(),
+        signatures: feagi_evolutionary::GenomeSignatures {
+            genome: "0".to_string(),
+            blueprint: "0".to_string(),
+            physiology: "0".to_string(),
+            morphologies: None,
+        },
+        stats: feagi_evolutionary::GenomeStats::default(),
+    };
+
+    let json = save_genome_to_json(&genome).expect("save");
+    let loaded = load_genome_from_json(&json).expect("load");
+    assert_eq!(loaded.cortical_areas.len(), 2);
+    assert!(loaded.cortical_areas.contains_key(&mem_id));
+    assert!(loaded.brain_regions.contains_key(&region_key));
+    assert!(loaded.morphologies.contains("projector"));
+    let dstmap = loaded.cortical_areas[&src_id].properties["cortical_mapping_dst"]
+        .as_object()
+        .expect("dstmap present");
+    let has_plastic = dstmap.values().any(|rules| {
+        rules
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .any(|rule| rule.get("plasticity_flag") == Some(&serde_json::json!(true)))
+            })
+            .unwrap_or(false)
+    });
+    assert!(
+        has_plastic,
+        "plastic mapping missing after roundtrip: {dstmap:?}"
+    );
+    assert_eq!(
+        loaded.cortical_areas[&mem_id].properties["is_mem_type"],
+        true
+    );
+}

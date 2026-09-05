@@ -29,6 +29,7 @@
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod executor; // Abstraction layer for different execution models
+pub(crate) mod log_rate_limiter;
 pub mod memory_neuron_array;
 pub mod memory_stats_cache;
 pub mod neuron_id_manager;

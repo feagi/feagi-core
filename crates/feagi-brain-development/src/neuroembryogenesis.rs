@@ -21,8 +21,12 @@ Licensed under the Apache License, Version 2.0
 use crate::connectome_manager::ConnectomeManager;
 use crate::models::{CorticalArea, CorticalID};
 use crate::types::{BduError, BduResult};
-use feagi_evolutionary::RuntimeGenome;
+use feagi_evolutionary::{
+    apply_genome_title_to_unique_top_circuit, wrap_parentless_regions_under_named_root,
+    RuntimeGenome,
+};
 use feagi_npu_neural::types::{Precision, QuantizationSpec};
+use feagi_structures::genomic::brain_regions::ROOT_BRAIN_REGION_NAME;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{debug, error, info, trace, warn};
@@ -37,6 +41,80 @@ fn autogen_subregion_display_name(genome_title: &str) -> String {
     } else {
         t.to_string()
     }
+}
+
+/// Order region IDs so every parent in `region_ids` is emitted before its children.
+///
+/// Genome `brain_regions` is a `HashMap`, so iteration order is not stable. Inserting in
+/// that order fails whenever a nested child (e.g. grandchild of root) is visited before
+/// its parent. Kahn's algorithm makes insert order independent of hashing.
+///
+/// A region's in-degree is 1 only when its parent is also in `region_ids`. Regions whose
+/// parent is the already-inserted root (or missing from this set) start ready.
+/// Cyclic leftovers are appended after the acyclic prefix so the caller still attempts
+/// insert and surfaces the existing "Parent region does not exist" error.
+fn order_regions_parent_before_child(
+    region_ids: &[String],
+    region_parent_map: &std::collections::HashMap<String, String>,
+) -> Vec<String> {
+    use std::collections::{HashMap, HashSet, VecDeque};
+
+    let id_set: HashSet<&str> = region_ids.iter().map(String::as_str).collect();
+    let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut in_degree: HashMap<&str, usize> =
+        region_ids.iter().map(|id| (id.as_str(), 0usize)).collect();
+
+    for id in region_ids {
+        if let Some(parent) = region_parent_map.get(id) {
+            if id_set.contains(parent.as_str()) {
+                if let Some(degree) = in_degree.get_mut(id.as_str()) {
+                    *degree += 1;
+                }
+                children
+                    .entry(parent.as_str())
+                    .or_default()
+                    .push(id.as_str());
+            }
+        }
+    }
+
+    let mut ready: Vec<&str> = in_degree
+        .iter()
+        .filter(|(_, degree)| **degree == 0)
+        .map(|(id, _)| *id)
+        .collect();
+    ready.sort_unstable();
+
+    let mut ordered = Vec::with_capacity(region_ids.len());
+    let mut queue: VecDeque<&str> = ready.into();
+
+    while let Some(id) = queue.pop_front() {
+        ordered.push(id.to_string());
+        if let Some(kids) = children.get_mut(id) {
+            kids.sort_unstable();
+            for child in kids.iter().copied() {
+                if let Some(degree) = in_degree.get_mut(child) {
+                    *degree -= 1;
+                    if *degree == 0 {
+                        queue.push_back(child);
+                    }
+                }
+            }
+        }
+    }
+
+    if ordered.len() < region_ids.len() {
+        let emitted: HashSet<&str> = ordered.iter().map(String::as_str).collect();
+        let mut leftovers: Vec<String> = region_ids
+            .iter()
+            .filter(|id| !emitted.contains(id.as_str()))
+            .cloned()
+            .collect();
+        leftovers.sort();
+        ordered.extend(leftovers);
+    }
+
+    ordered
 }
 
 /// Development stage tracking
@@ -601,7 +679,7 @@ impl Neuroembryogenesis {
 
             let mut root_region = BrainRegion::new(
                 root_region_id,
-                "Root Brain Region".to_string(),
+                ROOT_BRAIN_REGION_NAME.to_string(),
                 RegionType::Undefined,
             )
             .expect("Failed to create root region")
@@ -731,12 +809,31 @@ impl Neuroembryogenesis {
             (regions_map, parent_map)
         } else {
             info!(target: "feagi-bdu","  📋 Genome already has {} brain regions - using existing structure", genome.brain_regions.len());
+            let mut regions_map = genome.brain_regions.clone();
+            if let Some(wrapper_id) = wrap_parentless_regions_under_named_root(&mut regions_map) {
+                info!(
+                    target: "feagi-bdu",
+                    "  🔗 Wrapped parentless circuit(s) under new {} ({}); original circuit names preserved",
+                    ROOT_BRAIN_REGION_NAME,
+                    wrapper_id
+                );
+            }
+            if let Some(circuit_name) = apply_genome_title_to_unique_top_circuit(
+                &mut regions_map,
+                &genome.metadata.genome_title,
+            ) {
+                info!(
+                    target: "feagi-bdu",
+                    "  Applied genome_title to unique top-level circuit: {}",
+                    circuit_name
+                );
+            }
             // Parent links may be stored on each region as `parent_region_id` (properties). Flat/v3
             // exports often omit them; without parents, add_brain_region(..., None) only registers the
             // first region as root and leaves other regions detached — BV then shows an empty tree.
             let mut region_parent_map: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
-            for (region_id, region) in &genome.brain_regions {
+            for (region_id, region) in &regions_map {
                 if let Some(pid) = region
                     .properties
                     .get("parent_region_id")
@@ -746,13 +843,12 @@ impl Neuroembryogenesis {
                 }
             }
             if region_parent_map.is_empty() {
-                if let Some((root_id, _)) = genome
-                    .brain_regions
+                if let Some((root_id, _)) = regions_map
                     .iter()
-                    .find(|(_, r)| r.name == "Root Brain Region")
+                    .find(|(_, r)| r.name == ROOT_BRAIN_REGION_NAME)
                 {
-                    for (region_id, region) in &genome.brain_regions {
-                        if region.name == "Root Brain Region" {
+                    for (region_id, region) in &regions_map {
+                        if region.name == ROOT_BRAIN_REGION_NAME {
                             continue;
                         }
                         region_parent_map.insert(region_id.clone(), root_id.clone());
@@ -766,11 +862,12 @@ impl Neuroembryogenesis {
                     }
                 } else {
                     warn!(target: "feagi-bdu",
-                        "  ⚠️ brain_regions present but no 'Root Brain Region' and no parent_region_id — hierarchy may not load in BV"
+                        "  ⚠️ brain_regions present but no '{}' and no parent_region_id — hierarchy may not load in BV",
+                        ROOT_BRAIN_REGION_NAME
                     );
                 }
             }
-            (genome.brain_regions.clone(), region_parent_map)
+            (regions_map, region_parent_map)
         };
 
         // Add brain regions with proper parent relationships - minimize lock scope
@@ -779,22 +876,31 @@ impl Neuroembryogenesis {
             let brain_region_count = brain_regions_to_add.len();
             info!(target: "feagi-bdu","  Adding {} brain regions from genome", brain_region_count);
 
-            // First add root (no parent) - need to find it by iterating since key is UUID
+            // Named root first (parent=None). Remaining regions are inserted in
+            // parent-before-child order so nested trees do not depend on HashMap iteration.
             let root_entry = brain_regions_to_add
                 .iter()
-                .find(|(_, region)| region.name == "Root Brain Region");
+                .find(|(_, region)| region.name == ROOT_BRAIN_REGION_NAME);
             if let Some((root_id, root_region)) = root_entry {
                 manager.add_brain_region(root_region.clone(), None)?;
-                debug!(target: "feagi-bdu","    ✓ Added brain region: {} (Root Brain Region) [parent=None]", root_id);
+                debug!(target: "feagi-bdu","    ✓ Added brain region: {} ({}) [parent=None]", root_id, ROOT_BRAIN_REGION_NAME);
             }
 
-            // Then add other regions with their parent relationships
-            for (region_id, region) in brain_regions_to_add.iter() {
-                if region.name == "Root Brain Region" {
-                    continue; // Already added
-                }
+            let remaining_ids: Vec<String> = brain_regions_to_add
+                .iter()
+                .filter(|(_, region)| region.name != ROOT_BRAIN_REGION_NAME)
+                .map(|(region_id, _)| region_id.clone())
+                .collect();
+            let ordered_ids = order_regions_parent_before_child(&remaining_ids, &region_parent_map);
 
-                let parent_id = region_parent_map.get(region_id).cloned();
+            for region_id in ordered_ids {
+                let region = brain_regions_to_add.get(&region_id).ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "Ordered region {} missing from genome region map",
+                        region_id
+                    ))
+                })?;
+                let parent_id = region_parent_map.get(&region_id).cloned();
                 manager.add_brain_region(region.clone(), parent_id.clone())?;
                 debug!(target: "feagi-bdu","    ✓ Added brain region: {} ({}) [parent={:?}]",
                        region_id, region.name, parent_id);
@@ -1590,6 +1696,61 @@ mod tests {
     fn autogen_subregion_display_name_falls_back_for_blank() {
         assert_eq!(autogen_subregion_display_name(""), "Autogen Circuit");
         assert_eq!(autogen_subregion_display_name("   "), "Autogen Circuit");
+    }
+
+    #[test]
+    fn order_regions_puts_parent_before_grandchild_even_when_child_is_listed_first() {
+        let root = "root".to_string();
+        let parent = "look-for-people".to_string();
+        let grandchild = "wave".to_string();
+        let sibling = "look-for-ball".to_string();
+
+        // HashMap-unlucky listing: grandchild before its parent.
+        let remaining = vec![grandchild.clone(), sibling.clone(), parent.clone()];
+        let mut parent_map = std::collections::HashMap::new();
+        parent_map.insert(parent.clone(), root.clone());
+        parent_map.insert(grandchild.clone(), parent.clone());
+        parent_map.insert(sibling.clone(), root);
+
+        let ordered = order_regions_parent_before_child(&remaining, &parent_map);
+        let parent_idx = ordered.iter().position(|id| id == &parent).unwrap();
+        let grandchild_idx = ordered.iter().position(|id| id == &grandchild).unwrap();
+
+        assert_eq!(ordered.len(), 3);
+        assert!(
+            parent_idx < grandchild_idx,
+            "parent must precede grandchild, got {:?}",
+            ordered
+        );
+    }
+
+    #[test]
+    fn order_regions_keeps_flat_children_when_parent_is_already_inserted() {
+        let remaining = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let mut parent_map = std::collections::HashMap::new();
+        parent_map.insert("a".to_string(), "root".to_string());
+        parent_map.insert("b".to_string(), "root".to_string());
+        parent_map.insert("c".to_string(), "root".to_string());
+
+        let ordered = order_regions_parent_before_child(&remaining, &parent_map);
+        let mut sorted = ordered.clone();
+        sorted.sort();
+        assert_eq!(sorted, remaining);
+    }
+
+    #[test]
+    fn order_regions_appends_cycle_members_after_acyclic_prefix() {
+        let remaining = vec!["a".to_string(), "b".to_string(), "ok".to_string()];
+        let mut parent_map = std::collections::HashMap::new();
+        parent_map.insert("a".to_string(), "b".to_string());
+        parent_map.insert("b".to_string(), "a".to_string());
+        parent_map.insert("ok".to_string(), "root".to_string());
+
+        let ordered = order_regions_parent_before_child(&remaining, &parent_map);
+        assert_eq!(ordered.first().map(String::as_str), Some("ok"));
+        assert_eq!(ordered.len(), 3);
+        assert!(ordered.contains(&"a".to_string()));
+        assert!(ordered.contains(&"b".to_string()));
     }
 
     #[test]

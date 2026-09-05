@@ -360,8 +360,9 @@ pub trait ConnectomeService: Send + Sync {
 
     /// Export the current connectome as a snapshot
     ///
-    /// Captures the complete state of the NPU including all neurons, synapses,
-    /// and runtime state. This is the service layer interface for connectome export.
+    /// Captures regular neurons, synapses (including plastic and associative
+    /// weight changes), and long-term memory neurons with synapses to/from them.
+    /// Short-term memory and fire-ledger contents are not persisted.
     ///
     /// # Returns
     /// * `ConnectomeSnapshot` - Complete connectome state snapshot

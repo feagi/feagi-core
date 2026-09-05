@@ -247,8 +247,21 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
-
-
+                #[doc = "Cartesian position sensor: an absolute 3D position (x/y/z), each axis normalized to an unsigned percentage [0, 1] over a controller-defined workspace. Sensor-side counterpart of the SpatialPointer OPU's Absolute mode."]
+                CartesianPosition => {
+                    friendly_name: "Cartesian Position Sensor",
+                    accepted_wrapped_io_data_type: Percentage_3D,
+                    cortical_id_unit_reference: *b"cpo",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [115, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])
+                    }
+                },
 
             }
         }

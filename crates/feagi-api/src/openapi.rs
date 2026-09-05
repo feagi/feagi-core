@@ -256,6 +256,12 @@ use crate::{
         crate::endpoints::region::put_change_cortical_area_region,
 
         // Connectome endpoints (21 total)
+        crate::endpoints::connectome::get_download_connectome,
+        crate::endpoints::connectome::get_download_cortical_area,
+        crate::endpoints::connectome::get_connectome_directory,
+        crate::endpoints::connectome::post_upload_connectome,
+        crate::endpoints::connectome::post_upload_connectome_saved,
+        crate::endpoints::connectome::post_upload_cortical_area,
         crate::endpoints::connectome::get_cortical_areas_list_detailed,
         crate::endpoints::connectome::get_properties_dimensions,
         crate::endpoints::connectome::get_properties_mappings,
@@ -293,10 +299,6 @@ use crate::{
         crate::endpoints::connectome::get_fire_queue_area,
         crate::endpoints::connectome::get_plasticity_info,
         crate::endpoints::connectome::get_path_query,
-        crate::endpoints::connectome::get_download_connectome,
-        crate::endpoints::connectome::get_download_cortical_area,
-        crate::endpoints::connectome::post_upload_connectome,
-        crate::endpoints::connectome::post_upload_cortical_area,
 
         // Burst Engine endpoints (14 total)
         crate::endpoints::burst_engine::get_simulation_timestep,
@@ -591,6 +593,10 @@ use crate::{
             ValidateGenomeRequest,
             ValidateGenomeResponse,
             crate::endpoints::genome::GenomeFileUploadForm,
+            crate::endpoints::connectome::ConnectomeFileUploadForm,
+            crate::endpoints::connectome::ConnectomeDirectoryResponse,
+            crate::endpoints::connectome::ConnectomeSavedFileEntry,
+            crate::endpoints::connectome::ConnectomeUploadSavedRequest,
 
             // Neurons
             NeuronInfoResponse,

@@ -418,3 +418,12 @@ fn test_concurrent_pattern_detection() {
     // All should have detected patterns
     assert_eq!(results.iter().filter(|r| r.is_some()).count(), 10);
 }
+
+#[test]
+fn test_mp_unavailable_warn_period_is_part_of_plasticity_config() {
+    let config = PlasticityConfig::default();
+    assert!(
+        config.mp_unavailable_warn_period_bursts > 0,
+        "MP-unavailable warnings must be rate-limited by default"
+    );
+}

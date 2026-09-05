@@ -394,6 +394,87 @@ impl MemoryNeuronArray {
         })
     }
 
+    /// Active long-term memory neurons only. Short-term memory is never included.
+    pub fn export_long_term_memory_neurons(&self) -> Vec<MemoryNeuronDetail> {
+        (0..self.next_available_index)
+            .filter_map(|idx| {
+                if !self.is_valid_index(idx)
+                    || !self.is_active[idx]
+                    || !self.is_longterm_memory[idx]
+                {
+                    return None;
+                }
+                self.get_memory_neuron_detail(self.neuron_ids[idx])
+            })
+            .collect()
+    }
+
+    /// Replace the array with the given long-term memory neurons, restoring original IDs.
+    ///
+    /// Short-term entries in `neurons` are ignored. Existing STM/LTM state is discarded.
+    pub fn restore_long_term_memory_neurons(
+        &mut self,
+        neurons: &[MemoryNeuronDetail],
+    ) -> Result<usize, String> {
+        self.reset();
+        let mut restored = 0;
+        for detail in neurons {
+            if !detail.is_longterm_memory || !detail.is_active {
+                continue;
+            }
+            self.restore_long_term_memory_neuron(detail)?;
+            restored += 1;
+        }
+        Ok(restored)
+    }
+
+    fn restore_long_term_memory_neuron(
+        &mut self,
+        detail: &MemoryNeuronDetail,
+    ) -> Result<usize, String> {
+        if !NeuronIdManager::is_memory_neuron_id(detail.neuron_id) {
+            return Err(format!(
+                "Cannot restore LTM neuron {}: id is outside the memory range",
+                detail.neuron_id
+            ));
+        }
+        if !self.id_manager.reserve_memory_neuron_id(detail.neuron_id) {
+            return Err(format!(
+                "Cannot restore LTM neuron {}: id is already reserved",
+                detail.neuron_id
+            ));
+        }
+        let neuron_idx = self.get_available_index_internal().ok_or_else(|| {
+            format!(
+                "Cannot restore LTM neuron {}: memory array is at capacity {}",
+                detail.neuron_id, self.capacity
+            )
+        })?;
+
+        self.neuron_ids[neuron_idx] = detail.neuron_id;
+        self.cortical_area_ids[neuron_idx] = detail.cortical_area_idx;
+        self.is_active[neuron_idx] = true;
+        self.lifespan_current[neuron_idx] = detail.lifespan_current;
+        self.lifespan_initial[neuron_idx] = detail.lifespan_initial;
+        self.lifespan_growth_rate[neuron_idx] = detail.lifespan_growth_rate;
+        self.is_longterm_memory[neuron_idx] = true;
+        self.creation_burst[neuron_idx] = detail.creation_burst;
+        self.last_activation_burst[neuron_idx] = detail.last_activation_burst;
+        self.activation_count[neuron_idx] = detail.activation_count;
+
+        if let Some(pattern_hash) = detail.pattern_hash {
+            self.pattern_hash_to_index.insert(pattern_hash, neuron_idx);
+            self.index_to_pattern_hash.insert(neuron_idx, pattern_hash);
+        }
+
+        self.area_neuron_indices
+            .entry(detail.cortical_area_idx)
+            .or_default()
+            .insert(neuron_idx);
+
+        Ok(neuron_idx)
+    }
+
     /// Find neuron index by pattern hash
     pub fn find_neuron_by_pattern(&self, pattern_hash: &u64) -> Option<usize> {
         self.pattern_hash_to_index
@@ -1070,5 +1151,61 @@ mod tests {
         assert_eq!(detail.neuron_id, nid);
         assert_eq!(detail.cortical_area_idx, 7);
         assert!(detail.pattern_hash.is_some());
+    }
+
+    #[test]
+    fn export_and_restore_preserves_only_long_term_memory() {
+        let mut array = MemoryNeuronArray::new(1000);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 10,
+            lifespan_growth_rate: 5.0,
+            longterm_threshold: 20,
+            max_reactivations: 1000,
+        };
+
+        let stm_idx = array.create_memory_neuron(0x11, 3, 0, &config).unwrap();
+        let ltm_idx = array.create_memory_neuron(0x22, 3, 0, &config).unwrap();
+        array.lifespan_current[ltm_idx] = 25;
+        let converted = array.check_longterm_conversion(20);
+        assert_eq!(converted, vec![ltm_idx]);
+        assert!(!array.is_longterm_memory[stm_idx]);
+
+        let ltm_id = array.neuron_ids[ltm_idx];
+        let exported = array.export_long_term_memory_neurons();
+        assert_eq!(exported.len(), 1);
+        assert_eq!(exported[0].neuron_id, ltm_id);
+        assert!(exported[0].is_longterm_memory);
+
+        let mut restored = MemoryNeuronArray::new(1000);
+        let count = restored
+            .restore_long_term_memory_neurons(&exported)
+            .unwrap();
+        assert_eq!(count, 1);
+        let restored_ids: Vec<u32> = restored
+            .export_long_term_memory_neurons()
+            .iter()
+            .map(|n| n.neuron_id)
+            .collect();
+        assert_eq!(restored_ids, vec![ltm_id]);
+        assert_eq!(restored.get_active_neurons_by_area(3).len(), 1);
+
+        let stm_only = vec![MemoryNeuronDetail {
+            neuron_id: 50_000_099,
+            cortical_area_idx: 3,
+            pattern_hash: Some(0x33),
+            is_longterm_memory: false,
+            is_active: true,
+            lifespan_current: 10,
+            lifespan_initial: 10,
+            lifespan_growth_rate: 5.0,
+            creation_burst: 0,
+            last_activation_burst: 0,
+            activation_count: 1,
+        }];
+        let skipped = restored
+            .restore_long_term_memory_neurons(&stm_only)
+            .unwrap();
+        assert_eq!(skipped, 0);
+        assert!(restored.export_long_term_memory_neurons().is_empty());
     }
 }

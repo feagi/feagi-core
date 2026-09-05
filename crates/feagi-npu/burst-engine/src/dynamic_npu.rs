@@ -326,6 +326,18 @@ where
         dispatch_mut!(self, set_power_amount(amount))
     }
 
+    /// Replace NPU arrays from a connectome snapshot (see [`RustNPU::apply_connectome_snapshot`]).
+    #[cfg(feature = "connectome-io")]
+    pub fn apply_connectome_snapshot(
+        &mut self,
+        snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    ) -> Result<()> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.apply_connectome_snapshot(snapshot),
+            DynamicNPUGeneric::INT8(npu) => npu.apply_connectome_snapshot(snapshot),
+        }
+    }
+
     pub fn set_fatigue_active(&mut self, active: bool) {
         dispatch_mut!(self, set_fatigue_active(active))
     }
@@ -1043,6 +1055,41 @@ where
         match self {
             DynamicNPUGeneric::F32(npu) => npu.get_memory_replay_frames(neuron_id),
             DynamicNPUGeneric::INT8(npu) => npu.get_memory_replay_frames(neuron_id),
+        }
+    }
+
+    /// Export all stored replay frames. The service layer keeps LTM ids only.
+    pub fn export_memory_replay_frames(&self) -> Vec<(u32, Vec<crate::npu::MemoryReplayFrame>)> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.export_memory_replay_frames(),
+            DynamicNPUGeneric::INT8(npu) => npu.export_memory_replay_frames(),
+        }
+    }
+
+    /// Restore replay frames after connectome apply.
+    pub fn restore_memory_replay_frames(
+        &mut self,
+        frames: &[(u32, Vec<crate::npu::MemoryReplayFrame>)],
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.restore_memory_replay_frames(frames),
+            DynamicNPUGeneric::INT8(npu) => npu.restore_memory_replay_frames(frames),
+        }
+    }
+
+    /// Query the replay twin registered for one memory/upstream pair.
+    pub fn get_memory_twin_mapping(
+        &self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+    ) -> Option<(u32, f32)> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.get_memory_twin_mapping(memory_area_idx, upstream_area_idx)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.get_memory_twin_mapping(memory_area_idx, upstream_area_idx)
+            }
         }
     }
 

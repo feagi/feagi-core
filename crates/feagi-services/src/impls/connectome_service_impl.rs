@@ -518,6 +518,10 @@ pub struct ConnectomeServiceImpl {
     /// Currently loaded genome (source of truth for genome persistence)
     /// Shared with GenomeServiceImpl to ensure cortical mappings are saved
     current_genome: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
+    /// Shared with GenomeServiceImpl so connectome import bumps health_check `genome_num`.
+    genome_load_counter: Option<Arc<RwLock<i32>>>,
+    /// Shared with GenomeServiceImpl so connectome import updates `genome_timestamp`.
+    genome_load_timestamp: Option<Arc<RwLock<Option<i64>>>>,
     /// Optional reference to RuntimeService for accessing NPU (for connectome I/O)
     #[cfg(feature = "connectome-io")]
     runtime_service: Arc<RwLock<Option<Arc<dyn crate::traits::RuntimeService + Send + Sync>>>>,
@@ -533,10 +537,56 @@ impl ConnectomeServiceImpl {
         Self {
             connectome,
             current_genome,
+            genome_load_counter: None,
+            genome_load_timestamp: None,
             #[cfg(feature = "connectome-io")]
             runtime_service: Arc::new(RwLock::new(None)),
             burst_runner: None,
         }
+    }
+
+    /// Share GenomeService load counter/timestamp so BV sees connectome import as a new genome.
+    pub fn set_genome_load_signals(
+        &mut self,
+        counter: Arc<RwLock<i32>>,
+        timestamp: Arc<RwLock<Option<i64>>>,
+    ) {
+        self.genome_load_counter = Some(counter);
+        self.genome_load_timestamp = Some(timestamp);
+    }
+
+    /// Increment `genome_num` and stamp `genome_timestamp` after a successful connectome import.
+    fn record_connectome_as_genome_load(&self) {
+        let Some(counter) = &self.genome_load_counter else {
+            warn!(
+                target: "feagi-services",
+                "Connectome import finished without a shared genome_load_counter; Brain Visualizer will not see genome_num change"
+            );
+            return;
+        };
+        let Some(timestamp) = &self.genome_load_timestamp else {
+            warn!(
+                target: "feagi-services",
+                "Connectome import finished without a shared genome_load_timestamp; Brain Visualizer will not see genome_timestamp change"
+            );
+            return;
+        };
+        let genome_num = {
+            let mut value = counter.write();
+            *value += 1;
+            *value
+        };
+        let genome_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_secs() as i64);
+        *timestamp.write() = genome_timestamp;
+        info!(
+            target: "feagi-services",
+            "Connectome import recorded as genome load #{}, timestamp: {:?}",
+            genome_num,
+            genome_timestamp
+        );
     }
 
     /// Set the burst runner for cache refresh
@@ -587,6 +637,99 @@ impl ConnectomeServiceImpl {
                 s
             ))),
         }
+    }
+
+    /// Replace connectome metadata (areas, regions, morphologies) from a RuntimeGenome.
+    fn apply_runtime_genome_to_connectome(
+        &self,
+        genome: &feagi_evolutionary::RuntimeGenome,
+    ) -> ServiceResult<()> {
+        let mut manager = self.connectome.write();
+
+        let genome_area_ids: HashSet<CorticalID> = genome.cortical_areas.keys().copied().collect();
+        let live_ids: Vec<CorticalID> = manager
+            .get_cortical_area_ids()
+            .into_iter()
+            .copied()
+            .collect();
+        for id in live_ids {
+            if !genome_area_ids.contains(&id) {
+                manager.remove_cortical_area(&id).map_err(|e| {
+                    ServiceError::Backend(format!("Failed to remove stale cortical area: {}", e))
+                })?;
+            }
+        }
+        for (id, area) in &genome.cortical_areas {
+            if manager.get_cortical_area(id).is_some() {
+                if let Some(existing) = manager.get_cortical_area_mut(id) {
+                    *existing = area.clone();
+                }
+            } else {
+                manager.add_cortical_area(area.clone()).map_err(|e| {
+                    ServiceError::Backend(format!("Failed to add cortical area: {}", e))
+                })?;
+            }
+        }
+
+        let genome_morph_ids: HashSet<String> =
+            genome.morphologies.morphology_ids().into_iter().collect();
+        let live_morph_ids: Vec<String> = manager.get_morphologies().morphology_ids();
+        for morph_id in live_morph_ids {
+            if !genome_morph_ids.contains(&morph_id) {
+                manager.remove_morphology(&morph_id);
+            }
+        }
+        for (morph_id, morph) in genome.morphologies.iter() {
+            manager.upsert_morphology(morph_id.clone(), morph.clone());
+        }
+
+        // Full import replaces the hierarchy. Incremental `remove_brain_region`
+        // cannot delete the live root, so a saved essential-genome connectome
+        // (different auto-generated root UUID) previously failed here.
+        manager.clear_brain_regions();
+
+        let mut pending: Vec<(String, feagi_structures::genomic::BrainRegion)> = genome
+            .brain_regions
+            .iter()
+            .map(|(id, region)| (id.clone(), region.clone()))
+            .collect();
+        let mut safety = pending.len() + 1;
+        while !pending.is_empty() {
+            if safety == 0 {
+                return Err(ServiceError::Backend(
+                    "Brain region parent cycle during connectome import".to_string(),
+                ));
+            }
+            safety -= 1;
+            let mut next = Vec::new();
+            for (id, region) in pending {
+                let parent = region
+                    .properties
+                    .get("parent_region_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                if manager.get_brain_region(&id).is_some() {
+                    if let Some(existing) = manager.get_brain_region_mut(&id) {
+                        *existing = region;
+                    }
+                    continue;
+                }
+                let parent_ready = match &parent {
+                    None => true,
+                    Some(pid) => manager.get_brain_region(pid).is_some(),
+                };
+                if parent_ready {
+                    manager.add_brain_region(region, parent).map_err(|e| {
+                        ServiceError::Backend(format!("Failed to add brain region: {}", e))
+                    })?;
+                } else {
+                    next.push((id, region));
+                }
+            }
+            pending = next;
+        }
+
+        Ok(())
     }
 }
 
@@ -1846,6 +1989,11 @@ impl ConnectomeService for ConnectomeServiceImpl {
         if let Some(genome) = self.current_genome.write().as_mut() {
             if let Some(region) = genome.brain_regions.get_mut(region_id) {
                 for (k, v) in &properties {
+                    if matches!(k.as_str(), "title" | "name" | "region_title") {
+                        if let Some(name) = v.as_str().map(str::trim).filter(|s| !s.is_empty()) {
+                            region.name = name.to_string();
+                        }
+                    }
                     region.properties.insert(k.clone(), v.clone());
                 }
             }
@@ -2715,6 +2863,34 @@ impl ConnectomeService for ConnectomeServiceImpl {
         info!(target: "feagi-services", "✅ Connectome exported: {} neurons, {} synapses",
             snapshot.neurons.count, snapshot.synapses.count);
 
+        let mut snapshot = snapshot;
+        if let Some(mut genome) = self.current_genome.read().clone() {
+            {
+                let manager = self.connectome.read();
+                crate::impls::genome_service_impl::sync_runtime_genome_from_connectome(
+                    &mut genome,
+                    &manager,
+                );
+            }
+            let (memory_ids, plastic, region_ids) =
+                crate::impls::genome_service_impl::architecture_indexes_from_genome(&genome);
+            snapshot.set_architecture_indexes(memory_ids, plastic, region_ids);
+            match feagi_evolutionary::save_genome_to_json(&genome) {
+                Ok(json) => snapshot.genome_json = Some(json),
+                Err(e) => {
+                    return Err(ServiceError::Internal(format!(
+                        "Failed to attach genome to connectome snapshot: {}",
+                        e
+                    )));
+                }
+            }
+        }
+
+        #[cfg(feature = "plasticity")]
+        attach_long_term_memory_to_snapshot(&self.connectome, &mut snapshot)?;
+        #[cfg(not(feature = "plasticity"))]
+        snapshot.retain_regular_and_long_term_memory_synapses(&HashSet::new());
+
         Ok(snapshot)
     }
 
@@ -2726,26 +2902,347 @@ impl ConnectomeService for ConnectomeServiceImpl {
         info!(target: "feagi-services", "Importing connectome via service layer: {} neurons, {} synapses",
             snapshot.neurons.count, snapshot.synapses.count);
 
-        // NOTE: NPU.import_connectome_with_config() is a constructor that creates a NEW NPU.
-        // This means importing requires replacing the entire NPU instance, which involves:
-        // 1. Stopping the burst engine
-        // 2. Creating a new NPU from the snapshot
-        // 3. Replacing the NPU in ConnectomeManager and BurstLoopRunner
-        // 4. Restarting the burst engine
-        //
-        // This is a complex operation that requires coordination across multiple components.
-        // For now, we return NotImplemented and recommend using the NPU constructor directly
-        // during application initialization, or implementing a higher-level "replace NPU" operation.
+        snapshot.validate().map_err(|e| {
+            ServiceError::InvalidInput(format!("Invalid connectome snapshot: {}", e))
+        })?;
 
-        warn!(target: "feagi-services", "⚠️ Connectome import via service layer not yet fully implemented");
-        warn!(target: "feagi-services", "   NPU.import_connectome_with_config() creates a new NPU instance");
-        warn!(target: "feagi-services", "   This requires stopping burst engine, replacing NPU, and restarting");
-        warn!(target: "feagi-services", "   Recommendation: Use NPU.import_connectome_with_config() during initialization");
+        if let Some(ref genome_json) = snapshot.genome_json {
+            let genome = feagi_evolutionary::load_genome_from_json(genome_json).map_err(|e| {
+                ServiceError::InvalidInput(format!(
+                    "Connectome snapshot genome_json is invalid: {}",
+                    e
+                ))
+            })?;
+            self.apply_runtime_genome_to_connectome(&genome)?;
+            *self.current_genome.write() = Some(genome);
+        }
 
-        Err(ServiceError::NotImplemented(
-            "Connectome import via service layer requires NPU replacement coordination. Use NPU.import_connectome_with_config() during application initialization, or implement a 'replace NPU' operation that coordinates with BurstLoopRunner.".to_string(),
-        ))
+        let mut snapshot = snapshot;
+        {
+            let manager = self.connectome.read();
+            remap_snapshot_cortical_indexes(&manager, &mut snapshot)?;
+        }
+
+        let npu_arc = {
+            let connectome = self.connectome.read();
+            connectome.get_npu().cloned()
+        };
+        if let Some(npu_arc) = npu_arc {
+            let mut npu_lock = npu_arc.lock().unwrap();
+            npu_lock
+                .apply_connectome_snapshot(&snapshot)
+                .map_err(|e| ServiceError::Backend(format!("Failed to apply connectome: {}", e)))?;
+        }
+
+        #[cfg(feature = "plasticity")]
+        restore_long_term_memory_from_snapshot(&self.connectome, &snapshot)?;
+
+        restore_episodic_runtime_from_snapshot(&self.connectome, &snapshot)?;
+
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            let manager = self.connectome.read();
+            crate::impls::genome_service_impl::sync_runtime_genome_from_connectome(
+                genome, &manager,
+            );
+        }
+
+        {
+            let manager = self.connectome.read();
+            manager.refresh_all_connectome_hashes();
+        }
+        self.record_connectome_as_genome_load();
+        self.refresh_burst_runner_cache();
+
+        Ok(())
     }
+}
+
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn attach_long_term_memory_to_snapshot(
+    connectome: &RwLock<ConnectomeManager>,
+    snapshot: &mut feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+) -> ServiceResult<()> {
+    use feagi_npu_neural::types::connectome::SerializableLongTermMemoryNeuron;
+
+    let ltm = collect_long_term_memory_neurons(connectome)?;
+    let ltm_ids: HashSet<u32> = ltm.iter().map(|n| n.neuron_id).collect();
+    snapshot.long_term_memory_neurons = ltm
+        .into_iter()
+        .map(|detail| SerializableLongTermMemoryNeuron {
+            neuron_id: detail.neuron_id,
+            cortical_area_idx: detail.cortical_area_idx,
+            pattern_hash: detail.pattern_hash,
+            is_longterm_memory: detail.is_longterm_memory,
+            is_active: detail.is_active,
+            lifespan_current: detail.lifespan_current,
+            lifespan_initial: detail.lifespan_initial,
+            lifespan_growth_rate: detail.lifespan_growth_rate,
+            creation_burst: detail.creation_burst,
+            last_activation_burst: detail.last_activation_burst,
+            activation_count: detail.activation_count,
+        })
+        .collect();
+    snapshot.retain_regular_and_long_term_memory_synapses(&ltm_ids);
+    attach_long_term_memory_replay_frames(connectome, snapshot, &ltm_ids)?;
+    Ok(())
+}
+
+#[cfg(feature = "connectome-io")]
+fn attach_long_term_memory_replay_frames(
+    connectome: &RwLock<ConnectomeManager>,
+    snapshot: &mut feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    ltm_ids: &HashSet<u32>,
+) -> ServiceResult<()> {
+    use feagi_npu_neural::types::connectome::SerializableMemoryReplayFrame;
+
+    let npu_arc = {
+        let manager = connectome.read();
+        manager.get_npu().cloned()
+    };
+    let Some(npu_arc) = npu_arc else {
+        snapshot.long_term_memory_replay_frames = Vec::new();
+        return Ok(());
+    };
+    let npu = npu_arc.lock().map_err(|_| {
+        ServiceError::Backend("Failed to lock NPU for replay-frame export".to_string())
+    })?;
+    snapshot.long_term_memory_replay_frames = npu
+        .export_memory_replay_frames()
+        .into_iter()
+        .filter(|(neuron_id, _)| ltm_ids.contains(neuron_id))
+        .map(|(neuron_id, frames)| {
+            (
+                neuron_id,
+                frames
+                    .into_iter()
+                    .map(|frame| SerializableMemoryReplayFrame {
+                        offset: frame.offset,
+                        upstream_area_idx: frame.upstream_area_idx,
+                        coords: frame.coords,
+                        membrane_potentials: frame.membrane_potentials,
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    Ok(())
+}
+
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn collect_long_term_memory_neurons(
+    connectome: &RwLock<ConnectomeManager>,
+) -> ServiceResult<Vec<feagi_npu_plasticity::MemoryNeuronDetail>> {
+    let executor = {
+        let manager = connectome.read();
+        manager.get_plasticity_executor().cloned()
+    };
+    let Some(executor) = executor else {
+        return Ok(Vec::new());
+    };
+    let exec = executor
+        .lock()
+        .map_err(|_| ServiceError::Backend("Failed to lock plasticity executor".to_string()))?;
+    exec.export_long_term_memory_neurons()
+        .map_err(ServiceError::Backend)
+}
+
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn restore_long_term_memory_from_snapshot(
+    connectome: &RwLock<ConnectomeManager>,
+    snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+) -> ServiceResult<()> {
+    use feagi_npu_plasticity::MemoryNeuronDetail;
+
+    let executor = {
+        let manager = connectome.read();
+        manager.get_plasticity_executor().cloned()
+    };
+    let Some(executor) = executor else {
+        if snapshot.long_term_memory_neurons.is_empty() {
+            return Ok(());
+        }
+        return Err(ServiceError::Backend(
+            "Connectome snapshot contains long-term memory neurons but no plasticity executor is attached".to_string(),
+        ));
+    };
+    let details: Vec<MemoryNeuronDetail> = snapshot
+        .long_term_memory_neurons
+        .iter()
+        .filter(|n| n.is_longterm_memory && n.is_active)
+        .map(|n| MemoryNeuronDetail {
+            neuron_id: n.neuron_id,
+            cortical_area_idx: n.cortical_area_idx,
+            pattern_hash: n.pattern_hash,
+            is_longterm_memory: n.is_longterm_memory,
+            is_active: n.is_active,
+            lifespan_current: n.lifespan_current,
+            lifespan_initial: n.lifespan_initial,
+            lifespan_growth_rate: n.lifespan_growth_rate,
+            creation_burst: n.creation_burst,
+            last_activation_burst: n.last_activation_burst,
+            activation_count: n.activation_count,
+        })
+        .collect();
+    let exec = executor
+        .lock()
+        .map_err(|_| ServiceError::Backend("Failed to lock plasticity executor".to_string()))?;
+    exec.restore_long_term_memory_neurons(&details)
+        .map_err(ServiceError::Backend)?;
+    Ok(())
+}
+
+/// Rewrite snapshot cortical indexes to the live ConnectomeManager indexes.
+///
+/// Genome apply keeps live area indexes. The saved connectome may have assigned
+/// the same cortical IDs different numeric indexes. Voxel queries use the live
+/// index, so unmapped snapshot neurons appear as empty-synapse voxels.
+#[cfg(feature = "connectome-io")]
+fn remap_snapshot_cortical_indexes(
+    manager: &ConnectomeManager,
+    snapshot: &mut feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+) -> ServiceResult<()> {
+    if snapshot.cortical_area_names.is_empty() {
+        return Ok(());
+    }
+
+    let mut snapshot_idx_to_live: HashMap<u32, u32> = HashMap::new();
+    let mut live_names: ahash::AHashMap<u32, String> = ahash::AHashMap::new();
+    for (snapshot_idx, area_name) in &snapshot.cortical_area_names {
+        let cortical_id = CorticalID::try_from_base_64(area_name).map_err(|e| {
+            ServiceError::InvalidInput(format!(
+                "Connectome snapshot cortical area name '{}' is invalid: {}",
+                area_name, e
+            ))
+        })?;
+        let live_idx = manager
+            .get_cortical_idx(&cortical_id)
+            .unwrap_or(*snapshot_idx);
+        snapshot_idx_to_live.insert(*snapshot_idx, live_idx);
+        live_names.insert(live_idx, area_name.clone());
+    }
+
+    for idx in &mut snapshot.neurons.cortical_areas {
+        if let Some(live_idx) = snapshot_idx_to_live.get(idx) {
+            *idx = *live_idx;
+        }
+    }
+    for neuron in &mut snapshot.long_term_memory_neurons {
+        if let Some(live_idx) = snapshot_idx_to_live.get(&neuron.cortical_area_idx) {
+            neuron.cortical_area_idx = *live_idx;
+        }
+    }
+    for (_neuron_id, frames) in &mut snapshot.long_term_memory_replay_frames {
+        for frame in frames {
+            if let Some(live_idx) = snapshot_idx_to_live.get(&frame.upstream_area_idx) {
+                frame.upstream_area_idx = *live_idx;
+            }
+        }
+    }
+    snapshot.cortical_area_names = live_names;
+    Ok(())
+}
+
+#[cfg(feature = "connectome-io")]
+fn restore_episodic_runtime_from_snapshot(
+    connectome: &RwLock<ConnectomeManager>,
+    snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+) -> ServiceResult<()> {
+    restore_memory_replay_frames_from_snapshot(connectome, snapshot)?;
+    register_dynamic_neuron_mappings_for_ltm(connectome, snapshot)?;
+    let mut manager = connectome.write();
+    manager
+        .rebind_npu_runtime_after_connectome_apply()
+        .map_err(|error| {
+            ServiceError::Backend(format!(
+                "Failed to rebind NPU runtime after connectome import: {}",
+                error
+            ))
+        })?;
+    Ok(())
+}
+
+#[cfg(feature = "connectome-io")]
+fn restore_memory_replay_frames_from_snapshot(
+    connectome: &RwLock<ConnectomeManager>,
+    snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+) -> ServiceResult<()> {
+    use feagi_npu_burst_engine::npu::MemoryReplayFrame;
+
+    let npu_arc = {
+        let manager = connectome.read();
+        manager.get_npu().cloned()
+    };
+    let Some(npu_arc) = npu_arc else {
+        if snapshot.long_term_memory_replay_frames.is_empty() {
+            return Ok(());
+        }
+        return Err(ServiceError::Backend(
+            "Connectome snapshot contains long-term memory replay frames but NPU is not connected"
+                .to_string(),
+        ));
+    };
+    let frames: Vec<(u32, Vec<MemoryReplayFrame>)> = snapshot
+        .long_term_memory_replay_frames
+        .iter()
+        .map(|(neuron_id, neuron_frames)| {
+            (
+                *neuron_id,
+                neuron_frames
+                    .iter()
+                    .map(|frame| MemoryReplayFrame {
+                        offset: frame.offset,
+                        upstream_area_idx: frame.upstream_area_idx,
+                        coords: frame.coords.clone(),
+                        membrane_potentials: frame.membrane_potentials.clone(),
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    let mut npu = npu_arc.lock().map_err(|_| {
+        ServiceError::Backend("Failed to lock NPU for replay-frame restore".to_string())
+    })?;
+    npu.restore_memory_replay_frames(&frames);
+    Ok(())
+}
+
+#[cfg(feature = "connectome-io")]
+fn register_dynamic_neuron_mappings_for_ltm(
+    connectome: &RwLock<ConnectomeManager>,
+    snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+) -> ServiceResult<()> {
+    let npu_arc = {
+        let manager = connectome.read();
+        manager.get_npu().cloned()
+    };
+    let Some(npu_arc) = npu_arc else {
+        return Ok(());
+    };
+    let mappings: Vec<(u32, CorticalID)> = {
+        let manager = connectome.read();
+        let mut mappings = Vec::new();
+        for neuron in &snapshot.long_term_memory_neurons {
+            if !neuron.is_longterm_memory || !neuron.is_active {
+                continue;
+            }
+            let Some(cortical_id) = manager.get_cortical_id(neuron.cortical_area_idx).copied()
+            else {
+                return Err(ServiceError::Backend(format!(
+                    "Cannot map LTM neuron {}: cortical idx {} is not registered",
+                    neuron.neuron_id, neuron.cortical_area_idx
+                )));
+            };
+            mappings.push((neuron.neuron_id, cortical_id));
+        }
+        mappings
+    };
+    let mut npu = npu_arc.lock().map_err(|_| {
+        ServiceError::Backend("Failed to lock NPU for LTM neuron mapping".to_string())
+    })?;
+    for (neuron_id, cortical_id) in mappings {
+        npu.register_dynamic_neuron_mapping(neuron_id, cortical_id);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -4140,6 +4637,846 @@ mod tests {
             assert!(twins.contains_key(&source_b_id.as_base_64()));
         }
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn import_connectome_restores_memory_plastic_and_regions_from_genome_json(
+    ) -> ServiceResult<()> {
+        use crate::traits::ConnectomeService;
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        let src_id = CorticalID::try_from_bytes(b"csrcim01").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmemim01").unwrap();
+        let mut src = CorticalArea::new(
+            src_id,
+            7,
+            "src".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        src.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "projector",
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": true,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 3
+                }]
+            }),
+        );
+        let mut mem = CorticalArea::new(
+            mem_id,
+            8,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        let region = BrainRegion::new(
+            RegionID::new(),
+            "import-region".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap()
+        .with_areas([src_id, mem_id]);
+        let region_key = region.region_id.to_string();
+
+        let mut cortical_areas = HashMap::new();
+        cortical_areas.insert(src_id, src);
+        cortical_areas.insert(mem_id, mem);
+        let mut brain_regions = HashMap::new();
+        brain_regions.insert(region_key.clone(), region);
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "import".to_string(),
+                genome_title: "import".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: Some(region_key.clone()),
+            },
+            cortical_areas,
+            brain_regions,
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
+
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
+        let current_genome = Arc::new(RwLock::new(None));
+        let genome_load_counter = Arc::new(RwLock::new(0));
+        let genome_load_timestamp = Arc::new(RwLock::new(None));
+        let mut svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+        svc.set_genome_load_signals(genome_load_counter.clone(), genome_load_timestamp.clone());
+
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            genome_json: Some(genome_json),
+            memory_area_ids: vec![mem_id.as_base_64()],
+            plastic_mappings: vec![(src_id.as_base_64(), mem_id.as_base_64())],
+            brain_region_ids: vec![region_key.clone()],
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+        };
+        svc.import_connectome(snapshot).await?;
+
+        {
+            let manager = connectome.read();
+            assert!(manager.get_cortical_area(&mem_id).is_some());
+            assert!(manager.get_brain_region(&region_key).is_some());
+        }
+        {
+            let genome_guard = current_genome.read();
+            let stored = genome_guard.as_ref().expect("genome restored");
+            assert!(stored.cortical_areas.contains_key(&mem_id));
+            assert!(stored.brain_regions.contains_key(&region_key));
+        }
+        assert_eq!(*genome_load_counter.read(), 1);
+        assert!(genome_load_timestamp.read().is_some());
+        {
+            let state = feagi_state_manager::StateManager::instance();
+            let mappings_hash = state.read().get_cortical_mappings_hash();
+            assert_ne!(
+                mappings_hash, 0,
+                "connectome import must publish a non-zero cortical_mappings_hash"
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[tokio::test]
+    async fn import_connectome_restores_memory_twin_index_from_replay() -> ServiceResult<()> {
+        use crate::traits::ConnectomeService;
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        let src_id = CorticalID::try_from_bytes(b"csrcim02").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmemim02").unwrap();
+        let twin_id = CorticalID::try_from_bytes(b"ctwinim2").unwrap();
+
+        let mut src = CorticalArea::new(
+            src_id,
+            7,
+            "src".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        src.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "episodic_memory",
+                    "postSynapticCurrent_multiplier": 1
+                }]
+            }),
+        );
+        let mut mem = CorticalArea::new(
+            mem_id,
+            8,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                twin_id.as_base_64(): [{
+                    "morphology_id": "memory_replay",
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": false
+                }]
+            }),
+        );
+        let mut twin = CorticalArea::new(
+            twin_id,
+            9,
+            "src_twin".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (2, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        twin.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(src_id.as_base_64()),
+        );
+
+        let mut cortical_areas = HashMap::new();
+        cortical_areas.insert(src_id, src);
+        cortical_areas.insert(mem_id, mem);
+        cortical_areas.insert(twin_id, twin);
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "import-twin".to_string(),
+                genome_title: "import-twin".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas,
+            brain_regions: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
+
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
+        let current_genome = Arc::new(RwLock::new(None));
+        let mut svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+        let genome_load_counter = Arc::new(RwLock::new(0));
+        let genome_load_timestamp = Arc::new(RwLock::new(None));
+        svc.set_genome_load_signals(genome_load_counter, genome_load_timestamp);
+
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            genome_json: Some(genome_json),
+            memory_area_ids: vec![mem_id.as_base_64()],
+            plastic_mappings: vec![(src_id.as_base_64(), mem_id.as_base_64())],
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+        };
+        svc.import_connectome(snapshot).await?;
+
+        {
+            let manager = connectome.read();
+            let diagnostic = manager
+                .diagnose_memory_twin_for_mapping(&src_id, &mem_id)
+                .map_err(|error| crate::types::ServiceError::Backend(error.to_string()))?;
+            let mem_area = manager
+                .get_cortical_area(&mem_id)
+                .expect("memory area imported");
+            let twin_map = mem_area
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object());
+            assert_eq!(
+                twin_map
+                    .and_then(|map| map.get(&src_id.as_base_64()))
+                    .and_then(|value| value.as_str()),
+                Some(twin_id.as_base_64().as_str()),
+                "import must restore memory_twin_areas from the existing twin (diagnostic={:?})",
+                diagnostic
+            );
+            assert!(
+                diagnostic.twin_present,
+                "twin diagnostic must see the restored index (diagnostic={:?})",
+                diagnostic
+            );
+        }
+        {
+            let genome_guard = current_genome.read();
+            let stored = genome_guard.as_ref().expect("genome restored");
+            let twin_map = stored
+                .cortical_areas
+                .get(&mem_id)
+                .and_then(|area| area.properties.get("memory_twin_areas"))
+                .and_then(|value| value.as_object())
+                .expect("synced genome must include restored twin index");
+            assert_eq!(
+                twin_map
+                    .get(&src_id.as_base_64())
+                    .and_then(|value| value.as_str()),
+                Some(twin_id.as_base_64().as_str())
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[test]
+    fn remap_snapshot_cortical_indexes_rewrites_neuron_area_ids() -> ServiceResult<()> {
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CustomCorticalType,
+        };
+
+        let area_id = CorticalID::try_from_bytes(b"csrcimap").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            3,
+            "src".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let mut manager = ConnectomeManager::new_for_testing();
+        manager.add_cortical_area(area).unwrap();
+        let live_idx = manager.get_cortical_idx(&area_id).expect("live idx");
+        assert_ne!(live_idx, 99);
+
+        let mut neurons = SerializableNeuronArray::new(1);
+        neurons.count = 1;
+        neurons.cortical_areas[0] = 99;
+        neurons.valid_mask[0] = true;
+
+        let mut cortical_area_names = ahash::AHashMap::new();
+        cortical_area_names.insert(99, area_id.as_base_64());
+
+        let mut snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons,
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names,
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+        };
+
+        super::remap_snapshot_cortical_indexes(&manager, &mut snapshot)?;
+        assert_eq!(snapshot.neurons.cortical_areas[0], live_idx);
+        assert_eq!(
+            snapshot.cortical_area_names.get(&live_idx),
+            Some(&area_id.as_base_64())
+        );
+        assert!(!snapshot.cortical_area_names.contains_key(&99));
+        Ok(())
+    }
+
+    #[test]
+    fn import_replaces_live_root_when_incoming_root_id_differs() -> ServiceResult<()> {
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+
+        let live_root = BrainRegion::new(
+            RegionID::new(),
+            "live-root".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap();
+        let live_root_id = live_root.region_id.to_string();
+
+        let incoming = BrainRegion::new(
+            RegionID::new(),
+            "incoming-root".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap();
+        let incoming_id = incoming.region_id.to_string();
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        manager.add_brain_region(live_root, None).unwrap();
+
+        let connectome = Arc::new(RwLock::new(manager));
+        let current_genome = Arc::new(RwLock::new(None));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome);
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "incoming".to_string(),
+                genome_title: "incoming".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: Some(incoming_id.clone()),
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::from([(incoming_id.clone(), incoming)]),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+
+        svc.apply_runtime_genome_to_connectome(&genome)?;
+
+        let manager = connectome.read();
+        assert!(
+            manager.get_brain_region(&live_root_id).is_none(),
+            "stale live root must be replaced"
+        );
+        assert!(manager.get_brain_region(&incoming_id).is_some());
+        assert_eq!(
+            manager.get_brain_region_hierarchy().get_root_id(),
+            Some(&incoming_id)
+        );
+        Ok(())
+    }
+
+    #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+    #[test]
+    fn restore_ltm_without_executor_is_ok_when_snapshot_has_none() -> ServiceResult<()> {
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+        };
+        super::restore_long_term_memory_from_snapshot(&connectome, &snapshot)
+    }
+
+    #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+    #[test]
+    fn restore_ltm_without_executor_errors_when_snapshot_has_ltm() {
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableLongTermMemoryNeuron,
+            SerializableNeuronArray, SerializableSynapseArray,
+        };
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
+                neuron_id: 50_000_000,
+                cortical_area_idx: 1,
+                pattern_hash: Some(1),
+                is_longterm_memory: true,
+                is_active: true,
+                lifespan_current: 100,
+                lifespan_initial: 20,
+                lifespan_growth_rate: 3.0,
+                creation_burst: 0,
+                last_activation_burst: 0,
+                activation_count: 1,
+            }],
+            long_term_memory_replay_frames: Vec::new(),
+        };
+        let err = super::restore_long_term_memory_from_snapshot(&connectome, &snapshot)
+            .expect_err("missing executor must fail when LTM is present");
+        let msg = format!("{err}");
+        assert!(msg.contains("plasticity executor"));
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[test]
+    fn attach_and_restore_replay_frames_keep_ltm_drop_stm() -> ServiceResult<()> {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::npu::MemoryReplayFrame;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableLongTermMemoryNeuron,
+            SerializableNeuronArray, SerializableSynapseArray,
+        };
+        use feagi_npu_runtime::StdRuntime;
+        use std::collections::HashSet;
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 32, 32, 8).expect("npu construct");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "ReplayNPU"));
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.register_memory_replay_frames(
+                50_000_001,
+                vec![MemoryReplayFrame {
+                    offset: 0,
+                    upstream_area_idx: 4,
+                    coords: vec![(1, 2, 3)],
+                    membrane_potentials: Some(vec![0.55]),
+                }],
+            );
+            npu.register_memory_replay_frames(
+                50_000_002,
+                vec![MemoryReplayFrame {
+                    offset: 2,
+                    upstream_area_idx: 4,
+                    coords: vec![(9, 9, 9)],
+                    membrane_potentials: None,
+                }],
+            );
+        }
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            dyn_npu.clone(),
+        )));
+        let mut snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
+                neuron_id: 50_000_001,
+                cortical_area_idx: 1,
+                pattern_hash: Some(11),
+                is_longterm_memory: true,
+                is_active: true,
+                lifespan_current: 100,
+                lifespan_initial: 20,
+                lifespan_growth_rate: 3.0,
+                creation_burst: 0,
+                last_activation_burst: 0,
+                activation_count: 1,
+            }],
+            long_term_memory_replay_frames: Vec::new(),
+        };
+        super::attach_long_term_memory_replay_frames(
+            &connectome,
+            &mut snapshot,
+            &HashSet::from([50_000_001]),
+        )?;
+        assert_eq!(snapshot.long_term_memory_replay_frames.len(), 1);
+        assert_eq!(snapshot.long_term_memory_replay_frames[0].0, 50_000_001);
+        assert_eq!(
+            snapshot.long_term_memory_replay_frames[0].1[0].coords,
+            vec![(1, 2, 3)]
+        );
+
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.apply_connectome_snapshot(&snapshot)
+                .expect("apply snapshot");
+            assert!(npu.get_memory_replay_frames(50_000_001).is_none());
+        }
+        super::restore_memory_replay_frames_from_snapshot(&connectome, &snapshot)?;
+        {
+            let npu = dyn_npu.lock().unwrap();
+            let frames = npu
+                .get_memory_replay_frames(50_000_001)
+                .expect("LTM replay frames restored");
+            assert_eq!(frames[0].coords, vec![(1, 2, 3)]);
+            assert_eq!(frames[0].membrane_potentials.as_deref(), Some(&[0.55][..]));
+            assert!(npu.get_memory_replay_frames(50_000_002).is_none());
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[test]
+    fn rebind_restores_memory_twins_after_snapshot_apply() -> ServiceResult<()> {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, MemoryCorticalType,
+        };
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 32, 32, 8).expect("npu construct");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TwinRebindNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+
+        let upstream_id = CorticalID::try_from_bytes(b"cstwup01").expect("upstream");
+        let memory_id = CorticalID::try_from_bytes(b"mmemrb01").expect("memory");
+        let twin_id = CorticalID::try_from_bytes(b"cstwin01").expect("twin");
+
+        let upstream_idx = mgr
+            .add_cortical_area(
+                CorticalArea::new(
+                    upstream_id,
+                    0,
+                    "upstream".to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    CorticalAreaType::Custom(
+                        feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                    ),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let memory_idx = mgr
+            .add_cortical_area(
+                CorticalArea::new(
+                    memory_id,
+                    0,
+                    "memory".to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (1, 0, 0).into(),
+                    CorticalAreaType::Memory(MemoryCorticalType::Memory),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let twin_idx = mgr
+            .add_cortical_area(
+                CorticalArea::new(
+                    twin_id,
+                    0,
+                    "twin".to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (2, 0, 0).into(),
+                    CorticalAreaType::Custom(
+                        feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                    ),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        mgr.get_cortical_area_mut(&memory_id)
+            .expect("memory area")
+            .properties
+            .insert(
+                "memory_twin_areas".to_string(),
+                serde_json::json!({
+                    upstream_id.as_base_64(): twin_id.as_base_64()
+                }),
+            );
+
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.register_memory_twin_mapping(memory_idx, upstream_idx, twin_idx, 1.25);
+            assert!(npu
+                .get_memory_twin_mapping(memory_idx, upstream_idx)
+                .is_some());
+            npu.apply_connectome_snapshot(&ConnectomeSnapshot {
+                version: 1,
+                neurons: SerializableNeuronArray::default(),
+                synapses: SerializableSynapseArray::default(),
+                cortical_area_names: Default::default(),
+                burst_count: 0,
+                power_amount: 1.0,
+                fire_ledger_window: 20,
+                metadata: ConnectomeMetadata::default(),
+                genome_json: None,
+                memory_area_ids: Vec::new(),
+                plastic_mappings: Vec::new(),
+                brain_region_ids: Vec::new(),
+                long_term_memory_neurons: Vec::new(),
+                long_term_memory_replay_frames: Vec::new(),
+            })
+            .expect("apply snapshot");
+            assert!(npu
+                .get_memory_twin_mapping(memory_idx, upstream_idx)
+                .is_none());
+        }
+
+        mgr.rebind_npu_runtime_after_connectome_apply()
+            .map_err(|error| crate::types::ServiceError::Backend(error.to_string()))?;
+        {
+            let npu = dyn_npu.lock().unwrap();
+            let (restored_twin, _) = npu
+                .get_memory_twin_mapping(memory_idx, upstream_idx)
+                .expect("twin mapping restored");
+            assert_eq!(restored_twin, twin_idx);
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "connectome-io")]
+    #[test]
+    fn rebind_rebuilds_missing_memory_twin_index_from_replay() -> ServiceResult<()> {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, MemoryCorticalType,
+        };
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 32, 32, 8).expect("npu construct");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TwinRebuildNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+
+        let upstream_id = CorticalID::try_from_bytes(b"cstwup02").expect("upstream");
+        let memory_id = CorticalID::try_from_bytes(b"mmemrb02").expect("memory");
+        let twin_id = CorticalID::try_from_bytes(b"cstwin02").expect("twin");
+
+        let mut upstream = CorticalArea::new(
+            upstream_id,
+            0,
+            "upstream".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
+        upstream.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                memory_id.as_base_64(): [{
+                    "morphology_id": "episodic_memory",
+                    "postSynapticCurrent_multiplier": 1
+                }]
+            }),
+        );
+        let mut memory = CorticalArea::new(
+            memory_id,
+            0,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        memory.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                twin_id.as_base_64(): [{
+                    "morphology_id": "memory_replay",
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": false
+                }]
+            }),
+        );
+        let mut twin = CorticalArea::new(
+            twin_id,
+            0,
+            "twin".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (2, 0, 0).into(),
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
+        twin.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(upstream_id.as_base_64()),
+        );
+
+        let upstream_idx = mgr.add_cortical_area(upstream).unwrap();
+        let memory_idx = mgr.add_cortical_area(memory).unwrap();
+        let twin_idx = mgr.add_cortical_area(twin).unwrap();
+
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.apply_connectome_snapshot(&ConnectomeSnapshot {
+                version: 1,
+                neurons: SerializableNeuronArray::default(),
+                synapses: SerializableSynapseArray::default(),
+                cortical_area_names: Default::default(),
+                burst_count: 0,
+                power_amount: 1.0,
+                fire_ledger_window: 20,
+                metadata: ConnectomeMetadata::default(),
+                genome_json: None,
+                memory_area_ids: Vec::new(),
+                plastic_mappings: Vec::new(),
+                brain_region_ids: Vec::new(),
+                long_term_memory_neurons: Vec::new(),
+                long_term_memory_replay_frames: Vec::new(),
+            })
+            .expect("apply snapshot");
+            assert!(npu
+                .get_memory_twin_mapping(memory_idx, upstream_idx)
+                .is_none());
+        }
+
+        mgr.rebind_npu_runtime_after_connectome_apply()
+            .map_err(|error| crate::types::ServiceError::Backend(error.to_string()))?;
+        {
+            let npu = dyn_npu.lock().unwrap();
+            let (restored_twin, _) = npu
+                .get_memory_twin_mapping(memory_idx, upstream_idx)
+                .expect("twin mapping rebuilt from replay + memory_twin_of");
+            assert_eq!(restored_twin, twin_idx);
+        }
         Ok(())
     }
 }

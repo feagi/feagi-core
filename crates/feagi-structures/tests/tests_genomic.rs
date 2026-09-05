@@ -2058,6 +2058,104 @@ mod test_sensory_cortical_unit {
             );
         }
     }
+
+    /// Tests for the `CartesianPosition` sensory unit: an absolute 3D position
+    /// (x/y/z) IPU, sensor-side counterpart of the `SpatialPointer` OPU's
+    /// Absolute mode. Normalized per-axis unsigned percentage in `[0, 1]`.
+    mod test_cartesian_position_unit {
+        use super::*;
+
+        /// `CartesianPosition` MUST be a single-sub-area unit carrying subtype
+        /// `cpo`, unlike the multi-sub-area `RawIMU`.
+        #[test]
+        fn test_cartesian_position_is_single_subunit_with_cpo_subtype() {
+            assert_eq!(
+                SensoryCorticalUnit::CartesianPosition.get_number_cortical_areas(),
+                1
+            );
+
+            let frame_handling = FrameChangeHandling::Absolute;
+            let positioning = PercentageNeuronPositioning::Linear;
+            let group = CorticalUnitIndex::from(0u8);
+
+            let ids =
+                SensoryCorticalUnit::get_cortical_ids_array_for_cartesian_position_with_parameters(
+                    frame_handling,
+                    positioning,
+                    group,
+                );
+            assert_eq!(ids.len(), 1);
+            let bytes = ids[0].as_bytes();
+            assert_eq!(bytes[0], b'i', "CartesianPosition must be an IPU");
+            assert_eq!(
+                &bytes[1..4],
+                b"cpo",
+                "CartesianPosition subtype must be 'cpo'"
+            );
+        }
+
+        /// Default volume is 3x1x10 (one x-slot per axis, unsigned - no
+        /// positive/negative doubling), matching the unsigned `Percentage3D`
+        /// encoder contract used by `PercentageNeuronVoxelXYZPEncoder`.
+        #[test]
+        fn test_cartesian_position_default_dims_are_3x1x10() {
+            let topology = SensoryCorticalUnit::CartesianPosition.get_unit_default_topology();
+            assert_eq!(topology.len(), 1);
+            let unit = topology
+                .get(&0.into())
+                .expect("Missing CartesianPosition sub-area topology");
+            assert_eq!(unit.channel_dimensions_default, [3, 1, 10]);
+            assert_eq!(unit.channel_dimensions_min, [3, 1, 1]);
+            assert_eq!(unit.channel_dimensions_max, [3, 1, 1024]);
+        }
+
+        /// `CartesianPosition` only supports Absolute frame-change handling -
+        /// it represents a position, not a motion delta. `SpatialPointer`
+        /// (the OPU analog) is the type to use for Incremental motion.
+        #[test]
+        fn test_cartesian_position_only_allows_absolute_frame_handling() {
+            let allowed = SensoryCorticalUnit::CartesianPosition
+                .get_allowed_frame_change_handling()
+                .expect("CartesianPosition must restrict allowed frame-change handling");
+            assert_eq!(allowed, &[FrameChangeHandling::Absolute]);
+        }
+
+        /// The declared IO configuration flag must be unsigned `Percentage3D`
+        /// (not `SignedPercentage3D`), matching the Absolute-only, `[0, 1]`
+        /// per-axis contract.
+        #[test]
+        fn test_cartesian_position_uses_unsigned_percentage_3d_flag() {
+            let frame_handling = FrameChangeHandling::Absolute;
+            let positioning = PercentageNeuronPositioning::Linear;
+            let group = CorticalUnitIndex::from(0u8);
+            let id =
+                SensoryCorticalUnit::get_cortical_ids_array_for_cartesian_position_with_parameters(
+                    frame_handling,
+                    positioning,
+                    group,
+                )[0];
+            let flag = id
+                .extract_io_data_flag()
+                .expect("CartesianPosition cortical ID must decode a valid IO flag");
+            assert!(
+                matches!(
+                    flag,
+                    IOCorticalAreaConfigurationFlag::Percentage3D(FrameChangeHandling::Absolute, _)
+                ),
+                "Expected unsigned Percentage3D(Absolute, _), got {:?}",
+                flag
+            );
+        }
+
+        /// Snake-case name must be stable; SDK auto-generation relies on it.
+        #[test]
+        fn test_cartesian_position_snake_case_name() {
+            assert_eq!(
+                SensoryCorticalUnit::CartesianPosition.get_snake_case_name(),
+                "cartesian_position"
+            );
+        }
+    }
 }
 
 /// Comprehensive integration tests spanning multiple modules

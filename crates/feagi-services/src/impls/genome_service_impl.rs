@@ -293,6 +293,78 @@ fn precision_import_warning_reason(
     }
 }
 
+/// Copy live connectome structure into `genome` so save/export matches runtime.
+///
+/// The live connectome is the source of truth for:
+/// - all cortical areas (including areas created after the last genome load)
+/// - all area properties (mappings, memory flags, plasticity dstmaps, geometry)
+/// - morphologies
+/// - brain regions and the region tree root
+pub fn sync_runtime_genome_from_connectome(
+    genome: &mut feagi_evolutionary::RuntimeGenome,
+    manager: &ConnectomeManager,
+) {
+    let hierarchy = manager.get_brain_region_hierarchy();
+    genome.brain_regions = hierarchy.get_all_regions();
+    if let Some(root_id) = hierarchy.get_root_id().cloned() {
+        genome.metadata.brain_regions_root = Some(root_id);
+    }
+
+    genome.morphologies = manager.get_morphologies().clone();
+
+    let live_ids: HashSet<CorticalID> = manager
+        .get_cortical_area_ids()
+        .into_iter()
+        .cloned()
+        .collect();
+    genome.cortical_areas.retain(|id, _| live_ids.contains(id));
+
+    for cortical_id in manager.get_cortical_area_ids() {
+        if let Some(conn_area) = manager.get_cortical_area(cortical_id) {
+            genome
+                .cortical_areas
+                .insert(*cortical_id, conn_area.clone());
+        }
+    }
+}
+
+/// Collect architecture indexes used by connectome snapshots and completeness checks.
+pub fn architecture_indexes_from_genome(
+    genome: &feagi_evolutionary::RuntimeGenome,
+) -> (Vec<String>, Vec<(String, String)>, Vec<String>) {
+    let mut memory_area_ids = Vec::new();
+    let mut plastic_mappings = Vec::new();
+    for (cortical_id, area) in &genome.cortical_areas {
+        let is_memory = matches!(area.cortical_type, CorticalAreaType::Memory(_))
+            || area.properties.get("is_mem_type").and_then(|v| v.as_bool()) == Some(true);
+        if is_memory {
+            memory_area_ids.push(cortical_id.as_base_64());
+        }
+        if let Some(dstmap) = area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+        {
+            for (dst, rules) in dstmap {
+                let Some(arr) = rules.as_array() else {
+                    continue;
+                };
+                if arr
+                    .iter()
+                    .any(|rule| rule.get("plasticity_flag").and_then(|v| v.as_bool()) == Some(true))
+                {
+                    plastic_mappings.push((cortical_id.as_base_64(), dst.clone()));
+                }
+            }
+        }
+    }
+    memory_area_ids.sort();
+    plastic_mappings.sort();
+    let mut brain_region_ids: Vec<String> = genome.brain_regions.keys().cloned().collect();
+    brain_region_ids.sort();
+    (memory_area_ids, plastic_mappings, brain_region_ids)
+}
+
 /// Default implementation of GenomeService
 pub struct GenomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
@@ -357,6 +429,32 @@ impl GenomeServiceImpl {
     /// This allows other services to share access to the genome for persistence
     pub fn get_current_genome_arc(&self) -> Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>> {
         Arc::clone(&self.current_genome)
+    }
+
+    /// Share the genome-load counter so connectome import can bump `genome_num`.
+    pub fn get_genome_load_counter_arc(&self) -> Arc<RwLock<i32>> {
+        Arc::clone(&self.genome_load_counter)
+    }
+
+    /// Share the genome-load timestamp so connectome import can update health_check.
+    pub fn get_genome_load_timestamp_arc(&self) -> Arc<RwLock<Option<i64>>> {
+        Arc::clone(&self.genome_load_timestamp)
+    }
+
+    /// Increment `genome_num` and stamp `genome_timestamp` for BV reload detection.
+    fn record_genome_load(&self) -> i32 {
+        let genome_num = {
+            let mut counter = self.genome_load_counter.write();
+            *counter += 1;
+            *counter
+        };
+        let genome_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_secs() as i64);
+        *self.genome_load_timestamp.write() = genome_timestamp;
+        info!(target: "feagi-services", "Genome load #{}, timestamp: {:?}", genome_num, genome_timestamp);
+        genome_num
     }
 }
 
@@ -454,21 +552,8 @@ impl GenomeService for GenomeServiceImpl {
             genome.cortical_areas.len(), genome.morphologies.iter().count());
         *self.current_genome.write() = Some(genome.clone());
 
-        // Increment genome load counter and set timestamp
-        let genome_num = {
-            let mut counter = self.genome_load_counter.write();
-            *counter += 1;
-            *counter
-        };
-
-        let genome_timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .ok()
-            .map(|d| d.as_secs() as i64);
-
-        *self.genome_load_timestamp.write() = genome_timestamp;
-
-        info!(target: "feagi-services", "Genome load #{}, timestamp: {:?}", genome_num, genome_timestamp);
+        let genome_num = self.record_genome_load();
+        let genome_timestamp = *self.genome_load_timestamp.read();
 
         // Load into connectome via ConnectomeManager
         // This involves synaptogenesis which can be CPU-intensive, so run it on a blocking thread
@@ -678,44 +763,9 @@ impl GenomeService for GenomeServiceImpl {
             genome.metadata.genome_title = title;
         }
 
-        // Keep exported region metadata aligned with the live connectome state.
-        // Region edits (e.g. rename/reposition) are applied through ConnectomeManager
-        // and may not be reflected in the cached RuntimeGenome snapshot unless synced.
-        // get_all_regions() embeds parent_region_id from the hierarchy's parent_map
-        // into each BrainRegion.properties so the saved JSON preserves the tree.
-        let (runtime_brain_regions, root_region_id) = {
-            let manager = self.connectome.read();
-            let hierarchy = manager.get_brain_region_hierarchy();
-            (
-                hierarchy.get_all_regions(),
-                hierarchy.get_root_id().cloned(),
-            )
-        };
-        if !runtime_brain_regions.is_empty() {
-            genome.brain_regions = runtime_brain_regions;
-        }
-        if let Some(root_id) = root_region_id {
-            genome.metadata.brain_regions_root = Some(root_id);
-        }
-
-        // Align morphology registry and cortical mappings with the live connectome before export.
-        // Runtime edits (including morphology rename) are applied through ConnectomeManager first.
         {
             let manager = self.connectome.read();
-            genome.morphologies = manager.get_morphologies().clone();
-            for cortical_id in manager.get_cortical_area_ids() {
-                let Some(conn_area) = manager.get_cortical_area(cortical_id) else {
-                    continue;
-                };
-                let Some(genome_area) = genome.cortical_areas.get_mut(cortical_id) else {
-                    continue;
-                };
-                if let Some(dstmap) = conn_area.properties.get("cortical_mapping_dst") {
-                    genome_area
-                        .properties
-                        .insert("cortical_mapping_dst".to_string(), dstmap.clone());
-                }
-            }
+            sync_runtime_genome_from_connectome(&mut genome, &manager);
         }
 
         // Use the full RuntimeGenome saver (produces flat format v3.0)
@@ -727,12 +777,16 @@ impl GenomeService for GenomeServiceImpl {
     }
 
     async fn export_region_genome(&self, region_id: String) -> ServiceResult<String> {
-        let genome = self.current_genome.read().clone().ok_or_else(|| {
+        let mut genome = self.current_genome.read().clone().ok_or_else(|| {
             ServiceError::Internal(
                 "No RuntimeGenome stored. Genome must be loaded before exporting a region."
                     .to_string(),
             )
         })?;
+        {
+            let manager = self.connectome.read();
+            sync_runtime_genome_from_connectome(&mut genome, &manager);
+        }
         let subset =
             feagi_evolutionary::subset_runtime_genome_for_region_branch(&genome, &region_id)
                 .map_err(|e| match e {
@@ -4617,5 +4671,129 @@ mod tests {
             Some("mismatch")
         );
         assert_eq!(precision_import_warning_reason("int8", "int8"), None);
+    }
+
+    #[tokio::test]
+    async fn save_genome_includes_live_memory_plastic_and_regions() {
+        use super::{architecture_indexes_from_genome, GenomeServiceImpl};
+        use crate::traits::GenomeService;
+        use crate::types::SaveGenomeParams;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let src_id = CorticalID::try_from_bytes(b"csrcsv01").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmemsv01").unwrap();
+
+        let mut src = CorticalArea::new(
+            src_id,
+            7,
+            "src".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        src.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "projector",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": true,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 3
+                }]
+            }),
+        );
+        src.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(false));
+
+        let mut mem = CorticalArea::new(
+            mem_id,
+            8,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (2, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(src_id.as_base_64()),
+        );
+
+        let region = BrainRegion::new(
+            RegionID::new(),
+            "save-test-region".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap()
+        .with_areas([src_id, mem_id]);
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_brain_region(region, None).unwrap();
+            manager.add_cortical_area(src).unwrap();
+            manager.add_cortical_area(mem).unwrap();
+        }
+
+        let stale_genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "stale".to_string(),
+                genome_title: "stale".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+
+        let svc = GenomeServiceImpl::new(connectome);
+        *svc.get_current_genome_arc().write() = Some(stale_genome);
+
+        let json = svc
+            .save_genome(SaveGenomeParams {
+                genome_id: Some("saved".to_string()),
+                genome_title: Some("Saved".to_string()),
+            })
+            .await
+            .expect("save_genome");
+        let loaded = feagi_evolutionary::load_genome_from_json(&json).expect("reload genome");
+        assert!(loaded.cortical_areas.contains_key(&src_id));
+        assert!(loaded.cortical_areas.contains_key(&mem_id));
+        let (memory_ids, plastic, regions) = architecture_indexes_from_genome(&loaded);
+        assert!(memory_ids.contains(&mem_id.as_base_64()));
+        assert!(plastic
+            .iter()
+            .any(|(src, dst)| src == &src_id.as_base_64() && dst == &mem_id.as_base_64()));
+        assert!(!regions.is_empty());
+        assert_eq!(
+            loaded.cortical_areas[&mem_id].properties["memory_twin_of"],
+            serde_json::json!(src_id.as_base_64())
+        );
     }
 }

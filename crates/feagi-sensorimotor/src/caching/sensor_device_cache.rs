@@ -13,7 +13,7 @@ use crate::data_types::descriptors::{
 // `SignedPercentage4D`, ...). Removing one will surface as an "unresolved
 // type" error inside the macro expansion, not at this `use` line.
 use crate::data_types::{
-    GazeProperties, ImageFrame, MiscData, Percentage, RawIMU, SegmentedImageFrame,
+    GazeProperties, ImageFrame, MiscData, Percentage, Percentage3D, RawIMU, SegmentedImageFrame,
     SignedPercentage3D, SignedPercentage4D, RAW_IMU_SUBUNIT_COUNT,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::*;

@@ -204,6 +204,10 @@ panic = "abort"      # Smaller binary, no unwinding
 
 [profile.dev]
 opt-level = 1        # Some optimization in dev for reasonable performance
+debug = "line-tables-only"  # stack traces without full DWARF (limits target/ growth)
+
+[profile.dev.package."*"]
+debug = false        # dependency rlibs do not need debugger symbols
 
 [profile.test]
 opt-level = 0

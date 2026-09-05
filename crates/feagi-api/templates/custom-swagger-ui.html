@@ -457,6 +457,69 @@
       background-color: #5a32a3;
     }
 
+    .header-button.connectome-action {
+      background-color: #28a745;
+    }
+    .header-button.connectome-action:hover {
+      background-color: #218838;
+    }
+
+    .header-button.download-connectome {
+      background-color: #fd7e14;
+    }
+    .header-button.download-connectome:hover {
+      background-color: #e96b00;
+    }
+
+    .connectome-file-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .connectome-file-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--background-light);
+      cursor: pointer;
+    }
+
+    .connectome-file-item:hover {
+      border-color: var(--primary-color);
+    }
+
+    .connectome-file-name {
+      font-weight: 600;
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+
+    .connectome-file-meta {
+      font-size: 0.85em;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .connectome-directory-note {
+      margin: 0 0 12px;
+      color: var(--text-secondary);
+      font-size: 0.9em;
+      word-break: break-all;
+    }
+
+    .connectome-empty-note {
+      margin: 0;
+      color: var(--text-secondary);
+    }
+
     .theme-selector {
       display: flex;
       align-items: center;
@@ -589,6 +652,8 @@
       <button class="header-button genome-action" id="upload-genome">Upload Genome</button>
       <input type="file" id="upload-genome-input" accept=".json,application/json" style="display:none">
       <button class="header-button genome-action download-genome" id="download-genome">Download Genome</button>
+      <button class="header-button connectome-action download-connectome" id="download-connectome">Download Connectome</button>
+      <button class="header-button connectome-action" id="upload-connectome">Upload Connectome</button>
       <button class="header-button health-check" id="health-check">Health Check</button>
       <div class="theme-selector">
         <span class="theme-selector-label">Theme:</span>
@@ -620,8 +685,254 @@
     </div>
   </div>
 
+  <div class="feagi-dialog-overlay" id="connectome-dialog-overlay">
+    <div class="feagi-dialog">
+      <div class="feagi-dialog-header">
+        <span class="feagi-dialog-title">Select Connectome File</span>
+        <button class="feagi-dialog-close" id="connectome-dialog-close" type="button">&times;</button>
+      </div>
+      <div class="feagi-dialog-body">
+        <p class="connectome-directory-note" id="connectome-directory-note"></p>
+        <ul class="connectome-file-list" id="connectome-file-list"></ul>
+        <p class="connectome-empty-note" id="connectome-empty-note" style="display:none">
+          No saved connectome files found. Use Download Connectome first.
+        </p>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
   <script>
+    function getFeagiBaseUrl() {
+      return window.location.origin + window.location.pathname.split('/swagger-ui')[0];
+    }
+
+    const connectomeTopPaths = [
+      '/v1/connectome/download',
+      '/v1/connectome/download-cortical-area/{cortical_area}',
+      '/v1/connectome/directory',
+      '/v1/connectome/upload',
+      '/v1/connectome/upload-saved',
+      '/v1/connectome/upload-cortical-area'
+    ];
+
+    function connectomeOperationRank(path) {
+      const normalized = (path || '').trim();
+      const exactIndex = connectomeTopPaths.indexOf(normalized);
+      if (exactIndex >= 0) return exactIndex;
+      if (normalized.includes('/v1/connectome/download-cortical-area')) {
+        return connectomeTopPaths.indexOf('/v1/connectome/download-cortical-area/{cortical_area}');
+      }
+      if (normalized.includes('/v1/connectome/upload-saved')) {
+        return connectomeTopPaths.indexOf('/v1/connectome/upload-saved');
+      }
+      if (normalized.includes('/v1/connectome/upload-cortical-area')) {
+        return connectomeTopPaths.indexOf('/v1/connectome/upload-cortical-area');
+      }
+      if (normalized.includes('/v1/connectome/download')) {
+        return connectomeTopPaths.indexOf('/v1/connectome/download');
+      }
+      if (normalized.includes('/v1/connectome/directory')) {
+        return connectomeTopPaths.indexOf('/v1/connectome/directory');
+      }
+      if (normalized.includes('/v1/connectome/upload')) {
+        return connectomeTopPaths.indexOf('/v1/connectome/upload');
+      }
+      return connectomeTopPaths.length + 1;
+    }
+
+    function operationField(operation, key) {
+      if (!operation) return '';
+      if (typeof operation.get === 'function') {
+        const value = operation.get(key);
+        if (value !== undefined && value !== null) return value;
+        return operation.getIn(['operation', key]);
+      }
+      return operation[key] ?? operation.operation?.[key];
+    }
+
+    // Swagger calls this once per tag; connectome ops only need path-based ranking.
+    function feagiOperationsSorter(a, b) {
+      const pathA = String(operationField(a, 'path') || '');
+      const pathB = String(operationField(b, 'path') || '');
+      const rankA = connectomeOperationRank(pathA);
+      const rankB = connectomeOperationRank(pathB);
+      if (rankA !== rankB) return rankA - rankB;
+      return pathA.localeCompare(pathB);
+    }
+
+    function getOpblockPath(opblock) {
+      const pathEl = opblock.querySelector('.opblock-summary-path');
+      if (!pathEl) return '';
+      const raw = (pathEl.dataset.path || pathEl.getAttribute('data-path') || pathEl.textContent || '').trim();
+      return raw.replace(/\s+/g, '');
+    }
+
+    function findConnectomeOperationContent() {
+      const tagEl = document.querySelector('#operations-tag-connectome')
+        || document.querySelector('.opblock-tag[data-tag="connectome"]');
+      if (tagEl) {
+        const inParent = tagEl.parentElement?.querySelector('.operation-tag-content');
+        if (inParent) return inParent;
+
+        let sibling = tagEl.nextElementSibling;
+        while (sibling) {
+          if (sibling.classList.contains('operation-tag-content')) return sibling;
+          const nested = sibling.querySelector('.operation-tag-content');
+          if (nested) return nested;
+          sibling = sibling.nextElementSibling;
+        }
+      }
+
+      return Array.from(document.querySelectorAll('#swagger-ui .operation-tag-content')).find((content) => {
+        const pathEl = content.querySelector('.opblock-summary-path');
+        return pathEl && getOpblockPath(content.querySelector('.opblock') || pathEl.closest('.opblock')).includes('/v1/connectome/');
+      }) || null;
+    }
+
+    function reorderConnectomeOperations() {
+      const content = findConnectomeOperationContent();
+      if (!content) return;
+
+      let opblocks = Array.from(content.querySelectorAll(':scope > .opblock'));
+      if (opblocks.length === 0) {
+        opblocks = Array.from(content.children).filter((el) => el.classList.contains('opblock'));
+      }
+      if (opblocks.length < 2) return;
+
+      const sorted = opblocks.slice().sort((left, right) => {
+        const rankLeft = connectomeOperationRank(getOpblockPath(left));
+        const rankRight = connectomeOperationRank(getOpblockPath(right));
+        if (rankLeft !== rankRight) return rankLeft - rankRight;
+        return getOpblockPath(left).localeCompare(getOpblockPath(right));
+      });
+
+      const alreadySorted = sorted.every((opblock, index) => opblock === opblocks[index]);
+      if (alreadySorted) return;
+
+      sorted.forEach((opblock) => content.appendChild(opblock));
+    }
+
+    function scheduleConnectomeReorder() {
+      [0, 50, 150, 350].forEach((delay) => {
+        window.setTimeout(reorderConnectomeOperations, delay);
+      });
+    }
+
+    function formatBytes(sizeBytes) {
+      if (sizeBytes < 1024) return sizeBytes + ' B';
+      if (sizeBytes < 1024 * 1024) return (sizeBytes / 1024).toFixed(1) + ' KB';
+      return (sizeBytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    async function fetchConnectomeDirectory() {
+      const response = await fetch(getFeagiBaseUrl() + '/v1/connectome/directory');
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (_) {
+        throw new Error(text || 'HTTP ' + response.status);
+      }
+      if (!response.ok) {
+        throw new Error(data.message || data.details || data.detail || 'HTTP ' + response.status);
+      }
+      return data;
+    }
+
+    async function uploadConnectomeSaved(fileName) {
+      const response = await fetch(getFeagiBaseUrl() + '/v1/connectome/upload-saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_name: fileName })
+      });
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (_) {
+        throw new Error(text || 'HTTP ' + response.status);
+      }
+      if (!response.ok) {
+        throw new Error(result.message || result.details || result.detail || 'HTTP ' + response.status);
+      }
+      return result;
+    }
+
+    function closeConnectomeDialog() {
+      document.getElementById('connectome-dialog-overlay').classList.remove('visible');
+    }
+
+    async function openConnectomeUploadDialog() {
+      const overlay = document.getElementById('connectome-dialog-overlay');
+      const directoryNote = document.getElementById('connectome-directory-note');
+      const fileList = document.getElementById('connectome-file-list');
+      const emptyNote = document.getElementById('connectome-empty-note');
+
+      fileList.innerHTML = '';
+      emptyNote.style.display = 'none';
+      directoryNote.textContent = 'Loading saved connectome files...';
+      overlay.classList.add('visible');
+
+      try {
+        const listing = await fetchConnectomeDirectory();
+        directoryNote.textContent = 'Saved connectome directory: ' + listing.directory;
+
+        if (!listing.files || listing.files.length === 0) {
+          emptyNote.style.display = 'block';
+          return;
+        }
+
+        listing.files.forEach((entry) => {
+          const item = document.createElement('li');
+          item.className = 'connectome-file-item';
+          item.innerHTML =
+            '<span class="connectome-file-name">' + entry.file_name + '</span>' +
+            '<span class="connectome-file-meta">' + formatBytes(entry.size_bytes) + '</span>';
+          item.addEventListener('click', async () => {
+            if (!confirm('Load connectome "' + entry.file_name + '"? This will replace current NPU state.')) {
+              return;
+            }
+            closeConnectomeDialog();
+            try {
+              const result = await uploadConnectomeSaved(entry.file_name);
+              alert('Connectome uploaded successfully.\n\n' + (result.message || ''));
+              console.log('Connectome uploaded:', result);
+            } catch (error) {
+              console.error('Error uploading connectome:', error);
+              alert('Failed to upload connectome:\n' + error.message);
+            }
+          });
+          fileList.appendChild(item);
+        });
+      } catch (error) {
+        closeConnectomeDialog();
+        console.error('Error listing connectome directory:', error);
+        alert('Failed to list connectome directory:\n' + error.message);
+      }
+    }
+
+    function hookConnectomeUploadFileInputs() {
+      document.querySelectorAll('.opblock').forEach((opblock) => {
+        const pathEl = opblock.querySelector('.opblock-summary-path');
+        const methodEl = opblock.querySelector('.opblock-summary-method');
+        if (!pathEl || !methodEl) return;
+        const pathText = pathEl.textContent.trim();
+        const methodText = methodEl.textContent.trim().toUpperCase();
+        if (methodText !== 'POST' || pathText !== '/v1/connectome/upload') return;
+
+        opblock.querySelectorAll('input[type="file"]').forEach((input) => {
+          if (input.dataset.feagiConnectomeHooked === 'true') return;
+          input.dataset.feagiConnectomeHooked = 'true';
+          input.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openConnectomeUploadDialog();
+          });
+        });
+      });
+    }
+
     function getSystemTheme() {
       return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
@@ -685,12 +996,13 @@
         docExpansion: "none",
         filter: false,
         persistAuthorization: true,
-        // CRITICAL: Override server URL to always use current origin
+        operationsSorter: feagiOperationsSorter,
+        tryItOutEnabled: true,
         onComplete: function() {
           console.log('FEAGI Swagger UI: Loaded successfully');
           console.log('FEAGI Swagger UI: Server URL set to:', currentServerUrl);
+          scheduleConnectomeReorder();
         },
-        tryItOutEnabled: true,
         // Add response interceptor for debugging
         responseInterceptor: (response) => {
           console.log('Swagger UI Response:', response);
@@ -714,10 +1026,6 @@
         onFailure: (error) => {
           console.error('Swagger UI Error:', error);
           alert('Swagger UI failed to load. Check browser console for details.');
-        },
-        // Add completion handler
-        onComplete: () => {
-          console.log('Swagger UI loaded successfully');
         }
       });
 
@@ -887,8 +1195,61 @@
         }
       });
 
+      // Download Connectome button
+      document.getElementById('download-connectome').addEventListener('click', async () => {
+        try {
+          const response = await fetch(getFeagiBaseUrl() + '/v1/connectome/download');
+          const text = await response.text();
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch (_) {
+            throw new Error(text || 'HTTP ' + response.status);
+          }
+          if (!response.ok) {
+            throw new Error(data.message || data.details || data.detail || 'HTTP ' + response.status);
+          }
+          alert('Connectome saved successfully.\n\n' + (data.file_path || ''));
+          console.log('Connectome downloaded:', data);
+        } catch (error) {
+          console.error('Error downloading connectome:', error);
+          alert('Failed to download connectome:\n' + error.message);
+        }
+      });
+
+      // Upload Connectome button
+      document.getElementById('upload-connectome').addEventListener('click', () => {
+        openConnectomeUploadDialog();
+      });
+
+      document.getElementById('connectome-dialog-close').addEventListener('click', closeConnectomeDialog);
+      document.getElementById('connectome-dialog-overlay').addEventListener('click', (e) => {
+        if (e.target.id === 'connectome-dialog-overlay') {
+          closeConnectomeDialog();
+        }
+      });
+
       // Custom filter functionality
       setTimeout(() => {
+        hookConnectomeUploadFileInputs();
+        scheduleConnectomeReorder();
+        const connectomeObserver = new MutationObserver(() => {
+          hookConnectomeUploadFileInputs();
+          scheduleConnectomeReorder();
+        });
+        connectomeObserver.observe(document.getElementById('swagger-ui'), {
+          childList: true,
+          subtree: true
+        });
+
+        document.getElementById('swagger-ui').addEventListener('click', (event) => {
+          const tagEl = event.target.closest('.opblock-tag');
+          if (!tagEl) return;
+          if (tagEl.getAttribute('data-tag') === 'connectome' || (tagEl.id || '').toLowerCase().includes('connectome')) {
+            scheduleConnectomeReorder();
+          }
+        });
+
         const filterInput = document.getElementById('custom-filter-input');
         
         filterInput.addEventListener('input', function(e) {

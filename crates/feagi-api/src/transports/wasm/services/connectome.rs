@@ -480,4 +480,23 @@ impl ConnectomeService for WasmConnectomeService {
             "WASM mode is read-only".to_string(),
         ))
     }
+
+    #[cfg(feature = "connectome-io")]
+    async fn export_connectome(
+        &self,
+    ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot> {
+        Err(ServiceError::NotImplemented(
+            "WASM connectome export is not supported".to_string(),
+        ))
+    }
+
+    #[cfg(feature = "connectome-io")]
+    async fn import_connectome(
+        &self,
+        _snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM connectome import is not supported".to_string(),
+        ))
+    }
 }

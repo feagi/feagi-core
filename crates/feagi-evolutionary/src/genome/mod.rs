@@ -40,7 +40,10 @@ pub use migration::{
 pub use migrator::{map_old_id_to_new, migrate_genome, MigrationResult};
 pub use normalizers::{NormalizationDiagnostics, Normalizer, V3Normalizer};
 pub use parser::{GenomeParser, ParsedGenome};
-pub use region_export::subset_runtime_genome_for_region_branch;
+pub use region_export::{
+    apply_genome_title_to_unique_top_circuit, subset_runtime_genome_for_region_branch,
+    wrap_parentless_regions_under_named_root,
+};
 pub use runtime_saver::{save_genome_to_file, save_genome_to_json};
 pub use saver::GenomeSaver;
 pub use schema::{
