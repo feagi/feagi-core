@@ -16,13 +16,45 @@ use uuid::Uuid;
 
 #[cfg(feature = "http")]
 use axum::extract::Multipart;
+use axum::http::{header, HeaderMap, HeaderValue};
+
+const GENOME_ARTIFACT_EXTENSION: &str = "genome";
+const GENOME_ARTIFACT_MEDIA_TYPE: &str = "application/vnd.feagi.genome+json";
+
+fn validate_genome_artifact_file_name(file_name: Option<&str>) -> ApiResult<()> {
+    let file_name =
+        file_name.ok_or_else(|| ApiError::invalid_input("Genome upload requires a file name"))?;
+    let leaf_name = file_name.rsplit(['/', '\\']).next().unwrap_or(file_name);
+    let valid_extension = leaf_name.rsplit_once('.').is_some_and(|(stem, extension)| {
+        !stem.is_empty() && extension.eq_ignore_ascii_case(GENOME_ARTIFACT_EXTENSION)
+    });
+    if !valid_extension {
+        return Err(ApiError::invalid_input(
+            "Genome files must use the .genome extension",
+        ));
+    }
+    Ok(())
+}
+
+fn genome_artifact_download_headers(file_name: &'static str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(GENOME_ARTIFACT_MEDIA_TYPE),
+    );
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static(file_name),
+    );
+    headers
+}
 
 /// Multipart file upload schema for Swagger UI.
 ///
-/// This enables Swagger to show a file picker for endpoints that accept genome JSON files.
+/// This enables Swagger to show a file picker for `.genome` artifacts.
 #[derive(Debug, Clone, utoipa::ToSchema)]
 pub struct GenomeFileUploadForm {
-    /// Genome JSON file contents.
+    /// `.genome` artifact containing versioned genome JSON.
     #[schema(value_type = String, format = Binary)]
     pub file: String,
 }
@@ -1266,6 +1298,11 @@ pub async fn post_save(
 
     // Determine file path
     let save_path = if let Some(path) = file_path {
+        validate_genome_artifact_file_name(
+            std::path::Path::new(&path)
+                .file_name()
+                .and_then(|value| value.to_str()),
+        )?;
         std::path::PathBuf::from(path)
     } else {
         // Default: under configured data root (not cwd) so containers/read-only roots work.
@@ -1277,7 +1314,7 @@ pub async fn post_save(
             .filesystem_data_root
             .join("cache")
             .join(".genome")
-            .join(format!("saved_genome_{}.json", timestamp))
+            .join(format!("saved_genome_{}.genome", timestamp))
     };
 
     // Ensure parent directory exists
@@ -1382,10 +1419,17 @@ pub async fn post_upload(
     path = "/v1/genome/download",
     tag = "genome",
     responses(
-        (status = 200, description = "Genome JSON", body = HashMap<String, serde_json::Value>)
+        (
+            status = 200,
+            description = "Genome artifact",
+            body = HashMap<String, serde_json::Value>,
+            content_type = "application/vnd.feagi.genome+json"
+        )
     )
 )]
-pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde_json::Value>> {
+pub async fn get_download(
+    State(state): State<ApiState>,
+) -> ApiResult<(HeaderMap, Json<serde_json::Value>)> {
     info!("🦀 [API] GET /v1/genome/download - Downloading current genome");
     let genome_service = state.genome_service.as_ref();
 
@@ -1413,13 +1457,40 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde
         "✅ Genome download complete, {} bytes",
         genome_json_str.len()
     );
-    Ok(Json(genome_value))
+    Ok((
+        genome_artifact_download_headers("attachment; filename=\"feagi_genome.genome\""),
+        Json(genome_value),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn genome_artifact_file_name_requires_genome_extension() {
+        assert!(validate_genome_artifact_file_name(Some("brain.genome")).is_ok());
+        assert!(validate_genome_artifact_file_name(Some("brain.GENOME")).is_ok());
+        assert!(validate_genome_artifact_file_name(Some(r"C:\brains\brain.genome")).is_ok());
+        assert!(validate_genome_artifact_file_name(Some("brain.json")).is_err());
+        assert!(validate_genome_artifact_file_name(Some(".genome")).is_err());
+        assert!(validate_genome_artifact_file_name(None).is_err());
+    }
+
+    #[test]
+    fn genome_download_headers_use_artifact_contract() {
+        let headers =
+            genome_artifact_download_headers("attachment; filename=\"feagi_genome.genome\"");
+        assert_eq!(
+            headers.get(header::CONTENT_TYPE).unwrap(),
+            GENOME_ARTIFACT_MEDIA_TYPE
+        );
+        assert_eq!(
+            headers.get(header::CONTENT_DISPOSITION).unwrap(),
+            "attachment; filename=\"feagi_genome.genome\""
+        );
+    }
 
     #[test]
     fn test_inject_simulation_timestep_into_genome_updates_physio_key() {
@@ -2009,11 +2080,23 @@ pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Jso
 }
 
 /// Download a specific brain region from the genome.
-#[utoipa::path(get, path = "/v1/genome/download_region", tag = "genome")]
+#[utoipa::path(
+    get,
+    path = "/v1/genome/download_region",
+    tag = "genome",
+    responses(
+        (
+            status = 200,
+            description = "Region genome artifact",
+            body = HashMap<String, serde_json::Value>,
+            content_type = "application/vnd.feagi.genome+json"
+        )
+    )
+)]
 pub async fn get_download_region(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
-) -> ApiResult<Json<serde_json::Value>> {
+) -> ApiResult<(HeaderMap, Json<serde_json::Value>)> {
     let region_id = params
         .get("region_id")
         .cloned()
@@ -2026,7 +2109,10 @@ pub async fn get_download_region(
     let value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
         ApiError::internal(format!("Exported region genome JSON is invalid: {}", e))
     })?;
-    Ok(Json(value))
+    Ok((
+        genome_artifact_download_headers("attachment; filename=\"feagi_region.genome\""),
+        Json(value),
+    ))
 }
 
 /// Get the current genome number or generation identifier.
@@ -2112,6 +2198,7 @@ pub async fn post_amalgamation_by_upload(
         .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
     {
         if field.name() == Some("file") {
+            validate_genome_artifact_file_name(field.file_name())?;
             let bytes = field.bytes().await.map_err(|e| {
                 ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
             })?;
@@ -2183,6 +2270,7 @@ pub async fn post_upload_file(
         .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
     {
         if field.name() == Some("file") {
+            validate_genome_artifact_file_name(field.file_name())?;
             let bytes = field.bytes().await.map_err(|e| {
                 ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
             })?;

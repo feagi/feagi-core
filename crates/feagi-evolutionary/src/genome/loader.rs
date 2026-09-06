@@ -47,7 +47,7 @@ pub fn load_genome_with_report_from_file<P: AsRef<Path>>(
 ///
 /// # Example
 /// ```rust,ignore
-/// let precision = peek_quantization_precision("genome.json")?;
+/// let precision = peek_quantization_precision("brain.genome")?;
 /// let npu = match precision.as_str() {
 ///     "fp32" | "f32" => DynamicNPUGeneric::F32(RustNPU::<f32>::new(...)?),
 ///     "int8" => DynamicNPUGeneric::INT8(RustNPU::<INT8Value>::new(...)?),

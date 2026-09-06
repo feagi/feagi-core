@@ -89,6 +89,7 @@ Licensed under the Apache License, Version 2.0
 
 #[cfg(feature = "connectome-serialization")]
 pub mod brain_artifact;
+#[cfg(feature = "connectome-serialization")]
 pub mod connectome;
 #[cfg(feature = "std")]
 pub mod genome;

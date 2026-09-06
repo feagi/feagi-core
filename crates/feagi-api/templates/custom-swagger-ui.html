@@ -650,7 +650,7 @@
       <button class="header-button genome-action" id="load-essential">Load Essential</button>
       <button class="header-button genome-action" id="load-barebones">Load Barebones</button>
       <button class="header-button genome-action" id="upload-genome">Upload Genome</button>
-      <input type="file" id="upload-genome-input" accept=".json,application/json" style="display:none">
+      <input type="file" id="upload-genome-input" accept=".genome,application/vnd.feagi.genome+json" style="display:none">
       <button class="header-button genome-action download-genome" id="download-genome">Download Genome</button>
       <button class="header-button connectome-action download-connectome" id="download-connectome">Download Connectome</button>
       <button class="header-button connectome-action" id="upload-connectome">Upload Connectome</button>
@@ -1142,11 +1142,11 @@
             throw new Error('HTTP ' + response.status + ': ' + response.statusText);
           }
           const data = await response.json();
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/vnd.feagi.genome+json' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = 'genome.json';
+          a.download = 'feagi_genome.genome';
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);

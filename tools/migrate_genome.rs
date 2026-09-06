@@ -7,10 +7,10 @@ Genome Migration Tool
 Migrates old-format genomes (v2.1 with non-compliant cortical IDs) to new format.
 
 Usage:
-  cd feagi-core && cargo run --bin migrate_genome -- <input_genome.json> <output_genome.json>
+  cd feagi-core && cargo run --bin migrate_genome -- <input.genome> <output.genome>
 
 Example:
-  cd feagi-core && cargo run --bin migrate_genome -- ../brain-visualizer/godot_source/Resources/genomes/essential_genome.json essential_genome_v3.json
+  cd feagi-core && cargo run --bin migrate_genome -- source.genome migrated.genome
 
 Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
@@ -24,20 +24,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 3 {
-        eprintln!(
-            "Usage: {} <input_genome.json> <output_genome.json>",
-            args[0]
-        );
+        eprintln!("Usage: {} <input.genome> <output.genome>", args[0]);
         eprintln!("\nExample:");
-        eprintln!(
-            "  {} essential_genome.json essential_genome_v3.json",
-            args[0]
-        );
+        eprintln!("  {} source.genome migrated.genome", args[0]);
         std::process::exit(1);
     }
 
     let input_path = &args[1];
     let output_path = &args[2];
+    for path in [input_path, output_path] {
+        let extension = Path::new(path).extension().and_then(|value| value.to_str());
+        if !extension.is_some_and(|value| value.eq_ignore_ascii_case("genome")) {
+            return Err(format!("Genome files must use the .genome extension: {path}").into());
+        }
+    }
 
     println!("🧬 FEAGI Genome Migration Tool");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

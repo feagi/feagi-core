@@ -236,7 +236,7 @@ impl SleepManager {
             info!("🛌 Sleep Manager: DISABLED by system configuration (feagi_configuration.toml)");
         } else if !genome_has_config {
             warn!("🛌 Sleep Manager: DISABLED - missing 'physiology.sleep' in genome");
-            warn!("   Add sleep configuration to genome.json to enable sleep mode");
+            warn!("   Add sleep configuration to the .genome file to enable sleep mode");
         } else {
             info!("🛌 Sleep Manager: ENABLED");
             info!("   Light sleep frequency: {} Hz (threshold: {} neurons/burst over {} bursts)",
