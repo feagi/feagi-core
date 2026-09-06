@@ -32,16 +32,15 @@ fn region_is_parentless(
     region: &BrainRegion,
     brain_regions: &HashMap<String, BrainRegion>,
 ) -> bool {
-    match region
-        .properties
-        .get("parent_region_id")
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|p| !p.is_empty())
-    {
-        Some(parent) if parent != region_id && brain_regions.contains_key(parent) => false,
-        _ => true,
-    }
+    !matches!(
+        region
+            .properties
+            .get("parent_region_id")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|p| !p.is_empty()),
+        Some(parent) if parent != region_id && brain_regions.contains_key(parent)
+    )
 }
 
 /// If the map has regions but no `Root Brain Region`, insert one and parent every
