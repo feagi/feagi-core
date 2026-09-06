@@ -5,8 +5,9 @@
 Genome I/O and manipulation for FEAGI Evolution.
 
 This module handles:
-- Parsing genome JSON files (genotype)
-- Saving genome state back to JSON
+- Decoding and encoding external genome artifacts
+- Parsing genome schema documents (genotype)
+- Saving genome state
 - Genome validation
 - Genome transformation/mutation (future)
 
@@ -14,6 +15,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+pub mod artifact;
 pub mod converter;
 pub mod loader;
 pub mod migration;
@@ -28,10 +30,17 @@ pub mod signatures;
 pub mod validators;
 
 // Re-export main types
+pub use artifact::{
+    decode_genome_artifact, encode_genome_artifact, validate_genome_artifact_file_name,
+    GenomeArtifactCodec, GenomeArtifactEncoding, JsonGenomeArtifactCodec,
+    GENOME_ARTIFACT_EXTENSION, GENOME_ARTIFACT_MEDIA_TYPE,
+};
 pub use converter::to_runtime_genome;
 pub use loader::{
-    load_genome_from_file, load_genome_from_json, load_genome_with_report,
-    load_genome_with_report_from_file, migrate_genome_json_to_current, peek_quantization_precision,
+    load_genome_artifact_with_report, load_genome_from_artifact, load_genome_from_file,
+    load_genome_from_json, load_genome_value_with_report, load_genome_with_report,
+    load_genome_with_report_from_file, migrate_genome_json_to_current,
+    migrate_genome_value_to_current, peek_quantization_precision,
 };
 pub use migration::{
     ChainRegistry, ChainResult, ChainRunner, MigrationError, MigrationStepDiagnostics, Migrator,

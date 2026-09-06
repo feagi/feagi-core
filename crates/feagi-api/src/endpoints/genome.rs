@@ -7,6 +7,10 @@
 use crate::amalgamation;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
+use feagi_evolutionary::{
+    decode_genome_artifact, encode_genome_artifact,
+    validate_genome_artifact_file_name as validate_artifact_file_name, GENOME_ARTIFACT_MEDIA_TYPE,
+};
 use feagi_services::types::{GenomeInfo, LoadGenomeParams};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -18,22 +22,18 @@ use uuid::Uuid;
 use axum::extract::Multipart;
 use axum::http::{header, HeaderMap, HeaderValue};
 
-const GENOME_ARTIFACT_EXTENSION: &str = "genome";
-const GENOME_ARTIFACT_MEDIA_TYPE: &str = "application/vnd.feagi.genome+json";
-
 fn validate_genome_artifact_file_name(file_name: Option<&str>) -> ApiResult<()> {
     let file_name =
         file_name.ok_or_else(|| ApiError::invalid_input("Genome upload requires a file name"))?;
-    let leaf_name = file_name.rsplit(['/', '\\']).next().unwrap_or(file_name);
-    let valid_extension = leaf_name.rsplit_once('.').is_some_and(|(stem, extension)| {
-        !stem.is_empty() && extension.eq_ignore_ascii_case(GENOME_ARTIFACT_EXTENSION)
-    });
-    if !valid_extension {
-        return Err(ApiError::invalid_input(
-            "Genome files must use the .genome extension",
-        ));
-    }
-    Ok(())
+    validate_artifact_file_name(file_name)
+        .map_err(|error| ApiError::invalid_input(error.to_string()))
+}
+
+fn decode_genome_artifact_for_json_service(artifact: &[u8]) -> ApiResult<String> {
+    let genome = decode_genome_artifact(artifact)
+        .map_err(|error| ApiError::invalid_input(error.to_string()))?;
+    serde_json::to_string(&genome)
+        .map_err(|error| ApiError::internal(format!("Failed to serialize genome: {error}")))
 }
 
 fn genome_artifact_download_headers(file_name: &'static str) -> HeaderMap {
@@ -1293,8 +1293,8 @@ pub async fn post_save(
     let genome_value: serde_json::Value = serde_json::from_str(&genome_json)
         .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
     let genome_value = inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
-    let genome_json = serde_json::to_string_pretty(&genome_value)
-        .map_err(|e| ApiError::internal(format!("Failed to serialize genome JSON: {}", e)))?;
+    let genome_artifact = encode_genome_artifact(&genome_value)
+        .map_err(|e| ApiError::internal(format!("Failed to encode genome artifact: {}", e)))?;
 
     // Determine file path
     let save_path = if let Some(path) = file_path {
@@ -1324,7 +1324,7 @@ pub async fn post_save(
     }
 
     // Write to file
-    fs::write(&save_path, genome_json)
+    fs::write(&save_path, genome_artifact)
         .map_err(|e| ApiError::internal(format!("Failed to write file: {}", e)))?;
 
     info!("✅ Genome saved successfully to: {}", save_path.display());
@@ -1413,7 +1413,7 @@ pub async fn post_upload(
     Ok(Json(response))
 }
 
-/// Download the current genome as a JSON document.
+/// Download the current genome as an encoded `.genome` artifact.
 #[utoipa::path(
     get,
     path = "/v1/genome/download",
@@ -1427,9 +1427,7 @@ pub async fn post_upload(
         )
     )
 )]
-pub async fn get_download(
-    State(state): State<ApiState>,
-) -> ApiResult<(HeaderMap, Json<serde_json::Value>)> {
+pub async fn get_download(State(state): State<ApiState>) -> ApiResult<(HeaderMap, Vec<u8>)> {
     info!("🦀 [API] GET /v1/genome/download - Downloading current genome");
     let genome_service = state.genome_service.as_ref();
 
@@ -1452,14 +1450,16 @@ pub async fn get_download(
     // Ensure physiology.simulation_timestep reflects the *current* runtime timestep at download time.
     let simulation_timestep_s = get_current_runtime_simulation_timestep_s(&state).await?;
     let genome_value = inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
+    let genome_artifact = encode_genome_artifact(&genome_value)
+        .map_err(|e| ApiError::internal(format!("Failed to encode genome artifact: {}", e)))?;
 
     info!(
         "✅ Genome download complete, {} bytes",
-        genome_json_str.len()
+        genome_artifact.len()
     );
     Ok((
         genome_artifact_download_headers("attachment; filename=\"feagi_genome.genome\""),
-        Json(genome_value),
+        genome_artifact,
     ))
 }
 
@@ -2096,7 +2096,7 @@ pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Jso
 pub async fn get_download_region(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
-) -> ApiResult<(HeaderMap, Json<serde_json::Value>)> {
+) -> ApiResult<(HeaderMap, Vec<u8>)> {
     let region_id = params
         .get("region_id")
         .cloned()
@@ -2109,9 +2109,11 @@ pub async fn get_download_region(
     let value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
         ApiError::internal(format!("Exported region genome JSON is invalid: {}", e))
     })?;
+    let artifact = encode_genome_artifact(&value)
+        .map_err(|e| ApiError::internal(format!("Failed to encode region artifact: {}", e)))?;
     Ok((
         genome_artifact_download_headers("attachment; filename=\"feagi_region.genome\""),
-        Json(value),
+        artifact,
     ))
 }
 
@@ -2203,13 +2205,7 @@ pub async fn post_amalgamation_by_upload(
                 ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
             })?;
 
-            let json_str = std::str::from_utf8(&bytes).map_err(|e| {
-                ApiError::invalid_input(format!(
-                    "Uploaded file must be UTF-8 encoded JSON (decode error: {})",
-                    e
-                ))
-            })?;
-            genome_json = Some(json_str.to_string());
+            genome_json = Some(decode_genome_artifact_for_json_service(&bytes)?);
             break;
         }
     }
@@ -2275,13 +2271,7 @@ pub async fn post_upload_file(
                 ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
             })?;
 
-            let json_str = std::str::from_utf8(&bytes).map_err(|e| {
-                ApiError::invalid_input(format!(
-                    "Uploaded file must be UTF-8 encoded JSON (decode error: {})",
-                    e
-                ))
-            })?;
-            genome_json = Some(json_str.to_string());
+            genome_json = Some(decode_genome_artifact_for_json_service(&bytes)?);
             break;
         }
     }

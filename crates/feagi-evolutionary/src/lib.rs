@@ -66,12 +66,16 @@ pub use converter_hierarchical_to_flat::convert_hierarchical_to_flat;
 pub use cortical_type_parser::{parse_cortical_type, validate_cortical_type};
 pub use genome::parser::string_to_cortical_id;
 pub use genome::{
-    apply_genome_title_to_unique_top_circuit, load_genome_from_file, load_genome_from_json,
-    load_genome_with_report, load_genome_with_report_from_file, migrate_genome,
-    migrate_genome_json_to_current, peek_quantization_precision, save_genome_to_file,
+    apply_genome_title_to_unique_top_circuit, decode_genome_artifact, encode_genome_artifact,
+    load_genome_artifact_with_report, load_genome_from_artifact, load_genome_from_file,
+    load_genome_from_json, load_genome_value_with_report, load_genome_with_report,
+    load_genome_with_report_from_file, migrate_genome, migrate_genome_json_to_current,
+    migrate_genome_value_to_current, peek_quantization_precision, save_genome_to_file,
     save_genome_to_json, subset_runtime_genome_for_region_branch,
-    wrap_parentless_regions_under_named_root, ChainResult, GenomeParser, GenomeSaver,
-    MigrationResult, ParsedGenome,
+    validate_genome_artifact_file_name, wrap_parentless_regions_under_named_root, ChainResult,
+    GenomeArtifactCodec, GenomeArtifactEncoding, GenomeParser, GenomeSaver,
+    JsonGenomeArtifactCodec, MigrationResult, ParsedGenome, GENOME_ARTIFACT_EXTENSION,
+    GENOME_ARTIFACT_MEDIA_TYPE,
 };
 pub use plasticity_detector::{
     extract_memory_properties, genome_has_plasticity, MemoryAreaProperties,

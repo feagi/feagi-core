@@ -4,11 +4,16 @@ REST API layer for FEAGI with HTTP and ZMQ transport adapters.
 
 ## Genome Artifact Contract
 
-Genome files use the `.genome` extension and contain versioned JSON. File-oriented
-genome upload endpoints reject `.json` filenames. Genome download responses use
-`application/vnd.feagi.genome+json` and a `.genome` attachment name. JSON request
-bodies used by non-file API endpoints remain `application/json`. Connectome
-artifacts continue to use `.connectome`.
+Genome files use the representation-neutral `.genome` extension. The current
+artifact codec emits UTF-8 JSON with
+`application/vnd.feagi.genome+json`. File-oriented genome upload endpoints
+reject `.json` filenames and pass artifact bytes through the codec before the
+independent genome-schema migration pipeline runs. Download endpoints encode
+through the same boundary and return a `.genome` attachment name.
+
+JSON request bodies used by non-file API endpoints remain `application/json`;
+they are API documents, not file artifacts. Connectome artifacts continue to
+use `.connectome`.
 
 ## Architecture Overview
 

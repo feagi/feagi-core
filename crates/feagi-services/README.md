@@ -41,6 +41,19 @@ impl NeuronService for MyTransport {
 
 Services sit between transport adapters (HTTP/ZMQ/etc.) and domain logic (BDU/NPU/etc.), providing a stable interface that doesn't change when either layer changes.
 
+## Genome artifacts
+
+External `.genome` bytes are decoded by
+`feagi-evolutionary::genome::artifact` before services invoke the independent
+genome schema migration chain. The current explicit codec is UTF-8 JSON. It
+does not define another version sequence: `genome_schema_version` remains the
+only schema migration key.
+
+Unlike connectome, genome artifacts do not currently have a binary envelope or
+artifact manifest. A future encoding must be selected by an explicit codec
+contract; services must not infer encoding from genome shape or silently fall
+back between formats.
+
 ## Connectome persistence
 
 Full snapshots restore the serialized NPU state directly. Lite snapshots rebuild
