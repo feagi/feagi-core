@@ -255,11 +255,14 @@ use crate::{
         crate::endpoints::region::put_change_region_parent,
         crate::endpoints::region::put_change_cortical_area_region,
 
-        // Connectome endpoints (21 total)
+        // Connectome endpoints
         crate::endpoints::connectome::get_download_connectome,
+        crate::endpoints::connectome::get_download_connectome_bytes,
         crate::endpoints::connectome::get_download_cortical_area,
         crate::endpoints::connectome::get_connectome_directory,
         crate::endpoints::connectome::post_upload_connectome,
+        crate::endpoints::connectome::post_validate_connectome,
+        crate::endpoints::connectome::post_migrate_connectome,
         crate::endpoints::connectome::post_upload_connectome_saved,
         crate::endpoints::connectome::post_upload_cortical_area,
         crate::endpoints::connectome::get_cortical_areas_list_detailed,

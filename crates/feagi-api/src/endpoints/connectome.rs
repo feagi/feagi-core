@@ -7,6 +7,8 @@
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use crate::endpoints::cortical_area::synapse_details_for_neuron;
+use axum::http::{header, HeaderValue, StatusCode};
+use axum::response::Response;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -893,6 +895,44 @@ pub async fn get_download_connectome(
     ])))
 }
 
+/// GET /v1/connectome/download-bytes
+///
+/// Returns a serialized `.connectome` artifact in the HTTP response body.
+#[cfg(feature = "http")]
+#[utoipa::path(
+    get,
+    path = "/v1/connectome/download-bytes",
+    tag = "connectome",
+    params(ConnectomeDownloadQuery),
+    responses(
+        (status = 200, description = "Serialized connectome artifact bytes", body = String, content_type = "application/octet-stream")
+    )
+)]
+pub async fn get_download_connectome_bytes(
+    State(state): State<ApiState>,
+    Query(query): Query<ConnectomeDownloadQuery>,
+) -> ApiResult<Response> {
+    info!("[API] GET /v1/connectome/download-bytes - Streaming connectome bytes");
+    let mode = parse_connectome_download_mode(query.mode.as_deref())?;
+    let snapshot = state
+        .connectome_service
+        .export_connectome(mode)
+        .await
+        .map_err(ApiError::from)?;
+    let payload = serialize_connectome_snapshot_to_bytes(&snapshot)?;
+    let mut response = Response::new(payload.into());
+    *response.status_mut() = StatusCode::OK;
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    response.headers_mut().insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static("attachment; filename=\"saved_connectome.connectome\""),
+    );
+    Ok(response)
+}
+
 fn parse_connectome_download_mode(
     mode: Option<&str>,
 ) -> ApiResult<feagi_npu_neural::types::connectome::ConnectomePersistMode> {
@@ -903,6 +943,23 @@ fn parse_connectome_download_mode(
             "Invalid mode '{}'. Supported values: full, lite",
             other
         ))),
+    }
+}
+
+fn serialize_connectome_snapshot_to_bytes(
+    snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+) -> ApiResult<Vec<u8>> {
+    #[cfg(feature = "services")]
+    {
+        feagi_services::connectome::save_connectome_to_bytes(snapshot)
+            .map_err(|e| ApiError::internal(format!("Failed to serialize connectome file: {}", e)))
+    }
+    #[cfg(not(feature = "services"))]
+    {
+        let _ = snapshot;
+        Err(ApiError::internal(
+            "Connectome serialization requires the services feature".to_string(),
+        ))
     }
 }
 
@@ -962,26 +1019,93 @@ pub async fn post_upload_connectome(
     mut multipart: axum::extract::Multipart,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     info!("[API] POST /v1/connectome/upload - Loading connectome file");
-    let mut file_bytes: Option<Vec<u8>> = None;
+    let bytes = read_connectome_upload_bytes(&mut multipart).await?;
+    let migrated = feagi_services::brain_artifact::validate_and_migrate_brain_artifact(&bytes)
+        .map_err(|error| ApiError::invalid_input(error.to_string()))?;
+    let snapshot = load_connectome_snapshot_from_bytes(&migrated.artifact_bytes)?;
+    import_connectome_snapshot(&state, snapshot).await
+}
 
+/// POST /v1/connectome/validate
+///
+/// Parses and semantically validates a connectome without importing it.
+/// For lite artifacts this also runs the embedded genome migration chain
+/// and validates all semantic cortical references against the migrated genome.
+#[cfg(feature = "http")]
+#[utoipa::path(
+    post,
+    path = "/v1/connectome/validate",
+    tag = "connectome",
+    request_body(content = ConnectomeFileUploadForm, content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Connectome validation and migration report", body = serde_json::Value),
+        (status = 400, description = "Invalid or incompatible connectome")
+    )
+)]
+pub async fn post_validate_connectome(
+    mut multipart: axum::extract::Multipart,
+) -> ApiResult<Json<serde_json::Value>> {
+    let bytes = read_connectome_upload_bytes(&mut multipart).await?;
+    let result = feagi_services::brain_artifact::validate_and_migrate_brain_artifact(&bytes)
+        .map_err(|error| ApiError::invalid_input(error.to_string()))?;
+    let report = serde_json::to_value(result.report)
+        .map_err(|error| ApiError::internal(format!("Failed to serialize report: {error}")))?;
+    Ok(Json(report))
+}
+
+/// POST /v1/connectome/migrate
+///
+/// Returns a new validated artifact with its embedded genome and semantic
+/// references migrated atomically. The uploaded source is never modified.
+#[cfg(feature = "http")]
+#[utoipa::path(
+    post,
+    path = "/v1/connectome/migrate",
+    tag = "connectome",
+    request_body(content = ConnectomeFileUploadForm, content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Migrated connectome artifact", body = String, content_type = "application/octet-stream"),
+        (status = 400, description = "Invalid or incompatible connectome")
+    )
+)]
+pub async fn post_migrate_connectome(
+    mut multipart: axum::extract::Multipart,
+) -> ApiResult<Response> {
+    let bytes = read_connectome_upload_bytes(&mut multipart).await?;
+    let result = feagi_services::brain_artifact::validate_and_migrate_brain_artifact(&bytes)
+        .map_err(|error| ApiError::invalid_input(error.to_string()))?;
+    let mut response = Response::new(result.artifact_bytes.into());
+    *response.status_mut() = StatusCode::OK;
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    response.headers_mut().insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static("attachment; filename=\"migrated_connectome.connectome\""),
+    );
+    Ok(response)
+}
+
+async fn read_connectome_upload_bytes(
+    multipart: &mut axum::extract::Multipart,
+) -> ApiResult<Vec<u8>> {
     while let Some(field) = multipart
         .next_field()
         .await
-        .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
+        .map_err(|error| ApiError::invalid_input(format!("Invalid multipart upload: {error}")))?
     {
         if field.name() == Some("file") {
-            let bytes = field.bytes().await.map_err(|e| {
-                ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
-            })?;
-            file_bytes = Some(bytes.to_vec());
-            break;
+            return field
+                .bytes()
+                .await
+                .map(|bytes| bytes.to_vec())
+                .map_err(|error| {
+                    ApiError::invalid_input(format!("Failed to read uploaded file: {error}"))
+                });
         }
     }
-
-    let bytes =
-        file_bytes.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
-    let snapshot = load_connectome_snapshot_from_bytes(&bytes)?;
-    import_connectome_snapshot(&state, snapshot).await
+    Err(ApiError::invalid_input("Missing multipart field 'file'"))
 }
 
 /// GET /v1/connectome/directory
@@ -1040,7 +1164,9 @@ pub async fn post_upload_connectome_saved(
             ApiError::internal(format!("Failed to read connectome file: {}", e))
         }
     })?;
-    let snapshot = load_connectome_snapshot_from_bytes(&bytes)?;
+    let migrated = feagi_services::brain_artifact::validate_and_migrate_brain_artifact(&bytes)
+        .map_err(|error| ApiError::invalid_input(error.to_string()))?;
+    let snapshot = load_connectome_snapshot_from_bytes(&migrated.artifact_bytes)?;
     import_connectome_snapshot(&state, snapshot).await
 }
 

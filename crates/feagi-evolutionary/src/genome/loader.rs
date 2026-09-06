@@ -109,19 +109,7 @@ pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
 /// JSON parse, or structural failures where there is no `RuntimeGenome`
 /// to return at all.
 pub fn load_genome_with_report(json_str: &str) -> EvoResult<(RuntimeGenome, ChainResult)> {
-    let json_value: Value = serde_json::from_str(json_str)
-        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
-
-    let hierarchical_json = if is_flat_format(&json_value) {
-        crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value).map_err(|e| {
-            tracing::error!(target: "feagi-evo", "convert_flat_to_hierarchical_full failed: {}", e);
-            e
-        })?
-    } else {
-        json_value
-    };
-
-    let (migrated_json, report) = run_default_chain(hierarchical_json)?;
+    let (migrated_json, report) = migrate_genome_json_to_current(json_str)?;
 
     let migrated_json_str = serde_json::to_string(&migrated_json).map_err(|e| {
         crate::types::EvoError::InvalidGenome(format!("Failed to serialize migrated genome: {e}"))
@@ -138,6 +126,27 @@ pub fn load_genome_with_report(json_str: &str) -> EvoResult<(RuntimeGenome, Chai
     })?;
 
     Ok((runtime_genome, report))
+}
+
+/// Migrate and normalize genome JSON to the current schema without
+/// converting it into runtime structures.
+///
+/// Connectome-lite migration uses this API so the embedded genome and all
+/// semantic connectome references can be upgraded atomically.
+pub fn migrate_genome_json_to_current(json_str: &str) -> EvoResult<(Value, ChainResult)> {
+    let json_value: Value = serde_json::from_str(json_str)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
+
+    let hierarchical_json = if is_flat_format(&json_value) {
+        crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value).map_err(|e| {
+            tracing::error!(target: "feagi-evo", "convert_flat_to_hierarchical_full failed: {}", e);
+            e
+        })?
+    } else {
+        json_value
+    };
+
+    run_default_chain(hierarchical_json)
 }
 
 /// Run the default chain registry on `hierarchical_json` to bring it to

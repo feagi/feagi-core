@@ -337,7 +337,10 @@ pub enum ConnectomePersistMode {
     Lite,
 }
 
-/// Complete connectome snapshot
+/// Current connectome snapshot schema version.
+pub const CONNECTOME_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+
+/// Immutable connectome snapshot schema v1 DTO.
 ///
 /// This structure captures the entire state of a RustNPU, including:
 /// - All neurons and their properties
@@ -346,7 +349,7 @@ pub enum ConnectomePersistMode {
 /// - Runtime state (burst count, etc.)
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectomeSnapshot {
+pub struct ConnectomeSnapshotV1 {
     /// Format version (for backward compatibility)
     pub version: u32,
 
@@ -403,6 +406,13 @@ pub struct ConnectomeSnapshot {
     #[serde(default)]
     pub lite_synapses: Vec<SerializableSemanticSynapse>,
 }
+
+/// Current connectome snapshot schema.
+///
+/// When schema v2 is introduced, keep `ConnectomeSnapshotV1` unchanged,
+/// create a new DTO, and migrate between the two in `feagi-services`.
+#[cfg(feature = "std")]
+pub type ConnectomeSnapshot = ConnectomeSnapshotV1;
 
 /// Statistics about a connectome
 #[cfg(feature = "std")]

@@ -868,6 +868,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_download_connectome),
         )
         .route(
+            "/connectome/download-bytes",
+            get(connectome::get_download_connectome_bytes),
+        )
+        .route(
             "/connectome/download-cortical-area/:cortical_area",
             get(connectome::get_download_cortical_area),
         )
@@ -878,6 +882,14 @@ fn create_v1_router() -> Router<ApiState> {
         .route(
             "/connectome/upload",
             axum::routing::post(connectome::post_upload_connectome),
+        )
+        .route(
+            "/connectome/validate",
+            axum::routing::post(connectome::post_validate_connectome),
+        )
+        .route(
+            "/connectome/migrate",
+            axum::routing::post(connectome::post_migrate_connectome),
         )
         .route(
             "/connectome/upload-saved",

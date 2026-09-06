@@ -55,6 +55,9 @@ pub enum ConnectomeError {
 
     #[error("Compression error: {0}")]
     Compression(String),
+
+    #[error("Brain artifact compatibility error: {0}")]
+    BrainArtifact(String),
 }
 
 pub type Result<T> = std::result::Result<T, ConnectomeError>;
@@ -65,7 +68,24 @@ const MAGIC: &[u8; 5] = b"FEAGI";
 /// Current format version (increment when format changes)
 /// Version 1: Original format without compression
 /// Version 2: Added flags byte for compression support
-const FORMAT_VERSION: u32 = 2;
+const FORMAT_VERSION: u32 = 3;
+
+/// Return the binary container format version without deserializing its body.
+pub fn connectome_container_version(bytes: &[u8]) -> Result<u32> {
+    if bytes.len() < MAGIC.len() + std::mem::size_of::<u32>() {
+        return Err(ConnectomeError::BrainArtifact(
+            "connectome header is truncated".to_string(),
+        ));
+    }
+    if &bytes[..MAGIC.len()] != MAGIC {
+        let mut actual = [0u8; 5];
+        actual.copy_from_slice(&bytes[..MAGIC.len()]);
+        return Err(ConnectomeError::InvalidMagic(actual));
+    }
+    let mut version = [0u8; 4];
+    version.copy_from_slice(&bytes[MAGIC.len()..MAGIC.len() + 4]);
+    Ok(u32::from_le_bytes(version))
+}
 
 /// Save a connectome to a file with optional LZ4 compression
 ///
@@ -86,14 +106,35 @@ const FORMAT_VERSION: u32 = 2;
 /// ```
 pub fn save_connectome<P: AsRef<Path>>(snapshot: &ConnectomeSnapshot, path: P) -> Result<()> {
     let mut file = File::create(path)?;
+    write_connectome_to_writer(snapshot, &mut file)
+}
+
+/// Serialize a connectome into `.connectome` binary bytes.
+pub fn save_connectome_to_bytes(snapshot: &ConnectomeSnapshot) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    write_connectome_to_writer(snapshot, &mut bytes)?;
+    Ok(bytes)
+}
+
+fn write_connectome_to_writer<W: Write>(
+    snapshot: &ConnectomeSnapshot,
+    writer: &mut W,
+) -> Result<()> {
+    let mut export_snapshot = snapshot.clone();
+    crate::brain_artifact::embed_manifest_for_current_export(&mut export_snapshot)?;
+    let manifest = crate::brain_artifact::encoded_manifest(&export_snapshot)?;
+    let manifest_bytes = manifest.as_bytes();
+    let manifest_len = u32::try_from(manifest_bytes.len()).map_err(|_| {
+        ConnectomeError::BrainArtifact("artifact manifest exceeds maximum length".to_string())
+    })?;
 
     // Write header
-    file.write_all(MAGIC)?;
-    file.write_all(&FORMAT_VERSION.to_le_bytes())?;
+    writer.write_all(MAGIC)?;
+    writer.write_all(&FORMAT_VERSION.to_le_bytes())?;
 
     // Serialize data
-    let data =
-        bincode::serialize(snapshot).map_err(|e| ConnectomeError::Serialization(e.to_string()))?;
+    let data = bincode::serialize(&export_snapshot)
+        .map_err(|e| ConnectomeError::Serialization(e.to_string()))?;
 
     // Compress if feature enabled
     #[cfg(feature = "connectome-compression")]
@@ -108,17 +149,22 @@ pub fn save_connectome<P: AsRef<Path>>(snapshot: &ConnectomeSnapshot, path: P) -
     let (final_data, flags, uncompressed_size) = (data, 0u8, 0u64);
 
     // Write flags
-    file.write_all(&[flags])?;
+    writer.write_all(&[flags])?;
 
     // Write uncompressed size (only meaningful if compressed)
-    file.write_all(&uncompressed_size.to_le_bytes())?;
+    writer.write_all(&uncompressed_size.to_le_bytes())?;
+
+    // Container v3 stores compatibility metadata before the opaque bincode body
+    // so readers can select an immutable historical DTO before deserialization.
+    writer.write_all(&manifest_len.to_le_bytes())?;
+    writer.write_all(manifest_bytes)?;
 
     // Calculate checksum
     let checksum = calculate_checksum(&final_data);
-    file.write_all(&checksum.to_le_bytes())?;
+    writer.write_all(&checksum.to_le_bytes())?;
 
     // Write data
-    file.write_all(&final_data)?;
+    writer.write_all(&final_data)?;
 
     Ok(())
 }
@@ -153,16 +199,17 @@ fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnap
     reader.read_exact(&mut version_bytes)?;
     let version = u32::from_le_bytes(version_bytes);
 
-    // Support version 1 (no compression) and version 2 (with compression)
-    if version != 1 && version != 2 {
+    // Versions 1 and 2 are legacy containers. Version 3 adds a manifest
+    // before the opaque serialized body.
+    if version != 1 && version != 2 && version != 3 {
         return Err(ConnectomeError::VersionMismatch {
             file_version: version,
             expected_version: FORMAT_VERSION,
         });
     }
 
-    // Read flags (only in version 2)
-    let (is_compressed, uncompressed_size) = if version == 2 {
+    // Read flags (versions 2 and 3)
+    let (is_compressed, uncompressed_size) = if version >= 2 {
         let mut flags = [0u8; 1];
         reader.read_exact(&mut flags)?;
         let compressed = (flags[0] & 1) != 0;
@@ -175,6 +222,19 @@ fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnap
         (compressed, size as usize)
     } else {
         (false, 0) // Version 1 files are never compressed
+    };
+
+    let envelope_manifest = if version == 3 {
+        let mut manifest_len_bytes = [0u8; 4];
+        reader.read_exact(&mut manifest_len_bytes)?;
+        let manifest_len = u32::from_le_bytes(manifest_len_bytes) as usize;
+        let mut manifest_bytes = vec![0u8; manifest_len];
+        reader.read_exact(&mut manifest_bytes)?;
+        Some(String::from_utf8(manifest_bytes).map_err(|error| {
+            ConnectomeError::BrainArtifact(format!("artifact manifest is not UTF-8: {error}"))
+        })?)
+    } else {
+        None
     };
 
     // Read checksum
@@ -213,11 +273,20 @@ fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnap
     let snapshot: ConnectomeSnapshot =
         bincode::deserialize(&data).map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
 
+    if let Some(envelope_manifest) = envelope_manifest {
+        let snapshot_manifest = crate::brain_artifact::encoded_manifest(&snapshot)?;
+        if snapshot_manifest != envelope_manifest {
+            return Err(ConnectomeError::BrainArtifact(
+                "envelope manifest does not match serialized snapshot manifest".to_string(),
+            ));
+        }
+    }
+
     Ok(snapshot)
 }
 
 /// Calculate a simple checksum (CRC64-like)
-fn calculate_checksum(data: &[u8]) -> u64 {
+pub(crate) fn calculate_checksum(data: &[u8]) -> u64 {
     // Simple FNV-1a hash for now (can upgrade to proper CRC64 later)
     const FNV_OFFSET: u64 = 14695981039346656037;
     const FNV_PRIME: u64 = 1099511628211;
@@ -244,7 +313,7 @@ mod tests {
     fn test_save_load_roundtrip() {
         // Create a minimal snapshot
         let snapshot = ConnectomeSnapshot {
-            version: FORMAT_VERSION,
+            version: 1,
             neurons: SerializableNeuronArray::default(),
             synapses: SerializableSynapseArray::default(),
             cortical_area_names: ahash::AHashMap::new(),
@@ -277,12 +346,19 @@ mod tests {
         let bytes = std::fs::read(temp_file.path()).unwrap();
         let from_bytes = load_connectome_from_bytes(&bytes).unwrap();
         assert_eq!(from_bytes.burst_count, snapshot.burst_count);
+        let serialized = save_connectome_to_bytes(&snapshot).unwrap();
+        let from_serialized = load_connectome_from_bytes(&serialized).unwrap();
+        assert_eq!(from_serialized.burst_count, snapshot.burst_count);
     }
 
     #[test]
     fn test_save_load_roundtrip_lite_with_memory_and_plasticity_payload() {
+        let (current_genome, _) = feagi_evolutionary::migrate_genome_json_to_current(
+            feagi_evolutionary::BAREBONES_GENOME_JSON,
+        )
+        .unwrap();
         let snapshot = ConnectomeSnapshot {
-            version: FORMAT_VERSION,
+            version: 1,
             neurons: SerializableNeuronArray::default(),
             synapses: SerializableSynapseArray::default(),
             cortical_area_names: ahash::AHashMap::new(),
@@ -297,7 +373,7 @@ mod tests {
                 ..ConnectomeMetadata::default()
             },
             persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite,
-            genome_json: Some("{\"version\":\"3.0\"}".to_string()),
+            genome_json: Some(serde_json::to_string(&current_genome).unwrap()),
             memory_area_ids: vec!["mmem0001".to_string()],
             plastic_mappings: vec![("csrc0001".to_string(), "cdst0001".to_string())],
             brain_region_ids: vec!["region-1".to_string()],

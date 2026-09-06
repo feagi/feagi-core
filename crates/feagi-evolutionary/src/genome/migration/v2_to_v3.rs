@@ -63,6 +63,9 @@ impl Migrator for V2ToV3Migrator {
                 "renamed {} cortical IDs to v3 template-compliant form",
                 result.cortical_ids_migrated
             ));
+            for (old, new) in &result.id_mapping {
+                diag.record_identifier_remap(old.clone(), new.clone());
+            }
             // Record up to a small number of example renames so diagnostics
             // are useful but bounded. The full mapping is available on
             // `MigrationResult` for callers that need it.
