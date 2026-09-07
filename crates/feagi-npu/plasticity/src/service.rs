@@ -1094,6 +1094,26 @@ impl PlasticityService {
         true
     }
 
+    /// Clear cortical-index keyed registrations before a connectome rebuild.
+    ///
+    /// Memory neurons are restored separately from the snapshot; this only
+    /// removes runtime registrations and queued commands that refer to the
+    /// previous connectome's numeric cortical indexes.
+    pub fn clear_memory_area_registrations(&self) {
+        self.memory_areas.lock().unwrap().clear();
+        self.memory_lifecycle_configs.lock().unwrap().clear();
+        self.memory_area_names.lock().unwrap().clear();
+        self.pattern_detector.detectors.lock().unwrap().clear();
+        self.command_queue.lock().unwrap().clear();
+    }
+
+    /// Return sorted registered memory-area indexes for diagnostics and verification.
+    pub fn registered_memory_area_indexes(&self) -> Vec<u32> {
+        let mut indexes: Vec<u32> = self.memory_areas.lock().unwrap().keys().copied().collect();
+        indexes.sort_unstable();
+        indexes
+    }
+
     /// Normalize lifecycle values for runtime safety.
     ///
     /// Zero values can leak in from legacy or partially populated memory-area payloads.
@@ -1432,6 +1452,35 @@ mod tests {
 
         let areas = service.memory_areas.lock().unwrap();
         assert!(areas.contains_key(&100));
+    }
+
+    #[test]
+    fn clear_memory_area_registrations_removes_stale_indexes_only() {
+        let config = PlasticityConfig::default();
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-registration-reset-test-npu",
+        ));
+        let service = PlasticityService::new(config, cache, npu);
+        service.register_memory_area(16, "stale-memory".to_string(), 1, vec![9], None, false);
+        service.pattern_detector.get_detector(16, 1);
+        service.enqueue_commands_for_test(vec![PlasticityCommand::ResetMemoryNeuronsInArea {
+            cortical_idx: 16,
+        }]);
+
+        service.clear_memory_area_registrations();
+
+        assert!(service.memory_areas.lock().unwrap().is_empty());
+        assert!(service.memory_lifecycle_configs.lock().unwrap().is_empty());
+        assert!(service.memory_area_names.lock().unwrap().is_empty());
+        assert!(service
+            .pattern_detector
+            .detectors
+            .lock()
+            .unwrap()
+            .is_empty());
+        assert!(service.command_queue.lock().unwrap().is_empty());
     }
 
     #[test]

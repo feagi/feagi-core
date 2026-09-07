@@ -4319,6 +4319,18 @@ impl ConnectomeManager {
     /// STDP mapping parameters, and memory-area fire-ledger *windows* come from the
     /// live genome/manager. Fire-ledger *contents* are not restored.
     pub fn rebind_npu_runtime_after_connectome_apply(&mut self) -> BduResult<()> {
+        #[cfg(feature = "plasticity")]
+        if let Some(executor) = self.plasticity_executor.as_ref() {
+            executor
+                .lock()
+                .map_err(|_| {
+                    BduError::Internal(
+                        "Failed to lock PlasticityExecutor for registration reset".to_string(),
+                    )
+                })?
+                .clear_memory_area_registrations()
+                .map_err(BduError::Internal)?;
+        }
         self.refresh_all_upstream_cortical_areas_from_mappings();
         self.rebuild_memory_twin_mappings()?;
         self.rebind_memory_twin_mappings_to_npu()?;

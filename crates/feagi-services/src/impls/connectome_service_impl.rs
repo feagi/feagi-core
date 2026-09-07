@@ -6392,6 +6392,18 @@ mod tests {
             manager.setup_core_morphologies_for_testing();
             manager.set_plasticity_executor(target_exec.clone());
         }
+        {
+            let exec = target_exec.lock().expect("target plasticity executor");
+            PlasticityExecutor::register_memory_area(
+                &*exec,
+                999,
+                "stale-memory-index".to_string(),
+                1,
+                vec![998],
+                None,
+                false,
+            );
+        }
         let target_service =
             ConnectomeServiceImpl::new(target_connectome.clone(), Arc::new(RwLock::new(None)));
 
@@ -6408,6 +6420,21 @@ mod tests {
         let imported_assoc_mem_idx = target_manager
             .get_cortical_idx(&assoc_mem_id)
             .expect("imported associative memory area idx");
+        let registered_memory_indexes = target_exec
+            .lock()
+            .expect("target plasticity executor")
+            .get_service()
+            .expect("target plasticity service")
+            .registered_memory_area_indexes();
+        assert_eq!(
+            registered_memory_indexes,
+            {
+                let mut expected = vec![imported_mem_idx, imported_assoc_mem_idx];
+                expected.sort_unstable();
+                expected
+            },
+            "lite import must replace stale cortical-index registrations"
+        );
         let imported_src_neuron = target_manager
             .get_neurons_in_area(&src_id)
             .into_iter()

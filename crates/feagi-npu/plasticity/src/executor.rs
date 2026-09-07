@@ -178,6 +178,19 @@ impl AsyncPlasticityExecutor {
         service.restore_long_term_memory_neurons(neurons)
     }
 
+    /// Remove runtime registrations tied to the previous cortical index map.
+    pub fn clear_memory_area_registrations(&self) -> Result<(), String> {
+        let guard = self
+            .service
+            .lock()
+            .map_err(|_| "Failed to lock plasticity service".to_string())?;
+        let service = guard
+            .as_ref()
+            .ok_or_else(|| "Plasticity service is not initialized".to_string())?;
+        service.clear_memory_area_registrations();
+        Ok(())
+    }
+
     /// Active memory neuron ids for a cortical area (sorted), paginated: `(page, total)`.
     pub fn paginated_memory_neuron_ids_in_area(
         &self,
