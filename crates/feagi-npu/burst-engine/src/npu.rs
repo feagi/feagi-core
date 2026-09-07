@@ -4668,6 +4668,19 @@ impl<
             neuron_storage.valid_mask()[idx] && neuron_storage.cortical_areas()[idx] == 1;
         drop(neuron_storage);
 
+        // Neuron and synapse validity form one invariant: no valid synapse may
+        // reference an invalid neuron. Remove both incoming and outgoing edges
+        // in one deterministic storage pass before invalidating the neuron.
+        self.synapse_storage
+            .write()
+            .unwrap()
+            .remove_synapses_touching_neuron(neuron_id)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Invariant violation: failed to remove synapses touching neuron {}: {error:?}",
+                    neuron_id
+                )
+            });
         self.neuron_storage.write().unwrap().valid_mask_mut()[idx] = false;
 
         // CRITICAL PERFORMANCE: Remove from power neuron cache if it was a power neuron
@@ -6814,6 +6827,45 @@ mod tests {
             .unwrap();
 
         assert!(!npu.remove_synapse(n1, n2));
+    }
+
+    #[test]
+    fn test_delete_neuron_invalidates_incoming_and_outgoing_synapses() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+        let source = npu
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .unwrap();
+        let deleted = npu
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .unwrap();
+        let target = npu
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 2, 0, 0)
+            .unwrap();
+
+        for (from, to) in [(source, deleted), (deleted, target), (source, target)] {
+            npu.add_synapse(
+                from,
+                to,
+                SynapticWeight(128.0),
+                SynapticPsp(255.0),
+                SynapseType::Excitatory,
+                0,
+                1,
+            )
+            .unwrap();
+        }
+        assert_eq!(npu.get_synapse_count(), 3);
+
+        assert!(npu.delete_neuron(deleted.0));
+        assert!(!npu.is_neuron_valid(deleted.0));
+        assert_eq!(npu.get_synapse_count(), 1);
+        assert!(npu.remove_synapse(source, target));
+        assert_eq!(npu.get_synapse_count(), 0);
     }
 
     #[test]

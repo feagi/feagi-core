@@ -991,6 +991,33 @@ async fn test_health_endpoint() {
 }
 
 #[tokio::test]
+async fn test_cortical_area_read_waits_for_genome_transition() {
+    let state = build_test_state();
+    let transition_lock = Arc::clone(&state.genome_transition_lock);
+    let transition_guard = transition_lock.lock_owned().await;
+    state
+        .genome_transition_in_progress
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let app = create_http_server(state);
+
+    let read_task = tokio::spawn(request_json(
+        app,
+        "GET",
+        "/v1/cortical_area/cortical_area_name_list",
+        None,
+    ));
+    tokio::task::yield_now().await;
+    assert!(
+        !read_task.is_finished(),
+        "cortical-area read must wait until the active genome transition completes"
+    );
+
+    drop(transition_guard);
+    let (status, _response) = read_task.await.expect("read task should complete");
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
 async fn test_system_status() {
     let app = create_test_server().await;
 

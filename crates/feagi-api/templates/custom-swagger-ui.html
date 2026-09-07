@@ -650,7 +650,7 @@
       <button class="header-button genome-action" id="load-essential">Load Essential</button>
       <button class="header-button genome-action" id="load-barebones">Load Barebones</button>
       <button class="header-button genome-action" id="upload-genome">Upload Genome</button>
-      <input type="file" id="upload-genome-input" accept=".genome,application/vnd.feagi.genome+json" style="display:none">
+      <input type="file" id="upload-genome-input" accept=".genome,.GENOME" style="display:none">
       <button class="header-button genome-action download-genome" id="download-genome">Download Genome</button>
       <button class="header-button connectome-action download-connectome" id="download-connectome">Download Connectome</button>
       <button class="header-button connectome-action" id="upload-connectome">Upload Connectome</button>
@@ -1161,6 +1161,8 @@
       // Upload Genome button
       const uploadGenomeInput = document.getElementById('upload-genome-input');
       document.getElementById('upload-genome').addEventListener('click', () => {
+        // Keep the picker extension-focused; some browsers fail to honor mixed custom MIME + extension filters.
+        uploadGenomeInput.setAttribute('accept', '.genome,.GENOME');
         uploadGenomeInput.click();
       });
       uploadGenomeInput.addEventListener('change', async (e) => {

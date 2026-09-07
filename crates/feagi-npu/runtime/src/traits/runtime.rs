@@ -403,6 +403,9 @@ pub trait SynapseStorage: Send + Sync {
     /// Remove all synapses from specific source neurons
     fn remove_synapses_from_sources(&mut self, source_neurons: &[u32]) -> Result<usize>;
 
+    /// Remove every incoming and outgoing synapse touching one neuron.
+    fn remove_synapses_touching_neuron(&mut self, neuron_id: u32) -> Result<usize>;
+
     /// Remove synapses between specific source and target
     fn remove_synapses_between(&mut self, source: u32, target: u32) -> Result<usize>;
 

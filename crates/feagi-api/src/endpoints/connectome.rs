@@ -12,6 +12,8 @@ use axum::response::Response;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use tracing::{info, warn};
 use utoipa::{IntoParams, ToSchema};
 
@@ -1379,10 +1381,38 @@ pub async fn get_memory_neuron(
     }))
 }
 
+/// Clears the transition flag when an import completes or fails.
+struct ConnectomeTransitionFlagGuard {
+    in_progress: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Drop for ConnectomeTransitionFlagGuard {
+    fn drop(&mut self) {
+        self.in_progress.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Import a connectome as an exclusive genome transition.
+///
+/// The import reconstructs cortical areas incrementally. It must not overlap
+/// reads or another genome transition because legacy read paths may auto-heal
+/// missing core areas and mutate the partially reconstructed connectome.
 async fn import_connectome_snapshot(
     state: &ApiState,
     snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    let _transition_lock = state.genome_transition_lock.try_lock().map_err(|_| {
+        ApiError::conflict(
+            "Another genome transition is already in progress; wait for it to finish",
+        )
+    })?;
+    state
+        .genome_transition_in_progress
+        .store(true, Ordering::SeqCst);
+    let _transition_flag = ConnectomeTransitionFlagGuard {
+        in_progress: Arc::clone(&state.genome_transition_in_progress),
+    };
+
     state
         .connectome_service
         .import_connectome(snapshot)

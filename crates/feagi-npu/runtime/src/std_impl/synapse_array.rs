@@ -295,6 +295,19 @@ impl SynapseStorage for SynapseArray {
         Ok(removed)
     }
 
+    fn remove_synapses_touching_neuron(&mut self, neuron_id: u32) -> crate::traits::Result<usize> {
+        let mut removed = 0;
+        for idx in 0..self.count {
+            if self.valid_mask[idx]
+                && (self.source_neurons[idx] == neuron_id || self.target_neurons[idx] == neuron_id)
+            {
+                self.valid_mask[idx] = false;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+
     fn remove_synapses_between(
         &mut self,
         source: u32,
@@ -358,5 +371,16 @@ mod tests {
         assert_eq!(contributions.len(), 2);
         assert!(contributions.contains_key(&1));
         assert!(contributions.contains_key(&2));
+    }
+
+    #[test]
+    fn test_remove_synapses_touching_neuron_removes_both_directions() {
+        let mut array = SynapseArray::new(10);
+        array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory);
+        array.add_synapse_simple(1, 2, 255.0, 255.0, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 2, 255.0, 255.0, SynapseType::Excitatory);
+
+        assert_eq!(array.remove_synapses_touching_neuron(1).unwrap(), 2);
+        assert_eq!(array.valid_count(), 1);
     }
 }

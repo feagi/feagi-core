@@ -319,7 +319,11 @@ pub fn create_http_server(state: ApiState) -> Router {
         )
 }
 
-/// Reject non-genome requests while a prioritized genome transition is running.
+/// Hold read requests until an active genome transition has completed.
+///
+/// A read may invoke legacy auto-healing paths, so allowing it to observe a
+/// partially reconstructed connectome can mutate transition state. Holding the
+/// shared transition lock keeps reads observational until the new brain is ready.
 async fn reject_during_genome_transition(
     State(state): State<ApiState>,
     request: Request<Body>,
@@ -327,6 +331,12 @@ async fn reject_during_genome_transition(
 ) -> Response {
     let path = request.uri().path();
     let method = request.method();
+
+    if *method == Method::GET && !is_transition_allowed_route(path, method) {
+        let _read_guard = state.genome_transition_lock.lock().await;
+        return next.run(request).await;
+    }
+
     let transition_in_progress = state.genome_transition_in_progress.load(Ordering::SeqCst);
 
     if transition_in_progress && !is_transition_allowed_route(path, method) {

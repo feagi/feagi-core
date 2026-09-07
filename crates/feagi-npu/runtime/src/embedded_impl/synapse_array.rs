@@ -342,6 +342,19 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         Ok(removed)
     }
 
+    fn remove_synapses_touching_neuron(&mut self, neuron_id: u32) -> Result<usize> {
+        let mut removed = 0;
+        for idx in 0..self.count {
+            if self.valid_mask[idx]
+                && (self.source_neurons[idx] == neuron_id || self.target_neurons[idx] == neuron_id)
+            {
+                self.valid_mask[idx] = false;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+
     fn remove_synapses_between(&mut self, source: u32, target: u32) -> Result<usize> {
         let mut removed = 0;
         for idx in 0..self.count {
@@ -424,6 +437,17 @@ mod tests {
 
         assert!(contributions[1] > 0.0); // Excitatory contribution
         assert!(contributions[2] > 0.0); // Excitatory contribution
+    }
+
+    #[test]
+    fn test_remove_synapses_touching_neuron_removes_both_directions() {
+        let mut array = SynapseArray::<10>::new();
+        let _ = array.add_synapse(0, 1, 255.0, 255.0, 0, 0, 1);
+        let _ = array.add_synapse(1, 2, 255.0, 255.0, 0, 0, 1);
+        let _ = array.add_synapse(0, 2, 255.0, 255.0, 0, 0, 1);
+
+        assert_eq!(array.remove_synapses_touching_neuron(1).unwrap(), 2);
+        assert_eq!(array.valid_count(), 1);
     }
 
     #[test]

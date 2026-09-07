@@ -3186,30 +3186,26 @@ fn build_lite_snapshot(
     }
 
     let mut lite_synapses: Vec<SerializableSemanticSynapse> = Vec::new();
+    let mut stale_synapse_count = 0usize;
+    let mut first_stale_synapse: Option<(usize, u32, u32)> = None;
     for i in 0..snapshot.synapses.count {
         if i < snapshot.synapses.valid_mask.len() && !snapshot.synapses.valid_mask[i] {
             continue;
         }
         let source_id = snapshot.synapses.source_neurons[i];
         let target_id = snapshot.synapses.target_neurons[i];
-        let source = endpoint_by_neuron_id
-            .get(&source_id)
-            .cloned()
-            .ok_or_else(|| {
-                ServiceError::InvalidInput(format!(
-                    "Cannot create lite snapshot: synapse {} source {} has no semantic identity",
-                    i, source_id
-                ))
-            })?;
-        let target = endpoint_by_neuron_id
-            .get(&target_id)
-            .cloned()
-            .ok_or_else(|| {
-                ServiceError::InvalidInput(format!(
-                    "Cannot create lite snapshot: synapse {} target {} has no semantic identity",
-                    i, target_id
-                ))
-            })?;
+        // A synapse can be marked valid while one of its endpoint neurons was pruned/
+        // deactivated in the same tick (neuron and synapse validity are tracked
+        // independently). Rather than aborting the entire lite snapshot over a single
+        // stale edge, skip that synapse and keep the rest of the connectome save intact.
+        let (Some(source), Some(target)) = (
+            endpoint_by_neuron_id.get(&source_id).cloned(),
+            endpoint_by_neuron_id.get(&target_id).cloned(),
+        ) else {
+            stale_synapse_count += 1;
+            first_stale_synapse.get_or_insert((i, source_id, target_id));
+            continue;
+        };
         let source_cortical_id = semantic_reference_cortical_id(&source);
         let target_cortical_id = semantic_reference_cortical_id(&target);
         let touches_ltm = matches!(source, SerializableNeuronReference::LongTermMemory { .. })
@@ -3243,6 +3239,15 @@ fn build_lite_snapshot(
                     .unwrap_or(0.0),
             });
         }
+    }
+    if let Some((first_index, first_source, first_target)) = first_stale_synapse {
+        tracing::warn!(
+            "Skipped {} stale synapses in lite snapshot; first stale edge index={} source={} target={}. Valid synapses must not reference deleted neurons",
+            stale_synapse_count,
+            first_index,
+            first_source,
+            first_target
+        );
     }
 
     snapshot.lite_synapses = lite_synapses;
@@ -6744,6 +6749,94 @@ mod tests {
                 } if cortical_id == &dst.as_base_64()
             )
         }));
+        Ok(())
+    }
+
+    #[test]
+    fn build_lite_snapshot_skips_stale_synapse_instead_of_failing() -> ServiceResult<()> {
+        // Regression test: a synapse can be marked valid while one of its endpoint
+        // neurons was pruned/deactivated in the same tick (neuron and synapse validity
+        // are tracked independently). Previously this aborted the entire lite snapshot
+        // (and therefore the whole desktop auto-save) with "has no semantic identity".
+        // The fix skips only the stale synapse and keeps every other valid edge.
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomePersistMode, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        use feagi_structures::genomic::cortical_area::CorticalID;
+
+        let src = CorticalID::try_from_bytes(b"cltes002").unwrap();
+        let dst = CorticalID::try_from_bytes(b"clted002").unwrap();
+        let pruned = CorticalID::try_from_bytes(b"cltep002").unwrap();
+
+        let mut names = ahash::AHashMap::new();
+        names.insert(7, src.as_base_64());
+        names.insert(8, dst.as_base_64());
+        names.insert(9, pruned.as_base_64());
+
+        let mut neurons = SerializableNeuronArray::new(3);
+        neurons.count = 3;
+        neurons.cortical_areas[0] = 7;
+        neurons.cortical_areas[1] = 8;
+        neurons.cortical_areas[2] = 9;
+        neurons.valid_mask[0] = true;
+        neurons.valid_mask[1] = true;
+        // Neuron 2 was pruned/deactivated after its synapse was created.
+        neurons.valid_mask[2] = false;
+
+        let mut synapses = SerializableSynapseArray::new(2);
+        synapses.count = 2;
+        // Edge 0: healthy synapse into a memory-area neuron -> must be kept.
+        // Edge 1: still marked valid, but its target neuron (2) is now invalid -> skip.
+        synapses.source_neurons = vec![0, 0];
+        synapses.target_neurons = vec![1, 2];
+        synapses.weights = vec![0.5, 0.8];
+        synapses.postsynaptic_potentials = vec![0.0, 0.0];
+        synapses.types = vec![0, 0];
+        synapses.delay_bursts = vec![1, 1];
+        synapses.valid_mask = vec![true, true];
+        synapses.edge_flags = vec![0, 0];
+        synapses.eligibility_traces = vec![0.0, 0.0];
+
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons,
+            synapses,
+            cortical_area_names: names,
+            burst_count: 10,
+            power_amount: 2.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: ConnectomePersistMode::Full,
+            genome_json: Some("{\"version\":\"3.0\"}".to_string()),
+            memory_area_ids: vec![dst.as_base_64()],
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        };
+
+        let lite = super::build_lite_snapshot(snapshot)?;
+        assert_eq!(
+            lite.lite_synapses.len(),
+            1,
+            "stale synapse referencing a pruned neuron must be skipped, not error"
+        );
+        assert!(matches!(
+            lite.lite_synapses[0].source,
+            feagi_npu_neural::types::connectome::SerializableNeuronReference::Regular {
+                ref cortical_id,
+                ..
+            } if cortical_id == &src.as_base_64()
+        ));
+        assert!(matches!(
+            lite.lite_synapses[0].target,
+            feagi_npu_neural::types::connectome::SerializableNeuronReference::Regular {
+                ref cortical_id,
+                ..
+            } if cortical_id == &dst.as_base_64()
+        ));
         Ok(())
     }
 
