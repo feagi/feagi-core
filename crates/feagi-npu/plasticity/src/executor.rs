@@ -191,6 +191,20 @@ impl AsyncPlasticityExecutor {
         Ok(())
     }
 
+    /// Discard all memory neurons and registrations before a new genome is built.
+    ///
+    /// Returns the number of memory neurons discarded.
+    pub fn reset_all_memory_state(&self) -> Result<usize, String> {
+        let guard = self
+            .service
+            .lock()
+            .map_err(|_| "Failed to lock plasticity service".to_string())?;
+        let service = guard
+            .as_ref()
+            .ok_or_else(|| "Plasticity service is not initialized".to_string())?;
+        Ok(service.reset_all_memory_state())
+    }
+
     /// Active memory neuron ids for a cortical area (sorted), paginated: `(page, total)`.
     pub fn paginated_memory_neuron_ids_in_area(
         &self,

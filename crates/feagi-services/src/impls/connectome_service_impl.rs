@@ -2894,6 +2894,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
         #[cfg(not(feature = "plasticity"))]
         snapshot.retain_regular_and_long_term_memory_synapses(&HashSet::new());
 
+        #[cfg(feature = "plasticity")]
+        validate_exported_long_term_memory(
+            &self.connectome,
+            &snapshot,
+            mode == feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite,
+        )?;
+
         if mode == feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite {
             snapshot = build_lite_snapshot(snapshot)?;
         } else {
@@ -3027,6 +3034,73 @@ fn attach_long_term_memory_to_snapshot(
         .collect();
     snapshot.retain_regular_and_long_term_memory_synapses(&ltm_ids);
     attach_long_term_memory_replay_frames(connectome, snapshot, &ltm_ids)?;
+    Ok(())
+}
+
+/// Reject snapshots whose long-term memory rows can never be imported again.
+///
+/// Import resolves each long-term memory neuron back to a memory cortical area and, for
+/// lite artifacts, rebuilds its pattern hash from replay frames. A row that points at a
+/// non-memory area, or a lite row with no replay frames, produces an artifact that FEAGI
+/// will always refuse. Failing here keeps the unusable artifact from being stored.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn validate_exported_long_term_memory(
+    connectome: &RwLock<ConnectomeManager>,
+    snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    require_replay_frames: bool,
+) -> ServiceResult<()> {
+    if snapshot.long_term_memory_neurons.is_empty() {
+        return Ok(());
+    }
+    let manager = connectome.read();
+    for neuron in &snapshot.long_term_memory_neurons {
+        if !neuron.is_longterm_memory || !neuron.is_active {
+            continue;
+        }
+        let memory_id = manager
+            .get_cortical_id(neuron.cortical_area_idx)
+            .copied()
+            .ok_or_else(|| {
+                ServiceError::InvalidState(format!(
+                    "Cannot export LTM neuron {}: cortical idx {} is not registered",
+                    neuron.neuron_id, neuron.cortical_area_idx
+                ))
+            })?;
+        let memory_area = manager.get_cortical_area(&memory_id).ok_or_else(|| {
+            ServiceError::InvalidState(format!(
+                "Cannot export LTM neuron {}: cortical area '{}' is unavailable",
+                neuron.neuron_id,
+                memory_id.as_base_64()
+            ))
+        })?;
+        if feagi_evolutionary::extract_memory_properties(&memory_area.properties).is_none() {
+            return Err(ServiceError::InvalidState(format!(
+                "Cannot export LTM neuron {}: cortical area '{}' is not a memory area",
+                neuron.neuron_id,
+                memory_id.as_base_64()
+            )));
+        }
+        if !require_replay_frames {
+            continue;
+        }
+        if manager
+            .get_episodic_memory_upstream_cortical_areas(&memory_id)
+            .is_empty()
+        {
+            continue;
+        }
+        let has_frames = snapshot
+            .long_term_memory_replay_frames
+            .iter()
+            .any(|(neuron_id, frames)| *neuron_id == neuron.neuron_id && !frames.is_empty());
+        if !has_frames {
+            return Err(ServiceError::InvalidState(format!(
+                "Cannot export lite LTM neuron {} in memory area '{}': no replay frames are available to rebuild its pattern",
+                neuron.neuron_id,
+                memory_id.as_base_64()
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -6929,6 +7003,191 @@ mod tests {
             Some(&incoming_id)
         );
         Ok(())
+    }
+
+    /// Build a manager holding one source area mapped into one memory area via
+    /// `episodic_memory`, so the memory area has a live upstream index.
+    #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+    fn memory_export_fixture() -> (
+        Arc<RwLock<ConnectomeManager>>,
+        feagi_structures::genomic::cortical_area::CorticalID,
+        feagi_structures::genomic::cortical_area::CorticalID,
+    ) {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        let src_id = CorticalID::try_from_bytes(b"csrcexp1").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmemexp1").unwrap();
+
+        let mut src = CorticalArea::new(
+            src_id,
+            7,
+            "src".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        src.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "episodic_memory",
+                    "postSynapticCurrent_multiplier": 1
+                }]
+            }),
+        );
+        let mut mem = CorticalArea::new(
+            mem_id,
+            8,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (1, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        manager.add_cortical_area(src).unwrap();
+        manager.add_cortical_area(mem).unwrap();
+        manager.refresh_all_upstream_cortical_areas_from_mappings();
+
+        (Arc::new(RwLock::new(manager)), src_id, mem_id)
+    }
+
+    #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+    fn snapshot_with_ltm_neuron(
+        cortical_area_idx: u32,
+        cortical_id: &str,
+        replay_frames: Vec<feagi_npu_neural::types::connectome::SerializableMemoryReplayFrame>,
+    ) -> feagi_npu_neural::types::connectome::ConnectomeSnapshot {
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableLongTermMemoryNeuron,
+            SerializableNeuronArray, SerializableSynapseArray,
+        };
+
+        ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: vec![SerializableLongTermMemoryNeuron {
+                neuron_id: 50_000_003,
+                cortical_area_idx,
+                cortical_id: Some(cortical_id.to_string()),
+                pattern_hash: Some(42),
+                is_longterm_memory: true,
+                is_active: true,
+                lifespan_current: 100,
+                lifespan_initial: 20,
+                lifespan_growth_rate: 3.0,
+                creation_burst: 0,
+                last_activation_burst: 0,
+                activation_count: 1,
+            }],
+            long_term_memory_replay_frames: if replay_frames.is_empty() {
+                Vec::new()
+            } else {
+                vec![(50_000_003, replay_frames)]
+            },
+            lite_synapses: Vec::new(),
+        }
+    }
+
+    #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+    #[test]
+    fn export_rejects_ltm_neuron_outside_a_memory_area() {
+        let (connectome, src_id, _mem_id) = memory_export_fixture();
+        let src_idx = connectome
+            .read()
+            .get_cortical_idx(&src_id)
+            .expect("source idx");
+        let snapshot = snapshot_with_ltm_neuron(src_idx, &src_id.as_base_64(), Vec::new());
+
+        let err = super::validate_exported_long_term_memory(&connectome, &snapshot, false)
+            .expect_err("LTM rows outside a memory area must not be exported");
+        let message = format!("{err}");
+        assert!(
+            message.contains("is not a memory area"),
+            "unexpected error: {message}"
+        );
+    }
+
+    #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+    #[test]
+    fn export_rejects_ltm_neuron_with_unregistered_cortical_index() {
+        let (connectome, _src_id, _mem_id) = memory_export_fixture();
+        let snapshot = snapshot_with_ltm_neuron(4_242, "unregistered", Vec::new());
+
+        let err = super::validate_exported_long_term_memory(&connectome, &snapshot, false)
+            .expect_err("stale cortical indexes must not be exported");
+        let message = format!("{err}");
+        assert!(
+            message.contains("is not registered"),
+            "unexpected error: {message}"
+        );
+    }
+
+    #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+    #[test]
+    fn export_rejects_lite_ltm_neuron_without_replay_frames() {
+        let (connectome, _src_id, mem_id) = memory_export_fixture();
+        let mem_idx = connectome
+            .read()
+            .get_cortical_idx(&mem_id)
+            .expect("memory idx");
+        let snapshot = snapshot_with_ltm_neuron(mem_idx, &mem_id.as_base_64(), Vec::new());
+
+        super::validate_exported_long_term_memory(&connectome, &snapshot, false)
+            .expect("full export does not rehash, so missing frames are acceptable");
+        let err = super::validate_exported_long_term_memory(&connectome, &snapshot, true)
+            .expect_err("lite export must carry the frames the import needs to rehash");
+        let message = format!("{err}");
+        assert!(
+            message.contains("no replay frames"),
+            "unexpected error: {message}"
+        );
+    }
+
+    #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+    #[test]
+    fn export_accepts_lite_ltm_neuron_with_replay_frames() -> ServiceResult<()> {
+        use feagi_npu_neural::types::connectome::SerializableMemoryReplayFrame;
+
+        let (connectome, src_id, mem_id) = memory_export_fixture();
+        let (src_idx, mem_idx) = {
+            let manager = connectome.read();
+            (
+                manager.get_cortical_idx(&src_id).expect("source idx"),
+                manager.get_cortical_idx(&mem_id).expect("memory idx"),
+            )
+        };
+        let snapshot = snapshot_with_ltm_neuron(
+            mem_idx,
+            &mem_id.as_base_64(),
+            vec![SerializableMemoryReplayFrame {
+                offset: 0,
+                upstream_area_idx: src_idx,
+                upstream_cortical_id: Some(src_id.as_base_64()),
+                coords: vec![(0, 0, 0)],
+                membrane_potentials: None,
+            }],
+        );
+
+        super::validate_exported_long_term_memory(&connectome, &snapshot, true)
     }
 
     #[cfg(all(feature = "connectome-io", feature = "plasticity"))]

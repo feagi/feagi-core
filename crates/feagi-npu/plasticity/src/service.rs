@@ -1107,6 +1107,54 @@ impl PlasticityService {
         self.command_queue.lock().unwrap().clear();
     }
 
+    /// Discard every memory neuron along with all cortical-index keyed registrations.
+    ///
+    /// Genome load renumbers every non-core cortical index, so memory neurons carried
+    /// over from the previous brain keep indexes that now resolve to unrelated cortical
+    /// areas. Those rows are unusable at runtime and poison exported connectomes, so the
+    /// entire memory state is dropped before the new genome is built.
+    ///
+    /// Returns the number of memory neurons discarded.
+    pub fn reset_all_memory_state(&self) -> usize {
+        let area_names = self.memory_area_names.lock().unwrap().clone();
+        let mut attributed_per_area: Vec<(String, usize)> = Vec::with_capacity(area_names.len());
+        let discarded = {
+            let mut array = self.memory_neuron_array.lock().unwrap();
+            for (area_idx, area_name) in area_names.iter() {
+                let active = array.get_active_neurons_by_area(*area_idx).len();
+                if active > 0 {
+                    attributed_per_area.push((area_name.clone(), active));
+                }
+            }
+            let discarded = array.get_stats().active_neurons;
+            array.reset();
+            discarded
+        };
+
+        let mut attributed = 0usize;
+        for (area_name, active) in attributed_per_area {
+            attributed += active;
+            for _ in 0..active {
+                memory_stats_cache::on_neuron_deleted(&self.memory_stats_cache, &area_name);
+            }
+        }
+        if discarded > attributed {
+            tracing::warn!(
+                target: "plasticity",
+                "[PLASTICITY] Discarded {} memory neuron(s) whose cortical index is no longer registered; per-area stats could not be attributed",
+                discarded - attributed
+            );
+        }
+
+        self.clear_memory_area_registrations();
+        tracing::info!(
+            target: "plasticity",
+            "[PLASTICITY] Memory state reset for new genome: {} memory neuron(s) discarded",
+            discarded
+        );
+        discarded
+    }
+
     /// Return sorted registered memory-area indexes for diagnostics and verification.
     pub fn registered_memory_area_indexes(&self) -> Vec<u32> {
         let mut indexes: Vec<u32> = self.memory_areas.lock().unwrap().keys().copied().collect();
@@ -1481,6 +1529,53 @@ mod tests {
             .unwrap()
             .is_empty());
         assert!(service.command_queue.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn reset_all_memory_state_discards_neurons_and_registrations() {
+        let config = PlasticityConfig::default();
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-memory-state-reset-test-npu",
+        ));
+        let service = PlasticityService::new(config, cache, npu);
+        service.register_memory_area(8, "mem_reset".to_string(), 1, vec![7], None, false);
+        {
+            let mut array = service.memory_neuron_array.lock().unwrap();
+            let lifecycle = MemoryNeuronLifecycleConfig::default();
+            array
+                .create_memory_neuron(11, 8, 0, &lifecycle)
+                .expect("registered-area memory neuron");
+            // A neuron whose cortical index belongs to the previous genome's index map.
+            array
+                .create_memory_neuron(22, 99, 0, &lifecycle)
+                .expect("stale-area memory neuron");
+            assert_eq!(array.get_stats().active_neurons, 2);
+        }
+
+        let discarded = service.reset_all_memory_state();
+
+        assert_eq!(discarded, 2);
+        assert_eq!(
+            service
+                .memory_neuron_array
+                .lock()
+                .unwrap()
+                .get_stats()
+                .active_neurons,
+            0
+        );
+        assert!(service.export_long_term_memory_neurons().is_empty());
+        assert!(service.memory_areas.lock().unwrap().is_empty());
+        assert!(service.memory_area_names.lock().unwrap().is_empty());
+        assert_eq!(
+            memory_stats_cache::get_area_stats(&service.memory_stats_cache, "mem_reset")
+                .expect("registered area keeps a stats entry")
+                .neuron_count,
+            0,
+            "per-area neuron count must be settled for registered areas"
+        );
     }
 
     #[test]

@@ -6450,6 +6450,21 @@ impl ConnectomeManager {
         // Clear brain regions
         self.brain_regions = BrainRegionHierarchy::new();
 
+        // Drop memory neurons and memory-area registrations. Their cortical indexes belong
+        // to the previous index map, which the reset above invalidates.
+        #[cfg(feature = "plasticity")]
+        if let Some(executor) = self.plasticity_executor.as_ref() {
+            executor
+                .lock()
+                .map_err(|_| {
+                    BduError::Internal(
+                        "Failed to lock PlasticityExecutor for memory state reset".to_string(),
+                    )
+                })?
+                .reset_all_memory_state()
+                .map_err(BduError::Internal)?;
+        }
+
         // Reset NPU runtime state to prevent old neurons/synapses from leaking into the next genome.
         if let Some(ref npu) = self.npu {
             let mut npu_lock = npu
@@ -7959,6 +7974,93 @@ impl std::fmt::Debug for ConnectomeManager {
 mod tests {
     use super::*;
     use feagi_structures::genomic::cortical_area::CoreCorticalType;
+
+    /// Genome load renumbers every non-core cortical index, so any memory neuron left
+    /// behind by the previous brain would keep an index that now resolves to an unrelated
+    /// cortical area and would be written into the next exported connectome.
+    #[cfg(feature = "plasticity")]
+    #[test]
+    fn prepare_for_new_genome_discards_memory_neurons_from_previous_brain() {
+        use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
+        use feagi_npu_plasticity::executor::PlasticityExecutor;
+        use feagi_npu_plasticity::{
+            create_memory_stats_cache, AsyncPlasticityExecutor, MemoryNeuronDetail,
+            PlasticityConfig,
+        };
+        use feagi_npu_runtime::StdRuntime;
+
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(
+                StdRuntime::new(),
+                feagi_npu_burst_engine::backend::CPUBackend::new(),
+                16,
+                16,
+                8,
+            )
+            .unwrap(),
+            "prepare-for-new-genome-test-npu",
+        ));
+        let executor = Arc::new(std::sync::Mutex::new(AsyncPlasticityExecutor::new(
+            PlasticityConfig::default(),
+            create_memory_stats_cache(),
+            npu.clone(),
+        )));
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        manager.set_npu(npu);
+        manager.set_plasticity_executor(executor.clone());
+
+        let previous_brain_memory_idx = 8;
+        {
+            let exec = executor.lock().expect("plasticity executor");
+            PlasticityExecutor::register_memory_area(
+                &*exec,
+                previous_brain_memory_idx,
+                "previous_brain_memory".to_string(),
+                1,
+                vec![7],
+                None,
+                false,
+            );
+            exec.restore_long_term_memory_neurons(&[MemoryNeuronDetail {
+                neuron_id: 50_000_003,
+                cortical_area_idx: previous_brain_memory_idx,
+                pattern_hash: Some(9_631_261_403_772_054_764),
+                is_longterm_memory: true,
+                is_active: true,
+                lifespan_current: 120,
+                lifespan_initial: 20,
+                lifespan_growth_rate: 3.0,
+                creation_burst: 0,
+                last_activation_burst: 0,
+                activation_count: 5,
+            }])
+            .expect("seeded long-term memory neuron");
+            assert_eq!(
+                exec.export_long_term_memory_neurons()
+                    .expect("plasticity service is initialized")
+                    .len(),
+                1
+            );
+        }
+
+        manager
+            .prepare_for_new_genome()
+            .expect("genome preparation must succeed");
+
+        let exec = executor.lock().expect("plasticity executor");
+        assert!(
+            exec.export_long_term_memory_neurons()
+                .expect("plasticity service is initialized")
+                .is_empty(),
+            "memory neurons from the previous brain must not survive a genome load"
+        );
+        assert_eq!(
+            exec.paginated_memory_neuron_ids_in_area(previous_brain_memory_idx, 0, 10),
+            Some((Vec::new(), 0)),
+            "the previous brain's memory area must no longer report any memory neurons"
+        );
+    }
 
     #[test]
     fn test_singleton_instance() {
