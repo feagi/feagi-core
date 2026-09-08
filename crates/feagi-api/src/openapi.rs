@@ -236,7 +236,7 @@ use crate::{
         crate::endpoints::cortical_mapping::put_mapping_properties,
         crate::endpoints::cortical_mapping::get_mapping,
         crate::endpoints::cortical_mapping::get_mapping_list,
-        crate::endpoints::cortical_mapping::get_twin_diagnostic,
+        //crate::endpoints::cortical_mapping::get_twin_diagnostic, // TODO
         crate::endpoints::cortical_mapping::delete_mapping,
         crate::endpoints::cortical_mapping::post_batch_update,
         crate::endpoints::cortical_mapping::post_mapping,
@@ -258,13 +258,13 @@ use crate::{
 
         // Connectome endpoints
         crate::endpoints::connectome::get_download_connectome,
-        crate::endpoints::connectome::get_download_connectome_bytes,
+        //crate::endpoints::connectome::get_download_connectome_bytes,//todo
         crate::endpoints::connectome::get_download_cortical_area,
-        crate::endpoints::connectome::get_connectome_directory,
+        //crate::endpoints::connectome::get_connectome_directory, // TODO
         crate::endpoints::connectome::post_upload_connectome,
-        crate::endpoints::connectome::post_validate_connectome,
-        crate::endpoints::connectome::post_migrate_connectome,
-        crate::endpoints::connectome::post_upload_connectome_saved,
+        //crate::endpoints::connectome::post_validate_connectome, // TODO
+        //crate::endpoints::connectome::post_migrate_connectome, // TODO
+        //crate::endpoints::connectome::post_upload_connectome_saved, // TODO
         crate::endpoints::connectome::post_upload_cortical_area,
         crate::endpoints::connectome::get_cortical_areas_list_detailed,
         crate::endpoints::connectome::get_properties_dimensions,
@@ -599,10 +599,10 @@ use crate::{
             ValidateGenomeRequest,
             ValidateGenomeResponse,
             crate::endpoints::genome::GenomeFileUploadForm,
-            crate::endpoints::connectome::ConnectomeFileUploadForm,
-            crate::endpoints::connectome::ConnectomeDirectoryResponse,
-            crate::endpoints::connectome::ConnectomeSavedFileEntry,
-            crate::endpoints::connectome::ConnectomeUploadSavedRequest,
+            //crate::endpoints::connectome::ConnectomeFileUploadForm,
+            //crate::endpoints::connectome::ConnectomeDirectoryResponse,
+            //crate::endpoints::connectome::ConnectomeSavedFileEntry,
+            //crate::endpoints::connectome::ConnectomeUploadSavedRequest,
 
             // Neurons
             NeuronInfoResponse,

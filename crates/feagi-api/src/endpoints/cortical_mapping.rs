@@ -511,3 +511,4 @@ pub async fn put_mapping(
 ) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
+

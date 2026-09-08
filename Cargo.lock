@@ -1327,6 +1327,7 @@ dependencies = [
  "feagi-serialization",
  "feagi-services",
  "feagi-state-manager",
+ "feagi-structures",
  "http-body-util",
  "hyper 1.11.0",
  "insta",
@@ -1444,6 +1445,7 @@ dependencies = [
  "feagi-genomic-data",
  "feagi-logging-and-errors",
  "feagi-observability",
+ "feagi-structures",
  "js-sys",
  "paste",
  "rand 0.8.5",
@@ -1687,6 +1689,21 @@ dependencies = [
  "wasm-bindgen",
  "wasm_sync",
  "web-sys",
+]
+
+[[package]]
+name = "feagi-structures"
+version = "0.0.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f18759a8020222bd0f38582ae617b9b5ff05b6c56a2881de94784bc5305bc0b"
+dependencies = [
+ "base64 0.22.1",
+ "ndarray",
+ "paste",
+ "rayon",
+ "serde",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]

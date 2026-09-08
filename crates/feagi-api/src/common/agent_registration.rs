@@ -7,16 +7,13 @@ use crate::common::ApiState;
 use base64::{engine::general_purpose, Engine as _};
 use feagi_config::load_config;
 use feagi_services::types::CreateCorticalAreaParams;
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalSubUnitIndex, CorticalUnitIndex,
-};
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, PercentageNeuronPositioning,
-};
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit, UnitTopology};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use tracing::{info, warn};
+use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, PercentageNeuronPositioning};
+use feagi_genomic_context::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
+use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
+use feagi_genomic_context::cortical_unit::sensor_cortical_unit::{SensoryCorticalUnit, UnitTopology};
 
 const MOTOR_AREA_X_GAP_VOXELS: i32 = 10;
 const SEGMENTED_VISION_GROUP_X_GAP_VOXELS: i32 = 10;
@@ -990,7 +987,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             let mut assembly_min_x: Option<i32> = None;
                             let mut assembly_max_x: Option<i32> = None;
                             for (sub_index, unit_topology) in &topology {
-                                let sub_idx_usize = sub_index.get() as usize;
+                                let sub_idx_usize = sub_index.deref() as usize;
                                 let dimensions = resolve_sensory_dimensions_from_encoder_properties(
                                     grouped_encoder_properties,
                                     sub_idx_usize,
@@ -1277,7 +1274,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
                     properties.insert(
                         "cortical_subunit_index".to_string(),
-                        serde_json::Value::Number(serde_json::Number::from(sub_index.get())),
+                        serde_json::Value::Number(serde_json::Number::from(sub_index.deref())),
                     );
                     properties.insert(
                         "dev_count".to_string(),
@@ -1534,9 +1531,9 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
 #[cfg(test)]
 mod count_output_registration_tests {
     use super::per_channel_motor_dimensions_for_registration;
-    use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
-    use feagi_structures::genomic::MotorCorticalUnit;
     use serde_json::json;
+    use feagi_genomic_context::cortical_unit::CorticalSubUnitIndex;
+    use feagi_genomic_context::cortical_unit::motor_cortical_unit::MotorCorticalUnit;
 
     #[test]
     fn count_output_uses_percentage_tuple_depth_when_present() {
@@ -1631,11 +1628,11 @@ mod count_output_registration_tests {
 #[cfg(test)]
 mod sensory_registration_frame_mode_tests {
     use super::derive_sensory_cortical_ids_from_device_registrations;
-    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
-    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, PercentageNeuronPositioning,
     };
-    use feagi_structures::genomic::SensoryCorticalUnit;
+    use feagi_genomic_context::cortical_unit::CorticalUnitIndex;
+    use feagi_genomic_context::cortical_unit::sensor_cortical_unit::SensoryCorticalUnit;
     use serde_json::json;
 
     #[test]

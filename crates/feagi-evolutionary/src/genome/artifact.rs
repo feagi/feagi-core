@@ -56,7 +56,7 @@ impl GenomeArtifactCodec for JsonGenomeArtifactCodec {
 
     fn decode(&self, artifact: &[u8]) -> EvoResult<Value> {
         serde_json::from_slice(artifact)
-            .map_err(|error| EvoError::InvalidGenome(format!("Failed to parse JSON: {error}")))
+            .map_err(|error| EvoError::invalid_genome(format!("Failed to parse JSON: {error}")))
     }
 
     fn encode(&self, genome: &Value) -> EvoResult<Vec<u8>> {
@@ -84,8 +84,8 @@ pub fn validate_genome_artifact_file_name(file_name: &str) -> EvoResult<()> {
     if valid_extension {
         Ok(())
     } else {
-        Err(EvoError::InvalidGenome(
-            "Genome files must use the .genome extension".to_string(),
+        Err(EvoError::invalid_genome(
+            "Genome files must use the .genome extension",
         ))
     }
 }

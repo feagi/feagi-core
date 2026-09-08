@@ -19,10 +19,10 @@ Copyright 2025 Neuraville Inc.
 
 use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, RuntimeGenome};
 use crate::{EvoError, EvoResult};
-use feagi_structures::genomic::brain_regions::{
-    BrainRegion, RegionID, RegionType, ROOT_BRAIN_REGION_NAME,
-};
-use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalID};
+use feagi_genomic_context::brain_region::{BrainRegion, RegionID, RegionType};
+use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_genomic_data::cortical_area_prev::CorticalArea;
+use feagi_structures::genomic::ROOT_BRAIN_REGION_NAME;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -218,7 +218,7 @@ fn collect_region_branch_ids(
     children_by_parent: &HashMap<String, Vec<String>>,
 ) -> EvoResult<Vec<String>> {
     if !genome.brain_regions.contains_key(root_region_id) {
-        return Err(EvoError::InvalidRegion(format!(
+        return Err(EvoError::invalid_region(format!(
             "Unknown region_id: {}",
             root_region_id
         )));
@@ -361,10 +361,6 @@ mod tests {
         GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig,
         RuntimeGenome,
     };
-    use feagi_structures::genomic::brain_regions::{
-        BrainRegion, RegionID, RegionType, ROOT_BRAIN_REGION_NAME,
-    };
-    use feagi_structures::genomic::cortical_area::CorticalID;
     use serde_json::json;
     use std::collections::HashMap;
 

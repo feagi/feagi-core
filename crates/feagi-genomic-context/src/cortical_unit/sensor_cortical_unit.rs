@@ -4,7 +4,7 @@ use paste;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use feagi_data::feagi_data_error::FeagiDataError;
+use crate::feagi_genome_context_error::FeagiGenomeContextError;
 use crate::cortical_area::CorticalID;
 use crate::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, PercentageNeuronPositioning};
 use crate::cortical_unit::CorticalUnitIndex;
@@ -87,6 +87,8 @@ macro_rules! define_sensory_cortical_units_enum {
                     #[doc = "Get cortical area types array for " $friendly_name " using individual parameters."]
                     pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type),*) -> [CorticalAreaType; $number_cortical_areas] {
+                        // Keep parameterized API stable even for unit cortical_units that don't consume every parameter.
+                        $(let _ = &$param_name;)*
                         [
                             $(CorticalAreaType::BrainInput($io_cortical_area_configuration_flag_expr)),*
                         ]
@@ -95,10 +97,12 @@ macro_rules! define_sensory_cortical_units_enum {
                     #[doc = "Get cortical IDs array for " $friendly_name " using individual parameters."]
                     pub const fn [<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> [CorticalID; $number_cortical_areas] {
+                        // Keep parameterized API stable even for unit cortical_units that don't consume every parameter.
+                        $(let _ = &$param_name;)*
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(
-                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
+                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::const_new($cortical_sub_unit_index))
                             ),*
                         ]
                     }
@@ -222,7 +226,7 @@ macro_rules! define_sensory_cortical_units_enum {
                             let mut topology = HashMap::new();
                             $(
                                 topology.insert(
-                                    CorticalSubUnitIndex::from($cortical_sub_unit_index),
+                                    CorticalSubUnitIndex::const_new($cortical_sub_unit_index),
                                     UnitTopology {
                                         relative_position: [$rel_x, $rel_y, $rel_z],
                                         channel_dimensions_default: [$dim_default_x, $dim_default_y, $dim_default_z],
@@ -251,7 +255,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, FeagiDataError> {
+            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, FeagiGenomeContextError> {
                 match self {
                     $(
                         SensoryCorticalUnit::$variant_name => {
