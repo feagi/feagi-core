@@ -1,4 +1,4 @@
-use feagi_data::data_channels::implementations::flume::FlumeDataCycleEndpoint;
+use feagi_data::data_messaging::implementations::flume::FlumeDataCycleEndpoint;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::data_interface_set::data_interface_set::DataInterfaceChannelSet;
 

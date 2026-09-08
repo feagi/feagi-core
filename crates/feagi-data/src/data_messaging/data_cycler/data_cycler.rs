@@ -1,5 +1,8 @@
-use std::time::Duration;
-use crate::data_channels::errors::{ChannelReceivingError, ChannelSendingError};
+//! A trait for a pair of structs that can be used to send data over a thread boundary, but 
+//! rotate the allocated memory to do so amongst themselves, avoiding any dynamic allocation
+
+use core::time::Duration;
+use crate::data_messaging::errors::{ChannelReceivingError, ChannelSendingError};
 
 pub trait DataCycleEndpoint<T: Send>: Send + Sized {
     fn new_data_cycle_endpoint_pair(buffer_length: usize) -> (Self, Self);

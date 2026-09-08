@@ -14,7 +14,8 @@ description = "Base data structures and methods used throughout FEAGI"
 
 default = [
     "std",
-    "use-rayon"
+    "use-rayon",
+    "channel_flume"
 ]
 
 # ========================= Toggleable Features ========================= #
@@ -35,8 +36,13 @@ std = [
 ]
 
 alloc = [
-    "serde", "serde_json",
+    "serde_json",
     "serde/alloc", "serde/derive", "serde_json/alloc", "ahash/serde",
+]
+
+channel_flume = [
+    "std",
+    "flume"
 ]
 
 
@@ -49,12 +55,11 @@ feagi-logging-and-errors = {path = "../feagi-logging-and-errors"} # This should 
 paste = { workspace = true }
 half = {workspace = true}
 heapless = {workspace = true}
-#futures = {workspace = true}
 ahash = { workspace = true}
-serde = { workspace = true, optional = true}
+serde = { workspace = true}
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
-flume = {workspace = true}
+flume = {workspace = true, optional = true}
 
 [lints]
 workspace = true

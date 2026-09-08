@@ -1,4 +1,4 @@
-use feagi_data::data_channels::data_cycler::DataCycleEndpoint;
+use feagi_data::data_messaging::data_cycler::DataCycleEndpoint;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub const DEFAULT_MAX_NUMBER_OF_AGENTS_PER_DATA: usize  = 8;

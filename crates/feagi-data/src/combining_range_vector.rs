@@ -1,18 +1,18 @@
-use crate::index_range_managers::feagi_index_range_manager_error::{FeagiIndexRangeManagerError, FeagiIndexRangeVectorFailedMerge};
-use crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait;
+use crate::common_struct_patterns::feagi_index_range_manager_error::{FeagiIndexRangeManagerError, FeagiIndexRangeVectorFailedMerge};
 use core::ops::Range;
+use feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 /// Contains a vector of incrementing (by start / end index) ranges that are not overlapping, as well as indexes to those
 /// ranges in order of decrementing lengths of each range. Inserting a range will attempt to insert
 /// a range maintaining order, but if the range touches any neighbors, those neighbors are merged
 /// to produce a contiguous range instead
-pub struct CombiningRangeVector<Q: QuantizedUnsignedIntegerUnwrappedTrait> {
+pub struct CombiningRangeVector<Q: QuantizedUnsignedIntegerTrait> {
     ranges: Vec<Range<Q>>,
     indexes_sorted_by_length: Vec<Q>,
     total_value: Q,
 }
 
-impl<Q: QuantizedUnsignedIntegerUnwrappedTrait> CombiningRangeVector<Q> {
+impl<Q: QuantizedUnsignedIntegerTrait> CombiningRangeVector<Q> {
     pub fn new() -> Self {
         Self {
             ranges: vec![],

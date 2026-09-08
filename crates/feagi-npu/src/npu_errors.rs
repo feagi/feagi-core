@@ -1,4 +1,4 @@
-use feagi_data::data_channels::errors::ChannelSendingError;
+use feagi_data::data_messaging::errors::ChannelSendingError;
 use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFailImpossible};
 use feagi_npu_burst_engines::errors::BurstEngineError;
 
