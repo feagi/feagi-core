@@ -2,7 +2,7 @@ use crate::burst_phases::RunBurstPhase;
 use crate::composable::composable_burst_engine_allocator::ComposableBurstEngineAllocator;
 use crate::composable::connectome_change_messaging::{EngineConnectomeChangeRequest, EngineConnectomeChangeResponse};
 use crate::errors::BurstEngineError;
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization};
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization};
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::composable::composable_burst_phase_output::ComposableBurstPhaseOutput;
 

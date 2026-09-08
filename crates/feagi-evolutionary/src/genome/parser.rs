@@ -51,7 +51,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
-use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]

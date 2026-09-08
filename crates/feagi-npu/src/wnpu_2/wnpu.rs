@@ -4,7 +4,7 @@ use feagi_data::bidirectional_channel_queue::{MpscBiDirectionalChannelQueue, Mps
 use crate::npu::neuron_processor_unit_composable::NeuronProcessingUnitComposable;
 use crate::standard::npu::npu_target_frequency::NPUTargetFrequency;
 use crate::wnpu::agents::agent_registration_response::AgentRegistrationResponse;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationGenomic;
 use feagi_genomic_context::cortical_area::CorticalID;
 use crate::wnpu::agents::data_exchange::force_fire::VoxelForceFire;
 use crate::wnpu::agents::data_exchange::visualization::VoxelVisualization;

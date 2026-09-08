@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::npu::neuron_processing_unit::neuron_processing_unit_compose_messaging::NeuronProcessingUnitComposeRequest;
 
 /// Contains logic for continuously processing neuron dynamics in a loop on some backend(s)

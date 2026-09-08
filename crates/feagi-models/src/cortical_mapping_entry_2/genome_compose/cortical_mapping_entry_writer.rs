@@ -3,8 +3,8 @@ use crate::cortical_mapping_entry::synapse::cortical_mapping_entry_properties::C
 use crate::cortical_mapping_entry::synapse::synapse_data::SynapseModelSynapseData;
 use crate::cortical_mapping_entry::synapse::synapse_model_quantization::SynapseModelQuantization;
 use crate::cortical_mapping_entry::synapse::synapse_properties::SynapseProperties;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 pub trait SynapseModelCorticalWriter<SMQ, SMCMD, SMSD>
 where

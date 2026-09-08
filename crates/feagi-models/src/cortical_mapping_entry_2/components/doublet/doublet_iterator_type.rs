@@ -1,5 +1,5 @@
 use feagi_data::neurons::voxel_potentials::wrapped_values::NeuronVoxelCoordinate;
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

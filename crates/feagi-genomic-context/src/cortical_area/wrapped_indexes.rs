@@ -6,7 +6,7 @@ pub type CorticalChannelIndexCount = generics::CorticalChannelIndexCountQuant<u3
 pub type CorticalChannelNeuronDepth = generics::CorticalChannelNeuronDepthQuant<u32>;
 
 pub mod generics {
-    use feagi_data::create_wrapped_quantized_unsigned_integer;
+    use feagi_data::feagi_data_quantization::create_wrapped_quantized_unsigned_integer;
 
     create_wrapped_quantized_unsigned_integer!(
     /// Used for counting and indexing specific channels within an I/O cortical area.

@@ -128,7 +128,7 @@ impl GenomeSaver {
 
 #[cfg(test)]
 mod tests {
-    use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
+    use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
     use super::*;
     use feagi_genomic_context::brain_region::{RegionID, RegionType};
     use feagi_genomic_context::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};

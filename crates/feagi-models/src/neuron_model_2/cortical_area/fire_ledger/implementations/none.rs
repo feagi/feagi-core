@@ -1,5 +1,5 @@
 use crate::neuron_model::cortical_area::fire_ledger::FireLedger;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// A FireLedger to be used when one needs to technically be defined
 pub struct FireLedgerNone;

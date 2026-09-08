@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use crate::burst_phase_output::BurstPhaseOutput;
 use crate::non_composable::non_composable_phase_notification::NonComposablePhaseNotification;
 

@@ -1,6 +1,6 @@
 use std::hash::Hash;
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_data::values::quantizable::DecimalQuantizationLevel;
+use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::DecimalQuantizationLevel;
 
 /// Common root trait shared by all Neuron Model Quantizations. This trait should be extended
 /// by the given neuron model to add any quantization parameters for their given data

@@ -1,5 +1,5 @@
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelLinearIndex;
-use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_data::feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 use feagi_genomic_context::cortical_area::CorticalID;
 
 

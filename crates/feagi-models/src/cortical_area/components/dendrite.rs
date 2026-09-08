@@ -1,7 +1,7 @@
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_data::values::quantizable::DecimalQuantizationLevel;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::DecimalQuantizationLevel;
 
 /// The input surface of a cortical area, this is what incoming mappings will attempt to input into
 pub trait DendriteModelTrait<FIQ, CAMQ>

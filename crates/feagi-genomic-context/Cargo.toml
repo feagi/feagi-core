@@ -23,11 +23,13 @@ default = [
 
 std = [
     "alloc",
+    "feagi-data/std",
     "serde/std", "serde_json/std", "ahash/std"
 ]
 
 alloc = [
-    "serde", "serde_json",
+    "serde_json",
+    "feagi-data/alloc",
     "serde/alloc", "serde/derive", "serde_json/alloc", "ahash/serde",
 ]
 
@@ -39,7 +41,7 @@ feagi-data = {path = "../feagi-data" }
 paste = { workspace = true }
 ahash = { workspace = true}
 base64 = "0.22.1" # TODO remove this!
-serde = { workspace = true, optional = true}
+serde = { workspace = true}
 serde_json = { workspace = true, optional = true}
 uuid = { version = "1.24.0", features = ["v4", "v7"] }
 

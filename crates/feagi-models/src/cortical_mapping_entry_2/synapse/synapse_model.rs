@@ -6,7 +6,7 @@ use crate::cortical_mapping_entry::synapse_model_implementations::generated_enum
     SynapseModelType, SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked,
 };
 use feagi_data::neurons::potentials::neuron::NeuronMembranePotential;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root base trait for defining synapse firing and alteration of
 /// transmitting synapse potentials between synapses. Does NOT store actual data,

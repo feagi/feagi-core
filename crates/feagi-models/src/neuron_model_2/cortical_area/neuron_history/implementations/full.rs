@@ -1,6 +1,6 @@
 use crate::neuron_model::cortical_area::neuron_history::neuron_history::NeuronModelHistory;
 use crate::wrapped_indexes::BurstIndex;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// The neuron model stores per neuron the last time it received an input (active) and the last time
 /// if fired

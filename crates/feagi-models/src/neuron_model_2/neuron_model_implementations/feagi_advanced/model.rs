@@ -6,8 +6,8 @@ use crate::neuron_model::neuron_model_implementations::feagi_advanced::data::{Fe
 use crate::neuron_model::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
 use crate::wrapped_indexes::BurstIndex;
 use feagi_data::neurons::potentials::neuron::{NeuronCorticalLocalIndex, NeuronMembranePotential};
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::WrappedQuantizedUnsignedInteger;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::WrappedQuantizedUnsignedInteger;
 
 pub struct FeagiAdvancedModel<FIQ, NMQ>
 where

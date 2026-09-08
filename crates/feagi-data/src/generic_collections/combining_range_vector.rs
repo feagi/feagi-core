@@ -2,6 +2,8 @@ use crate::common_struct_patterns::feagi_index_range_manager_error::{FeagiIndexR
 use core::ops::Range;
 use feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 
+// TODO this may be too ultra specific and may need to eb dropped
+
 /// Contains a vector of incrementing (by start / end index) ranges that are not overlapping, as well as indexes to those
 /// ranges in order of decrementing lengths of each range. Inserting a range will attempt to insert
 /// a range maintaining order, but if the range touches any neighbors, those neighbors are merged

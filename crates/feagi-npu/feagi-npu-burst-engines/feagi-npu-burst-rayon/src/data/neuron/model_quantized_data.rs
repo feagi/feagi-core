@@ -1,5 +1,5 @@
 /// Helper structs to make dealing with multiple quantizations / models less annoying
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::standard::npu::burst_engine::sync_implementations::rayon::data::neuron::model_quantized_data::feagi_advanced_model::ModelFeagiAdvanced;
 
 macro_rules! quant_default_with_neurons {
@@ -36,7 +36,7 @@ impl<FIQ: FeagiIndexQuantization> Default for NeuronModelData<FIQ> {
 
 #[doc(hidden)]
 mod feagi_advanced_model {
-    use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+    use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
     use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::data::{
         FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData,
     };

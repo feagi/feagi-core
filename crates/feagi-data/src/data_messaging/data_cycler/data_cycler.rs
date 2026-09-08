@@ -14,6 +14,15 @@ pub trait DataCycleEndpoint<T: Send>: Send + Sized {
     /// Waits to receive data over the cycle, blocking the thread until a timeout (or erroring)
     fn receive_timeout(&mut self, timeout: Duration) -> Result<T, ChannelReceivingError>;
 
+    /// Enqueue data over the cycle, blocking the thread until it does (or erroring)
+    fn block_enqueue(&mut self, sending: T) -> Result<(), ChannelSendingError>;
+
+    /// Tries to enqueue data over the cycle, erroring immediately if it cannot
+    fn try_enqueue(&mut self, sending: T) -> Result<(), ChannelSendingError>;
+
+    /// Enqueue data over the cycle, blocking the thread until it does or a timeout expires (or erroring)
+    fn enqueue_timeout(&mut self, sending: T, timeout: Duration) -> Result<(), ChannelSendingError>;
+
     /// Return data over the channel, blocking the thread until it does (or erroring)
     fn block_return(&mut self, returning: T) -> Result<(), ChannelSendingError>;
 

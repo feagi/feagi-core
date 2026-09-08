@@ -1,5 +1,5 @@
 use std::ops::ControlFlow;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
 use crate::npu::npu_target_frequency::NPUTargetFrequency;
 use crate::npu::worker::communication::{BurstEngineWorkerCommand, BurstEngineWorkerResponse};

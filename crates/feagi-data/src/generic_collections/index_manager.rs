@@ -1,5 +1,5 @@
 use feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
-use crate::common_struct_patterns::feagi_index_range_manager_error::{
+use crate::generic_collections::feagi_index_range_manager_error::{
     FeagiIndexManagerInvalid, FeagiIndexManagerInvalidIndex, FeagiIndexManagerLimit, FeagiIndexRangeManagerError,
 };
 

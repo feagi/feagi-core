@@ -10,8 +10,8 @@ use crate::cortical_mapping_entry::synapse_model_implementations::uniform::quant
     UniformSynapseModelQuantization, UniformSynapseModelStandardQuant,
 };
 use core::marker::PhantomData;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 #[derive(Debug, Clone, Copy)]
 pub enum UniformSynapseWriter<SMQ>

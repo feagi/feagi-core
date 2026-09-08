@@ -3,7 +3,7 @@ use feagi_data::data_channels::data_channel::{DataChannelPair, DataReceiver, Dat
 use feagi_data::data_channels::data_cycler::DataCycleEndpoint;
 use feagi_data::data_channels::errors::ChannelReceivingError;
 use crate::npu::npu_target_frequency::NPUTargetFrequency;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
 use feagi_npu_burst_engines::burst_engine_package::implementations::standard_flume::BurstEnginePackage;
 use crate::npu::worker::burst_engine_timeout_logic::BurstEngineTimeoutLogic;

@@ -1,10 +1,10 @@
-use feagi_data::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
+use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use crate::cortical_area::parameters::body::dynamics::components::data::{CorticalDataProperties, CorticalDataInternal, CorticalDataShared, NeuronDataProperties, NeuronDataInternal};
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayout};
 use crate::cortical_area::parameters::body::dynamics::components::mp_driven_psp_configurability::MPDrivenPSPConfigurability;
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::wrapped_indexes::BurstIndex;
 
 // TODO maybe we should allow the BEIQ type in here so people can better use the layout information (tie it to a unique data struct that is not saved, that must instead be generated at instantiation / layout edit)

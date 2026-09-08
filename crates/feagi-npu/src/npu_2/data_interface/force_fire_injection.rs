@@ -1,5 +1,5 @@
 use feagi_data::neurons::NeuronCorticalLocalIndex;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_index_collections::CorticalEngineIndex;
 
 /// For a given cortical index, denotes the local neuron indexes that should be forced to fire

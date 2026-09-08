@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::neuron_model::cortical_area::cortical_area_layout::implementations::dimensional::CorticalAreaLayoutDimensional;
 use feagi_models::neuron_model::cortical_area::neuron_history::implementations::full::NeuronModelFullNeuronHistory;
 use feagi_models::neuron_model::neuron_model_implementations::generated_enums::NeuronModelTypeAndQuantizationPacked;

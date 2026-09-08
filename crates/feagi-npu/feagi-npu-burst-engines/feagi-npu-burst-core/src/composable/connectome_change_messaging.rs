@@ -1,5 +1,5 @@
-use feagi_data::neurons::wrapped_types::NeuronCount;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::NeuronCount;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::wrapped_values::EngineCorticalIndex;
 
 /// Change requests for the connectome

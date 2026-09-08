@@ -1,6 +1,6 @@
 use feagi_data::neurons::potentials::neuron::NeuronMembranePotential;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::custom_data_types::StorageF8;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::custom_data_types::StorageF8;
 use feagi_models::wrapped_index_collections::NeuronMPIndexedVector;
 use half::{bf16, f16};
 

@@ -2,8 +2,8 @@ use crate::neuron_model::cortical_area::cortical_area_layout::cortical_area_layo
 use crate::cortical_mapping_entry::components::doublet::doublet_iterator::DoubletIterator;
 use core::marker::PhantomData;
 use feagi_data::neurons::potentials::neuron::NeuronCorticalLocalIndex;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 /// Effectively reads a list of existing neuron index pairs into memory. Cannot be modified
 #[derive(Clone, PartialEq, Eq, Hash)]

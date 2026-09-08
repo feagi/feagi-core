@@ -1403,8 +1403,6 @@ dependencies = [
  "feagi-data-quantization",
  "feagi-logging-and-errors",
  "flume",
- "half",
- "heapless 0.9.3",
  "paste",
  "rayon",
  "serde",

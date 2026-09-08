@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_npu_burst_core::burst_engine_definitions::composable::composable_engine_allocator::ComposableEngineConnectomeChangeInstructions;
 
 pub struct RayonEngineChangeInstructions<FIQ: FeagiIndexQuantization>

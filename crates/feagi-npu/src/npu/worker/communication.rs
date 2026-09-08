@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
 use feagi_npu_burst_engines::BurstEnginePackage;
 use feagi_npu_burst_engines::feagi_npu_burst_core::burst_engine_definitions::burst_phase_output::ItemRequestingAllocationIncrease;

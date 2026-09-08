@@ -1,6 +1,6 @@
 //! Enumized forms of some of these
 
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::neuron_model::cortical_area::cortical_layout::implementations::dimensional::DimensionalLayout;
 use crate::neuron_model::cortical_area::cortical_layout::implementations::formless::FormlessLayout;
 

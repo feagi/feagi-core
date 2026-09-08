@@ -8,8 +8,8 @@ use crate::neuron_model::neuron_model_implementations::feagi_advanced::data::{
 use crate::neuron_model::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
 use core::marker::PhantomData;
 use feagi_data::neurons::potentials::neuron::{DimensionalCorticalArea4DDimensions, NeuronMembranePotential};
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
-use feagi_data::values::quantizable::{PercentageUnsigned, WrappedQuantizedUnsignedInteger};
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
+use feagi_data::feagi_data_quantization::values::quantizable::{PercentageUnsigned, WrappedQuantizedUnsignedInteger};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

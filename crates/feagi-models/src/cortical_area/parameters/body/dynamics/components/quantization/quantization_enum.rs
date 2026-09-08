@@ -1,6 +1,6 @@
 use core::fmt::Debug;
 use core::hash::Hash;
-use feagi_data::values::quantizable::DecimalQuantizationLevel;
+use feagi_data::feagi_data_quantization::values::quantizable::DecimalQuantizationLevel;
 
 /// All Cortical Area Implementations have their own quantization enums, that must implement this
 pub trait CorticalAreaImplementationQuantizationLevelTrait: Clone + Copy + Hash + Eq + PartialEq + Default + Debug {

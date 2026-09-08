@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::data_interface_set::DataInterfaceChannelSet;
 
 // TODO dont do pub access of members

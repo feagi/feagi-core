@@ -1,5 +1,5 @@
 use feagi_data::neuron_voxels::voxel_vector::VoxelVector;
-use feagi_data::values::quantizable::{QuantizedDecimalTrait, QuantizedUnsignedIntegerTrait};
+use feagi_data::feagi_data_quantization::values::quantizable::{QuantizedDecimalTrait, QuantizedUnsignedIntegerTrait};
 use feagi_genomic_context::cortical_area::CorticalID;
 
 // TODO this isnt efficient

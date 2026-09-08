@@ -2,7 +2,7 @@ use crate::cortical_mapping_entry::synapse::synapse_model_quantization_level::Sy
 use crate::cortical_mapping_entry::synapse_model_implementations::generated_enums::{
     SynapseModelType, SynapseModelTypeAndQuantizationNested, SynapseModelTypeAndQuantizationPacked,
 };
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait};
+use feagi_data::feagi_data_quantization::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait};
 
 /// Common root trait shared by all Synapse Model Quantizations. This trait should be extended
 /// by the given synapse model to add any quantization parameters for their given data

@@ -1,5 +1,5 @@
 use feagi_data::data_messaging::data_cycler::DataCycleEndpoint;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub const DEFAULT_MAX_NUMBER_OF_AGENTS_PER_DATA: usize  = 8;
 // TODO on embedded builds turn the above to 1!

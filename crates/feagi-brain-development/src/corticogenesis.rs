@@ -17,18 +17,16 @@ with mappings from loading as though it were fully realised.
 */
 
 use core::marker::PhantomData;
-use feagi_data::neurons::wrapped_types::CorticalNeuronDimensions;
-use feagi_data::quantization_levels::feagi_index_quantization::{
-    FeagiIndexQuantization, FeagiIndexQuantizationGenomic,
-};
-use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalNeuronDimensions;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
+use feagi_data::feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 use feagi_evolutionary::runtime::RuntimeGenome;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
-use feagi_npu::wnpu::connectome_composer::connectome_request::connectome_request::ConnectomeRequest;
+use feagi_models::connectome_requests_2::connectome_request::ConnectomeRequest;
 use crate::types::{BduError, BduResult};
 
 /// Neuron index quantization of the genomic-level engine the NPU is currently fixed to.
-type NeuronQuant = <FeagiIndexQuantizationGenomic as FeagiIndexQuantization>::NeuronIndexQuant;
+type NeuronQuant = <FeagiIndexQuantizationStandard as FeagiIndexQuantization>::NeuronIndexQuant;
 
 /// Genome property holding the number of neurons packed into each voxel, which becomes the
 /// fourth axis of the engine's cortical area dimensions.

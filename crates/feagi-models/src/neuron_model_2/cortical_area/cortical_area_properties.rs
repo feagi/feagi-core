@@ -1,6 +1,6 @@
 use feagi_data::neurons::potentials::neuron::NeuronMembranePotential;
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_data::values::quantizable::QuantizedDecimalTrait;
+use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::QuantizedDecimalTrait;
 
 /// Defines a cortical area
 #[derive(Clone, Copy, Debug)]

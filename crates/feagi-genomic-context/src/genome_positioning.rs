@@ -9,7 +9,8 @@
 //! area and is therefore unsigned and bounded by that area's dimensions. Keeping the two in
 //! separate types is what stops a placement from being silently truncated into a voxel index.
 
-use feagi_data::values::spatial::integer_signed::SignedIntegerSpatial;
+use serde::{Deserialize, Serialize};
+use feagi_data::feagi_data_quantization::values::spatial::integer_signed::SignedIntegerSpatial;
 
 /// Quantization of a genome-space axis.
 ///
@@ -23,7 +24,7 @@ const GENOME_COORDINATE_DIMS: usize = 3;
 pub type SignedCoordinate3D<Q> = SignedIntegerSpatial<Q, GENOME_COORDINATE_DIMS>;
 
 /// Where a structure sits in genome space.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GenomeCoordinate3D(SignedCoordinate3D<GenomeAxisQuant>);
 
 impl GenomeCoordinate3D {

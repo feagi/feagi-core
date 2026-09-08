@@ -1,7 +1,7 @@
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::{NeuronLayout};
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
 use crate::cortical_area::parameters::body::dynamics::cortical_area_dynamics::CorticalAreaDynamics;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 // TODO Neuron Membrane Type should be configurable
 

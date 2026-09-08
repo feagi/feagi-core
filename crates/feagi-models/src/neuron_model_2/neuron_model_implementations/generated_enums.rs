@@ -2,7 +2,7 @@
 
 use crate::neuron_model::neuron::neuron_model_quantization_level::NeuronModelQuantizationLevel;
 use crate::neuron_model::neuron_model_implementations::feagi_advanced::quantization::FeagiAdvancedModelQuantizationLevel;
-use feagi_data::values::quantizable::DecimalQuantizationLevel;
+use feagi_data::feagi_data_quantization::values::quantizable::DecimalQuantizationLevel;
 
 /// Describes what Neuron Model is being used without further context. Internally is encoded as an
 /// u8 of the same value of the neuron models `MODEL_INDEX` for bitpacking reasons. This makes

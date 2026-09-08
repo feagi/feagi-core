@@ -150,12 +150,12 @@ pub fn remap_guest_custom_memory_cortical_ids_for_amalgamation(
 
 #[cfg(test)]
 mod tests {
+    use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
     use super::*;
     use crate::random::random_bytes;
     use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, PhysiologyConfig};
     use crate::MorphologyRegistry;
     use crate::RuntimeGenome;
-    use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
     use feagi_genomic_context::cortical_area::CustomCorticalType;
 
     fn sample_custom_cortical_id() -> CorticalID {

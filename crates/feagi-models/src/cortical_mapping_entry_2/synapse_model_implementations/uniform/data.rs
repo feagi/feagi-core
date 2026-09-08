@@ -1,7 +1,7 @@
 use crate::cortical_mapping_entry::synapse::cortical_mapping_entry_data::SynapseModelCorticalMappingEntryData;
 use crate::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelQuantization;
 use feagi_data::create_wrapped_quantized_decimal;
-use feagi_data::values::quantizable::QuantizedDecimalTrait;
+use feagi_data::feagi_data_quantization::values::quantizable::QuantizedDecimalTrait;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 create_wrapped_quantized_decimal!(

@@ -1,5 +1,5 @@
 use feagi_data::generic_collections::generic_par_data::linear::ParDataVector;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::wrapped_indexes::BurstIndex;
 use feagi_npu_burst_core::wrapped_values::{EngineCorticalIndex, EngineNeuronIndex};
 

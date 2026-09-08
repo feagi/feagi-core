@@ -1,6 +1,6 @@
 pub mod implementations;
 
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 pub trait FireLedger<FIQ: FeagiIndexQuantization> {
     /// Defines if the fire ledger exists (is not None)

@@ -2,7 +2,7 @@ use crate::neuron_model::cortical_area::cortical_area_layout::enums::CorticalAre
 use crate::neuron_model::cortical_area::cortical_data::NeuronModelCorticalData;
 use crate::neuron_model::neuron::neuron_data::NeuronModelNeuronData;
 use crate::neuron_model::neuron::neuron_model_quantization::NeuronModelQuantization;
-use feagi_data::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationGenomic};
 // TODO rethink interface a bit more
 
 /*

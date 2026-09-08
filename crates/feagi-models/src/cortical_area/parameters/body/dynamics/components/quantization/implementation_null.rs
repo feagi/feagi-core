@@ -3,8 +3,8 @@
 use core::hash::{Hash};
 use core::marker::PhantomData;
 use std::fmt::{Debug, Formatter};
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
-use feagi_data::values::quantizable::QuantizedDecimalUnwrappedTrait;
+use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::QuantizedDecimalUnwrappedTrait;
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
 
 #[derive(Clone, Copy, Debug)]

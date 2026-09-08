@@ -1,8 +1,8 @@
 use core::cmp::min;
 use core::ops::Range;
 use feagi_data::neurons::potentials::neuron::NeuronCorticalLocalIndex;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::WrappedQuantizedUnsignedInteger;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::WrappedQuantizedUnsignedInteger;
 use feagi_models::wrapped_index_collections::{
     CorticalLayoutIndex, CorticalModelIndex, NeuronEngineByteIndex, NeuronEngineIndex, NeuronHistoryIndex, NeuronMPIndex, NeuronModelIndex,
 };

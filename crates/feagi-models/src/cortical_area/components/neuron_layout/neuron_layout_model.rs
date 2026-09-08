@@ -1,5 +1,5 @@
-use feagi_data::neurons::wrapped_types::{CorticalNeuronLocalIndex, NeuronCount};
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::{CorticalNeuronLocalIndex, NeuronCount};
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root trait for defining Neuron Layout
 pub trait NeuronLayout<FIQ: FeagiIndexQuantization>

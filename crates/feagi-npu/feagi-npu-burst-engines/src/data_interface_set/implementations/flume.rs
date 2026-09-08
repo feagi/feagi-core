@@ -1,5 +1,5 @@
-use feagi_data::data_messaging::implementations::flume::FlumeDataCycleEndpoint;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::data_messaging::data_cycler::implementations::flume::FlumeDataCycleEndpoint;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::data_interface_set::data_interface_set::DataInterfaceChannelSet;
 
 /// Channels using mpmc channels from the `Flume` crate

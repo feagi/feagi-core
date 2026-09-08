@@ -1,5 +1,5 @@
 use core::hash::Hash;
-use feagi_data::values::quantizable::DecimalQuantizationLevel;
+use feagi_data::feagi_data_quantization::values::quantizable::DecimalQuantizationLevel;
 
 /// An enum specific to a neuron model that denotes what neuron model specific quantization preset
 /// is using. Runtime counterpart to `NeuronModelQuantization`. Can be packed within a

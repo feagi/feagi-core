@@ -1,5 +1,5 @@
-use feagi_data::neurons::wrapped_types::CorticalNeuronPotential;
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalNeuronPotential;
+use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 
 /// A marker trait that defines if the PSP can be configured to be / not be on the membrane
 /// potentials. Note that in the NPU, this state is stored in the neuron flags. This is just

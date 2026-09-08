@@ -263,7 +263,7 @@ impl ConnectomeManager {
     /// half-built state.
     fn new_wnpu() -> WrappedNeuronProcessingUnit {
         WrappedNeuronProcessingUnit::new(
-            feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel::default(),
+            feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationLevel::default(),
             Vec::new(),
         )
         .expect("Failed to initialize the WrappedNeuronProcessingUnit")

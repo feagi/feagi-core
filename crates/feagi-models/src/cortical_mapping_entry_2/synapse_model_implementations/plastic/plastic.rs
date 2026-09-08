@@ -3,8 +3,8 @@
 
 use feagi_data::create_wrapped_quantized_decimal;
 use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_data::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait};
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_quantization::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait};
 use crate::cortical_mapping_entry::synapse::synapse_model::model_type_and_quantization::{SynapseModelType, SynapseModelTypeAndQuantizationNested};
 use crate::cortical_mapping_entry::synapse::synapse_model::synapse_model::SynapseModel;
 use crate::cortical_mapping_entry::synapse::synapse_model::synapse_model_data::{EmptyPerSynapseData, SynapseCorticalMappingEntryData};

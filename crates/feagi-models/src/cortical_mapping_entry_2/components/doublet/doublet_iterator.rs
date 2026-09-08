@@ -1,6 +1,6 @@
 use crate::neuron_model::cortical_area::cortical_area_layout::cortical_area_layout::CorticalAreaLayout;
 use feagi_data::neurons::potentials::neuron::NeuronCorticalLocalIndex;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Used to map source and destination neurons for a cortical mapping entry.
 pub trait DoubletIterator<FIQ, SourceLayout, DestinationLayout>:

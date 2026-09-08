@@ -1,6 +1,6 @@
 use crate::cortical_area::data_structs::bit_batch_activations::BitBatchActivation;
 use crate::cortical_area::data_structs::per_neuron_flags::PerNeuronFlags;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 // TODO BitBatch sizing?
 

@@ -23,7 +23,7 @@ pub use feagi_genomic_data::cortical_area_prev::CorticalArea;
 ///
 /// Dimensions are quantized index wrappers rather than bare fields, so the axes are read through
 /// the generated accessors and unwrapped once here instead of at every call site.
-fn dimension_extents(area: &CorticalArea) -> (u64, u64, u64) {
+fn dimension_extents(area: &CorticalArea) -> (u32, u32, u32) {
     (
         *area.dimensions.get_x().as_ref(),
         *area.dimensions.get_y().as_ref(),
@@ -209,7 +209,7 @@ impl CorticalAreaExt for CorticalArea {
     fn to_absolute_position(&self, rel_pos: Position) -> BduResult<(i32, i32, i32)> {
         let (dx, dy, dz) = dimension_extents(self);
         let within_bounds =
-            (rel_pos.0 as u64) < dx && (rel_pos.1 as u64) < dy && (rel_pos.2 as u64) < dz;
+            (rel_pos.0 as u32) < dx && (rel_pos.1 as u32) < dy && (rel_pos.2 as u32) < dz;
         if !within_bounds {
             return Err(BduError::OutOfBounds {
                 pos: rel_pos,
@@ -411,7 +411,7 @@ impl CorticalAreaExt for CorticalArea {
 
 #[cfg(test)]
 mod tests {
-    use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
+    use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
     use super::*;
 
     #[test]

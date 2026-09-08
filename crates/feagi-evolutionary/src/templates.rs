@@ -21,7 +21,7 @@ use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use feagi_genomic_data::cortical_area_prev::CorticalArea;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
 
 /// Embedded essential genome (loaded at compile time)
 pub const ESSENTIAL_GENOME_JSON: &str = include_str!("../genomes/essential_genome.json");

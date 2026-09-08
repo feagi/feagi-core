@@ -4,11 +4,11 @@ use crate::cortical_area::parameters::body::dynamics::components::data::NullData
 use crate::cortical_area::parameters::body::dynamics::components::mp_driven_psp_configurability::MPDrivenPSPForcedOff;
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
 use crate::cortical_area::parameters::body::dynamics::cortical_area_dynamics::{CorticalAreaDynamics, NeuronDynamicsOutput};
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::wrapped_indexes::BurstIndex;
-use feagi_data::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
 use std::marker::PhantomData;
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 
 /// Simply fires every burst lol
 pub struct CorePowerCorticalAreaDynamics<FIQ, NL, CAMQ>

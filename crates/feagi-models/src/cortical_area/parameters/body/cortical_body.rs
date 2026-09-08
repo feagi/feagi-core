@@ -1,7 +1,7 @@
-use feagi_data::neurons::wrapped_types::CorticalNeuronPotential;
-use feagi_data::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalNeuronPotential;
+use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
 use crate::cortical_area::components::neuron_layout::neuron_layout_model::NeuronLayout;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// A body of a cortical area
 pub trait CorticalBody<FIQ, NL, CAMQ>

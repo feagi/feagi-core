@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::standard::npu::burst_engine::sync_implementations::rayon::data::synapse::model_quantized_data::uniform_model::ModelUniform;
 
 macro_rules! quant_default_without_synapses {
@@ -26,7 +26,7 @@ impl<FIQ: FeagiIndexQuantization> Default for SynapseModelData<FIQ> {
 
 #[doc(hidden)]
 mod uniform_model {
-    use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+    use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
     use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::data::UniformSynapseModelCorticalMappingEntryData;
     use feagi_models::cortical_mapping_entry::synapse_model_implementations::uniform::quantizations::UniformSynapseModelStandardQuant;
     use feagi_models::wrapped_index_collections::MappingEntryModelIndexedVector;

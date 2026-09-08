@@ -40,6 +40,18 @@ impl<T: Send> DataCycleEndpoint<T> for FlumeDataCycleEndpoint<T> {
         self.receiver.receive_timeout(timeout)
     }
 
+    fn block_enqueue(&mut self, sending: T) -> Result<(), ChannelSendingError> {
+        self.transmitter.block_send(sending)
+    }
+
+    fn try_enqueue(&mut self, sending: T) -> Result<(), ChannelSendingError> {
+        self.transmitter.try_send(sending)
+    }
+
+    fn enqueue_timeout(&mut self, sending: T, timeout: Duration) -> Result<(), ChannelSendingError> {
+        self.transmitter.send_timeout(sending, timeout)
+    }
+
     fn block_return(&mut self, returning: T) -> Result<(), ChannelSendingError> {
         self.transmitter.block_send(returning)
     }

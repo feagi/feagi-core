@@ -3,7 +3,7 @@ use crate::npu::worker::burst_engine_timeout_logic::BurstEngineTimeoutLogic;
 use crate::npu::worker::communication::{BurstEngineWorkerCommand, BurstEngineWorkerConclusion, BurstEngineWorkerResponse};
 use feagi_data::data_channels::data_channel::{DataReceiver, DataTransmitter};
 use feagi_data::data_channels::errors::ChannelReceivingError;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_npu_burst_engines::feagi_npu_burst_core::burst_engine_definitions::burst_engine::BurstEngine;
 use feagi_npu_burst_engines::feagi_npu_burst_core::burst_engine_definitions::burst_phase_output::BurstPhaseOutput;
 use feagi_npu_burst_engines::feagi_npu_burst_core::errors::BurstEngineWorkerError;

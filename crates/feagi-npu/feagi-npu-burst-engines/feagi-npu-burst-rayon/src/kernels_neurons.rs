@@ -1,11 +1,11 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_models::neuron_model::neuron::layout_specific_implementations::dimensional::DimensionalNeuronModel;
 use feagi_models::neuron_model::neuron_model_implementations::feagi_advanced::model::FeagiAdvancedModel;
 use feagi_models::neuron_model::neuron_model_implementations::generated_enums::NeuronModelTypeAndQuantizationPacked;
 use feagi_models::wrapped_index_collections::NeuronEngineIndex;
 use feagi_models::wrapped_indexes::BurstIndex;
 use rayon::prelude::*;
-use feagi_data::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedUnsignedInteger};
+use feagi_data::feagi_data_quantization::values::quantizable::{QuantizedUnsignedIntegerTrait, WrappedQuantizedUnsignedInteger};
 use crate::standard::npu::burst_engine::sync_implementations::rayon::data::neuron::neuron_sub_data::{CorticalIndexLookupTable, NeuronIndexLookupTable};
 use crate::standard::npu::burst_engine::sync_implementations::rayon::data::RayonEngineData;
 

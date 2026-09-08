@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 
 /// A vector of "notifications" of notable results from processing a phase of neuron dynamics.
@@ -16,7 +16,7 @@ impl<Notification, const NOTIFICATION_VARIANTS_COUNT: usize> BurstPhaseOutput<No
 where
     Notification: Sized + Send + Sync
 {
-    
+
     /// Creates a new struct with no notifications.
     pub fn new_empty() -> Self {
         Self {

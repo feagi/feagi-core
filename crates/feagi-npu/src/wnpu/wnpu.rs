@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
-use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
 use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_data::quantization_levels::feagi_index_quantization::NeuronProcessingUnitIndexQuantizationStandard32Bit;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::NeuronProcessingUnitIndexQuantizationStandard32Bit;
 use crate::npu::npu_target_frequency::NPUTargetFrequency;
 use crate::wnpu::connectome_composer::connectome_request::connectome_request::ConnectomeRequest;
 use crate::wnpu::wrapped_neuron_processor_unit_error::WNPUError;

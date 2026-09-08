@@ -1,5 +1,5 @@
 use feagi_data::neurons::voxel_potentials::wrapped_values::NeuronVoxelCoordinate;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::spatial::integer_signed::SignedCoordinate3D;
 
 // TODO complete this after the changes as highlighted in https://github.com/feagi/feagi-core/issues/236

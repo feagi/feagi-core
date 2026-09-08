@@ -13,8 +13,8 @@ use feagi_genomic_context::cortical_area::{CorticalAreaType, CorticalID};
 use feagi_genomic_context::genome_positioning::GenomeCoordinate3D;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use feagi_data::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
-use feagi_data::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_data::feagi_data_neuron::neurons::wrapped_types::CorticalVoxelDimensionsGenomic;
+use feagi_data::feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 
 /// Cortical area metadata (genome representation)
 ///
