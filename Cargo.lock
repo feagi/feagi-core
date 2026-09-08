@@ -1355,6 +1355,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-brain"
+version = "0.1.1"
+dependencies = [
+ "ahash",
+ "feagi-brain-templates",
+ "feagi-data",
+ "feagi-genomic-context",
+ "feagi-logging-and-errors",
+ "feagi-models",
+ "paste",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "feagi-brain-development"
 version = "0.1.1"
 dependencies = [
@@ -1383,6 +1399,10 @@ dependencies = [
  "tracing",
  "xxhash-rust",
 ]
+
+[[package]]
+name = "feagi-brain-templates"
+version = "0.1.1"
 
 [[package]]
 name = "feagi-config"

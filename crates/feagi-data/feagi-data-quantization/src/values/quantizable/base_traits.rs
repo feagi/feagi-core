@@ -92,3 +92,8 @@ impl QuantizedElementBase for f64 {
     const QUANT_ZERO: Self = 0.0;
     const QUANT_ONE: Self = 1.0;
 }
+
+pub(crate) mod sealed {
+    /// Prevent the creation of more unwrapped types
+    pub trait QuantizedUnwrappedSeal {}
+}

@@ -1,5 +1,3 @@
-extern crate core;
-
 pub mod connectome_requests_2;
 //pub mod neuron_model;
 //pub mod cortical_mapping_entry;

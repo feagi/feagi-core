@@ -5,3 +5,6 @@ pub mod values;
 
 /// Collections that are quantized, allow parallel mutable (unsafe) access
 pub mod generic_collections;
+
+/// Common traits easily glob imported here
+pub mod prelude;

@@ -1,4 +1,4 @@
-use crate::cortical_area::CorticalID;
+use crate::identifiers::cortical_id::CorticalID;
 
 /// Identifies a set of mapping entries between two cortical areas in a directional matter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

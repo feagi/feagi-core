@@ -1,11 +1,6 @@
 use crate::values::quantizable::feagi_data_value_quantization_error::{FeagiDataValueQuantizationError, FeagiFailPercentageOutOfRange};
 use crate::values::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
 
-/// Internally uses a quantized decimal, but exposes methods to treat the value as a percentage
-/// from 0–100% (0.0–1.0).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
-pub struct PercentageUnsigned<D: QuantizedDecimalTrait>(D);
-
 /// Shared unsigned-percentage semantics for both [`PercentageUnsigned`] and wrapped newtypes.
 ///
 /// Use this as a generic bound when a function should accept either
@@ -53,6 +48,12 @@ pub trait QuantizedUnsignedPercentageTrait:
 
 /// Marker trait for unwrapped [`PercentageUnsigned`] values.
 pub trait QuantizedUnsignedPercentageUnwrappedTrait: QuantizedUnsignedPercentageTrait {}
+
+
+/// Internally uses a quantized decimal, but exposes methods to treat the value as a percentage
+/// from 0–100% (0.0–1.0).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+pub struct PercentageUnsigned<D: QuantizedDecimalTrait>(D);
 
 impl<D: QuantizedDecimalTrait> QuantizedUnsignedPercentageTrait for PercentageUnsigned<D> {
     type DecimalQuant = D;

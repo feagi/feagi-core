@@ -1,6 +1,7 @@
 use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
 use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
 use serde::Serialize;
+use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
@@ -147,7 +148,7 @@ pub trait QuantizedSignedIntegerTrait:
 }
 
 /// Marker trait for raw signed integer quantization types (`i8`, `i16`, `i32`, `i64`).
-pub trait QuantizedSignedIntegerUnwrappedTrait: QuantizedSignedIntegerTrait {}
+pub trait QuantizedSignedIntegerUnwrappedTrait: QuantizedSignedIntegerTrait + QuantizedUnwrappedSeal {}
 
 impl QuantizedSignedIntegerTrait for i8 {
     type QuantType = Self;
@@ -234,6 +235,8 @@ impl QuantizedSignedIntegerTrait for i8 {
         *self <= 0
     }
 }
+
+impl QuantizedUnwrappedSeal for i8 {}
 
 impl QuantizedSignedIntegerUnwrappedTrait for i8 {}
 
@@ -323,9 +326,11 @@ impl QuantizedSignedIntegerTrait for i16 {
     }
 }
 
+impl QuantizedUnwrappedSeal for i16 {}
+
 impl QuantizedSignedIntegerUnwrappedTrait for i16 {}
 
-// lol, lmao even
+
 impl QuantizedSignedIntegerTrait for i32 {
     type QuantType = Self;
     const LEVEL: SignedIntegerQuantizationLevel = SignedIntegerQuantizationLevel::I32;
@@ -411,6 +416,8 @@ impl QuantizedSignedIntegerTrait for i32 {
         *self <= 0
     }
 }
+
+impl QuantizedUnwrappedSeal for i32 {}
 
 impl QuantizedSignedIntegerUnwrappedTrait for i32 {}
 
@@ -499,6 +506,8 @@ impl QuantizedSignedIntegerTrait for i64 {
         *self <= 0
     }
 }
+
+impl QuantizedUnwrappedSeal for i64 {}
 
 impl QuantizedSignedIntegerUnwrappedTrait for i64 {}
 

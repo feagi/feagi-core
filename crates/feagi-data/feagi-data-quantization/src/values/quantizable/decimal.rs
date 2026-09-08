@@ -7,6 +7,7 @@ use crate::values::quantizable::custom_data_types::StorageF8;
 use crate::values::quantizable::quantization_level_packing::QuantizationLevelPacking;
 use crate::values::quantizable::{PercentageUnsigned, QuantizedElementBase, QuantizedUnsignedPercentageTrait};
 use half::{bf16, f16};
+use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 
 /// Represents a value that is represented as a decimal number, main backbone for computations
 #[repr(u8)]
@@ -111,7 +112,7 @@ pub trait QuantizedDecimalTrait:
 }
 
 /// Marker trait for raw decimal quantization types (`f16`, `bf16`, `f32`, `f64`, [`StorageF8`]).
-pub trait QuantizedDecimalUnwrappedTrait: QuantizedDecimalTrait {}
+pub trait QuantizedDecimalUnwrappedTrait: QuantizedDecimalTrait + QuantizedUnwrappedSeal {}
 
 impl QuantizedDecimalTrait for StorageF8 {
     type QuantType = Self;
@@ -150,6 +151,8 @@ impl QuantizedDecimalTrait for StorageF8 {
     }
 }
 
+impl QuantizedUnwrappedSeal for StorageF8 {}
+
 impl QuantizedDecimalUnwrappedTrait for StorageF8 {}
 
 impl core::iter::Sum for StorageF8 {
@@ -163,6 +166,8 @@ impl core::iter::Product for StorageF8 {
         iter.fold(Self::ONE, |accum, value| accum * value)
     }
 }
+
+impl QuantizedUnwrappedSeal for f16 {}
 
 impl QuantizedDecimalTrait for f16 {
     type QuantType = Self;
@@ -203,6 +208,8 @@ impl QuantizedDecimalTrait for f16 {
 }
 
 impl QuantizedDecimalUnwrappedTrait for f16 {}
+
+impl QuantizedUnwrappedSeal for bf16 {}
 
 impl QuantizedDecimalTrait for bf16 {
     type QuantType = Self;
@@ -282,6 +289,8 @@ impl QuantizedDecimalTrait for f32 {
     }
 }
 
+impl QuantizedUnwrappedSeal for f32 {}
+
 impl QuantizedDecimalUnwrappedTrait for f32 {}
 
 impl QuantizedDecimalTrait for f64 {
@@ -321,6 +330,8 @@ impl QuantizedDecimalTrait for f64 {
         value.quant_to_f64()
     }
 }
+
+impl QuantizedUnwrappedSeal for f64 {}
 
 impl QuantizedDecimalUnwrappedTrait for f64 {}
 
