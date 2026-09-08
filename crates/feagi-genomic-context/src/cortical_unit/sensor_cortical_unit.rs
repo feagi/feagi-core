@@ -1,16 +1,18 @@
-use crate::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
-use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, PercentageNeuronPositioning,
-};
-use crate::genomic::cortical_area::{
-    CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
-};
+use crate::cortical_area::IOCorticalAreaConfigurationFlag;
 use crate::sensor_cortical_units;
 use paste;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use feagi_data::feagi_data_error::FeagiDataError;
+use crate::cortical_area::CorticalID;
+use crate::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, PercentageNeuronPositioning};
+use crate::cortical_unit::CorticalUnitIndex;
+use crate::cortical_area::CorticalAreaType;
+use crate::cortical_unit::*;
+
+
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)] // TODO move me!
 pub struct UnitTopology {
@@ -249,7 +251,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, crate::FeagiDataError> {
+            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, FeagiDataError> {
                 match self {
                     $(
                         SensoryCorticalUnit::$variant_name => {
@@ -302,9 +304,6 @@ impl SensoryCorticalUnit {
 
     /// Get the default CorticalID for this unit with group index 0 (Absolute frame handling, Linear positioning).
     pub fn get_default_cortical_id_for_group(&self, group_index: CorticalUnitIndex) -> CorticalID {
-        use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
-            FrameChangeHandling, PercentageNeuronPositioning,
-        };
         let fh = FrameChangeHandling::Absolute;
         let pos = PercentageNeuronPositioning::Linear;
         match self {
@@ -363,6 +362,10 @@ impl SensoryCorticalUnit {
                 Self::get_cortical_ids_array_for_smart_i_m_u_with_parameters(fh, pos, group_index)
                     [0]
             }
+
+            SensoryCorticalUnit::Accelerometer => Self::get_cortical_ids_array_for_accelerometer_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::Gyroscope => Self::get_cortical_ids_array_for_gyroscope_with_parameters(fh, pos, group_index)[0],
+
             SensoryCorticalUnit::CartesianPosition => {
                 Self::get_cortical_ids_array_for_cartesian_position_with_parameters(
                     fh,

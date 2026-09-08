@@ -244,6 +244,41 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
+                #[doc = "Raw IMU: composite linear-vector sensor with three sub-cortical-areas (accelerometer + gyroscope + magnetometer), each a 3-axis signed percentage."]
+                RawIMU => {
+                    friendly_name: "Raw IMU",
+                    accepted_wrapped_io_data_type: RawIMU,
+                    cortical_id_unit_reference: *b"rim",
+                    number_cortical_areas: 3,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_properties: {
+                        // Sub-area order is contractual: 0 = accelerometer, 1 = gyroscope, 2 = magnetometer.
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [70, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024]), // Accelerometer
+                        1 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [80, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024]), // Gyroscope
+                        2 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [90, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])  // Magnetometer
+                    }
+                },
+
+
+
+                #[doc = "Smart IMU: orientation as a unit quaternion (w/x/y/z) in a single 4-axis signed-percentage sub-area."]
+                SmartIMU => {
+                    friendly_name: "Smart IMU",
+                    accepted_wrapped_io_data_type: SignedPercentage_4D,
+                    cortical_id_unit_reference: *b"sim",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), relative_position: [100, 0, -10], channel_dimensions_default: [4, 1, 10], channel_dimensions_min: [4, 1, 1], channel_dimensions_max: [4, 1, 1024])
+                    }
+                },
+
                 #[doc = "Cartesian position sensor: an absolute 3D position (x/y/z), each axis normalized to an unsigned percentage [0, 1] over a controller-defined workspace. Sensor-side counterpart of the SpatialPointer OPU's Absolute mode."]
                 CartesianPosition => {
                     friendly_name: "Cartesian Position Sensor",
