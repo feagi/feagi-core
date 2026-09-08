@@ -18,7 +18,7 @@ fn feagi_data_etc_error(message: String) -> FeagiDataError {
 // `SignedPercentage4D`, ...). Removing one will surface as an "unresolved
 // type" error inside the macro expansion, not at this `use` line.
 use crate::data_types::{
-    GazeProperties, ImageFrame, MiscData, Percentage, RawIMU, SegmentedImageFrame,
+    GazeProperties, ImageFrame, MiscData, Percentage, Percentage3D, RawIMU, SegmentedImageFrame,
     SignedPercentage3D, SignedPercentage4D, RAW_IMU_SUBUNIT_COUNT,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::*;
@@ -49,6 +49,7 @@ macro_rules! sensor_unit_functions {
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
                     $(default_firing_threshold: $default_firing_threshold:expr,)?
+                    $(default_firing_threshold_increment: [$default_firing_threshold_increment_x:expr, $default_firing_threshold_increment_y:expr, $default_firing_threshold_increment_z:expr],)?
                     $(default_mp_charge_accumulation: $default_mp_charge_accumulation:expr,)?
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?

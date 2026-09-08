@@ -7,9 +7,9 @@ Neuroembryogenesis - Brain Development from Genome.
 This module orchestrates the development of a functional connectome (phenotype)
 from a genome blueprint (genotype). It coordinates:
 
-1. **Corticogenesis**: Creating cortical_area area structures
+1. **Corticogenesis**: Creating cortical area structures
 2. **Voxelogenesis**: Establishing 3D spatial framework
-3. **Neurogenesis**: Generating neurons within cortical_area areas
+3. **Neurogenesis**: Generating neurons within cortical areas
 4. **Synaptogenesis**: Forming synaptic connections between neurons
 
 The process is biologically inspired by embryonic brain development.
@@ -21,14 +21,15 @@ Licensed under the Apache License, Version 2.0
 use crate::connectome_manager::ConnectomeManager;
 use crate::models::{CorticalArea, CorticalID};
 use crate::types::{BduError, BduResult};
-use feagi_evolutionary::RuntimeGenome;
+use feagi_evolutionary::{
+    apply_genome_title_to_unique_top_circuit, wrap_parentless_regions_under_named_root,
+    RuntimeGenome,
+};
+use feagi_npu_neural::types::{Precision, QuantizationSpec};
+use feagi_structures::genomic::brain_regions::ROOT_BRAIN_REGION_NAME;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{debug, error, info, trace, warn};
-// Build brain region structure following Python's normalize_brain_region_membership()
-use feagi_genomic_context::brain_region::BrainRegion;
-// Build brain region structure following Python's normalize_brain_region_membership()
-use feagi_genomic_context::brain_region::RegionType;
 
 /// Label for the CUSTOM/MEMORY subregion when the genome JSON has no `brain_regions` and
 /// neuroembryogenesis must synthesize one. Prefer `metadata.genome_title` so Hub replace/upload
@@ -42,12 +43,86 @@ fn autogen_subregion_display_name(genome_title: &str) -> String {
     }
 }
 
+/// Order region IDs so every parent in `region_ids` is emitted before its children.
+///
+/// Genome `brain_regions` is a `HashMap`, so iteration order is not stable. Inserting in
+/// that order fails whenever a nested child (e.g. grandchild of root) is visited before
+/// its parent. Kahn's algorithm makes insert order independent of hashing.
+///
+/// A region's in-degree is 1 only when its parent is also in `region_ids`. Regions whose
+/// parent is the already-inserted root (or missing from this set) start ready.
+/// Cyclic leftovers are appended after the acyclic prefix so the caller still attempts
+/// insert and surfaces the existing "Parent region does not exist" error.
+fn order_regions_parent_before_child(
+    region_ids: &[String],
+    region_parent_map: &std::collections::HashMap<String, String>,
+) -> Vec<String> {
+    use std::collections::{HashMap, HashSet, VecDeque};
+
+    let id_set: HashSet<&str> = region_ids.iter().map(String::as_str).collect();
+    let mut children: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut in_degree: HashMap<&str, usize> =
+        region_ids.iter().map(|id| (id.as_str(), 0usize)).collect();
+
+    for id in region_ids {
+        if let Some(parent) = region_parent_map.get(id) {
+            if id_set.contains(parent.as_str()) {
+                if let Some(degree) = in_degree.get_mut(id.as_str()) {
+                    *degree += 1;
+                }
+                children
+                    .entry(parent.as_str())
+                    .or_default()
+                    .push(id.as_str());
+            }
+        }
+    }
+
+    let mut ready: Vec<&str> = in_degree
+        .iter()
+        .filter(|(_, degree)| **degree == 0)
+        .map(|(id, _)| *id)
+        .collect();
+    ready.sort_unstable();
+
+    let mut ordered = Vec::with_capacity(region_ids.len());
+    let mut queue: VecDeque<&str> = ready.into();
+
+    while let Some(id) = queue.pop_front() {
+        ordered.push(id.to_string());
+        if let Some(kids) = children.get_mut(id) {
+            kids.sort_unstable();
+            for child in kids.iter().copied() {
+                if let Some(degree) = in_degree.get_mut(child) {
+                    *degree -= 1;
+                    if *degree == 0 {
+                        queue.push_back(child);
+                    }
+                }
+            }
+        }
+    }
+
+    if ordered.len() < region_ids.len() {
+        let emitted: HashSet<&str> = ordered.iter().map(String::as_str).collect();
+        let mut leftovers: Vec<String> = region_ids
+            .iter()
+            .filter(|id| !emitted.contains(id.as_str()))
+            .cloned()
+            .collect();
+        leftovers.sort();
+        ordered.extend(leftovers);
+    }
+
+    ordered
+}
+
 /// Development stage tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DevelopmentStage {
     /// Initial state, not started
     Initialization,
-    /// Creating cortical_area area structures
+    /// Creating cortical area structures
     Corticogenesis,
     /// Establishing spatial framework
     Voxelogenesis,
@@ -124,8 +199,7 @@ impl Neuroembryogenesis {
         self.progress.read().clone()
     }
 
-    /*
-    /// Sync existing core neuron parameters with cortical_area area properties.
+    /// Sync existing core neuron parameters with cortical area properties.
     ///
     /// This updates neuron parameters in-place without creating new neurons.
     fn sync_core_neuron_params(&self, cortical_idx: u32, area: &CorticalArea) -> BduResult<()> {
@@ -167,15 +241,13 @@ impl Neuroembryogenesis {
         Ok(())
     }
 
-     */
-
-    /// Incrementally add cortical_area areas to an existing connectome
+    /// Incrementally add cortical areas to an existing connectome
     ///
-    /// This is for adding new cortical_area areas after the initial genome has been loaded.
+    /// This is for adding new cortical areas after the initial genome has been loaded.
     /// Unlike `develop_from_genome()`, this only processes the new areas.
     ///
     /// # Arguments
-    /// * `areas` - The cortical_area areas to add
+    /// * `areas` - The cortical areas to add
     /// * `genome` - The full runtime genome (needed for synaptogenesis context)
     ///
     /// # Returns
@@ -185,21 +257,21 @@ impl Neuroembryogenesis {
         areas: Vec<CorticalArea>,
         genome: &RuntimeGenome,
     ) -> BduResult<(usize, usize)> {
-        info!(target: "feagi-bdu", "🧬 Incrementally adding {} cortical_area areas", areas.len());
+        info!(target: "feagi-bdu", "🧬 Incrementally adding {} cortical areas", areas.len());
 
         let mut total_neurons = 0;
         let mut total_synapses = 0;
 
-        // Stage 1: Add cortical_area area structures (Corticogenesis)
+        // Stage 1: Add cortical area structures (Corticogenesis)
         for area in &areas {
             let mut manager = self.connectome_manager.write();
             manager.add_cortical_area(area.clone())?;
-            info!(target: "feagi-bdu", "  ✓ Added cortical_area area structure: {}", area.cortical_id.as_base_64());
+            info!(target: "feagi-bdu", "  ✓ Added cortical area structure: {}", area.cortical_id.as_base_64());
         }
 
         // Stage 2: Create neurons for each area (Neurogenesis)
         // CRITICAL: Create core area neurons FIRST to ensure deterministic IDs
-        use feagi_genomic_context::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
@@ -241,29 +313,23 @@ impl Neuroembryogenesis {
             for (core_idx, area) in &core_areas {
                 let existing_core_neurons = {
                     let manager = self.connectome_manager.read();
-                    manager
-                        .get_wnpu()
-                        .cortical_area_neuron_count(&area.cortical_id)
-                        .unwrap_or(0)
+                    let npu = manager.get_npu();
+                    match npu {
+                        Some(npu_arc) => {
+                            let npu_lock = npu_arc.lock();
+                            match npu_lock {
+                                Ok(npu_guard) => {
+                                    npu_guard.get_neurons_in_cortical_area(*core_idx).len()
+                                }
+                                Err(_) => 0,
+                            }
+                        }
+                        None => 0,
+                    }
                 };
 
                 if existing_core_neurons > 0 {
-                    // Neural parameters travel with the area, so an already-populated area is
-                    // brought up to date by reconfiguring it rather than by rewriting neurons.
-                    {
-                        let parameters = ConnectomeManager::wnpu_area_parameters(area);
-                        let mut manager = self.connectome_manager.write();
-                        manager
-                            .get_wnpu_mut()
-                            .reconfigure_cortical_area(&area.cortical_id, parameters)
-                            .map_err(|e| {
-                                BduError::Internal(format!(
-                                    "WNPU failed to reconfigure core area {}: {}",
-                                    area.cortical_id.as_base_64(),
-                                    e
-                                ))
-                            })?;
-                    }
+                    self.sync_core_neuron_params(*core_idx, area)?;
                     let refreshed = {
                         let manager = self.connectome_manager.read();
                         manager.refresh_neuron_count_for_area(&area.cortical_id)
@@ -373,15 +439,50 @@ impl Neuroembryogenesis {
     pub fn develop_from_genome(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         info!(target: "feagi-bdu","🧬 Starting neuroembryogenesis for genome: {}", genome.metadata.genome_id);
 
-        // Quantization is no longer chosen here. The new NPU fixes its data layout when the WNPU
-        // and its burst engines are constructed, so the genome's requested precision is a matter
-        // for that construction rather than for development.
+        // Phase 5: Parse quantization precision and dispatch to type-specific builder
         let _quantization_precision = &genome.physiology.quantization_precision;
+        // Precision parsing handled in genome loader
+        let quant_spec = QuantizationSpec::default();
+
+        info!(target: "feagi-bdu",
+            "   Quantization precision: {:?} (range: [{}, {}] for membrane potential)",
+            quant_spec.precision,
+            quant_spec.membrane_potential_min,
+            quant_spec.membrane_potential_max
+        );
+
+        // Phase 6: Type dispatch - Neuroembryogenesis is now fully generic!
+        // The precision is determined by the type T of this Neuroembryogenesis instance.
+        // All stages (corticogenesis, neurogenesis, synaptogenesis) automatically use the correct type.
+        match quant_spec.precision {
+            Precision::FP32 => {
+                info!(target: "feagi-bdu", "   ✓ Using FP32 (32-bit floating-point) - highest precision");
+                info!(target: "feagi-bdu", "   Memory usage: Baseline (4 bytes/neuron for membrane potential)");
+            }
+            Precision::INT8 => {
+                info!(target: "feagi-bdu", "   ✓ Using INT8 (8-bit integer) - memory efficient");
+                info!(target: "feagi-bdu", "   Memory reduction: 42% (1 byte/neuron for membrane potential)");
+                info!(target: "feagi-bdu", "   Quantization range: [{}, {}]",
+                    quant_spec.membrane_potential_min,
+                    quant_spec.membrane_potential_max);
+                // Note: If this Neuroembryogenesis was created with <f32>, this will warn below
+                // The caller must create Neuroembryogenesis::<INT8Value> to use INT8
+            }
+            Precision::FP16 => {
+                warn!(target: "feagi-bdu", "   FP16 quantization requested but not yet implemented.");
+                warn!(target: "feagi-bdu", "   FP16 support planned for future GPU optimization.");
+                // Note: Requires f16 type and implementation
+            }
+        }
+
+        // Type consistency is now handled by DynamicNPU at creation time
+        // The caller (main.rs) peeks at genome precision and creates the correct DynamicNPU variant
+        info!(target: "feagi-bdu", "   ✓ Quantization handled by DynamicNPU (dispatches at runtime)");
 
         // Update stage: Initialization
         self.update_stage(DevelopmentStage::Initialization, 0);
 
-        // Stage 1: Corticogenesis - Create cortical_area area structures
+        // Stage 1: Corticogenesis - Create cortical area structures
         self.corticogenesis(genome)?;
 
         // Stage 2: Voxelogenesis - Establish spatial framework
@@ -398,7 +499,7 @@ impl Neuroembryogenesis {
 
         let progress = self.progress.read();
         info!(target: "feagi-bdu",
-            "✅ Neuroembryogenesis completed in {}ms: {} cortical_area areas, {} neurons, {} synapses",
+            "✅ Neuroembryogenesis completed in {}ms: {} cortical areas, {} neurons, {} synapses",
             progress.duration_ms,
             progress.cortical_areas_created,
             progress.neurons_created,
@@ -408,10 +509,10 @@ impl Neuroembryogenesis {
         Ok(())
     }
 
-    /// Stage 1: Corticogenesis - Create cortical_area area structures
+    /// Stage 1: Corticogenesis - Create cortical area structures
     fn corticogenesis(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         self.update_stage(DevelopmentStage::Corticogenesis, 0);
-        info!(target: "feagi-bdu","🧠 Stage 1: Corticogenesis - Creating {} cortical_area areas", genome.cortical_areas.len());
+        info!(target: "feagi-bdu","🧠 Stage 1: Corticogenesis - Creating {} cortical areas", genome.cortical_areas.len());
         info!(target: "feagi-bdu","🔍 Genome brain_regions check: is_empty={}, count={}",
               genome.brain_regions.is_empty(), genome.brain_regions.len());
         if !genome.brain_regions.is_empty() {
@@ -422,7 +523,7 @@ impl Neuroembryogenesis {
 
         // CRITICAL: Minimize lock scope - only hold lock when actually adding areas
         for (idx, (cortical_id, area)) in genome.cortical_areas.iter().enumerate() {
-            // Add cortical_area area to connectome - lock held only during this operation
+            // Add cortical area to connectome - lock held only during this operation
             {
                 let mut manager = self.connectome_manager.write();
                 manager.add_cortical_area(area.clone())?;
@@ -435,7 +536,7 @@ impl Neuroembryogenesis {
                 p.progress = progress_pct;
             });
 
-            trace!(target: "feagi-bdu", "Created cortical_area area: {} ({})", cortical_id, area.name);
+            trace!(target: "feagi-bdu", "Created cortical area: {} ({})", cortical_id, area.name);
         }
 
         // Ensure brain regions structure exists (auto-generate if missing)
@@ -443,11 +544,11 @@ impl Neuroembryogenesis {
         info!(target: "feagi-bdu","🔍 BRAIN REGION AUTO-GEN CHECK: genome.brain_regions.is_empty() = {}", genome.brain_regions.is_empty());
         let (brain_regions_to_add, region_parent_map) = if genome.brain_regions.is_empty() {
             info!(target: "feagi-bdu","  ✅ TRIGGERING AUTO-GENERATION: No brain_regions in genome - auto-generating default root region");
-            info!(target: "feagi-bdu","  📊 Genome has {} cortical_area areas to process", genome.cortical_areas.len());
+            info!(target: "feagi-bdu","  📊 Genome has {} cortical areas to process", genome.cortical_areas.len());
 
-            // Collect all cortical_area area IDs
+            // Collect all cortical area IDs
             let all_cortical_ids = genome.cortical_areas.keys().cloned().collect::<Vec<_>>();
-            info!(target: "feagi-bdu","  📊 Collected {} cortical_area area IDs: {:?}", all_cortical_ids.len(),
+            info!(target: "feagi-bdu","  📊 Collected {} cortical area IDs: {:?}", all_cortical_ids.len(),
             if all_cortical_ids.len() <= 5 {
                 format!("{:?}", all_cortical_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>())
             } else {
@@ -476,8 +577,8 @@ impl Neuroembryogenesis {
                 let category = if area_id_str.starts_with("___") {
                     "CORE"
                 } else if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
-                    // Use cortical_area type from CorticalID
-                    use feagi_genomic_context::cortical_area::CorticalAreaType;
+                    // Use cortical type from CorticalID
+                    use feagi_structures::genomic::cortical_area::CorticalAreaType;
                     match cortical_type {
                         CorticalAreaType::Core(_) => "CORE",
                         CorticalAreaType::BrainInput(_) => "IPU",
@@ -558,7 +659,7 @@ impl Neuroembryogenesis {
                   ipu_areas.len(), opu_areas.len(), core_areas.len(), custom_memory_areas.len());
 
             // Build brain region structure following Python's normalize_brain_region_membership()
-            use feagi_genomic_context::brain_region::RegionID;
+            use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
             let mut regions_map = std::collections::HashMap::new();
 
             // Step 1: Create root region with only IPU/OPU/CORE areas
@@ -578,7 +679,7 @@ impl Neuroembryogenesis {
 
             let mut root_region = BrainRegion::new(
                 root_region_id,
-                "Root Brain Region".to_string(),
+                ROOT_BRAIN_REGION_NAME.to_string(),
                 RegionType::Undefined,
             )
             .expect("Failed to create root region")
@@ -695,7 +796,7 @@ impl Neuroembryogenesis {
                     0
                 };
 
-            info!(target: "feagi-bdu","  ✅ Auto-generated {} brain region(s) with {} total cortical_area areas ({} total inputs, {} total outputs)",
+            info!(target: "feagi-bdu","  ✅ Auto-generated {} brain region(s) with {} total cortical areas ({} total inputs, {} total outputs)",
                   regions_map.len(), all_cortical_ids.len(), total_inputs, total_outputs);
 
             // Return (regions_map, parent_map) so we can properly link hierarchy
@@ -708,12 +809,31 @@ impl Neuroembryogenesis {
             (regions_map, parent_map)
         } else {
             info!(target: "feagi-bdu","  📋 Genome already has {} brain regions - using existing structure", genome.brain_regions.len());
+            let mut regions_map = genome.brain_regions.clone();
+            if let Some(wrapper_id) = wrap_parentless_regions_under_named_root(&mut regions_map) {
+                info!(
+                    target: "feagi-bdu",
+                    "  🔗 Wrapped parentless circuit(s) under new {} ({}); original circuit names preserved",
+                    ROOT_BRAIN_REGION_NAME,
+                    wrapper_id
+                );
+            }
+            if let Some(circuit_name) = apply_genome_title_to_unique_top_circuit(
+                &mut regions_map,
+                &genome.metadata.genome_title,
+            ) {
+                info!(
+                    target: "feagi-bdu",
+                    "  Applied genome_title to unique top-level circuit: {}",
+                    circuit_name
+                );
+            }
             // Parent links may be stored on each region as `parent_region_id` (properties). Flat/v3
             // exports often omit them; without parents, add_brain_region(..., None) only registers the
             // first region as root and leaves other regions detached — BV then shows an empty tree.
             let mut region_parent_map: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
-            for (region_id, region) in &genome.brain_regions {
+            for (region_id, region) in &regions_map {
                 if let Some(pid) = region
                     .properties
                     .get("parent_region_id")
@@ -723,13 +843,12 @@ impl Neuroembryogenesis {
                 }
             }
             if region_parent_map.is_empty() {
-                if let Some((root_id, _)) = genome
-                    .brain_regions
+                if let Some((root_id, _)) = regions_map
                     .iter()
-                    .find(|(_, r)| r.name == "Root Brain Region")
+                    .find(|(_, r)| r.name == ROOT_BRAIN_REGION_NAME)
                 {
-                    for (region_id, region) in &genome.brain_regions {
-                        if region.name == "Root Brain Region" {
+                    for (region_id, region) in &regions_map {
+                        if region.name == ROOT_BRAIN_REGION_NAME {
                             continue;
                         }
                         region_parent_map.insert(region_id.clone(), root_id.clone());
@@ -743,11 +862,12 @@ impl Neuroembryogenesis {
                     }
                 } else {
                     warn!(target: "feagi-bdu",
-                        "  ⚠️ brain_regions present but no 'Root Brain Region' and no parent_region_id — hierarchy may not load in BV"
+                        "  ⚠️ brain_regions present but no '{}' and no parent_region_id — hierarchy may not load in BV",
+                        ROOT_BRAIN_REGION_NAME
                     );
                 }
             }
-            (genome.brain_regions.clone(), region_parent_map)
+            (regions_map, region_parent_map)
         };
 
         // Add brain regions with proper parent relationships - minimize lock scope
@@ -756,22 +876,31 @@ impl Neuroembryogenesis {
             let brain_region_count = brain_regions_to_add.len();
             info!(target: "feagi-bdu","  Adding {} brain regions from genome", brain_region_count);
 
-            // First add root (no parent) - need to find it by iterating since key is UUID
+            // Named root first (parent=None). Remaining regions are inserted in
+            // parent-before-child order so nested trees do not depend on HashMap iteration.
             let root_entry = brain_regions_to_add
                 .iter()
-                .find(|(_, region)| region.name == "Root Brain Region");
+                .find(|(_, region)| region.name == ROOT_BRAIN_REGION_NAME);
             if let Some((root_id, root_region)) = root_entry {
                 manager.add_brain_region(root_region.clone(), None)?;
-                debug!(target: "feagi-bdu","    ✓ Added brain region: {} (Root Brain Region) [parent=None]", root_id);
+                debug!(target: "feagi-bdu","    ✓ Added brain region: {} ({}) [parent=None]", root_id, ROOT_BRAIN_REGION_NAME);
             }
 
-            // Then add other regions with their parent relationships
-            for (region_id, region) in brain_regions_to_add.iter() {
-                if region.name == "Root Brain Region" {
-                    continue; // Already added
-                }
+            let remaining_ids: Vec<String> = brain_regions_to_add
+                .iter()
+                .filter(|(_, region)| region.name != ROOT_BRAIN_REGION_NAME)
+                .map(|(region_id, _)| region_id.clone())
+                .collect();
+            let ordered_ids = order_regions_parent_before_child(&remaining_ids, &region_parent_map);
 
-                let parent_id = region_parent_map.get(region_id).cloned();
+            for region_id in ordered_ids {
+                let region = brain_regions_to_add.get(&region_id).ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "Ordered region {} missing from genome region map",
+                        region_id
+                    ))
+                })?;
+                let parent_id = region_parent_map.get(&region_id).cloned();
                 manager.add_brain_region(region.clone(), parent_id.clone())?;
                 debug!(target: "feagi-bdu","    ✓ Added brain region: {} ({}) [parent={:?}]",
                        region_id, region.name, parent_id);
@@ -781,7 +910,7 @@ impl Neuroembryogenesis {
         } // Lock released
 
         self.update_stage(DevelopmentStage::Corticogenesis, 100);
-        info!(target: "feagi-bdu","  ✅ Corticogenesis complete: {} cortical_area areas created", total_areas);
+        info!(target: "feagi-bdu","  ✅ Corticogenesis complete: {} cortical areas created", total_areas);
 
         Ok(())
     }
@@ -791,7 +920,7 @@ impl Neuroembryogenesis {
         self.update_stage(DevelopmentStage::Voxelogenesis, 0);
         info!(target: "feagi-bdu","📐 Stage 2: Voxelogenesis - Establishing spatial framework");
 
-        // Spatial framework is implicitly established by cortical_area area dimensions
+        // Spatial framework is implicitly established by cortical area dimensions
         // The Morton spatial hash in ConnectomeManager handles the actual indexing
 
         self.update_stage(DevelopmentStage::Voxelogenesis, 100);
@@ -800,10 +929,10 @@ impl Neuroembryogenesis {
         Ok(())
     }
 
-    /// Stage 3: Neurogenesis - Generate neurons within cortical_area areas
+    /// Stage 3: Neurogenesis - Generate neurons within cortical areas
     ///
     /// This uses ConnectomeManager which delegates to NPU's SIMD-optimized batch operations.
-    /// Each cortical_area area is processed with `create_cortical_area_neurons()` which creates
+    /// Each cortical area is processed with `create_cortical_area_neurons()` which creates
     /// ALL neurons for that area in one vectorized operation (not a loop).
     ///
     /// CRITICAL: Core areas (0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope) are created
@@ -816,7 +945,7 @@ impl Neuroembryogenesis {
         info!(target: "feagi-bdu","  Expected innate neurons from genome: {}", expected_neurons);
 
         // CRITICAL: Identify core areas first to ensure deterministic neuron IDs
-        use feagi_genomic_context::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
@@ -862,29 +991,23 @@ impl Neuroembryogenesis {
         for (core_idx, cortical_id, area) in &core_areas {
             let existing_core_neurons = {
                 let manager = self.connectome_manager.read();
-                manager
-                    .get_wnpu()
-                    .cortical_area_neuron_count(cortical_id)
-                    .unwrap_or(0)
+                let npu = manager.get_npu();
+                match npu {
+                    Some(npu_arc) => {
+                        let npu_lock = npu_arc.lock();
+                        match npu_lock {
+                            Ok(npu_guard) => {
+                                npu_guard.get_neurons_in_cortical_area(*core_idx).len()
+                            }
+                            Err(_) => 0,
+                        }
+                    }
+                    None => 0,
+                }
             };
 
             if existing_core_neurons > 0 {
-                // Neural parameters travel with the area, so an already-populated area is brought
-                // up to date by reconfiguring it rather than by rewriting neurons.
-                {
-                    let parameters = ConnectomeManager::wnpu_area_parameters(area);
-                    let mut manager = self.connectome_manager.write();
-                    manager
-                        .get_wnpu_mut()
-                        .reconfigure_cortical_area(cortical_id, parameters)
-                        .map_err(|e| {
-                            BduError::Internal(format!(
-                                "WNPU failed to reconfigure core area {}: {}",
-                                cortical_id.as_base_64(),
-                                e
-                            ))
-                        })?;
-                }
+                self.sync_core_neuron_params(*core_idx, area)?;
                 let refreshed = {
                     let manager = self.connectome_manager.read();
                     manager.refresh_neuron_count_for_area(cortical_id)
@@ -1058,7 +1181,7 @@ impl Neuroembryogenesis {
                 continue;
             }
 
-            // Call ConnectomeManager to apply cortical_area mappings (delegates to NPU)
+            // Call ConnectomeManager to apply cortical mappings (delegates to NPU)
             // CRITICAL: Minimize lock scope - only hold lock during synapse creation
             // Use src_area.cortical_id (the actual ID stored in ConnectomeManager)
             let src_cortical_id = &src_area.cortical_id;
@@ -1102,17 +1225,102 @@ impl Neuroembryogenesis {
             });
         }
 
-        // No synapse index rebuild is needed: the engine applies a mapping's synapses atomically
-        // as part of the edit, so queries never observe a half-built index. Refresh the cached
-        // count from the WNPU's shadow state.
-        {
+        // CRITICAL: Rebuild the NPU synapse index so newly created synapses are visible to
+        // queries (e.g. get_outgoing_synapses / synapse counts) and propagation.
+        //
+        // Note: We do this once at the end for performance.
+        let npu_arc = {
+            let manager = self.connectome_manager.read();
+            manager.get_npu().cloned()
+        };
+        if let Some(npu_arc) = npu_arc {
+            let mut npu_lock = npu_arc
+                .lock()
+                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+            npu_lock.rebuild_synapse_index();
+
+            // Refresh cached counts after index rebuild.
             let manager = self.connectome_manager.read();
             manager.update_cached_synapse_count();
         }
 
-        // Memory areas need no separate registration: the new NPU treats them as ordinary cortical
-        // areas, so their temporal depth, lifespan and fire ledger settings no longer have an
-        // engine-side counterpart. The genome properties remain on the area for the API layer.
+        // CRITICAL: Register memory areas with PlasticityExecutor after all mappings are created
+        // This ensures memory areas have their complete upstream_cortical_areas lists populated.
+        #[cfg(feature = "plasticity")]
+        {
+            use feagi_evolutionary::extract_memory_properties;
+            use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
+
+            let manager = self.connectome_manager.read();
+            if let Some(executor) = manager.get_plasticity_executor() {
+                let mut registered_count = 0;
+
+                // Iterate through all cortical areas and register memory areas
+                for area_id in manager.get_cortical_area_ids() {
+                    if let Some(area) = manager.get_cortical_area(area_id) {
+                        if let Some(mem_props) = extract_memory_properties(&area.properties) {
+                            let upstream_areas =
+                                manager.get_episodic_memory_upstream_cortical_areas(area_id);
+
+                            // Ensure FireLedger tracks upstream areas with at least the required temporal depth.
+                            // Dense, burst-aligned tracking is required for correct memory pattern hashing.
+                            if let Some(npu_arc) = manager.get_npu() {
+                                if let Ok(mut npu) = npu_arc.lock() {
+                                    let existing_configs = npu.get_all_fire_ledger_configs();
+                                    for &upstream_idx in &upstream_areas {
+                                        let existing = existing_configs
+                                            .iter()
+                                            .find(|(idx, _)| *idx == upstream_idx)
+                                            .map(|(_, w)| *w)
+                                            .unwrap_or(0);
+
+                                        let desired = mem_props.temporal_depth as usize;
+                                        let resolved = existing.max(desired);
+                                        if resolved != existing {
+                                            if let Err(e) = npu.configure_fire_ledger_window(
+                                                upstream_idx,
+                                                resolved,
+                                            ) {
+                                                warn!(
+                                                    target: "feagi-bdu",
+                                                    "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
+                                                    upstream_idx,
+                                                    resolved,
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
+                                }
+                            }
+
+                            if let Ok(exec) = executor.lock() {
+                                let lifecycle_config = MemoryNeuronLifecycleConfig {
+                                    initial_lifespan: mem_props.init_lifespan,
+                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
+                                    longterm_threshold: mem_props.longterm_threshold,
+                                    max_reactivations: 1000,
+                                };
+
+                                exec.register_memory_area(
+                                    area.cortical_idx,
+                                    area_id.as_base_64(),
+                                    mem_props.temporal_depth,
+                                    upstream_areas.clone(),
+                                    Some(lifecycle_config),
+                                    mem_props.mp_learning_enabled,
+                                );
+
+                                registered_count += 1;
+                            }
+                        }
+                    }
+                }
+                let _ = registered_count; // count retained for future metrics if needed
+            }
+        }
 
         // Verify against genome stats
         if expected_synapses > 0 {
@@ -1142,7 +1350,7 @@ impl Neuroembryogenesis {
         &mut self,
         genome: &RuntimeGenome,
     ) -> BduResult<()> {
-        use feagi_genomic_context::cortical_area::CorticalAreaType;
+        use feagi_structures::genomic::cortical_area::CorticalAreaType;
         let mut repaired = 0usize;
 
         for (memory_id, memory_area) in genome.cortical_areas.iter() {
@@ -1189,7 +1397,7 @@ impl Neuroembryogenesis {
                     Err(_) => {
                         warn!(
                             target: "feagi-bdu",
-                            "Invalid twin cortical_area ID in memory_replay dstmap: {}",
+                            "Invalid twin cortical ID in memory_replay dstmap: {}",
                             dst_id_str
                         );
                         continue;
@@ -1367,13 +1575,13 @@ impl Neuroembryogenesis {
         [autogen_x, autogen_y, autogen_z]
     }
 
-    /// Analyze region inputs/outputs based on cortical_area connections
+    /// Analyze region inputs/outputs based on cortical connections
     ///
     /// Following Python's _auto_assign_region_io() logic:
     /// - OUTPUT: Any area in the region that connects to an area OUTSIDE the region
     /// - INPUT: Any area in the region that receives connection from OUTSIDE the region
     fn analyze_region_io(
-        region_area_ids: &[feagi_genomic_context::cortical_area::CorticalID],
+        region_area_ids: &[feagi_structures::genomic::cortical_area::CorticalID],
         all_cortical_areas: &std::collections::HashMap<CorticalID, CorticalArea>,
     ) -> (Vec<String>, Vec<String>) {
         let area_set: std::collections::HashSet<_> = region_area_ids.iter().cloned().collect();
@@ -1452,7 +1660,7 @@ impl Neuroembryogenesis {
 mod tests {
     use super::*;
     use feagi_evolutionary::create_genome_with_core_morphologies;
-    use feagi_genomic_context::cortical_area::CorticalAreaDimensions;
+    use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
 
     #[test]
     fn test_neuroembryogenesis_creation() {
@@ -1491,21 +1699,76 @@ mod tests {
     }
 
     #[test]
+    fn order_regions_puts_parent_before_grandchild_even_when_child_is_listed_first() {
+        let root = "root".to_string();
+        let parent = "look-for-people".to_string();
+        let grandchild = "wave".to_string();
+        let sibling = "look-for-ball".to_string();
+
+        // HashMap-unlucky listing: grandchild before its parent.
+        let remaining = vec![grandchild.clone(), sibling.clone(), parent.clone()];
+        let mut parent_map = std::collections::HashMap::new();
+        parent_map.insert(parent.clone(), root.clone());
+        parent_map.insert(grandchild.clone(), parent.clone());
+        parent_map.insert(sibling.clone(), root);
+
+        let ordered = order_regions_parent_before_child(&remaining, &parent_map);
+        let parent_idx = ordered.iter().position(|id| id == &parent).unwrap();
+        let grandchild_idx = ordered.iter().position(|id| id == &grandchild).unwrap();
+
+        assert_eq!(ordered.len(), 3);
+        assert!(
+            parent_idx < grandchild_idx,
+            "parent must precede grandchild, got {:?}",
+            ordered
+        );
+    }
+
+    #[test]
+    fn order_regions_keeps_flat_children_when_parent_is_already_inserted() {
+        let remaining = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let mut parent_map = std::collections::HashMap::new();
+        parent_map.insert("a".to_string(), "root".to_string());
+        parent_map.insert("b".to_string(), "root".to_string());
+        parent_map.insert("c".to_string(), "root".to_string());
+
+        let ordered = order_regions_parent_before_child(&remaining, &parent_map);
+        let mut sorted = ordered.clone();
+        sorted.sort();
+        assert_eq!(sorted, remaining);
+    }
+
+    #[test]
+    fn order_regions_appends_cycle_members_after_acyclic_prefix() {
+        let remaining = vec!["a".to_string(), "b".to_string(), "ok".to_string()];
+        let mut parent_map = std::collections::HashMap::new();
+        parent_map.insert("a".to_string(), "b".to_string());
+        parent_map.insert("b".to_string(), "a".to_string());
+        parent_map.insert("ok".to_string(), "root".to_string());
+
+        let ordered = order_regions_parent_before_child(&remaining, &parent_map);
+        assert_eq!(ordered.first().map(String::as_str), Some("ok"));
+        assert_eq!(ordered.len(), 3);
+        assert!(ordered.contains(&"a".to_string()));
+        assert!(ordered.contains(&"b".to_string()));
+    }
+
+    #[test]
     fn test_development_from_minimal_genome() {
         ConnectomeManager::reset_for_testing(); // Ensure clean state
         let manager = ConnectomeManager::instance();
         let mut neuro = Neuroembryogenesis::new(manager.clone());
 
-        // Create a minimal genome with one cortical_area area
+        // Create a minimal genome with one cortical area
         let mut genome = create_genome_with_core_morphologies(
             "test_genome".to_string(),
             "Test Genome".to_string(),
         );
 
-        let cortical_id = CorticalID::try_from_bytes(b"cst_neur").unwrap(); // Use valid custom cortical_area ID
+        let cortical_id = CorticalID::try_from_bytes(b"cst_neur").unwrap(); // Use valid custom cortical ID
         let cortical_type = cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical_area type");
+            .expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -1514,7 +1777,7 @@ mod tests {
             (0, 0, 0).into(),
             cortical_type,
         )
-        .expect("Failed to create cortical_area area");
+        .expect("Failed to create cortical area");
         genome.cortical_areas.insert(cortical_id, area);
 
         // Run neuroembryogenesis

@@ -77,6 +77,11 @@ pub struct MigrationStepDiagnostics {
     pub from_version: GenomeSchemaVersion,
     pub to_version: GenomeSchemaVersion,
     pub transformations: Vec<String>,
+    /// Deterministic identifier rewrites produced by this migration step.
+    ///
+    /// Brain-artifact migration consumes these mappings to rewrite
+    /// connectome-lite references after its embedded genome is migrated.
+    pub identifier_remaps: BTreeMap<String, String>,
 }
 
 impl MigrationStepDiagnostics {
@@ -85,11 +90,21 @@ impl MigrationStepDiagnostics {
             from_version: from,
             to_version: to,
             transformations: Vec::new(),
+            identifier_remaps: BTreeMap::new(),
         }
     }
 
     pub fn record(&mut self, msg: impl Into<String>) {
         self.transformations.push(msg.into());
+    }
+
+    pub fn record_identifier_remap(
+        &mut self,
+        source: impl Into<String>,
+        destination: impl Into<String>,
+    ) {
+        self.identifier_remaps
+            .insert(source.into(), destination.into());
     }
 }
 

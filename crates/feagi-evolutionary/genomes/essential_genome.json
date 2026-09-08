@@ -1581,7 +1581,7 @@
     "ipu_idle_threshold": 1000,
     "plasticity_queue_depth": 3,
     "lifespan_mgmt_interval": 1,
-    "quantization_precision": "f16",
+    "quantization_precision": "fp32",
     "sleep": {
       "light_sleep_frequency_hz": 10.0,
       "light_sleep_ipu_threshold_neurons": 100,

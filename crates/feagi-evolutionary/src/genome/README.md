@@ -4,6 +4,24 @@ Authoritative rules for evolving the genome schema. See the system-level
 design at [`docs/GENOME_SCHEMA_VERSIONING.md`](../../../../docs/GENOME_SCHEMA_VERSIONING.md)
 for the architecture, decisions, and rationale.
 
+## Artifact encoding is not schema versioning
+
+External `.genome` bytes are decoded by `artifact.rs` before this schema
+pipeline runs. The current codec is UTF-8 JSON, identified by
+`application/vnd.feagi.genome+json`. `GenomeArtifactEncoding::Json` names the
+representation only; it does not introduce another version number.
+
+The decoded document carries `genome_schema_version`, which exclusively drives
+the migration chain described below. Artifact codecs must not migrate, validate,
+or infer schema versions. Schema migrators must not inspect the external file
+encoding. A future encoding can therefore replace the codec without changing
+the schema-version sequence or `.genome` extension.
+
+A `.genome` file must decode directly to the genome schema document. Tools must
+not place snapshot labels, timestamps, or other wrapper objects around that
+document while retaining the `.genome` extension. Such metadata belongs in a
+separate sidecar or service record.
+
 ## The version field
 
 Every genome MUST carry an integer field `genome_schema_version: u32`.

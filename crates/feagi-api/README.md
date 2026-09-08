@@ -2,6 +2,19 @@
 
 REST API layer for FEAGI with HTTP and ZMQ transport adapters.
 
+## Genome Artifact Contract
+
+Genome files use the representation-neutral `.genome` extension. The current
+artifact codec emits UTF-8 JSON with
+`application/vnd.feagi.genome+json`. File-oriented genome upload endpoints
+reject `.json` filenames and pass artifact bytes through the codec before the
+independent genome-schema migration pipeline runs. Download endpoints encode
+through the same boundary and return a `.genome` attachment name.
+
+JSON request bodies used by non-file API endpoints remain `application/json`;
+they are API documents, not file artifacts. Connectome artifacts continue to
+use `.connectome`.
+
 ## Architecture Overview
 
 **feagi-api** is responsible for **business logic** of API endpoints, while **feagi-io** handles **transport infrastructure**.
@@ -256,6 +269,81 @@ let response = zmq::handle_api_control_request(
 
 // Send response back over ZMQ
 ```
+
+## RGBD Registration Example
+
+For RGBD sensors, register two sensory units in `device_registrations`:
+- `Vision` for RGB frames
+- `DepthMap` for quantized depth volumes (`x/y` topology, `z` depth bins)
+
+Use the same `cortical_unit_index` and `bundle_id` so FEAGI and BV can treat both streams as one camera rig.
+
+```json
+{
+  "input_units_and_encoder_properties": {
+    "Vision": [
+      [
+        {
+          "friendly_name": "front_rgb_camera",
+          "cortical_unit_index": 0,
+          "io_configuration_flags": {
+            "frame_change_handling": "Absolute"
+          },
+          "device_grouping": [
+            {
+              "friendly_name": "rgb_sensor",
+              "device_properties": {
+                "bundle_id": "front_rgbd",
+                "bundle_type": "rgbd_camera"
+              }
+            }
+          ]
+        },
+        {
+          "CartesianPlane": {
+            "image_resolution": { "width": 640, "height": 480 },
+            "color_space": "Gamma",
+            "color_channel_layout": "RGB"
+          }
+        }
+      ]
+    ],
+    "DepthMap": [
+      [
+        {
+          "friendly_name": "front_depth_camera",
+          "cortical_unit_index": 0,
+          "io_configuration_flags": {
+            "frame_change_handling": "Absolute"
+          },
+          "device_grouping": [
+            {
+              "friendly_name": "depth_sensor",
+              "device_properties": {
+                "bundle_id": "front_rgbd",
+                "bundle_type": "rgbd_camera"
+              }
+            }
+          ]
+        },
+        {
+          "MiscData": {
+            "width": 160,
+            "height": 120,
+            "depth": 64
+          }
+        }
+      ]
+    ]
+  },
+  "output_units_and_decoder_properties": {},
+  "feedbacks": {}
+}
+```
+
+Notes:
+- `DepthMap` uses cortical unit reference `dpt` (IPU type key `idpt`).
+- `MiscData.width/height/depth` controls the depth cortical dimensions when auto-create is enabled.
 
 ## License
 

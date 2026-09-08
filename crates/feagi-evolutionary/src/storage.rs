@@ -114,11 +114,11 @@ pub mod fs_storage {
 
     /// File system-based genome storage
     ///
-    /// Stores genomes as JSON files in a directory structure:
+    /// Stores JSON-encoded genomes as `.genome` artifacts:
     /// ```
     /// base_path/
-    ///   genome_id_1.json
-    ///   genome_id_2.json
+    ///   genome_id_1.genome
+    ///   genome_id_2.genome
     ///   ...
     /// ```
     pub struct FileSystemStorage {
@@ -152,7 +152,7 @@ pub mod fs_storage {
                 .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
                 .collect::<String>();
 
-            self.base_path.join(format!("{}.json", sanitized))
+            self.base_path.join(format!("{}.genome", sanitized))
         }
     }
 
@@ -201,7 +201,7 @@ pub mod fs_storage {
                     .map_err(|e| StorageError::IOError(format!("Failed to read directory entry: {}", e)))?
                 {
                     let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    if path.extension().and_then(|s| s.to_str()) == Some("genome") {
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                             genome_ids.push(stem.to_string());
                         }
@@ -244,6 +244,7 @@ mod tests {
         let genome_id = "test_genome";
         let genome_json = r#"{"genome_id": "test_genome", "version": "2.1"}"#;
         storage.save_genome(genome_id, genome_json).await.unwrap();
+        assert!(temp_dir.path().join("test_genome.genome").exists());
 
         // Test load
         let loaded = storage.load_genome(genome_id).await.unwrap();

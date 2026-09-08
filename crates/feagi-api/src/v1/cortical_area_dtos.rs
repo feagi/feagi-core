@@ -117,7 +117,7 @@ pub struct CorticalAreaSummary {
     "plasticity_constant": 0.5,
     "degeneration": 0.0,
     "psp_uniform_distribution": false,
-    "firing_threshold_increment": 0.1,
+    "firing_threshold_increment": [0.1, 0.1, 0.1],
     "firing_threshold_limit": 10.0,
     "consecutive_fire_count": 3,
     "snooze_period": 5,
@@ -175,8 +175,8 @@ pub struct CorticalAreaDetail {
     /// PSP uniform distribution
     pub psp_uniform_distribution: bool,
 
-    /// Firing threshold increment
-    pub firing_threshold_increment: f64,
+    /// Firing threshold increment per spatial axis [x, y, z]
+    pub firing_threshold_increment: [f64; 3],
 
     /// Firing threshold limit
     pub firing_threshold_limit: f64,

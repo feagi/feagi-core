@@ -23,7 +23,7 @@ feagi-evolutionary = "2.0"
 use feagi_evolutionary::genome::{load_genome, save_genome};
 
 // Load brain definition from JSON
-let genome = load_genome("path/to/genome.json")?;
+let genome = load_genome("path/to/brain.genome")?;
 ```
 
 ## Use Cases

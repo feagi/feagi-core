@@ -11,6 +11,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+use super::artifact::decode_genome_artifact;
 use super::migration::ChainResult;
 use super::{converter::to_runtime_genome, GenomeParser};
 use crate::{EvoResult, RuntimeGenome};
@@ -18,17 +19,33 @@ use serde_json::Value;
 use std::fs;
 use std::path::Path;
 
-/// Load a genome from a JSON file.
+/// Load a genome from an external `.genome` artifact.
 pub fn load_genome_from_file<P: AsRef<Path>>(path: P) -> EvoResult<RuntimeGenome> {
-    let json_str = fs::read_to_string(path)?;
-    load_genome_from_json(&json_str)
+    let artifact = fs::read(path)?;
+    load_genome_from_artifact(&artifact)
 }
 
-/// Load a genome from a JSON file and return the chain report alongside
+/// Load a genome artifact and return the chain report alongside
 /// the runtime genome. See [`load_genome_with_report`] for semantics.
-pub fn load_genome_with_report_from_file<P: AsRef<Path>>(path: P) -> EvoResult<(RuntimeGenome, ChainResult)> {
-    let json_str = fs::read_to_string(path)?;
-    load_genome_with_report(&json_str)
+pub fn load_genome_with_report_from_file<P: AsRef<Path>>(
+    path: P,
+) -> EvoResult<(RuntimeGenome, ChainResult)> {
+    let artifact = fs::read(path)?;
+    load_genome_artifact_with_report(&artifact)
+}
+
+/// Load external genome artifact bytes using the current explicit codec.
+pub fn load_genome_from_artifact(artifact: &[u8]) -> EvoResult<RuntimeGenome> {
+    let (genome, _report) = load_genome_artifact_with_report(artifact)?;
+    Ok(genome)
+}
+
+/// Load external genome artifact bytes and return the schema-chain report.
+pub fn load_genome_artifact_with_report(
+    artifact: &[u8],
+) -> EvoResult<(RuntimeGenome, ChainResult)> {
+    let genome_value = decode_genome_artifact(artifact)?;
+    load_genome_value_with_report(genome_value)
 }
 
 /// Peek at genome's quantization precision without full parsing
@@ -45,7 +62,7 @@ pub fn load_genome_with_report_from_file<P: AsRef<Path>>(path: P) -> EvoResult<(
 ///
 /// # Example
 /// ```rust,ignore
-/// let precision = peek_quantization_precision("genome.json")?;
+/// let precision = peek_quantization_precision("brain.genome")?;
 /// let npu = match precision.as_str() {
 ///     "fp32" | "f32" => DynamicNPUGeneric::F32(RustNPU::<f32>::new(...)?),
 ///     "int8" => DynamicNPUGeneric::INT8(RustNPU::<INT8Value>::new(...)?),
@@ -55,8 +72,8 @@ pub fn load_genome_with_report_from_file<P: AsRef<Path>>(path: P) -> EvoResult<(
 pub fn peek_quantization_precision<P: AsRef<Path>>(path: P) -> EvoResult<String> {
     let json_str = fs::read_to_string(path)?;
 
-    let json_value: Value =
-        serde_json::from_str(&json_str).map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to parse JSON: {e}")))?;
+    let json_value: Value = serde_json::from_str(&json_str)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
 
     let precision = json_value
         .get("genome_physiology")
@@ -107,22 +124,23 @@ pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
 /// JSON parse, or structural failures where there is no `RuntimeGenome`
 /// to return at all.
 pub fn load_genome_with_report(json_str: &str) -> EvoResult<(RuntimeGenome, ChainResult)> {
-    let json_value: Value =
-        serde_json::from_str(json_str).map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to parse JSON: {e}")))?;
+    let json_value: Value = serde_json::from_str(json_str)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
+    load_genome_value_with_report(json_value)
+}
 
-    let hierarchical_json = if is_flat_format(&json_value) {
-        crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value).map_err(|e| {
-            tracing::error!(target: "feagi-evo", "convert_flat_to_hierarchical_full failed: {}", e);
-            e
-        })?
-    } else {
-        json_value
-    };
+/// Load a decoded genome document and return the schema-chain report.
+///
+/// Artifact codecs terminate before this function. Schema migration and
+/// validation therefore remain independent from the external representation.
+pub fn load_genome_value_with_report(
+    genome_value: Value,
+) -> EvoResult<(RuntimeGenome, ChainResult)> {
+    let (migrated_json, report) = migrate_genome_value_to_current(genome_value)?;
 
-    let (migrated_json, report) = run_default_chain(hierarchical_json)?;
-
-    let migrated_json_str = serde_json::to_string(&migrated_json)
-        .map_err(|e| crate::types::EvoError::invalid_genome(format!("Failed to serialize migrated genome: {e}")))?;
+    let migrated_json_str = serde_json::to_string(&migrated_json).map_err(|e| {
+        crate::types::EvoError::InvalidGenome(format!("Failed to serialize migrated genome: {e}"))
+    })?;
 
     let parsed = GenomeParser::parse(&migrated_json_str).map_err(|e| {
         tracing::error!(target: "feagi-evo", "GenomeParser::parse failed: {}", e);
@@ -135,6 +153,31 @@ pub fn load_genome_with_report(json_str: &str) -> EvoResult<(RuntimeGenome, Chai
     })?;
 
     Ok((runtime_genome, report))
+}
+
+/// Migrate and normalize genome JSON to the current schema without
+/// converting it into runtime structures.
+///
+/// Connectome-lite migration uses this API so the embedded genome and all
+/// semantic connectome references can be upgraded atomically.
+pub fn migrate_genome_json_to_current(json_str: &str) -> EvoResult<(Value, ChainResult)> {
+    let json_value: Value = serde_json::from_str(json_str)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
+    migrate_genome_value_to_current(json_value)
+}
+
+/// Migrate and normalize a decoded genome document to the current schema.
+pub fn migrate_genome_value_to_current(json_value: Value) -> EvoResult<(Value, ChainResult)> {
+    let hierarchical_json = if is_flat_format(&json_value) {
+        crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value).map_err(|e| {
+            tracing::error!(target: "feagi-evo", "convert_flat_to_hierarchical_full failed: {}", e);
+            e
+        })?
+    } else {
+        json_value
+    };
+
+    run_default_chain(hierarchical_json)
 }
 
 /// Run the default chain registry on `hierarchical_json` to bring it to
@@ -152,7 +195,7 @@ fn run_default_chain(mut hierarchical_json: Value) -> EvoResult<(Value, ChainRes
 
     let result = runner
         .run_to(&mut hierarchical_json, CURRENT_SCHEMA_VERSION)
-        .map_err(|e| crate::types::EvoError::invalid_genome(format!("Genome chain failed: {e}")))?;
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Genome chain failed: {e}")))?;
 
     if !result.migrators_applied.is_empty() {
         tracing::info!(
@@ -328,6 +371,9 @@ mod tests {
             "timestamp": 0.0
         }"#;
         let result = load_genome_with_report(json);
-        assert!(result.is_ok(), "load_genome_with_report must not turn validator output into Err");
+        assert!(
+            result.is_ok(),
+            "load_genome_with_report must not turn validator output into Err"
+        );
     }
 }

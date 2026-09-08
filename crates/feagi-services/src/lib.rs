@@ -88,6 +88,8 @@ Licensed under the Apache License, Version 2.0
 */
 
 #[cfg(feature = "connectome-serialization")]
+pub mod brain_artifact;
+#[cfg(feature = "connectome-serialization")]
 pub mod connectome;
 // The bundled service implementations still target the pre-refactor crate layout and are gated
 // behind `builtin-impls` until they are migrated, following the same convention as

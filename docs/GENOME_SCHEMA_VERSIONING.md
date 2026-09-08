@@ -1,8 +1,8 @@
 # Genome Schema Versioning
 
-**Status:** Approved (design only; no implementation yet)
+**Status:** Implemented
 **Owners:** feagi-core / feagi-evolutionary
-**Last updated:** 2026-04-24
+**Last updated:** 2026-09-06
 
 ## Goal
 
@@ -14,8 +14,12 @@ instead of shape-sniffing.
 ## Scope
 
 - Applies to `feagi-evolutionary::genome::*`.
+- Begins after external `.genome` bytes have been decoded into a schema
+  document. Artifact representation is owned by `genome/artifact.rs` and has
+  no role in schema-version dispatch.
 - Out of scope: representation coercion (flat ↔ hierarchical), runtime
-  genome behavior, NPU/burst-engine integration, amalgamation.
+  genome behavior, NPU/burst-engine integration, amalgamation, and artifact
+  encoding.
 
 ## Decisions (locked)
 

@@ -1,7 +1,11 @@
-use crate::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning};
-use crate::cortical_area::{CorticalAreaType, CorticalID};
-use crate::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
-use crate::feagi_genome_context_error::FeagiGenomeContextError;
+use crate::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
+use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
+use crate::genomic::cortical_area::{
+    CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+};
 use crate::sensor_cortical_units;
 use paste;
 use serde_json::{Map, Value};
@@ -34,6 +38,15 @@ macro_rules! default_mp_charge_accumulation_impl {
     };
 }
 
+macro_rules! default_firing_threshold_increment_impl {
+    () => {
+        None
+    };
+    ([$x:expr, $y:expr, $z:expr]) => {
+        Some([$x, $y, $z])
+    };
+}
+
 macro_rules! define_sensory_cortical_units_enum {
     (
         SensoryCorticalUnit {
@@ -45,6 +58,7 @@ macro_rules! define_sensory_cortical_units_enum {
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
                     $(default_firing_threshold: $default_firing_threshold:expr,)?
+                    $(default_firing_threshold_increment: [$default_firing_threshold_increment_x:expr, $default_firing_threshold_increment_y:expr, $default_firing_threshold_increment_z:expr],)?
                     $(default_mp_charge_accumulation: $default_mp_charge_accumulation:expr,)?
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
@@ -68,7 +82,7 @@ macro_rules! define_sensory_cortical_units_enum {
         impl SensoryCorticalUnit {
             $(
                 paste::paste! {
-                    #[doc = "Get cortical_area area types array for " $friendly_name " using individual parameters."]
+                    #[doc = "Get cortical area types array for " $friendly_name " using individual parameters."]
                     pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type),*) -> [CorticalAreaType; $number_cortical_areas] {
                         [
@@ -76,13 +90,13 @@ macro_rules! define_sensory_cortical_units_enum {
                         ]
                     }
 
-                    #[doc = "Get cortical_area IDs array for " $friendly_name " using individual parameters."]
+                    #[doc = "Get cortical IDs array for " $friendly_name " using individual parameters."]
                     pub const fn [<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> [CorticalID; $number_cortical_areas] {
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(
-                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::const_new($cortical_sub_unit_index))
+                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
                             ),*
                         ]
                     }
@@ -97,10 +111,10 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            /// Parse a sensory cortical_area unit from its snake_case name
+            /// Parse a sensory cortical unit from its snake_case name
             ///
             /// # Arguments
-            /// * `name` - The snake_case name (e.g., "simple_vision", "accelerometer")
+            /// * `name` - The snake_case name (e.g., "simple_vision", "raw_i_m_u")
             ///
             /// # Returns
             /// * `Some(SensoryCorticalUnit)` - If name matches a known type
@@ -114,7 +128,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            /// Returns all available sensory cortical_area unit types.
+            /// Returns all available sensory cortical unit types.
             /// This is useful for enumerating all possible sensor types in the system.
             pub const fn list_all() -> &'static [SensoryCorticalUnit] {
                 &[
@@ -124,7 +138,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 ]
             }
 
-            /// Returns the friendly (human-readable) name for this sensory cortical_area unit type.
+            /// Returns the friendly (human-readable) name for this sensory cortical unit type.
             pub const fn get_friendly_name(&self) -> &'static str {
                 match self {
                     $(
@@ -133,7 +147,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            /// Returns the 3-byte cortical_area ID unit reference for this type. // TODO delete me!
+            /// Returns the 3-byte cortical ID unit reference for this type. // TODO delete me!
             pub const fn get_cortical_id_unit_reference(&self) -> [u8; 3] {
                 match self {
                     $(
@@ -142,7 +156,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            /// Returns the number of cortical_area areas this type creates.
+            /// Returns the number of cortical areas this type creates.
             pub const fn get_number_cortical_areas(&self) -> usize {
                 match self {
                     $(
@@ -158,6 +172,20 @@ macro_rules! define_sensory_cortical_units_enum {
                     $(
                         SensoryCorticalUnit::$variant_name => {
                             default_firing_threshold_impl!($($default_firing_threshold)?)
+                        }
+                    )*
+                }
+            }
+
+            /// Returns template-defined default per-axis firing threshold increment [x, y, z].
+            /// `None` means no template override is defined.
+            pub const fn get_default_firing_threshold_increment(&self) -> Option<[f64; 3]> {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => {
+                            default_firing_threshold_increment_impl!(
+                                $([$default_firing_threshold_increment_x, $default_firing_threshold_increment_y, $default_firing_threshold_increment_z])?
+                            )
                         }
                     )*
                 }
@@ -184,7 +212,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            /// Returns the default topology for all units of this cortical_area type.
+            /// Returns the default topology for all units of this cortical type.
             pub fn get_unit_default_topology(&self) -> HashMap<CorticalSubUnitIndex, UnitTopology> {
                 match self {
                     $(
@@ -192,7 +220,7 @@ macro_rules! define_sensory_cortical_units_enum {
                             let mut topology = HashMap::new();
                             $(
                                 topology.insert(
-                                    CorticalSubUnitIndex::const_new($cortical_sub_unit_index),
+                                    CorticalSubUnitIndex::from($cortical_sub_unit_index),
                                     UnitTopology {
                                         relative_position: [$rel_x, $rel_y, $rel_z],
                                         channel_dimensions_default: [$dim_default_x, $dim_default_y, $dim_default_z],
@@ -221,7 +249,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, FeagiGenomeContextError> {
+            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, crate::FeagiDataError> {
                 match self {
                     $(
                         SensoryCorticalUnit::$variant_name => {
@@ -274,23 +302,74 @@ impl SensoryCorticalUnit {
 
     /// Get the default CorticalID for this unit with group index 0 (Absolute frame handling, Linear positioning).
     pub fn get_default_cortical_id_for_group(&self, group_index: CorticalUnitIndex) -> CorticalID {
+        use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
+            FrameChangeHandling, PercentageNeuronPositioning,
+        };
         let fh = FrameChangeHandling::Absolute;
         let pos = PercentageNeuronPositioning::Linear;
         match self {
-            SensoryCorticalUnit::Infrared => Self::get_cortical_ids_array_for_infrared_with_parameters(fh, pos, group_index)[0],
-            SensoryCorticalUnit::Proximity => Self::get_cortical_ids_array_for_proximity_with_parameters(fh, pos, group_index)[0],
-            SensoryCorticalUnit::Shock => Self::get_cortical_ids_array_for_shock_with_parameters(fh, pos, group_index)[0],
-            SensoryCorticalUnit::Battery => Self::get_cortical_ids_array_for_battery_with_parameters(fh, pos, group_index)[0],
-            SensoryCorticalUnit::Servo => Self::get_cortical_ids_array_for_servo_with_parameters(fh, pos, group_index)[0],
-            SensoryCorticalUnit::AnalogGPIO => Self::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(fh, pos, group_index)[0],
-            SensoryCorticalUnit::DigitalGPIO => Self::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(group_index)[0],
-            SensoryCorticalUnit::MiscData => Self::get_cortical_ids_array_for_misc_data_with_parameters(fh, group_index)[0],
-            SensoryCorticalUnit::TextEnglishInput => Self::get_cortical_ids_array_for_text_english_input_with_parameters(fh, group_index)[0],
-            SensoryCorticalUnit::CountInput => Self::get_cortical_ids_array_for_count_input_with_parameters(fh, pos, group_index)[0],
-            SensoryCorticalUnit::Vision => Self::get_cortical_ids_array_for_vision_with_parameters(fh, group_index)[0],
-            SensoryCorticalUnit::SegmentedVision => Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)[0],
-            SensoryCorticalUnit::Accelerometer => Self::get_cortical_ids_array_for_accelerometer_with_parameters(fh, pos, group_index)[0],
-            SensoryCorticalUnit::Gyroscope => Self::get_cortical_ids_array_for_gyroscope_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::Infrared => {
+                Self::get_cortical_ids_array_for_infrared_with_parameters(fh, pos, group_index)[0]
+            }
+            SensoryCorticalUnit::Proximity => {
+                Self::get_cortical_ids_array_for_proximity_with_parameters(fh, pos, group_index)[0]
+            }
+            SensoryCorticalUnit::Shock => {
+                Self::get_cortical_ids_array_for_shock_with_parameters(fh, pos, group_index)[0]
+            }
+            SensoryCorticalUnit::Battery => {
+                Self::get_cortical_ids_array_for_battery_with_parameters(fh, pos, group_index)[0]
+            }
+            SensoryCorticalUnit::Servo => {
+                Self::get_cortical_ids_array_for_servo_with_parameters(fh, pos, group_index)[0]
+            }
+            SensoryCorticalUnit::AnalogGPIO => {
+                Self::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(
+                    fh,
+                    pos,
+                    group_index,
+                )[0]
+            }
+            SensoryCorticalUnit::DigitalGPIO => {
+                Self::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(group_index)[0]
+            }
+            SensoryCorticalUnit::MiscData => {
+                Self::get_cortical_ids_array_for_misc_data_with_parameters(fh, group_index)[0]
+            }
+            SensoryCorticalUnit::TextEnglishInput => {
+                Self::get_cortical_ids_array_for_text_english_input_with_parameters(fh, group_index)
+                    [0]
+            }
+            SensoryCorticalUnit::CountInput => {
+                Self::get_cortical_ids_array_for_count_input_with_parameters(fh, pos, group_index)
+                    [0]
+            }
+            SensoryCorticalUnit::Vision => {
+                Self::get_cortical_ids_array_for_vision_with_parameters(fh, group_index)[0]
+            }
+            SensoryCorticalUnit::DepthMap => {
+                Self::get_cortical_ids_array_for_depth_map_with_parameters(fh, group_index)[0]
+            }
+            SensoryCorticalUnit::SegmentedVision => {
+                Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)
+                    [0]
+            }
+            SensoryCorticalUnit::RawIMU => {
+                // Default group index returns the accelerometer (sub-area 0) as
+                // the canonical "primary" cortical id of a Raw IMU unit.
+                Self::get_cortical_ids_array_for_raw_i_m_u_with_parameters(fh, pos, group_index)[0]
+            }
+            SensoryCorticalUnit::SmartIMU => {
+                Self::get_cortical_ids_array_for_smart_i_m_u_with_parameters(fh, pos, group_index)
+                    [0]
+            }
+            SensoryCorticalUnit::CartesianPosition => {
+                Self::get_cortical_ids_array_for_cartesian_position_with_parameters(
+                    fh,
+                    pos,
+                    group_index,
+                )[0]
+            }
         }
     }
 }

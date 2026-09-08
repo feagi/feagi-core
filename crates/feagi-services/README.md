@@ -41,5 +41,55 @@ impl NeuronService for MyTransport {
 
 Services sit between transport adapters (HTTP/ZMQ/etc.) and domain logic (BDU/NPU/etc.), providing a stable interface that doesn't change when either layer changes.
 
+## Genome artifacts
+
+External `.genome` bytes are decoded by
+`feagi-evolutionary::genome::artifact` before services invoke the independent
+genome schema migration chain. The current explicit codec is UTF-8 JSON. It
+does not define another version sequence: `genome_schema_version` remains the
+only schema migration key.
+
+Unlike connectome, genome artifacts do not currently have a binary envelope or
+artifact manifest. A future encoding must be selected by an explicit codec
+contract; services must not infer encoding from genome shape or silently fall
+back between formats.
+
+## Connectome persistence
+
+Full snapshots restore the serialized NPU state directly. Lite snapshots rebuild
+the genome baseline and then apply memory and plasticity overlays.
+
+During lite import, long-term-memory pattern hashes are recomputed from persisted
+replay-frame cortical areas and voxel coordinates after neuroembryogenesis. This
+keeps recall aligned with rebuilt runtime neuron IDs while leaving full import
+and runtime pattern detection unchanged. Rehashing fails explicitly when a
+replay coordinate is missing or resolves ambiguously.
+
+### Artifact compatibility and migration
+
+`brain_artifact::validate_and_migrate_brain_artifact` is the authoritative,
+transport-independent compatibility boundary. It performs these stages
+atomically on immutable source bytes:
+
+1. Validate the binary container and connectome schema versions.
+2. Migrate and validate the embedded genome through `feagi-evolutionary`.
+3. Rewrite connectome cortical references using the genome migration's
+   identifier map.
+4. Reject references absent from the migrated genome.
+5. Embed a `BrainArtifactManifest` with independent container, connectome,
+   genome, producer, digest, and migration-history fields.
+6. Serialize a new artifact and return a structured migration report.
+
+Connectome-lite artifacts must include a genome. Full artifacts may omit it
+because they carry complete structure; in that case the report explicitly says
+genome compatibility was not evaluated. Future versions and migration-chain
+gaps fail explicitly. The service never downgrades and has no permissive
+fallback.
+
+HTTP adapters expose `/v1/connectome/validate` and `/v1/connectome/migrate`.
+Python services use the same implementation through
+`feagi_rust_py_libs.connectome`, preventing validation drift between FEAGI and
+Composer.
+
 Part of the [FEAGI](https://github.com/feagi/feagi-core) ecosystem.
 
