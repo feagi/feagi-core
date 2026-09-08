@@ -7,7 +7,6 @@ use crate::data_messaging::errors::{ChannelReceivingError, ChannelSendingError};
 pub trait DataChannelPair<T: Send> {
     type Transmitter: Send;
     type Receiver: Send;
-    fn new_pair(buffer_length: usize) -> (Self::Transmitter, Self::Receiver);
 }
 
 /// Generic trait for a struct that can send data to a paired `DataReceiver`

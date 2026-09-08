@@ -6,14 +6,16 @@ use crate::data_messaging::errors::{ChannelReceivingError, ChannelSendingError, 
 
 pub struct FlumeChannelPair<T: Send>(PhantomData<T>);
 
-impl<T: Send> DataChannelPair<T> for FlumeChannelPair<T> {
-    type Transmitter = FlumeTransmitter<T>;
-    type Receiver = FlumeReceiver<T>;
-
-    fn new_pair(buffer_length: usize) -> (Self::Transmitter, Self::Receiver) {
+impl<T: Send> FlumeChannelPair<T> {
+    pub fn new_pair(buffer_length: usize) -> (<FlumeChannelPair<T> as DataChannelPair<T>>::Transmitter, <FlumeChannelPair<T> as DataChannelPair<T>>::Receiver) {
         let (t, r) = flume::bounded(buffer_length);
         (FlumeTransmitter(t), FlumeReceiver(r))
     }
+}
+
+impl<T: Send> DataChannelPair<T> for FlumeChannelPair<T> {
+    type Transmitter = FlumeTransmitter<T>;
+    type Receiver = FlumeReceiver<T>;
 }
 
 pub struct FlumeTransmitter<T: Send>(flume::Sender<T>);

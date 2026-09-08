@@ -10,10 +10,6 @@ pub mod data_messaging;
 
 pub mod feagi_data_error; // TODO This error is very generic, we should break it apart
 
-pub mod bidirectional_channel_queue;
-
-
-
 
 
 

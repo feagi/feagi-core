@@ -10,7 +10,7 @@ pub struct FlumeDataCycleEndpoint<T: Send> {
     receiver: FlumeReceiver<T>,
 }
 
-impl<T: Send> DataCycleEndpoint<T> for FlumeDataCycleEndpoint<T> {
+impl<T: Send> FlumeDataCycleEndpoint<T> {
     fn new_data_cycle_endpoint_pair(buffer_length: usize) -> (Self, Self) {
         let (a, b) = FlumeChannelPair::new_pair(buffer_length);
         let (c, d) = FlumeChannelPair::new_pair(buffer_length);
@@ -25,7 +25,9 @@ impl<T: Send> DataCycleEndpoint<T> for FlumeDataCycleEndpoint<T> {
             }
         )
     }
+}
 
+impl<T: Send> DataCycleEndpoint<T> for FlumeDataCycleEndpoint<T> {
     fn block_receive(&mut self) -> Result<T, ChannelReceivingError> {
         self.receiver.block_receive()
     }
