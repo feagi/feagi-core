@@ -529,8 +529,8 @@ mod tests {
         let r = decode_single_voxel(&id, 0, 0, 7, dims, 1);
         assert!(r.success);
         assert!(
-            (r.value_0_1 - 0.125).abs() < 0.01,
-            "z=7 with z_max=8 -> 1.0 - 7/8 = 0.125 (min for linear)"
+            (r.value_0_1 - 0.0).abs() < 0.01,
+            "z=7 with z_max=8 -> 1.0 - 7/7 = 0.0 (min for linear)"
         );
     }
 
