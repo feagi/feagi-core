@@ -1,0 +1,51 @@
+[package]
+name = "feagi-brain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+
+[features]
+
+default = [
+    "std", # "engine-composable-rayon"
+]
+
+# ========================= Standard Toggleable Features ========================= #
+
+std = [
+    "alloc",
+    "ahash/std",
+    "serde/std",
+    "serde_json/std",
+    "uuid/std"
+
+]
+
+alloc = [
+    "serde_json",
+    "serde/alloc",
+]
+
+[dependencies]
+feagi-brain-templates = {path = "feagi-brain-templates"}
+feagi-data = {path = "../feagi-data"}
+feagi-models = {path = "../feagi-models" }
+feagi-logging-and-errors = {path = "../feagi-logging-and-errors"}
+feagi-genomic-context = {path = "../feagi-genomic-context"}
+
+
+# External crates
+paste = { workspace = true}
+ahash = { workspace = true, default-features = false}
+serde = { workspace = true, default-features = false}
+# Toggled external crates
+serde_json = { workspace = true, optional = true}
+uuid = { workspace = true, default-features = false, features = ["v7", "serde"] }
+
+[lints]
+workspace = true
