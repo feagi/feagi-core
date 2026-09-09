@@ -1,0 +1,23 @@
+[package]
+name = "feagi-brain-device-template-proc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Proc macro for generating IO Device Templates"
+
+[lib]
+proc-macro = true
+
+[features]
+# No features here! This is all compile macro stuff!
+
+[dependencies]
+syn = { version = "3.0.5", features = ["full"] }
+quote = "1.0.47"
+proc-macro2 = "1.0.107"
+heck = "0.5.0"

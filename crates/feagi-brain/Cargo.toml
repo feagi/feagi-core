@@ -32,9 +32,7 @@ alloc = [
 ]
 
 [dependencies]
-feagi-brain-templates = {path = "feagi-brain-templates"}
 feagi-data = {path = "../feagi-data"}
-feagi-models = {path = "../feagi-models" }
 feagi-logging-and-errors = {path = "../feagi-logging-and-errors"}
 feagi-genomic-context = {path = "../feagi-genomic-context"}
 

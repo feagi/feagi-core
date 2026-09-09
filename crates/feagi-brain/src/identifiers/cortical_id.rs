@@ -1,4 +1,24 @@
 
+macro_rules! match_bytes_by_cortical_type {
+    ($cortical_id_bytes: expr,
+        custom => $custom:block,
+        memory => $memory:block,
+        core => $core:block,
+
+        brain_input => $brain_input:block,
+        brain_output => $brain_output:block,
+        invalid => $invalid:block,
+    ) => {
+        match $cortical_id_bytes[0] {
+            b'c' => $custom,
+            b'm' => $memory,
+            b'_' => $core,
+            b'i' => $brain_input,
+            b'o' => $brain_output,
+            _ => $invalid,
+        }
+    };
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CorticalID {
@@ -68,45 +88,6 @@ impl CorticalID {
 
     pub fn write_id_to_bytes(&self, bytes: &mut [u8; Self::NUMBER_OF_BYTES]) {
         bytes.copy_from_slice(&self.bytes)
-    }
-
-    /// Extract IO data type configuration from cortical_area ID bytes
-    ///
-    /// Extracts the data type configuration flag from bytes 4-5 (u16, little-endian)
-    /// and converts it to an IOCorticalAreaDataFlag.
-    ///
-    /// This is used for both BrainInput and BrainOutput cortical_area areas.
-    #[inline]
-    pub fn extract_io_data_flag(&self) -> Result<IOCorticalAreaConfigurationFlag, FeagiGenomeContextError> {
-        let data_type_config = u16::from_le_bytes([self.bytes[4], self.bytes[5]]);
-        IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(data_type_config)
-    }
-
-    pub fn as_cortical_type(&self) -> Result<CorticalAreaType, FeagiGenomeContextError> {
-        match_bytes_by_cortical_type!(self.bytes,
-            custom => {
-                // NOTE: Only 1 custom type currently
-                Ok(CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire))
-            },
-            memory => {
-                // NOTE: Only 1 memory type currently
-                Ok(CorticalAreaType::Memory(MemoryCorticalType::Memory))
-            },
-            core => {
-                Ok(CorticalAreaType::Core(CoreCorticalType::try_from_cortical_id_bytes_type_unchecked(&self.bytes)?))
-            },
-            brain_input => {
-                Ok(CorticalAreaType::BrainInput(self.extract_io_data_flag()?))
-            },
-            brain_output => {
-                Ok(CorticalAreaType::BrainOutput(self.extract_io_data_flag()?))
-            },
-            invalid => {
-                Err(
-                FeagiCorticalIDErrKey::new("cortical_area ID does not encode a valid cortical_area area type").into()
-                )
-            },
-        )
     }
 
     pub fn as_bytes(&self) -> &[u8; CorticalID::CORTICAL_ID_LENGTH] {
