@@ -587,9 +587,17 @@ impl Display for PoseEstimationProperties {
 
 //region Spatial Pointer
 
+/// Fixed per-channel width for SpatialPointer (one cortical X column per XYZ axis).
+pub const SPATIAL_POINTER_CHANNEL_WIDTH: u32 = 3;
+/// Fixed per-channel height for SpatialPointer (percentage encoders/decoders use Y=0 only).
+pub const SPATIAL_POINTER_CHANNEL_HEIGHT: u32 = 1;
+
 /// Properties describing a SpatialPointer cortical area.
 ///
-/// `width`, `height`, and `depth` define the per-channel voxel grid the decoder reads.
+/// The per-channel voxel grid is fixed at `3×1×depth`, matching the CartesianPosition
+/// IPU layout: three X columns (x/y/z), height 1, and configurable Z neuron depth.
+/// `width` and `height` must equal [`SPATIAL_POINTER_CHANNEL_WIDTH`] and
+/// [`SPATIAL_POINTER_CHANNEL_HEIGHT`]; only `depth` (Z resolution) is configurable.
 ///
 /// The remaining fields configure the Incremental decode mode (see `FrameChangeHandling`).
 /// They are unused in Absolute mode and are therefore optional at the serialization
@@ -673,9 +681,16 @@ impl SpatialPointerProperties {
     }
 
     fn validate_dimensions(width: u32, height: u32, depth: u32) -> Result<(), FeagiDataError> {
-        if width == 0 || height == 0 || depth == 0 {
+        if width != SPATIAL_POINTER_CHANNEL_WIDTH || height != SPATIAL_POINTER_CHANNEL_HEIGHT {
+            return Err(FeagiDataError::BadParameters(format!(
+                "SpatialPointer cortical layout must be {}x{}xdepth (CartesianPosition-style); \
+                 got {}x{}x{}",
+                SPATIAL_POINTER_CHANNEL_WIDTH, SPATIAL_POINTER_CHANNEL_HEIGHT, width, height, depth
+            )));
+        }
+        if depth == 0 {
             return Err(FeagiDataError::BadParameters(
-                "SpatialPointerProperties dimensions must all be non-zero".into(),
+                "SpatialPointer 'depth' (Z neuron resolution) must be non-zero".into(),
             ));
         }
         Ok(())

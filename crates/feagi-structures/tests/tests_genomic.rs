@@ -2156,6 +2156,58 @@ mod test_sensory_cortical_unit {
             );
         }
     }
+
+    /// Tests for the `SpatialPointer` motor unit: OPU counterpart of `CartesianPosition`.
+    mod test_spatial_pointer_unit {
+        use super::*;
+
+        #[test]
+        fn test_spatial_pointer_is_single_subunit_with_ptr_subtype() {
+            assert_eq!(
+                MotorCorticalUnit::SpatialPointer.get_number_cortical_areas(),
+                1
+            );
+
+            let ids = MotorCorticalUnit::get_cortical_ids_array_for_spatial_pointer_with_parameters(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear,
+                CorticalUnitIndex::from(0u8),
+            );
+            assert_eq!(ids.len(), 1);
+            let bytes = ids[0].as_bytes();
+            assert_eq!(bytes[0], b'o', "SpatialPointer must be an OPU");
+            assert_eq!(&bytes[1..4], b"ptr", "SpatialPointer subtype must be 'ptr'");
+        }
+
+        #[test]
+        fn test_spatial_pointer_default_dims_are_3x1x10() {
+            let topology = MotorCorticalUnit::SpatialPointer.get_unit_default_topology();
+            assert_eq!(topology.len(), 1);
+            let unit = topology
+                .get(&0.into())
+                .expect("Missing SpatialPointer sub-area topology");
+            assert_eq!(unit.channel_dimensions_default, [3, 1, 10]);
+            assert_eq!(unit.channel_dimensions_min, [3, 1, 1]);
+            assert_eq!(unit.channel_dimensions_max, [3, 1, 1024]);
+        }
+
+        #[test]
+        fn test_spatial_pointer_allows_absolute_and_incremental() {
+            let allowed = MotorCorticalUnit::SpatialPointer
+                .get_allowed_frame_change_handling()
+                .expect("SpatialPointer must declare allowed frame-change handling");
+            assert!(allowed.contains(&FrameChangeHandling::Absolute));
+            assert!(allowed.contains(&FrameChangeHandling::Incremental));
+        }
+
+        #[test]
+        fn test_spatial_pointer_snake_case_name() {
+            assert_eq!(
+                MotorCorticalUnit::SpatialPointer.get_snake_case_name(),
+                "spatial_pointer"
+            );
+        }
+    }
 }
 
 /// Comprehensive integration tests spanning multiple modules

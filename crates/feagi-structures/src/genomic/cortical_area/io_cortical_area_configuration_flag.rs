@@ -308,12 +308,11 @@ impl fmt::Display for PercentageNeuronPositioning {
 
 /// Returns the area configuration flag for a SpatialPointer cortical area.
 ///
-/// SpatialPointer encodes its decode mechanism in the area's data type so the genome is
-/// self-describing for consumers:
-/// - `Absolute` decodes an unsigned position centroid, so the area is `Percentage3D`
-///   (each axis in `[0, 1]`).
-/// - `Incremental` decodes a signed motion vector, so the area is `SignedPercentage3D`
-///   (each axis in `[-1, 1]`, `0` meaning no motion).
+/// Voxel layout is always `3×1×depth` (CartesianPosition-style percentage columns).
+/// The flag describes the decoded motor output, not alternate voxel topologies:
+/// - `Absolute` emits an unsigned position (`Percentage3D`, each axis in `[0, 1]`).
+/// - `Incremental` emits a signed motion vector (`SignedPercentage3D`, each axis in
+///   `[-1, 1]`, `0` meaning no motion) derived from position history over `window_ms`.
 ///
 /// Signedness is therefore fully determined by the frame-change mode; there is no valid
 /// "absolute + signed" or "incremental + unsigned" combination.

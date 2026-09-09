@@ -104,8 +104,9 @@ fn per_channel_motor_dimensions_for_registration(
         }
         return (default_w, default_h, default_d);
     }
-    // SpatialPointer: honor dimensions from decoder block.
-    // Expected: {"SpatialPointer": {"width": N, "height": N, "depth": N}}
+    // SpatialPointer: fixed 3×1×depth layout (CartesianPosition-style). Only Z depth is
+    // configurable via the decoder block.
+    // Expected: {"SpatialPointer": {"depth": N}} (width/height ignored if present).
     if motor_unit == MotorCorticalUnit::SpatialPointer {
         if let Some(dims) =
             spatial_pointer_dims_from_decoder_properties(decoder_properties, unit_topology)
@@ -188,40 +189,26 @@ fn pose_dims_from_decoder_properties(
     ))
 }
 
-/// Extracts and clamps spatial pointer (width, height, depth) from a
-/// `{"SpatialPointer": {"width": N, "height": N, "depth": N}}` decoder block.
-/// Returns `None` if the block is absent, malformed, or contains any zero dimension.
+/// Extracts and clamps spatial pointer `(3, 1, depth)` from a
+/// `{"SpatialPointer": {"depth": N}}` decoder block.
+/// Returns `None` if the block is absent, malformed, or depth is zero.
 fn spatial_pointer_dims_from_decoder_properties(
     decoder_properties: Option<&Value>,
     unit_topology: &UnitTopology,
 ) -> Option<(usize, usize, usize)> {
     let pointer = decoder_properties?.get("SpatialPointer")?;
-    let w = pointer
-        .get("width")
-        .and_then(|v| v.as_u64())
-        .and_then(|u| u32::try_from(u).ok())?;
-    let h = pointer
-        .get("height")
-        .and_then(|v| v.as_u64())
-        .and_then(|u| u32::try_from(u).ok())?;
     let d = pointer
         .get("depth")
         .and_then(|v| v.as_u64())
         .and_then(|u| u32::try_from(u).ok())?;
-    if w == 0 || h == 0 || d == 0 {
+    if d == 0 {
         return None;
     }
-    let w_min = unit_topology.channel_dimensions_min[0].max(1);
-    let h_min = unit_topology.channel_dimensions_min[1].max(1);
+    let w = unit_topology.channel_dimensions_min[0].max(3) as usize;
+    let h = unit_topology.channel_dimensions_min[1].max(1) as usize;
     let d_min = unit_topology.channel_dimensions_min[2].max(1);
-    let w_max = unit_topology.channel_dimensions_max[0].max(1);
-    let h_max = unit_topology.channel_dimensions_max[1].max(1);
     let d_max = unit_topology.channel_dimensions_max[2].max(1);
-    Some((
-        w.clamp(w_min, w_max) as usize,
-        h.clamp(h_min, h_max) as usize,
-        d.clamp(d_min, d_max) as usize,
-    ))
+    Some((w, h, d.clamp(d_min, d_max) as usize))
 }
 
 fn build_friendly_unit_name(unit_label: &str, group: u8, sub_unit_index: usize) -> String {
@@ -242,6 +229,19 @@ fn extract_grouping_array(unit_def: &Value) -> &[Value] {
         .and_then(|v| v.as_array())
         .map(Vec::as_slice)
         .unwrap_or(&[])
+}
+
+/// Returns the number of cortical devices represented by a motor registration.
+///
+/// `SpatialPointer` is one `Percentage3D`/`SignedPercentage3D` device. Its three
+/// flattened snapshot values represent axes of that tuple, rather than three independent
+/// cortical devices. Other motor unit registrations use one device per grouping entry.
+fn motor_registration_device_count(motor_unit: MotorCorticalUnit, unit_def: &Value) -> usize {
+    let grouping_count = extract_grouping_array(unit_def).len();
+    if motor_unit == MotorCorticalUnit::SpatialPointer && grouping_count > 0 {
+        return 1;
+    }
+    grouping_count
 }
 
 fn first_grouping_property(unit_def: &Value, key: &str) -> Option<String> {
@@ -573,11 +573,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                 };
                 let group: CorticalUnitIndex = group_u8.into();
 
-                let device_count = unit_def
-                    .get("device_grouping")
-                    .and_then(|v| v.as_array())
-                    .map(|a| a.len())
-                    .unwrap_or(0);
+                let device_count = motor_registration_device_count(motor_unit, unit_def);
                 if device_count == 0 {
                     warn!(
                     "⚠️ [API] device_grouping is empty for motor unit '{}' group {}; skipping auto-create",
@@ -756,12 +752,21 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
 
                         if dimensions_mismatch || dev_count_mismatch {
                             let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
-                            // Pass total dimensions. Do NOT pass cortical_dimensions_per_device here:
-                            // genome service would treat it as per-device and multiply depth by dev_count.
+                            // Supply both total and per-device dimensions. The structural rebuild
+                            // derives the total from the latter when dev_count is changed; omitting
+                            // it would preserve stale per-device geometry from a prior registration.
                             changes.insert(
                                 "dimensions".to_string(),
                                 serde_json::json!([
                                     expected_dimensions.0,
+                                    expected_dimensions.1,
+                                    expected_dimensions.2
+                                ]),
+                            );
+                            changes.insert(
+                                "cortical_dimensions_per_device".to_string(),
+                                serde_json::json!([
+                                    expected_dimensions.0 / device_count,
                                     expected_dimensions.1,
                                     expected_dimensions.2
                                 ]),
@@ -1533,7 +1538,7 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
 
 #[cfg(test)]
 mod count_output_registration_tests {
-    use super::per_channel_motor_dimensions_for_registration;
+    use super::{motor_registration_device_count, per_channel_motor_dimensions_for_registration};
     use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
     use feagi_structures::genomic::MotorCorticalUnit;
     use serde_json::json;
@@ -1618,13 +1623,28 @@ mod count_output_registration_tests {
     }
 
     #[test]
-    fn spatial_pointer_uses_decoder_dimensions() {
+    fn spatial_pointer_uses_fixed_xy_and_decoder_depth() {
         let motor = MotorCorticalUnit::SpatialPointer;
         let topo = motor.get_unit_default_topology();
         let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
-        let dec = json!({"SpatialPointer": {"width": 64u32, "height": 64u32, "depth": 64u32}});
+        let dec = json!({"SpatialPointer": {"depth": 32u32}});
         let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
-        assert_eq!((w, h, d), (64, 64, 64));
+        assert_eq!((w, h, d), (3, 1, 32));
+    }
+
+    #[test]
+    fn spatial_pointer_axis_entries_are_one_cortical_device() {
+        let unit_def = json!({
+            "device_grouping": [
+                {"friendly_name": "x"},
+                {"friendly_name": "y"},
+                {"friendly_name": "z"}
+            ]
+        });
+        assert_eq!(
+            motor_registration_device_count(MotorCorticalUnit::SpatialPointer, &unit_def),
+            1
+        );
     }
 }
 

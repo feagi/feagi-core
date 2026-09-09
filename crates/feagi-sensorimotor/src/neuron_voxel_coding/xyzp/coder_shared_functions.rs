@@ -7,9 +7,13 @@ pub(crate) fn decode_unsigned_percentage_from_linear_neurons(
     z_max_depth: u32,
     replace_val: &mut Percentage,
 ) {
-    let z_max_depth: f32 = z_max_depth as f32; // WARNING: If we ever get neuron indexes past z_max_depth, we run the risk of invalid percentages!
+    let max_z_index = z_max_depth.saturating_sub(1);
+    if max_z_index == 0 {
+        replace_val.inplace_update_unchecked(1.0);
+        return;
+    }
     let average_index_value: f32 = neuron_indexes_along_z.iter().copied().sum::<u32>() as f32
-        / (z_max_depth * neuron_indexes_along_z.len() as f32);
+        / (max_z_index as f32 * neuron_indexes_along_z.len() as f32);
     replace_val.inplace_update_unchecked(1.0 - average_index_value); // Flip since index z 0 should be max value
 }
 
@@ -107,8 +111,7 @@ pub(crate) fn encode_unsigned_percentage_to_linear_neuron_z_index(
     // The raw `floor((1 - val) * z_len)` yields `z_len` for val=0.0, which is
     // one past the last valid neuron and would silently fail to fire any neuron
     // in the live cortical area. Clamp to `z_len - 1` so the boundary case
-    // still produces a real spike. Discretization implies a residual error of
-    // up to `1 / z_len` on the val=0.0 boundary at decode time.
+    // still produces a real spike.
     neuron_indexes_along_z.clear();
     let max_idx = (z_length_as_float as u32).saturating_sub(1);
     let raw_idx = ((1.0 - val.get_as_0_1()) * z_length_as_float).floor() as u32;
@@ -266,11 +269,9 @@ mod tests {
                 z_max_depth,
                 &mut percentage,
             );
-            // Discretization residual at the val=0 boundary is bounded by 1/z_len.
-            let boundary_tolerance = (1.0 / z_max_depth_float) + tolerance;
             assert!(
-                (percentage.get_as_0_1() - 0.0).abs() <= boundary_tolerance,
-                "Round trip should preserve 0.0 within one bin (got {})",
+                (percentage.get_as_0_1() - 0.0).abs() < tolerance,
+                "Round trip should preserve the minimum boundary (got {})",
                 percentage.get_as_0_1()
             );
         }
@@ -331,9 +332,10 @@ mod tests {
                 z_max_depth,
                 &mut percentage,
             );
+            let quantization_tolerance = (1.0 / (z_max_depth_float - 1.0)) + tolerance;
             assert!(
-                (percentage.get_as_0_1() - 0.5).abs() < tolerance,
-                "Round trip should preserve 0.5"
+                (percentage.get_as_0_1() - 0.5).abs() <= quantization_tolerance,
+                "Round trip should remain within one discrete level of 0.5"
             );
         }
 
