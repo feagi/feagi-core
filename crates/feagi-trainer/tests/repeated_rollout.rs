@@ -175,6 +175,8 @@ fn encoder_profile() -> EncoderBindingProfile {
             bins: 1,
             spacing: BinSpacing::Linear,
         },
+        image_width: None,
+        image_height: None,
     }
 }
 
@@ -183,6 +185,9 @@ fn decoder_profile() -> DecoderBindingProfile {
         cortical_area_id: "o____C".to_string(),
         class_count: 3,
         bins: 1,
+        mask_width: None,
+        mask_height: None,
+        mask_depth: None,
     }
 }
 

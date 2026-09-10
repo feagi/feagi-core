@@ -40,6 +40,7 @@ feagi-dataset-contracts = { workspace = true }
 # The encoder/decoder plugins are selectors over these (ADR-006, Appendix B.1).
 feagi-structures = { version = "=0.0.27", path = "../feagi-structures" }
 feagi-sensorimotor = { version = "=0.0.27", path = "../feagi-sensorimotor" }
+image = { workspace = true }
 
 # Remote/ZMQ runtime path (optional; behind `remote-runtime`). The open crate stays a pure
 # ZMQ/`feagi-agent` client — no Composer/REST coupling (ADR-006).
@@ -50,3 +51,6 @@ feagi-agent = { version = "=0.0.27", path = "../feagi-agent", default-features =
 ], optional = true }
 feagi-io = { version = "=0.0.27", path = "../feagi-io", optional = true }
 feagi-serialization = { version = "=0.0.27", path = "../feagi-serialization", optional = true }
+
+[dev-dependencies]
+tempfile = "3.20.0"

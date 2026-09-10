@@ -1607,6 +1607,10 @@ mod test_sensory_cortical_unit {
             );
             assert_eq!(format!("{}", SensoryCorticalUnit::DepthMap), "Depth Map");
             assert_eq!(
+                format!("{}", SensoryCorticalUnit::ObjectSegmentationInput),
+                "Object Segmentation"
+            );
+            assert_eq!(
                 format!("{}", SensoryCorticalUnit::SegmentedVision),
                 "Segmented Vision"
             );
@@ -1621,6 +1625,10 @@ mod test_sensory_cortical_unit {
             assert_eq!(
                 SensoryCorticalUnit::DepthMap.get_snake_case_name(),
                 "depth_map"
+            );
+            assert_eq!(
+                SensoryCorticalUnit::ObjectSegmentationInput.get_snake_case_name(),
+                "object_segmentation_input"
             );
             assert_eq!(
                 SensoryCorticalUnit::SegmentedVision.get_snake_case_name(),
@@ -1666,6 +1674,32 @@ mod test_sensory_cortical_unit {
                 SensoryCorticalUnit::DepthMap.get_default_firing_threshold_increment(),
                 Some([0.0, 0.0, 0.01])
             );
+        }
+
+        #[test]
+        fn test_object_segmentation_input_cortical_id_and_default_topology() {
+            let group = CorticalUnitIndex::from(2u8);
+            let ids = SensoryCorticalUnit::get_cortical_ids_array_for_object_segmentation_input_with_parameters(
+                FrameChangeHandling::Absolute,
+                group,
+            );
+            assert_eq!(ids.len(), 1);
+
+            let bytes = ids[0].as_bytes();
+            assert_eq!(bytes[0], b'i', "Expected IPU cortical ID prefix 'i'");
+            assert_eq!(
+                &bytes[1..4],
+                b"seg",
+                "Expected subtype 'seg' for Object Segmentation Input"
+            );
+
+            let topology = SensoryCorticalUnit::ObjectSegmentationInput.get_unit_default_topology();
+            let unit = topology
+                .get(&0.into())
+                .expect("Missing topology entry for ObjectSegmentationInput area 0");
+            assert_eq!(unit.channel_dimensions_default, [32, 32, 8]);
+            assert_eq!(unit.channel_dimensions_min, [1, 1, 1]);
+            assert_eq!(unit.channel_dimensions_max, [4096, 4096, 1024]);
         }
 
         #[test]

@@ -53,6 +53,8 @@ fn population_profile(channels: u32) -> EncoderBindingProfile {
             bins: BINS,
             spacing: BinSpacing::Linear,
         },
+        image_width: None,
+        image_height: None,
     }
 }
 
@@ -114,6 +116,9 @@ fn roundtrip_decode_single(value: f64) -> f64 {
         cortical_area_id: "iris_opu".to_string(),
         class_count: 1,
         bins: BINS,
+        mask_width: None,
+        mask_height: None,
+        mask_depth: None,
     };
     match decoder.decode(motor, &profile).expect("decode") {
         TypedPrediction::Class { scores, .. } => scores[0],
@@ -193,6 +198,9 @@ fn decoder_argmaxes_strongest_class_channel() {
         cortical_area_id: "iris_opu".to_string(),
         class_count: 3,
         bins: BINS,
+        mask_width: None,
+        mask_height: None,
+        mask_depth: None,
     };
     let prediction = decoder.decode(motor, &profile).expect("decode");
     match prediction {

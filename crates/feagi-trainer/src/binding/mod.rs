@@ -27,9 +27,11 @@ pub mod decoder;
 pub mod encoder;
 pub mod encoding_scheme;
 pub mod environment;
+pub mod image_frame_encoder;
 pub mod motor_decoder;
 pub mod population_encoder;
 pub mod profile;
+pub mod segmentation_mask_decoder;
 #[cfg(feature = "remote-runtime")]
 pub mod remote_runtime;
 pub mod reward;
@@ -41,14 +43,16 @@ pub use decoder::DecoderPlugin;
 pub use encoder::{EncoderPlugin, ObservationEncoder};
 pub use encoding_scheme::{BinSpacing, EncodingScheme, ResolvedEncodingScheme};
 pub use environment::{Action, Environment, Observation, StepOutcome, StubEnvironment};
+pub use image_frame_encoder::ImageFrameEncoder;
 pub use motor_decoder::{ContinuousDecodeScheme, ContinuousMotorDecoder};
 pub use population_encoder::PopulationEncoder;
 pub use profile::{DecoderBindingProfile, EncoderBindingProfile};
+pub use segmentation_mask_decoder::SegmentationMaskDecoder;
 #[cfg(feature = "remote-runtime")]
 pub use remote_runtime::{RemoteFeagiRuntime, RemoteRuntimeConfig};
 pub use reward::{
     AffectChannel, EnvironmentRewardPolicy, PainPleasureReward, RewardPolicy, RewardSignal,
-    SurvivalReward,
+    SegmentationOverlapReward, SurvivalReward,
 };
 pub use runtime::FeagiRuntime;
 pub use stub_runtime::StubFeagiRuntime;

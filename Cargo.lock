@@ -2238,8 +2238,10 @@ dependencies = [
  "feagi-sensorimotor",
  "feagi-serialization",
  "feagi-structures",
+ "image",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.69",
 ]
 

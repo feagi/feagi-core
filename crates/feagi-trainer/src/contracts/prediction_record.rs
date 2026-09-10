@@ -30,6 +30,15 @@ pub enum TypedPrediction {
     },
     /// Multi-label class prediction.
     ClassSet(Vec<u32>),
+    /// Dense per-pixel class-id mask (row-major, length = width * height).
+    SegmentationMask {
+        /// Mask width in pixels.
+        width: u32,
+        /// Mask height in pixels.
+        height: u32,
+        /// Per-pixel predicted class ids aligned to `(x, y)` row-major order.
+        labels: Vec<u8>,
+    },
     /// Scalar regression prediction.
     Scalar(f64),
     /// Vector regression prediction.

@@ -107,6 +107,116 @@ impl RewardPolicy for PainPleasureReward {
     }
 }
 
+/// Segmentation overlap reward: Pleasure when mean IoU meets threshold, Pain otherwise.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SegmentationOverlapReward {
+    magnitude: f64,
+    iou_threshold: f64,
+}
+
+impl SegmentationOverlapReward {
+    /// Stable plugin id for this segmentation reward policy.
+    pub const PLUGIN_ID: &'static str = "reward.segmentation_overlap";
+
+    /// Creates a policy with a fixed stimulation magnitude and IoU threshold in `[0.0, 1.0]`.
+    pub fn new(magnitude: f64, iou_threshold: f64) -> Result<Self, TrainerError> {
+        for (name, value) in [("magnitude", magnitude), ("iou_threshold", iou_threshold)] {
+            if !(0.0..=1.0).contains(&value) {
+                return Err(TrainerError::Config(format!(
+                    "segmentation reward {name} must be in [0.0, 1.0], got {value}"
+                )));
+            }
+        }
+        Ok(Self {
+            magnitude,
+            iou_threshold,
+        })
+    }
+
+    fn mask_iou(predicted: &[u8], target: &[u8], ignore_label: Option<u8>) -> Result<f64, TrainerError> {
+        if predicted.len() != target.len() {
+            return Err(TrainerError::Config(format!(
+                "segmentation reward mask length mismatch: {} vs {}",
+                predicted.len(),
+                target.len()
+            )));
+        }
+        let mut true_positive = vec![0_u64; 256];
+        let mut false_positive = vec![0_u64; 256];
+        let mut false_negative = vec![0_u64; 256];
+        for (p, t) in predicted.iter().zip(target.iter()) {
+            if ignore_label == Some(*t) {
+                continue;
+            }
+            if p == t {
+                true_positive[*p as usize] += 1;
+            } else {
+                false_positive[*p as usize] += 1;
+                false_negative[*t as usize] += 1;
+            }
+        }
+        let mut iou_sum = 0.0_f64;
+        let mut iou_count = 0_u64;
+        for class_id in 0..256 {
+            let tp = true_positive[class_id];
+            let fp = false_positive[class_id];
+            let fn_count = false_negative[class_id];
+            let denom = tp + fp + fn_count;
+            if denom == 0 {
+                continue;
+            }
+            iou_sum += tp as f64 / denom as f64;
+            iou_count += 1;
+        }
+        Ok(if iou_count > 0 {
+            iou_sum / iou_count as f64
+        } else {
+            0.0
+        })
+    }
+}
+
+impl RewardPolicy for SegmentationOverlapReward {
+    fn plugin_ref(&self) -> PluginRef {
+        PluginRef {
+            id: PluginId(Self::PLUGIN_ID.to_string()),
+            version: "1.0.0".to_string(),
+        }
+    }
+
+    fn reward(
+        &self,
+        predicted: &TypedPrediction,
+        target: &TypedTarget,
+    ) -> Result<Vec<RewardSignal>, TrainerError> {
+        let (pred_labels, tgt_labels, ignore_label) = match (predicted, target) {
+            (
+                TypedPrediction::SegmentationMask { labels: pred, .. },
+                TypedTarget::SegmentationMask {
+                    labels: tgt,
+                    ignore_label,
+                    ..
+                },
+            ) => (pred.as_slice(), tgt.as_slice(), *ignore_label),
+            other => {
+                return Err(TrainerError::Config(format!(
+                    "segmentation_overlap reward requires SegmentationMask prediction/target, got {other:?}"
+                )))
+            }
+        };
+        let iou = Self::mask_iou(pred_labels, tgt_labels, ignore_label)?;
+        let channel = if iou >= self.iou_threshold {
+            AffectChannel::Pleasure
+        } else {
+            AffectChannel::Pain
+        };
+        Ok(vec![RewardSignal {
+            channel,
+            magnitude: self.magnitude,
+        }])
+    }
+}
+
 /// Converts an environment step outcome into FEAGI affect stimulation for **control** runs.
 ///
 /// PARKED (ADR-014/ADR-015): used by the superseded Topology-C executor (`run_control_rollout`).

@@ -627,6 +627,8 @@ mod tests {
                 bins: 1,
                 spacing: BinSpacing::Linear,
             },
+            image_width: None,
+            image_height: None,
         }
     }
 
@@ -635,6 +637,9 @@ mod tests {
             cortical_area_id: "o____C".to_string(),
             class_count: 3,
             bins: 1,
+            mask_width: None,
+            mask_height: None,
+            mask_depth: None,
         }
     }
 

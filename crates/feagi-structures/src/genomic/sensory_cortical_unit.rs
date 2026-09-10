@@ -350,6 +350,12 @@ impl SensoryCorticalUnit {
             SensoryCorticalUnit::DepthMap => {
                 Self::get_cortical_ids_array_for_depth_map_with_parameters(fh, group_index)[0]
             }
+            SensoryCorticalUnit::ObjectSegmentationInput => {
+                Self::get_cortical_ids_array_for_object_segmentation_input_with_parameters(
+                    fh,
+                    group_index,
+                )[0]
+            }
             SensoryCorticalUnit::SegmentedVision => {
                 Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)
                     [0]

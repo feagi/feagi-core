@@ -15,32 +15,52 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::adapters::{TabularCsvAdapter, TabularCsvConfig};
+use crate::adapters::{
+    ImageFolderSegmentationAdapter, ImageFolderSegmentationConfig, TabularCsvAdapter,
+    TabularCsvConfig,
+};
 use crate::binding::profile::{DecoderBindingProfile, EncoderBindingProfile};
+use crate::binding::reward::SegmentationOverlapReward;
 use crate::contracts::{
     BackendFingerprint, DatasetManifest, IRSample, RunSpec, ScorecardId, ScorecardStatus,
     ScorecardVisibility,
 };
 use crate::error::TrainerError;
 use crate::executor::{ExecutorConfig, ScorecardProvenance};
-use crate::metrics::ClassificationMetricPack;
+use crate::metrics::{ClassificationMetricPack, SegmentationMetricPack};
 use crate::plugins::{AdapterPlugin, DatasetSource, SamplerPlugin};
 use crate::samplers::SequentialSampler;
 
 /// Reward-policy plugin id the CLI resolves to [`PainPleasureReward`](crate::binding::PainPleasureReward).
 pub const SUPPORTED_REWARD_ID: &str = "reward.pain_pleasure";
+/// Reward-policy plugin id for dense segmentation overlap.
+pub const SUPPORTED_SEGMENTATION_REWARD_ID: &str = SegmentationOverlapReward::PLUGIN_ID;
 /// Encoder coder id the CLI resolves to [`PopulationEncoder`](crate::binding::PopulationEncoder).
 pub const SUPPORTED_ENCODER_CODER_ID: &str = "percentage_encoder";
+/// Encoder coder id the CLI resolves to [`ImageFrameEncoder`](crate::binding::ImageFrameEncoder).
+pub const SUPPORTED_IMAGE_ENCODER_CODER_ID: &str = "image_encoder";
 /// Decoder coder id the CLI resolves to [`ClassDecoder`](crate::binding::ClassDecoder).
 pub const SUPPORTED_DECODER_CODER_ID: &str = "percentage_decoder";
+/// Decoder coder id the CLI resolves to [`SegmentationMaskDecoder`](crate::binding::SegmentationMaskDecoder).
+pub const SUPPORTED_SEGMENTATION_DECODER_CODER_ID: &str = "misc_data_decoder";
+
+/// Adapter-specific dataset configuration (untagged for backward-compatible tabular JSON).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DatasetAdapterConfig {
+    /// Tabular CSV layout (`has_header` + `feature_columns` discriminates this variant).
+    Tabular(TabularCsvConfig),
+    /// Image-folder semantic segmentation layout (`layout` discriminates this variant).
+    ImageFolder(ImageFolderSegmentationConfig),
+}
 
 /// Where the dataset bytes come from and how the adapter parses them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DatasetInput {
     /// Filesystem path the dataset bytes are read from (platform-agnostic; resolved by the CLI).
     pub path: String,
-    /// Tabular CSV adapter configuration (column layout, class labels, split).
-    pub adapter: TabularCsvConfig,
+    /// Adapter-specific configuration.
+    pub adapter: DatasetAdapterConfig,
 }
 
 /// Scorecard provenance the executor cannot derive locally and the operator must supply.
@@ -73,6 +93,9 @@ pub struct RunConfig {
     pub executor: ExecutorConfig,
     /// Pain/pleasure reward stimulation magnitude in `[0.0, 1.0]`.
     pub reward_magnitude: f64,
+    /// Mean-IoU threshold for segmentation overlap reward in `[0.0, 1.0]`.
+    #[serde(default)]
+    pub segmentation_iou_threshold: Option<f64>,
     /// Locally-unknowable scorecard provenance fields.
     pub scorecard: ScorecardInput,
 }
@@ -100,32 +123,75 @@ impl RunConfig {
             Ok(())
         };
 
-        check("adapter", &spec.adapter.id.0, TabularCsvAdapter::PLUGIN_ID)?;
         check(
             "sampler",
             &spec.sampler.plugin.id.0,
             SequentialSampler::PLUGIN_ID,
         )?;
-        check(
-            "metric pack",
-            &spec.metric_pack.id.0,
-            ClassificationMetricPack::PLUGIN_ID,
-        )?;
-        check(
-            "reward policy",
-            &spec.reward_policy.plugin.id.0,
-            SUPPORTED_REWARD_ID,
-        )?;
-        check(
-            "encoder coder",
-            &spec.binding.encoder.coder_id,
-            SUPPORTED_ENCODER_CODER_ID,
-        )?;
-        check(
-            "decoder coder",
-            &spec.binding.decoder.coder_id,
-            SUPPORTED_DECODER_CODER_ID,
-        )?;
+
+        match spec.adapter.id.0.as_str() {
+            TabularCsvAdapter::PLUGIN_ID => {
+                check(
+                    "metric pack",
+                    &spec.metric_pack.id.0,
+                    ClassificationMetricPack::PLUGIN_ID,
+                )?;
+                check(
+                    "reward policy",
+                    &spec.reward_policy.plugin.id.0,
+                    SUPPORTED_REWARD_ID,
+                )?;
+                check(
+                    "encoder coder",
+                    &spec.binding.encoder.coder_id,
+                    SUPPORTED_ENCODER_CODER_ID,
+                )?;
+                check(
+                    "decoder coder",
+                    &spec.binding.decoder.coder_id,
+                    SUPPORTED_DECODER_CODER_ID,
+                )?;
+            }
+            ImageFolderSegmentationAdapter::PLUGIN_ID => {
+                check(
+                    "metric pack",
+                    &spec.metric_pack.id.0,
+                    SegmentationMetricPack::PLUGIN_ID,
+                )?;
+                check(
+                    "reward policy",
+                    &spec.reward_policy.plugin.id.0,
+                    SUPPORTED_SEGMENTATION_REWARD_ID,
+                )?;
+                check(
+                    "encoder coder",
+                    &spec.binding.encoder.coder_id,
+                    SUPPORTED_IMAGE_ENCODER_CODER_ID,
+                )?;
+                check(
+                    "decoder coder",
+                    &spec.binding.decoder.coder_id,
+                    SUPPORTED_SEGMENTATION_DECODER_CODER_ID,
+                )?;
+                if self.segmentation_iou_threshold.is_none() {
+                    return Err(TrainerError::Config(
+                        "segmentation runs require segmentation_iou_threshold".to_string(),
+                    ));
+                }
+                if let Some(threshold) = self.segmentation_iou_threshold {
+                    if !(0.0..=1.0).contains(&threshold) {
+                        return Err(TrainerError::Config(format!(
+                            "segmentation_iou_threshold must be in [0.0, 1.0], got {threshold}"
+                        )));
+                    }
+                }
+            }
+            other => {
+                return Err(TrainerError::Config(format!(
+                    "unsupported adapter '{other}'"
+                )));
+            }
+        }
         Ok(())
     }
 
@@ -138,7 +204,26 @@ impl RunConfig {
         &self,
         source: &DatasetSource,
     ) -> Result<(DatasetManifest, Vec<IRSample>), TrainerError> {
-        let adapter = TabularCsvAdapter::new(self.dataset.adapter.clone());
+        let (manifest, samples) = match &self.dataset.adapter {
+            DatasetAdapterConfig::Tabular(config) => {
+                let adapter = TabularCsvAdapter::new(config.clone());
+                Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?
+            }
+            DatasetAdapterConfig::ImageFolder(config) => {
+                let adapter = ImageFolderSegmentationAdapter::new(config.clone());
+                Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?
+            }
+        };
+        let order = SequentialSampler::new().plan(samples.len(), self.run_spec.sampler.seed);
+        let ordered = order.iter().map(|&i| samples[i].clone()).collect();
+        Ok((manifest, ordered))
+    }
+
+    fn plan_with_adapter<A: AdapterPlugin>(
+        adapter: &A,
+        source: &DatasetSource,
+        split_id: &crate::contracts::SplitId,
+    ) -> Result<(DatasetManifest, Vec<IRSample>), TrainerError> {
         let manifest = adapter.discover(source)?;
         let report = adapter.validate(&manifest)?;
         if !report.passed {
@@ -147,10 +232,8 @@ impl RunConfig {
                 report.issues.join("; ")
             )));
         }
-        let samples = adapter.stream(source, &self.run_spec.split_id)?;
-        let order = SequentialSampler::new().plan(samples.len(), self.run_spec.sampler.seed);
-        let ordered = order.iter().map(|&i| samples[i].clone()).collect();
-        Ok((manifest, ordered))
+        let samples = adapter.stream(source, split_id)?;
+        Ok((manifest, samples))
     }
 
     /// Derives the scorecard provenance from the resolved manifest + operator-supplied fields.
@@ -272,9 +355,11 @@ impl RunConfig {
         events: &mut dyn crate::control::RunEventSink,
         cancel: &crate::control::CancelToken,
     ) -> Result<(crate::contracts::RunSummary, crate::contracts::Scorecard), TrainerError> {
+        use crate::adapters::ImageFolderSegmentationAdapter;
         use crate::binding::{
-            ClassDecoder, PainPleasureReward, PopulationEncoder, RemoteFeagiRuntime,
-            RemoteRuntimeConfig,
+            ClassDecoder, ImageFrameEncoder, PainPleasureReward, PopulationEncoder,
+            RemoteFeagiRuntime, RemoteRuntimeConfig, SegmentationMaskDecoder,
+            SegmentationOverlapReward,
         };
         use crate::contracts::ExecutionMode;
         use crate::executor::{assemble_scorecard, run_rollout_with_events};
@@ -310,25 +395,60 @@ impl RunConfig {
         };
 
         let mut runtime = RemoteFeagiRuntime::connect_and_register(runtime_config)?;
-        let mut encoder = PopulationEncoder::new();
-        let mut decoder = ClassDecoder::new();
-        let reward = PainPleasureReward::new(self.reward_magnitude)?;
-        let metric = ClassificationMetricPack::new();
 
-        let rollout = run_rollout_with_events(
-            &self.run_spec.run_id,
-            samples,
-            &mut runtime,
-            &mut encoder,
-            &self.encoder_profile,
-            &mut decoder,
-            &self.decoder_profile,
-            &reward,
-            &metric,
-            &self.executor,
-            events,
-            cancel,
-        );
+        let rollout = match self.run_spec.adapter.id.0.as_str() {
+            TabularCsvAdapter::PLUGIN_ID => {
+                let mut encoder = PopulationEncoder::new();
+                let mut decoder = ClassDecoder::new();
+                let reward = PainPleasureReward::new(self.reward_magnitude)?;
+                let metric = ClassificationMetricPack::new();
+                run_rollout_with_events(
+                    &self.run_spec.run_id,
+                    samples,
+                    &mut runtime,
+                    &mut encoder,
+                    &self.encoder_profile,
+                    &mut decoder,
+                    &self.decoder_profile,
+                    &reward,
+                    &metric,
+                    &self.executor,
+                    events,
+                    cancel,
+                )
+            }
+            ImageFolderSegmentationAdapter::PLUGIN_ID => {
+                let mut encoder = ImageFrameEncoder::new();
+                let mut decoder = SegmentationMaskDecoder::new();
+                let iou_threshold = self.segmentation_iou_threshold.ok_or_else(|| {
+                    TrainerError::Config(
+                        "segmentation runs require segmentation_iou_threshold".to_string(),
+                    )
+                })?;
+                let reward =
+                    SegmentationOverlapReward::new(self.reward_magnitude, iou_threshold)?;
+                let metric = SegmentationMetricPack::new();
+                run_rollout_with_events(
+                    &self.run_spec.run_id,
+                    samples,
+                    &mut runtime,
+                    &mut encoder,
+                    &self.encoder_profile,
+                    &mut decoder,
+                    &self.decoder_profile,
+                    &reward,
+                    &metric,
+                    &self.executor,
+                    events,
+                    cancel,
+                )
+            }
+            other => {
+                return Err(TrainerError::Config(format!(
+                    "unsupported adapter '{other}' for remote execution"
+                )));
+            }
+        };
 
         // Always deregister, even if the rollout failed; surface the rollout error first.
         let shutdown = runtime.shutdown();
@@ -434,7 +554,7 @@ mod tests {
             },
             dataset: DatasetInput {
                 path: "/tmp/one_hot.csv".to_string(),
-                adapter: adapter_config(),
+                adapter: DatasetAdapterConfig::Tabular(adapter_config()),
             },
             encoder_profile: EncoderBindingProfile {
                 cortical_area_id: "iv00_C".to_string(),
@@ -443,16 +563,22 @@ mod tests {
                     bins: 1,
                     spacing: BinSpacing::Linear,
                 },
+                image_width: None,
+                image_height: None,
             },
             decoder_profile: DecoderBindingProfile {
                 cortical_area_id: "o____C".to_string(),
                 class_count: 3,
                 bins: 1,
+                mask_width: None,
+                mask_height: None,
+                mask_depth: None,
             },
             executor: ExecutorConfig {
                 ticks_per_sample: 3,
             },
             reward_magnitude: 0.8,
+            segmentation_iou_threshold: None,
             scorecard: ScorecardInput {
                 scorecard_id: ScorecardId("sc-cfg-0001".to_string()),
                 backend_descriptor: "stub-cpu".to_string(),

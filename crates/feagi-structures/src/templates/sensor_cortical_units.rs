@@ -187,6 +187,23 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
+                #[doc = "Object semantic-segmentation labels where X/Y encode the source pixel and Z encodes the stable class ID. PSP magnitude encodes confidence."]
+                ObjectSegmentationInput => {
+                    friendly_name: "Object Segmentation",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"seg",
+                    number_cortical_areas: 1,
+                    default_firing_threshold: 0.01,
+                    default_mp_charge_accumulation: false,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-170, 0, 0], channel_dimensions_default: [32, 32, 8], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
+                    }
+                },
+
                 #[doc = "Segmented vision processing, with a higher resolution center and lower resolution peripherals"]
                 SegmentedVision => {
                     friendly_name: "Segmented Vision",
