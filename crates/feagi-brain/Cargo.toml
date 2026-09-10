@@ -33,7 +33,6 @@ alloc = [
 
 [dependencies]
 # Sub Crates
-feagi-brain-device-template-proc = {path = "feagi-brain-device-template-proc"}
 feagi-brain-models = {path = "feagi-brain-models"}
 feagi-brain-npu = {path = "feagi-brain-npu"}
 

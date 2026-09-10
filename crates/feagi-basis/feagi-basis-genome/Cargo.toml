@@ -36,6 +36,7 @@ support_base64 = [
 [dependencies]
 
 # Sub Crates
+feagi-basis-genome-proc = {path = "feagi-basis-genome-proc"}
 
 # Sibling Crates
 feagi-basis-error-logging = {path = "../feagi-basis-error-logging"}

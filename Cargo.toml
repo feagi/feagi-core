@@ -163,6 +163,7 @@ members = [
     "crates/feagi-basis/feagi-basis-quantization",
     "crates/feagi-basis/feagi-basis-neuron",
     "crates/feagi-basis/feagi-basis-genome",
+    "crates/feagi-basis/feagi-basis-genome/feagi-basis-genome-proc",
     "crates/feagi-basis/feagi-basis-error-logging",
     "crates/feagi-basis/feagi-basis-error-logging/feagi-basis-error-logging-proc",
     "crates/feagi-evolutionary",
@@ -182,7 +183,6 @@ members = [
     "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-core",
     "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon",
     "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
-    "crates/feagi-brain/feagi-brain-device-template-proc"
 ]
 
 
@@ -199,10 +199,11 @@ documentation = "https://docs.rs/feagi"
 
 [workspace.dependencies] # Contains dependencies that several crates use
 # Macro Stuff
-paste = { version =  "1.0.15" , default-features = false}
+paste = { version =  "1.0.15"}
 quote = "1.0.47"
 syn = { version = "3.0.5", features = ["full"] }
 proc-macro2 = "1.0.107"
+heck = "0.5.0"
 
 # Always needed (nearly)
 serde = { version = "1.0.229", default-features = false}

@@ -114,8 +114,8 @@ struct SubunitIOCorticalAreaProperties {
     /// Position of this cortical area relative to the cortical unit as a whole.
     relative_position: Vec<Expr>, // sint, 3 long
     channel_dimensions_default: Vec<LitInt>, // uint, 3 long, no value may be 0
-    channel_dimensions_min: Vec<LitInt>,     // uint, 3 long, no value may be 0, each value must be smaller than max
-    channel_dimensions_max: Vec<LitInt>,     // uint, 3 long, no value may be 0, each value must be bigger than min
+    channel_dimensions_min: Vec<LitInt>,     // uint, 3 long, no value may be 0, each value must be smaller or equal than max
+    channel_dimensions_max: Vec<LitInt>,     // uint, 3 long, no value may be 0, each value must be bigger or equal than min
     /// The enum or macro invocation defining a cortical area generator.
     io_cortical_generator: Expr,
 }
@@ -268,16 +268,16 @@ fn validate_template(template_list: &CorticalIOUnitTemplateList) -> Result<()> {
                 let max_v = area.channel_dimensions_max[idx].base10_parse::<u64>()?;
                 let default_v = area.channel_dimensions_default[idx].base10_parse::<u64>()?;
 
-                if min_v >= max_v {
+                if min_v > max_v {
                     return Err(syn::Error::new(
                         area.channel_dimensions_min[idx].span(),
-                        format!("channel_dimensions_min[{idx}] must be smaller than channel_dimensions_max[{idx}]"),
+                        format!("channel_dimensions_min[{idx}] must be smaller or equal than channel_dimensions_max[{idx}]"),
                     ));
                 }
                 if default_v < min_v || default_v > max_v {
                     return Err(syn::Error::new(
                         area.channel_dimensions_default[idx].span(),
-                        format!("channel_dimensions_default[{idx}] must be within [min, max] bounds"),
+                        format!("channel_dimensions_default[{idx}] must be (inclusively) within [min, max] bounds"),
                     ));
                 }
             }

@@ -1211,11 +1211,22 @@ dependencies = [
  "ahash",
  "base64 0.23.1",
  "feagi-basis-error-logging",
+ "feagi-basis-genome-proc",
  "feagi-basis-quantization",
  "paste",
  "serde",
  "serde_json",
  "uuid",
+]
+
+[[package]]
+name = "feagi-basis-genome-proc"
+version = "0.1.1"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -1248,7 +1259,6 @@ version = "0.1.1"
 dependencies = [
  "ahash",
  "feagi-basis",
- "feagi-brain-device-template-proc",
  "feagi-brain-models",
  "feagi-brain-npu",
  "paste",
@@ -1280,16 +1290,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tracing",
  "xxhash-rust",
-]
-
-[[package]]
-name = "feagi-brain-device-template-proc"
-version = "0.1.1"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "syn 3.0.5",
 ]
 
 [[package]]
