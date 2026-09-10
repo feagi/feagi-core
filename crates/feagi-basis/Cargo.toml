@@ -1,0 +1,69 @@
+[package]
+name = "feagi-basis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Base data structures and methods used throughout FEAGI"
+
+[features]
+
+default = [
+    "std",
+    "use-rayon",
+    "channel_flume"
+]
+
+# ========================= Toggleable Features ========================= #
+# Features that add certain libraries/crates that extend the functionality
+# and performance of the FEAGI application
+# In order of Directly activated crates, other features here, external crate features, feagi crate features
+
+# Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
+use-rayon = [
+    "rayon",
+    "std",
+]
+
+
+std = [
+    "alloc",
+    "serde/std", "serde_json/std", "ahash/std"
+]
+
+alloc = [
+    "serde_json",
+    "serde/alloc", "serde/derive", "serde_json/alloc", "ahash/serde",
+]
+
+channel_flume = [
+    "std",
+    "flume"
+]
+
+
+[dependencies]
+# Sub Crates
+feagi-basis-error-logging = {path = "feagi-basis-error-logging"}
+feagi-basis-quantization = {path = "feagi-basis-quantization" }
+feagi-basis-neuron = {path = "feagi-basis-neuron" }
+feagi-basis-genome = {path = "feagi-basis-genome"}
+
+# Root Crates
+# NONE! THIS CRATE MUST NOT DEPEND ON OTHER FEAGI ROOT CRATES
+
+# External crates
+paste = { workspace = true }
+ahash = { workspace = true}
+serde = { workspace = true}
+serde_json = { workspace = true, optional = true}
+rayon = { workspace = true, optional = true}
+flume = {workspace = true, optional = true}
+# TODO Heapless Channel?
+
+[lints]
+workspace = true

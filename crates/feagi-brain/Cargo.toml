@@ -38,8 +38,7 @@ feagi-brain-models = {path = "feagi-brain-models"}
 feagi-brain-npu = {path = "feagi-brain-npu"}
 
 # Root Crates
-feagi-data = {path = "../feagi-data"}
-feagi-logging-and-errors = {path = "../feagi-logging-and-errors"}
+feagi-basis = {path = "../feagi-basis" }
 
 # External crates
 paste = { workspace = true}

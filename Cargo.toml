@@ -143,8 +143,7 @@ alloc = [
 # FEAGI
 feagi-models = { path = "crates/feagi-models" }
 feagi-serialization = { path = "crates/feagi-serialization" }
-feagi-logging-and-errors = {path = "crates/feagi-logging-and-errors"}
-feagi-data = {path = "crates/feagi-data"}
+feagi-basis = {path = "crates/feagi-basis" }
 feagi-state-manager = { path = "crates/feagi-state-manager", optional = true }
 feagi-io = { path = "crates/feagi-io", optional = true }
 
@@ -177,15 +176,16 @@ members = [
     "crates/feagi-api",
     "crates/feagi-brain-development",
     "crates/feagi-config",
-    "crates/feagi-data",
-    "crates/feagi-data/feagi-data-quantization",
-    "crates/feagi-data/feagi-data-neuron",
+    "crates/feagi-basis",
+    "crates/feagi-basis/feagi-basis-quantization",
+    "crates/feagi-basis/feagi-basis-neuron",
+    "crates/feagi-basis/feagi-basis-genome",
+    "crates/feagi-basis/feagi-basis-error-logging",
+    "crates/feagi-basis/feagi-basis-error-logging/feagi-basis-error-logging-proc",
     "crates/feagi-evolutionary",
     "crates/feagi-genomic-context",
     "crates/feagi-genomic-data",
     "crates/feagi-io",
-    "crates/feagi-logging-and-errors",
-    "crates/feagi-logging-and-errors/feagi-logging-and-errors-derive",
     "crates/feagi-models",
     "crates/feagi-observability",
     "crates/feagi-sensorimotor",
@@ -227,6 +227,7 @@ heapless = {version = "0.9.3"}
 half = {version = "2.7.1", default-features = false}
 futures = {version = "0.3.34"}
 flume = {version = "0.12.0"}
+log = {version = "0.4.34"}
 
 # TODO update and review below
 image = { version = "0.25.10" } # TODO this shouldnt be here, this should be in the feagi sensiomotor specifically

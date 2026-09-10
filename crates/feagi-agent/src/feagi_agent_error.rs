@@ -1,12 +1,12 @@
 //! Unified error types for the FEAGI agent (client and server).
 
 use feagi_io::FeagiNetworkError;
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
+use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
 
 macro_rules! define_feagi_agent_error_key {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[derive(FeagiErrorKey)]
+        #[derive(FeagiFail)]
         pub struct $name {
             context: &'static str,
             pub message: String,

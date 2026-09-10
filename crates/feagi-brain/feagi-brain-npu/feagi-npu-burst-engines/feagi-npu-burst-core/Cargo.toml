@@ -30,12 +30,12 @@ alloc = [
 
 # Sibling Crates
 
+
 # Parent Crates
 feagi-brain-models = {path = "../../../feagi-brain-models"}
 
 # Root Crates
-feagi-data = {path = "../../../../feagi-data" }
-feagi-logging-and-errors = {path = "../../../../feagi-logging-and-errors" }
+feagi-basis = {path = "../../../../feagi-basis" }
 
 # External Crates
 paste = { workspace = true}

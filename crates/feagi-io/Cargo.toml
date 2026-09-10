@@ -31,7 +31,7 @@ js-bridge-wasm = [] # WASM javascript bridge implementation
 
 
 [dependencies]
-feagi-data = { path = "../feagi-data" }
+feagi-basis = { path = "../feagi-basis" }
 feagi-serialization = { path = "../feagi-serialization" }
 serde = { workspace = true }
 

@@ -1,0 +1,50 @@
+[package]
+name = "feagi-basis-genome"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Structures for Genome Structure Identification and optionally their metadata properties"
+
+[features]
+
+# subcrates should not have default in order to avoid confusion
+
+std = [
+    "alloc",
+    "serde/std", "serde_json/std"
+]
+
+alloc = [
+    "serde/alloc", "serde_json/alloc"
+]
+
+# Allow JSON serialization / deserialization of structures
+serialization_support_json = [
+    "serde_json"
+]
+
+
+
+[dependencies]
+
+# Sub Crates
+
+# Sibling Crates
+feagi-basis-quantization = {path = "../feagi-basis-quantization" }
+
+# Root Crates
+# NONE! NOTHING WITHIN BASIS CAN USE OTHER ROOT CRATES!
+
+# External Crates
+paste = { workspace = true }
+ahash = { workspace = true}
+serde = { workspace = true}
+serde_json = { workspace = true, optional = true}
+
+[lints]
+workspace = true

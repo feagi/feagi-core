@@ -1,0 +1,40 @@
+[package]
+name = "feagi-basis-neuron"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Structures related to Neuron Data used in FEAGI"
+
+[features]
+
+# subcrates should not have default in order to avoid confusion
+
+std = [
+    "alloc"
+]
+
+alloc = []
+
+rayon = [
+    "std"
+]
+
+[dependencies]
+# Sub Crates
+
+# Sibling Crates
+feagi-basis-quantization = {path = "../feagi-basis-quantization" } # This should be the ONLY FEAGI sibling crate!
+
+# Root Crates
+# NONE! NOTHING WITHIN BASIS CAN USE OTHER ROOT CRATES!
+
+# External Crates
+paste = { workspace = true }
+half = {workspace = true}
+serde = { workspace = true}
+serde_json = { workspace = true, optional = true}

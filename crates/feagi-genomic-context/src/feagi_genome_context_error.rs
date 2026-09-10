@@ -1,21 +1,21 @@
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
+use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
 
-#[derive(FeagiErrorKey)]
+#[derive(FeagiFail)]
 pub struct FeagiCorticalIDErrKey {
     context: &'static str,
 }
 
-#[derive(FeagiErrorKey)]
+#[derive(FeagiFail)]
 pub struct FeagiCorticalTypeErrKey {
     context: &'static str,
 }
 
-#[derive(FeagiErrorKey)]
+#[derive(FeagiFail)]
 pub struct FeagiCorticalConfigurationFlagErrKey {
     context: &'static str,
 }
 
-#[derive(FeagiErrorKey)]
+#[derive(FeagiFail)]
 pub struct FeagiBrainRegionErrKey {
     context: &'static str,
 }

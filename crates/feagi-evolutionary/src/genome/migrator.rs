@@ -8,7 +8,7 @@ This module provides tools to migrate genomes from v2.1 with non-compliant corti
 (e.g., iic100, omot00, _power) to the new feagi-data-processing template-compliant format
 (e.g., svi1____, mot0____, ___power).
 
-CRITICAL: Uses CoreCorticalType and cortical_units from feagi-data-processing as single source of truth.
+CRITICAL: Uses CoreCorticalType and cortical_units from feagi-basis-processing as single source of truth.
 
 Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
@@ -43,7 +43,7 @@ pub struct MigrationResult {
 ///
 /// This function:
 /// 1. Detects old-format cortical_area IDs (iic*, omot*, ogaz*, _power, etc.)
-/// 2. Maps them to new template-compliant IDs using feagi-data-processing types
+/// 2. Maps them to new template-compliant IDs using feagi-basis-processing types
 /// 3. Updates all references (blueprint, brain_regions, cortical_mapping_dst)
 /// 4. Returns the migrated genome and migration statistics
 ///
@@ -598,8 +598,8 @@ fn needs_migration(id: &str) -> bool {
 /// - ... up to iic800 → Proper 8-byte SegmentedVision ID (index 8, Absolute frame handling, group 0)
 /// - omot00 → Proper 8-byte Motor ID (index 0, Absolute frame handling, group 0)
 /// - ogaz00 → Proper 8-byte Gaze ID (index 0, Absolute frame handling, group 0)
-/// - _power → Proper 8-byte Core ID (CoreCorticalType::Power from feagi-data-processing)
-/// - _death → Proper 8-byte Core ID (CoreCorticalType::Death from feagi-data-processing)
+/// - _power → Proper 8-byte Core ID (CoreCorticalType::Power from feagi-basis-processing)
+/// - _death → Proper 8-byte Core ID (CoreCorticalType::Death from feagi-basis-processing)
 ///
 /// NOTE: Old format doesn't encode frame handling, so we default to Absolute.
 /// This function is public so it can be used by string_to_cortical_id for individual ID conversions.

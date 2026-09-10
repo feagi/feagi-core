@@ -23,19 +23,18 @@ default = [
 
 std = [
     "alloc",
-    "feagi-data/std",
+    "feagi-basis/std",
     "serde/std", "serde_json/std", "ahash/std"
 ]
 
 alloc = [
     "serde_json",
-    "feagi-data/alloc",
+    "feagi-basis/alloc",
     "serde/alloc", "serde/derive", "serde_json/alloc", "ahash/serde",
 ]
 
 [dependencies]
-feagi-logging-and-errors = {path = "../feagi-logging-and-errors" }
-feagi-data = {path = "../feagi-data" }
+feagi-basis = {path = "../feagi-basis" }
 
 # External crates
 paste = { workspace = true }

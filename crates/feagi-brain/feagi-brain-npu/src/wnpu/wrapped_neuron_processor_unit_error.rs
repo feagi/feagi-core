@@ -1,6 +1,6 @@
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
+use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
 
-#[derive(FeagiErrorKey)]
+#[derive(FeagiFail)]
 pub struct WNPUFailEtc {
     context: &'static str,
 }

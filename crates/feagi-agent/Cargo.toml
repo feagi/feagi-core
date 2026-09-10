@@ -40,8 +40,7 @@ tracing = { workspace = true }
 feagi-io = {  path = "../feagi-io" }
 feagi-serialization = {  path = "../feagi-serialization" }
 feagi-sensorimotor = {  path = "../feagi-sensorimotor" }
-feagi-data = { path = "../feagi-data" }
-feagi-logging-and-errors = { path = "../feagi-logging-and-errors" }
+feagi-basis = { path = "../feagi-basis" }
 paste = "1"
 base64 = "0.22.1"
 

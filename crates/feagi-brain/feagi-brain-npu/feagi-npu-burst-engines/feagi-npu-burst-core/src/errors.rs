@@ -1,4 +1,4 @@
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
+use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
 
 generate_feagi_error! {
     /// Burst engine related error
@@ -13,14 +13,14 @@ generate_feagi_error! {
 }
 
 /// Burst engine experienced a failure in executing a burst phase. 
-#[derive(FeagiErrorKey)]
+#[derive(FeagiFail)]
 pub struct FeagiFailPhase {
     context: &'static str,
 }
 
 /// Invalid state in the connectome has been detected by the burst engine.
 /// This error is fatal for the burst engine and requires halting and user intervention
-#[derive(FeagiErrorKey)]
+#[derive(FeagiFail)]
 pub struct FeagiFailConnectomeCorruption {
     context: &'static str,
 }

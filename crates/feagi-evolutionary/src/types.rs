@@ -8,7 +8,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiErrorKey};
+use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
 
 /// Result type for evolution operations
 pub type EvoResult<T> = Result<T, EvoError>;
@@ -16,7 +16,7 @@ pub type EvoResult<T> = Result<T, EvoError>;
 macro_rules! define_evo_error_key {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[derive(FeagiErrorKey)]
+        #[derive(FeagiFail)]
         pub struct $name {
             context: &'static str,
             pub message: String,

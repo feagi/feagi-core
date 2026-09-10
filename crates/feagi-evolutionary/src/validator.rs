@@ -180,7 +180,7 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
     for (cortical_id, area) in &genome.cortical_areas {
         let cortical_id_display = cortical_id.to_string();
 
-        // CRITICAL: Validate cortical_area ID format and compliance with feagi-data-processing cortical_units
+        // CRITICAL: Validate cortical_area ID format and compliance with feagi-basis-processing cortical_units
         validate_cortical_id_format(cortical_id, &cortical_id_display, result);
 
         // Validate neurons_per_voxel (stored in properties)
@@ -199,7 +199,7 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
     }
 }
 
-/// Validate cortical_area ID format and compliance with feagi-data-processing cortical_units
+/// Validate cortical_area ID format and compliance with feagi-basis-processing cortical_units
 fn validate_cortical_id_format(_cortical_id: &CorticalID, display: &str, result: &mut ValidationResult) {
     // Base64 encoded 8-byte IDs are 12 characters (with padding)
     // Old format IDs are 8 characters
@@ -233,11 +233,11 @@ fn validate_cortical_id_format(_cortical_id: &CorticalID, display: &str, result:
     validate_io_area_id(display, result);
 }
 
-/// Validate CORE area IDs (power, death, etc.) using feagi-data-processing types
+/// Validate CORE area IDs (power, death, etc.) using feagi-basis-processing types
 fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
     use feagi_genomic_context::cortical_area::CoreCorticalType;
 
-    // Generate valid CORE IDs from the authoritative source (feagi-data-processing)
+    // Generate valid CORE IDs from the authoritative source (feagi-basis-processing)
     let valid_core_ids: Vec<String> = vec![
         CoreCorticalType::Power.to_cortical_id().to_string(),    // "___power"
         CoreCorticalType::Death.to_cortical_id().to_string(),    // "___death"
@@ -264,7 +264,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
     let first_char = display.chars().next().unwrap_or('_');
     let unit_prefix = &display[1..4]; // Skip first char (i/o), get 3-char unit identifier
 
-    // Known valid IPU prefixes from feagi-data-processing cortical_units
+    // Known valid IPU prefixes from feagi-basis-processing cortical_units
     const VALID_IPU_PREFIXES: &[&str] = &[
         "svi", // SegmentedVision (9 areas: isvi____ variants)
         "aud", // Audio
@@ -274,7 +274,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
         "dpt", // DepthMap
     ];
 
-    // Known valid OPU prefixes from feagi-data-processing cortical_units
+    // Known valid OPU prefixes from feagi-basis-processing cortical_units
     const VALID_OPU_PREFIXES: &[&str] = &[
         "mot", // Motor (omot____ variants)
         "voc", // Vocal
@@ -290,7 +290,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
         // Check for OLD invalid formats (old format didn't have i/o prefix)
         if display.starts_with("iic") || display.starts_with("omot") || display.starts_with("ogaz") {
             result.add_error(format!(
-                "INVALID OLD-FORMAT cortical_area ID: '{}' - not compliant with feagi-data-processing cortical_units. \
+                "INVALID OLD-FORMAT cortical_area ID: '{}' - not compliant with feagi-basis-processing cortical_units. \
                 Valid IPU format: 'i' + unit_prefix (e.g., 'isvi____'). \
                 Valid OPU format: 'o' + unit_prefix (e.g., 'omot____'). \
                 Valid IPU units: {:?}, Valid OPU units: {:?}. \
@@ -299,7 +299,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
             ));
         } else {
             result.add_warning(format!(
-                "Unknown cortical_area ID: '{}' (first char: '{}', unit: '{}') - may not follow feagi-data-processing template system. \
+                "Unknown cortical_area ID: '{}' (first char: '{}', unit: '{}') - may not follow feagi-basis-processing template system. \
                 Valid IPU format: 'i' + {:?}. Valid OPU format: 'o' + {:?}",
                 display, first_char, unit_prefix, VALID_IPU_PREFIXES, VALID_OPU_PREFIXES
             ));

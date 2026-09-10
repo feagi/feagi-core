@@ -196,7 +196,7 @@ pub enum OutputType {
 /// Quantization (e.g. 8/16/32/64-bit neuron/synapse storage) is a determinant of results
 /// on the evolving FEAGI NPU direction, so it must be captured in provenance and treated as
 /// part of the brain identity for comparability. Kept as a string `level` + opaque
-/// `details` so the contract does not couple to the in-flight `feagi-data` quantization
+/// `details` so the contract does not couple to the in-flight `feagi-basis` quantization
 /// enums; the authoritative configuration is anchored by the pinned `connectome_hash`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QuantizationFingerprint {

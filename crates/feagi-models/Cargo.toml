@@ -28,7 +28,7 @@ alloc = [
 ]
 
 [dependencies]
-feagi-data = {path = "../feagi-data" }
+feagi-basis = {path = "../feagi-basis" }
 feagi-genomic-context = {path = "../feagi-genomic-context" }
 
 paste = {workspace = true}
