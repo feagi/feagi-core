@@ -26,10 +26,18 @@ alloc = [
 ]
 
 [dependencies]
-feagi-data = {path = "../../../feagi-data" }
-feagi-models = {path = "../../../feagi-models" }
-feagi-logging-and-errors = {path = "../../../feagi-logging-and-errors" }
+# Sub Crates
 
+# Sibling Crates
+
+# Parent Crates
+feagi-brain-models = {path = "../../../feagi-brain-models"}
+
+# Root Crates
+feagi-data = {path = "../../../../feagi-data" }
+feagi-logging-and-errors = {path = "../../../../feagi-logging-and-errors" }
+
+# External Crates
 paste = { workspace = true}
 serde = {workspace = true} # Required by FeagiError
 heapless = {workspace = true, default-features = false}

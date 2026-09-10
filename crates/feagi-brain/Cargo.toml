@@ -32,16 +32,19 @@ alloc = [
 ]
 
 [dependencies]
+# Sub Crates
+feagi-brain-device-template-proc = {path = "feagi-brain-device-template-proc"}
+feagi-brain-models = {path = "feagi-brain-models"}
+feagi-brain-npu = {path = "feagi-brain-npu"}
+
+# Root Crates
 feagi-data = {path = "../feagi-data"}
 feagi-logging-and-errors = {path = "../feagi-logging-and-errors"}
-feagi-genomic-context = {path = "../feagi-genomic-context"}
-
 
 # External crates
 paste = { workspace = true}
 ahash = { workspace = true, default-features = false}
 serde = { workspace = true, default-features = false}
-# Toggled external crates
 serde_json = { workspace = true, optional = true}
 uuid = { workspace = true, default-features = false, features = ["v7", "serde"] }
 

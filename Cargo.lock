@@ -1275,7 +1275,6 @@ dependencies = [
  "feagi-io",
  "feagi-logging-and-errors",
  "feagi-models",
- "feagi-npu",
  "feagi-serialization",
  "feagi-state-manager",
  "ndarray",
@@ -1322,7 +1321,6 @@ dependencies = [
  "feagi-genomic-data",
  "feagi-io",
  "feagi-models",
- "feagi-npu",
  "feagi-observability",
  "feagi-serialization",
  "feagi-services",
@@ -1359,8 +1357,10 @@ name = "feagi-brain"
 version = "0.1.1"
 dependencies = [
  "ahash",
+ "feagi-brain-device-template-proc",
+ "feagi-brain-models",
+ "feagi-brain-npu",
  "feagi-data",
- "feagi-genomic-context",
  "feagi-logging-and-errors",
  "paste",
  "serde",
@@ -1377,10 +1377,6 @@ dependencies = [
  "criterion",
  "feagi-data",
  "feagi-evolutionary",
- "feagi-genomic-context",
- "feagi-genomic-data",
- "feagi-models",
- "feagi-npu",
  "feagi-observability",
  "feagi-state-manager",
  "getrandom 0.2.17",
@@ -1406,6 +1402,31 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.5",
+]
+
+[[package]]
+name = "feagi-brain-models"
+version = "0.1.1"
+dependencies = [
+ "feagi-data",
+ "half",
+ "paste",
+ "serde",
+]
+
+[[package]]
+name = "feagi-brain-npu"
+version = "0.1.1"
+dependencies = [
+ "ahash",
+ "feagi-brain-models",
+ "feagi-data",
+ "feagi-logging-and-errors",
+ "feagi-npu-burst-engines",
+ "futures",
+ "paste",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1465,8 +1486,6 @@ dependencies = [
  "chrono",
  "env_logger",
  "feagi-data",
- "feagi-genomic-context",
- "feagi-genomic-data",
  "feagi-logging-and-errors",
  "feagi-observability",
  "feagi-structures",
@@ -1503,7 +1522,6 @@ name = "feagi-genomic-data"
 version = "0.1.1"
 dependencies = [
  "feagi-data",
- "feagi-genomic-context",
  "feagi-logging-and-errors",
  "serde",
  "serde_json",
@@ -1553,28 +1571,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-npu"
-version = "0.1.1"
-dependencies = [
- "ahash",
- "feagi-data",
- "feagi-genomic-context",
- "feagi-logging-and-errors",
- "feagi-models",
- "feagi-npu-burst-engines",
- "futures",
- "paste",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "feagi-npu-burst-core"
 version = "0.1.1"
 dependencies = [
+ "feagi-brain-models",
  "feagi-data",
  "feagi-logging-and-errors",
- "feagi-models",
  "heapless 0.9.3",
  "paste",
  "serde",
@@ -1584,9 +1586,9 @@ dependencies = [
 name = "feagi-npu-burst-engines"
 version = "0.1.1"
 dependencies = [
+ "feagi-brain-models",
  "feagi-data",
  "feagi-logging-and-errors",
- "feagi-models",
  "feagi-npu-burst-core",
  "feagi-npu-burst-esp32",
  "feagi-npu-burst-rayon",
@@ -1598,12 +1600,13 @@ dependencies = [
 name = "feagi-npu-burst-esp32"
 version = "0.1.1"
 dependencies = [
+ "feagi-brain-models",
  "feagi-data",
- "feagi-genomic-context",
  "feagi-logging-and-errors",
- "feagi-models",
  "feagi-npu-burst-core",
  "heapless 0.9.3",
+ "paste",
+ "serde",
 ]
 
 [[package]]
@@ -1611,14 +1614,15 @@ name = "feagi-npu-burst-rayon"
 version = "0.1.1"
 dependencies = [
  "ahash",
+ "feagi-brain-models",
  "feagi-data",
- "feagi-genomic-context",
  "feagi-logging-and-errors",
- "feagi-models",
  "feagi-npu-burst-core",
  "half",
+ "heapless 0.9.3",
  "paste",
  "rayon",
+ "serde",
 ]
 
 [[package]]
@@ -1680,7 +1684,6 @@ dependencies = [
  "feagi-brain-development",
  "feagi-data",
  "feagi-evolutionary",
- "feagi-genomic-context",
  "feagi-observability",
  "feagi-state-manager",
  "lz4",

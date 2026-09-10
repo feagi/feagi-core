@@ -141,7 +141,6 @@ alloc = [
 
 [dependencies]
 # FEAGI
-feagi-npu = { path = "crates/feagi-npu" }
 feagi-models = { path = "crates/feagi-models" }
 feagi-serialization = { path = "crates/feagi-serialization" }
 feagi-logging-and-errors = {path = "crates/feagi-logging-and-errors"}
@@ -156,7 +155,6 @@ serde_json = "1.0"
 
 [dev-dependencies]
 # For integration tests that need GenomeService
-feagi-npu = { path = "crates/feagi-npu", features = ["std"] }
 ahash = { workspace = true }
 feagi-config = { path = "crates/feagi-config" }
 parking_lot = "0.12"

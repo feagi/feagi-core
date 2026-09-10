@@ -47,8 +47,15 @@ channel_flume = [
 
 
 [dependencies]
+# Sub Crates
 feagi-data-quantization = {path = "feagi-data-quantization"}
 feagi-data-neuron = {path = "feagi-data-neuron"}
+
+# Sibling Crates
+
+# Parent Crates
+
+# Root Crates
 feagi-logging-and-errors = {path = "../feagi-logging-and-errors"} # This should be the ONLY FEAGI sibling crate!
 
 # External crates

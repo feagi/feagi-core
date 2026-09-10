@@ -16,7 +16,6 @@ name = "feagi_services"
 # Core FEAGI crates (backend)
 feagi-evolutionary = {  path = "../feagi-evolutionary" }
 feagi-brain-development = {  path = "../feagi-brain-development", default-features = false }
-feagi-genomic-context = {  path = "../feagi-genomic-context" }
 feagi-data = {  path = "../feagi-data" }
 feagi-state-manager = {  path = "../feagi-state-manager", default-features = false }
 # feagi-io dependency removed to break circular dependency

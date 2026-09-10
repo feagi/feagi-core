@@ -16,7 +16,7 @@ proc-macro = true
 [features]
 # No features here! This is all compile macro stuff!
 
-[dependencies]
+[dependencies] # TODO use workspace
 syn = { version = "3.0.5", features = ["full"] }
 quote = "1.0.47"
 proc-macro2 = "1.0.107"

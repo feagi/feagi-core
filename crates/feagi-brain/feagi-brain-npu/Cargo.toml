@@ -1,5 +1,5 @@
 [package]
-name = "feagi-npu"
+name = "feagi-brain-npu"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -70,12 +70,15 @@ engines-esp32 = [
 
 
 [dependencies]
+# Sub Crates
 feagi-npu-burst-engines = {path = "feagi-npu-burst-engines"}
-feagi-data = {path = "../feagi-data"}
-feagi-models = {path = "../feagi-models" }
-feagi-logging-and-errors = {path = "../feagi-logging-and-errors"}
-feagi-genomic-context = {path = "../feagi-genomic-context"}
 
+# Sibling Crates
+feagi-brain-models = {path = "../feagi-brain-models" }
+
+# Root Crates
+feagi-data = {path = "../../feagi-data"}
+feagi-logging-and-errors = {path = "../../feagi-logging-and-errors"}
 
 # External crates
 paste = { workspace = true}
@@ -90,3 +93,9 @@ serde_json = { workspace = true, optional = true}
 
 [lints]
 workspace = true
+
+# Sub Crates
+# Sibling Crates
+# Parent Crates
+# Root Crates
+# External Crates

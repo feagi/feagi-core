@@ -32,11 +32,19 @@ alloc = [
 
 
 [dependencies]
+# Sub Crates
+
+# Sibling Crates
 feagi-npu-burst-core = {path = "../feagi-npu-burst-core"}
 
-feagi-data = {path = "../../../feagi-data" }
-feagi-models = {path = "../../../feagi-models" }
-feagi-logging-and-errors = {path = "../../../feagi-logging-and-errors" }
-feagi-genomic-context = {path = "../../../feagi-genomic-context" }
+# Parent Crates
+feagi-brain-models = {path = "../../../feagi-brain-models"}
 
-heapless = {workspace = true}
+# Root Crates
+feagi-data = {path = "../../../../feagi-data" }
+feagi-logging-and-errors = {path = "../../../../feagi-logging-and-errors" }
+
+# External Crates
+paste = { workspace = true}
+serde = {workspace = true} # Required by FeagiError
+heapless = {workspace = true, default-features = false}
