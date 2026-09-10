@@ -215,6 +215,31 @@ fn build_friendly_unit_name(unit_label: &str, group: u8, sub_unit_index: usize) 
     format!("{unit_label}-{}-{}", group, sub_unit_index)
 }
 
+/// Builds an unambiguous default name for motor areas created during registration.
+///
+/// SpatialPointer's frame handling changes its command semantics, so expose that
+/// distinction in its name rather than requiring users to infer it from an ID.
+fn build_motor_registration_default_name(
+    motor_unit: MotorCorticalUnit,
+    group: u8,
+    sub_unit_index: usize,
+    frame_handling: Option<&str>,
+) -> String {
+    let legacy_name =
+        build_friendly_unit_name(motor_unit.get_friendly_name(), group, sub_unit_index);
+    if motor_unit != MotorCorticalUnit::SpatialPointer || sub_unit_index != 0 {
+        return legacy_name;
+    }
+    let Some(frame_handling) = frame_handling else {
+        return legacy_name;
+    };
+    match frame_handling {
+        "Absolute" => format!("SpatialPointer_absolute_{group}"),
+        "Incremental" => format!("SpatialPointer_incremental_{group}"),
+        _ => legacy_name,
+    }
+}
+
 fn non_empty_string(value: Option<&Value>) -> Option<String> {
     value
         .and_then(|v| v.as_str())
@@ -435,6 +460,20 @@ fn extract_misc_dimensions(encoder_properties: &Value) -> Option<(usize, usize, 
     Some((width, height, depth))
 }
 
+/// Extract the registered Z depth from a `JSONEncoderProperties::Percentage` tuple.
+///
+/// Percentage encoders serialize as `{"Percentage": [NeuronDepth, ...]}`. The
+/// cortical area must use this depth because the connector encodes samples using
+/// the same value; retaining a template depth would produce out-of-bounds sensory
+/// voxel coordinates.
+fn extract_percentage_depth(encoder_properties: &Value) -> Option<usize> {
+    let payload = encoder_variant_payload(encoder_properties, "Percentage")?;
+    let depth_json = payload.as_array()?.first()?;
+    percentage_tuple_first_depth_u32(depth_json)
+        .filter(|depth| *depth > 0)
+        .map(|depth| depth as usize)
+}
+
 fn resolve_sensory_dimensions_from_encoder_properties(
     encoder_properties: Option<&Value>,
     sub_unit_index: usize,
@@ -446,6 +485,10 @@ fn resolve_sensory_dimensions_from_encoder_properties(
     extract_cartesian_plane_dimensions(encoder_properties)
         .or_else(|| extract_segmented_vision_dimensions(encoder_properties, sub_unit_index))
         .or_else(|| extract_misc_dimensions(encoder_properties))
+        .or_else(|| {
+            extract_percentage_depth(encoder_properties)
+                .map(|depth| (fallback.0, fallback.1, depth))
+        })
         .unwrap_or(fallback)
 }
 
@@ -592,6 +635,10 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         continue;
                     }
                 };
+                let frame_handling = config_map
+                    .get("frame_change_handling")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
                 let topology = motor_unit.get_unit_default_topology();
 
                 let cortical_ids = match motor_unit
@@ -667,14 +714,21 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     let cortical_id_b64 = cortical_id.as_base_64();
                     let legacy_default_name =
                         build_friendly_unit_name(motor_unit.get_friendly_name(), group_u8, i);
+                    let registration_default_name = build_motor_registration_default_name(
+                        motor_unit,
+                        group_u8,
+                        i,
+                        frame_handling.as_deref(),
+                    );
                     let resolved_base_name =
-                        resolve_registration_name(unit_def, &legacy_default_name);
-                    let resolved_name =
-                        if resolved_base_name == legacy_default_name || cortical_ids.len() == 1 {
-                            resolved_base_name.clone()
-                        } else {
-                            format!("{}-{}", resolved_base_name, i)
-                        };
+                        resolve_registration_name(unit_def, &registration_default_name);
+                    let resolved_name = if resolved_base_name == registration_default_name
+                        || cortical_ids.len() == 1
+                    {
+                        resolved_base_name.clone()
+                    } else {
+                        format!("{}-{}", resolved_base_name, i)
+                    };
                     let exists = match connectome_service
                         .cortical_area_exists(&cortical_id_b64)
                         .await
@@ -1720,11 +1774,22 @@ mod sensory_dimension_extraction_tests {
             resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (64, 64, 64));
         assert_eq!(resolved, (160, 120, 48));
     }
+
+    #[test]
+    fn resolve_sensory_dimensions_reads_percentage_encoder_depth() {
+        let encoder = json!({
+            "Percentage": [{"value": 20}, "Linear", false, "D1"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (6, 1, 10));
+        assert_eq!(resolved, (6, 1, 20));
+    }
 }
 
 #[cfg(test)]
 mod registration_name_helpers_tests {
-    use super::should_auto_rename;
+    use super::{build_motor_registration_default_name, should_auto_rename};
+    use feagi_structures::genomic::MotorCorticalUnit;
 
     #[test]
     fn should_auto_rename_placeholder_names() {
@@ -1739,6 +1804,28 @@ mod registration_name_helpers_tests {
             "aWRwdAoAAAA=",
             "Depth Map"
         ));
+    }
+
+    #[test]
+    fn spatial_pointer_default_names_include_their_command_semantics() {
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::SpatialPointer,
+                0,
+                0,
+                Some("Absolute"),
+            ),
+            "SpatialPointer_absolute_0"
+        );
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::SpatialPointer,
+                1,
+                0,
+                Some("Incremental"),
+            ),
+            "SpatialPointer_incremental_1"
+        );
     }
 }
 

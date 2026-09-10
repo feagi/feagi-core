@@ -2,7 +2,7 @@
 
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
-use crate::data_types::Percentage;
+use crate::data_types::{Percentage, Percentage2D};
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::decode_unsigned_percentage_from_linear_neurons;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -35,6 +35,9 @@ pub struct PositionalServoNeuronVoxelXYZPDecoder {
     /// Scratch space for incremental area (2 per channel: forward and backward)
     z_depth_incremental_forward_scratch_space: Vec<Vec<u32>>,
     z_depth_incremental_backward_scratch_space: Vec<Vec<u32>>,
+    /// `None` retains legacy positional-servo semantics. When present, each
+    /// channel emits `(target_position, speed_limit)` percentages.
+    default_speed_0_1_per_channel: Option<Vec<f32>>,
 }
 
 /// Maximum position change per tick at full deflection, expressed as a fraction
@@ -68,6 +71,48 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
             z_depth_absolute_scratch_space: vec![Vec::new(); *number_channels as usize],
             z_depth_incremental_forward_scratch_space: vec![Vec::new(); *number_channels as usize],
             z_depth_incremental_backward_scratch_space: vec![Vec::new(); *number_channels as usize],
+            default_speed_0_1_per_channel: None,
+        };
+        Ok(Box::new(decoder))
+    }
+
+    /// Creates the explicit target-and-speed positional-servo decoder.
+    ///
+    /// The caller must configure one safe default speed for every channel.
+    /// No implicit speed is used when an absolute target fires alone.
+    pub fn new_target_speed_box(
+        absolute_cortical_id: CorticalID,
+        incremental_cortical_id: CorticalID,
+        z_depth: NeuronDepth,
+        number_channels: CorticalChannelCount,
+        interpolation: PercentageNeuronPositioning,
+        default_speed_0_1_per_channel: Vec<f32>,
+    ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
+        if default_speed_0_1_per_channel.len() != *number_channels as usize
+            || default_speed_0_1_per_channel
+                .iter()
+                .any(|speed| !speed.is_finite() || !(0.0..=1.0).contains(speed))
+        {
+            return Err(FeagiDataError::BadParameters(
+                "PositionalServoTargetSpeed requires one finite [0, 1] default speed per channel."
+                    .to_string(),
+            ));
+        }
+        const CHANNEL_Y_HEIGHT: u32 = 1;
+        const ABSOLUTE_WIDTH_PER_CHANNEL: u32 = 1;
+        let decoder = PositionalServoNeuronVoxelXYZPDecoder {
+            channel_absolute_dimensions: CorticalChannelDimensions::new(
+                *number_channels * ABSOLUTE_WIDTH_PER_CHANNEL,
+                CHANNEL_Y_HEIGHT,
+                *z_depth,
+            )?,
+            cortical_absolute_read_target: absolute_cortical_id,
+            cortical_incremental_read_target: incremental_cortical_id,
+            interpolation,
+            z_depth_absolute_scratch_space: vec![Vec::new(); *number_channels as usize],
+            z_depth_incremental_forward_scratch_space: vec![Vec::new(); *number_channels as usize],
+            z_depth_incremental_backward_scratch_space: vec![Vec::new(); *number_channels as usize],
+            default_speed_0_1_per_channel: Some(default_speed_0_1_per_channel),
         };
         Ok(Box::new(decoder))
     }
@@ -108,14 +153,23 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
 
 impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
     fn get_decodable_data_type(&self) -> WrappedIOType {
-        WrappedIOType::Percentage
+        if self.default_speed_0_1_per_channel.is_some() {
+            WrappedIOType::Percentage_2D
+        } else {
+            WrappedIOType::Percentage
+        }
     }
 
     fn get_as_properties(&self) -> JSONDecoderProperties {
-        JSONDecoderProperties::PositionalServo(
-            NeuronDepth::new(self.channel_absolute_dimensions.depth).unwrap(),
-            self.interpolation,
-        )
+        let depth = NeuronDepth::new(self.channel_absolute_dimensions.depth).unwrap();
+        match &self.default_speed_0_1_per_channel {
+            Some(default_speeds) => JSONDecoderProperties::PositionalServoTargetSpeed(
+                depth,
+                self.interpolation,
+                default_speeds.clone(),
+            ),
+            None => JSONDecoderProperties::PositionalServo(depth, self.interpolation),
+        }
     }
 
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(
@@ -215,22 +269,44 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
 
             *changed_flag = true;
 
-            let percentage: &mut Percentage =
-                pipeline.get_preprocessed_cached_value_mut().try_into()?;
-
-            if has_absolute {
-                self.decode_percentage(absolute_scratch, percentage);
-            } else if has_incremental {
-                let mut forward_value = Percentage::new_zero();
-                let mut backward_value = Percentage::new_zero();
-
+            let mut forward_value = Percentage::new_zero();
+            let mut backward_value = Percentage::new_zero();
+            if has_incremental {
                 if !forward_scratch.is_empty() {
                     self.decode_percentage(forward_scratch, &mut forward_value);
                 }
                 if !backward_scratch.is_empty() {
                     self.decode_percentage(backward_scratch, &mut backward_value);
                 }
+            }
 
+            if let Some(default_speeds) = &self.default_speed_0_1_per_channel {
+                let target_speed: &mut Percentage2D =
+                    pipeline.get_preprocessed_cached_value_mut().try_into()?;
+                if has_absolute {
+                    self.decode_percentage(absolute_scratch, &mut target_speed.a);
+                } else {
+                    let net_direction = forward_value.get_as_0_1() - backward_value.get_as_0_1();
+                    let new_pos = (target_speed.a.get_as_0_1()
+                        + net_direction * INCREMENTAL_STEP_SIZE)
+                        .clamp(0.0, 1.0);
+                    target_speed.a = Percentage::new_from_0_1(new_pos)
+                        .unwrap_or_else(|_| Percentage::new_from_0_1_unchecked(new_pos));
+                }
+                let speed = if has_incremental {
+                    (forward_value.get_as_0_1() - backward_value.get_as_0_1()).abs()
+                } else {
+                    default_speeds[channel_index]
+                };
+                target_speed.b = Percentage::new_from_0_1(speed)
+                    .unwrap_or_else(|_| Percentage::new_from_0_1_unchecked(speed));
+            } else if has_absolute {
+                let percentage: &mut Percentage =
+                    pipeline.get_preprocessed_cached_value_mut().try_into()?;
+                self.decode_percentage(absolute_scratch, percentage);
+            } else {
+                let percentage: &mut Percentage =
+                    pipeline.get_preprocessed_cached_value_mut().try_into()?;
                 // net_direction: -1.0 (full backward) to +1.0 (full forward)
                 let net_direction = forward_value.get_as_0_1() - backward_value.get_as_0_1();
 
@@ -301,6 +377,18 @@ mod tests {
         .unwrap()
     }
 
+    fn make_target_speed_decoder() -> Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> {
+        PositionalServoNeuronVoxelXYZPDecoder::new_target_speed_box(
+            absolute_cortical_id(),
+            incremental_cortical_id(),
+            NeuronDepth::new(Z_DEPTH).unwrap(),
+            CorticalChannelCount::new(NUM_CHANNELS).unwrap(),
+            PercentageNeuronPositioning::Linear,
+            vec![0.2],
+        )
+        .unwrap()
+    }
+
     fn one_channel_pipeline() -> Vec<MotorPipelineStageRunner> {
         vec![MotorPipelineStageRunner::new(WrappedIOData::Percentage(
             Percentage::new_from_0_1(0.5).unwrap(),
@@ -308,10 +396,27 @@ mod tests {
         .unwrap()]
     }
 
+    fn one_channel_target_speed_pipeline() -> Vec<MotorPipelineStageRunner> {
+        vec![
+            MotorPipelineStageRunner::new(WrappedIOData::Percentage_2D(Percentage2D::new(
+                Percentage::new_from_0_1(0.5).unwrap(),
+                Percentage::new_zero(),
+            )))
+            .unwrap(),
+        ]
+    }
+
     fn read_percentage(pipelines: &[MotorPipelineStageRunner]) -> f32 {
         match pipelines[0].get_postprocessed_motor_value() {
             WrappedIOData::Percentage(p) => p.get_as_0_1(),
             other => panic!("expected Percentage, got {:?}", other),
+        }
+    }
+
+    fn read_target_speed(pipelines: &[MotorPipelineStageRunner]) -> (f32, f32) {
+        match pipelines[0].get_postprocessed_motor_value() {
+            WrappedIOData::Percentage_2D(value) => (value.a.get_as_0_1(), value.b.get_as_0_1()),
+            other => panic!("expected Percentage_2D, got {:?}", other),
         }
     }
 
@@ -570,6 +675,50 @@ mod tests {
         assert!(
             pos < 0.25,
             "absolute at z=8 (0.2) must win over forward incremental, got {pos}"
+        );
+    }
+
+    #[test]
+    fn target_speed_mode_uses_absolute_target_and_incremental_speed() {
+        let mut decoder = make_target_speed_decoder();
+        let mut pipelines = one_channel_target_speed_pipeline();
+        let mut map = CorticalMappedXYZPNeuronVoxels::new();
+        let mut absolute = NeuronVoxelXYZPArrays::new();
+        absolute.push(&NeuronVoxelXYZP::new(0, 0, 8, 1.0));
+        map.insert(absolute_cortical_id(), absolute);
+        let mut incremental = NeuronVoxelXYZPArrays::new();
+        incremental.push(&NeuronVoxelXYZP::new(0, 0, 0, 1.0));
+        map.insert(incremental_cortical_id(), incremental);
+
+        decode(&mut decoder, &map, &mut pipelines);
+
+        let (target, speed) = read_target_speed(&pipelines);
+        assert!(
+            target < 0.25,
+            "absolute target must be retained, got {target}"
+        );
+        assert!(
+            (speed - 1.0).abs() < 1e-6,
+            "full incremental activation must produce full speed, got {speed}"
+        );
+    }
+
+    #[test]
+    fn target_speed_mode_uses_configured_speed_for_absolute_only_command() {
+        let mut decoder = make_target_speed_decoder();
+        let mut pipelines = one_channel_target_speed_pipeline();
+        let neurons = make_neuron_map(absolute_cortical_id(), &[(0, 0, 1)]);
+
+        decode(&mut decoder, &neurons, &mut pipelines);
+
+        let (target, speed) = read_target_speed(&pipelines);
+        assert!(
+            target > 0.85,
+            "absolute target must be decoded, got {target}"
+        );
+        assert!(
+            (speed - 0.2).abs() < 1e-6,
+            "absolute-only command must use configured speed, got {speed}"
         );
     }
 

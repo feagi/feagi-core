@@ -17,8 +17,7 @@ use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
 };
 use feagi_structures::FeagiDataError;
-use std::collections::VecDeque;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 /// Decodes one cortical area's activity into a normalized XYZ spatial pointer.
 ///
@@ -32,64 +31,21 @@ use std::time::{Duration, Instant};
 /// - `Absolute`: decodes each axis via the percentage neuron layout and emits one unsigned
 ///   `Percentage3D` tuple (x/y/z in [0, 1]).
 ///
-/// - `Incremental`: decodes the same unsigned position each read, maintains a per-channel
-///   rolling window spanning `window_ms`, and emits the average motion (per-axis least-squares
-///   velocity) as a signed `SignedPercentage3D` tuple (x/y/z in [-1, 1], `0` = no motion).
-///   The velocity is scaled by `max_axis_velocity`.
+/// - `Incremental`: decodes each axis directly as a signed `SignedPercentage3D` velocity
+///   command (x/y/z in [-1, 1]). The center depth is neutral; lower and higher depths map
+///   to opposite directions with proportional magnitude.
 #[derive(Debug)]
 pub struct SpatialPointerNeuronVoxelXYZPDecoder {
     cortical_read_target: CorticalID,
     properties: SpatialPointerProperties,
     frame_change_handling: FrameChangeHandling,
     percentage_neuron_positioning: PercentageNeuronPositioning,
-    /// Incremental-only configuration: rolling-window length.
-    window: Duration,
-    /// Incremental-only configuration: per-axis velocity that maps to encoding full scale.
-    max_axis_velocity: f32,
-    /// Incremental-only state: per-channel timestamped history of normalized positions.
-    position_history: Vec<VecDeque<(Instant, [f32; 3])>>,
     /// Per-channel scratch: Z indexes collected for each of the three axis columns.
     z_depth_scratch: Vec<[Vec<u32>; 3]>,
 }
 
-/// Neutral signed output for incremental mode (no motion on any axis).
-const INCREMENTAL_NEUTRAL: f32 = 0.0;
 const ONLY_ALLOWED_Y: u32 = 0;
 const AXES_PER_CHANNEL: u32 = SPATIAL_POINTER_CHANNEL_WIDTH;
-
-/// Computes the per-axis least-squares velocity (units per second) of a series of
-/// timestamped 3D points.
-fn regression_velocity_per_axis(times_s: &[f32], points: &[[f32; 3]]) -> [f32; 3] {
-    let n = times_s.len();
-    if n < 2 || n != points.len() {
-        return [0.0; 3];
-    }
-
-    let count = n as f32;
-    let sum_t: f32 = times_s.iter().sum();
-    let sum_tt: f32 = times_s.iter().map(|t| t * t).sum();
-    let denominator = count * sum_tt - sum_t * sum_t;
-    if denominator.abs() <= f32::EPSILON {
-        return [0.0; 3];
-    }
-
-    let mut velocity = [0.0f32; 3];
-    for axis in 0..3 {
-        let sum_v: f32 = points.iter().map(|p| p[axis]).sum();
-        let sum_tv: f32 = times_s
-            .iter()
-            .zip(points.iter())
-            .map(|(t, p)| t * p[axis])
-            .sum();
-        velocity[axis] = (count * sum_tv - sum_t * sum_v) / denominator;
-    }
-    velocity
-}
-
-#[inline]
-fn encode_signed_velocity(velocity: f32, max_axis_velocity: f32) -> f32 {
-    (velocity / max_axis_velocity).clamp(-1.0, 1.0)
-}
 
 impl SpatialPointerNeuronVoxelXYZPDecoder {
     pub fn new_box(
@@ -115,26 +71,15 @@ impl SpatialPointerNeuronVoxelXYZPDecoder {
             };
 
         let channel_count = *number_of_channels as usize;
-        let (window, max_axis_velocity, position_history) = match frame_change_handling {
-            FrameChangeHandling::Absolute => (Duration::ZERO, 0.0, Vec::new()),
-            FrameChangeHandling::Incremental => {
-                let (window_ms, max_axis_velocity) = properties.require_incremental_parameters()?;
-                (
-                    Duration::from_millis(window_ms as u64),
-                    max_axis_velocity,
-                    vec![VecDeque::new(); channel_count],
-                )
-            }
-        };
+        if frame_change_handling == FrameChangeHandling::Incremental {
+            properties.require_incremental_parameters()?;
+        }
 
         let decoder = SpatialPointerNeuronVoxelXYZPDecoder {
             cortical_read_target,
             properties,
             frame_change_handling,
             percentage_neuron_positioning,
-            window,
-            max_axis_velocity,
-            position_history,
             z_depth_scratch: vec![[Vec::new(), Vec::new(), Vec::new()]; channel_count],
         };
         Ok(Box::new(decoder))
@@ -236,40 +181,11 @@ impl SpatialPointerNeuronVoxelXYZPDecoder {
         Ok(())
     }
 
-    fn incremental_motion_for_channel(
-        &mut self,
-        channel_index: usize,
-        time_of_read: Instant,
-        position: [f32; 3],
-    ) -> [f32; 3] {
-        let history = &mut self.position_history[channel_index];
-        history.push_back((time_of_read, position));
-
-        while let Some((oldest_time, _)) = history.front() {
-            if time_of_read.duration_since(*oldest_time) > self.window {
-                history.pop_front();
-            } else {
-                break;
-            }
-        }
-
-        if history.len() < 2 {
-            return [INCREMENTAL_NEUTRAL; 3];
-        }
-
-        let origin = history.front().expect("history has >= 2 samples").0;
-        let mut times_s = Vec::with_capacity(history.len());
-        let mut points = Vec::with_capacity(history.len());
-        for (sample_time, sample_position) in history.iter() {
-            times_s.push(sample_time.duration_since(origin).as_secs_f32());
-            points.push(*sample_position);
-        }
-
-        let velocity = regression_velocity_per_axis(&times_s, &points);
+    fn incremental_motion_from_position(position: [f32; 3]) -> [f32; 3] {
         [
-            encode_signed_velocity(velocity[0], self.max_axis_velocity),
-            encode_signed_velocity(velocity[1], self.max_axis_velocity),
-            encode_signed_velocity(velocity[2], self.max_axis_velocity),
+            position[0].mul_add(2.0, -1.0).clamp(-1.0, 1.0),
+            position[1].mul_add(2.0, -1.0).clamp(-1.0, 1.0),
+            position[2].mul_add(2.0, -1.0).clamp(-1.0, 1.0),
         ]
     }
 }
@@ -289,7 +205,7 @@ impl NeuronVoxelXYZPDecoder for SpatialPointerNeuronVoxelXYZPDecoder {
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(
         &mut self,
         neurons_to_read: &CorticalMappedXYZPNeuronVoxels,
-        time_of_read: Instant,
+        _time_of_read: Instant,
         pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>,
         channel_changed: &mut Vec<bool>,
     ) -> Result<(), FeagiDataError> {
@@ -319,8 +235,7 @@ impl NeuronVoxelXYZPDecoder for SpatialPointerNeuronVoxelXYZPDecoder {
                     Self::write_position(pipeline, position)?;
                 }
                 FrameChangeHandling::Incremental => {
-                    let motion =
-                        self.incremental_motion_for_channel(channel_index, time_of_read, position);
+                    let motion = Self::incremental_motion_from_position(position);
                     let pipeline = pipelines_with_data_to_update
                         .get_mut(channel_index)
                         .expect("channel_index is within pipeline bounds");
@@ -336,10 +251,7 @@ impl NeuronVoxelXYZPDecoder for SpatialPointerNeuronVoxelXYZPDecoder {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        encode_signed_velocity, regression_velocity_per_axis, SpatialPointerNeuronVoxelXYZPDecoder,
-        INCREMENTAL_NEUTRAL,
-    };
+    use super::SpatialPointerNeuronVoxelXYZPDecoder;
     use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
     use crate::data_types::descriptors::SpatialPointerProperties;
     use crate::data_types::{Percentage3D, SignedPercentage3D};
@@ -354,7 +266,7 @@ mod tests {
     use feagi_structures::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
     };
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     fn pointer_cortical_id(frame: FrameChangeHandling) -> CorticalID {
         spatial_pointer_io_flag(frame, PercentageNeuronPositioning::Linear).as_io_cortical_id(
@@ -363,14 +275,6 @@ mod tests {
             CorticalUnitIndex::from(0u8),
             CorticalSubUnitIndex::from(0u8),
         )
-    }
-
-    fn axis_voxel_map(id: CorticalID, axis_x: u32, z: u32) -> CorticalMappedXYZPNeuronVoxels {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
-        arrays.push(&NeuronVoxelXYZP::new(axis_x, 0, z, 1.0));
-        let mut map = CorticalMappedXYZPNeuronVoxels::new();
-        map.insert(id, arrays);
-        map
     }
 
     fn three_axis_voxel_map(
@@ -420,18 +324,6 @@ mod tests {
             ))
             .unwrap(),
         ]
-    }
-
-    #[test]
-    fn regression_returns_zero_for_insufficient_samples() {
-        assert_eq!(regression_velocity_per_axis(&[], &[]), [0.0; 3]);
-    }
-
-    #[test]
-    fn encode_signed_velocity_maps_neutral_and_extremes() {
-        assert_eq!(encode_signed_velocity(0.0, 2.0), INCREMENTAL_NEUTRAL);
-        assert_eq!(encode_signed_velocity(2.0, 2.0), 1.0);
-        assert_eq!(encode_signed_velocity(-2.0, 2.0), -1.0);
     }
 
     #[test]
@@ -518,7 +410,7 @@ mod tests {
     }
 
     #[test]
-    fn incremental_mode_first_read_is_neutral() {
+    fn incremental_mode_maps_depth_to_signed_velocity_on_first_read() {
         let id = pointer_cortical_id(FrameChangeHandling::Incremental);
         let mut decoder = SpatialPointerNeuronVoxelXYZPDecoder::new_box(
             id,
@@ -527,7 +419,7 @@ mod tests {
         )
         .unwrap();
 
-        let neurons = axis_voxel_map(id, 0, 5);
+        let neurons = three_axis_voxel_map(id, 0, 5, 9);
         let mut pipelines = one_channel_motion_pipeline();
         let mut changed = vec![false];
         decoder
@@ -540,17 +432,13 @@ mod tests {
             .unwrap();
 
         let out = read_motion(&pipelines);
-        for axis in out {
-            assert!(
-                axis.abs() < 1e-6,
-                "first read must be neutral, got {}",
-                axis
-            );
-        }
+        assert!((out[0] - 1.0).abs() < 1e-4, "x {}", out[0]);
+        assert!((out[1] + (1.0 / 9.0)).abs() < 1e-4, "y {}", out[1]);
+        assert!((out[2] + 1.0).abs() < 1e-4, "z {}", out[2]);
     }
 
     #[test]
-    fn incremental_mode_encodes_increasing_x_axis_as_positive_motion() {
+    fn incremental_mode_depth_changes_produce_distinct_velocities() {
         let id = pointer_cortical_id(FrameChangeHandling::Incremental);
         let mut decoder = SpatialPointerNeuronVoxelXYZPDecoder::new_box(
             id,
@@ -559,35 +447,29 @@ mod tests {
         )
         .unwrap();
 
-        let base = Instant::now();
         let mut pipelines = one_channel_motion_pipeline();
-        // X axis column (X=0): decreasing z means increasing normalized x over time.
-        let x_z_values = [9u32, 8, 7, 6, 5];
-        let mut out = [0.0f32; 3];
-        for (frame, &x_z) in x_z_values.iter().enumerate() {
-            let neurons = three_axis_voxel_map(id, x_z, 5, 5);
-            let mut changed = vec![false];
-            decoder
-                .read_neuron_data_multi_channel_into_pipeline_input_cache(
-                    &neurons,
-                    base + Duration::from_millis(50 * frame as u64),
-                    &mut pipelines,
-                    &mut changed,
-                )
-                .unwrap();
-            out = read_motion(&pipelines);
-        }
+        let mut changed = vec![false];
+        decoder
+            .read_neuron_data_multi_channel_into_pipeline_input_cache(
+                &three_axis_voxel_map(id, 2, 4, 4),
+                Instant::now(),
+                &mut pipelines,
+                &mut changed,
+            )
+            .unwrap();
+        let lower_magnitude = read_motion(&pipelines)[0];
 
-        assert!(out[0] > 0.05, "expected positive x motion, got {}", out[0]);
-        assert!(
-            out[1].abs() < 1e-3,
-            "y motion must be neutral, got {}",
-            out[1]
-        );
-        assert!(
-            out[2].abs() < 1e-3,
-            "z motion must be neutral, got {}",
-            out[2]
-        );
+        decoder
+            .read_neuron_data_multi_channel_into_pipeline_input_cache(
+                &three_axis_voxel_map(id, 0, 4, 4),
+                Instant::now(),
+                &mut pipelines,
+                &mut changed,
+            )
+            .unwrap();
+        let higher_magnitude = read_motion(&pipelines)[0];
+
+        assert!(higher_magnitude > lower_magnitude);
+        assert!(higher_magnitude <= 1.0);
     }
 }

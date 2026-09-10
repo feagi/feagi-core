@@ -743,6 +743,56 @@ impl MotorDeviceCache {
 
     motor_cortical_units!(motor_unit_functions);
 
+    /// Registers a positional-servo group that emits target-and-speed pairs.
+    ///
+    /// The first tuple component is the absolute target percentage. The second
+    /// is a normalized speed limit derived from incremental activity, or from
+    /// the explicitly configured per-channel safe speed for absolute-only
+    /// commands. The legacy `motor_positional_servo_register` remains unchanged.
+    pub fn motor_positional_servo_target_speed_register(
+        &mut self,
+        unit: CorticalUnitIndex,
+        number_channels: CorticalChannelCount,
+        z_neuron_resolution: NeuronDepth,
+        percentage_neuron_positioning: PercentageNeuronPositioning,
+        default_speed_0_1_per_channel: Vec<f32>,
+    ) -> Result<(), FeagiDataError> {
+        let cortical_ids =
+            MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+                FrameChangeHandling::Absolute,
+                percentage_neuron_positioning,
+                unit,
+            );
+        let decoder = PositionalServoNeuronVoxelXYZPDecoder::new_target_speed_box(
+            cortical_ids[0],
+            cortical_ids[1],
+            z_neuron_resolution,
+            number_channels,
+            percentage_neuron_positioning,
+            default_speed_0_1_per_channel,
+        )?;
+        let io_props = json!({
+            "frame_change_handling": FrameChangeHandling::Absolute,
+            "percentage_neuron_positioning": percentage_neuron_positioning,
+            "control_semantics": "absolute_target_incremental_speed",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let initial_value = WrappedIOData::Percentage_2D(Percentage2D::new(
+            Percentage::new_from_0_1(0.5).expect("0.5 is always valid"),
+            Percentage::new_zero(),
+        ));
+        self.register(
+            MotorCorticalUnit::PositionalServo,
+            unit,
+            decoder,
+            io_props,
+            number_channels,
+            initial_value,
+        )
+    }
+
     //region Data IO
 
     pub fn get_feagi_byte_container(&self) -> &FeagiByteContainer {
