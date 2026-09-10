@@ -7,6 +7,7 @@ on_cortical_template! {
             encoded_data_type: Percentage,
             friendly_name: "Infrared Sensor",
             cortical_id_tag: b"abc",
+            comment: "Infrared distance sensor for object detection.",
             io_cortical_areas: {
                 {
                     io_cortical_data_type: Percentage,
@@ -14,7 +15,8 @@ on_cortical_template! {
                     channel_dimensions_default: [1, 1, 10],
                     channel_dimensions_min: [1, 1, 1],
                     channel_dimensions_max: [1, 1, 1024],
-                    io_cortical_generator: Generator
+                    comment: "Generator",
+                    io_cortical_generator: Generator,
                 }
             }
         }

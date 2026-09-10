@@ -22,6 +22,7 @@ mod kw {
     syn::custom_keyword!(channel_dimensions_min);
     syn::custom_keyword!(channel_dimensions_max);
     syn::custom_keyword!(io_cortical_generator);
+    syn::custom_keyword!(comment);
 }
 
 /// The full device list.
@@ -54,6 +55,8 @@ struct CorticalIOUnitTemplate {
     friendly_name: LitStr,
     /// Should be 3 bytes.
     cortical_id_tag: LitByteStr,
+    /// Optional human-readable comment for this unit.
+    comment: Option<LitStr>,
     io_cortical_areas: Vec<SubunitIOCorticalAreaProperties>,
 }
 
@@ -83,6 +86,17 @@ impl Parse for CorticalIOUnitTemplate {
         let cortical_id_tag: LitByteStr = content.parse()?;
         content.parse::<Token![,]>()?;
 
+        // comment: "..."
+        let comment = if content.peek(kw::comment) {
+            content.parse::<kw::comment>()?;
+            content.parse::<Token![:]>()?;
+            let parsed_comment: LitStr = content.parse()?;
+            let _ = content.parse::<Token![,]>();
+            Some(parsed_comment)
+        } else {
+            None
+        };
+
         // io_cortical_areas: { ... }
         content.parse::<kw::io_cortical_areas>()?;
         content.parse::<Token![:]>()?;
@@ -94,14 +108,21 @@ impl Parse for CorticalIOUnitTemplate {
             let _ = area_content.parse::<Token![,]>();
         }
 
+        let _ = content.parse::<Token![,]>();
+
         // Optional trailing comma for the unit body.
         let _ = content.parse::<Token![,]>();
+
+        if !content.is_empty() {
+            return Err(content.error("unexpected tokens in unit definition"));
+        }
 
         Ok(Self {
             unit_name,
             encoded_data_type,
             friendly_name,
             cortical_id_tag,
+            comment,
             io_cortical_areas,
         })
     }
@@ -116,8 +137,11 @@ struct SubunitIOCorticalAreaProperties {
     channel_dimensions_default: Vec<LitInt>, // uint, 3 long, no value may be 0
     channel_dimensions_min: Vec<LitInt>,     // uint, 3 long, no value may be 0, each value must be smaller or equal than max
     channel_dimensions_max: Vec<LitInt>,     // uint, 3 long, no value may be 0, each value must be bigger or equal than min
+    /// Optional human-readable comment for this cortical area.
+    comment: Option<LitStr>,
     /// The enum or macro invocation defining a cortical area generator.
     io_cortical_generator: Expr,
+
 }
 
 impl Parse for SubunitIOCorticalAreaProperties {
@@ -150,6 +174,16 @@ impl Parse for SubunitIOCorticalAreaProperties {
         let channel_dimensions_max = parse_unsigned_triplet(&content)?;
         content.parse::<Token![,]>()?;
 
+        let comment = if content.peek(kw::comment) {
+            content.parse::<kw::comment>()?;
+            content.parse::<Token![:]>()?;
+            let parsed_comment: LitStr = content.parse()?;
+            let _ = content.parse::<Token![,]>();
+            Some(parsed_comment)
+        } else {
+            None
+        };
+
         content.parse::<kw::io_cortical_generator>()?;
         content.parse::<Token![:]>()?;
         let io_cortical_generator: Expr = content.parse()?;
@@ -157,12 +191,19 @@ impl Parse for SubunitIOCorticalAreaProperties {
         // Optional trailing comma.
         let _ = content.parse::<Token![,]>();
 
+        let _ = content.parse::<Token![,]>();
+
+        if !content.is_empty() {
+            return Err(content.error("unexpected tokens in area definition"));
+        }
+
         Ok(Self {
             io_cortical_data_type,
             relative_position,
             channel_dimensions_default,
             channel_dimensions_min,
             channel_dimensions_max,
+            comment,
             io_cortical_generator,
         })
     }
@@ -241,6 +282,12 @@ fn validate_template(template_list: &CorticalIOUnitTemplateList) -> Result<()> {
             ));
         }
 
+        if let Some(comment) = &unit.comment {
+            if comment.value().trim().is_empty() {
+                return Err(syn::Error::new(comment.span(), "comment must not be empty when provided"));
+            }
+        }
+
         if unit.io_cortical_areas.is_empty() {
             return Err(syn::Error::new(
                 unit.unit_name.span(),
@@ -249,6 +296,12 @@ fn validate_template(template_list: &CorticalIOUnitTemplateList) -> Result<()> {
         }
 
         for area in &unit.io_cortical_areas {
+            if let Some(comment) = &area.comment {
+                if comment.value().trim().is_empty() {
+                    return Err(syn::Error::new(comment.span(), "comment must not be empty when provided"));
+                }
+            }
+
             if area.relative_position.len() != 3 {
                 return Err(syn::Error::new(
                     area.relative_position.first().map_or(unit.unit_name.span(), Spanned::span),
@@ -290,12 +343,13 @@ fn validate_template(template_list: &CorticalIOUnitTemplateList) -> Result<()> {
 #[proc_macro]
 /// Generates `for_each_cortical_io_unit_template!` from a `template { ... }` declaration.
 ///
-/// Expected input form:
+/// General Expected input form:
 /// `template {
 ///     UnitName {
 ///         encoded_data_type: Kind,
 ///         friendly_name: "Name",
 ///         cortical_id_tag: b"abc",
+///         comment: "optional unit comment or skip this line",
 ///         io_cortical_areas: {
 ///             {
 ///                 io_cortical_data_type: Type,
@@ -303,6 +357,7 @@ fn validate_template(template_list: &CorticalIOUnitTemplateList) -> Result<()> {
 ///                 channel_dimensions_default: [1, 1, 1],
 ///                 channel_dimensions_min: [1, 1, 1],
 ///                 channel_dimensions_max: [2, 2, 2],
+///                 comment: "optional area comment or skip this line",
 ///                 io_cortical_generator: Generator::Variant,
 ///             },
 ///         },
@@ -322,6 +377,11 @@ pub fn on_cortical_template(input: TokenStream) -> TokenStream {
         let encoded_data_type = &unit.encoded_data_type;
         let friendly_name = &unit.friendly_name;
         let cortical_id_tag = &unit.cortical_id_tag;
+        let unit_comment = unit.comment.as_ref().map(|comment| {
+            quote! {
+                comment: #comment,
+            }
+        });
 
         let area_tokens = unit.io_cortical_areas.iter().map(|area| {
             let io_cortical_data_type = &area.io_cortical_data_type;
@@ -329,6 +389,11 @@ pub fn on_cortical_template(input: TokenStream) -> TokenStream {
             let channel_dimensions_default = &area.channel_dimensions_default;
             let channel_dimensions_min = &area.channel_dimensions_min;
             let channel_dimensions_max = &area.channel_dimensions_max;
+            let area_comment = area.comment.as_ref().map(|comment| {
+                quote! {
+                    comment: #comment,
+                }
+            });
             let io_cortical_generator = &area.io_cortical_generator;
 
             quote! {
@@ -338,6 +403,7 @@ pub fn on_cortical_template(input: TokenStream) -> TokenStream {
                     channel_dimensions_default: [#(#channel_dimensions_default),*],
                     channel_dimensions_min: [#(#channel_dimensions_min),*],
                     channel_dimensions_max: [#(#channel_dimensions_max),*],
+                    #area_comment
                     io_cortical_generator: #io_cortical_generator,
                 }
             }
@@ -349,9 +415,10 @@ pub fn on_cortical_template(input: TokenStream) -> TokenStream {
                 encoded_data_type: #encoded_data_type,
                 friendly_name: #friendly_name,
                 cortical_id_tag: #cortical_id_tag,
+                #unit_comment,
                 io_cortical_areas: {
                     #(#area_tokens,)*
-                },
+                }
             }
         }
     });
