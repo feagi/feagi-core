@@ -1,5 +1,8 @@
 
+pub mod collections;
 
-pub mod neurons;
+pub mod cortical_collections;
 
-pub mod quantization_levels;
+pub mod wrapped_types;
+
+pub mod neuron_error;

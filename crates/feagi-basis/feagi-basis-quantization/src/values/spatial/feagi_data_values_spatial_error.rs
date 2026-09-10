@@ -1,5 +1,5 @@
+use feagi_basis_error_logging::prelude::*;
 use crate::values::quantizable::FeagiDataValueQuantizationError;
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
 
 #[derive(FeagiFail)]
 /// Attempted to index using a coordinate, but it was not in the given dimensions

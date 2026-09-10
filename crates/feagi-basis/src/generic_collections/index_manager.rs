@@ -1,4 +1,4 @@
-use feagi_data_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_basis_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
 use crate::generic_collections::feagi_index_range_manager_error::{
     FeagiIndexManagerInvalid, FeagiIndexManagerInvalidIndex, FeagiIndexManagerLimit, FeagiIndexRangeManagerError,
 };

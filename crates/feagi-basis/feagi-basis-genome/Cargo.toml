@@ -16,11 +16,11 @@ description = "Structures for Genome Structure Identification and optionally the
 
 std = [
     "alloc",
-    "serde/std", "serde_json/std"
+    "serde/std", "serde_json/std", "base64/std"
 ]
 
 alloc = [
-    "serde/alloc", "serde_json/alloc"
+    "serde/alloc", "serde_json/alloc", "base64/alloc"
 ]
 
 # Allow JSON serialization / deserialization of structures
@@ -28,6 +28,9 @@ serialization_support_json = [
     "serde_json"
 ]
 
+support_base64 = [
+    "base64"
+]
 
 
 [dependencies]
@@ -35,6 +38,7 @@ serialization_support_json = [
 # Sub Crates
 
 # Sibling Crates
+feagi-basis-error-logging = {path = "../feagi-basis-error-logging"}
 feagi-basis-quantization = {path = "../feagi-basis-quantization" }
 
 # Root Crates
@@ -44,7 +48,9 @@ feagi-basis-quantization = {path = "../feagi-basis-quantization" }
 paste = { workspace = true }
 ahash = { workspace = true}
 serde = { workspace = true}
+uuid = {workspace = true}
 serde_json = { workspace = true, optional = true}
+base64 = {workspace = true, optional = true}
 
 [lints]
 workspace = true

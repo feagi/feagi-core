@@ -1,9 +1,11 @@
+#[cfg(feature = "base64")]
+use base64::engine::general_purpose;
+use crate::identifiers::feagi_identifier_error::{FeagiFailCorticalID, FeagiGenomeIdenfitierError};
 
 macro_rules! match_bytes_by_cortical_type {
     ($cortical_id_bytes: expr,
         custom => $custom:block,
-        memory => $memory:block,
-        core => $core:block,
+        memory => $memory:block,        core => $core:block,
 
         brain_input => $brain_input:block,
         brain_output => $brain_output:block,
@@ -33,7 +35,7 @@ impl CorticalID {
 
     //region Constructors
 
-    pub fn try_from_bytes(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<Self, FeagiGenomeContextError> {
+    pub fn try_from_bytes(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<Self, FeagiGenomeIdenfitierError> {
         match_bytes_by_cortical_type!(bytes,
             custom => {
                 Ok(CorticalID {bytes: *bytes})
@@ -55,7 +57,7 @@ impl CorticalID {
             invalid => {
                 Err
                 (
-                    FeagiCorticalIDErrKey::new(
+                    FeagiFailCorticalID::new(
                         "Cortical ID bytes do not match a valid Cortical type prefix"
                     ).into()
                 )
@@ -63,18 +65,19 @@ impl CorticalID {
         )
     }
 
-    pub fn try_from_u64(u: u64) -> Result<Self, FeagiGenomeContextError> {
+    pub fn try_from_u64(u: u64) -> Result<Self, FeagiGenomeIdenfitierError> {
         let bytes = u.to_be_bytes();
         Self::try_from_bytes(&bytes)
     }
 
-    pub fn try_from_base_64(str: &str) -> Result<Self, FeagiGenomeContextError> {
+    #[cfg(feature = "base64")]
+    pub fn try_from_base_64(str: &str) -> Result<Self, FeagiGenomeIdenfitierError> {
         let decoded = general_purpose::STANDARD
             .decode(str)
-            .map_err(|_| FeagiCorticalIDErrKey::new("failed to decode cortical area ID from base64").into())?;
+            .map_err(|_| FeagiFailCorticalID::new("failed to decode cortical area ID from base64").into())?;
 
         if decoded.len() != Self::CORTICAL_ID_LENGTH {
-            return Err(FeagiCorticalIDErrKey::new("Base 64 is wrong length for cortical ID").into());
+            return Err(FeagiFailCorticalID::new("Base 64 is wrong length for cortical ID").into());
         }
 
         let mut bytes = [0u8; Self::CORTICAL_ID_LENGTH];
@@ -98,7 +101,8 @@ impl CorticalID {
         u64::from_be_bytes(self.bytes)
     }
 
-    pub fn as_base_64(&self) -> String {
+    #[cfg(feature = "base64")]
+    pub fn as_base_64_str(&self) -> String {
         general_purpose::STANDARD.encode(self.bytes)
     }
 

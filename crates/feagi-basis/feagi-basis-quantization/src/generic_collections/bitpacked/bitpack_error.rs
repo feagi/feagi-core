@@ -1,4 +1,4 @@
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
+use feagi_basis_error_logging::prelude::*;
 
 #[derive(FeagiFail)]
 /// A bit or u32-word index was out of bounds

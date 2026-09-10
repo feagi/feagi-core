@@ -5,8 +5,7 @@
 //! We have different structs since voxels consolidate (lose) data from the source dimensional data 
 //! which NPU operates in
 
-use feagi_data_quantization::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
-
+use feagi_basis_quantization::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_dimensions};
 
 create_wrapped_quantized_decimal!(
     /// Represents the Membrane Potential of the neuron(s) in a voxel. Most of the time, each

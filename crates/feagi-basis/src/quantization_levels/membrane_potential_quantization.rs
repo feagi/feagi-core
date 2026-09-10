@@ -1,8 +1,8 @@
 use core::hash::Hash;
 use half::{bf16, f16};
-use feagi_data_quantization::values::quantizable::custom_data_types::StorageF8;
-use feagi_data_quantization::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
-
+use feagi_basis_quantization::prelude::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
+use feagi_basis_quantization::values::quantizable::custom_data_types::StorageF8;
+use feagi_basis_quantization::values::quantizable::DecimalQuantizationLevel;
 
 /// Defines the quantization of the neuron potential for a specific cortical area. All cortical
 /// areas must have this property. This quantization is set per cortical area, and

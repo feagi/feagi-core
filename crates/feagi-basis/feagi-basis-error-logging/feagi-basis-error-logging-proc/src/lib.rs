@@ -24,7 +24,6 @@ pub fn derive_feagi_error(input: TokenStream) -> TokenStream {
 
 fn expand_error_key(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     reject_type_generics(&input)?;
-    let feagi_error_crate = feagi_error_crate_path();
 
     let name = input.ident;
     let fields = match input.data {
@@ -104,7 +103,7 @@ fn expand_error_key(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream>
 
         impl ::core::error::Error for #name {}
 
-        impl #feagi_error_crate::FeagiFailTrait for #name {
+        impl FeagiFailTrait for #name {
             fn context(&self) -> &'static str {
                 self.context
             }
@@ -114,7 +113,6 @@ fn expand_error_key(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream>
 
 fn expand_error(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     reject_type_generics(&input)?;
-    let feagi_error_crate = feagi_error_crate_path();
 
     let name = input.ident;
     let variants = match input.data {
@@ -195,16 +193,12 @@ fn expand_error(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
             }
         }
 
-        impl #feagi_error_crate::FeagiErrorTrait for #name {
+        impl FeagiErrorTrait for #name {
             fn context(&self) -> &'static str {
                 self.context()
             }
         }
     })
-}
-
-fn feagi_error_crate_path() -> Path {
-    parse_quote!(::feagi_logging_and_errors)
 }
 
 fn reject_type_generics(input: &DeriveInput) -> syn::Result<()> {

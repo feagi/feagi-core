@@ -11,4 +11,12 @@ impl CorticalMappingID {
     pub fn new(source: CorticalID, destination: CorticalID) -> Self {
         Self { source, destination }
     }
+    
+    pub fn source_cortical_id(&self) -> &CorticalID {
+        &self.source
+    }
+
+    pub fn destination_cortical_id(&self) -> &CorticalID {
+        &self.destination
+    }
 }
