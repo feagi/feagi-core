@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Error, Fields, LitStr, Path, Type, TypePath};
+use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Error, Fields, Path, Type, TypePath};
 
-#[proc_macro_derive(FeagiFail, attributes(feagi_error))]
+#[proc_macro_derive(FeagiFail)]
 pub fn derive_feagi_fail(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -12,7 +12,7 @@ pub fn derive_feagi_fail(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(FeagiError, attributes(feagi_error))]
+#[proc_macro_derive(FeagiError)]
 pub fn derive_feagi_error(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -24,7 +24,7 @@ pub fn derive_feagi_error(input: TokenStream) -> TokenStream {
 
 fn expand_error_key(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     reject_type_generics(&input)?;
-    let feagi_error_crate = feagi_error_crate_path(&input)?;
+    let feagi_error_crate = feagi_error_crate_path();
 
     let name = input.ident;
     let fields = match input.data {
@@ -114,7 +114,7 @@ fn expand_error_key(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream>
 
 fn expand_error(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     reject_type_generics(&input)?;
-    let feagi_error_crate = feagi_error_crate_path(&input)?;
+    let feagi_error_crate = feagi_error_crate_path();
 
     let name = input.ident;
     let variants = match input.data {
@@ -203,31 +203,8 @@ fn expand_error(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     })
 }
 
-fn feagi_error_crate_path(input: &DeriveInput) -> syn::Result<Path> {
-    let mut crate_path = None;
-
-    for attribute in &input.attrs {
-        if !attribute.path().is_ident("feagi_error") {
-            continue;
-        }
-
-        attribute.parse_nested_meta(|meta| {
-            if !meta.path.is_ident("crate") {
-                return Err(meta.error("unsupported feagi_error attribute; expected `crate = \"...\"`"));
-            }
-
-            if crate_path.is_some() {
-                return Err(meta.error("duplicate feagi_error crate path override"));
-            }
-
-            let value = meta.value()?;
-            let literal: LitStr = value.parse()?;
-            crate_path = Some(literal.parse()?);
-            Ok(())
-        })?;
-    }
-
-    Ok(crate_path.unwrap_or_else(|| parse_quote!(::feagi_logging_and_errors)))
+fn feagi_error_crate_path() -> Path {
+    parse_quote!(::feagi_logging_and_errors)
 }
 
 fn reject_type_generics(input: &DeriveInput) -> syn::Result<()> {

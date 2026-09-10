@@ -11,6 +11,8 @@ description = "Contains FEAGI error macro generator and logger facade to swap be
 
 [features]
 
+std = []
+
 enable_log_facade = [
     "log"
 ]

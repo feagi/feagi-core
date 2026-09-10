@@ -1,4 +1,4 @@
-pub use feagi_basis_error_logging_derive::{FeagiError, FeagiFail};
+pub use feagi_basis_error_logging_proc::{FeagiError, FeagiFail};
 
 /// Impossible error, this is an error that should not fundamentally be reachable, so something is
 /// wrong with the code if it is

@@ -48,9 +48,6 @@ validator = { version = "0.18", features = ["derive"] }
 utoipa = { version = "4.0", features = ["axum_extras"], default-features = false }
 utoipa-swagger-ui = { version = "6.0", features = ["axum"], optional = true }
 
-# Observability
-feagi-observability = { workspace = true }
-
 # Logging (now via feagi-observability)
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

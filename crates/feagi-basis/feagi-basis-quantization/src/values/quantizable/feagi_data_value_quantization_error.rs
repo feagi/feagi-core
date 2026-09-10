@@ -1,4 +1,4 @@
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
+use feagi_basis_error_logging::prelude::*;
 
 #[derive(FeagiFail)]
 /// Tried bringing a value into quantization that was not in possible range of quantization

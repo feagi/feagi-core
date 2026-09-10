@@ -141,27 +141,10 @@ alloc = [
 
 [dependencies]
 # FEAGI
-feagi-models = { path = "crates/feagi-models" }
-feagi-serialization = { path = "crates/feagi-serialization" }
-feagi-basis = {path = "crates/feagi-basis" }
-feagi-state-manager = { path = "crates/feagi-state-manager", optional = true }
-feagi-io = { path = "crates/feagi-io", optional = true }
 
-
-ndarray = { workspace = true }
-serde_json = "1.0"
 
 
 [dev-dependencies]
-# For integration tests that need GenomeService
-ahash = { workspace = true }
-feagi-config = { path = "crates/feagi-config" }
-parking_lot = "0.12"
-tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
-# Optional crates needed by root integration tests
-feagi-io = { path = "crates/feagi-io" }
-
-
 
 
 
@@ -215,35 +198,36 @@ documentation = "https://docs.rs/feagi"
 
 
 [workspace.dependencies] # Contains dependencies that several crates use
-
-rayon = {version = "1.12.0", default-features = false}
-ndarray = { version = "0.17.2", default-features = false}
-serde = { version = "1.0.229", default-features = false}
-serde_json = { version = "1.0.151", default-features = false}
+# Macro Stuff
 paste = { version =  "1.0.15" , default-features = false}
-ahash = { version = "0.8.12", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM) # TODO remove features
-enum_delegate  = {version = "0.2.0"}
-heapless = {version = "0.9.3"}
-half = {version = "2.7.1", default-features = false}
-futures = {version = "0.3.34"}
-flume = {version = "0.12.0"}
-log = {version = "0.4.34"}
-
-# TODO update and review below
-image = { version = "0.25.10" } # TODO this shouldnt be here, this should be in the feagi sensiomotor specifically
-proc-macro2 = "1.0.107"
 quote = "1.0.47"
-syn = { version = "2.0.117", features = ["full"] } # TODO Review this
+syn = { version = "3.0.5", features = ["full"] }
+proc-macro2 = "1.0.107"
 
-thiserror = "1.0.50" # TODO migrate away from this and use our own error trait!
-tracing = "0.1"  # Structured logging and diagnostics # TODO shouldnt this only be in the error subcrate?
-defmt = {version = "1.1.1"} # only used in embedded contexts # TODO shouldnt this only be in the error subcrate?
+# Always needed (nearly)
+serde = { version = "1.0.229", default-features = false}
+heapless = {version = "0.9.3"}
+futures = {version = "0.3.34"}
+half = {version = "2.7.1", default-features = false}
+ahash = { version = "0.8.12", default-features = false, features = ["std", "serde", "compile-time-rng"] } # TODO remove features
 
-uuid = { version = "1.11", features = ["v7", "serde", "js"] }  # js feature for WASM supporto
+# Optional Feature Gated Crates
+thiserror = "1.0.50" # TODO migrate away from this
+tracing = "0.1"  # Structured logging and diagnostics # TODO migrate away from this
+log = {version = "0.4.34"}
+defmt = {version = "1.1.1"}
+serde_json = { version = "1.0.151", default-features = false}
+rayon = {version = "1.12.0", default-features = false}
+uuid = { version = "1.26.1", features = ["v7", "serde", "js"] }  # js feature for WASM supporto
+flume = {version = "0.12.0"}
+ndarray = { version = "0.17.2", default-features = false}
+image = { version = "0.25.10" }
 
-# Workspace-internal crates
-feagi-observability = { path = "crates/feagi-observability" }
-feagi-dataset-contracts = { path = "crates/feagi-dataset-contracts" }
+
+
+
+
+
 
 
 [workspace.lints.rust]
