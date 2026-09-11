@@ -1,0 +1,24 @@
+[package]
+name = "feagi-correspondence-io"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Defines the interfaces to exchange data by FEAGI agents and servers"
+
+[features]
+
+# subcrates should not have default in order to avoid confusion
+
+[dependencies]
+# Sub Crates
+
+# Sibling Crates
+
+# Root Crates
+
+# External Crates

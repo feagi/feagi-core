@@ -28,115 +28,7 @@ categories = ["science", "simulation"]
 workspace = true
 
 [features]
-default = ["default-config-feagi-server"]
-legacy-tools = []
 
-# ========================= Common Configuration Sets ========================= #
-# Common classes of FEAGI Applications using the crates of this library
-
-# Default features for compiling the FEAGI Server
-default-config-feagi-server = [
-    "agent-transport-zmq",
-    "agent-transport-websocket-std",
-    "agent-transport-shm",
-    "agent-transport-bluetooth",
-    "agent-server",
-    "use-rayon",
-    "std",
-]
-
-# Default features for a FEAGI Agent (an embodiement, like a robot or game avatar) with std support (AKA not embedded).
-# Note the transport protocol method will need to be specified!
-default-config-feagi-agent-std = [
-    #"agent-transport-zmq",
-    #"agent-transport-websocket-std",
-    #"agent-transport-shm",
-    #"agent-transport-bluetooth",
-    #"agent-client-asynchelper-tokio"
-    "agent-client",
-    "use-rayon",
-    "std",
-]
-
-# Default features for a FEAGI Agent (an embodiement, like a robot or game avatar) without std.
-# Note the transport protocol method will need to be specified!
-default-config-feagi-agent-embedded = [
-    #"agent-client",
-    #"agent-transport-zmq",
-    #"agent-transport-websocket-std",
-    #"agent-transport-shm",
-    #"agent-transport-bluetooth",
-    #"agent-client-asynchelper-tokio"
-]
-
-# Default features for a FEAGI Genome Editor (mainly Brain Visualizer)
-default-config-feagi-editor = [
-    #"agent-client",
-    "agent-transport-websocket-std",
-    "use-rayon",
-    "std",
-]
-
-# Compiles all feagi crates, mainly for creating wrappers in other languages. Does not include optional features!
-default-config-feagi-language-lib = [
-    # TODO
-]
-
-# ========================= Toggleable Features ========================= #
-# Features that add certain libraries/crates that extend the functionality
-# and performance of the FEAGI application
-# In order of other features here, feagi crate features
-
-
-# TODO These features should activate subcrate features
-
-# Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
-use-rayon = [
-    "std",
-]
-
-# Allows conversion of some FEAGI structs to / from NDArrays.
-use-ndarray = [
-
-]
-
-use-image = []
-
-
-
-# Specifies this is a client of a FEAGI server
-agent-client = []
-
-# Specifies this is a server running FEAGI
-agent-server = []
-
-# Transport types that can be used by the compiled program.
-agent-transport-zmq = [
-    #"feagi-agent/agent-client"
-]
-agent-transport-websocket-std = [
-    "std",
-    #"feagi-agent/agent-transport-websocket-std"
-]
-agent-transport-shm = [
-    #"feagi-agent/agent-transport-shm"
-]
-agent-transport-bluetooth = [
-    #"feagi-agent/agent-transport-bluetooth"
-]
-
-# Use the Rust Standard Library. Needs to be disabled by some compile targets. Enables alloc.
-std = [
-    "alloc",
-]
-
-# Allow the use of allocation (such as with vectors, hashmaps). Needs to be disabled by some compile targets.
-alloc = [
-
-]
-
-# TODO WASM specific flags
-# TODO Embedded specific flags (different features for things like embedded)
 
 
 [dependencies]
@@ -147,7 +39,6 @@ alloc = [
 [dev-dependencies]
 
 
-
 # ============================================================================
 #                             WORKSPACE CONFIGURATION
 # ============================================================================
@@ -155,34 +46,32 @@ alloc = [
 [workspace]
 resolver = "2"
 members = [
-    "crates/feagi-agent",
-    "crates/feagi-agent/feagi-agent-io/feagi-api",
-    "crates/feagi-brain-development",
-    "crates/feagi-config",
     "crates/feagi-basis",
     "crates/feagi-basis/feagi-basis-quantization",
-    "crates/feagi-basis/feagi-basis-neuron",
-    "crates/feagi-basis/feagi-basis-genome",
-    "crates/feagi-basis/feagi-basis-genome/feagi-basis-genome-proc",
     "crates/feagi-basis/feagi-basis-error-logging",
     "crates/feagi-basis/feagi-basis-error-logging/feagi-basis-error-logging-proc",
-    "crates/feagi-evolutionary",
-    "crates/feagi-genomic-context",
-    "crates/feagi-genomic-data",
-    "crates/feagi-io",
-    "crates/feagi-models",
-    "crates/feagi-observability",
-    "crates/feagi-sensorimotor",
-    "crates/feagi-serialization",
-    "crates/feagi-services",
-    "crates/feagi-state-manager",
-    "crates/test-loop",
+    "crates/feagi-basis/feagi-basis-genome",
+    "crates/feagi-basis/feagi-basis-genome/feagi-basis-genome-proc",
+    "crates/feagi-basis/feagi-basis-neuron",
+    "crates/feagi-basis/feagi-basis-sensiomotor",
+
     "crates/feagi-brain",
+    "crates/feagi-brain/feagi-brain-models",
     "crates/feagi-brain/feagi-brain-npu",
     "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines",
-    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-core",
+    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-basis",
     "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon",
     "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
+
+    "crates/feagi-correspondence",
+    "crates/feagi-correspondence/feagi-correspondence-serialization",
+    "crates/feagi-correspondence/feagi-correspondence-io",
+    "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-api",
+    "crates/feagi-correspondence/feagi-correspondence-contracts",
+
+    "crates/feagi-server",
+
+    "crates/feagi-agent"
 ]
 
 
@@ -224,10 +113,6 @@ flume = {version = "0.12.0"}
 ndarray = { version = "0.17.2", default-features = false}
 image = { version = "0.25.10", default-features = false }
 base64 = {version = "0.23.1", default-features = false}
-
-
-
-
 
 
 

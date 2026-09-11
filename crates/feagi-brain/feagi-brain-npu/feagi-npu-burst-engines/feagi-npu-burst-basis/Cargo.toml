@@ -1,5 +1,5 @@
 [package]
-name = "feagi-npu-burst-core"
+name = "feagi-npu-burst-basis"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

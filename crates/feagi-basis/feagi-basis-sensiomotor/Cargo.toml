@@ -1,0 +1,13 @@
+[package]
+name = "feagi-basis-sensiomotor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Data Interfaces for interacting with real world sensor / motor data and converting them to neuron data"
+
+[dependencies]

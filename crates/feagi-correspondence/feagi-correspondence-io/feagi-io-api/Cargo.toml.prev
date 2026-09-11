@@ -1,12 +1,12 @@
 [package]
-name = "feagi-api"
+name = "feagi-io-api"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
+description = "FEAGI REST API"
 
 [dependencies]
 # Core FEAGI

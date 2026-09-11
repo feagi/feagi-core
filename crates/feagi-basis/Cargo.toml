@@ -18,11 +18,6 @@ default = [
     "channel_flume"
 ]
 
-# ========================= Toggleable Features ========================= #
-# Features that add certain libraries/crates that extend the functionality
-# and performance of the FEAGI application
-# In order of Directly activated crates, other features here, external crate features, feagi crate features
-
 # Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
 use-rayon = [
     "rayon",

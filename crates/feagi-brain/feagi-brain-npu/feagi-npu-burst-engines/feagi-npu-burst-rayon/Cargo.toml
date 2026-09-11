@@ -28,7 +28,7 @@ alloc = [
 # Sub Crates
 
 # Sibling Crates
-feagi-npu-burst-core = {path = "../feagi-npu-burst-core"}
+feagi-npu-burst-basis = {path = "../feagi-npu-burst-basis" }
 
 # Parent Crates
 feagi-brain-models = {path = "../../../feagi-brain-models"}
