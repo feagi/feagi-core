@@ -1,15 +1,17 @@
-use feagi_data::feagi_data_neuron::neurons::wrapped_types::{CorticalNeuronCoordinate, CorticalNeuronDimensions, CorticalNeuronLocalIndex, NeuronCount};
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::models::cortical_area::components::neuron_layout::neuron_layout_model::NeuronLayout;
+use serde::Serialize;
+use feagi_basis::feagi_neuron::wrapped_types::{CorticalAreaNeuronCoordinate, CorticalAreaNeuronDimensions, CorticalAreaNeuronLocalIndex, NeuronCount};
+use feagi_basis::prelude::*;
+use crate::cortical_area::components::neuron_layout::NeuronLayout;
 
 /// Defines that the neurons are laid out in xyzd (depth) order linearly in a dense fashion
+#[derive(Clone, Serialize)]
 pub struct NeuronLayoutVoxel<FIQ: FeagiIndexQuantization> {
-    pub cortical_dimensions: CorticalNeuronDimensions<FIQ::NeuronIndexQuant>,
+    pub cortical_dimensions: CorticalAreaNeuronDimensions<FIQ::NeuronIndexQuant>,
 }
 
 impl<FIQ: FeagiIndexQuantization> NeuronLayout<FIQ> for NeuronLayoutVoxel<FIQ> {
-    type CorticalContext = CorticalNeuronDimensions<FIQ::NeuronIndexQuant>;
-    type PerNeuronContext = CorticalNeuronCoordinate<FIQ::NeuronIndexQuant>;
+    type CorticalContext = CorticalAreaNeuronDimensions<FIQ::NeuronIndexQuant>;
+    type PerNeuronContext = CorticalAreaNeuronCoordinate<FIQ::NeuronIndexQuant>;
 
     fn get_neuron_count(&self) -> NeuronCount<FIQ::NeuronIndexQuant> {
         self.cortical_dimensions.number_contained_elements().deref().into()
@@ -19,7 +21,7 @@ impl<FIQ: FeagiIndexQuantization> NeuronLayout<FIQ> for NeuronLayoutVoxel<FIQ> {
         &self.cortical_dimensions
     }
 
-    fn get_neuron_layout_context(&self, neuron_index: &CorticalNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> Self::PerNeuronContext {
+    fn get_neuron_layout_context(&self, neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> Self::PerNeuronContext {
         let neuron_index = neuron_index.deref().into();
         self.cortical_dimensions.linear_index_to_coordinate_unchecked(neuron_index)
     }

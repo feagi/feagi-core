@@ -1,5 +1,4 @@
 pub mod components;
-pub mod data_structs;
 pub mod cortical_area;
-pub mod parameters;
-pub mod cortical_area_writer;
+pub mod common_structs;
+pub mod implementations;

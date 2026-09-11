@@ -1,16 +1,18 @@
-use std::marker::PhantomData;
-use feagi_data::feagi_data_neuron::neurons::wrapped_types::{CorticalNeuronLocalIndex, NeuronCount};
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::models::cortical_area::components::neuron_layout::neuron_layout_model::NeuronLayout;
 
-/// Defines that the neurons are laid out in linear (dense) fashion
+use serde::Serialize;
+use feagi_basis::feagi_neuron::wrapped_types::{CorticalAreaNeuronLocalIndex, NeuronCount};
+use feagi_basis::prelude::*;
+use crate::cortical_area::components::neuron_layout::NeuronLayout;
+
+/// Defines that the neurons are laid out in linear fashion
+#[derive(Clone, Serialize)]
 pub struct NeuronLayoutLinear<FIQ: FeagiIndexQuantization> {
     pub neuron_count: NeuronCount<FIQ::NeuronIndexQuant>,
 }
 
 impl<FIQ: FeagiIndexQuantization> NeuronLayout<FIQ> for NeuronLayoutLinear<FIQ> {
     type CorticalContext = NeuronCount<FIQ::NeuronIndexQuant>;
-    type PerNeuronContext = CorticalNeuronLocalIndex<FIQ::NeuronIndexQuant>;
+    type PerNeuronContext = CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>;
 
     fn get_neuron_count(&self) -> NeuronCount<FIQ::NeuronIndexQuant> {
         self.neuron_count
@@ -20,7 +22,7 @@ impl<FIQ: FeagiIndexQuantization> NeuronLayout<FIQ> for NeuronLayoutLinear<FIQ> 
         &self.neuron_count
     }
 
-    fn get_neuron_layout_context(&self, neuron_index: &CorticalNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> Self::PerNeuronContext {
+    fn get_neuron_layout_context(&self, neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> Self::PerNeuronContext {
         neuron_index.clone() // no further details lol
     }
 }

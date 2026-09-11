@@ -7,6 +7,7 @@ use crate::values::quantizable::custom_data_types::StorageF8;
 use crate::values::quantizable::quantization_level_packing::QuantizationLevelPacking;
 use crate::values::quantizable::{PercentageUnsigned, QuantizedElementBase, QuantizedUnsignedPercentageTrait};
 use half::{bf16, f16};
+use crate::prelude::{QuantizedSignedIntegerTrait, QuantizedUnsignedIntegerTrait};
 use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 
 /// Represents a value that is represented as a decimal number, main backbone for computations
@@ -96,6 +97,10 @@ pub trait QuantizedDecimalTrait:
     /// Creates from a decimal of another quantization.
     fn from_quantization<FromQuant: QuantizedDecimalTrait>(value: FromQuant) -> Self;
 
+    fn from_quantized_unsigned_integer<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self;
+
+    fn from_quantized_signed_integer<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self;
+    
     /// Converts to a decimal of another quantization.
     fn to_quantization<ToQuant: QuantizedDecimalTrait>(self) -> ToQuant {
         ToQuant::from_quantization(self)
@@ -108,6 +113,11 @@ pub trait QuantizedDecimalTrait:
 
     fn scale_by_same_quant_unsigned_percentage(self, p: &PercentageUnsigned<Self>) -> Self {
         self * QuantizedUnsignedPercentageTrait::get_decimal(*p)
+    }
+    
+    /// Gets the reciprocal
+    fn reciprocal(self) -> Self {
+        Self::QUANT_ONE / self
     }
 }
 
@@ -147,6 +157,14 @@ impl QuantizedDecimalTrait for StorageF8 {
     }
 
     fn from_quantization<FromQuant: QuantizedDecimalTrait>(value: FromQuant) -> Self {
+        todo!()
+    }
+
+    fn from_quantized_unsigned_integer<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
+        todo!()
+    }
+
+    fn from_quantized_signed_integer<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
         todo!()
     }
 }
@@ -205,6 +223,14 @@ impl QuantizedDecimalTrait for f16 {
     fn from_quantization<FromQuant: QuantizedDecimalTrait>(value: FromQuant) -> Self {
         value.quant_to_f16()
     }
+
+    fn from_quantized_unsigned_integer<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
+        (value.quant_to_usize() as f32).quant_to_f16()
+    }
+
+    fn from_quantized_signed_integer<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        (value.quant_to_isize() as f32).quant_to_f16()
+    }
 }
 
 impl QuantizedDecimalUnwrappedTrait for f16 {}
@@ -247,6 +273,14 @@ impl QuantizedDecimalTrait for bf16 {
     fn from_quantization<FromQuant: QuantizedDecimalTrait>(value: FromQuant) -> Self {
         value.quant_to_bf16()
     }
+
+    fn from_quantized_unsigned_integer<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
+        (value.quant_to_usize() as f32).quant_to_bf16()
+    }
+
+    fn from_quantized_signed_integer<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        (value.quant_to_isize() as f32).quant_to_bf16()
+    }
 }
 
 impl QuantizedDecimalUnwrappedTrait for bf16 {}
@@ -286,6 +320,14 @@ impl QuantizedDecimalTrait for f32 {
 
     fn from_quantization<FromQuant: QuantizedDecimalTrait>(value: FromQuant) -> Self {
         value.quant_to_f32()
+    }
+
+    fn from_quantized_unsigned_integer<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
+        value.quant_to_usize() as f32
+    }
+
+    fn from_quantized_signed_integer<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        value.quant_to_isize() as f32
     }
 }
 
@@ -328,6 +370,14 @@ impl QuantizedDecimalTrait for f64 {
 
     fn from_quantization<FromQuant: QuantizedDecimalTrait>(value: FromQuant) -> Self {
         value.quant_to_f64()
+    }
+
+    fn from_quantized_unsigned_integer<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
+        value.quant_to_usize() as f64
+    }
+
+    fn from_quantized_signed_integer<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+        value.quant_to_isize() as f64
     }
 }
 
@@ -486,6 +536,14 @@ macro_rules! create_wrapped_quantized_decimal {
                 value: FromQuant,
             ) -> Self {
                 Self::const_new(Q::from_quantization(value))
+            }
+            
+            fn from_quantized_unsigned_integer<FromQuant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
+                Self::const_new(Q::from_quantized_unsigned_integer(value))
+            }
+        
+            fn from_quantized_signed_integer<FromQuant: $crate::values::quantizable::QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+                Self::const_new(Q::from_quantized_signed_integer(value))
             }
 
             fn scale_by_unsigned_percentage<OTHER: $crate::values::quantizable::QuantizedDecimalTrait>(

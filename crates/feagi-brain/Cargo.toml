@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
+description = "The library holding the logic for the actual neural processing capabilities of FEAGI"
 
 [features]
 
@@ -22,7 +23,6 @@ std = [
     "ahash/std",
     "serde/std",
     "serde_json/std",
-    "uuid/std"
 
 ]
 
@@ -44,7 +44,6 @@ paste = { workspace = true}
 ahash = { workspace = true, default-features = false}
 serde = { workspace = true, default-features = false}
 serde_json = { workspace = true, optional = true}
-uuid = { workspace = true, default-features = false, features = ["v7", "serde"] }
 
 [lints]
 workspace = true
