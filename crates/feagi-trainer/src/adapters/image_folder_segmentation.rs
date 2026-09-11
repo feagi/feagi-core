@@ -117,9 +117,7 @@ impl ImageFolderSegmentationAdapter {
 
     fn discover_pairs(&self, root: &Path) -> Result<Vec<ImageLabelPair>, TrainerError> {
         match self.config.layout {
-            SegmentationDatasetLayout::CityscapesFine => {
-                self.discover_cityscapes_pairs(root)
-            }
+            SegmentationDatasetLayout::CityscapesFine => self.discover_cityscapes_pairs(root),
             SegmentationDatasetLayout::PairedFolders => self.discover_paired_folders(root),
         }
     }
@@ -150,7 +148,11 @@ impl ImageFolderSegmentationAdapter {
             TrainerError::Parse(format!("cannot read '{}': {e}", img_root.display()))
         })? {
             let city_entry = city_entry.map_err(|e| TrainerError::Parse(e.to_string()))?;
-            if !city_entry.file_type().map_err(|e| TrainerError::Parse(e.to_string()))?.is_dir() {
+            if !city_entry
+                .file_type()
+                .map_err(|e| TrainerError::Parse(e.to_string()))?
+                .is_dir()
+            {
                 continue;
             }
             let city_name = city_entry.file_name();
@@ -228,7 +230,11 @@ impl ImageFolderSegmentationAdapter {
         Ok(pairs)
     }
 
-    fn load_resized_png_bytes(path: &Path, width: u32, height: u32) -> Result<Vec<u8>, TrainerError> {
+    fn load_resized_png_bytes(
+        path: &Path,
+        width: u32,
+        height: u32,
+    ) -> Result<Vec<u8>, TrainerError> {
         let bytes = std::fs::read(path)
             .map_err(|e| TrainerError::Parse(format!("cannot read '{}': {e}", path.display())))?;
         let img = image::load_from_memory_with_format(&bytes, ImageFormat::Png).map_err(|e| {
@@ -237,10 +243,7 @@ impl ImageFolderSegmentationAdapter {
         let resized = img.resize_exact(width, height, FilterType::Nearest);
         let mut out = Vec::new();
         resized
-            .write_to(
-                &mut std::io::Cursor::new(&mut out),
-                ImageFormat::Png,
-            )
+            .write_to(&mut std::io::Cursor::new(&mut out), ImageFormat::Png)
             .map_err(|e| TrainerError::Parse(format!("cannot encode resized png: {e}")))?;
         Ok(out)
     }
@@ -365,10 +368,8 @@ impl AdapterPlugin for ImageFolderSegmentationAdapter {
 
         let mut samples = Vec::with_capacity(pairs.len());
         for (index, pair) in pairs.iter().enumerate() {
-            let image_bytes =
-                Self::load_resized_png_bytes(&pair.image_path, width, height)?;
-            let labels =
-                Self::load_resized_label_mask(&pair.label_path, width, height)?;
+            let image_bytes = Self::load_resized_png_bytes(&pair.image_path, width, height)?;
+            let labels = Self::load_resized_label_mask(&pair.label_path, width, height)?;
             if labels.len() != (width as usize) * (height as usize) {
                 return Err(TrainerError::Parse(format!(
                     "label mask size mismatch for '{}'",
@@ -377,11 +378,7 @@ impl AdapterPlugin for ImageFolderSegmentationAdapter {
             }
             samples.push(IRSample {
                 schema_version: IR_SCHEMA_VERSION,
-                sample_id: SampleId(format!(
-                    "{}#{}",
-                    pair.image_path.to_string_lossy(),
-                    index
-                )),
+                sample_id: SampleId(format!("{}#{}", pair.image_path.to_string_lossy(), index)),
                 dataset_version_id: dataset_version_id.clone(),
                 split: self.config.split.clone(),
                 modality: Modality::Image,
@@ -461,13 +458,20 @@ mod tests {
             let manifest = adapter.discover(&source).expect("discover");
             let report = adapter.validate(&manifest).expect("validate");
             assert!(report.passed, "{:?}", report.issues);
-            let samples = adapter.stream(&source, &SplitId("train".to_string())).expect("stream");
+            let samples = adapter
+                .stream(&source, &SplitId("train".to_string()))
+                .expect("stream");
             (manifest, samples)
         };
         assert_eq!(manifest.output_type, OutputType::SegmentationMask);
         assert_eq!(samples.len(), 1);
         match &samples[0].target {
-            Some(TypedTarget::SegmentationMask { width, height, labels, .. }) => {
+            Some(TypedTarget::SegmentationMask {
+                width,
+                height,
+                labels,
+                ..
+            }) => {
                 assert_eq!(*width, 2);
                 assert_eq!(*height, 2);
                 assert_eq!(labels.len(), 4);

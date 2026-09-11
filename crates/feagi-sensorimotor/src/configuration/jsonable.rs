@@ -464,6 +464,7 @@ impl JSONDecoderProperties {
                     *cortical_ids.first().unwrap(),
                     *cortical_ids.get(1).unwrap(),
                     *neuron_depth,
+                    *neuron_depth,
                     number_channels,
                     *percentage_neuron_positioning,
                     default_speed_0_1_per_channel.clone(),

@@ -32,9 +32,13 @@ impl SegmentationMaskDecoder {
         Self
     }
 
-    fn misc_dimensions(profile: &DecoderBindingProfile) -> Result<MiscDataDimensions, TrainerError> {
+    fn misc_dimensions(
+        profile: &DecoderBindingProfile,
+    ) -> Result<MiscDataDimensions, TrainerError> {
         let width = profile.mask_width.ok_or_else(|| {
-            TrainerError::Config("segmentation decoder requires decoder_profile.mask_width".to_string())
+            TrainerError::Config(
+                "segmentation decoder requires decoder_profile.mask_width".to_string(),
+            )
         })?;
         let height = profile.mask_height.ok_or_else(|| {
             TrainerError::Config(
@@ -42,7 +46,9 @@ impl SegmentationMaskDecoder {
             )
         })?;
         let depth = profile.mask_depth.ok_or_else(|| {
-            TrainerError::Config("segmentation decoder requires decoder_profile.mask_depth".to_string())
+            TrainerError::Config(
+                "segmentation decoder requires decoder_profile.mask_depth".to_string(),
+            )
         })?;
         MiscDataDimensions::new(width, height, depth).map_err(map_err)
     }

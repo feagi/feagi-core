@@ -5,12 +5,12 @@
 
 use std::time::Instant;
 
+use feagi_sensorimotor::data_pipeline::PipelineStageProperties;
 use feagi_sensorimotor::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution,
 };
 use feagi_sensorimotor::data_types::processing::ImageFrameProcessor;
 use feagi_sensorimotor::data_types::ImageFrame;
-use feagi_sensorimotor::data_pipeline::PipelineStageProperties;
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 use feagi_sensorimotor::ConnectorCache;
 use feagi_structures::genomic::cortical_area::descriptors::{
@@ -38,7 +38,9 @@ impl ImageFrameEncoder {
         Self
     }
 
-    fn image_properties(profile: &EncoderBindingProfile) -> Result<ImageFrameProperties, TrainerError> {
+    fn image_properties(
+        profile: &EncoderBindingProfile,
+    ) -> Result<ImageFrameProperties, TrainerError> {
         let width = profile.image_width.ok_or_else(|| {
             TrainerError::Config("image encoder requires encoder_profile.image_width".to_string())
         })?;

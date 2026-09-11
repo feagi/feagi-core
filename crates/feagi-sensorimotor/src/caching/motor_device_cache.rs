@@ -753,7 +753,8 @@ impl MotorDeviceCache {
         &mut self,
         unit: CorticalUnitIndex,
         number_channels: CorticalChannelCount,
-        z_neuron_resolution: NeuronDepth,
+        absolute_z_neuron_resolution: NeuronDepth,
+        incremental_z_neuron_resolution: NeuronDepth,
         percentage_neuron_positioning: PercentageNeuronPositioning,
         default_speed_0_1_per_channel: Vec<f32>,
     ) -> Result<(), FeagiDataError> {
@@ -766,7 +767,8 @@ impl MotorDeviceCache {
         let decoder = PositionalServoNeuronVoxelXYZPDecoder::new_target_speed_box(
             cortical_ids[0],
             cortical_ids[1],
-            z_neuron_resolution,
+            absolute_z_neuron_resolution,
+            incremental_z_neuron_resolution,
             number_channels,
             percentage_neuron_positioning,
             default_speed_0_1_per_channel,
@@ -943,17 +945,29 @@ impl MotorDeviceCache {
     /// Override PositionalServo preprocessed cache value for a channel.
     ///
     /// This seeds the decoder's internal integration state to a known live value.
+    /// When the unit uses target-and-speed semantics (`Percentage2D`), only the
+    /// target component is updated and the current speed component is preserved.
     pub fn motor_positional_servo_write_preprocessed_cache_value(
         &mut self,
         unit: CorticalUnitIndex,
         channel: CorticalChannelIndex,
         value: Percentage,
     ) -> Result<(), FeagiDataError> {
+        let wrapped = match self.try_read_preprocessed_cached_value(
+            MotorCorticalUnit::PositionalServo,
+            unit,
+            channel,
+        ) {
+            Ok(WrappedIOData::Percentage_2D(current)) => {
+                WrappedIOData::Percentage_2D(Percentage2D::new(value, current.b))
+            }
+            _ => WrappedIOData::Percentage(value),
+        };
         self.try_write_preprocessed_cached_value(
             MotorCorticalUnit::PositionalServo,
             unit,
             channel,
-            WrappedIOData::Percentage(value),
+            wrapped,
         )
     }
 

@@ -133,7 +133,11 @@ impl SegmentationOverlapReward {
         })
     }
 
-    fn mask_iou(predicted: &[u8], target: &[u8], ignore_label: Option<u8>) -> Result<f64, TrainerError> {
+    fn mask_iou(
+        predicted: &[u8],
+        target: &[u8],
+        ignore_label: Option<u8>,
+    ) -> Result<f64, TrainerError> {
         if predicted.len() != target.len() {
             return Err(TrainerError::Config(format!(
                 "segmentation reward mask length mismatch: {} vs {}",

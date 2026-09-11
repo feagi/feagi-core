@@ -31,11 +31,11 @@ pub mod image_frame_encoder;
 pub mod motor_decoder;
 pub mod population_encoder;
 pub mod profile;
-pub mod segmentation_mask_decoder;
 #[cfg(feature = "remote-runtime")]
 pub mod remote_runtime;
 pub mod reward;
 pub mod runtime;
+pub mod segmentation_mask_decoder;
 pub mod stub_runtime;
 
 pub use class_decoder::ClassDecoder;
@@ -47,7 +47,6 @@ pub use image_frame_encoder::ImageFrameEncoder;
 pub use motor_decoder::{ContinuousDecodeScheme, ContinuousMotorDecoder};
 pub use population_encoder::PopulationEncoder;
 pub use profile::{DecoderBindingProfile, EncoderBindingProfile};
-pub use segmentation_mask_decoder::SegmentationMaskDecoder;
 #[cfg(feature = "remote-runtime")]
 pub use remote_runtime::{RemoteFeagiRuntime, RemoteRuntimeConfig};
 pub use reward::{
@@ -55,4 +54,5 @@ pub use reward::{
     SegmentationOverlapReward, SurvivalReward,
 };
 pub use runtime::FeagiRuntime;
+pub use segmentation_mask_decoder::SegmentationMaskDecoder;
 pub use stub_runtime::StubFeagiRuntime;

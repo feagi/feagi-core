@@ -425,8 +425,7 @@ impl RunConfig {
                         "segmentation runs require segmentation_iou_threshold".to_string(),
                     )
                 })?;
-                let reward =
-                    SegmentationOverlapReward::new(self.reward_magnitude, iou_threshold)?;
+                let reward = SegmentationOverlapReward::new(self.reward_magnitude, iou_threshold)?;
                 let metric = SegmentationMetricPack::new();
                 run_rollout_with_events(
                     &self.run_spec.run_id,

@@ -18,9 +18,7 @@ impl SegmentationMetricPack {
         Self
     }
 
-    fn extract_mask(
-        value: &TypedPrediction,
-    ) -> Result<(u32, u32, &[u8]), TrainerError> {
+    fn extract_mask(value: &TypedPrediction) -> Result<(u32, u32, &[u8]), TrainerError> {
         match value {
             TypedPrediction::SegmentationMask {
                 width,
@@ -33,9 +31,7 @@ impl SegmentationMetricPack {
         }
     }
 
-    fn extract_target(
-        value: &TypedTarget,
-    ) -> Result<(u32, u32, &[u8], Option<u8>), TrainerError> {
+    fn extract_target(value: &TypedTarget) -> Result<(u32, u32, &[u8], Option<u8>), TrainerError> {
         match value {
             TypedTarget::SegmentationMask {
                 width,
@@ -179,10 +175,7 @@ mod tests {
     fn half_wrong_pixel_accuracy() {
         let pack = SegmentationMetricPack::new();
         let result = pack
-            .evaluate(
-                &[mask(&[0, 0, 0, 0])],
-                &[target(&[0, 1, 0, 0])],
-            )
+            .evaluate(&[mask(&[0, 0, 0, 0])], &[target(&[0, 1, 0, 0])])
             .expect("evaluate");
         assert_eq!(result.metrics["pixel_accuracy"], 0.75);
     }
