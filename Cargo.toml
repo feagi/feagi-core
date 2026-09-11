@@ -156,7 +156,7 @@ alloc = [
 resolver = "2"
 members = [
     "crates/feagi-agent",
-    "crates/feagi-api",
+    "crates/feagi-agent/feagi-agent-io/feagi-api",
     "crates/feagi-brain-development",
     "crates/feagi-config",
     "crates/feagi-basis",
