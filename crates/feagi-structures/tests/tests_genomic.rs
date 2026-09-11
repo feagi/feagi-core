@@ -1589,12 +1589,35 @@ mod test_motor_cortical_unit {
             .expect("Missing topology entry for area 0");
         assert_eq!(unit.channel_dimensions_default, [1, 1, 16]);
     }
+
+    #[test]
+    fn test_positional_servo_default_depths_are_20() {
+        let topology = MotorCorticalUnit::PositionalServo.get_unit_default_topology();
+        assert_eq!(topology.len(), 2);
+        let absolute = topology
+            .get(&0.into())
+            .expect("Missing PositionalServo absolute sub-area topology");
+        let incremental = topology
+            .get(&1.into())
+            .expect("Missing PositionalServo incremental sub-area topology");
+        assert_eq!(absolute.channel_dimensions_default, [1, 1, 20]);
+        assert_eq!(incremental.channel_dimensions_default, [2, 1, 20]);
+    }
 }
 
 /// Tests for genomic/sensory_cortical_unit.rs
 #[cfg(test)]
 mod test_sensory_cortical_unit {
     use super::*;
+
+    #[test]
+    fn test_servo_encoder_default_depth_is_20() {
+        let topology = SensoryCorticalUnit::Servo.get_unit_default_topology();
+        let unit = topology
+            .get(&0.into())
+            .expect("Missing Servo encoder topology");
+        assert_eq!(unit.channel_dimensions_default, [1, 1, 20]);
+    }
 
     mod test_basic_properties {
         use super::*;
@@ -2128,17 +2151,17 @@ mod test_sensory_cortical_unit {
             );
         }
 
-        /// Default volume is 3x1x10 (one x-slot per axis, unsigned - no
-        /// positive/negative doubling), matching the unsigned `Percentage3D`
-        /// encoder contract used by `PercentageNeuronVoxelXYZPEncoder`.
+        /// Default volume is 3x1x100 (one x-slot per axis, unsigned - no
+        /// positive/negative doubling), matching the SpatialPointer OPU
+        /// depth default and the unsigned `Percentage3D` encoder contract.
         #[test]
-        fn test_cartesian_position_default_dims_are_3x1x10() {
+        fn test_cartesian_position_default_dims_are_3x1x100() {
             let topology = SensoryCorticalUnit::CartesianPosition.get_unit_default_topology();
             assert_eq!(topology.len(), 1);
             let unit = topology
                 .get(&0.into())
                 .expect("Missing CartesianPosition sub-area topology");
-            assert_eq!(unit.channel_dimensions_default, [3, 1, 10]);
+            assert_eq!(unit.channel_dimensions_default, [3, 1, 100]);
             assert_eq!(unit.channel_dimensions_min, [3, 1, 1]);
             assert_eq!(unit.channel_dimensions_max, [3, 1, 1024]);
         }

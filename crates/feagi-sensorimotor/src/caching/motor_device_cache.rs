@@ -757,6 +757,7 @@ impl MotorDeviceCache {
         incremental_z_neuron_resolution: NeuronDepth,
         percentage_neuron_positioning: PercentageNeuronPositioning,
         default_speed_0_1_per_channel: Vec<f32>,
+        incremental_step_0_1: f32,
     ) -> Result<(), FeagiDataError> {
         let cortical_ids =
             MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
@@ -772,6 +773,7 @@ impl MotorDeviceCache {
             number_channels,
             percentage_neuron_positioning,
             default_speed_0_1_per_channel,
+            incremental_step_0_1,
         )?;
         let io_props = json!({
             "frame_change_handling": FrameChangeHandling::Absolute,

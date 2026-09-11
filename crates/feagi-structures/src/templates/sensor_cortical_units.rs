@@ -75,7 +75,7 @@ macro_rules! sensor_cortical_units {
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [25, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [25, 0, -10], channel_dimensions_default: [1, 1, 20], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -276,7 +276,7 @@ macro_rules! sensor_cortical_units {
                     },
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Percentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [115, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [115, 0, -10], channel_dimensions_default: [3, 1, 100], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])
                     }
                 },
 

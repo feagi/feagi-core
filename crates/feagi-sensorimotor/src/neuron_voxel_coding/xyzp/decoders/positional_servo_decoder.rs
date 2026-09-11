@@ -22,8 +22,8 @@ use std::time::Instant;
 /// - Area 1 (incremental): 2x1xZ - each channel has 2 neuron widths (forward/backward)
 ///
 /// Incremental commands are integrated into the current cached position so the
-/// output is always an absolute target percentage.  The step magnitude per tick
-/// is controlled by `INCREMENTAL_STEP_SIZE`.
+/// output is always an absolute target percentage. The step magnitude per tick
+/// is controlled by `incremental_step_size_0_1`.
 #[derive(Debug)]
 pub struct PositionalServoNeuronVoxelXYZPDecoder {
     channel_absolute_dimensions: CorticalChannelDimensions,
@@ -40,6 +40,8 @@ pub struct PositionalServoNeuronVoxelXYZPDecoder {
     /// `None` retains legacy positional-servo semantics. When present, each
     /// channel emits `(target_position, speed_limit)` percentages.
     default_speed_0_1_per_channel: Option<Vec<f32>>,
+    /// Normalized incremental step applied per decode tick.
+    incremental_step_size_0_1: f32,
 }
 
 /// Maximum position change per tick at full deflection, expressed as a fraction
@@ -65,6 +67,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
             number_channels,
             interpolation,
             None,
+            INCREMENTAL_STEP_SIZE,
         )
     }
 
@@ -76,6 +79,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
         number_channels: CorticalChannelCount,
         interpolation: PercentageNeuronPositioning,
         default_speed_0_1_per_channel: Option<Vec<f32>>,
+        incremental_step_size_0_1: f32,
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
         const ABSOLUTE_WIDTH_PER_CHANNEL: u32 = 1;
@@ -98,6 +102,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
             z_depth_incremental_forward_scratch_space: vec![Vec::new(); *number_channels as usize],
             z_depth_incremental_backward_scratch_space: vec![Vec::new(); *number_channels as usize],
             default_speed_0_1_per_channel,
+            incremental_step_size_0_1,
         };
         Ok(Box::new(decoder))
     }
@@ -114,6 +119,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
         number_channels: CorticalChannelCount,
         interpolation: PercentageNeuronPositioning,
         default_speed_0_1_per_channel: Vec<f32>,
+        incremental_step_size_0_1: f32,
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         if default_speed_0_1_per_channel.len() != *number_channels as usize
             || default_speed_0_1_per_channel
@@ -125,6 +131,14 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
                     .to_string(),
             ));
         }
+        if !incremental_step_size_0_1.is_finite()
+            || !(incremental_step_size_0_1 > 0.0 && incremental_step_size_0_1 <= 1.0)
+        {
+            return Err(FeagiDataError::BadParameters(
+                "PositionalServoTargetSpeed requires incremental_step_size_0_1 in (0, 1]."
+                    .to_string(),
+            ));
+        }
         Self::new_with_depths_box(
             absolute_cortical_id,
             incremental_cortical_id,
@@ -133,6 +147,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
             number_channels,
             interpolation,
             Some(default_speed_0_1_per_channel),
+            incremental_step_size_0_1,
         )
     }
 
@@ -196,6 +211,7 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                 depth,
                 self.interpolation,
                 default_speeds.clone(),
+                self.incremental_step_size_0_1,
             ),
             None => JSONDecoderProperties::PositionalServo(depth, self.interpolation),
         }
@@ -314,12 +330,21 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                     pipeline.get_preprocessed_cached_value_mut().try_into()?;
                 if has_absolute {
                     self.decode_absolute_percentage(absolute_scratch, &mut target_speed.a);
+                } else if has_incremental {
+                    // Standalone incremental activation must still nudge target.
+                    // Paired behavior is unchanged because absolute takes priority.
+                    let net_direction = forward_value.get_as_0_1() - backward_value.get_as_0_1();
+                    let current_target = target_speed.a.get_as_0_1();
+                    let new_target = (current_target
+                        + net_direction * self.incremental_step_size_0_1)
+                        .clamp(0.0, 1.0);
+                    target_speed.a = Percentage::new_from_0_1(new_target)
+                        .unwrap_or_else(|_| Percentage::new_from_0_1_unchecked(new_target));
                 }
-                // Incremental-only ticks in target-and-speed mode set speed only; the
-                // absolute cortical area owns the joint target. Speed is the unsigned
-                // [0, 1] activity on the forward incremental column (x even). The
-                // backward column is legacy direction semantics and must not override
-                // speed when both halves carry activity from broad stimulation.
+                // Speed is the unsigned [0, 1] activity on the forward incremental
+                // column (x even). The backward column is legacy direction semantics
+                // and must not override speed when both halves carry activity from
+                // broad stimulation.
                 let speed = if has_incremental {
                     if !forward_scratch.is_empty() {
                         forward_value.get_as_0_1()
@@ -349,7 +374,8 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                 // Integrate the delta into the current cached position so the
                 // output stays an absolute target percentage.
                 let current_pos = percentage.get_as_0_1();
-                let new_pos = (current_pos + net_direction * INCREMENTAL_STEP_SIZE).clamp(0.0, 1.0);
+                let new_pos = (current_pos + net_direction * self.incremental_step_size_0_1)
+                    .clamp(0.0, 1.0);
                 *percentage = Percentage::new_from_0_1(new_pos)
                     .unwrap_or_else(|_| Percentage::new_from_0_1_unchecked(new_pos));
             }
@@ -414,6 +440,10 @@ mod tests {
     }
 
     fn make_target_speed_decoder() -> Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> {
+        make_target_speed_decoder_with_step(INCREMENTAL_STEP_SIZE)
+    }
+
+    fn make_target_speed_decoder_with_step(step_size_0_1: f32) -> Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> {
         PositionalServoNeuronVoxelXYZPDecoder::new_target_speed_box(
             absolute_cortical_id(),
             incremental_cortical_id(),
@@ -422,6 +452,7 @@ mod tests {
             CorticalChannelCount::new(NUM_CHANNELS).unwrap(),
             PercentageNeuronPositioning::Linear,
             vec![0.2],
+            step_size_0_1,
         )
         .unwrap()
     }
@@ -760,25 +791,43 @@ mod tests {
     }
 
     #[test]
-    fn target_speed_incremental_only_updates_speed_not_target() {
+    fn target_speed_incremental_only_updates_target_and_speed() {
         let mut decoder = make_target_speed_decoder();
         let mut pipelines = one_channel_target_speed_pipeline();
-        assert!(
-            (read_target_speed(&pipelines).0 - 0.5).abs() < 1e-6,
-            "initial target must be 0.5"
-        );
+        let start_target = read_target_speed(&pipelines).0;
+        assert!((start_target - 0.5).abs() < 1e-6, "initial target must be 0.5");
 
         let neurons = make_neuron_map(incremental_cortical_id(), &[(0, 0, 0)]);
         decode(&mut decoder, &neurons, &mut pipelines);
 
         let (target, speed) = read_target_speed(&pipelines);
         assert!(
-            (target - 0.5).abs() < 1e-6,
-            "incremental-only must not nudge target, got {target}"
+            target > start_target,
+            "incremental-only forward activation must increase target, start={start_target}, after={target}"
+        );
+        assert!(
+            (target - (start_target + INCREMENTAL_STEP_SIZE)).abs() < 1e-6,
+            "incremental-only target delta must be one step size, got {target}"
         );
         assert!(
             (speed - 1.0).abs() < 1e-6,
             "full forward incremental must set full speed, got {speed}"
+        );
+    }
+
+    #[test]
+    fn target_speed_uses_configured_incremental_step_size() {
+        let custom_step = 0.01_f32;
+        let mut decoder = make_target_speed_decoder_with_step(custom_step);
+        let mut pipelines = one_channel_target_speed_pipeline();
+        let start_target = read_target_speed(&pipelines).0;
+        let neurons = make_neuron_map(incremental_cortical_id(), &[(0, 0, 0)]);
+
+        decode(&mut decoder, &neurons, &mut pipelines);
+        let (target, _speed) = read_target_speed(&pipelines);
+        assert!(
+            (target - (start_target + custom_step)).abs() < 1e-6,
+            "incremental-only target delta must match configured step size"
         );
     }
 
@@ -790,10 +839,11 @@ mod tests {
         let neurons = make_neuron_map(incremental_cortical_id(), &[(0, 0, 7)]);
         decode(&mut decoder, &neurons, &mut pipelines);
 
+        let start_target = 0.5_f32;
         let (target, speed) = read_target_speed(&pipelines);
         assert!(
-            (target - 0.5).abs() < 1e-6,
-            "incremental-only must not nudge target, got {target}"
+            target > start_target,
+            "partial incremental activation must nudge target upward, got {target}"
         );
         assert!(
             speed > 0.15 && speed < 0.3,
@@ -811,7 +861,7 @@ mod tests {
         let (target, speed) = read_target_speed(&pipelines);
         assert!(
             (target - 0.5).abs() < 1e-6,
-            "incremental-only must not nudge target, got {target}"
+            "z=9 should decode to near-zero incremental influence on target, got {target}"
         );
         assert!(
             speed < 0.05,
@@ -834,8 +884,8 @@ mod tests {
 
         let (target, speed) = read_target_speed(&pipelines);
         assert!(
-            (target - 0.5).abs() < 1e-6,
-            "incremental-only must not nudge target, got {target}"
+            target < 0.5,
+            "backward-heavy incremental activity must nudge target backward, got {target}"
         );
         assert!(
             speed > 0.15 && speed < 0.3,

@@ -373,7 +373,7 @@ pub enum JSONDecoderProperties {
     ///
     /// `default_speed_0_1_per_channel` is required because an absolute-only
     /// command must still carry an explicit safe speed for every channel.
-    PositionalServoTargetSpeed(NeuronDepth, PercentageNeuronPositioning, Vec<f32>),
+    PositionalServoTargetSpeed(NeuronDepth, PercentageNeuronPositioning, Vec<f32>, f32),
     GazeProperties(NeuronDepth, NeuronDepth, PercentageNeuronPositioning), // eccentricity z depth, modularity z depth
     ImageFilteringSettings(
         NeuronDepth,
@@ -454,6 +454,7 @@ impl JSONDecoderProperties {
                 neuron_depth,
                 percentage_neuron_positioning,
                 default_speed_0_1_per_channel,
+                incremental_step_size_0_1,
             ) => {
                 if cortical_ids.len() != 2 {
                     return Err(FeagiDataError::InternalError(
@@ -468,6 +469,7 @@ impl JSONDecoderProperties {
                     number_channels,
                     *percentage_neuron_positioning,
                     default_speed_0_1_per_channel.clone(),
+                    *incremental_step_size_0_1,
                 )
             }
             JSONDecoderProperties::GazeProperties(
@@ -616,6 +618,7 @@ impl JSONDecoderProperties {
                 _neuron_depth,
                 _percentage_neuron_positioning,
                 _default_speed_0_1_per_channel,
+                _incremental_step_size_0_1,
             ) => Ok(WrappedIOData::Percentage_2D(Percentage2D::new(
                 Percentage::new_from_0_1(0.5).expect("0.5 is always valid"),
                 Percentage::new_zero(),
