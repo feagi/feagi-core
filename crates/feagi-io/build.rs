@@ -1,5 +1,8 @@
 // Build script for feagi-io
 fn main() {
+
+    // TODO why are we doing this, just use a cfg(and(features)) and and a compile_error! lol
+
     // ==========================================================================
     // Feature Compatibility Check: WASM vs Native transports
     // ==========================================================================

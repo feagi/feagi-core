@@ -11,17 +11,17 @@ description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 [dependencies]
 # Core FEAGI
 # feagi-services is always needed (for trait definitions), but can work without tokio
-feagi-services = {  path = "../feagi-services", default-features = false, features = ["wasm", "connectome-io"] }
-feagi-evolutionary = {  path = "../feagi-evolutionary" } # For embedded default genomes
-feagi-genomic-context = {  path = "../feagi-genomic-context" }
+feagi-services = {  path = "../../../feagi-services", default-features = false, features = ["wasm", "connectome-io"] }
+feagi-evolutionary = {  path = "../../../feagi-evolutionary" } # For embedded default genomes
+feagi-genomic-context = {  path = "../../../feagi-genomic-context" }
 feagi-genomic-data = {  path = "../feagi-genomic-data" }
-feagi-io = {  path = "../feagi-io", optional = true, features = ["zmq-transport", "websocket-transport-std"] } # For transport primitives and domain logic
-feagi-brain-development = {  path = "../feagi-brain-development", optional = true } # Corticogenesis, for genome loading
-feagi-models = {  path = "../feagi-models", optional = true } # Connectome request vocabulary the NPU accepts
-feagi-state-manager = {  path = "../feagi-state-manager", default-features = false, optional = true }
-feagi-serialization = {  path = "../feagi-serialization" }
-feagi-agent = {  path = "../feagi-agent", optional = true, default-features = false, features = ["agent-client", "agent-client-asynchelper-tokio"] }
-feagi-config = {  path = "../feagi-config" }
+feagi-io = {  path = "../../../feagi-io", optional = true, features = ["zmq-transport", "websocket-transport-std"] } # For transport primitives and domain logic
+feagi-brain-development = {  path = "../../../feagi-brain-development", optional = true } # Corticogenesis, for genome loading
+feagi-models = {  path = "../../../feagi-models", optional = true } # Connectome request vocabulary the NPU accepts
+feagi-state-manager = {  path = "../../../feagi-state-manager", default-features = false, optional = true }
+feagi-serialization = {  path = "../../../feagi-serialization" }
+feagi-agent = {  path = "../..", optional = true, default-features = false, features = ["agent-client", "agent-client-asynchelper-tokio"] }
+feagi-config = {  path = "../../../feagi-config" }
 
 # HTTP/REST (optional - not needed for WASM)
 axum = { version = "0.7", optional = true, features = ["multipart"] }
