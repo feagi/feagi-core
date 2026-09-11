@@ -8,7 +8,7 @@ pub struct FeagiFailGenomeEtc {
 
 
 generate_feagi_error! {
-    FeagiGenomeContextError,
+    FeagiGenomeError,
     keys: {
         Etc: FeagiFailGenomeEtc,
     },

@@ -1,4 +1,4 @@
-pub mod feagi_index_range_manager_error;
+pub mod feagi_index_organizer_error;
 
 #[cfg(feature = "alloc")]
 pub use index_manager::IndexManager;

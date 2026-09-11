@@ -341,7 +341,7 @@ fn validate_template(template_list: &CorticalIOUnitTemplateList) -> Result<()> {
 }
 
 #[proc_macro]
-/// Generates `for_each_cortical_io_unit_template!` from a `template { ... }` declaration.
+/// Generates `cortical_interface_templates!` from a `template { ... }` declaration.
 ///
 /// General Expected input form:
 /// `template {
@@ -363,14 +363,14 @@ fn validate_template(template_list: &CorticalIOUnitTemplateList) -> Result<()> {
 ///         },
 ///     },
 /// }`
-pub fn on_cortical_template(input: TokenStream) -> TokenStream {
+pub fn make_cortical_template(input: TokenStream) -> TokenStream {
     let template_list = parse_macro_input!(input as CorticalIOUnitTemplateList);
 
     if let Err(error) = validate_template(&template_list) {
         return error.to_compile_error().into();
     }
 
-    let macro_name = format_ident!("for_each_cortical_io_unit_template");
+    let macro_name = format_ident!("cortical_interface_templates");
 
     let unit_tokens = template_list.units.iter().map(|unit| {
         let unit_name = &unit.unit_name;

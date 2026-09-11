@@ -1212,6 +1212,7 @@ dependencies = [
  "base64 0.23.1",
  "feagi-basis-error-logging",
  "feagi-basis-genome-proc",
+ "feagi-basis-neuron",
  "feagi-basis-quantization",
  "paste",
  "serde",

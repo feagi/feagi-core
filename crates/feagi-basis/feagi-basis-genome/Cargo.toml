@@ -39,6 +39,7 @@ support_base64 = [
 feagi-basis-genome-proc = {path = "feagi-basis-genome-proc"}
 
 # Sibling Crates
+feagi-basis-neuron = {path = "../feagi-basis-neuron"}
 feagi-basis-error-logging = {path = "../feagi-basis-error-logging"}
 feagi-basis-quantization = {path = "../feagi-basis-quantization" }
 

@@ -1,9 +1,9 @@
 use core::time::Duration;
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 use std::sync::mpsc::{self, TryRecvError, TrySendError};
 
-use crate::data_messaging::data_channel::{DataChannelPair, DataReceiver, DataTransmitter};
-use crate::data_messaging::errors::{
+use crate::thread_messaging::data_channel::{DataChannelPair, DataReceiver, DataTransmitter};
+use crate::thread_messaging::errors::{
     ChannelReceivingError, ChannelSendingError, FeagiFailChannelReceiveEtc,
     FeagiFailChannelReceiveTimeout, FeagiFailChannelSendEtc, FeagiFailChannelSendFull,
     FeagiFailChannelSendTimeout,

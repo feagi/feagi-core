@@ -1,7 +1,7 @@
 //! A generic trait set for structs capable of one way sending data over thread boundaries
 
 use core::time::Duration;
-use crate::data_messaging::errors::{ChannelReceivingError, ChannelSendingError};
+use crate::thread_messaging::errors::{ChannelReceivingError, ChannelSendingError};
 
 /// Allows creations of `DataTransmitter` and `DataReceiver` easily
 pub trait DataChannelPair<T: Send> {

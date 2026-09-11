@@ -1,11 +1,11 @@
 use core::time::Duration;
 
-use crate::data_messaging::data_channel::{DataChannelPair, DataReceiver, DataTransmitter};
-use crate::data_messaging::data_channel::implementations::mpsc::{
+use crate::thread_messaging::data_channel::{DataChannelPair, DataReceiver, DataTransmitter};
+use crate::thread_messaging::data_channel::implementations::mpsc::{
     MpscChannelPair, MpscReceiver, MpscTransmitter,
 };
-use crate::data_messaging::data_cycler::DataCycleEndpoint;
-use crate::data_messaging::errors::{ChannelReceivingError, ChannelSendingError};
+use crate::thread_messaging::data_cycler::DataCycleEndpoint;
+use crate::thread_messaging::errors::{ChannelReceivingError, ChannelSendingError};
 
 /// Allows reusing a block of memory back and forth using `std::sync::mpsc`.
 pub struct MpscDataCycleEndpoint<T: Send> {

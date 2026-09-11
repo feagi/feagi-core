@@ -1,7 +1,9 @@
-use feagi_basis_genome_proc::on_cortical_template;
+use feagi_basis_genome_proc::make_cortical_template;
 
+// This generates a 'cortical_interface_templates!' exported macro for use in 
+// creating interface types
 
-on_cortical_template! {
+make_cortical_template! {
     template {
         Infrared {
             encoded_data_type: Percentage,

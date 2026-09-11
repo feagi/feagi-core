@@ -1,5 +1,5 @@
 use core::hash::Hash;
-use feagi_basis_quantization::prelude::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
+use crate::values::quantizable::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 // TODO xxhash?
 
 

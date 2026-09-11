@@ -2,7 +2,7 @@
 //! rotate the allocated memory to do so amongst themselves, avoiding any dynamic allocation
 
 use core::time::Duration;
-use crate::data_messaging::errors::{ChannelReceivingError, ChannelSendingError};
+use crate::thread_messaging::errors::{ChannelReceivingError, ChannelSendingError};
 
 pub trait DataCycleEndpoint<T: Send>: Send + Sized {
     /// Waits to receive data over the cycle, blocking the thread until it does (or erroring)

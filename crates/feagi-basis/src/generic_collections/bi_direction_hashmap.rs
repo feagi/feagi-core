@@ -1,5 +1,5 @@
 use ahash::AHashMap;
-use std::hash::Hash;
+use core::hash::Hash;
 
 // TODO We can probably optimize this a bit
 

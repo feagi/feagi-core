@@ -1,36 +1,35 @@
 use feagi_basis_quantization::generic_collections::bitpacked::linear::{BitPackedArraySizeAware, BitPackedSliceMutSizeAware, BitPackedSliceSizeAware, BitPackedVectorSizeAware};
 use feagi_basis_quantization::generic_collections::generic_par_data::linear::{ParDataArray, ParDataSlice, ParDataSliceMut, ParDataVector};
-use feagi_basis_quantization::prelude::QuantizedDecimalTrait;
-use feagi_basis_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
-use crate::wrapped_types::{CorticalNeuronLocalIndex, CorticalNeuronPotential};
+use feagi_basis_quantization::values::quantizable::{QuantizedDecimalTrait, QuantizedUnsignedIntegerTrait};
+use crate::wrapped_types::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 // TODO size aware vs unaware?
 
 // Neuron Linear Activations (Size Aware)
 
 pub type LinearCorticalNeuronActivationVector<QI: QuantizedUnsignedIntegerTrait> =
-BitPackedVectorSizeAware<CorticalNeuronLocalIndex<QI>>;
+BitPackedVectorSizeAware<CorticalAreaNeuronLocalIndex<QI>>;
 
 pub type LinearCorticalNeuronActivationSlice<'a, QI: QuantizedUnsignedIntegerTrait> =
-BitPackedSliceSizeAware<'a, CorticalNeuronLocalIndex<QI>>;
+BitPackedSliceSizeAware<'a, CorticalAreaNeuronLocalIndex<QI>>;
 
 pub type LinearCorticalNeuronActivationSliceMut<'a, QI: QuantizedUnsignedIntegerTrait> =
-BitPackedSliceMutSizeAware<'a, CorticalNeuronLocalIndex<QI>>;
+BitPackedSliceMutSizeAware<'a, CorticalAreaNeuronLocalIndex<QI>>;
 
 pub type LinearCorticalNeuronActivationArray<QI: QuantizedUnsignedIntegerTrait, const N: usize> =
-BitPackedArraySizeAware<CorticalNeuronLocalIndex<QI>, N>;
+BitPackedArraySizeAware<CorticalAreaNeuronLocalIndex<QI>, N>;
 
 
 // Neuron Linear Potentials
 
 pub type LinearCorticalNeuronPotentialVector<QI: QuantizedUnsignedIntegerTrait, Q: QuantizedDecimalTrait> =
-    ParDataVector<CorticalNeuronLocalIndex<QI>, CorticalNeuronPotential<Q>>;
+    ParDataVector<CorticalAreaNeuronLocalIndex<QI>, CorticalAreaNeuronPotential<Q>>;
 
 pub type LinearCorticalNeuronPotentialSlice<'a, QI: QuantizedUnsignedIntegerTrait, Q: QuantizedDecimalTrait> =
-    ParDataSlice<'a, CorticalNeuronLocalIndex<QI>, CorticalNeuronPotential<Q>>;
+    ParDataSlice<'a, CorticalAreaNeuronLocalIndex<QI>, CorticalAreaNeuronPotential<Q>>;
 
 pub type LinearCorticalNeuronPotentialSliceMut<'a, QI: QuantizedUnsignedIntegerTrait, Q: QuantizedDecimalTrait> =
-    ParDataSliceMut<'a, CorticalNeuronLocalIndex<QI>, CorticalNeuronPotential<Q>>;
+    ParDataSliceMut<'a, CorticalAreaNeuronLocalIndex<QI>, CorticalAreaNeuronPotential<Q>>;
 
 pub type LinearCorticalNeuronPotentialArray<QI: QuantizedUnsignedIntegerTrait, Q: QuantizedDecimalTrait, const N: usize> =
-    ParDataArray<CorticalNeuronLocalIndex<QI>, CorticalNeuronPotential<Q>, N>;
+    ParDataArray<CorticalAreaNeuronLocalIndex<QI>, CorticalAreaNeuronPotential<Q>, N>;
 

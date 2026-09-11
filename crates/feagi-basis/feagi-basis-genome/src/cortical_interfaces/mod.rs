@@ -1,1 +1,3 @@
-pub mod definitions;
+pub mod cortical_interface_definitions;
+pub mod cortical_interface_type;
+pub mod cortical_interface_properties;

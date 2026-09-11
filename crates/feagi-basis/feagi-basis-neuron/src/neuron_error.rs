@@ -4,23 +4,23 @@ use feagi_basis_error_logging::prelude::*;
 /// A bit or u32-word index was out of bounds for a neuron activation collection.
 pub struct FeagiNeuronActivationInvalidIndex {
     context: &'static str,
-    index: usize,
+    index: u64,
 }
 
 #[derive(FeagiFail)]
 /// A u32-word sub-range was out of bounds or otherwise invalid (e.g. start > end).
 pub struct FeagiNeuronActivationInvalidRange {
     context: &'static str,
-    start: usize,
-    end: usize,
+    start: u64,
+    end: u64,
 }
 
 #[derive(FeagiFail)]
 /// The declared number of addressable activation bits exceeds the backing u32 storage.
 pub struct FeagiNeuronActivationInvalidBitCount {
     context: &'static str,
-    addressable_bits: usize,
-    capacity_bits: usize,
+    addressable_bits: u64,
+    capacity_bits: u64,
 }
 
 #[derive(FeagiFail)]
@@ -29,7 +29,7 @@ pub struct FeagiNeuronInvalidNeuronIndex {
 }
 
 generate_feagi_error! {
-    FeagiVoxelError,
+    FeagiNeuronError,
     keys: {
         InvalidIndex: FeagiNeuronInvalidNeuronIndex
     },
