@@ -749,6 +749,7 @@ impl MotorDeviceCache {
     /// is a normalized speed limit derived from incremental activity, or from
     /// the explicitly configured per-channel safe speed for absolute-only
     /// commands. The legacy `motor_positional_servo_register` remains unchanged.
+    #[allow(clippy::too_many_arguments)]
     pub fn motor_positional_servo_target_speed_register(
         &mut self,
         unit: CorticalUnitIndex,

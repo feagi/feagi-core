@@ -5,6 +5,12 @@ use crate::contracts::{TypedPrediction, TypedTarget};
 use crate::error::TrainerError;
 use crate::plugins::{MetricPackPlugin, MetricResult};
 
+/// Dense mask dimensions and label slice extracted from a prediction.
+type SegmentationMaskParts<'a> = (u32, u32, &'a [u8]);
+
+/// Dense mask dimensions, label slice, and optional ignore label from a target.
+type SegmentationTargetParts<'a> = (u32, u32, &'a [u8], Option<u8>);
+
 /// Computes segmentation metrics from dense mask predictions and targets.
 #[derive(Debug, Clone, Default)]
 pub struct SegmentationMetricPack;
@@ -18,7 +24,7 @@ impl SegmentationMetricPack {
         Self
     }
 
-    fn extract_mask(value: &TypedPrediction) -> Result<(u32, u32, &[u8]), TrainerError> {
+    fn extract_mask(value: &TypedPrediction) -> Result<SegmentationMaskParts<'_>, TrainerError> {
         match value {
             TypedPrediction::SegmentationMask {
                 width,
@@ -31,7 +37,7 @@ impl SegmentationMetricPack {
         }
     }
 
-    fn extract_target(value: &TypedTarget) -> Result<(u32, u32, &[u8], Option<u8>), TrainerError> {
+    fn extract_target(value: &TypedTarget) -> Result<SegmentationTargetParts<'_>, TrainerError> {
         match value {
             TypedTarget::SegmentationMask {
                 width,

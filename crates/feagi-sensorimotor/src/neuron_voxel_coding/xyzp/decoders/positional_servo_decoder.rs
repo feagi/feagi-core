@@ -71,6 +71,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn new_with_depths_box(
         absolute_cortical_id: CorticalID,
         incremental_cortical_id: CorticalID,
@@ -111,6 +112,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
     ///
     /// The caller must configure one safe default speed for every channel.
     /// No implicit speed is used when an absolute target fires alone.
+    #[allow(clippy::too_many_arguments)]
     pub fn new_target_speed_box(
         absolute_cortical_id: CorticalID,
         incremental_cortical_id: CorticalID,
@@ -131,8 +133,9 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
                     .to_string(),
             ));
         }
-        if !incremental_step_size_0_1.is_finite()
-            || !(incremental_step_size_0_1 > 0.0 && incremental_step_size_0_1 <= 1.0)
+        if !(incremental_step_size_0_1.is_finite()
+            && incremental_step_size_0_1 > 0.0
+            && incremental_step_size_0_1 <= 1.0)
         {
             return Err(FeagiDataError::BadParameters(
                 "PositionalServoTargetSpeed requires incremental_step_size_0_1 in (0, 1]."
@@ -374,8 +377,8 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                 // Integrate the delta into the current cached position so the
                 // output stays an absolute target percentage.
                 let current_pos = percentage.get_as_0_1();
-                let new_pos = (current_pos + net_direction * self.incremental_step_size_0_1)
-                    .clamp(0.0, 1.0);
+                let new_pos =
+                    (current_pos + net_direction * self.incremental_step_size_0_1).clamp(0.0, 1.0);
                 *percentage = Percentage::new_from_0_1(new_pos)
                     .unwrap_or_else(|_| Percentage::new_from_0_1_unchecked(new_pos));
             }
@@ -443,7 +446,9 @@ mod tests {
         make_target_speed_decoder_with_step(INCREMENTAL_STEP_SIZE)
     }
 
-    fn make_target_speed_decoder_with_step(step_size_0_1: f32) -> Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> {
+    fn make_target_speed_decoder_with_step(
+        step_size_0_1: f32,
+    ) -> Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> {
         PositionalServoNeuronVoxelXYZPDecoder::new_target_speed_box(
             absolute_cortical_id(),
             incremental_cortical_id(),
@@ -795,7 +800,10 @@ mod tests {
         let mut decoder = make_target_speed_decoder();
         let mut pipelines = one_channel_target_speed_pipeline();
         let start_target = read_target_speed(&pipelines).0;
-        assert!((start_target - 0.5).abs() < 1e-6, "initial target must be 0.5");
+        assert!(
+            (start_target - 0.5).abs() < 1e-6,
+            "initial target must be 0.5"
+        );
 
         let neurons = make_neuron_map(incremental_cortical_id(), &[(0, 0, 0)]);
         decode(&mut decoder, &neurons, &mut pipelines);
