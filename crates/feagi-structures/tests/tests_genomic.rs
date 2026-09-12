@@ -1593,15 +1593,19 @@ mod test_motor_cortical_unit {
     #[test]
     fn test_positional_servo_default_depths_are_20() {
         let topology = MotorCorticalUnit::PositionalServo.get_unit_default_topology();
-        assert_eq!(topology.len(), 2);
+        assert_eq!(topology.len(), 3);
         let absolute = topology
             .get(&0.into())
             .expect("Missing PositionalServo absolute sub-area topology");
         let incremental = topology
             .get(&1.into())
             .expect("Missing PositionalServo incremental sub-area topology");
+        let speed = topology
+            .get(&2.into())
+            .expect("Missing PositionalServo speed sub-area topology");
         assert_eq!(absolute.channel_dimensions_default, [1, 1, 20]);
         assert_eq!(incremental.channel_dimensions_default, [2, 1, 20]);
+        assert_eq!(speed.channel_dimensions_default, [1, 1, 20]);
     }
 }
 
@@ -2164,6 +2168,7 @@ mod test_sensory_cortical_unit {
             assert_eq!(unit.channel_dimensions_default, [3, 1, 100]);
             assert_eq!(unit.channel_dimensions_min, [3, 1, 1]);
             assert_eq!(unit.channel_dimensions_max, [3, 1, 1024]);
+            assert_eq!(unit.relative_position, [115, 0, -10]);
         }
 
         /// `CartesianPosition` only supports Absolute frame-change handling -
@@ -2244,8 +2249,9 @@ mod test_sensory_cortical_unit {
                 .get(&0.into())
                 .expect("Missing SpatialPointer sub-area topology");
             assert_eq!(unit.channel_dimensions_default, [3, 1, 10]);
-            assert_eq!(unit.channel_dimensions_min, [3, 1, 1]);
-            assert_eq!(unit.channel_dimensions_max, [3, 1, 1024]);
+            assert_eq!(unit.channel_dimensions_min, [1, 1, 1]);
+            assert_eq!(unit.channel_dimensions_max, [6, 1, 1024]);
+            assert_eq!(unit.relative_position, [130, 0, -10]);
         }
 
         #[test]

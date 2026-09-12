@@ -746,9 +746,9 @@ impl MotorDeviceCache {
     /// Registers a positional-servo group that emits target-and-speed pairs.
     ///
     /// The first tuple component is the absolute target percentage. The second
-    /// is a normalized speed limit derived from incremental activity, or from
-    /// the explicitly configured per-channel safe speed for absolute-only
-    /// commands. The legacy `motor_positional_servo_register` remains unchanged.
+    /// is a normalized speed limit from PositionalServo area 2. A silent speed
+    /// area emits `1.0` (full agility). Incremental activity only updates the
+    /// target. The legacy `motor_positional_servo_register` remains unchanged.
     #[allow(clippy::too_many_arguments)]
     pub fn motor_positional_servo_target_speed_register(
         &mut self,
@@ -769,6 +769,7 @@ impl MotorDeviceCache {
         let decoder = PositionalServoNeuronVoxelXYZPDecoder::new_target_speed_box(
             cortical_ids[0],
             cortical_ids[1],
+            cortical_ids[2],
             absolute_z_neuron_resolution,
             incremental_z_neuron_resolution,
             number_channels,

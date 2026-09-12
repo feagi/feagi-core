@@ -587,17 +587,22 @@ impl Display for PoseEstimationProperties {
 
 //region Spatial Pointer
 
-/// Fixed per-channel width for SpatialPointer (one cortical X column per XYZ axis).
+/// Absolute SpatialPointer width: one cortical X column per XYZ axis.
 pub const SPATIAL_POINTER_CHANNEL_WIDTH: u32 = 3;
+/// Shared TCP / pointer speed width: one unsigned speed column.
+pub const SPATIAL_POINTER_SPEED_CHANNEL_WIDTH: u32 = 1;
+/// Incremental SpatialPointer width: two cortical X columns per XYZ axis
+/// (even = positive, odd = negative), matching PositionalServo incremental.
+pub const SPATIAL_POINTER_INCREMENTAL_CHANNEL_WIDTH: u32 = 6;
 /// Fixed per-channel height for SpatialPointer (percentage encoders/decoders use Y=0 only).
 pub const SPATIAL_POINTER_CHANNEL_HEIGHT: u32 = 1;
 
 /// Properties describing a SpatialPointer cortical area.
 ///
-/// The per-channel voxel grid is fixed at `3×1×depth`, matching the CartesianPosition
-/// IPU layout: three X columns (x/y/z), height 1, and configurable Z neuron depth.
-/// `width` and `height` must equal [`SPATIAL_POINTER_CHANNEL_WIDTH`] and
-/// [`SPATIAL_POINTER_CHANNEL_HEIGHT`]; only `depth` (Z resolution) is configurable.
+/// Absolute areas are `3×1×depth` (one X column per XYZ axis). Speed areas
+/// are `1×1×depth` (one shared unsigned speed column). Incremental areas
+/// are `6×1×depth` (X+/X−, Y+/Y−, Z+/Z−). Height is always 1; only
+/// `depth` (Z neuron resolution) is a free parameter.
 ///
 /// The remaining fields configure the Incremental decode mode (see `FrameChangeHandling`).
 /// They are unused in Absolute mode and are therefore optional at the serialization
@@ -627,7 +632,7 @@ impl SpatialPointerProperties {
     /// The Incremental-only fields are left unset; using these properties with an
     /// Incremental area will be rejected by the decoder constructor.
     pub fn new_absolute(width: u32, height: u32, depth: u32) -> Result<Self, FeagiDataError> {
-        Self::validate_dimensions(width, height, depth)?;
+        Self::validate_absolute_dimensions(width, height, depth)?;
         Ok(SpatialPointerProperties {
             width,
             height,
@@ -648,7 +653,7 @@ impl SpatialPointerProperties {
         window_ms: u32,
         max_axis_velocity: f32,
     ) -> Result<Self, FeagiDataError> {
-        Self::validate_dimensions(width, height, depth)?;
+        Self::validate_incremental_dimensions(width, height, depth)?;
         Self::validate_window_ms(window_ms)?;
         Self::validate_max_axis_velocity(max_axis_velocity)?;
         Ok(SpatialPointerProperties {
@@ -680,12 +685,54 @@ impl SpatialPointerProperties {
         Ok((window_ms, max_axis_velocity))
     }
 
-    fn validate_dimensions(width: u32, height: u32, depth: u32) -> Result<(), FeagiDataError> {
-        if width != SPATIAL_POINTER_CHANNEL_WIDTH || height != SPATIAL_POINTER_CHANNEL_HEIGHT {
+    fn validate_absolute_dimensions(
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> Result<(), FeagiDataError> {
+        if width == SPATIAL_POINTER_SPEED_CHANNEL_WIDTH {
+            return Self::validate_layout(
+                width,
+                height,
+                depth,
+                SPATIAL_POINTER_SPEED_CHANNEL_WIDTH,
+                "speed",
+            );
+        }
+        Self::validate_layout(
+            width,
+            height,
+            depth,
+            SPATIAL_POINTER_CHANNEL_WIDTH,
+            "absolute",
+        )
+    }
+
+    fn validate_incremental_dimensions(
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> Result<(), FeagiDataError> {
+        Self::validate_layout(
+            width,
+            height,
+            depth,
+            SPATIAL_POINTER_INCREMENTAL_CHANNEL_WIDTH,
+            "incremental",
+        )
+    }
+
+    fn validate_layout(
+        width: u32,
+        height: u32,
+        depth: u32,
+        expected_width: u32,
+        mode: &str,
+    ) -> Result<(), FeagiDataError> {
+        if width != expected_width || height != SPATIAL_POINTER_CHANNEL_HEIGHT {
             return Err(FeagiDataError::BadParameters(format!(
-                "SpatialPointer cortical layout must be {}x{}xdepth (CartesianPosition-style); \
-                 got {}x{}x{}",
-                SPATIAL_POINTER_CHANNEL_WIDTH, SPATIAL_POINTER_CHANNEL_HEIGHT, width, height, depth
+                "SpatialPointer {mode} cortical layout must be {}x{}xdepth; got {}x{}x{}",
+                expected_width, SPATIAL_POINTER_CHANNEL_HEIGHT, width, height, depth
             )));
         }
         if depth == 0 {

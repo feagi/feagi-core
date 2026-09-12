@@ -19,19 +19,20 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
-                #[doc = "Servo Position, defined by min / max distances. Uses unsigned Percentage (0-100%)."]
+                #[doc = "Servo Position, defined by min / max distances. Uses unsigned Percentage (0-100%). Area 2 is a dedicated per-channel speed limit."]
                 PositionalServo => {
                     friendly_name: "Positional Servo",
                     accepted_wrapped_io_data_type: Percentage,
                     cortical_id_unit_reference: *b"pse",
-                    number_cortical_areas: 2,
+                    number_cortical_areas: 3,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
                         0 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-20, 0, -10], channel_dimensions_default: [1, 1, 20], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]),
-                        1 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Incremental, percentage_neuron_positioning), relative_position: [-40, 0, -10], channel_dimensions_default: [2, 1, 20], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024])
+                        1 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Incremental, percentage_neuron_positioning), relative_position: [-40, 0, -10], channel_dimensions_default: [2, 1, 20], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024]),
+                        2 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-60, 0, -10], channel_dimensions_default: [1, 1, 20], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -161,7 +162,7 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
-                #[doc = "Spatial pointer output - decodes activity into one normalized XYZ percentage tuple. Voxel layout matches CartesianPosition IPU: 3×1×depth (one X column per axis, Y=1, Z=neuron depth)."]
+                #[doc = "Spatial pointer output - Absolute is 3×1×depth at (130, 0, -10). Incremental is 6×1×depth; registration places it at (145, 0, -10)."]
                 SpatialPointer => {
                     friendly_name: "Spatial Pointer",
                     accepted_wrapped_io_data_type: SpatialPointer3D,
@@ -173,7 +174,7 @@ macro_rules! motor_cortical_units {
                     },
                     allowed_frame_change_handling: [Absolute, Incremental],
                     cortical_area_properties: {
-                        0 => ($crate::genomic::cortical_area::io_cortical_area_configuration_flag::spatial_pointer_io_flag(frame_change_handling, percentage_neuron_positioning), relative_position: [210, 0, -30], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])
+                        0 => ($crate::genomic::cortical_area::io_cortical_area_configuration_flag::spatial_pointer_io_flag(frame_change_handling, percentage_neuron_positioning), relative_position: [130, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [6, 1, 1024])
                     }
                 },
 

@@ -369,10 +369,8 @@ pub enum JSONDecoderProperties {
     /// incremental commands integrate into the cached position.
     PositionalServo(NeuronDepth, PercentageNeuronPositioning),
     /// Capability-gated positional-servo behavior where the absolute area
-    /// provides the target and the incremental area provides the speed limit.
-    ///
-    /// `default_speed_0_1_per_channel` is required because an absolute-only
-    /// command must still carry an explicit safe speed for every channel.
+    /// provides the target, incremental nudges that target, and area 2
+    /// provides the unsigned speed limit. A silent speed area emits 1.0.
     PositionalServoTargetSpeed(NeuronDepth, PercentageNeuronPositioning, Vec<f32>, f32),
     GazeProperties(NeuronDepth, NeuronDepth, PercentageNeuronPositioning), // eccentricity z depth, modularity z depth
     ImageFilteringSettings(
@@ -437,9 +435,9 @@ impl JSONDecoderProperties {
                 )
             }
             JSONDecoderProperties::PositionalServo(neuron_depth, percentage_neuron_positioning) => {
-                if cortical_ids.len() != 2 {
+                if cortical_ids.len() < 2 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected two cortical ids for PositionalServo!".to_string(),
+                        "Expected at least two cortical ids for PositionalServo!".to_string(),
                     ));
                 }
                 crate::neuron_voxel_coding::xyzp::decoders::PositionalServoNeuronVoxelXYZPDecoder::new_box(
@@ -456,14 +454,15 @@ impl JSONDecoderProperties {
                 default_speed_0_1_per_channel,
                 incremental_step_size_0_1,
             ) => {
-                if cortical_ids.len() != 2 {
+                if cortical_ids.len() != 3 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected two cortical ids for PositionalServoTargetSpeed!".to_string(),
+                        "Expected three cortical ids for PositionalServoTargetSpeed!".to_string(),
                     ));
                 }
                 crate::neuron_voxel_coding::xyzp::decoders::PositionalServoNeuronVoxelXYZPDecoder::new_target_speed_box(
                     *cortical_ids.first().unwrap(),
                     *cortical_ids.get(1).unwrap(),
+                    *cortical_ids.get(2).unwrap(),
                     *neuron_depth,
                     *neuron_depth,
                     number_channels,

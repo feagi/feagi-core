@@ -1255,12 +1255,13 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
         .collect();
     assert_eq!(
         motor_areas.len(),
-        8,
-        "Expected 8 PositionalServo areas (abs+inc per limb), got {}",
+        12,
+        "Expected 12 PositionalServo areas (abs+inc+speed per limb), got {}",
         motor_areas.len()
     );
     let mut abs_width_count = 0;
     let mut inc_width_count = 0;
+    let mut speed_width_count = 0;
     for area in &motor_areas {
         if area.name.ends_with("-1") {
             assert_eq!(
@@ -1268,6 +1269,9 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
                 "Incremental subunit width should be 6"
             );
             inc_width_count += 1;
+        } else if area.name.ends_with("-2") {
+            assert_eq!(area.dimensions.0, 3, "Speed subunit width should be 3");
+            speed_width_count += 1;
         } else if area.name.ends_with("-0") {
             assert_eq!(area.dimensions.0, 3, "Absolute subunit width should be 3");
             abs_width_count += 1;
@@ -1280,6 +1284,7 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
     }
     assert_eq!(abs_width_count, 4, "Expected 4 absolute limb areas");
     assert_eq!(inc_width_count, 4, "Expected 4 incremental limb areas");
+    assert_eq!(speed_width_count, 4, "Expected 4 speed limb areas");
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -2719,6 +2724,72 @@ async fn test_io_dev_count_scales_x_and_per_device_stays_independent() {
         Some((6, 5, 7)),
         "per-device dimensions should be stored and returned verbatim"
     );
+}
+
+#[tokio::test]
+async fn test_registration_dimensions_replace_stale_per_device_depth() {
+    let state = build_test_state();
+    let cortical_id = general_purpose::STANDARD.encode(*b"cREGZ001");
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "servo-encoder-stale-z".to_string(),
+            dimensions: (6, 1, 10),
+            position: (0, 0, 0),
+            area_type: "sensory".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(HashMap::from([
+                ("dev_count".to_string(), json!(6)),
+                (
+                    "cortical_dimensions_per_device".to_string(),
+                    json!([1, 1, 10]),
+                ),
+            ])),
+        }])
+        .await
+        .expect("failed creating stale servo encoder area");
+
+    let updated = state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([
+                ("dimensions".to_string(), json!([6, 1, 20])),
+                ("dev_count".to_string(), json!(6)),
+                (
+                    "cortical_dimensions_per_device".to_string(),
+                    json!([1, 1, 20]),
+                ),
+            ]),
+        )
+        .await
+        .expect("failed applying registration dimensions");
+    assert_eq!(
+        updated.dimensions,
+        (6, 1, 20),
+        "registration z-depth must replace leftover genome per-device depth"
+    );
+    assert_eq!(
+        updated.cortical_dimensions_per_device,
+        Some((1, 1, 20)),
+        "registration must persist the new per-device depth"
+    );
+    assert_eq!(updated.dev_count, Some(6));
 }
 
 #[tokio::test]
