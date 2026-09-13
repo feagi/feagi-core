@@ -2271,6 +2271,83 @@ mod test_sensory_cortical_unit {
             );
         }
     }
+
+    /// Tests for the `AngularPointer` motor unit: yaw/pitch/roll counterpart
+    /// of `SpatialPointer` translation.
+    mod test_angular_pointer_unit {
+        use super::*;
+
+        #[test]
+        fn test_angular_pointer_is_single_subunit_with_ang_subtype() {
+            assert_eq!(
+                MotorCorticalUnit::AngularPointer.get_number_cortical_areas(),
+                1
+            );
+
+            let ids = MotorCorticalUnit::get_cortical_ids_array_for_angular_pointer_with_parameters(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear,
+                CorticalUnitIndex::from(0u8),
+            );
+            assert_eq!(ids.len(), 1);
+            let bytes = ids[0].as_bytes();
+            assert_eq!(bytes[0], b'o', "AngularPointer must be an OPU");
+            assert_eq!(&bytes[1..4], b"ang", "AngularPointer subtype must be 'ang'");
+        }
+
+        #[test]
+        fn test_angular_pointer_default_dims_are_3x1x10() {
+            let topology = MotorCorticalUnit::AngularPointer.get_unit_default_topology();
+            assert_eq!(topology.len(), 1);
+            let unit = topology
+                .get(&0.into())
+                .expect("Missing AngularPointer sub-area topology");
+            assert_eq!(unit.channel_dimensions_default, [3, 1, 10]);
+            assert_eq!(unit.channel_dimensions_min, [3, 1, 1]);
+            assert_eq!(unit.channel_dimensions_max, [6, 1, 1024]);
+            assert_eq!(unit.relative_position, [175, 0, -10]);
+        }
+
+        #[test]
+        fn test_angular_pointer_allows_absolute_and_incremental() {
+            let allowed = MotorCorticalUnit::AngularPointer
+                .get_allowed_frame_change_handling()
+                .expect("AngularPointer must declare allowed frame-change handling");
+            assert!(allowed.contains(&FrameChangeHandling::Absolute));
+            assert!(allowed.contains(&FrameChangeHandling::Incremental));
+        }
+
+        #[test]
+        fn test_angular_pointer_uses_signed_percentage_3d_flag() {
+            let id = MotorCorticalUnit::get_cortical_ids_array_for_angular_pointer_with_parameters(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear,
+                CorticalUnitIndex::from(0u8),
+            )[0];
+            let flag = id
+                .extract_io_data_flag()
+                .expect("AngularPointer cortical ID must decode a valid IO flag");
+            assert!(
+                matches!(
+                    flag,
+                    IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+                        FrameChangeHandling::Absolute,
+                        _
+                    )
+                ),
+                "Expected signed SignedPercentage3D(Absolute, _), got {:?}",
+                flag
+            );
+        }
+
+        #[test]
+        fn test_angular_pointer_snake_case_name() {
+            assert_eq!(
+                MotorCorticalUnit::AngularPointer.get_snake_case_name(),
+                "angular_pointer"
+            );
+        }
+    }
 }
 
 /// Comprehensive integration tests spanning multiple modules

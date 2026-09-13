@@ -604,17 +604,12 @@ pub const SPATIAL_POINTER_CHANNEL_HEIGHT: u32 = 1;
 /// are `6×1×depth` (X+/X−, Y+/Y−, Z+/Z−). Height is always 1; only
 /// `depth` (Z neuron resolution) is a free parameter.
 ///
-/// The remaining fields configure the Incremental decode mode (see `FrameChangeHandling`).
-/// They are unused in Absolute mode and are therefore optional at the serialization
-/// boundary so that Absolute producers do not need to supply them. When the owning area
-/// is registered as Incremental they are mandatory: the decoder fails fast (no fallback)
-/// if either is missing, non-finite, or non-positive.
-///
-/// * `window_ms` - rolling-window length, in milliseconds, over which neuron-activity
-///   centroids are accumulated to estimate motion.
-/// * `max_axis_velocity` - full-scale motion magnitude, in normalized-units per second,
-///   that maps to the extremes of the 0.5-centered output encoding. A per-axis velocity
-///   of `+max_axis_velocity` encodes to 1.0 and `-max_axis_velocity` encodes to 0.0.
+/// Incremental registration also carries `window_ms`, a controller look-ahead
+/// horizon in milliseconds. The Rust decoder does not consume it: Incremental
+/// decode emits a raw signed `[-1, 1]` magnitude per tick. Controllers use
+/// `window_ms` when integrating that magnitude into a physical hop
+/// (`delta = agility * (window_ms / 1000) * speed_scale`). Absolute producers
+/// omit the field. Incremental registration fails fast if it is missing or zero.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SpatialPointerProperties {
     pub width: u32,
@@ -622,8 +617,6 @@ pub struct SpatialPointerProperties {
     pub depth: u32,
     #[serde(default)]
     pub window_ms: Option<u32>,
-    #[serde(default)]
-    pub max_axis_velocity: Option<f32>,
 }
 
 impl SpatialPointerProperties {
@@ -638,51 +631,40 @@ impl SpatialPointerProperties {
             height,
             depth,
             window_ms: None,
-            max_axis_velocity: None,
         })
     }
 
     /// Creates properties for an Incremental-mode SpatialPointer area.
     ///
-    /// Validates the rolling-window length and full-scale velocity up front so that
-    /// invalid configuration is rejected at construction rather than at decode time.
+    /// Validates the controller look-ahead window up front so invalid
+    /// configuration is rejected at construction rather than at decode time.
     pub fn new_incremental(
         width: u32,
         height: u32,
         depth: u32,
         window_ms: u32,
-        max_axis_velocity: f32,
     ) -> Result<Self, FeagiDataError> {
         Self::validate_incremental_dimensions(width, height, depth)?;
         Self::validate_window_ms(window_ms)?;
-        Self::validate_max_axis_velocity(max_axis_velocity)?;
         Ok(SpatialPointerProperties {
             width,
             height,
             depth,
             window_ms: Some(window_ms),
-            max_axis_velocity: Some(max_axis_velocity),
         })
     }
 
-    /// Returns the validated Incremental parameters, or an error explaining which one
-    /// is missing or invalid. Intended to be called by the decoder when the owning area
-    /// uses Incremental frame-change handling.
-    pub fn require_incremental_parameters(&self) -> Result<(u32, f32), FeagiDataError> {
+    /// Returns the validated Incremental look-ahead window, or an error if it
+    /// is missing or invalid. The decoder calls this when the owning area uses
+    /// Incremental frame-change handling; decode itself does not scale by it.
+    pub fn require_incremental_parameters(&self) -> Result<u32, FeagiDataError> {
         let window_ms = self.window_ms.ok_or_else(|| {
             FeagiDataError::BadParameters(
                 "Incremental SpatialPointer requires 'window_ms' in decoder properties".into(),
             )
         })?;
-        let max_axis_velocity = self.max_axis_velocity.ok_or_else(|| {
-            FeagiDataError::BadParameters(
-                "Incremental SpatialPointer requires 'max_axis_velocity' in decoder properties"
-                    .into(),
-            )
-        })?;
         Self::validate_window_ms(window_ms)?;
-        Self::validate_max_axis_velocity(max_axis_velocity)?;
-        Ok((window_ms, max_axis_velocity))
+        Ok(window_ms)
     }
 
     fn validate_absolute_dimensions(
@@ -751,23 +733,153 @@ impl SpatialPointerProperties {
         }
         Ok(())
     }
-
-    fn validate_max_axis_velocity(max_axis_velocity: f32) -> Result<(), FeagiDataError> {
-        if !max_axis_velocity.is_finite() || max_axis_velocity <= 0.0 {
-            return Err(FeagiDataError::BadParameters(
-                "SpatialPointer 'max_axis_velocity' must be a finite, positive value".into(),
-            ));
-        }
-        Ok(())
-    }
 }
 
 impl Display for SpatialPointerProperties {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
-            "SpatialPointer({}x{}x{}, window_ms={:?}, max_axis_velocity={:?})",
-            self.width, self.height, self.depth, self.window_ms, self.max_axis_velocity
+            "SpatialPointer({}x{}x{}, window_ms={:?})",
+            self.width, self.height, self.depth, self.window_ms
+        )
+    }
+}
+
+//endregion
+
+//region Angular Pointer
+
+/// Absolute AngularPointer width: one cortical X column per yaw/pitch/roll axis.
+pub const ANGULAR_POINTER_CHANNEL_WIDTH: u32 = 3;
+/// Incremental AngularPointer width: two cortical X columns per YPR axis
+/// (even = positive, odd = negative), matching SpatialPointer incremental.
+pub const ANGULAR_POINTER_INCREMENTAL_CHANNEL_WIDTH: u32 = 6;
+/// Fixed per-channel height for AngularPointer (percentage decoders use Y=0 only).
+pub const ANGULAR_POINTER_CHANNEL_HEIGHT: u32 = 1;
+
+/// Properties describing an AngularPointer cortical area (yaw / pitch / roll).
+///
+/// Absolute areas are `3×1×depth` and decode a signed attitude
+/// (`SignedPercentage3D`, each axis in `[-1, 1]`, `0` = center). Incremental
+/// areas are `6×1×depth` (yaw+/yaw−, pitch+/pitch−, roll+/roll−) and decode a
+/// signed rate vector. Height is always 1; only `depth` is a free parameter.
+///
+/// Incremental registration also carries `window_ms` for controller look-ahead.
+/// The Rust decoder does not consume it.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AngularPointerProperties {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+    #[serde(default)]
+    pub window_ms: Option<u32>,
+}
+
+impl AngularPointerProperties {
+    /// Creates properties for an Absolute-mode AngularPointer area.
+    pub fn new_absolute(width: u32, height: u32, depth: u32) -> Result<Self, FeagiDataError> {
+        Self::validate_absolute_dimensions(width, height, depth)?;
+        Ok(AngularPointerProperties {
+            width,
+            height,
+            depth,
+            window_ms: None,
+        })
+    }
+
+    /// Creates properties for an Incremental-mode AngularPointer area.
+    pub fn new_incremental(
+        width: u32,
+        height: u32,
+        depth: u32,
+        window_ms: u32,
+    ) -> Result<Self, FeagiDataError> {
+        Self::validate_incremental_dimensions(width, height, depth)?;
+        Self::validate_window_ms(window_ms)?;
+        Ok(AngularPointerProperties {
+            width,
+            height,
+            depth,
+            window_ms: Some(window_ms),
+        })
+    }
+
+    /// Returns the validated Incremental look-ahead window.
+    pub fn require_incremental_parameters(&self) -> Result<u32, FeagiDataError> {
+        let window_ms = self.window_ms.ok_or_else(|| {
+            FeagiDataError::BadParameters(
+                "Incremental AngularPointer requires 'window_ms' in decoder properties".into(),
+            )
+        })?;
+        Self::validate_window_ms(window_ms)?;
+        Ok(window_ms)
+    }
+
+    fn validate_absolute_dimensions(
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> Result<(), FeagiDataError> {
+        Self::validate_layout(
+            width,
+            height,
+            depth,
+            ANGULAR_POINTER_CHANNEL_WIDTH,
+            "absolute",
+        )
+    }
+
+    fn validate_incremental_dimensions(
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> Result<(), FeagiDataError> {
+        Self::validate_layout(
+            width,
+            height,
+            depth,
+            ANGULAR_POINTER_INCREMENTAL_CHANNEL_WIDTH,
+            "incremental",
+        )
+    }
+
+    fn validate_layout(
+        width: u32,
+        height: u32,
+        depth: u32,
+        expected_width: u32,
+        mode: &str,
+    ) -> Result<(), FeagiDataError> {
+        if width != expected_width || height != ANGULAR_POINTER_CHANNEL_HEIGHT {
+            return Err(FeagiDataError::BadParameters(format!(
+                "AngularPointer {mode} cortical layout must be {}x{}xdepth; got {}x{}x{}",
+                expected_width, ANGULAR_POINTER_CHANNEL_HEIGHT, width, height, depth
+            )));
+        }
+        if depth == 0 {
+            return Err(FeagiDataError::BadParameters(
+                "AngularPointer 'depth' (Z neuron resolution) must be non-zero".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_window_ms(window_ms: u32) -> Result<(), FeagiDataError> {
+        if window_ms == 0 {
+            return Err(FeagiDataError::BadParameters(
+                "AngularPointer 'window_ms' must be greater than zero".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Display for AngularPointerProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "AngularPointer({}x{}x{}, window_ms={:?})",
+            self.width, self.height, self.depth, self.window_ms
         )
     }
 }

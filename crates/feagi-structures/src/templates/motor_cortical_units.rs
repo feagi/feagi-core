@@ -178,6 +178,22 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Angular pointer output - yaw/pitch/roll. Absolute is signed 3×1×depth at (175, 0, -10). Incremental is 6×1×depth; registration places it at (190, 0, -10)."]
+                AngularPointer => {
+                    friendly_name: "Angular Pointer",
+                    accepted_wrapped_io_data_type: AngularPointer3D,
+                    cortical_id_unit_reference: *b"ang",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute, Incremental],
+                    cortical_area_properties: {
+                        0 => ($crate::genomic::cortical_area::io_cortical_area_configuration_flag::angular_pointer_io_flag(frame_change_handling, percentage_neuron_positioning), relative_position: [175, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [6, 1, 1024])
+                    }
+                },
+
             }
         }
     };

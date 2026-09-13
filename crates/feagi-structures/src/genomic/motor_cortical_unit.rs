@@ -308,6 +308,13 @@ impl MotorCorticalUnit {
                     group_index,
                 )[0]
             }
+            MotorCorticalUnit::AngularPointer => {
+                Self::get_cortical_ids_array_for_angular_pointer_with_parameters(
+                    fh,
+                    pos,
+                    group_index,
+                )[0]
+            }
         }
     }
 }

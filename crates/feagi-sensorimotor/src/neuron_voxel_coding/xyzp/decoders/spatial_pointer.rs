@@ -376,8 +376,8 @@ mod tests {
         assert!(SpatialPointerProperties::new_absolute(3, 2, 10).is_err());
         assert!(SpatialPointerProperties::new_absolute(3, 1, 10).is_ok());
         assert!(SpatialPointerProperties::new_absolute(1, 1, 10).is_ok());
-        assert!(SpatialPointerProperties::new_incremental(3, 1, 10, 1000, 4.0).is_err());
-        assert!(SpatialPointerProperties::new_incremental(6, 1, 10, 1000, 4.0).is_ok());
+        assert!(SpatialPointerProperties::new_incremental(3, 1, 10, 1000).is_err());
+        assert!(SpatialPointerProperties::new_incremental(6, 1, 10, 1000).is_ok());
     }
 
     #[test]
@@ -492,7 +492,7 @@ mod tests {
         let id = pointer_cortical_id(FrameChangeHandling::Incremental);
         let mut decoder = SpatialPointerNeuronVoxelXYZPDecoder::new_box(
             id,
-            SpatialPointerProperties::new_incremental(6, 1, 10, 1000, 4.0).unwrap(),
+            SpatialPointerProperties::new_incremental(6, 1, 10, 1000).unwrap(),
             CorticalChannelCount::new(1).unwrap(),
         )
         .unwrap();
@@ -526,7 +526,7 @@ mod tests {
         let id = pointer_cortical_id(FrameChangeHandling::Incremental);
         let mut decoder = SpatialPointerNeuronVoxelXYZPDecoder::new_box(
             id,
-            SpatialPointerProperties::new_incremental(6, 1, 10, 1000, 4.0).unwrap(),
+            SpatialPointerProperties::new_incremental(6, 1, 10, 1000).unwrap(),
             CorticalChannelCount::new(1).unwrap(),
         )
         .unwrap();
@@ -596,7 +596,7 @@ mod tests {
         let id = pointer_cortical_id(FrameChangeHandling::Incremental);
         let mut decoder = SpatialPointerNeuronVoxelXYZPDecoder::new_box(
             id,
-            SpatialPointerProperties::new_incremental(6, 1, 10, 1000, 4.0).unwrap(),
+            SpatialPointerProperties::new_incremental(6, 1, 10, 1000).unwrap(),
             CorticalChannelCount::new(1).unwrap(),
         )
         .unwrap();

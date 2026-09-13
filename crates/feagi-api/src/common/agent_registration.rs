@@ -68,6 +68,7 @@ fn per_channel_motor_dimensions_for_registration(
         && motor_unit != MotorCorticalUnit::ObjectSegmentation
         && motor_unit != MotorCorticalUnit::PoseEstimation
         && motor_unit != MotorCorticalUnit::SpatialPointer
+        && motor_unit != MotorCorticalUnit::AngularPointer
         && motor_unit != MotorCorticalUnit::PositionalServo
     {
         return (default_w, default_h, default_d);
@@ -111,7 +112,9 @@ fn per_channel_motor_dimensions_for_registration(
     // SpatialPointer: Absolute is 3×1×depth; Incremental is 6×1×depth;
     // speed is 1×1×depth per XYZ channel. Expected:
     // {"SpatialPointer": {"depth": N, "width": 1|3|6}}
-    if motor_unit == MotorCorticalUnit::SpatialPointer {
+    if motor_unit == MotorCorticalUnit::SpatialPointer
+        || motor_unit == MotorCorticalUnit::AngularPointer
+    {
         if let Some(dims) =
             spatial_pointer_dims_from_decoder_properties(decoder_properties, unit_topology)
         {
@@ -231,7 +234,9 @@ fn spatial_pointer_dims_from_decoder_properties(
     decoder_properties: Option<&Value>,
     unit_topology: &UnitTopology,
 ) -> Option<(usize, usize, usize)> {
-    let pointer = decoder_properties?.get("SpatialPointer")?;
+    let pointer = decoder_properties?
+        .get("SpatialPointer")
+        .or_else(|| decoder_properties?.get("AngularPointer"))?;
     let d = pointer
         .get("depth")
         .and_then(|v| v.as_u64())
@@ -263,6 +268,8 @@ fn build_friendly_unit_name(unit_label: &str, group: u8, sub_unit_index: usize) 
 /// speed 160.
 const SPATIAL_POINTER_INCREMENTAL_POSITION_X: i32 = 145;
 const SPATIAL_POINTER_SPEED_POSITION_X: i32 = 160;
+const ANGULAR_POINTER_ABSOLUTE_POSITION_X: i32 = 175;
+const ANGULAR_POINTER_INCREMENTAL_POSITION_X: i32 = 190;
 /// Per-axis speed pointer width. Matches `SPATIAL_POINTER_SPEED_CHANNEL_WIDTH`.
 const SPATIAL_POINTER_SPEED_WIDTH: u32 = 1;
 
@@ -286,6 +293,22 @@ fn spatial_pointer_world_position(
     (x, relative_position[1], relative_position[2])
 }
 
+/// World position for a newly registered AngularPointer area.
+///
+/// Absolute attitude uses X=175. Incremental is offset to 190 so it sits
+/// on the same Cartesian row after SpatialPointer speed (160).
+fn angular_pointer_world_position(
+    relative_position: [i32; 3],
+    frame_handling: Option<&str>,
+) -> (i32, i32, i32) {
+    let x = match frame_handling {
+        Some("Incremental") => ANGULAR_POINTER_INCREMENTAL_POSITION_X,
+        Some("Absolute") => ANGULAR_POINTER_ABSOLUTE_POSITION_X,
+        _ => relative_position[0],
+    };
+    (x, relative_position[1], relative_position[2])
+}
+
 /// Builds an unambiguous default name for motor areas created during registration.
 ///
 /// SpatialPointer's frame handling changes its command semantics, so expose that
@@ -303,6 +326,13 @@ fn build_motor_registration_default_name(
     }
     let legacy_name =
         build_friendly_unit_name(motor_unit.get_friendly_name(), group, sub_unit_index);
+    if motor_unit == MotorCorticalUnit::AngularPointer && sub_unit_index == 0 {
+        return match frame_handling {
+            Some("Absolute") => "Angular Pointer Absolute".to_string(),
+            Some("Incremental") => "Angular Pointer Incremental".to_string(),
+            _ => "Angular Pointer".to_string(),
+        };
+    }
     if motor_unit != MotorCorticalUnit::SpatialPointer || sub_unit_index != 0 {
         return legacy_name;
     }
@@ -347,7 +377,8 @@ fn extract_grouping_array(unit_def: &Value) -> &[Value] {
 /// Width from a `{"SpatialPointer": {"width": N, ...}}` decoder block.
 fn spatial_pointer_decoder_width(decoder_properties: Option<&Value>) -> Option<u32> {
     decoder_properties?
-        .get("SpatialPointer")?
+        .get("SpatialPointer")
+        .or_else(|| decoder_properties?.get("AngularPointer"))?
         .get("width")
         .and_then(|value| value.as_u64())
         .and_then(|width| u32::try_from(width).ok())
@@ -369,6 +400,9 @@ fn motor_registration_device_count(
         if spatial_pointer_decoder_width(decoder_properties) == Some(SPATIAL_POINTER_SPEED_WIDTH) {
             return grouping_count;
         }
+        return if grouping_count > 0 { 1 } else { 0 };
+    }
+    if motor_unit == MotorCorticalUnit::AngularPointer {
         return if grouping_count > 0 { 1 } else { 0 };
     }
     grouping_count
@@ -482,15 +516,21 @@ fn should_auto_rename_motor(
 /// descriptive titles.
 fn is_placeholder_cartesian_area_name(current_name: &str) -> bool {
     let name = current_name.trim();
-    if name.starts_with("Spatial Pointer-") || name.starts_with("Cartesian Position Sensor-") {
+    if name.starts_with("Spatial Pointer-")
+        || name.starts_with("Angular Pointer-")
+        || name.starts_with("Cartesian Position Sensor-")
+    {
         return true;
     }
-    const PREFIXES: [&str; 7] = [
+    const PREFIXES: [&str; 10] = [
         "SpatialPointer_abs_",
         "SpatialPointer_inc_",
         "SpatialPointer_absolute_",
         "SpatialPointer_incremental_",
         "SpatialPointer_",
+        "AngularPointer_abs_",
+        "AngularPointer_inc_",
+        "AngularPointer_",
         "CartesianPosition_",
         "Cartesian Position Sensor_",
     ];
@@ -932,6 +972,11 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                 frame_handling.as_deref(),
                                 spatial_pointer_decoder_width(decoder_properties),
                             )
+                        } else if motor_unit == MotorCorticalUnit::AngularPointer {
+                            angular_pointer_world_position(
+                                unit_topology.relative_position,
+                                frame_handling.as_deref(),
+                            )
                         } else {
                             (x, y, z)
                         });
@@ -962,7 +1007,8 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     let resolved_base_name = resolve_registration_name_with_placeholders(
                         unit_def,
                         &registration_default_name,
-                        motor_unit == MotorCorticalUnit::SpatialPointer,
+                        motor_unit == MotorCorticalUnit::SpatialPointer
+                            || motor_unit == MotorCorticalUnit::AngularPointer,
                     );
                     let resolved_name =
                         if motor_unit == MotorCorticalUnit::PositionalServo && i == 2 {
@@ -2159,10 +2205,11 @@ mod registration_dimension_change_tests {
 #[cfg(test)]
 mod registration_name_helpers_tests {
     use super::{
-        build_motor_registration_default_name, build_sensory_registration_default_name,
-        resolve_registration_name_with_placeholders, should_auto_rename, should_auto_rename_motor,
-        spatial_pointer_world_position, SPATIAL_POINTER_INCREMENTAL_POSITION_X,
-        SPATIAL_POINTER_SPEED_POSITION_X,
+        angular_pointer_world_position, build_motor_registration_default_name,
+        build_sensory_registration_default_name, resolve_registration_name_with_placeholders,
+        should_auto_rename, should_auto_rename_motor, spatial_pointer_world_position,
+        ANGULAR_POINTER_ABSOLUTE_POSITION_X, ANGULAR_POINTER_INCREMENTAL_POSITION_X,
+        SPATIAL_POINTER_INCREMENTAL_POSITION_X, SPATIAL_POINTER_SPEED_POSITION_X,
     };
     use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use serde_json::json;
@@ -2223,6 +2270,26 @@ mod registration_name_helpers_tests {
                 None,
             ),
             "Positional Servo Speed"
+        );
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::AngularPointer,
+                0,
+                0,
+                Some("Absolute"),
+                Some(3),
+            ),
+            "Angular Pointer Absolute"
+        );
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::AngularPointer,
+                1,
+                0,
+                Some("Incremental"),
+                Some(6),
+            ),
+            "Angular Pointer Incremental"
         );
     }
 
@@ -2305,6 +2372,19 @@ mod registration_name_helpers_tests {
         assert_eq!(speed, (SPATIAL_POINTER_SPEED_POSITION_X, 0, -10));
         assert_eq!(incremental.0, 145);
         assert_eq!(speed.0, 160);
+    }
+
+    #[test]
+    fn angular_pointer_incremental_sits_right_of_absolute() {
+        let absolute = angular_pointer_world_position([175, 0, -10], Some("Absolute"));
+        let incremental = angular_pointer_world_position([175, 0, -10], Some("Incremental"));
+        assert_eq!(absolute, (ANGULAR_POINTER_ABSOLUTE_POSITION_X, 0, -10));
+        assert_eq!(
+            incremental,
+            (ANGULAR_POINTER_INCREMENTAL_POSITION_X, 0, -10)
+        );
+        assert_eq!(absolute.0, 175);
+        assert_eq!(incremental.0, 190);
     }
 
     #[test]

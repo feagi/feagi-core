@@ -1,7 +1,8 @@
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{
-    ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality,
-    PoseEstimationProperties, SegmentedImageFrameProperties, SpatialPointerProperties,
+    AngularPointerProperties, ImageFrameProperties, MiscDataDimensions,
+    PercentageChannelDimensionality, PoseEstimationProperties, SegmentedImageFrameProperties,
+    SpatialPointerProperties,
 };
 use crate::data_types::{
     GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
@@ -10,9 +11,10 @@ use crate::data_types::{
 };
 use crate::feedbacks::FeedbackRegistrar;
 use crate::neuron_voxel_coding::xyzp::decoders::{
-    GazePropertiesNeuronVoxelXYZPDecoder, ImageFilteringSettingsNeuronVoxelXYZPDecoder,
-    MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder,
-    PoseEstimationNeuronVoxelXYZPDecoder, SpatialPointerNeuronVoxelXYZPDecoder,
+    AngularPointerNeuronVoxelXYZPDecoder, GazePropertiesNeuronVoxelXYZPDecoder,
+    ImageFilteringSettingsNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder,
+    PercentageNeuronVoxelXYZPDecoder, PoseEstimationNeuronVoxelXYZPDecoder,
+    SpatialPointerNeuronVoxelXYZPDecoder,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::{
     BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder,
@@ -380,6 +382,7 @@ pub enum JSONDecoderProperties {
         PercentageNeuronPositioning,
     ), // brightness z depth, contrast z depth, diff z depth
     SpatialPointer(SpatialPointerProperties),
+    AngularPointer(AngularPointerProperties),
     PoseEstimation(PoseEstimationProperties),
 }
 
@@ -536,6 +539,18 @@ impl JSONDecoderProperties {
                     number_channels,
                 )
             }
+            JSONDecoderProperties::AngularPointer(pointer_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for AngularPointer!".to_string(),
+                    ));
+                }
+                AngularPointerNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *pointer_properties,
+                    number_channels,
+                )
+            }
         }
     }
 
@@ -651,6 +666,9 @@ impl JSONDecoderProperties {
                     _ => Ok(WrappedIOData::Percentage_3D(Percentage3D::new_zero())),
                 }
             }
+            JSONDecoderProperties::AngularPointer(_pointer_properties) => Ok(
+                WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero()),
+            ),
         }
     }
 }

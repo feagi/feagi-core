@@ -333,6 +333,23 @@ pub const fn spatial_pointer_io_flag(
     }
 }
 
+/// Returns the area configuration flag for an AngularPointer cortical area.
+///
+/// Both Absolute and Incremental emit a signed 3-vector (`SignedPercentage3D`,
+/// each axis in `[-1, 1]`, `0` meaning center / no motion):
+/// - `Absolute` is `3×1×depth` (one X column per yaw/pitch/roll axis). Linear
+///   Z encoding maps low Z to `+1` and high Z to `-1`.
+/// - `Incremental` is `6×1×depth` (yaw+/yaw−, pitch+/pitch−, roll+/roll−).
+pub const fn angular_pointer_io_flag(
+    frame_change_handling: FrameChangeHandling,
+    percentage_neuron_positioning: PercentageNeuronPositioning,
+) -> IOCorticalAreaConfigurationFlag {
+    IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+        frame_change_handling,
+        percentage_neuron_positioning,
+    )
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum FrameChangeHandling {
     #[default]

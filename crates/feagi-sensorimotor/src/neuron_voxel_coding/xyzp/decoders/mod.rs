@@ -6,10 +6,12 @@ mod percentage_decoder;
 mod pose_estimation;
 mod positional_servo_decoder;
 
+mod angular_pointer;
 mod cartesian_plane;
 mod image_filtering_settings;
 mod spatial_pointer;
 
+pub(crate) use angular_pointer::AngularPointerNeuronVoxelXYZPDecoder;
 pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPDecoder;
 pub(crate) use gaze_properties_decoder::GazePropertiesNeuronVoxelXYZPDecoder;
 pub(crate) use image_filtering_settings::ImageFilteringSettingsNeuronVoxelXYZPDecoder;

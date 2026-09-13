@@ -366,8 +366,7 @@ macro_rules! motor_unit_functions {
                         "width": pointer_properties.width,
                         "height": pointer_properties.height,
                         "depth": pointer_properties.depth,
-                        "window_ms": pointer_properties.window_ms,
-                        "max_axis_velocity": pointer_properties.max_axis_velocity
+                        "window_ms": pointer_properties.window_ms
                     }
                 }).as_object().unwrap().clone();
 
@@ -388,6 +387,50 @@ macro_rules! motor_unit_functions {
 
         motor_unit_functions!(@generate_similar_functions $motor_unit, Percentage3D);
         motor_unit_functions!(@generate_spatial_pointer_signed_read $motor_unit);
+    };
+
+    // Arm for AngularPointer: both Absolute and Incremental emit SignedPercentage3D.
+    (@generate_functions
+        $motor_unit:ident,
+        AngularPointer3D
+    ) => {
+        ::paste::paste! {
+            pub fn [<$motor_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                percentage_neuron_positioning: PercentageNeuronPositioning,
+                pointer_properties: AngularPointerProperties,
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    unit
+                )[0];
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> =
+                    AngularPointerNeuronVoxelXYZPDecoder::new_box(cortical_id, pointer_properties, number_channels)?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning,
+                    "AngularPointer": {
+                        "width": pointer_properties.width,
+                        "height": pointer_properties.height,
+                        "depth": pointer_properties.depth,
+                        "window_ms": pointer_properties.window_ms
+                    }
+                }).as_object().unwrap().clone();
+
+                let initial_val: WrappedIOData =
+                    WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero());
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, SignedPercentage3D);
     };
 
     // Bespoke signed read accessors for SpatialPointer (Incremental mode emits
