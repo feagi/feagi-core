@@ -3,7 +3,6 @@
 
 // TODO Equal check with epsilon
 
-use crate::values::quantizable::custom_data_types::StorageF8;
 use crate::values::quantizable::quantization_level_packing::QuantizationLevelPacking;
 use crate::values::quantizable::{PercentageUnsigned, QuantizedElementBase, QuantizedUnsignedPercentageTrait};
 use half::{bf16, f16};
@@ -86,8 +85,6 @@ pub trait QuantizedDecimalTrait:
     /// Converts this value to a [`DecimalEnum`].
     fn quant_to_enum(self) -> DecimalEnum;
 
-    fn quant_to_storage_f8(self) -> StorageF8;
-
     fn quant_to_f16(self) -> f16;
 
     fn quant_to_bf16(self) -> bf16;
@@ -126,67 +123,6 @@ pub trait QuantizedDecimalTrait:
 /// Marker trait for raw decimal quantization types (`f16`, `bf16`, `f32`, `f64`, [`StorageF8`]).
 pub trait QuantizedDecimalUnwrappedTrait: QuantizedDecimalTrait + QuantizedUnwrappedSeal {}
 
-impl QuantizedDecimalTrait for StorageF8 {
-    type QuantType = Self;
-    const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::StorageF8;
-
-    fn quant_clamp(&self, min: Self, max: Self) -> Self {
-        todo!()
-    }
-
-    fn quant_to_enum(self) -> DecimalEnum {
-        DecimalEnum::StorageF8(self)
-    }
-
-    fn quant_to_storage_f8(self) -> StorageF8 {
-        todo!()
-    }
-
-    fn quant_to_f16(self) -> f16 {
-        todo!()
-    }
-
-    fn quant_to_bf16(self) -> bf16 {
-        todo!()
-    }
-
-    fn quant_to_f32(self) -> f32 {
-        todo!()
-    }
-
-    fn quant_to_f64(self) -> f64 {
-        todo!()
-    }
-
-    fn from_quantization<FromQuant: QuantizedDecimalTrait>(value: FromQuant) -> Self {
-        todo!()
-    }
-
-    fn from_quantized_unsigned_integer<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
-        todo!()
-    }
-
-    fn from_quantized_signed_integer<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
-        todo!()
-    }
-}
-
-impl QuantizedUnwrappedSeal for StorageF8 {}
-
-impl QuantizedDecimalUnwrappedTrait for StorageF8 {}
-
-impl core::iter::Sum for StorageF8 {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Self::ZERO, |accum, value| accum + value)
-    }
-}
-
-impl core::iter::Product for StorageF8 {
-    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Self::ONE, |accum, value| accum * value)
-    }
-}
-
 impl QuantizedUnwrappedSeal for f16 {}
 
 impl QuantizedDecimalTrait for f16 {
@@ -200,10 +136,6 @@ impl QuantizedDecimalTrait for f16 {
 
     fn quant_to_enum(self) -> DecimalEnum {
         DecimalEnum::F16(self)
-    }
-
-    fn quant_to_storage_f8(self) -> StorageF8 {
-        todo!()
     }
 
     fn quant_to_f16(self) -> f16 {
@@ -252,10 +184,6 @@ impl QuantizedDecimalTrait for bf16 {
         DecimalEnum::BF16(self)
     }
 
-    fn quant_to_storage_f8(self) -> StorageF8 {
-        todo!()
-    }
-
     fn quant_to_f16(self) -> f16 {
         f16::from_f32(self.to_f32())
     }
@@ -298,10 +226,6 @@ impl QuantizedDecimalTrait for f32 {
 
     fn quant_to_enum(self) -> DecimalEnum {
         DecimalEnum::F32(self)
-    }
-
-    fn quant_to_storage_f8(self) -> StorageF8 {
-        todo!()
     }
 
     fn quant_to_f16(self) -> f16 {
@@ -350,10 +274,6 @@ impl QuantizedDecimalTrait for f64 {
         DecimalEnum::F64(self)
     }
 
-    fn quant_to_storage_f8(self) -> StorageF8 {
-        todo!()
-    }
-
     fn quant_to_f16(self) -> f16 {
         f16::from_f64(self)
     }
@@ -394,22 +314,11 @@ pub enum DecimalEnum {
     BF16(bf16),
     F32(f32),
     F64(f64),
-    StorageF8(StorageF8),
 }
 
 impl DecimalEnum {
     pub fn new_from_quantized<FromQuant: QuantizedDecimalTrait>(value: FromQuant) -> Self {
         value.quant_to_enum()
-    }
-
-    pub fn get_level(&self) -> DecimalQuantizationLevel {
-        match self {
-            DecimalEnum::F16(_) => DecimalQuantizationLevel::F16,
-            DecimalEnum::BF16(_) => DecimalQuantizationLevel::BF16,
-            DecimalEnum::F32(_) => DecimalQuantizationLevel::F32,
-            DecimalEnum::F64(_) => DecimalQuantizationLevel::F64,
-            DecimalEnum::StorageF8(_) => DecimalQuantizationLevel::StorageF8,
-        }
     }
 
     pub fn into_quant<Quant: QuantizedDecimalUnwrappedTrait>(self) -> Quant {
@@ -418,7 +327,6 @@ impl DecimalEnum {
             DecimalEnum::BF16(value) => value.to_quantization(),
             DecimalEnum::F32(value) => value.to_quantization(),
             DecimalEnum::F64(value) => value.to_quantization(),
-            DecimalEnum::StorageF8(value) => value.to_quantization(),
         }
     }
 }

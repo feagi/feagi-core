@@ -1,3 +1,4 @@
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use crate::values::quantizable::feagi_data_value_quantization_error::{FeagiDataValueQuantizationError, FeagiFailPercentageOutOfRange};
 use crate::values::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
@@ -14,12 +15,17 @@ pub trait QuantizedUnsignedPercentageTrait:
     + Sync
     + Default
     + core::fmt::Debug
+    + core::fmt::Display
     + core::cmp::PartialEq
     + core::cmp::PartialOrd
     + core::ops::Mul<Output = Self>
     + core::ops::Div<Output = Self>
     + core::ops::MulAssign
     + core::ops::DivAssign
+    + Sized
+    + Serialize
+    + DeserializeOwned
+    + 'static
 {
     /// The underlying decimal quantization type this percentage stores.
     type DecimalQuant: QuantizedDecimalTrait;
@@ -47,7 +53,7 @@ pub trait QuantizedUnsignedPercentageTrait:
     fn get_decimal(self) -> Self::DecimalQuant;
 }
 
-/// Marker trait for unwrapped [`PercentageUnsigned`] values.
+/// Marker trait for unwrapped [`QuantizedUnsignedPercentageTrait`] values.
 pub trait QuantizedUnsignedPercentageUnwrappedTrait: QuantizedUnsignedPercentageTrait {}
 
 
@@ -127,6 +133,12 @@ impl<D: QuantizedDecimalTrait> core::ops::MulAssign for PercentageUnsigned<D> {
 impl<D: QuantizedDecimalTrait> core::ops::DivAssign for PercentageUnsigned<D> {
     fn div_assign(&mut self, rhs: Self) {
         *self = Self::new_clamped(self.0 / rhs.0);
+    }
+}
+
+impl<D: QuantizedDecimalTrait> core::fmt::Display for PercentageUnsigned<D> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}%", &self.0)
     }
 }
 

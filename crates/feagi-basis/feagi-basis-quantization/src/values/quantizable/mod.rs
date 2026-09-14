@@ -8,8 +8,6 @@ mod quantization_level_packing;
 mod signed_integer;
 mod unsigned_integer;
 mod unsigned_percentage;
-
-pub mod custom_data_types;
 pub mod feagi_data_value_quantization_error;
 
 pub use base_traits::QuantizedElementBase;

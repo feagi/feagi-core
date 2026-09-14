@@ -6,6 +6,7 @@ use crate::wrapped_types::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPoten
 
 // Neuron Linear Activations (Size Aware)
 
+#[cfg(feature = "alloc")]
 pub type LinearCorticalNeuronActivationVector<QI: QuantizedUnsignedIntegerTrait> =
 BitPackedVectorSizeAware<CorticalAreaNeuronLocalIndex<QI>>;
 
@@ -21,6 +22,7 @@ BitPackedArraySizeAware<CorticalAreaNeuronLocalIndex<QI>, N>;
 
 // Neuron Linear Potentials
 
+#[cfg(feature = "alloc")]
 pub type LinearCorticalNeuronPotentialVector<QI: QuantizedUnsignedIntegerTrait, Q: QuantizedDecimalTrait> =
     ParDataVector<CorticalAreaNeuronLocalIndex<QI>, CorticalAreaNeuronPotential<Q>>;
 

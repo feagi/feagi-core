@@ -14,11 +14,13 @@ description = "Traits and enums for handling serialization of real time data"
 
 std = [
     "alloc",
+    "feagi-basis-quantization/std", "feagi-basis-neuron/std",
     "serde/std", "serde_json/std", "postcard/use-std",
 ]
 
 alloc = [
     "serde_json",
+    "feagi-basis-quantization/alloc", "feagi-basis-neuron/alloc",
     "serde/alloc", "serde/derive", "serde_json/alloc", "postcard/alloc"
 ]
 

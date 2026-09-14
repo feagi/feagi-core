@@ -2,6 +2,7 @@ use crate::generic_collections::generic_par_data::par_data_error::{ParDataError,
 use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
+use serde::{Deserialize, Serialize};
 
 macro_rules! impl_par_data_range_read {
     ($self_ty:ty, $qi:ty, $d:ty, [$($generics:tt)*]) => {
@@ -148,6 +149,7 @@ pub trait ParData<QI: QuantizedUnsignedIntegerTrait, D: Clone>: Index<QI, Output
         }
     }
 
+    #[cfg(feature = "alloc")]
     /// Copies the internal elements to a new owned vector structure.
     fn clone_to_owned(&self) -> ParDataVector<QI, D> {
         ParDataVector::from_vec(self.as_slice().to_vec())
@@ -239,21 +241,14 @@ pub trait ParDataMut<QI: QuantizedUnsignedIntegerTrait, D: Clone>:
 //region Vector
 
 /// An owned, heap-allocated run of generic elements indexed by `QI`.
-#[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParDataVector<QI: QuantizedUnsignedIntegerTrait, D: Clone> {
     pub(crate) data: Vec<D>,
     pub(crate) _marker: PhantomData<QI>,
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> Clone for ParDataVector<QI, D> {
-    fn clone(&self) -> Self {
-        Self {
-            data: self.data.clone(),
-            _marker: PhantomData,
-        }
-    }
-}
-
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataVector<QI, D> {
     /// Builds a vector of `number_elements` entries, every one initialised to
     /// `initial_value`.
@@ -285,18 +280,21 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataVector<QI, D> {
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParData<QI, D> for ParDataVector<QI, D> {
     fn as_slice(&self) -> &[D] {
         &self.data
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataMut<QI, D> for ParDataVector<QI, D> {
     fn as_mut_slice(&mut self) -> &mut [D] {
         &mut self.data
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> Index<QI> for ParDataVector<QI, D> {
     type Output = D;
     fn index(&self, index: QI) -> &Self::Output {
@@ -304,12 +302,14 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> Index<QI> for ParDataVector<QI
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> IndexMut<QI> for ParDataVector<QI, D> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
         &mut self.data[index.quant_to_usize()]
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> Default for ParDataVector<QI, D> {
     fn default() -> Self {
         Self {
@@ -319,6 +319,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> Default for ParDataVector<QI, 
     }
 }
 
+#[cfg(feature = "alloc")]
 impl_par_data_range_read_write!(
     ParDataVector<QI, D>,
     QI,
@@ -326,12 +327,14 @@ impl_par_data_range_read_write!(
     [QI: QuantizedUnsignedIntegerTrait, D: Clone]
 );
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> From<Vec<D>> for ParDataVector<QI, D> {
     fn from(value: Vec<D>) -> Self {
         Self::from_vec(value)
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> From<ParDataVector<QI, D>> for Vec<D> {
     fn from(value: ParDataVector<QI, D>) -> Self {
         value.data
@@ -343,7 +346,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> From<ParDataVector<QI, D>> for
 //region Slice
 
 /// A borrowed, read-only view over a run of generic elements indexed by `QI`.
-#[derive(Clone, Copy, ::serde::Serialize)]
+#[derive(Clone, Copy, Serialize)]
 pub struct ParDataSlice<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> {
     pub(crate) data: &'a [D],
     pub(crate) _marker: PhantomData<QI>,
@@ -397,7 +400,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> From<&'a [D]> for ParDataS
 //region Mut Slice
 
 /// A borrowed, mutable view over a run of generic elements indexed by `QI`.
-#[derive(::serde::Serialize)]
+#[derive(Debug, Serialize)]
 pub struct ParDataSliceMut<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> {
     pub(crate) data: &'a mut [D],
     pub(crate) _marker: PhantomData<QI>,
@@ -469,7 +472,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> From<&'a mut [D]> for ParD
 
 /// An owned, stack-allocated run of generic elements backed by exactly `N`
 /// entries.
-#[derive(Clone, ::serde::Serialize, ::serde::Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound(
     serialize = "[D; N]: ::serde::Serialize",
     deserialize = "[D; N]: ::serde::Deserialize<'de>"

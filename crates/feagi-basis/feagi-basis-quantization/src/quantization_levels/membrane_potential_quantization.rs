@@ -2,7 +2,6 @@ use core::hash::Hash;
 use half::{bf16, f16};
 use serde::{Deserialize, Serialize};
 use crate::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
-use crate::values::quantizable::custom_data_types::StorageF8;
 
 /// Defines the quantization of the neuron potential for a specific cortical area. All cortical
 /// areas must have this property. This quantization is set per cortical area, and
@@ -17,13 +16,6 @@ pub trait MembranePotentialQuantization<'de>: Clone + Copy + Hash + PartialEq
 }
 
 //region Discrete Levels
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Serialize, Deserialize)]
-pub struct CorticalMembranePotentialQuantizationStorageF8;
-
-impl MembranePotentialQuantization<'_> for CorticalMembranePotentialQuantizationStorageF8 {
-    type MembranePotentialQuant = StorageF8;
-}
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Serialize, Deserialize)]
 pub struct CorticalMembranePotentialQuantizationFloat16;

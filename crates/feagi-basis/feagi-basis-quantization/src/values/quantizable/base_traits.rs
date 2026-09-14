@@ -2,15 +2,15 @@
 
 // TODO Add FeagiDisplay, FeagiDebug traits, and force them here
 
-use crate::values::quantizable::custom_data_types::StorageF8;
 use half::{bf16, f16};
-use serde::Serialize;
+use serde::{Serialize};
+use serde::de::DeserializeOwned;
 
 /// Common base for all quantizable types
 #[doc(hidden)]
 pub trait QuantizedElementBase:
     Copy + Clone + Send + Sync + Default + core::fmt::Debug + core::fmt::Display
-    + core::cmp::PartialEq + Sized + Serialize +  'static
+    + core::cmp::PartialEq + core::cmp::PartialOrd + Sized + Serialize + DeserializeOwned + 'static
 {
     const QUANT_ZERO: Self;
     const QUANT_ONE: Self;
@@ -67,12 +67,6 @@ impl QuantizedElementBase for i32 {
 impl QuantizedElementBase for i64 {
     const QUANT_ZERO: Self = 0;
     const QUANT_ONE: Self = 1;
-}
-
-// A bad choice for computation
-impl QuantizedElementBase for StorageF8 {
-    const QUANT_ZERO: Self = StorageF8::ZERO;
-    const QUANT_ONE: Self = StorageF8::ONE;
 }
 
 impl QuantizedElementBase for f16 {
