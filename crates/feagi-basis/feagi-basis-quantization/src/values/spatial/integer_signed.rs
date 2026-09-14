@@ -414,6 +414,7 @@ macro_rules! create_wrapped_signed_integer_spatial {
         $(#[$meta])*
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
+        #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
             $crate::values::spatial::integer_signed::SignedIntegerSpatial<Q, $num_dimensions>
         );

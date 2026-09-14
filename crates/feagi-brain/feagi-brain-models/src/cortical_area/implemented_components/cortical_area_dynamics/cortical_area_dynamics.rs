@@ -1,9 +1,9 @@
 use feagi_basis::feagi_neuron::wrapped_types::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::*;
-use crate::cortical_area::common_structs::per_neuron_flags::PerNeuronFlags;
-use crate::cortical_area::components::cortical_area_dynamics::components::cortical_area_quantization::CorticalAreaQuantization;
-use crate::cortical_area::components::cortical_area_dynamics::components::model_data::{CorticalDataInternal, CorticalDataProperties, CorticalDataScratch, NeuronDataInternal, NeuronDataScratch};
 use crate::cortical_area::components::neuron_layout::NeuronLayout;
+use crate::cortical_area::implemented_components::cortical_area_quantization::CorticalAreaQuantization;
+use crate::cortical_area::implemented_components::cortical_model_data_field::CorticalModelDataField;
+use crate::cortical_area::shared_structs::{CorticalAreaModelCorticalData, CorticalAreaModelNeuronData};
 
 type IsFiring = bool;
 
@@ -15,31 +15,36 @@ where
 {
     // NOTE: The data properties for the cortical and neurons are each in one uniform struct.
     // Beware overall byte alignment for them all!
-
+    
     //region Cortical level Data
+    
     /// The cortical level data that should be exposed to genome developers. Not mutable during
     /// cortical processing
-    type CorticalDataProperties: CorticalDataProperties<CAQ>;
+    type CorticalDataProperties: CorticalModelDataField<CAQ>;
 
     /// The cortical level data that is for mutable internal processing, will not be
     /// exposed to genome developers but is saved in the connectome
-    type CorticalDataInternal: CorticalDataInternal<CAQ>;
+    type CorticalDataInternal: CorticalModelDataField<CAQ>;
 
     /// The cortical level data that is used for runtime processing, is not exposed to
     /// genome developers nor is it saved (starts clean with every init)
-    type CorticalDataScratch: CorticalDataScratch<CAQ>;
+    type CorticalDataScratch: CorticalModelDataField<CAQ>;
     //endregion
 
     //region Per Neuron Data
     /// The per neuron level data that should be saved to the connectome
-    type NeuronDataInternal: NeuronDataInternal<CAQ>;
+    type NeuronDataInternal: CorticalModelDataField<CAQ>;
 
     /// The per neuron level data that should not be saved to the connectome
     /// (starts clean with every init)
-    type NeuronDataScratch: NeuronDataScratch<CAQ>;
+    type NeuronDataScratch: CorticalModelDataField<CAQ>;
 
     //endregion
 
+    /// Not actual cortical data, but rather represents various "values" that are actually the result
+    /// of running functions on the neuron data
+    type CorticalFunctionContext: CorticalModelDataField<CAQ>;
+    
     /// Set to true to ensure the burst engine calls the `process_cortical_dynamics` function
     const HAS_CORTICAL_DYNAMICS_PROCESSING: bool;
     
@@ -74,24 +79,31 @@ where
         // Inputs as the incoming potential, but is output as the firing potential
         processing_buffer: &mut CorticalAreaNeuronPotential<CAQ::MembranePotentialQuant>,
         burst_index: &BurstIndex<FIQ::BurstIndexQuant>,
-        cortical_properties: &Self::CorticalDataProperties,
-        cortical_internal: &Self::CorticalDataInternal,
-        cortical_scratch: &Self::CorticalDataScratch,
-        neuron_internal: &mut Self::NeuronDataInternal,
-        neuron_scratch: &mut Self::NeuronDataScratch,
+        cortical_data: &CorticalAreaModelCorticalData<
+            CAQ,
+            Self::CorticalDataProperties,
+            Self::CorticalDataInternal,
+            Self::CorticalDataScratch
+        >,
+        neuron_data: &mut CorticalAreaModelNeuronData<
+            CAQ,
+            Self::NeuronDataInternal,
+            Self::NeuronDataScratch
+        >,
         neuron_linear_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
         layout_context: &NL,
-        per_neuron_flags: &mut PerNeuronFlags,
     ) {
+        
+        let cortical = cortical_data.get_parameters_for_neuron_dynamics();
         
         let model_is_firing = Self::process_model_neuron_dynamics(
             processing_buffer,
             burst_index,
-            cortical_properties,
-            cortical_internal,
-            cortical_scratch,
-            neuron_internal,
-            neuron_scratch,
+            cortical.0,
+            cortical.1,
+            cortical.2,
+            neuron_data.neuron_data_internal,
+            neuron_data.neuron_data_scratch,
             neuron_linear_index,
             layout_context
         );

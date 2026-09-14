@@ -525,6 +525,7 @@ macro_rules! create_wrapped_unsigned_integer_spatial_data {
         $(#[$meta])*
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
+        #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait>(
             $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial<Q, $num_dimensions>
         );
@@ -847,6 +848,7 @@ macro_rules! create_wrapped_unsigned_integer_spatial_coordinate {
         $(#[$meta])*
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
+        #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait>(
             $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial<Q, $num_dimensions>
         );
@@ -1176,6 +1178,7 @@ macro_rules! create_wrapped_unsigned_integer_spatial_dimensions {
         $(#[$meta])*
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
+        #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait>(
             $crate::values::spatial::unsigned_integer::UnsignedIntegerSpatial<Q, $num_dimensions>
         );

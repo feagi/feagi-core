@@ -649,6 +649,7 @@ macro_rules! create_wrapped_quantized_signed_integer {
         $(#[$meta])*
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, ::serde::Deserialize)]
+        #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(Q);
 
         impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> $struct_name<Q> {

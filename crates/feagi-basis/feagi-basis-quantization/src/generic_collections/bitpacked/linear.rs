@@ -80,7 +80,11 @@ macro_rules! impl_bitpacked_range_read_write {
     };
 }
 
-pub trait BitPacked<QI: QuantizedUnsignedIntegerTrait>: Index<QI, Output = u32> + Index<Range<QI>, Output = [u32]> {
+pub trait BitPacked<QI: QuantizedUnsignedIntegerTrait>: 
+Index<QI, Output = u32>
++ Index<Range<QI>, Output = [u32]> 
++ core::fmt::Debug
+{
     /// Borrows the backing storage as a regular shared bit packed slice.
     fn as_u32s(&self) -> &[u32];
 
@@ -439,19 +443,11 @@ pub trait BitPackedUnawareSizeMut<QI: QuantizedUnsignedIntegerTrait>: BitPackedM
 
 /// An owned, heap-allocated run of u32 bit-packed booleans whose logical size
 /// is implied by its u32-word count (every word is fully utilised).
-#[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "alloc", derive(::serde::Deserialize))]
+#[derive(Debug, Clone, ::serde::Serialize)]
 pub struct BitPackedVectorSizeUnaware<QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: Vec<u32>,
     pub(crate) _marker: core::marker::PhantomData<QI>,
-}
-
-impl<QI: QuantizedUnsignedIntegerTrait> Clone for BitPackedVectorSizeUnaware<QI> {
-    fn clone(&self) -> Self {
-        Self {
-            data: self.data.clone(),
-            _marker: core::marker::PhantomData,
-        }
-    }
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedVectorSizeUnaware<QI> {
@@ -558,7 +554,7 @@ impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeUnaware<QI>> for
 
 /// A borrowed, read-only view over a run of u32 bit-packed booleans whose logical
 /// size is implied by its u32-word count (every word is fully utilised).
-#[derive(Clone, Copy, ::serde::Serialize)]
+#[derive(Debug, Clone, Copy, ::serde::Serialize)]
 pub struct BitPackedSliceSizeUnaware<'a, QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: &'a [u32],
     pub(crate) _marker: core::marker::PhantomData<QI>,
@@ -618,7 +614,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a [u32]> for BitPackedSliceSi
 
 /// A borrowed, mutable view over a run of u32 bit-packed booleans whose logical
 /// size is implied by its u32-word count (every word is fully utilised).
-#[derive(::serde::Serialize)]
+#[derive(Debug, ::serde::Serialize)]
 pub struct BitPackedSliceMutSizeUnaware<'a, QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: &'a mut [u32],
     pub(crate) _marker: core::marker::PhantomData<QI>,
@@ -701,7 +697,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a mut [u32]> for BitPackedSli
 /// The compile-time length `N` is the *u32-word* count as a `usize` const generic
 /// (Rust const generics must be an integer type, so `QI` is retained as the
 /// associated index/count type used by the shared trait methods).
-#[derive(Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
+#[derive(Debug, Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(bound(
     serialize = "[u32; N]: ::serde::Serialize",
     deserialize = "[u32; N]: ::serde::Deserialize<'de>"
@@ -787,20 +783,12 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<[u32; N]> for BitPa
 //region Vector
 
 /// An owned, heap-allocated run of u32 bit-packed neuron activation booleans.
-#[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "alloc", derive(::serde::Deserialize))]
 #[cfg_attr(feature = "alloc", serde(bound(deserialize = "QI: QuantizedUnsignedIntegerTrait")))]
+#[derive(Debug, Clone, ::serde::Serialize)]
 pub struct BitPackedVectorSizeAware<QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: Vec<u32>,
     pub(crate) number_bits: QI,
-}
-
-impl<QI: QuantizedUnsignedIntegerTrait> Clone for BitPackedVectorSizeAware<QI> {
-    fn clone(&self) -> Self {
-        Self {
-            data: self.data.clone(),
-            number_bits: self.number_bits,
-        }
-    }
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedVectorSizeAware<QI> {
@@ -919,7 +907,7 @@ impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeAware<QI>> for V
 //region Slice
 
 /// A borrowed, read-only view over a run of u32 bit-packed neuron activation booleans.
-#[derive(Clone, Copy, ::serde::Serialize)]
+#[derive(Debug, Clone, Copy, ::serde::Serialize)]
 pub struct BitPackedSliceSizeAware<'a, QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: &'a [u32],
     pub(crate) number_bits: QI,
@@ -981,7 +969,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a [u32]> for BitPackedSliceSi
 //region Mut Slice
 
 /// A borrowed, mutable view over a run of u32 bit-packed neuron activation booleans.
-#[derive(::serde::Serialize)]
+#[derive(Debug, ::serde::Serialize)]
 pub struct BitPackedSliceMutSizeAware<'a, QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: &'a mut [u32],
     pub(crate) number_bits: QI,
@@ -1068,7 +1056,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a mut [u32]> for BitPackedSli
 /// (Rust const generics must be an integer type, so `QI` is retained as the
 /// associated index/count type used by the shared trait methods). The logical
 /// bit count may be smaller than `N * 32` when there are dangling bits.
-#[derive(Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
+#[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(bound(
     serialize = "[u32; N]: ::serde::Serialize",
     deserialize = "[u32; N]: ::serde::Deserialize<'de>"

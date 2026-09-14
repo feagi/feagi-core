@@ -173,7 +173,8 @@ macro_rules! create_wrapped_percentage_unsigned {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, ::serde::Serialize, ::serde::Deserialize)]
+        #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>(
             $crate::values::quantizable::PercentageUnsigned<Q>
         );
@@ -293,6 +294,12 @@ macro_rules! create_wrapped_percentage_unsigned {
         {
             fn as_mut(&mut self) -> &mut $crate::values::quantizable::PercentageUnsigned<Q> {
                 &mut self.0
+            }
+        }
+
+        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::fmt::Display for $struct_name<Q> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                core::fmt::Display::fmt(&self.0, f)
             }
         }
 

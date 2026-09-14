@@ -1,16 +1,38 @@
 pub struct PerNeuronFlags(u8);
 
 impl PerNeuronFlags {
-    // Free flags for 0, 1, 2, 3, 4
+    // These flags are universal cortical properties
+    const MASK_PSP_IS_MP_DRIVEN: u8 = 0;
+    const MASK_PSP_IS_UNIFORM: u8 = 1;
+    // Free flags for 2, 3, 4
+    
     const MASK_PROBE_IS_PRESSING_FIRE: u8 = 5;
     const MASK_PROBE_IS_REPRESSING_FIRE: u8 = 6;
     const MASK_IS_FIRING_RESULT: u8 = 7;
-
 
     /// Sets the neuron to forcibly fire (despite all other parameters or contexts), but only
     /// lasts a single burst before being reset
     pub fn force_fire(&mut self) {
         self.turn_on_bit(Self::MASK_IS_FIRING_RESULT);
+    }
+    
+    /// Set to true if the output firing potential should come from the neuron membrane potential.
+    /// otherwise will use the cortical area level property
+    pub fn set_psp_being_mp_driven(&mut self, is_mp_driven: bool) {
+        if is_mp_driven {
+            self.turn_on_bit(Self::MASK_PSP_IS_MP_DRIVEN)
+        } else {
+            self.turn_off_bit(Self::MASK_PSP_IS_MP_DRIVEN)
+        }
+    }
+
+    /// Set to true for output firing potential to be divided between all outgoing mappings
+    pub fn set_psp_being_uniform(&mut self, is_uniform: bool) {
+        if is_uniform {
+            self.turn_on_bit(Self::MASK_PSP_IS_UNIFORM)
+        } else {
+            self.turn_off_bit(Self::MASK_PSP_IS_UNIFORM)
+        }
     }
 
     /// If set to true, any firing output from the neuron will be ignored and the neuron will always

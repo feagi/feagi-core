@@ -375,6 +375,7 @@ macro_rules! create_wrapped_quantized_decimal {
         $(#[$meta])*
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, ::serde::Serialize, ::serde::Deserialize)]
+        #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>(Q);
 
         impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> $struct_name<Q> {
@@ -424,10 +425,6 @@ macro_rules! create_wrapped_quantized_decimal {
 
             fn quant_to_enum(self) -> $crate::values::quantizable::DecimalEnum {
                 self.0.quant_to_enum()
-            }
-
-            fn quant_to_storage_f8(self) -> $crate::values::quantizable::custom_data_types::StorageF8 {
-                self.0.quant_to_storage_f8()
             }
 
             fn quant_to_f16(self) -> half::f16 {
@@ -608,7 +605,6 @@ macro_rules! create_wrapped_quantized_decimal {
                 BF16($struct_name<half::bf16>),
                 F32($struct_name<f32>),
                 F64($struct_name<f64>),
-                StorageF8($struct_name<$crate::values::quantizable::custom_data_types::StorageF8>),
             }
 
             impl [<$struct_name Enum>] {
@@ -629,11 +625,7 @@ macro_rules! create_wrapped_quantized_decimal {
                             Self::F64($struct_name::<f64>::new(<f64 as $crate::values::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())))
                         }
                         $crate::values::quantizable::DecimalQuantizationLevel::StorageF8 => {
-                            Self::StorageF8(
-                                $struct_name::<$crate::values::quantizable::custom_data_types::StorageF8>::new(
-                                    <$crate::values::quantizable::custom_data_types::StorageF8 as $crate::values::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())
-                                )
-                            )
+                            panic!("StorageF8 is not supported by wrapped decimal macro generation")
                         }
                     }
                 }
@@ -652,11 +644,6 @@ macro_rules! create_wrapped_quantized_decimal {
                         $crate::values::quantizable::DecimalEnum::F64(v) => {
                             Self::F64($struct_name::<f64>::new(v))
                         }
-                        $crate::values::quantizable::DecimalEnum::StorageF8(v) => {
-                            Self::StorageF8(
-                                $struct_name::<$crate::values::quantizable::custom_data_types::StorageF8>::new(v)
-                            )
-                        }
                     }
                 }
 
@@ -666,7 +653,6 @@ macro_rules! create_wrapped_quantized_decimal {
                         Self::BF16(v) => $crate::values::quantizable::DecimalEnum::BF16(v.deref()),
                         Self::F32(v) => $crate::values::quantizable::DecimalEnum::F32(v.deref()),
                         Self::F64(v) => $crate::values::quantizable::DecimalEnum::F64(v.deref()),
-                        Self::StorageF8(v) => $crate::values::quantizable::DecimalEnum::StorageF8(v.deref()),
                     }
                 }
 
@@ -686,7 +672,6 @@ macro_rules! create_wrapped_quantized_decimal {
                         Self::BF16(_) => $crate::values::quantizable::DecimalQuantizationLevel::BF16,
                         Self::F32(_) => $crate::values::quantizable::DecimalQuantizationLevel::F32,
                         Self::F64(_) => $crate::values::quantizable::DecimalQuantizationLevel::F64,
-                        Self::StorageF8(_) => $crate::values::quantizable::DecimalQuantizationLevel::StorageF8,
                     }
                 }
 
@@ -696,7 +681,6 @@ macro_rules! create_wrapped_quantized_decimal {
                         Self::BF16(value) => Quant::from_quantization(value.deref()),
                         Self::F32(value) => Quant::from_quantization(value.deref()),
                         Self::F64(value) => Quant::from_quantization(value.deref()),
-                        Self::StorageF8(value) => Quant::from_quantization(value.deref()),
                     }
                 }
 
@@ -712,11 +696,6 @@ macro_rules! create_wrapped_quantized_decimal {
                             <f32 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
                         }
                         Self::F64(value) => value.dewrap(),
-                        Self::StorageF8(value) => {
-                            <$crate::values::quantizable::custom_data_types::StorageF8 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(
-                                value.dewrap(),
-                            )
-                        }
                     }
                 }
             }

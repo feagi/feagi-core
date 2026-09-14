@@ -7,7 +7,7 @@ const PROTOCOL_VERSION: u8 = 4;
 
 /// Implements functions needed for a data struct (real time data)
 /// to be serialized and deserialized
-pub trait FeagiDataSerializableQuantized<'de, FIQ: FeagiIndexQuantization<'de>>: Debug + Serialize + Deserialize<'de> {
+pub trait FeagiDataSerializableQuantized<'de, FIQ: FeagiIndexQuantization>: Debug + Serialize + Deserialize<'de> {
     /// What version of serialization does this data represent. Do not override! MUST be included
     /// as a version field in the given struct!
     const PROTOCOL_VERSION: u8 = PROTOCOL_VERSION;

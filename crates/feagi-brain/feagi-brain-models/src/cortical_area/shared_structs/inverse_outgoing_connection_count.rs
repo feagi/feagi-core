@@ -2,10 +2,12 @@ use core::cmp::min;
 use feagi_basis::prelude::*;
 
 create_wrapped_quantized_decimal!(
-    /// When psp uniformity is enabled, we divide the membrane potential by the number of outgoing
+    /// When psp uniformity is DISABLED, we divide the membrane potential by the number of outgoing
     /// connection, for each connection. However, since storing the connection count as an int,
     /// then turning it into a float, then dividing with it is slow, here we precompute that into
     /// this struct
+    // TODO This may actually be bad behavior, as synapses that slowly die will result in sudden
+    // jumps in sharing ratios
     pub(crate) InverseOutgoingConnectionCount
 );
 
