@@ -7,7 +7,7 @@ const PROTOCOL_VERSION: u8 = 4;
 
 /// Implements functions needed for a data struct (real time data)
 /// to be serialized and deserialized
-pub trait FeagiDataSerializableQuantized<'de, FIQ: FeagiIndexQuantization>: Debug + Serialize + Deserialize<'de> {
+pub trait FeagiDataSerializableQuantized<'de, FIQ: FeagiIndexQuantization<'de>>: Debug + Serialize + Deserialize<'de> {
     /// What version of serialization does this data represent. Do not override! MUST be included
     /// as a version field in the given struct!
     const PROTOCOL_VERSION: u8 = PROTOCOL_VERSION;
@@ -25,9 +25,11 @@ pub trait FeagiDataSerializableQuantized<'de, FIQ: FeagiIndexQuantization>: Debu
         postcard::to_slice(self, buffer).unwrap()
     }
 
-    /// Without allocation, interpret load byte data into self
-    fn inplace_load_from_bytes(self, bytes: &'de [u8]) -> Self {
-        postcard::from_bytes(bytes).unwrap()
+    /// Without allocation, deserialize bytes directly into this existing value.
+    fn inplace_load_from_bytes(&mut self, bytes: &'de [u8]) -> Result<(), postcard::Error> {
+        let mut deserializer = postcard::Deserializer::from_bytes(bytes);
+        <Self as Deserialize<'de>>::deserialize_in_place(&mut deserializer, self)?;
+        Ok(())
     }
 
     #[cfg(feature = "std")]

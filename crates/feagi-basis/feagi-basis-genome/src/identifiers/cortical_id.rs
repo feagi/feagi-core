@@ -1,5 +1,6 @@
 #[cfg(feature = "base64")]
 use base64::engine::general_purpose;
+use serde::{Deserialize, Serialize};
 use crate::identifiers::feagi_identifier_error::{FeagiFailCorticalID, FeagiGenomeIdenfitierError};
 
 macro_rules! match_bytes_by_cortical_type {
@@ -22,7 +23,7 @@ macro_rules! match_bytes_by_cortical_type {
     };
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CorticalID {
     pub(crate) bytes: [u8; CorticalID::CORTICAL_ID_LENGTH],
 }

@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use crate::identifiers::cortical_id::CorticalID;
 
 /// Identifies a set of mapping entries between two cortical areas in a directional matter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CorticalMappingID {
     source: CorticalID,
     destination: CorticalID,

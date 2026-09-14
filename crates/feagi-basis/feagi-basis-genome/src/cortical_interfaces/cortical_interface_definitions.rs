@@ -392,6 +392,8 @@ make_cortical_template! {
                 }
             }
         },
+
+
         RotaryMotor {
             encoded_data_type: SignedPercentage,
             friendly_name: "Rotary Motor",
@@ -620,6 +622,24 @@ make_cortical_template! {
                     channel_dimensions_default: [64, 64, 1],
                     channel_dimensions_min: [1, 1, 1],
                     channel_dimensions_max: [4096, 4096, 4096],
+                    io_cortical_generator: Generator,
+                }
+            }
+        },
+        // Legacy optional field omitted (no equivalent here): allowed_frame_change_handling
+        // Legacy IO flag helper omitted (no equivalent here): spatial_pointer_io_flag
+        AngularPointer {
+            encoded_data_type: AngularPointer3D,
+            friendly_name: "Angular  Pointer",
+            cortical_id_tag: b"ang",
+            comment: "Angular pointer output - yaw/pitch/roll. Absolute is signed 3×1×depth at (175, 0, -10). Incremental is 6×1×depth; registration places it at (190, 0, -10).",
+            io_cortical_areas: {
+                {
+                    io_cortical_data_type: Percentage3D,
+                    relative_position: [175, 0, -10],
+                    channel_dimensions_default: [3, 1, 10],
+                    channel_dimensions_min: [3, 1, 1],
+                    channel_dimensions_max: [6, 1, 1024],
                     io_cortical_generator: Generator,
                 }
             }
