@@ -631,7 +631,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, ::serde::Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait>(Q);
 
         impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait> $struct_name<Q> {
@@ -970,7 +970,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer {
         }
 
         ::paste::paste! {
-            #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+            #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
             $vis enum [<$struct_name Enum>] {
                 U8($struct_name<u8>),
                 U16($struct_name<u16>),

@@ -7,7 +7,7 @@ use crate::values::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappe
 /// Use this as a generic bound when a function should accept either
 /// [`PercentageUnsigned`] or a wrapped newtype implementing
 /// [`QuantizedUnsignedPercentageWrappedTrait`].
-pub trait QuantizedUnsignedPercentageTrait<'de>:
+pub trait QuantizedUnsignedPercentageTrait:
     Copy
     + Clone
     + Send
@@ -20,8 +20,6 @@ pub trait QuantizedUnsignedPercentageTrait<'de>:
     + core::ops::Div<Output = Self>
     + core::ops::MulAssign
     + core::ops::DivAssign
-    + Serialize
-    + Deserialize<'de>
 {
     /// The underlying decimal quantization type this percentage stores.
     type DecimalQuant: QuantizedDecimalTrait;
@@ -50,7 +48,7 @@ pub trait QuantizedUnsignedPercentageTrait<'de>:
 }
 
 /// Marker trait for unwrapped [`PercentageUnsigned`] values.
-pub trait QuantizedUnsignedPercentageUnwrappedTrait<'de>: QuantizedUnsignedPercentageTrait<'de> {}
+pub trait QuantizedUnsignedPercentageUnwrappedTrait: QuantizedUnsignedPercentageTrait {}
 
 
 /// Internally uses a quantized decimal, but exposes methods to treat the value as a percentage

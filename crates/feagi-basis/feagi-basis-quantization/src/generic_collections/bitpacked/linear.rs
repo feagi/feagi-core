@@ -439,6 +439,7 @@ pub trait BitPackedUnawareSizeMut<QI: QuantizedUnsignedIntegerTrait>: BitPackedM
 
 /// An owned, heap-allocated run of u32 bit-packed booleans whose logical size
 /// is implied by its u32-word count (every word is fully utilised).
+#[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct BitPackedVectorSizeUnaware<QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: Vec<u32>,
     pub(crate) _marker: core::marker::PhantomData<QI>,
@@ -557,7 +558,7 @@ impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeUnaware<QI>> for
 
 /// A borrowed, read-only view over a run of u32 bit-packed booleans whose logical
 /// size is implied by its u32-word count (every word is fully utilised).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, ::serde::Serialize)]
 pub struct BitPackedSliceSizeUnaware<'a, QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: &'a [u32],
     pub(crate) _marker: core::marker::PhantomData<QI>,
@@ -617,6 +618,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a [u32]> for BitPackedSliceSi
 
 /// A borrowed, mutable view over a run of u32 bit-packed booleans whose logical
 /// size is implied by its u32-word count (every word is fully utilised).
+#[derive(::serde::Serialize)]
 pub struct BitPackedSliceMutSizeUnaware<'a, QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: &'a mut [u32],
     pub(crate) _marker: core::marker::PhantomData<QI>,
@@ -699,7 +701,11 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a mut [u32]> for BitPackedSli
 /// The compile-time length `N` is the *u32-word* count as a `usize` const generic
 /// (Rust const generics must be an integer type, so `QI` is retained as the
 /// associated index/count type used by the shared trait methods).
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
+#[serde(bound(
+    serialize = "[u32; N]: ::serde::Serialize",
+    deserialize = "[u32; N]: ::serde::Deserialize<'de>"
+))]
 pub struct BitPackedArraySizeUnaware<QI: QuantizedUnsignedIntegerTrait, const N: usize> {
     pub(crate) data: [u32; N],
     pub(crate) _marker: core::marker::PhantomData<QI>,
@@ -781,6 +787,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<[u32; N]> for BitPa
 //region Vector
 
 /// An owned, heap-allocated run of u32 bit-packed neuron activation booleans.
+#[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct BitPackedVectorSizeAware<QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: Vec<u32>,
     pub(crate) number_bits: QI,
@@ -911,7 +918,7 @@ impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeAware<QI>> for V
 //region Slice
 
 /// A borrowed, read-only view over a run of u32 bit-packed neuron activation booleans.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, ::serde::Serialize)]
 pub struct BitPackedSliceSizeAware<'a, QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: &'a [u32],
     pub(crate) number_bits: QI,
@@ -973,6 +980,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a [u32]> for BitPackedSliceSi
 //region Mut Slice
 
 /// A borrowed, mutable view over a run of u32 bit-packed neuron activation booleans.
+#[derive(::serde::Serialize)]
 pub struct BitPackedSliceMutSizeAware<'a, QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: &'a mut [u32],
     pub(crate) number_bits: QI,
@@ -1059,7 +1067,11 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a mut [u32]> for BitPackedSli
 /// (Rust const generics must be an integer type, so `QI` is retained as the
 /// associated index/count type used by the shared trait methods). The logical
 /// bit count may be smaller than `N * 32` when there are dangling bits.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
+#[serde(bound(
+    serialize = "[u32; N]: ::serde::Serialize, QI: ::serde::Serialize",
+    deserialize = "[u32; N]: ::serde::Deserialize<'de>, QI: ::serde::Deserialize<'de>"
+))]
 pub struct BitPackedArraySizeAware<QI: QuantizedUnsignedIntegerTrait, const N: usize> {
     pub(crate) data: [u32; N],
     pub(crate) number_bits: QI,

@@ -1,3 +1,4 @@
+#[macro_export]
 macro_rules! create_spatial_bitpacked_vector {
     (
         $(#[$meta:meta])*
@@ -7,6 +8,7 @@ macro_rules! create_spatial_bitpacked_vector {
         $num_dimensions:expr,
     ) => {
         $(#[$meta])*
+        #[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
         $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait> {
             pub data: $crate::generic_collections::linear::bitpacked::BitPackedVector<QI>,
             pub dimensions: $dim_impl<QI>

@@ -648,7 +648,7 @@ macro_rules! create_wrapped_quantized_signed_integer {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, ::serde::Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(Q);
 
         impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> $struct_name<Q> {
@@ -937,7 +937,7 @@ macro_rules! create_wrapped_quantized_signed_integer {
         }
 
         ::paste::paste! {
-            #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+            #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
             $vis enum [<$struct_name Enum>] {
                 I8($struct_name<i8>),
                 I16($struct_name<i16>),
@@ -1031,7 +1031,7 @@ macro_rules! create_wrapped_quantized_signed_integer {
                 }
             }
 
-            impl $crate::values::quantizable::WrappedQuantizedSignedIntegerEnum for [<$struct_name Enum>] {
+            impl<'de> $crate::values::quantizable::WrappedQuantizedSignedIntegerEnum<'de> for [<$struct_name Enum>] {
                 fn get_level(&self) -> $crate::values::quantizable::SignedIntegerQuantizationLevel {
                     [<$struct_name Enum>]::get_level(self)
                 }

@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, parse_quote, Data, DeriveInput, Error, Fields, Path, Type, TypePath};
+use syn::{parse_macro_input, Data, DeriveInput, Error, Fields, Type, TypePath};
 
 #[proc_macro_derive(FeagiFail)]
 pub fn derive_feagi_fail(input: TokenStream) -> TokenStream {

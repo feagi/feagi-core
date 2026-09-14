@@ -2,6 +2,7 @@ use crate::generic_collections::generic_par_data::linear::ParDataVector;
 use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
 use crate::values::spatial::unsigned_integer::UnsignedIntegerSpatialWrappedDimensionsTrait;
 
+#[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
 pub struct SpatialCollectionVector<QI, D, Dims, const DIM_COUNT: usize>
 where
     QI: QuantizedUnsignedIntegerTrait,

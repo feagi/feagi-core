@@ -2,6 +2,10 @@ use crate::values::quantizable::{
     QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait, QuantizedUnsignedIntegerWrappedTrait, UnsignedIntegerQuantizationLevel,
 };
 use crate::values::spatial::feagi_data_values_spatial_error::{FeagiDataValuesSpatialError, FeagiFailInvalidSpatialIndex};
+use core::marker::PhantomData;
+use serde::de::{self, IgnoredAny, SeqAccess, Visitor};
+use serde::ser::SerializeSeq;
+use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct UnsignedIntegerSpatial<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> {
@@ -13,7 +17,11 @@ impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> serde::Serialize f
     where
         S: serde::Serializer,
     {
-        self.data.as_slice().serialize(serializer)
+        let mut seq = serializer.serialize_seq(Some(NUM_DIMS))?;
+        for value in self.data.iter() {
+            seq.serialize_element(value)?;
+        }
+        seq.end()
     }
 }
 
@@ -25,18 +33,37 @@ where
     where
         D: serde::Deserializer<'de>,
     {
-        let values = Vec::<Q>::deserialize(deserializer)?;
-        if values.len() != NUM_DIMS {
-            return Err(serde::de::Error::custom(format!(
-                "expected {} spatial elements, got {}",
-                NUM_DIMS,
-                values.len()
-            )));
+        struct UnsignedIntegerSpatialVisitor<Q, const NUM_DIMS: usize>(PhantomData<Q>);
+
+        impl<'de, Q: QuantizedUnsignedIntegerTrait + Deserialize<'de>, const NUM_DIMS: usize> Visitor<'de>
+            for UnsignedIntegerSpatialVisitor<Q, NUM_DIMS>
+        {
+            type Value = UnsignedIntegerSpatial<Q, NUM_DIMS>;
+
+            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(formatter, "a sequence with exactly {} elements", NUM_DIMS)
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut values: [Option<Q>; NUM_DIMS] = core::array::from_fn(|_| None);
+                for (idx, slot) in values.iter_mut().enumerate() {
+                    *slot = Some(
+                        seq.next_element()?
+                            .ok_or_else(|| de::Error::invalid_length(idx, &self))?,
+                    );
+                }
+                if seq.next_element::<IgnoredAny>()?.is_some() {
+                    return Err(de::Error::invalid_length(NUM_DIMS + 1, &self));
+                }
+                let data = values.map(|value| value.expect("visitor filled every spatial element"));
+                Ok(UnsignedIntegerSpatial { data })
+            }
         }
-        let data: [Q; NUM_DIMS] = values
-            .try_into()
-            .map_err(|_| serde::de::Error::custom("failed converting spatial elements to fixed-size array"))?;
-        Ok(Self { data })
+
+        deserializer.deserialize_seq(UnsignedIntegerSpatialVisitor::<Q, NUM_DIMS>(PhantomData))
     }
 }
 
