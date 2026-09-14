@@ -353,6 +353,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-correspondence-contracts"
+version = "0.1.1"
+
+[[package]]
 name = "feagi-correspondence-io"
 version = "0.1.1"
 

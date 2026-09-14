@@ -1,0 +1,17 @@
+[package]
+name = "feagi-correspondence-contracts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Defines how server and agents should communicate to each other"
+
+[features]
+
+# subcrates should not have default in order to avoid confusion
+
+[dependencies]

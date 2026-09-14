@@ -1,0 +1,16 @@
+[package]
+name = "feagi-agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Systems for allowing a client (agent) to interact with a FEAGI server"
+
+[dependencies]
+
+[lints]
+workspace = true
