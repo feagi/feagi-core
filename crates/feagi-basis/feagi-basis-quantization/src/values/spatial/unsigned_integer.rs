@@ -5,7 +5,6 @@ use crate::values::spatial::feagi_data_values_spatial_error::{FeagiDataValuesSpa
 use core::marker::PhantomData;
 use serde::de::{self, IgnoredAny, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
-use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct UnsignedIntegerSpatial<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> {

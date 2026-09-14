@@ -3,7 +3,6 @@ use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpat
 use core::marker::PhantomData;
 use serde::de::{self, IgnoredAny, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
-use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct SignedIntegerSpatial<Q: QuantizedSignedIntegerTrait, const NUM_DIMS: usize> {

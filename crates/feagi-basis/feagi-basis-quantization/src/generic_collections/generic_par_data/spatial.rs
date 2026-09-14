@@ -3,6 +3,13 @@ use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
 use crate::values::spatial::unsigned_integer::UnsignedIntegerSpatialWrappedDimensionsTrait;
 
 #[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(
+    feature = "alloc",
+    serde(bound(
+        serialize = "Dims: ::serde::Serialize, ParDataVector<QI, D>: ::serde::Serialize",
+        deserialize = "Dims: ::serde::Deserialize<'de>, ParDataVector<QI, D>: ::serde::Deserialize<'de>"
+    ))
+)]
 pub struct SpatialCollectionVector<QI, D, Dims, const DIM_COUNT: usize>
 where
     QI: QuantizedUnsignedIntegerTrait,

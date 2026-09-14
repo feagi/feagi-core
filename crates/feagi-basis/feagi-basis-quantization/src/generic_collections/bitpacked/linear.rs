@@ -788,6 +788,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<[u32; N]> for BitPa
 
 /// An owned, heap-allocated run of u32 bit-packed neuron activation booleans.
 #[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
+#[cfg_attr(feature = "alloc", serde(bound(deserialize = "QI: QuantizedUnsignedIntegerTrait")))]
 pub struct BitPackedVectorSizeAware<QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: Vec<u32>,
     pub(crate) number_bits: QI,
@@ -1069,8 +1070,8 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a mut [u32]> for BitPackedSli
 /// bit count may be smaller than `N * 32` when there are dangling bits.
 #[derive(Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(bound(
-    serialize = "[u32; N]: ::serde::Serialize, QI: ::serde::Serialize",
-    deserialize = "[u32; N]: ::serde::Deserialize<'de>, QI: ::serde::Deserialize<'de>"
+    serialize = "[u32; N]: ::serde::Serialize",
+    deserialize = "[u32; N]: ::serde::Deserialize<'de>"
 ))]
 pub struct BitPackedArraySizeAware<QI: QuantizedUnsignedIntegerTrait, const N: usize> {
     pub(crate) data: [u32; N],
