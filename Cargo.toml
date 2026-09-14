@@ -53,6 +53,7 @@ members = [
     "crates/feagi-basis/feagi-basis-genome",
     "crates/feagi-basis/feagi-basis-genome/feagi-basis-genome-proc",
     "crates/feagi-basis/feagi-basis-neuron",
+    "crates/feagi-basis/feagi-basis-data-serialization",
     "crates/feagi-basis/feagi-basis-sensiomotor",
 
     "crates/feagi-brain",
@@ -67,11 +68,11 @@ members = [
     "crates/feagi-correspondence/feagi-correspondence-serialization",
     "crates/feagi-correspondence/feagi-correspondence-io",
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-api",
-    "crates/feagi-correspondence/feagi-correspondence-contracts",
+    #"crates/feagi-correspondence/feagi-correspondence-contracts",
 
-    "crates/feagi-server",
+    #"crates/feagi-server",
 
-    "crates/feagi-agent"
+    #"crates/feagi-agent"
 ]
 
 
@@ -100,6 +101,7 @@ heapless = {version = "0.9.3"}
 futures = {version = "0.3.34"}
 half = {version = "2.7.1", default-features = false}
 ahash = { version = "0.8.12", default-features = false, features = ["std", "serde", "compile-time-rng"] } # TODO remove features
+postcard = {version = "1.1.3", default-features = false} # TODO remove features
 
 # Optional Feature Gated Crates
 thiserror = "1.0.50" # TODO migrate away from this

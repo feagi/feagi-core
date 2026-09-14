@@ -1,0 +1,39 @@
+[package]
+name = "feagi-basis-data-serialization"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Traits and enums for handling serialization of real time data"
+
+[features]
+
+std = [
+    "alloc",
+    "serde/std", "serde_json/std", "postcard/use-std",
+]
+
+alloc = [
+    "serde_json",
+    "serde/alloc", "serde/derive", "serde_json/alloc", "postcard/alloc"
+]
+
+
+[dependencies]
+
+# Sibling Crates
+feagi-basis-quantization = {path = "../feagi-basis-quantization"}
+feagi-basis-error-logging = {path = "../feagi-basis-error-logging"}
+feagi-basis-neuron = {path = "../feagi-basis-neuron"}
+
+
+# External crates
+paste = { workspace = true }
+serde = { workspace = true }
+heapless = {workspace = true}
+postcard = {workspace = true, version = "1.0.0", features = ["heapless"] }
+serde_json = { workspace = true, optional = true}

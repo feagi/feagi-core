@@ -43,7 +43,7 @@ feagi-basis-error-logging = {path = "../feagi-basis-error-logging"}
 
 # External Crates
 paste = { workspace = true }
-half = {workspace = true, default-features = false}
-serde = { workspace = true, default-features = false}
+half = {workspace = true, default-features = false, features = ["serde"]}
+serde = { workspace = true, default-features = false, features = ["derive"]}
 serde_json = { workspace = true, optional = true, default-features = false}
 rayon = {workspace = true, optional = true, default-features = false}

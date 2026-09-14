@@ -4,11 +4,13 @@
 
 use crate::values::quantizable::custom_data_types::StorageF8;
 use half::{bf16, f16};
+use serde::Serialize;
 
 /// Common base for all quantizable types
 #[doc(hidden)]
 pub trait QuantizedElementBase:
-    Copy + Clone + Send + Sync + Default + core::fmt::Debug + core::fmt::Display + core::cmp::PartialEq + Sized + 'static
+    Copy + Clone + Send + Sync + Default + core::fmt::Debug + core::fmt::Display
+    + core::cmp::PartialEq + Sized + Serialize +  'static
 {
     const QUANT_ZERO: Self;
     const QUANT_ONE: Self;

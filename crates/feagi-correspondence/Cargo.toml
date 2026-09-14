@@ -32,7 +32,7 @@ alloc = [
 # Sub Crates
 feagi-correspondence-serialization = {path = "feagi-correspondence-serialization"}
 feagi-correspondence-io = {path = "feagi-correspondence-io"}
-feagi-correspondence-contracts = {path = "feagi-correspondence-contracts"}
+#feagi-correspondence-contracts = {path = "feagi-correspondence-contracts"}
 
 # Root Crates
 feagi-basis = {path = "../feagi-basis"}

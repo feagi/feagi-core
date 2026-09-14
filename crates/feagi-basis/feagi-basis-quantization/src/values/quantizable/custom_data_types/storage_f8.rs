@@ -1,4 +1,5 @@
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+use serde::{Deserialize, Serialize};
 
 /// A Crappy f8 implementation written by some LLM. Uses 1 sign bit, 4 exponent bits, and 3
 /// mantissa bits, meaning it has an effective range of -7 to 8, with the smallest positive number
@@ -6,7 +7,7 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 /// convert to a f32 and back for any computations, meaning it is not performant in essentially
 /// any situation in contrast to using f32 directly
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Serialize, Deserialize)]
 pub struct StorageF8(u8);
 
 impl StorageF8 {
