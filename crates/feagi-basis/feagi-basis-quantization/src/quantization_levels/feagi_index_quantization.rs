@@ -1,11 +1,14 @@
 use core::hash::Hash;
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::values::quantizable::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 // TODO xxhash?
 
 
 /// The quantization level that is for structures that must be of the same quantization across
 /// all burst engines in the Neural Processing Unit
-pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq + Sync + Send + 'static  {
+pub trait FeagiIndexQuantization<'de>: Clone + Copy + Hash + PartialEq
++ Eq + core::fmt::Debug + Serialize + Deserialize<'de> + Sync + Send + 'static  {
     const LEVEL: FeagiIndexQuantizationLevel;
 
     /// Defines the quantization of the  burst index.
@@ -61,10 +64,10 @@ pub enum FeagiIndexQuantizationLevel {
 }
 
 /// Should work with most genomes without using too much data on most desktop deployments
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct FeagiIndexQuantizationStandard;
 
-impl FeagiIndexQuantization for FeagiIndexQuantizationStandard {
+impl FeagiIndexQuantization<'_> for FeagiIndexQuantizationStandard {
     const LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::StandardQuantization;
     type BurstIndexQuant = u32;
     type CorticalAreaIndexCountQuant = u16;
@@ -75,10 +78,10 @@ impl FeagiIndexQuantization for FeagiIndexQuantizationStandard {
     type SynapseAggregatorIndexCountQuant = u32;
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct FeagiIndexQuantizationLow;
 
-impl FeagiIndexQuantization for FeagiIndexQuantizationLow {
+impl FeagiIndexQuantization<'_> for FeagiIndexQuantizationLow {
     const LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::LowQuantization;
     type BurstIndexQuant = u16;
     type CorticalAreaIndexCountQuant = u16;
@@ -90,10 +93,10 @@ impl FeagiIndexQuantization for FeagiIndexQuantizationLow {
 }
 
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct FeagiIndexQuantizationMini;
 
-impl FeagiIndexQuantization for FeagiIndexQuantizationMini {
+impl FeagiIndexQuantization<'_> for FeagiIndexQuantizationMini {
     const LEVEL: FeagiIndexQuantizationLevel = FeagiIndexQuantizationLevel::MiniQuantization;
     type BurstIndexQuant = u16;
     type CorticalAreaIndexCountQuant = u8;

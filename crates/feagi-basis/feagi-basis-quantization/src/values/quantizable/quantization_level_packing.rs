@@ -1,8 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 /// Common trait for the enums describing the quantization level which establishes a standard
 /// way to read / write the data from a byte. Enforces that the bits encoding this are on the X
 /// first (right side) of a byte, with X being configurable on implementation. This allows the
 /// encoding byte to also represent other data
-pub trait QuantizationLevelPacking: Into<u8> + TryFrom<u8> + Clone + Copy + Sized {
+pub trait QuantizationLevelPacking<'de>:
+Into<u8> + TryFrom<u8> + Clone + Copy +
+core::fmt::Debug + Serialize + Deserialize<'de> + Sized {
     /// Defines the number of bits on the right to define for the bitmask
     const NUMBER_BITS: usize;
     const BASE_QUANT_MASK: u8 = 255 >> (8 - Self::NUMBER_BITS);

@@ -1,10 +1,10 @@
 use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
 use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SignedIntegerQuantizationLevel {
     I8 = 0,
     I16 = 1,
@@ -33,7 +33,7 @@ impl TryFrom<u8> for SignedIntegerQuantizationLevel {
     }
 }
 
-impl QuantizationLevelPacking for SignedIntegerQuantizationLevel {
+impl<'de> QuantizationLevelPacking<'de> for SignedIntegerQuantizationLevel {
     const NUMBER_BITS: usize = 2;
 
     unsafe fn from_unpacked_byte(byte: u8) -> Self {
@@ -512,7 +512,7 @@ impl QuantizedUnwrappedSeal for i64 {}
 impl QuantizedSignedIntegerUnwrappedTrait for i64 {}
 
 /// Allows storing all quantized signed integer types under a single enum
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SignedIntegerEnum {
     I8(i8),
     I16(i16),
@@ -623,8 +623,12 @@ pub trait QuantizedSignedIntegerWrappedTrait:
 ///
 /// These enums hide the generic quantized wrapper type behind concrete variants
 /// (`I8`, `I16`, `I32`, `I64`) while preserving the wrapper family semantics.
-pub trait WrappedQuantizedSignedIntegerEnum:
-    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
+pub trait WrappedQuantizedSignedIntegerEnum<'de>:
+Copy + Clone + Send + Sync
++ core::fmt::Debug + core::cmp::PartialEq
++ core::cmp::Eq + core::hash::Hash
++ Serialize + Deserialize<'de>
++ Sized + 'static
 {
     fn get_level(&self) -> SignedIntegerQuantizationLevel;
 
@@ -644,7 +648,7 @@ macro_rules! create_wrapped_quantized_signed_integer {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(Q);
 
         impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> $struct_name<Q> {
@@ -933,7 +937,7 @@ macro_rules! create_wrapped_quantized_signed_integer {
         }
 
         ::paste::paste! {
-            #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+            #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
             $vis enum [<$struct_name Enum>] {
                 I8($struct_name<i8>),
                 I16($struct_name<i16>),

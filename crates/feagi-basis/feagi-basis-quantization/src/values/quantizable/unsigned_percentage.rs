@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use crate::values::quantizable::feagi_data_value_quantization_error::{FeagiDataValueQuantizationError, FeagiFailPercentageOutOfRange};
 use crate::values::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
 
@@ -6,7 +7,7 @@ use crate::values::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappe
 /// Use this as a generic bound when a function should accept either
 /// [`PercentageUnsigned`] or a wrapped newtype implementing
 /// [`QuantizedUnsignedPercentageWrappedTrait`].
-pub trait QuantizedUnsignedPercentageTrait:
+pub trait QuantizedUnsignedPercentageTrait<'de>:
     Copy
     + Clone
     + Send
@@ -19,6 +20,8 @@ pub trait QuantizedUnsignedPercentageTrait:
     + core::ops::Div<Output = Self>
     + core::ops::MulAssign
     + core::ops::DivAssign
+    + Serialize
+    + Deserialize<'de>
 {
     /// The underlying decimal quantization type this percentage stores.
     type DecimalQuant: QuantizedDecimalTrait;
@@ -47,12 +50,12 @@ pub trait QuantizedUnsignedPercentageTrait:
 }
 
 /// Marker trait for unwrapped [`PercentageUnsigned`] values.
-pub trait QuantizedUnsignedPercentageUnwrappedTrait: QuantizedUnsignedPercentageTrait {}
+pub trait QuantizedUnsignedPercentageUnwrappedTrait<'de>: QuantizedUnsignedPercentageTrait<'de> {}
 
 
 /// Internally uses a quantized decimal, but exposes methods to treat the value as a percentage
 /// from 0–100% (0.0–1.0).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy, Serialize, Deserialize)]
 pub struct PercentageUnsigned<D: QuantizedDecimalTrait>(D);
 
 impl<D: QuantizedDecimalTrait> QuantizedUnsignedPercentageTrait for PercentageUnsigned<D> {

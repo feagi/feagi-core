@@ -1,7 +1,7 @@
 use feagi_basis_error_logging::prelude::*;
 use feagi_genome::feagi_genome_error::FeagiGenomeError;
 use feagi_neuron::neuron_error::FeagiNeuronError;
-use feagi_quantization::feagi_quantization_value::FeagiQuantizationError;
+use feagi_quantization::feagi_quantization_error::FeagiQuantizationError;
 use crate::generic_collections::feagi_index_organizer_error::FeagiIndexOrganizerError;
 use crate::thread_messaging::errors::ThreadMessaging;
 

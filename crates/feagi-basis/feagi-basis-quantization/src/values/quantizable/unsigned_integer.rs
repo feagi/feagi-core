@@ -1,10 +1,10 @@
 use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
 use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum UnsignedIntegerQuantizationLevel {
     U8 = 0,
     U16 = 1,
@@ -34,7 +34,7 @@ impl TryFrom<u8> for UnsignedIntegerQuantizationLevel {
     }
 }
 
-impl QuantizationLevelPacking for UnsignedIntegerQuantizationLevel {
+impl<'de> QuantizationLevelPacking<'de> for UnsignedIntegerQuantizationLevel {
     const NUMBER_BITS: usize = 2;
 
     unsafe fn from_unpacked_byte(byte: u8) -> Self {
@@ -518,7 +518,7 @@ impl QuantizedUnsignedIntegerUnwrappedTrait for u64 {}
 // backend, which could cause some issues with device interoperability
 
 /// Allows storing all quantized index types under a single enum
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum UnsignedIntegerEnum {
     U8(u8),
     U16(u16),
@@ -631,7 +631,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait>(Q);
 
         impl<Q: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait> $struct_name<Q> {
@@ -970,7 +970,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer {
         }
 
         ::paste::paste! {
-            #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+            #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
             $vis enum [<$struct_name Enum>] {
                 U8($struct_name<u8>),
                 U16($struct_name<u16>),

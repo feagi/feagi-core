@@ -8,7 +8,7 @@ pub mod generic_collections;
 
 /// Common levels of quantizations that is used throughout FEAGI
 pub mod quantization_levels;
-pub mod feagi_quantization_value;
+pub mod feagi_quantization_error;
 
 /// Easy Import
 pub mod prelude {

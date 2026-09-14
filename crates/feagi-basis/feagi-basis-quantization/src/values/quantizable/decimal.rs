@@ -7,12 +7,13 @@ use crate::values::quantizable::custom_data_types::StorageF8;
 use crate::values::quantizable::quantization_level_packing::QuantizationLevelPacking;
 use crate::values::quantizable::{PercentageUnsigned, QuantizedElementBase, QuantizedUnsignedPercentageTrait};
 use half::{bf16, f16};
+use serde::{Deserialize, Serialize};
 use crate::prelude::{QuantizedSignedIntegerTrait, QuantizedUnsignedIntegerTrait};
 use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 
 /// Represents a value that is represented as a decimal number, main backbone for computations
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Serialize, Deserialize)]
 pub enum DecimalQuantizationLevel {
     F16 = 0,
     BF16 = 1,
@@ -43,7 +44,7 @@ impl TryFrom<u8> for DecimalQuantizationLevel {
     }
 }
 
-impl QuantizationLevelPacking for DecimalQuantizationLevel {
+impl<'de> QuantizationLevelPacking<'de> for DecimalQuantizationLevel {
     const NUMBER_BITS: usize = 4; // 16 quants ( we will need more custom types later)
 
     unsafe fn from_unpacked_byte(byte: u8) -> Self {
@@ -386,7 +387,7 @@ impl QuantizedUnwrappedSeal for f64 {}
 impl QuantizedDecimalUnwrappedTrait for f64 {}
 
 /// Allows storing all quantized decimal types under a single enum
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum DecimalEnum {
     F16(f16),
     BF16(bf16),
@@ -443,7 +444,11 @@ pub trait QuantizedDecimalWrappedTrait: QuantizedDecimalTrait + From<Self::Quant
 ///
 /// These enums hide the generic wrapped decimal type behind concrete variants
 /// (`F16`, `BF16`, `F32`, `F64`, `StorageF8`) while preserving wrapper-family semantics.
-pub trait WrappedQuantizedDecimalEnum: Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + Sized + 'static {
+pub trait WrappedQuantizedDecimalEnum<'de>: 
+Copy + Clone + Send + Sync
++ core::fmt::Debug + core::cmp::PartialEq
++ Serialize + Deserialize<'de>
++ Sized + 'static {
     fn get_level(&self) -> DecimalQuantizationLevel;
 
     fn into_quant<Quant: QuantizedDecimalUnwrappedTrait>(self) -> Quant;
@@ -460,7 +465,7 @@ macro_rules! create_wrapped_quantized_decimal {
     ) => {
         $(#[$meta])*
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>(Q);
 
         impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> $struct_name<Q> {
@@ -688,7 +693,7 @@ macro_rules! create_wrapped_quantized_decimal {
         }
 
         ::paste::paste! {
-            #[derive(Clone, Copy, Debug, PartialEq)]
+            #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
             $vis enum [<$struct_name Enum>] {
                 F16($struct_name<half::f16>),
                 BF16($struct_name<half::bf16>),
