@@ -60,6 +60,7 @@ pub trait QuantizedUnsignedPercentageUnwrappedTrait: QuantizedUnsignedPercentage
 /// Internally uses a quantized decimal, but exposes methods to treat the value as a percentage
 /// from 0–100% (0.0–1.0).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy, Serialize, Deserialize)]
+#[serde(bound(deserialize = "D: QuantizedDecimalTrait"))]
 pub struct PercentageUnsigned<D: QuantizedDecimalTrait>(D);
 
 impl<D: QuantizedDecimalTrait> QuantizedUnsignedPercentageTrait for PercentageUnsigned<D> {

@@ -26,8 +26,6 @@ impl<Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> serde::Serialize f
 }
 
 impl<'de, Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> serde::Deserialize<'de> for UnsignedIntegerSpatial<Q, NUM_DIMS>
-where
-    Q: serde::Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -35,7 +33,7 @@ where
     {
         struct UnsignedIntegerSpatialVisitor<Q, const NUM_DIMS: usize>(PhantomData<Q>);
 
-        impl<'de, Q: QuantizedUnsignedIntegerTrait + Deserialize<'de>, const NUM_DIMS: usize> Visitor<'de>
+        impl<'de, Q: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> Visitor<'de>
             for UnsignedIntegerSpatialVisitor<Q, NUM_DIMS>
         {
             type Value = UnsignedIntegerSpatial<Q, NUM_DIMS>;
