@@ -6,6 +6,7 @@ mod base_traits;
 mod decimal;
 mod quantization_level_packing;
 mod signed_integer;
+mod signed_percentage;
 mod unsigned_integer;
 mod unsigned_percentage;
 pub mod feagi_data_value_quantization_error;

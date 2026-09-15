@@ -79,6 +79,8 @@ pub trait QuantizedDecimalTrait:
     type QuantType: QuantizedDecimalTrait;
 
     const LEVEL: DecimalQuantizationLevel;
+    
+    const QUANT_NEGATIVE_ONE: Self;
 
     fn quant_clamp(&self, min: Self, max: Self) -> Self;
 
@@ -130,6 +132,8 @@ impl QuantizedDecimalTrait for f16 {
 
     const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F16;
 
+    const QUANT_NEGATIVE_ONE: Self = f16::NEG_ONE;
+
     fn quant_clamp(&self, min: Self, max: Self) -> Self {
         self.clamp(min, max)
     }
@@ -173,6 +177,8 @@ impl QuantizedUnwrappedSeal for bf16 {}
 
 impl QuantizedDecimalTrait for bf16 {
     type QuantType = Self;
+
+    const QUANT_NEGATIVE_ONE: Self = bf16::NEG_ONE;
 
     const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::BF16;
 
@@ -220,6 +226,8 @@ impl QuantizedDecimalTrait for f32 {
 
     const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F32;
 
+    const QUANT_NEGATIVE_ONE: Self = -1.0;
+
     fn quant_clamp(&self, min: Self, max: Self) -> Self {
         self.clamp(min, max)
     }
@@ -265,6 +273,8 @@ impl QuantizedDecimalTrait for f64 {
     type QuantType = Self;
 
     const LEVEL: DecimalQuantizationLevel = DecimalQuantizationLevel::F64;
+
+    const QUANT_NEGATIVE_ONE: Self = -1.0;
 
     fn quant_clamp(&self, min: Self, max: Self) -> Self {
         self.clamp(min, max)
