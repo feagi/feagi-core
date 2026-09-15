@@ -389,6 +389,7 @@ macro_rules! create_wrapped_quantized_decimal {
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>(Q);
 
         impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> $struct_name<Q> {
+
             pub const LEVEL: $crate::values::quantizable::DecimalQuantizationLevel = Q::LEVEL;
             pub const QUANT_ZERO: Self = Self::const_new(Q::QUANT_ZERO);
             pub const QUANT_ONE: Self = Self::const_new(Q::QUANT_ONE);
@@ -428,6 +429,7 @@ macro_rules! create_wrapped_quantized_decimal {
         {
             type QuantType = Q;
             const LEVEL: $crate::values::quantizable::DecimalQuantizationLevel = Q::LEVEL;
+            const QUANT_NEGATIVE_ONE: Self = Self::const_new(Q::QUANT_NEGATIVE_ONE);
 
             fn quant_clamp(&self, min: Self, max: Self) -> Self {
                 Self::const_new(self.0.quant_clamp(min.0, max.0))

@@ -205,6 +205,7 @@ pub trait BitPackedAwareSize<QI: QuantizedUnsignedIntegerTrait>: BitPacked<QI> {
         }
     }
 
+    #[cfg(feature = "alloc")]
     /// Copies the internal u32 words and total length to a new owned vector structure.
     fn clone_to_owned(&self) -> BitPackedVectorSizeAware<QI> {
         BitPackedVectorSizeAware::from_vec_with_bits(self.as_u32s().to_vec(), self.number_addressable_bits())
@@ -378,6 +379,8 @@ pub trait BitPackedUnawareSize<QI: QuantizedUnsignedIntegerTrait>: BitPacked<QI>
 
     /// Copies the internal u32 words and supplied logical bit count to a new owned
     /// vector structure.
+
+    #[cfg(feature = "alloc")]
     fn clone_to_owned(&self, number_addressable_bits: QI) -> BitPackedVectorSizeAware<QI> {
         BitPackedVectorSizeAware::from_vec_with_bits(self.as_u32s().to_vec(), number_addressable_bits)
     }
@@ -443,13 +446,14 @@ pub trait BitPackedUnawareSizeMut<QI: QuantizedUnsignedIntegerTrait>: BitPackedM
 
 /// An owned, heap-allocated run of u32 bit-packed booleans whose logical size
 /// is implied by its u32-word count (every word is fully utilised).
-#[cfg_attr(feature = "alloc", derive(::serde::Deserialize))]
-#[derive(Debug, Clone, ::serde::Serialize)]
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, ::serde::Serialize, ::serde::Deserialize)]
 pub struct BitPackedVectorSizeUnaware<QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: Vec<u32>,
     pub(crate) _marker: core::marker::PhantomData<QI>,
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedVectorSizeUnaware<QI> {
     /// Builds a vector of `number_u32s` words, every bit in every word initialised
     /// to `initial_state`.
@@ -501,22 +505,27 @@ impl<QI: QuantizedUnsignedIntegerTrait> BitPackedVectorSizeUnaware<QI> {
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPacked<QI> for BitPackedVectorSizeUnaware<QI> {
     fn as_u32s(&self) -> &[u32] {
         &self.data
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedMut<QI> for BitPackedVectorSizeUnaware<QI> {
     fn as_mut_u32s(&mut self) -> &mut [u32] {
         &mut self.data
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedUnawareSize<QI> for BitPackedVectorSizeUnaware<QI> {}
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedUnawareSizeMut<QI> for BitPackedVectorSizeUnaware<QI> {}
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedVectorSizeUnaware<QI> {
     type Output = u32;
     fn index(&self, index: QI) -> &Self::Output {
@@ -524,24 +533,28 @@ impl<QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedVectorSizeUnaware
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> IndexMut<QI> for BitPackedVectorSizeUnaware<QI> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
         &mut self.data[index.quant_to_usize()]
     }
 }
 
+#[cfg(feature = "alloc")]
 impl_bitpacked_range_read_write!(
     BitPackedVectorSizeUnaware<QI>,
     QI,
     [QI: QuantizedUnsignedIntegerTrait]
 );
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> From<Vec<u32>> for BitPackedVectorSizeUnaware<QI> {
     fn from(value: Vec<u32>) -> Self {
         Self::from_vec(value)
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeUnaware<QI>> for Vec<u32> {
     fn from(value: BitPackedVectorSizeUnaware<QI>) -> Self {
         value.data
@@ -783,14 +796,16 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<[u32; N]> for BitPa
 //region Vector
 
 /// An owned, heap-allocated run of u32 bit-packed neuron activation booleans.
-#[cfg_attr(feature = "alloc", derive(::serde::Deserialize))]
+
+#[cfg(feature = "alloc")]
 #[cfg_attr(feature = "alloc", serde(bound(deserialize = "QI: QuantizedUnsignedIntegerTrait")))]
-#[derive(Debug, Clone, ::serde::Serialize)]
+#[derive(Debug, Clone, ::serde::Serialize, ::serde::Deserialize)]
 pub struct BitPackedVectorSizeAware<QI: QuantizedUnsignedIntegerTrait> {
     pub(crate) data: Vec<u32>,
     pub(crate) number_bits: QI,
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedVectorSizeAware<QI> {
     /// Builds a vector holding `number_bits` booleans, every one initialised to
     /// `initial_state`. Any dangling bits in the final u32 word are kept zeroed.
@@ -851,26 +866,31 @@ impl<QI: QuantizedUnsignedIntegerTrait> BitPackedVectorSizeAware<QI> {
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPacked<QI> for BitPackedVectorSizeAware<QI> {
     fn as_u32s(&self) -> &[u32] {
         &self.data
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedAwareSize<QI> for BitPackedVectorSizeAware<QI> {
     fn number_addressable_bits(&self) -> QI {
         self.number_bits
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedMut<QI> for BitPackedVectorSizeAware<QI> {
     fn as_mut_u32s(&mut self) -> &mut [u32] {
         &mut self.data
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> BitPackedAwareSizeMut<QI> for BitPackedVectorSizeAware<QI> {}
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedVectorSizeAware<QI> {
     type Output = u32;
     fn index(&self, index: QI) -> &Self::Output {
@@ -878,24 +898,28 @@ impl<QI: QuantizedUnsignedIntegerTrait> Index<QI> for BitPackedVectorSizeAware<Q
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> IndexMut<QI> for BitPackedVectorSizeAware<QI> {
     fn index_mut(&mut self, index: QI) -> &mut Self::Output {
         &mut self.data[index.quant_to_usize()]
     }
 }
 
+#[cfg(feature = "alloc")]
 impl_bitpacked_range_read_write!(
     BitPackedVectorSizeAware<QI>,
     QI,
     [QI: QuantizedUnsignedIntegerTrait]
 );
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> From<Vec<u32>> for BitPackedVectorSizeAware<QI> {
     fn from(value: Vec<u32>) -> Self {
         Self::from_vec(value)
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeAware<QI>> for Vec<u32> {
     fn from(value: BitPackedVectorSizeAware<QI>) -> Self {
         value.data
@@ -1151,18 +1175,21 @@ impl<QI: QuantizedUnsignedIntegerTrait, const N: usize> From<[u32; N]> for BitPa
 // Aware → unaware conversions discard the tracked bit count; any padding bits in
 // the final u32 word become addressable in the unaware target.
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeUnaware<QI>> for BitPackedVectorSizeAware<QI> {
     fn from(value: BitPackedVectorSizeUnaware<QI>) -> Self {
         Self::from_vec(value.data)
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> From<(BitPackedVectorSizeUnaware<QI>, QI)> for BitPackedVectorSizeAware<QI> {
     fn from((value, number_bits): (BitPackedVectorSizeUnaware<QI>, QI)) -> Self {
         Self::from_vec_with_bits(value.data, number_bits)
     }
 }
 
+#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait> From<BitPackedVectorSizeAware<QI>> for BitPackedVectorSizeUnaware<QI> {
     fn from(value: BitPackedVectorSizeAware<QI>) -> Self {
         Self::from_vec(value.data)
