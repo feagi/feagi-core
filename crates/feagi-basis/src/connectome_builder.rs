@@ -1,9 +1,10 @@
+use core::marker::PhantomData;
 use feagi_quantization::prelude::FeagiIndexQuantization;
 
 
 
 pub struct ConnectomeBuilder<FIQ: FeagiIndexQuantization> {
-    
+    _p: PhantomData<FIQ>
 }
 
 impl<FIQ: FeagiIndexQuantization> ConnectomeBuilder<FIQ> {

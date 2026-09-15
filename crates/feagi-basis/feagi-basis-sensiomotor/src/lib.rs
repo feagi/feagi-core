@@ -14,6 +14,7 @@ mod internal_prelude;
 pub mod feedbacks;
 pub mod single_voxel_decode;
 pub mod wrapped_io_data;
+pub mod data;
 
 pub use connector_cache::ConnectorCache;
 pub use feagi_signal::{FeagiSignal, FeagiSignalIndex};

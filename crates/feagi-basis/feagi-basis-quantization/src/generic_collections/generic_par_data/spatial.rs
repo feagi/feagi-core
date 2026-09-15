@@ -1,7 +1,9 @@
-use crate::generic_collections::generic_par_data::linear::ParDataVector;
 use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
 use crate::values::spatial::unsigned_integer::UnsignedIntegerSpatialWrappedDimensionsTrait;
+#[cfg(feature = "alloc")]
+use crate::generic_collections::generic_par_data::linear::ParDataVector;
 
+#[cfg(feature = "alloc")]
 #[cfg_attr(feature = "alloc", derive(::serde::Serialize, ::serde::Deserialize))]
 #[cfg_attr(
     feature = "alloc",
@@ -20,6 +22,7 @@ where
     data: ParDataVector<QI, D>,
 }
 
+#[cfg(feature = "alloc")]
 impl<QI, D, Dims, const DIM_COUNT: usize> SpatialCollectionVector<QI, D, Dims, DIM_COUNT>
 where
     QI: QuantizedUnsignedIntegerTrait,
