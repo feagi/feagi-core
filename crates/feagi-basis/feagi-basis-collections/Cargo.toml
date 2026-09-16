@@ -1,0 +1,52 @@
+[package]
+name = "feagi-basis-collections"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Used to hold various collections of various data types for FEAGI"
+
+
+[features]
+
+# subcrates should not have default in order to avoid confusion
+
+std = [
+    "alloc",
+    "half/std", "serde/std", "serde_json/std",
+]
+
+alloc = [
+    "half/alloc", "serde/alloc", "serde_json/alloc", "heapless/alloc"
+]
+
+expose_heapless = [
+    "heapless"
+]
+
+expose_rayon = [
+    "std",
+    "rayon",
+]
+
+[dependencies]
+# Sub Crates
+
+# Sibling Crates
+feagi-basis-error-logging = {path = "../feagi-basis-error-logging"}
+feagi-basis-quantization = {path = "../feagi-basis-quantization"}
+
+# Root Crates
+# NONE! NOTHING WITHIN BASIS CAN USE OTHER ROOT CRATES!
+
+# External Crates
+paste = { workspace = true }
+half = {workspace = true, default-features = false, features = ["serde"]}
+serde = { workspace = true, default-features = false, features = ["derive"]}
+serde_json = { workspace = true, optional = true, default-features = false}
+rayon = {workspace = true, optional = true, default-features = false}
+heapless = {workspace = true, optional = true, default-features = false, features = ["serde"]}

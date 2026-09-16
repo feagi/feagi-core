@@ -1,8 +1,10 @@
-use crate::generic_collections::generic_par_data::par_data_error::{ParDataError, ParDataInvalidRange};
-use crate::values::quantizable::QuantizedUnsignedIntegerTrait;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "heapless")]
+use heapless::Vec;
+use feagi_basis_quantization::prelude::*;
+use crate::par_data_error::{ParDataError, ParDataInvalidRange};
 
 macro_rules! impl_par_data_range_read {
     ($self_ty:ty, $qi:ty, $d:ty, [$($generics:tt)*]) => {
@@ -162,7 +164,7 @@ pub trait ParData<QI: QuantizedUnsignedIntegerTrait, D: Clone>: Index<QI, Output
 /// exclusively borrow their storage ([`ParDataVector`], [`ParDataSliceMut`], and
 /// [`ParDataArray`]).
 pub trait ParDataMut<QI: QuantizedUnsignedIntegerTrait, D: Clone>:
-    ParData<QI, D> + IndexMut<QI, Output = D> + IndexMut<Range<QI>, Output = [D]>
+ParData<QI, D> + IndexMut<QI, Output = D> + IndexMut<Range<QI>, Output = [D]>
 {
     /// Mutably borrows the backing storage as a regular slice.
     fn as_mut_slice(&mut self) -> &mut [D];
@@ -535,6 +537,88 @@ impl_par_data_range_read_write!(
 );
 
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> From<[D; N]> for ParDataArray<QI, D, N> {
+    fn from(value: [D; N]) -> Self {
+        Self::from_array(value)
+    }
+}
+
+//endregion
+
+//region Heapless Vector
+
+#[cfg(feature = "heapless")]
+/// An owned, stack-allocated run of generic elements backed by exactly `N`
+/// entries.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound(
+    serialize = "[D; N]: ::serde::Serialize",
+    deserialize = "[D; N]: ::serde::Deserialize<'de>"
+))]
+pub struct ParDataHeaplessVec<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> {
+    pub(crate) data: ::heapless::Vec<D, N>,
+    pub(crate) _marker: PhantomData<QI>,
+}
+
+#[cfg(feature = "heapless")]
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParDataHeaplessVec<QI, D, N> {
+    /// Builds an array of `N` entries, every one initialised to `initial_value`.
+    pub fn new_uniform(initial_value: D) -> ParDataHeaplessVec<QI, D, N> {
+        Self {
+            data: ::heapless::Vec::from_array([(); N].map(|_| initial_value.clone())),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Wraps an existing array.
+    pub fn from_array(data: [D; N]) -> ParDataHeaplessVec<QI, D, N> {
+        Self { data: ::heapless::Vec::from_array(data) , _marker: PhantomData }
+    }
+
+    /// Consumes the wrapper, returning the backing array.
+    pub fn into_array(self) -> [D; N] {
+        self.data.into_array().unwrap()
+    }
+}
+
+#[cfg(feature = "heapless")]
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParData<QI, D> for ParDataHeaplessVec<QI, D, N> {
+    fn as_slice(&self) -> &[D] {
+        &self.data
+    }
+}
+
+#[cfg(feature = "heapless")]
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParDataMut<QI, D> for ParDataHeaplessVec<QI, D, N> {
+    fn as_mut_slice(&mut self) -> &mut [D] {
+        &mut self.data
+    }
+}
+
+#[cfg(feature = "heapless")]
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> Index<QI> for ParDataHeaplessVec<QI, D, N> {
+    type Output = D;
+    fn index(&self, index: QI) -> &Self::Output {
+        &self.data[index.quant_to_usize()]
+    }
+}
+
+#[cfg(feature = "heapless")]
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> IndexMut<QI> for ParDataHeaplessVec<QI, D, N> {
+    fn index_mut(&mut self, index: QI) -> &mut Self::Output {
+        &mut self.data[index.quant_to_usize()]
+    }
+}
+
+#[cfg(feature = "heapless")]
+impl_par_data_range_read_write!(
+    ParDataHeaplessVec<QI, D, N>,
+    QI,
+    D,
+    [QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize]
+);
+
+#[cfg(feature = "heapless")]
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> From<[D; N]> for ParDataHeaplessVec<QI, D, N> {
     fn from(value: [D; N]) -> Self {
         Self::from_array(value)
     }

@@ -48,6 +48,7 @@ resolver = "2"
 members = [
     "crates/feagi-basis",
     "crates/feagi-basis/feagi-basis-quantization",
+    "crates/feagi-basis/feagi-basis-collections",
     "crates/feagi-basis/feagi-basis-error-logging",
     "crates/feagi-basis/feagi-basis-error-logging/feagi-basis-error-logging-proc",
     "crates/feagi-basis/feagi-basis-genome",
