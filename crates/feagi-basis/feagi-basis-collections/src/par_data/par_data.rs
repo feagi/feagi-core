@@ -6,84 +6,9 @@ use heapless::Vec;
 use feagi_basis_quantization::prelude::*;
 use super::par_data_error::{ParDataError, ParDataInvalidRange};
 
-macro_rules! impl_par_data_range_read {
-    ($self_ty:ty, $qi:ty, $d:ty, [$($generics:tt)*]) => {
-        impl<$($generics)*> Index<Range<$qi>> for $self_ty {
-            type Output = [$d];
-            fn index(&self, range: Range<$qi>) -> &Self::Output {
-                &self.data[range.start.quant_to_usize()..range.end.quant_to_usize()]
-            }
-        }
-
-        impl<$($generics)*> Index<core::ops::RangeInclusive<$qi>> for $self_ty {
-            type Output = [$d];
-            fn index(&self, range: core::ops::RangeInclusive<$qi>) -> &Self::Output {
-                &self.data[range.start().quant_to_usize()..=range.end().quant_to_usize()]
-            }
-        }
-
-        impl<$($generics)*> Index<core::ops::RangeFrom<$qi>> for $self_ty {
-            type Output = [$d];
-            fn index(&self, range: core::ops::RangeFrom<$qi>) -> &Self::Output {
-                &self.data[range.start.quant_to_usize()..]
-            }
-        }
-
-        impl<$($generics)*> Index<core::ops::RangeTo<$qi>> for $self_ty {
-            type Output = [$d];
-            fn index(&self, range: core::ops::RangeTo<$qi>) -> &Self::Output {
-                &self.data[..range.end.quant_to_usize()]
-            }
-        }
-
-        impl<$($generics)*> Index<core::ops::RangeFull> for $self_ty {
-            type Output = [$d];
-            fn index(&self, _range: core::ops::RangeFull) -> &Self::Output {
-                &self.data[..]
-            }
-        }
-    };
-}
-
-macro_rules! impl_par_data_range_read_write {
-    ($self_ty:ty, $qi:ty, $d:ty, [$($generics:tt)*]) => {
-        impl_par_data_range_read!($self_ty, $qi, $d, [$($generics)*]);
-
-        impl<$($generics)*> IndexMut<Range<$qi>> for $self_ty {
-            fn index_mut(&mut self, range: Range<$qi>) -> &mut Self::Output {
-                &mut self.data[range.start.quant_to_usize()..range.end.quant_to_usize()]
-            }
-        }
-
-        impl<$($generics)*> IndexMut<core::ops::RangeInclusive<$qi>> for $self_ty {
-            fn index_mut(&mut self, range: core::ops::RangeInclusive<$qi>) -> &mut Self::Output {
-                &mut self.data[range.start().quant_to_usize()..=range.end().quant_to_usize()]
-            }
-        }
-
-        impl<$($generics)*> IndexMut<core::ops::RangeFrom<$qi>> for $self_ty {
-            fn index_mut(&mut self, range: core::ops::RangeFrom<$qi>) -> &mut Self::Output {
-                &mut self.data[range.start.quant_to_usize()..]
-            }
-        }
-
-        impl<$($generics)*> IndexMut<core::ops::RangeTo<$qi>> for $self_ty {
-            fn index_mut(&mut self, range: core::ops::RangeTo<$qi>) -> &mut Self::Output {
-                &mut self.data[..range.end.quant_to_usize()]
-            }
-        }
-
-        impl<$($generics)*> IndexMut<core::ops::RangeFull> for $self_ty {
-            fn index_mut(&mut self, _range: core::ops::RangeFull) -> &mut Self::Output {
-                &mut self.data[..]
-            }
-        }
-    };
-}
-
 /// Shared read behaviour for quantized-indexed collections backed by contiguous
 /// generic data.
-pub trait ParData<QI: QuantizedUnsignedIntegerTrait, D: Clone>: Index<QI, Output = D> + Index<Range<QI>, Output = [D]> {
+pub trait ParData<QI: QuantizedUnsignedIntegerTrait, D: Clone>: Index<QI, Output = D> {
     /// Borrows the backing storage as a regular shared slice.
     fn as_slice(&self) -> &[D];
 
@@ -164,7 +89,7 @@ pub trait ParData<QI: QuantizedUnsignedIntegerTrait, D: Clone>: Index<QI, Output
 /// exclusively borrow their storage ([`ParDataVector`], [`ParDataSliceMut`], and
 /// [`ParDataArray`]).
 pub trait ParDataMut<QI: QuantizedUnsignedIntegerTrait, D: Clone>:
-ParData<QI, D> + IndexMut<QI, Output = D> + IndexMut<Range<QI>, Output = [D]>
+ParData<QI, D> + IndexMut<QI, Output = D>
 {
     /// Mutably borrows the backing storage as a regular slice.
     fn as_mut_slice(&mut self) -> &mut [D];
@@ -242,7 +167,7 @@ ParData<QI, D> + IndexMut<QI, Output = D> + IndexMut<Range<QI>, Output = [D]>
 pub trait ParDataOwned<QI: QuantizedUnsignedIntegerTrait, D: Clone>
 :ParDataMut<QI, D>
 {
-    
+
 }
 
 
@@ -333,14 +258,6 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> Default for ParDataVector<QI, 
 }
 
 #[cfg(feature = "alloc")]
-impl_par_data_range_read_write!(
-    ParDataVector<QI, D>,
-    QI,
-    D,
-    [QI: QuantizedUnsignedIntegerTrait, D: Clone]
-);
-
-#[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> From<Vec<D>> for ParDataVector<QI, D> {
     fn from(value: Vec<D>) -> Self {
         Self::from_vec(value)
@@ -394,13 +311,6 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> Index<QI> for ParDataSlice
         &self.data[index.quant_to_usize()]
     }
 }
-
-impl_par_data_range_read!(
-    ParDataSlice<'a, QI, D>,
-    QI,
-    D,
-    ['a, QI: QuantizedUnsignedIntegerTrait, D: Clone]
-);
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> From<&'a [D]> for ParDataSlice<'a, QI, D> {
     fn from(value: &'a [D]) -> Self {
@@ -465,13 +375,6 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> IndexMut<QI> for ParDataSl
         &mut self.data[index.quant_to_usize()]
     }
 }
-
-impl_par_data_range_read_write!(
-    ParDataSliceMut<'a, QI, D>,
-    QI,
-    D,
-    ['a, QI: QuantizedUnsignedIntegerTrait, D: Clone]
-);
 
 impl<'a, QI: QuantizedUnsignedIntegerTrait, D: Clone> From<&'a mut [D]> for ParDataSliceMut<'a, QI, D> {
     fn from(value: &'a mut [D]) -> Self {
@@ -541,13 +444,6 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> IndexMut<QI> f
         &mut self.data[index.quant_to_usize()]
     }
 }
-
-impl_par_data_range_read_write!(
-    ParDataArray<QI, D, N>,
-    QI,
-    D,
-    [QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize]
-);
 
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> From<[D; N]> for ParDataArray<QI, D, N> {
     fn from(value: [D; N]) -> Self {
@@ -624,14 +520,6 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> IndexMut<QI> f
         &mut self.data[index.quant_to_usize()]
     }
 }
-
-#[cfg(feature = "heapless")]
-impl_par_data_range_read_write!(
-    ParDataHeaplessVec<QI, D, N>,
-    QI,
-    D,
-    [QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize]
-);
 
 #[cfg(feature = "heapless")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> From<[D; N]> for ParDataHeaplessVec<QI, D, N> {

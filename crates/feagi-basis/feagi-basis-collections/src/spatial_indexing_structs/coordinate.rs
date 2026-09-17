@@ -1,17 +1,24 @@
-use serde::{Deserialize, Serialize};
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 use crate::feagi_collection_error::FeagiDataCollectionError;
-use crate::spatial_indexing::base_shared::SpatialIndexingBase;
+use crate::spatial_indexing_structs::base_shared::SpatialIndexingBase;
 
 macro_rules! generate_quantized_coordinate {
-    ($vis:vis, $name:ident, $size:expr) => {
-        #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
-        $vis struct $name<QI: QuantizedUnsignedIntegerTrait> {
+    ($(#[$doc:meta])* $name:ident, $size:expr) => {
+        generate_quantized_coordinate!(@def $(#[$doc])* , $name, $size;);
+    };
+    ($(#[$doc:meta])* $vis:vis, $name:ident, $size:expr) => {
+        generate_quantized_coordinate!(@def $(#[$doc])* $vis, $name, $size;);
+    };
+
+    (@def $(#[$doc:meta])* $vis:vis, $name:ident, $size:expr;) => {
+        $(#[$doc])*
+        #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
+        $vis struct $name<QI: ::feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait> {
             #[serde(with = "serde_arrays")]
             data: [QI; $size],
         }
 
-        impl<'de, QI: QuantizedUnsignedIntegerTrait> SpatialIndexingBase<'de, QI, $size> for $name<QI> {
+        impl<'de, QI: ::feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait> SpatialIndexingBase<'de, QI, $size> for $name<QI> {
             fn new(data: [QI; $size]) -> Result<Self, FeagiDataCollectionError> {
                 Ok(Self { data })
             }
@@ -25,7 +32,7 @@ macro_rules! generate_quantized_coordinate {
             }
         }
 
-        impl<'de, QI: QuantizedUnsignedIntegerTrait> SpatialIndexingCoordinate<'de, QI, $size> for $name<QI> {
+        impl<'de, QI: ::feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait> SpatialIndexingCoordinate<'de, QI, $size> for $name<QI> {
             const ZEROS: Self = Self {
                 data: [QI::QUANT_ZERO; $size],
             };
@@ -56,4 +63,4 @@ pub trait SpatialIndexingCoordinate<'de, QI: QuantizedUnsignedIntegerTrait, cons
     }
 }
 
-generate_quantized_coordinate!(pub, Coordinate, 3);
+generate_quantized_coordinate!(pub, TestCoordinate, 3);
