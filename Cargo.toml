@@ -96,7 +96,9 @@ syn = { version = "3.0.5", features = ["full"] }
 proc-macro2 = "1.0.107"
 heck = "0.5.0"
 
+
 # Always needed (nearly)
+serde_arrays = {version = "0.2.0", default-features = false}
 serde = { version = "1.0.229", default-features = false}
 heapless = {version = "0.9.3"}
 futures = {version = "0.3.34"}

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "heapless")]
 use heapless::Vec;
 use feagi_basis_quantization::prelude::*;
-use crate::par_data_error::{ParDataError, ParDataInvalidRange};
+use super::par_data_error::{ParDataError, ParDataInvalidRange};
 
 macro_rules! impl_par_data_range_read {
     ($self_ty:ty, $qi:ty, $d:ty, [$($generics:tt)*]) => {
@@ -238,6 +238,14 @@ ParData<QI, D> + IndexMut<QI, Output = D> + IndexMut<Range<QI>, Output = [D]>
     //endregion
 }
 
+/// Any struct that owns the data
+pub trait ParDataOwned<QI: QuantizedUnsignedIntegerTrait, D: Clone>
+:ParDataMut<QI, D>
+{
+    
+}
+
+
 //region Implementations
 
 //region Vector
@@ -295,6 +303,9 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataMut<QI, D> for ParDataV
         &mut self.data
     }
 }
+
+#[cfg(feature = "alloc")]
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> ParDataOwned<QI, D> for ParDataVector<QI, D> {}
 
 #[cfg(feature = "alloc")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone> Index<QI> for ParDataVector<QI, D> {
@@ -516,6 +527,8 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParDataMut<QI,
     }
 }
 
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParDataOwned<QI, D> for ParDataArray<QI, D, N> {}
+
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> Index<QI> for ParDataArray<QI, D, N> {
     type Output = D;
     fn index(&self, index: QI) -> &Self::Output {
@@ -593,6 +606,9 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParDataMut<QI,
         &mut self.data
     }
 }
+
+#[cfg(feature = "heapless")]
+impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> ParDataOwned<QI, D> for ParDataHeaplessVec<QI, D, N> {}
 
 #[cfg(feature = "heapless")]
 impl<QI: QuantizedUnsignedIntegerTrait, D: Clone, const N: usize> Index<QI> for ParDataHeaplessVec<QI, D, N> {

@@ -1,4 +1,5 @@
 
+/*
 pub mod caching;
 mod neuron_voxel_coding;
 pub mod neuron_voxels;
@@ -23,5 +24,7 @@ pub use neuron_voxels::xyzp::{
     NeuronVoxelXYZPSparseVectors,
 };
 
+
+ */
 
  
