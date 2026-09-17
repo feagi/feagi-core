@@ -14,4 +14,28 @@ description = "Defines how server and agents should communicate to each other"
 
 # subcrates should not have default in order to avoid confusion
 
+std = [
+    "alloc",
+    "serde/std", "serde_json/std", "ahash/std"
+]
+
+alloc = [
+    "serde/alloc", "serde/derive", "ahash/serde",
+]
+
+support_json = [
+    "serde_json"
+]
+
+
 [dependencies]
+
+
+# Root Crates
+feagi-basis = {path = "../../feagi-basis"}
+
+# External crates
+paste = { workspace = true }
+ahash = { workspace = true}
+serde = { workspace = true}
+serde_json = { workspace = true, optional = true, features = ["alloc"]}

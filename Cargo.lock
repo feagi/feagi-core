@@ -370,10 +370,20 @@ dependencies = [
 [[package]]
 name = "feagi-correspondence-contracts"
 version = "0.1.1"
+dependencies = [
+ "ahash",
+ "feagi-basis",
+ "paste",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "feagi-correspondence-io"
 version = "0.1.1"
+dependencies = [
+ "feagi-basis",
+]
 
 [[package]]
 name = "feagi-correspondence-serialization"
@@ -382,6 +392,9 @@ version = "0.1.1"
 [[package]]
 name = "feagi-io-api"
 version = "0.1.1"
+dependencies = [
+ "feagi-basis",
+]
 
 [[package]]
 name = "feagi-npu-burst-basis"

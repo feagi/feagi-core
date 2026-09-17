@@ -20,5 +20,6 @@ description = "Defines the interfaces to exchange data by FEAGI agents and serve
 # Sibling Crates
 
 # Root Crates
+feagi-basis = {path = "../../feagi-basis"}
 
 # External Crates

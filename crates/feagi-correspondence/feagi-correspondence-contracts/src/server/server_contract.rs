@@ -1,0 +1,1602 @@
+
+// types are just
+
+macro_rules! define_request_response {
+    (
+        server_request_response,
+        permissionss: [Read, Write],
+        requests_responses {
+
+            //region Burst Engine
+            burst_engine: [
+                {
+                    path_extension: "simulation_timestep",
+                    description: "Gets the frequency timestep (in seconds) between bursts",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "simulation_timestep",
+                    description: "Sets the frequency timestep (in seconds) between bursts",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "stats",
+                    description: "Gets the current stats of the burst engine",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "status",
+                    description: "Gets the current status of the burst engine",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "control",
+                    description: "Controls the burst engine",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "burst_counter",
+                    description: "Gets the number of bursts elapsed since genome load",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "start",
+                    description: "Starts the burst engine",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "stop",
+                    description: "Stops the burst engine",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "hold",
+                    description: "Holds the burst engine",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "resume",
+                    description: "Resumes the burst engine",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "config",
+                    description: "Gets the burst engine config",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "config",
+                    description: "Updates the burst engine config",
+                    permissions: [],
+                    rest_type: put,
+                },
+            ],
+
+            //endregion
+
+            //region Connectome
+
+            connectome: [
+                {
+                    path_extension: "cortical_areas/list/detailed",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "properties/dimensions",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "properties/mappings",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "snapshot",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "stats",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "batch_neuron_operations",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "batch_synapse_operations",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "neuron_count",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "synapse_count",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "paths",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cumulative_stats",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "area_details",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "rebuild",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "structure",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "clear",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "validation",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "topology",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "optimize",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "connectivity_matrix",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "neurons/batch",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "synapses/batch",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "cortical_areas/list/summary",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_areas/list/transforming",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_area/{cortical_id}/neurons",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "{cortical_area_id}/synapses",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "{cortical_area_id}/synapses/incoming",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_info/{cortical_area}",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "stats/cortical_area/cumulative/{cortical_area}",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "neuron/{neuron_id}/properties",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "neuron_properties",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "neuron_properties_at",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "area_neurons",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "plasticity",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "path",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "download",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "download-cortical_area-area/{cortical_area}",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "upload",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "upload-cortical_area-area",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post, },
+            ],
+            //endregion
+
+            //region Cortical Area
+            cortical_area: [
+                {
+                    path_extension: "ipu",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "opu",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_area_id_list",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_area_name_list",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_id_name_mapping",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_types",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_map_detailed",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_locations_2d",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_area/geometry",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_visibility",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_name_location",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "cortical_area_properties",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "multi/cortical_area_properties",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "cortical_area",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "cortical_area",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "cortical_area",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "custom_cortical_area",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "clone",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "multi/cortical_area",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "multi/cortical_area",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "coord_2d",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "suppress_cortical_visibility",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "visualization",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "batch_operations",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "ipu/list",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "opu/list",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "coordinates_3d",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "bulk_delete",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "resize",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "reposition",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "voxel_neurons",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "voxel_neurons",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "memory",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "ipu/types",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "opu/types",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_area_index_list",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_idx_mapping",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "mapping_restrictions",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "{cortical_id}/memory_usage",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "{cortical_id}/neuron_count",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_type_options",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "mapping_restrictions",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "mapping_restrictions_between_areas",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "coord_3d",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put, },
+            ],
+            //endregion
+
+            //region Cortical Mapping
+            cortical_mapping: [
+                {
+                    path_extension: "afferents",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "efferents",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "mapping_properties",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "mapping_properties",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "mapping",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "mapping_list",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "mapping",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "batch_update",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "mapping",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "mapping",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put, },
+            ],
+            //endregion
+
+            //region Evolution
+            evolution: [
+                {
+                    path_extension: "status",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "config",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post, },
+            ],
+            //endregion
+
+            //region Genome
+            genome: [
+                {
+                    path_extension: "file_name",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "circuits",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "amalgamation_destination",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "amalgamation_cancellation",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "append",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "upload/barebones",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "upload/essential",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "name",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "timestamp",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "save",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "load",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "upload",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "download",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "properties",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "validate",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "transform",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "clone",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "reset",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "metadata",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "merge",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "diff",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "export_format",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "amalgamation",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "amalgamation_history",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_template",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "defaults/files",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "download_region",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "genome_number",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "amalgamation_by_filename",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "amalgamation_by_payload",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "amalgamation_by_upload",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "append-file",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "upload/file",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "upload/file/edit",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "upload/string",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post, },
+            ],
+            //endregion
+
+            //region Input
+            input: [
+                {
+                    path_extension: "vision",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "vision",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "sources",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "configure",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "sensor_snapshot/last",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get, },
+            ],
+            //endregion
+
+            //region Insight
+            insight: [
+                {
+                    path_extension: "analytics",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "data",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get, },
+            ],
+
+            //endregion
+
+            //region Monitoring
+
+            monitoring: [
+                {
+                    path_extension: "status",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "metrics",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "data",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "performance",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_activity",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get, },
+            ],
+            //endregion
+
+            //region Morphology
+            morphology: [
+                {
+                    path_extension: "morphology_list",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "morphology_types",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "list/types",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "morphologies",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "morphology",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "morphology",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "morphology",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "rename",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "morphology_properties",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "morphology_usage",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "list",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "info/{morphology_id}",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "create",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "update",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "delete/{morphology_id}",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete, },
+            ],
+            //endregion
+
+            //region Network
+            network: [
+                {
+                    path_extension: "status",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "config",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "connection_info",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get, },
+            ],
+            //endregion
+
+            //region NeuroPlasticity
+            neuroplasticity: [
+                {
+                    path_extension: "plasticity_queue_depth",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "plasticity_queue_depth",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "status",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "transforming",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "configure",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "enable/{area_id}",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "disable/{area_id}",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post, },
+            ],
+            //endregion
+
+            //region Outputs
+            outputs: [
+                {
+                    path_extension: "targets",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "configure",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "motor_snapshot/last",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get, },
+            ],
+            //endregion
+
+            //region Physiology
+            physiology: [
+                {
+                    path_extension: "",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put, },
+            ],
+            //endregion
+
+            //region Plasticity
+            plasticity: [
+                {
+                    path_extension: "register_memory_area",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post, },
+            ],
+            //endregion
+
+            //region Region
+            region: [
+                {
+                    path_extension: "regions_members",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "region",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "region",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "region",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "clone",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "relocate_members",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "region_and_members",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "regions",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "region_titles",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "region/{region_id}",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "change_region_parent",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "change_cortical_area_region",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put, },
+            ],
+            //endregion
+
+            //region Simulation
+            simulation: [
+                {
+                    path_extension: "upload/string",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "reset",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "status",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "stats",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "config",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post, },
+            ],
+            //endregion
+
+            //region System
+            system: [
+                {
+                    path_extension: "health_check",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_area_visualization_skip_rate",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_area_visualization_skip_rate",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "cortical_area_visualization_suppression_threshold",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "cortical_area_visualization_suppression_threshold",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "version",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "versions",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "configuration",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "user_preferences",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "user_preferences",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "cortical_area_types",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "enable_visualization_fq_sampler",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "disable_visualization_fq_sampler",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "processes",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "unique_logs",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "log_tail",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "logs",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "beacon/subscribers",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "beacon/subscribe",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "beacon/unsubscribe",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "global_activity_visualization",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "global_activity_visualization",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "circuit_library_path",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "db/influxdb/test",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "register",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post, },
+            ],
+            //endregion
+
+            //region Training
+            training: [
+                {
+                    path_extension: "shock",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "shock/options",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "shock/status",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "reward/intensity",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "punishment/intensity",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "gameover",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "brain_fitness",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "fitness_criteria",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "fitness_criteria",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "fitness_stats",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "training_report",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "status",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "stats",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get,
+                },
+                {
+                    path_extension: "config",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "reward",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "punishment",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "shock/activate",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "fitness_criteria",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "fitness_stats",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: put,
+                },
+                {
+                    path_extension: "fitness_stats",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete,
+                },
+                {
+                    path_extension: "reset_fitness_stats",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: delete, },
+            ],
+            //endregion
+
+            //region Visualization
+            visualization: [
+                {
+                    path_extension: "register_client",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "unregister_client",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "heartbeat",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: post,
+                },
+                {
+                    path_extension: "status",
+                    description:"TODO",
+                    permissions: [],
+                    rest_type: get, },
+            ]
+            //endregion
+        }
+    ) => {};
+}

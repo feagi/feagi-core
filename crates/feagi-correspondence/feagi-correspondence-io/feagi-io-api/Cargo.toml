@@ -20,5 +20,6 @@ description = ""
 # Sibling Crates
 
 # Root Crates
+feagi-basis = {path = "../../../feagi-basis"}
 
 # External Crates
