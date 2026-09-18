@@ -3,7 +3,7 @@ use crate::feagi_collection_error::FeagiDataCollectionError;
 
 /// Base spatial indexing context data. Is locked within the crate to avoid having the mutable method
 /// be easily accessible outside to cause problems
-pub(crate) trait SpatialIndexingBase<'de, QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>:
+pub trait SpatialIndexingBase<'de, QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>:
 core::fmt::Debug + Clone + Copy + core::hash::Hash + PartialEq
 + ::serde::Serialize + ::serde::Deserialize<'de> {
 

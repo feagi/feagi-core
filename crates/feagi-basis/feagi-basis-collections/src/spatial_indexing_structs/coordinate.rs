@@ -62,5 +62,3 @@ pub trait SpatialIndexingCoordinate<'de, QI: QuantizedUnsignedIntegerTrait, cons
         self.as_mut_slice()
     }
 }
-
-generate_quantized_coordinate!(pub, TestCoordinate, 3);

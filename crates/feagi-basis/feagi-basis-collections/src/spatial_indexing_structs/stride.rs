@@ -2,8 +2,6 @@ use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 use crate::feagi_collection_error::FeagiDataCollectionError;
 use crate::spatial_indexing_structs::base_shared::SpatialIndexingBase;
 
-// TODO use this!
-
 macro_rules! generate_quantized_stride {
     ($(#[$doc:meta])* $name:ident, $size:expr) => {
         generate_quantized_coordinate!(@def $(#[$doc])* , $name, $size;);

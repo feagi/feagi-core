@@ -56,7 +56,3 @@ SpatialIndexingBase<'de, QI, NUM_DIMS> {
     /// Constructor (no value can be zero)
     fn new_dimensions(data: [QI; NUM_DIMS]) -> Result<Self, FeagiDataCollectionError>;
 }
-
-use super::coordinate::TestCoordinate;
-
-generate_quantized_dimension!(pub, Dimens, 3, TestCoordinate);
