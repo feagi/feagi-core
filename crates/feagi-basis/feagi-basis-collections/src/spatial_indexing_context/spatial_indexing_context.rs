@@ -1,41 +1,36 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
-use crate::spatial_indexing_structs::coordinate::SpatialIndexingCoordinate;
-use crate::spatial_indexing_structs::dimensions::{Dimens, SpatialIndexingDimensions};
-use crate::spatial_indexing_structs::stride::SpatialIndexingStride;
+use super::spatial_indexing_structs::coordinate::SpatialCoordinate;
+use super::spatial_indexing_structs::dimensions::SpatialDimensions;
+use super::spatial_indexing_structs::stride::SpatialStride;
 
-/// Defines the relationship between spatial indexing and linear indexing
+// NOTE: Keeping this a trait as we may have other context types in the future
+/// Defines the relationship between spatial indexing and linear indexing. 
 pub trait SpatialIndexingContext<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize>:
-core::fmt::Debug
+    core::fmt::Debug
 {
     type LinearIndex: QuantizedUnsignedIntegerTrait<QuantType = QI::QuantType>;
-    type Coord<'de>: SpatialIndexingCoordinate<'de, QI, NUM_DIMS>
-    where
-        Self: 'de;
-    type Dims<'de>: SpatialIndexingDimensions<'de, QI, NUM_DIMS, Coord = Self::Coord<'de>>
-    where
-        Self: 'de;
-    //type Stride<'de>: SpatialIndexingStride<'de, QI, NUM_DIMS>
-    //where
-    //    Self: 'de;
+    fn coordinate_to_linear_index(&self, coordinate: &SpatialCoordinate<QI, NUM_DIMS>) -> Self::LinearIndex;
 
-    // TODO things other than stride may be used in the future!
-
-    fn coordinate_to_linear_index(&self, coordinate: &Self::Coord<'_>) -> Self::LinearIndex;
-
-    fn linear_index_to_coordinate(&self, linear_index: Self::LinearIndex) -> Self::Coord<'static>;
+    fn linear_index_to_coordinate(&self, linear_index: Self::LinearIndex) -> SpatialCoordinate<QI, NUM_DIMS>;
 }
 
-// TODO makeGeneric
+/// Generic default context carrying owned dimensions and stride metadata.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub struct DefaultSpatialIndexingContext<QI: QuantizedUnsignedIntegerTrait> {
-    pub dimensions: Dimens<QI>
-    // stride is constant
+pub struct DefaultSpatialIndexingContext<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> {
+    pub dimensions: SpatialDimensions<QI, NUM_DIMS>,
+    pub stride: SpatialStride<QI, NUM_DIMS>,
 }
 
-//impl<QI: QuantizedUnsignedIntegerTrait>
+impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> DefaultSpatialIndexingContext<QI, NUM_DIMS> {
+    /// Construct from owned dimensions and stride values.
+    pub fn new(
+        dimensions: SpatialDimensions<QI, NUM_DIMS>,
+        stride: SpatialStride<QI, NUM_DIMS>,
+    ) -> Self {
+        Self { dimensions, stride }
+    }
+}
 
-
-
-
-
+/// Convenience type alias for the default generic coordinate type.
+pub type DefaultSpatialCoordinate<QI, const NUM_DIMS: usize> = SpatialCoordinate<QI, NUM_DIMS>;

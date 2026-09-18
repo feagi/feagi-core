@@ -5,6 +5,7 @@ generate_feagi_error!{
     FeagiDataCollectionError,
     keys: {
         InvalidDimensions: FeagiFailInvalidDimensions,
+        InvalidAxisOrder: FeagiFailInvalidAxisOrder,
         ParDataInvalidIndex: ParDataInvalidIndex,
         ParDataInvalidRange: ParDataInvalidRange,
         BitBatchParDataInvalidIndex: BitBatchParDataInvalidIndex,
@@ -16,6 +17,12 @@ generate_feagi_error!{
 #[derive(FeagiFail)]
 /// Dimensions was set to 0 in some axis
 pub struct FeagiFailInvalidDimensions {
+    context: &'static str,
+}
+
+#[derive(FeagiFail)]
+/// Axis order is invalid for the given dimension count.
+pub struct FeagiFailInvalidAxisOrder {
     context: &'static str,
 }
 
