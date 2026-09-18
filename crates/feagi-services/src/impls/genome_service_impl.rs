@@ -16,9 +16,7 @@ use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_npu_burst_engine::{BurstLoopRunner, ParameterUpdateQueue};
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalSubUnitIndex, CorticalUnitIndex,
-};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
@@ -1186,8 +1184,10 @@ impl GenomeService for GenomeServiceImpl {
                             && c[1] == target_bytes[1]
                             && c[2] == target_bytes[2]
                             && c[3] == target_bytes[3] // cortical unit identifier
-                            && c[6] == target_bytes[6] // sub-unit index
-                            && c[7] == target_bytes[7] // unit(group) index
+                            && candidate.io_cortical_sub_unit_index()
+                                == effective_cortical_id.io_cortical_sub_unit_index()
+                            && candidate.io_cortical_unit_index()
+                                == effective_cortical_id.io_cortical_unit_index()
                     })
                     .collect();
                 if candidates.len() == 1 {
@@ -2652,8 +2652,8 @@ impl GenomeServiceImpl {
         };
 
         let unit_identifier = [bytes[1], bytes[2], bytes[3]];
-        let cortical_subunit_index = CorticalSubUnitIndex::from(bytes[6]);
-        let cortical_unit_index = CorticalUnitIndex::from(bytes[7]);
+        let cortical_subunit_index = cortical_id.io_cortical_sub_unit_index();
+        let cortical_unit_index = cortical_id.io_cortical_unit_index();
         let computed_id = new_flag.as_io_cortical_id(
             is_input,
             unit_identifier,
@@ -2743,7 +2743,7 @@ impl GenomeServiceImpl {
         let new_group_id_value = changes.get("group_id").ok_or_else(|| {
             ServiceError::InvalidInput("group_id is required for unit index update".to_string())
         })?;
-        let new_group_id = if let Some(value) = new_group_id_value.as_u64() {
+        let new_group_id: u16 = if let Some(value) = new_group_id_value.as_u64() {
             value
                 .try_into()
                 .map_err(|_| ServiceError::InvalidInput("group_id out of range".to_string()))?
@@ -2758,7 +2758,7 @@ impl GenomeServiceImpl {
                 .try_into()
                 .map_err(|_| ServiceError::InvalidInput("group_id out of range".to_string()))?
         } else if let Some(raw) = new_group_id_value.as_str() {
-            raw.parse::<u8>().map_err(|_| {
+            raw.parse::<u16>().map_err(|_| {
                 ServiceError::InvalidInput("group_id must be an integer".to_string())
             })?
         } else {
@@ -2783,7 +2783,7 @@ impl GenomeServiceImpl {
             ))
         })?;
         let unit_identifier = [bytes[1], bytes[2], bytes[3]];
-        let cortical_subunit_index = CorticalSubUnitIndex::from(bytes[6]);
+        let cortical_subunit_index = cortical_id.io_cortical_sub_unit_index();
         let cortical_unit_index = CorticalUnitIndex::from(new_group_id);
         let computed_id = current_flag.as_io_cortical_id(
             is_input,
@@ -4092,14 +4092,14 @@ impl GenomeServiceImpl {
             } else {
                 None
             };
-            // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see connectome_service_impl).
+            // CorticalSubUnitIndex in flag bits 4-7; CorticalUnitIndex as LE u16 in bytes 6-7.
             let subunit_id = if is_io_area {
-                Some(cortical_bytes[6])
+                Some(*cortical_id_typed.io_cortical_sub_unit_index())
             } else {
                 None
             };
             let cortical_unit_index = if is_io_area {
-                Some(cortical_bytes[7])
+                Some(*cortical_id_typed.io_cortical_unit_index())
             } else {
                 None
             };
@@ -4290,14 +4290,14 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see connectome_service_impl).
+        // CorticalSubUnitIndex in flag bits 4-7; CorticalUnitIndex as LE u16 in bytes 6-7.
         let subunit_id = if is_io_area {
-            Some(cortical_bytes[6])
+            Some(*cortical_id_typed.io_cortical_sub_unit_index())
         } else {
             None
         };
         let cortical_unit_index = if is_io_area {
-            Some(cortical_bytes[7])
+            Some(*cortical_id_typed.io_cortical_unit_index())
         } else {
             None
         };
@@ -4489,14 +4489,14 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see connectome_service_impl).
+        // CorticalSubUnitIndex in flag bits 4-7; CorticalUnitIndex as LE u16 in bytes 6-7.
         let subunit_id = if is_io_area {
-            Some(cortical_bytes[6])
+            Some(*cortical_id_typed.io_cortical_sub_unit_index())
         } else {
             None
         };
         let cortical_unit_index = if is_io_area {
-            Some(cortical_bytes[7])
+            Some(*cortical_id_typed.io_cortical_unit_index())
         } else {
             None
         };

@@ -72,7 +72,7 @@ pub struct VisionCapability {
     /// FEAGI encodes the group in the cortical ID. This keeps the wire contract
     /// language-agnostic and avoids leaking internal byte layouts to SDK users.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub group: Option<u8>,
+    pub group: Option<u16>,
 }
 
 /// Motor output capability
@@ -89,7 +89,7 @@ pub struct MotorCapability {
     pub unit: Option<MotorUnit>,
     /// Cortical unit index (group) for the selected unit (preferred).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub group: Option<u8>,
+    pub group: Option<u16>,
     /// Multiple semantic motor unit sources (preferred for multi-OPU agents).
     ///
     /// This supports agents that subscribe to multiple motor cortical unit types
@@ -102,7 +102,7 @@ pub struct MotorCapability {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MotorUnitSpec {
     pub unit: MotorUnit,
-    pub group: u8,
+    pub group: u16,
 }
 
 /// Language-agnostic sensory unit identifiers for registration contracts.

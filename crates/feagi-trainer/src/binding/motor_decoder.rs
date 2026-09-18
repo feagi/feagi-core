@@ -29,7 +29,7 @@ use crate::contracts::prediction_record::TypedPrediction;
 use crate::error::TrainerError;
 
 /// Motor cortical unit index this decoder reads from (matches the pinned genome's OPU unit 0).
-const MOTOR_UNIT: u8 = 0;
+const MOTOR_UNIT: u16 = 0;
 
 /// How OPU channel activations encode a signed continuous action component.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

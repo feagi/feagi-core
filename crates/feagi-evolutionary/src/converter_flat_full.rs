@@ -16,6 +16,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{EvoError, EvoResult};
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use tracing::warn;
@@ -143,6 +144,7 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
 
         // Process all flat keys for this cortical area
         process_area_properties(cortical_id, flat_blueprint, &property_map, &mut area_data)?;
+        apply_power_area_defaults(cortical_id, flat_blueprint, &mut area_data);
 
         // Apply visualization_voxel_granularity override if present
         if let Some(override_value) = visualization_overrides.get(cortical_id) {
@@ -220,6 +222,41 @@ fn extract_cortical_areas(
     }
 
     Ok(areas)
+}
+
+/// True for canonical and legacy Power cortical IDs used in default genomes.
+fn is_power_cortical_id(cortical_id: &str) -> bool {
+    matches!(cortical_id, "_power" | "___pwr" | "___power" | "___pwr__")
+        || cortical_id == CoreCorticalType::Power.to_cortical_id().as_base_64()
+}
+
+/// Whether the flat blueprint already defines `suffix` for `cortical_id`.
+fn area_has_flat_suffix(
+    flat_blueprint: &serde_json::Map<String, Value>,
+    cortical_id: &str,
+    suffix: &str,
+) -> bool {
+    let prefix = format!("_____10c-{}-", cortical_id);
+    flat_blueprint
+        .keys()
+        .any(|key| key.starts_with(&prefix) && key.ends_with(suffix))
+}
+
+/// Power defaults: no synapse degeneration, full PSP on every outgoing synapse.
+fn apply_power_area_defaults(
+    cortical_id: &str,
+    flat_blueprint: &serde_json::Map<String, Value>,
+    area_data: &mut serde_json::Map<String, Value>,
+) {
+    if !is_power_cortical_id(cortical_id) {
+        return;
+    }
+    if !area_has_flat_suffix(flat_blueprint, cortical_id, "de_gen-f") {
+        area_data.insert("degeneration".to_string(), json!(0.0));
+    }
+    if !area_has_flat_suffix(flat_blueprint, cortical_id, "pspuni-b") {
+        area_data.insert("psp_uniform_distribution".to_string(), json!(true));
+    }
 }
 
 /// Parse cortical ID from flat key: "_____10c-AREA1-cx-property-type"
@@ -728,5 +765,31 @@ mod tests {
             area.get("relative_coordinate").unwrap(),
             &json!([10, 0, -20])
         );
+    }
+
+    #[test]
+    fn test_power_defaults_when_flat_keys_omitted() {
+        let flat = json!({
+            "version": "2.0",
+            "blueprint": {
+                "_____10c-_power-cx-__name-t": "Brain_Power",
+                "_____10c-_power-cx-___bbx-i": 1,
+                "_____10c-_power-cx-___bby-i": 1,
+                "_____10c-_power-cx-___bbz-i": 1
+            },
+            "neuron_morphologies": {},
+            "physiology": {}
+        });
+
+        let hierarchical = convert_flat_to_hierarchical_full(&flat).unwrap();
+        let area = hierarchical
+            .get("blueprint")
+            .and_then(|v| v.as_object())
+            .and_then(|bp| bp.get("_power"))
+            .and_then(|v| v.as_object())
+            .unwrap();
+
+        assert_eq!(area.get("degeneration").unwrap(), &json!(0.0));
+        assert_eq!(area.get("psp_uniform_distribution").unwrap(), &json!(true));
     }
 }

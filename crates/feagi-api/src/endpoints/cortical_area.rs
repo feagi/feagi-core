@@ -12,7 +12,10 @@ use std::collections::HashMap;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use feagi_evolutionary::extract_memory_properties;
-use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalSubUnitIndex, CorticalUnitIndex,
+};
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use utoipa::{IntoParams, ToSchema};
@@ -812,10 +815,12 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
 
-    let mut group_id = request
+    let mut group_id: u16 = request
         .get("group_id")
         .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u8;
+        .unwrap_or(0)
+        .try_into()
+        .map_err(|_| ApiError::invalid_input("group_id out of range"))?;
 
     let device_count = request
         .get("device_count")
@@ -844,7 +849,7 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_type required"))?;
 
-    let unit_id: Option<u8> = request
+    let unit_id: Option<u16> = request
         .get("unit_id")
         .and_then(|v| v.as_u64())
         .map(|value| {
@@ -1004,9 +1009,15 @@ pub async fn post_cortical_area(
                 ))
             })?;
 
-        // Split per-subunit data_type_config into two bytes for cortical ID
-        let config_byte_4 = (data_type_config & 0xFF) as u8; // Lower byte
-        let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
+        let io_flag = IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(
+            data_type_config,
+        )
+        .map_err(|e| {
+            ApiError::invalid_input(format!(
+                "Invalid data_type_config for subunit {}: {}",
+                unit_idx, e
+            ))
+        })?;
 
         // Get per-device dimensions from topology, then scale X by device_count:
         // total_x = device_count * per_device_x
@@ -1054,24 +1065,15 @@ pub async fn post_cortical_area(
             return Err(ApiError::invalid_input("Invalid cortical_type_key"));
         };
 
-        // Construct the 8-byte cortical ID
-        let cortical_id_bytes = [
-            if cortical_type_str == "IPU" {
-                b'i'
-            } else {
-                b'o'
-            }, // Byte 0: type
-            subtype_bytes[0], // Byte 1: subtype[0]
-            subtype_bytes[1], // Byte 2: subtype[1]
-            subtype_bytes[2], // Byte 3: subtype[2]
-            config_byte_4,    // Byte 4: data type config (lower byte)
-            config_byte_5,    // Byte 5: data type config (upper byte)
-            unit_idx as u8,   // Byte 6: unit index
-            group_id,         // Byte 7: group ID
-        ];
-
-        // Encode to base64 for use as cortical_id string
-        let cortical_id = general_purpose::STANDARD.encode(cortical_id_bytes);
+        // Construct the 8-byte cortical ID: flags include subunit in bits 4-7,
+        // unit index is little-endian u16 in bytes 6-7.
+        let cortical_id_obj = io_flag.as_io_cortical_id(
+            cortical_type_str == "IPU",
+            subtype_bytes,
+            CorticalUnitIndex::from(group_id),
+            CorticalSubUnitIndex::from(unit_idx as u8),
+        );
+        let cortical_id = cortical_id_obj.as_base_64();
 
         tracing::debug!(target: "feagi-api",
             "  Unit {}: dims={}x{}x{}, neurons_per_voxel={}, total_neurons={}",

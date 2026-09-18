@@ -30,7 +30,7 @@ use crate::contracts::ir_sample::{IRSample, Payload};
 use crate::error::TrainerError;
 
 /// Sensory cortical unit index this encoder writes to for the IRIS slice.
-const IRIS_SENSORY_UNIT: u8 = 0;
+const IRIS_SENSORY_UNIT: u16 = 0;
 
 /// Stateless selector that encodes tabular features via FEAGI population coding.
 #[derive(Debug, Clone, Copy, Default)]

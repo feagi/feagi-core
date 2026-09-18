@@ -34,6 +34,7 @@ These do not depend on the source neuron's position.
 |--------|------|---------|
 | `*` | Wildcard | All coordinates on this axis (0 to dimension-1) |
 | `5` | Exact | Only coordinate 5 |
+| `N..M` | Absolute range | All coordinates from N to M inclusive (for example `1..98`) |
 
 ### Source-Relative Patterns
 
@@ -160,6 +161,17 @@ X=8 and X=9 only (clamped).
 
 ---
 
+### Contiguous source channels map topographically to dest Z=0
+
+```json
+[["1..98", "*", "*"], ["?", "?", 0]]
+```
+
+Source: every neuron whose X is in 1 through 98, at any Y and Z.
+Destination: same X and Y, Z fixed at 0. One rule replaces 98 exact-X rows.
+
+---
+
 ### Column 0 fans out to all positions in the positive X direction
 
 ```json
@@ -239,17 +251,22 @@ When using the Python FFI (integer-based API), patterns are encoded as:
 | `-13` | `?-=` (direction negative inclusive) |
 | `>= 0` | Exact coordinate |
 
-Offset (`?+N`, `?-N`) and Range (`?-A:?+B`) patterns are only available through
-the string-based genome JSON format.
+Offset (`?+N`, `?-N`), relative Range (`?-A:?+B`), and absolute Range (`N..M`)
+patterns are only available through the string-based genome JSON format.
 
 ---
 
 ## Source Pattern Behavior
 
-On the **source** side, only `*` and exact integers perform meaningful filtering.
-All relative patterns (`?`, `!`, `?+`, `?-`, etc.) are treated as wildcards when
-applied to source filtering, because they require a destination context to be
-meaningful.
+On the **source** side, `*`, exact integers, and absolute ranges (`N..M`)
+perform meaningful filtering. All relative patterns (`?`, `!`, `?+`, `?-`,
+`?-A:?+B`, etc.) are treated as wildcards when applied to source filtering,
+because they require a destination context to be meaningful.
+
+`N..M` is an **absolute** filter (coordinates N through M). It is not the same
+as `?-A:?+B`, which is a **source-relative** destination span. Unrecognized
+strings are treated as `*` by the runtime expander — do not write `1-98` or
+`1:98` expecting a source range.
 
 ---
 

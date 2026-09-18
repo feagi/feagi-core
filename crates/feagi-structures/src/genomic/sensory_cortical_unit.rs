@@ -294,7 +294,7 @@ impl SensoryCorticalUnit {
         let subtype_arr = [subtype_bytes[0], subtype_bytes[1], subtype_bytes[2]];
         for unit in Self::list_all() {
             if unit.get_cortical_id_unit_reference() == subtype_arr {
-                return Some(unit.get_default_cortical_id_for_group(CorticalUnitIndex::from(0u8)));
+                return Some(unit.get_default_cortical_id_for_group(CorticalUnitIndex::from(0u16)));
             }
         }
         None

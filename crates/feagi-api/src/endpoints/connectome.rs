@@ -1256,7 +1256,7 @@ pub async fn get_cortical_area_list_types(
     }
 
     // Group areas by cortical subtype
-    let mut type_map: HashMap<String, (String, Vec<String>, HashSet<u8>)> = HashMap::new();
+    let mut type_map: HashMap<String, (String, Vec<String>, HashSet<u16>)> = HashMap::new();
 
     for area in areas {
         // Parse cortical ID from base64
@@ -1286,7 +1286,7 @@ pub async fn get_cortical_area_list_types(
         // Sort cortical_ids for consistent output
         cortical_ids.sort();
 
-        let mut group_ids_vec: Vec<u8> = group_ids.into_iter().collect();
+        let mut group_ids_vec: Vec<u16> = group_ids.into_iter().collect();
         group_ids_vec.sort_unstable();
 
         response.insert(

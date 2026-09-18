@@ -1,7 +1,10 @@
 use crate::genomic::cortical_area::cortical_area_type::{
     CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType,
 };
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::genomic::cortical_area::descriptors::{CorticalSubUnitIndex, CorticalUnitIndex};
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    bit_indexes, IOCorticalAreaConfigurationFlag,
+};
 use crate::FeagiDataError;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -131,6 +134,21 @@ impl CorticalID {
         IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(data_type_config)
     }
 
+    /// Cortical unit (group) index packed as little-endian u16 in bytes 6-7.
+    #[inline]
+    pub fn io_cortical_unit_index(&self) -> CorticalUnitIndex {
+        CorticalUnitIndex::from(u16::from_le_bytes([self.bytes[6], self.bytes[7]]))
+    }
+
+    /// Cortical sub-unit index packed in flag bits 4-7 of bytes 4-5.
+    #[inline]
+    pub fn io_cortical_sub_unit_index(&self) -> CorticalSubUnitIndex {
+        let flags = u16::from_le_bytes([self.bytes[4], self.bytes[5]]);
+        let subunit = ((flags >> bit_indexes::CORTICAL_SUB_UNIT_INDEX)
+            & bit_indexes::CORTICAL_SUB_UNIT_INDEX_MASK) as u8;
+        CorticalSubUnitIndex::from(subunit)
+    }
+
     pub fn as_cortical_type(&self) -> Result<CorticalAreaType, FeagiDataError> {
         match_bytes_by_cortical_type!(self.bytes,
             custom => {
@@ -188,27 +206,19 @@ impl CorticalID {
         }
     }
 
-    /// Extract unit ID from cortical ID (typically byte 4)
-    /// Returns None for CORE/CUSTOM/MEMORY areas
-    pub fn extract_unit_id(&self) -> Option<u8> {
+    /// Extract cortical unit (group) index from an IO cortical ID.
+    /// Returns None for CORE/CUSTOM/MEMORY areas.
+    pub fn extract_unit_id(&self) -> Option<u16> {
         if self.bytes[0] == b'i' || self.bytes[0] == b'o' {
-            // Byte 4 typically contains unit ID (0-9 as ASCII)
-            let byte = self.bytes[4];
-            if byte.is_ascii_digit() {
-                Some(byte - b'0')
-            } else if byte == b'_' || byte == 0 {
-                Some(0)
-            } else {
-                None
-            }
+            Some(*self.io_cortical_unit_index())
         } else {
             None
         }
     }
 
-    /// Extract group ID from cortical ID (similar to unit ID, but may be in different byte)
-    /// For now, returns the same as unit_id
-    pub fn extract_group_id(&self) -> Option<u8> {
+    /// Extract cortical unit (group) index from an IO cortical ID.
+    /// Returns None for CORE/CUSTOM/MEMORY areas.
+    pub fn extract_group_id(&self) -> Option<u16> {
         self.extract_unit_id()
     }
 

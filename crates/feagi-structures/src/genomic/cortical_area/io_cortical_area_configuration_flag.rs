@@ -8,13 +8,16 @@ pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
 /// Define the indexes of various bit flags
 pub mod bit_indexes {
-    // Bits 0-7 -> Enum variant discriminant
+    // Bits 0-3 -> Enum variant discriminant
+    // Bits 4-7 -> CorticalSubUnitIndex (0-15). Unit index lives in cortical ID bytes 6-7.
     pub const FRAME_CHANGE_HANDLING: usize = 8;
     pub const PERCENTAGE_NEURON_POSITIONING: usize = 9;
+    // Bits 4-7 -> CorticalSubUnitIndex (0-15). Variant discriminant uses bits 0-3.
     // Bits 10-12 -> PoseSchema (3 bits, used only by PoseEstimation variant)
     pub const POSE_SCHEMA_START: usize = 10;
     pub const POSE_SCHEMA_MASK: u16 = 0b111; // 3 bits
-                                             // Bits 13-15 -> RESERVED
+    pub const CORTICAL_SUB_UNIT_INDEX: usize = 4;
+    pub const CORTICAL_SUB_UNIT_INDEX_MASK: u16 = 0b1111;
 }
 
 /// Different types of Input/Output cortical areas exist, and have their own nested configurations. This enum defines that
@@ -38,7 +41,7 @@ impl IOCorticalAreaConfigurationFlag {
     pub const fn try_from_data_type_configuration_flag(
         value: IOCorticalAreaConfigurationFlagBitmask,
     ) -> Result<Self, FeagiDataError> {
-        let variant = value & 0xFF; // Bits 0-7
+        let variant = value & 0x0F; // Bits 0-3; bits 4-7 hold CorticalSubUnitIndex
         let frame_handling = (value >> bit_indexes::FRAME_CHANGE_HANDLING) & 0x01;
         let positioning = (value >> bit_indexes::PERCENTAGE_NEURON_POSITIONING) & 0x01;
 
@@ -190,9 +193,13 @@ impl IOCorticalAreaConfigurationFlag {
         cortical_unit_index: CorticalUnitIndex,
         cortical_sub_unit_index: CorticalSubUnitIndex,
     ) -> CorticalID {
-        let data_type_configuration: IOCorticalAreaConfigurationFlagBitmask =
+        let sub_unit = cortical_sub_unit_index.get() as u16;
+        let mut data_type_configuration: IOCorticalAreaConfigurationFlagBitmask =
             self.to_data_type_configuration_flag();
+        data_type_configuration |= (sub_unit & bit_indexes::CORTICAL_SUB_UNIT_INDEX_MASK)
+            << bit_indexes::CORTICAL_SUB_UNIT_INDEX;
         let data_type_configuration_bytes: [u8; 2] = data_type_configuration.to_le_bytes();
+        let unit_index_bytes: [u8; 2] = cortical_unit_index.get().to_le_bytes();
 
         let cortical_id_bytes: [u8; CorticalID::NUMBER_OF_BYTES] = [
             if is_input { b'i' } else { b'o' },
@@ -201,8 +208,8 @@ impl IOCorticalAreaConfigurationFlag {
             cortical_unit_identifier[2],
             data_type_configuration_bytes[0],
             data_type_configuration_bytes[1],
-            cortical_sub_unit_index.get(),
-            cortical_unit_index.get(),
+            unit_index_bytes[0],
+            unit_index_bytes[1],
         ];
 
         CorticalID {

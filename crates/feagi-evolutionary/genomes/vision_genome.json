@@ -2927,6 +2927,8 @@
     "_____10c-_power-cx-___bby-i": 1,
     "_____10c-_power-cx-___bbz-i": 1,
     "_____10c-_power-cx-__name-t": "Power",
+    "_____10c-_power-cx-de_gen-f": 0,
+    "_____10c-_power-cx-pspuni-b": true,
     "_____10c-_death-cx-rcordx-i": 0,
     "_____10c-_death-cx-rcordy-i": 0,
     "_____10c-_death-cx-rcordz-i": -10,

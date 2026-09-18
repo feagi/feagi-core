@@ -69,6 +69,8 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 #[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::CorticalID;
+#[cfg(feature = "feagi-agent")]
 use feagi_structures::genomic::SensoryCorticalUnit;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
@@ -1312,17 +1314,15 @@ async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_in
     let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
 
     for area in &areas {
-        let Ok(bytes) = general_purpose::STANDARD.decode(&area.cortical_id) else {
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
             continue;
         };
-        if bytes.len() != 8 {
-            continue;
-        }
+        let bytes = cortical_id.as_bytes();
         if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
             continue;
         }
-        let subunit_index = bytes[6];
-        let group_index = bytes[7];
+        let subunit_index = *cortical_id.io_cortical_sub_unit_index();
+        let group_index = *cortical_id.io_cortical_unit_index();
         if group_index == 0 {
             group0_by_subunit.insert(subunit_index, area.position);
         } else if group_index == 1 {
@@ -1410,7 +1410,7 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
 
     let existing_ids = SensoryCorticalUnit::SegmentedVision
         .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
             config,
         )
         .expect("Generate segmented-vision cortical IDs for group 0");
@@ -1468,14 +1468,15 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
     let mut group0_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
     let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
     for area in &areas {
-        let Ok(bytes) = general_purpose::STANDARD.decode(&area.cortical_id) else {
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
             continue;
         };
-        if bytes.len() != 8 || bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+        let bytes = cortical_id.as_bytes();
+        if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
             continue;
         }
-        let subunit_index = bytes[6];
-        let group_index = bytes[7];
+        let subunit_index = *cortical_id.io_cortical_sub_unit_index();
+        let group_index = *cortical_id.io_cortical_unit_index();
         if group_index == 0 {
             group0_by_subunit.insert(subunit_index, area.position);
         } else if group_index == 1 {
@@ -1546,7 +1547,7 @@ async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existi
     );
     let existing_ids = SensoryCorticalUnit::SegmentedVision
         .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
             config,
         )
         .expect("Generate segmented-vision cortical IDs for group 0");
@@ -1593,14 +1594,15 @@ async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existi
 
     let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
     for area in &areas {
-        let Ok(bytes) = general_purpose::STANDARD.decode(&area.cortical_id) else {
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
             continue;
         };
-        if bytes.len() != 8 || bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+        let bytes = cortical_id.as_bytes();
+        if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
             continue;
         }
-        if bytes[7] == 1 {
-            group1_by_subunit.insert(bytes[6], area.position);
+        if *cortical_id.io_cortical_unit_index() == 1 {
+            group1_by_subunit.insert(*cortical_id.io_cortical_sub_unit_index(), area.position);
         }
     }
 

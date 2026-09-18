@@ -20,7 +20,7 @@ use crate::contracts::prediction_record::TypedPrediction;
 use crate::error::TrainerError;
 
 /// Motor cortical unit index this decoder reads from for the segmentation slice.
-const SEGMENTATION_MOTOR_UNIT: u8 = 0;
+const SEGMENTATION_MOTOR_UNIT: u16 = 0;
 
 /// Stateless selector that decodes a dense class-id mask from misc-data motor output.
 #[derive(Debug, Clone, Copy, Default)]

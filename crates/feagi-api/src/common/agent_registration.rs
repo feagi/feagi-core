@@ -4,7 +4,6 @@
 //! Shared registration helpers used across transports.
 
 use crate::common::ApiState;
-use base64::{engine::general_purpose, Engine as _};
 use feagi_config::load_config;
 use feagi_services::types::CreateCorticalAreaParams;
 use feagi_structures::genomic::cortical_area::descriptors::{
@@ -13,6 +12,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit, UnitTopology};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -258,7 +258,7 @@ fn spatial_pointer_dims_from_decoder_properties(
     Some((w, h, d.clamp(d_min, d_max) as usize))
 }
 
-fn build_friendly_unit_name(unit_label: &str, group: u8, sub_unit_index: usize) -> String {
+fn build_friendly_unit_name(unit_label: &str, group: u16, sub_unit_index: usize) -> String {
     format!("{unit_label}-{}-{}", group, sub_unit_index)
 }
 
@@ -316,7 +316,7 @@ fn angular_pointer_world_position(
 /// PositionalServo area 2 is the dedicated per-joint speed strip.
 fn build_motor_registration_default_name(
     motor_unit: MotorCorticalUnit,
-    group: u8,
+    group: u16,
     sub_unit_index: usize,
     frame_handling: Option<&str>,
     decoder_width: Option<u32>,
@@ -349,7 +349,7 @@ fn build_motor_registration_default_name(
 /// Default title for a newly registered CartesianPosition IPU.
 fn build_sensory_registration_default_name(
     sensory_unit: SensoryCorticalUnit,
-    group: u8,
+    group: u16,
     sub_unit_index: usize,
 ) -> String {
     if sensory_unit == SensoryCorticalUnit::CartesianPosition {
@@ -422,13 +422,13 @@ fn first_grouping_property(unit_def: &Value, key: &str) -> Option<String> {
 }
 
 /// Reads ``motor_servo_group_id`` from the first channel (grouped strips share one ID).
-fn motor_servo_group_id_u8_from_first_channel(unit_def: &Value) -> Option<u8> {
+fn motor_servo_group_id_u8_from_first_channel(unit_def: &Value) -> Option<u16> {
     extract_grouping_array(unit_def)
         .first()
         .and_then(|channel| channel.get("device_properties"))
         .and_then(|props| props.get("motor_servo_group_id"))
         .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
-        .and_then(|u| u8::try_from(u).ok())
+        .and_then(|u| u16::try_from(u).ok())
 }
 
 /// ``sensor_tag`` on the first grouped channel (e.g. ``jointpos`` / ``jointvel`` for Servo).
@@ -690,13 +690,18 @@ fn extract_percentage_depth(encoder_properties: &Value) -> Option<usize> {
         .map(|depth| depth as usize)
 }
 
-/// Servo IPU width is one voxel per registered joint; Y/Z stay on the encoder result.
-fn apply_grouped_servo_encoder_width(
+/// Scalar IPU width is one per-channel X column per registered device; Y/Z stay
+/// on the encoder result (Proximity/Servo depth, MiscData volume Z).
+fn apply_grouped_scalar_encoder_width(
     resolved: (usize, usize, usize),
-    template_w: usize,
+    per_channel_x: usize,
     device_count: usize,
 ) -> (usize, usize, usize) {
-    ((template_w * device_count).max(1), resolved.1, resolved.2)
+    (
+        (per_channel_x * device_count).max(1),
+        resolved.1,
+        resolved.2,
+    )
 }
 
 fn resolve_sensory_dimensions_from_encoder_properties(
@@ -789,17 +794,18 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
         .await
         .ok()
         .and_then(|areas| {
-            let mut grouped_yz_by_group: HashMap<u8, HashMap<u8, (i32, i32)>> = HashMap::new();
+            let mut grouped_yz_by_group: HashMap<u16, HashMap<u8, (i32, i32)>> = HashMap::new();
 
             for area in areas {
-                let Ok(bytes) = general_purpose::STANDARD.decode(&area.cortical_id) else {
+                let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
                     continue;
                 };
-                if bytes.len() != 8 || bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+                let bytes = cortical_id.as_bytes();
+                if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
                     continue;
                 }
-                let subunit_index = bytes[6];
-                let group_index = bytes[7];
+                let subunit_index = *cortical_id.io_cortical_sub_unit_index();
+                let group_index = *cortical_id.io_cortical_unit_index();
                 grouped_yz_by_group
                     .entry(group_index)
                     .or_default()
@@ -839,7 +845,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
 
     // For each (limb / motor_servo_group_id, PositionalServo sub-unit): resolved OPU
     // min-corner position (matches grouped Servo motor_servo_group_id + jointpos/jointvel → sub 0/1).
-    let mut positional_servo_subarea_world_position: HashMap<(u8, u8), (i32, i32, i32)> =
+    let mut positional_servo_subarea_world_position: HashMap<(u16, u8), (i32, i32, i32)> =
         HashMap::new();
 
     // Build creation params for missing OPU areas based on default topologies.
@@ -878,18 +884,18 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                 else {
                     continue;
                 };
-                let group_u8: u8 = match group_u64.try_into() {
+                let group_u16: u16 = match group_u64.try_into() {
                     Ok(v) => v,
                     Err(_) => continue,
                 };
-                let group: CorticalUnitIndex = group_u8.into();
+                let group: CorticalUnitIndex = group_u16.into();
 
                 let device_count =
                     motor_registration_device_count(motor_unit, unit_def, decoder_properties);
                 if device_count == 0 {
                     warn!(
                     "⚠️ [API] device_grouping is empty for motor unit '{}' group {}; skipping auto-create",
-                    motor_unit_key, group_u8
+                    motor_unit_key, group_u16
                 );
                     continue;
                 }
@@ -899,7 +905,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     Err(e) => {
                         warn!(
                             "⚠️ [API] Failed to build motor IO config map from registration for '{}' group {}: {}",
-                            motor_unit_key, group_u8, e
+                            motor_unit_key, group_u16, e
                         );
                         continue;
                     }
@@ -918,7 +924,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     Err(e) => {
                         warn!(
                             "⚠️ [API] Failed to derive motor cortical IDs for '{}' group {}: {}",
-                            motor_unit_key, group_u8, e
+                            motor_unit_key, group_u16, e
                         );
                         continue;
                     }
@@ -951,7 +957,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     );
                     expected_dimensions_by_sub[i] = Some(expected_dimensions);
 
-                    let y = unit_topology.relative_position[1] + (group_u8 as i32 * 20);
+                    let y = unit_topology.relative_position[1] + (group_u16 as i32 * 20);
                     let z = unit_topology.relative_position[2];
                     let width_i32 = expected_dimensions.0 as i32;
                     let x = if let (Some(prev_x), Some(_prev_w)) =
@@ -988,7 +994,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     for (sub_i, pos_opt) in expected_position_by_sub.iter().enumerate() {
                         if let Some(pos) = *pos_opt {
                             positional_servo_subarea_world_position
-                                .insert((group_u8, sub_i as u8), pos);
+                                .insert((group_u16, sub_i as u8), pos);
                         }
                     }
                 }
@@ -996,10 +1002,10 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                 for (i, cortical_id) in cortical_ids.iter().enumerate() {
                     let cortical_id_b64 = cortical_id.as_base_64();
                     let legacy_default_name =
-                        build_friendly_unit_name(motor_unit.get_friendly_name(), group_u8, i);
+                        build_friendly_unit_name(motor_unit.get_friendly_name(), group_u16, i);
                     let registration_default_name = build_motor_registration_default_name(
                         motor_unit,
-                        group_u8,
+                        group_u16,
                         i,
                         frame_handling.as_deref(),
                         spatial_pointer_decoder_width(decoder_properties),
@@ -1257,11 +1263,11 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                 else {
                     continue;
                 };
-                let group_u8: u8 = match group_u64.try_into() {
+                let group_u16: u16 = match group_u64.try_into() {
                     Ok(v) => v,
                     Err(_) => continue,
                 };
-                let group: CorticalUnitIndex = group_u8.into();
+                let group: CorticalUnitIndex = group_u16.into();
 
                 let device_count = unit_def
                     .get("device_grouping")
@@ -1271,7 +1277,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                 if device_count == 0 {
                     warn!(
                         "⚠️ [API] device_grouping is empty for sensory unit '{}' group {}; skipping auto-create for this entry (SmartIMU/vision/IR need non-empty grouping from connector export)",
-                        sensory_unit_key, group_u8
+                        sensory_unit_key, group_u16
                     );
                     continue;
                 }
@@ -1281,7 +1287,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     Err(e) => {
                         warn!(
                             "⚠️ [API] Failed to build sensory IO config map from registration for '{}' group {}: {}",
-                            sensory_unit_key, group_u8, e
+                            sensory_unit_key, group_u16, e
                         );
                         continue;
                     }
@@ -1294,7 +1300,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     Err(e) => {
                         warn!(
                             "⚠️ [API] Failed to derive sensory cortical IDs for '{}' group {}: {}",
-                            sensory_unit_key, group_u8, e
+                            sensory_unit_key, group_u16, e
                         );
                         continue;
                     }
@@ -1304,7 +1310,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     if sensory_unit == SensoryCorticalUnit::SegmentedVision {
                         // For each segmented-vision group, compute the assembly min/max X bounds based on
                         // template relative positions and effective per-subunit dimensions.
-                        let mut bounds_by_group: Vec<(u8, i32, i32)> = Vec::new();
+                        let mut bounds_by_group: Vec<(u16, i32, i32)> = Vec::new();
                         for grouped_entry in unit_defs_arr {
                             let Some(grouped_pair) = grouped_entry.as_array() else {
                                 continue;
@@ -1318,7 +1324,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             else {
                                 continue;
                             };
-                            let Ok(grouped_u8) = u8::try_from(grouped_u64) else {
+                            let Ok(grouped_u16) = u16::try_from(grouped_u64) else {
                                 continue;
                             };
                             let grouped_encoder_properties = grouped_pair.get(1);
@@ -1350,24 +1356,24 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             }
 
                             if let (Some(min_x), Some(max_x)) = (assembly_min_x, assembly_max_x) {
-                                bounds_by_group.push((grouped_u8, min_x, max_x));
+                                bounds_by_group.push((grouped_u16, min_x, max_x));
                             }
                         }
 
                         // Sort by cortical unit index so lower-index segmented assemblies stay left and
                         // higher-index assemblies are shifted to the right with a fixed gap.
-                        bounds_by_group.sort_by_key(|(grouped_u8, _, _)| *grouped_u8);
+                        bounds_by_group.sort_by_key(|(grouped_u16, _, _)| *grouped_u16);
 
-                        let mut offsets: HashMap<u8, i32> = HashMap::new();
+                        let mut offsets: HashMap<u16, i32> = HashMap::new();
                         let mut previous_shifted_max_x: Option<i32> = None;
-                        for (grouped_u8, min_x, max_x) in bounds_by_group {
+                        for (grouped_u16, min_x, max_x) in bounds_by_group {
                             let offset_x = if let Some(prev_max_x) = previous_shifted_max_x {
                                 prev_max_x + SEGMENTED_VISION_GROUP_X_GAP_VOXELS - min_x
                             } else {
                                 0
                             };
                             previous_shifted_max_x = Some(max_x.saturating_add(offset_x));
-                            offsets.insert(grouped_u8, offset_x);
+                            offsets.insert(grouped_u16, offset_x);
                         }
                         offsets
                     } else {
@@ -1396,17 +1402,29 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             i,
                             (template_w, template_h, template_d),
                         );
-                    // Grouped Servo strips: one X column per joint. Percentage
+                    // Grouped scalar strips: one X column per device. Percentage
                     // encoders only pin Z depth, so a non-template depth (e.g. 50)
-                    // must not skip the width expand or the IPU collapses to 1 device.
-                    if sensory_unit == SensoryCorticalUnit::Servo {
-                        expected_dimensions = apply_grouped_servo_encoder_width(
+                    // must not skip the width expand or the IPU collapses to 1
+                    // device (Servo). The same expand applies to Proximity and
+                    // MiscData so N-channel encoder IPUs match motor OPU width.
+                    if matches!(
+                        sensory_unit,
+                        SensoryCorticalUnit::Servo
+                            | SensoryCorticalUnit::Proximity
+                            | SensoryCorticalUnit::MiscData
+                    ) {
+                        let per_channel_x = if sensory_unit == SensoryCorticalUnit::Servo {
+                            template_w
+                        } else {
+                            expected_dimensions.0
+                        };
+                        expected_dimensions = apply_grouped_scalar_encoder_width(
                             expected_dimensions,
-                            template_w,
+                            per_channel_x,
                             device_count,
                         );
                     }
-                    let group_x_offset = *segmented_group_x_offsets.get(&group_u8).unwrap_or(&0);
+                    let group_x_offset = *segmented_group_x_offsets.get(&group_u16).unwrap_or(&0);
                     let existing_segmented_yz =
                         if sensory_unit == SensoryCorticalUnit::SegmentedVision {
                             existing_segmented_vision_yz_by_subunit
@@ -1445,9 +1463,9 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         }
                     }
                     let legacy_default_name =
-                        build_friendly_unit_name(sensory_unit.get_friendly_name(), group_u8, i);
+                        build_friendly_unit_name(sensory_unit.get_friendly_name(), group_u16, i);
                     let registration_default_name =
-                        build_sensory_registration_default_name(sensory_unit, group_u8, i);
+                        build_sensory_registration_default_name(sensory_unit, group_u16, i);
                     let resolved_base_name = resolve_registration_name_with_placeholders(
                         unit_def,
                         &registration_default_name,
@@ -1764,10 +1782,10 @@ pub fn derive_motor_cortical_ids_from_device_registrations(
                 .get("cortical_unit_index")
                 .and_then(|v| v.as_u64())
                 .ok_or_else(|| "Motor unit definition missing cortical_unit_index".to_string())?;
-            let group_u8: u8 = group_u64
+            let group_u16: u16 = group_u64
                 .try_into()
-                .map_err(|_| "Motor unit cortical_unit_index out of range for u8".to_string())?;
-            let group: CorticalUnitIndex = group_u8.into();
+                .map_err(|_| "Motor unit cortical_unit_index out of range for u16".to_string())?;
+            let group: CorticalUnitIndex = group_u16.into();
 
             let device_count = unit_def
                 .get("device_grouping")
@@ -1777,14 +1795,14 @@ pub fn derive_motor_cortical_ids_from_device_registrations(
             if device_count == 0 {
                 return Err(format!(
                     "device_grouping is empty for motor unit '{}' group {}",
-                    motor_unit_key, group_u8
+                    motor_unit_key, group_u16
                 ));
             }
 
             let config = build_io_config_map_from_unit_def(unit_def).map_err(|e| {
                 format!(
                     "Failed to build motor IO config map from registration for '{}' group {}: {}",
-                    motor_unit_key, group_u8, e
+                    motor_unit_key, group_u16, e
                 )
             })?;
             let unit_cortical_ids = motor_unit
@@ -1837,10 +1855,10 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
                 .get("cortical_unit_index")
                 .and_then(|v| v.as_u64())
                 .ok_or_else(|| "Sensory unit definition missing cortical_unit_index".to_string())?;
-            let group_u8: u8 = group_u64
+            let group_u16: u16 = group_u64
                 .try_into()
-                .map_err(|_| "Sensory unit cortical_unit_index out of range for u8".to_string())?;
-            let group: CorticalUnitIndex = group_u8.into();
+                .map_err(|_| "Sensory unit cortical_unit_index out of range for u16".to_string())?;
+            let group: CorticalUnitIndex = group_u16.into();
 
             let device_count = unit_def
                 .get("device_grouping")
@@ -1850,14 +1868,14 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
             if device_count == 0 {
                 return Err(format!(
                     "device_grouping is empty for sensory unit '{}' group {}",
-                    sensory_unit_key, group_u8
+                    sensory_unit_key, group_u16
                 ));
             }
 
             let config = build_io_config_map_from_unit_def(unit_def).map_err(|e| {
                 format!(
                     "Failed to build sensory IO config map from registration for '{}' group {}: {}",
-                    sensory_unit_key, group_u8, e
+                    sensory_unit_key, group_u16, e
                 )
             })?;
             let unit_cortical_ids = sensory_unit
@@ -2096,7 +2114,7 @@ mod sensory_registration_frame_mode_tests {
             SensoryCorticalUnit::get_cortical_ids_array_for_servo_with_parameters(
                 FrameChangeHandling::Incremental,
                 PercentageNeuronPositioning::Linear,
-                CorticalUnitIndex::from(60u8),
+                CorticalUnitIndex::from(60u16),
             )[0]
             .as_base_64();
 
@@ -2114,7 +2132,7 @@ mod sensory_registration_frame_mode_tests {
 #[cfg(test)]
 mod sensory_dimension_extraction_tests {
     use super::{
-        apply_grouped_servo_encoder_width, resolve_sensory_dimensions_from_encoder_properties,
+        apply_grouped_scalar_encoder_width, resolve_sensory_dimensions_from_encoder_properties,
     };
     use serde_json::json;
 
@@ -2162,8 +2180,59 @@ mod sensory_dimension_extraction_tests {
             resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, template);
         assert_eq!(resolved, (1, 1, 50));
         assert_eq!(
-            apply_grouped_servo_encoder_width(resolved, template.0, 6),
+            apply_grouped_scalar_encoder_width(resolved, template.0, 6),
             (6, 1, 50)
+        );
+    }
+
+    #[test]
+    fn proximity_encoder_width_follows_channel_count() {
+        let template = (1, 1, 10);
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Linear", false, "D1"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, template);
+        assert_eq!(resolved, (1, 1, 10));
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 232),
+            (232, 1, 10)
+        );
+    }
+
+    #[test]
+    fn miscdata_encoder_width_follows_channel_count() {
+        let encoder = json!({
+            "MiscData": {
+                "width": 1,
+                "height": 1,
+                "depth": 1
+            }
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (1, 1, 1));
+        assert_eq!(resolved, (1, 1, 1));
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 416),
+            (416, 1, 1)
+        );
+    }
+
+    #[test]
+    fn miscdata_volume_width_stays_per_channel_when_single_device() {
+        let encoder = json!({
+            "MiscData": {
+                "width": 160,
+                "height": 120,
+                "depth": 48
+            }
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (1, 1, 1));
+        assert_eq!(resolved, (160, 120, 48));
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 1),
+            (160, 120, 48)
         );
     }
 }

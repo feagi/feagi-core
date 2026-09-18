@@ -110,6 +110,8 @@ pub fn create_power_area() -> CorticalArea {
     props.insert("firing_threshold".to_string(), Value::from(0.1));
     props.insert("postsynaptic_current".to_string(), Value::from(500.0));
     props.insert("neuron_excitability".to_string(), Value::from(100.0));
+    props.insert("degeneration".to_string(), Value::from(0.0));
+    props.insert("psp_uniform_distribution".to_string(), Value::from(true));
     area.properties = props;
     area
 }
@@ -878,6 +880,20 @@ mod tests {
         assert_eq!(power.dimensions.width, 1);
         assert_eq!(power.dimensions.height, 1);
         assert_eq!(power.dimensions.depth, 1);
+        assert_eq!(
+            power
+                .properties
+                .get("degeneration")
+                .and_then(|v| v.as_f64()),
+            Some(0.0)
+        );
+        assert_eq!(
+            power
+                .properties
+                .get("psp_uniform_distribution")
+                .and_then(|v| v.as_bool()),
+            Some(true)
+        );
     }
 
     #[test]
@@ -932,6 +948,30 @@ mod tests {
         }
     }
 
+    fn assert_power_has_zero_degeneration_and_psp_uniform(genome: &RuntimeGenome) {
+        let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+        let power = genome
+            .cortical_areas
+            .get(&power_id)
+            .expect("default genomes must include Power");
+        assert_eq!(
+            power
+                .properties
+                .get("degeneration")
+                .and_then(|v| v.as_f64()),
+            Some(0.0),
+            "default-genome Power degeneration must be 0"
+        );
+        assert_eq!(
+            power
+                .properties
+                .get("psp_uniform_distribution")
+                .and_then(|v| v.as_bool()),
+            Some(true),
+            "default-genome Power must have PSP uniformity on"
+        );
+    }
+
     #[test]
     fn test_load_essential_genome() {
         let genome = load_essential_genome().expect("Failed to load essential genome");
@@ -939,6 +979,13 @@ mod tests {
         // Essential genome should have _power
         let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
         assert!(genome.cortical_areas.contains_key(&power_id));
+        assert_power_has_zero_degeneration_and_psp_uniform(&genome);
+    }
+
+    #[test]
+    fn test_load_barebones_genome_power_defaults() {
+        let genome = load_barebones_genome().expect("Failed to load barebones genome");
+        assert_power_has_zero_degeneration_and_psp_uniform(&genome);
     }
 
     #[test]

@@ -26,7 +26,7 @@ use crate::contracts::ir_sample::{IRSample, Payload};
 use crate::error::TrainerError;
 
 /// Sensory cortical unit index this encoder writes to for the vision slice.
-const VISION_SENSORY_UNIT: u8 = 0;
+const VISION_SENSORY_UNIT: u16 = 0;
 
 /// Stateless selector that encodes PNG/JPEG image bytes via FEAGI vision coding.
 #[derive(Debug, Clone, Copy, Default)]

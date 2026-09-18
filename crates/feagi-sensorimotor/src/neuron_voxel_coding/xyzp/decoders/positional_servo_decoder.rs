@@ -467,7 +467,7 @@ mod tests {
         .as_io_cortical_id(
             false,
             *b"pse",
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
             CorticalSubUnitIndex::from(0u8),
         )
     }
@@ -480,7 +480,7 @@ mod tests {
         .as_io_cortical_id(
             false,
             *b"pse",
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
             CorticalSubUnitIndex::from(1u8),
         )
     }
@@ -493,7 +493,7 @@ mod tests {
         .as_io_cortical_id(
             false,
             *b"pse",
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
             CorticalSubUnitIndex::from(2u8),
         )
     }

@@ -223,7 +223,7 @@ fn test_byte_container_with_sensory_cortical_id() {
     let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
         FrameChangeHandling::Absolute,
         PercentageNeuronPositioning::Linear,
-        CorticalUnitIndex::from(0u8),
+        CorticalUnitIndex::from(0u16),
     )[0];
 
     let dimensions = CorticalAreaDimensions::new(5, 5, 3).unwrap();
@@ -254,7 +254,7 @@ fn test_byte_container_with_segmented_vision() {
     let cortical_ids =
         SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
             FrameChangeHandling::Incremental,
-            CorticalUnitIndex::from(2u8),
+            CorticalUnitIndex::from(2u16),
         );
 
     let dimensions = CorticalAreaDimensions::new(4, 4, 2).unwrap();

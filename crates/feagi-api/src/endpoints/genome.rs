@@ -1892,7 +1892,7 @@ pub async fn get_cortical_template(
                 // Use unit index 0 for template enumeration (index does not affect IO flags).
                 let cortical_ids = motor_unit
                     .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-                        CorticalUnitIndex::from(0u8),
+                        CorticalUnitIndex::from(0u16),
                         map,
                     );
 
@@ -2007,7 +2007,7 @@ pub async fn get_cortical_template(
 
                 let cortical_ids = sensory_unit
                     .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-                        CorticalUnitIndex::from(0u8),
+                        CorticalUnitIndex::from(0u16),
                         map,
                     );
 

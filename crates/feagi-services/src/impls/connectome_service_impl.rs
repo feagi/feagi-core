@@ -44,8 +44,8 @@ fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
     }
 
     let unit_ref: [u8; 3] = [bytes[1], bytes[2], bytes[3]];
-    let subunit_index = bytes[6];
-    let unit_index = bytes[7];
+    let subunit_index = *cortical_id.io_cortical_sub_unit_index();
+    let unit_index = *cortical_id.io_cortical_unit_index();
 
     if is_input {
         for unit in SensoryCorticalUnit::list_all() {
@@ -1317,15 +1317,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
         } else {
             None
         };
-        // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see feagi-structures
-        // genomic cortical ID layout). BV and motor decoders use byte 7 for device group.
+        // CorticalSubUnitIndex in flag bits 4-7; CorticalUnitIndex as LE u16 in bytes 6-7.
         let subunit_id = if is_io_area {
-            Some(cortical_bytes[6])
+            Some(*cortical_id_typed.io_cortical_sub_unit_index())
         } else {
             None
         };
         let cortical_unit_index = if is_io_area {
-            Some(cortical_bytes[7])
+            Some(*cortical_id_typed.io_cortical_unit_index())
         } else {
             None
         };

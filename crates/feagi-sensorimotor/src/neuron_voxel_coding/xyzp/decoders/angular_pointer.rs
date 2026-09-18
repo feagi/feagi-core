@@ -302,7 +302,7 @@ mod tests {
         angular_pointer_io_flag(frame, PercentageNeuronPositioning::Linear).as_io_cortical_id(
             false,
             *b"ang",
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
             CorticalSubUnitIndex::from(0u8),
         )
     }

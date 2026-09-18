@@ -397,7 +397,7 @@ mod xyzp_tests {
         let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
         let mut arrays = NeuronVoxelXYZPArrays::new();
         arrays.push_raw(1, 2, 3, 0.5);
@@ -418,7 +418,7 @@ mod xyzp_tests {
         let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
         let arrays = NeuronVoxelXYZPArrays::new();
 
@@ -438,7 +438,7 @@ mod xyzp_tests {
         let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
         mapped.insert(cortical_id, NeuronVoxelXYZPArrays::new());
 
@@ -456,12 +456,12 @@ mod xyzp_tests {
         let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
         let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Incremental,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
 
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
@@ -482,7 +482,7 @@ mod xyzp_tests {
         let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
         let mut arrays = NeuronVoxelXYZPArrays::new();
         arrays.push_raw(1, 2, 3, 0.5);
@@ -503,12 +503,12 @@ mod xyzp_tests {
         let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
         let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Incremental,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
 
         let mut arrays1 = NeuronVoxelXYZPArrays::new();
@@ -549,12 +549,12 @@ mod xyzp_tests {
         let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
         let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Incremental,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
 
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
@@ -571,12 +571,12 @@ mod xyzp_tests {
         let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
         let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Incremental,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
 
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
@@ -593,7 +593,7 @@ mod xyzp_tests {
         let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
 
         // First call - creates new empty array
@@ -619,7 +619,7 @@ mod xyzp_tests {
         let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
         )[0];
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
 

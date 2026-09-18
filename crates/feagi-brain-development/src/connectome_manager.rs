@@ -4107,6 +4107,9 @@ impl ConnectomeManager {
                                 EvoPatternElement::Range(lo, hi) => {
                                     Ok(RulePatternElement::Range(*lo, *hi))
                                 }
+                                EvoPatternElement::AbsoluteRange(lo, hi) => {
+                                    Ok(RulePatternElement::AbsoluteRange(*lo, *hi))
+                                }
                             }
                         };
 

@@ -161,7 +161,7 @@ pub enum MorphologyParameters {
     },
 }
 
-/// Pattern element: exact value, wildcard (*), skip (?), exclude (!), or relative directional
+/// Pattern element: exact value, wildcard (*), skip (?), exclude (!), relative, or `N..M`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatternElement {
     /// Exact coordinate value
@@ -184,6 +184,8 @@ pub enum PatternElement {
     Offset(i32), // "?+N" or "?-N"
     /// Inclusive range relative to source [src+lo, src+hi]
     Range(i32, i32), // "?-A:?+B"
+    /// Inclusive absolute range [N, M]
+    AbsoluteRange(i32, i32), // "N..M"
 }
 
 // Custom serialization to convert PatternElement back to JSON properly
@@ -220,6 +222,9 @@ impl Serialize for PatternElement {
                     format!("?{}", hi)
                 };
                 serializer.serialize_str(&format!("{}:{}", lo_str, hi_str))
+            }
+            PatternElement::AbsoluteRange(lo, hi) => {
+                serializer.serialize_str(&format!("{}..{}", lo, hi))
             }
         }
     }
@@ -266,6 +271,9 @@ impl PatternElement {
                 if let Some(range) = Self::try_parse_range(s) {
                     return Some(range);
                 }
+                if let Some(abs_range) = Self::try_parse_absolute_range(s) {
+                    return Some(abs_range);
+                }
                 if let Some(offset) = Self::try_parse_offset(s) {
                     return Some(offset);
                 }
@@ -282,6 +290,16 @@ impl PatternElement {
         let lo = Self::extract_relative_offset(parts[0])?;
         let hi = Self::extract_relative_offset(parts[1])?;
         Some(PatternElement::Range(lo, hi))
+    }
+
+    fn try_parse_absolute_range(s: &str) -> Option<Self> {
+        let idx = s.find("..")?;
+        if s[idx + 2..].contains("..") {
+            return None;
+        }
+        let lo = s[..idx].parse::<i32>().ok()?;
+        let hi = s[idx + 2..].parse::<i32>().ok()?;
+        Some(PatternElement::AbsoluteRange(lo, hi))
     }
 
     fn try_parse_offset(s: &str) -> Option<Self> {

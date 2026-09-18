@@ -632,7 +632,7 @@ mod test_cortical_area {
                 let cortical_id = io_type.as_io_cortical_id(
                     true,
                     *b"tst",
-                    CorticalUnitIndex::from(0u8),
+                    CorticalUnitIndex::from(0u16),
                     CorticalSubUnitIndex::from(0u8),
                 );
 
@@ -646,7 +646,7 @@ mod test_cortical_area {
                 let cortical_id = io_type.as_io_cortical_id(
                     false,
                     *b"mot",
-                    CorticalUnitIndex::from(0u8),
+                    CorticalUnitIndex::from(0u16),
                     CorticalSubUnitIndex::from(0u8),
                 );
 
@@ -686,33 +686,33 @@ mod test_cortical_area {
 
             #[test]
             fn test_cortical_group_index_creation() {
-                let index = CorticalUnitIndex::from(42u8);
-                assert_eq!(*index, 42u8);
+                let index = CorticalUnitIndex::from(42u16);
+                assert_eq!(*index, 42u16);
             }
 
             #[test]
             fn test_cortical_group_index_deref() {
-                let index = CorticalUnitIndex::from(100u8);
-                assert_eq!(*index, 100u8);
+                let index = CorticalUnitIndex::from(100u16);
+                assert_eq!(*index, 100u16);
             }
 
             #[test]
             fn test_cortical_group_index_max_value() {
-                let index = CorticalUnitIndex::from(u8::MAX);
-                assert_eq!(*index, u8::MAX);
+                let index = CorticalUnitIndex::from(u16::MAX);
+                assert_eq!(*index, u16::MAX);
             }
 
             #[test]
             fn test_cortical_group_index_zero() {
-                let index = CorticalUnitIndex::from(0u8);
-                assert_eq!(*index, 0u8);
+                let index = CorticalUnitIndex::from(0u16);
+                assert_eq!(*index, 0u16);
             }
 
             #[test]
             fn test_cortical_group_index_equality() {
-                let index1 = CorticalUnitIndex::from(50u8);
-                let index2 = CorticalUnitIndex::from(50u8);
-                let index3 = CorticalUnitIndex::from(51u8);
+                let index1 = CorticalUnitIndex::from(50u16);
+                let index2 = CorticalUnitIndex::from(50u16);
+                let index3 = CorticalUnitIndex::from(51u16);
 
                 assert_eq!(index1, index2);
                 assert_ne!(index1, index3);
@@ -720,8 +720,8 @@ mod test_cortical_area {
 
             #[test]
             fn test_cortical_group_index_ordering() {
-                let index1 = CorticalUnitIndex::from(10u8);
-                let index2 = CorticalUnitIndex::from(20u8);
+                let index1 = CorticalUnitIndex::from(10u16);
+                let index2 = CorticalUnitIndex::from(20u16);
 
                 assert!(index1 < index2);
                 assert!(index2 > index1);
@@ -904,8 +904,8 @@ mod test_cortical_area {
 
             #[test]
             fn test_cortical_unit_index_get() {
-                let index = CorticalUnitIndex::from(42u8);
-                assert_eq!(index.get(), 42u8);
+                let index = CorticalUnitIndex::from(42u16);
+                assert_eq!(index.get(), 42u16);
             }
 
             #[test]
@@ -1320,7 +1320,7 @@ mod test_cortical_area {
 
                 let unit_id = *b"tst";
                 let unit_index = CorticalSubUnitIndex::from(0u8);
-                let group_index = CorticalUnitIndex::from(5u8);
+                let group_index = CorticalUnitIndex::from(5u16);
 
                 let cortical_id = io_type.as_io_cortical_id(true, unit_id, group_index, unit_index);
 
@@ -1337,7 +1337,7 @@ mod test_cortical_area {
 
                 let unit_id = *b"tst";
                 let unit_index = CorticalSubUnitIndex::from(0u8);
-                let group_index = CorticalUnitIndex::from(0u8);
+                let group_index = CorticalUnitIndex::from(0u16);
 
                 let input_id = io_type.as_io_cortical_id(true, unit_id, group_index, unit_index);
                 let output_id = io_type.as_io_cortical_id(false, unit_id, group_index, unit_index);
@@ -1358,7 +1358,7 @@ mod test_cortical_area {
                 let cortical_id = io_type.as_io_cortical_id(
                     true,
                     unit_id,
-                    CorticalUnitIndex::from(0u8),
+                    CorticalUnitIndex::from(0u16),
                     CorticalSubUnitIndex::from(0u8),
                 );
 
@@ -1369,16 +1369,44 @@ mod test_cortical_area {
             #[test]
             fn test_as_io_cortical_id_encodes_indices() {
                 let io_type = IOCorticalAreaConfigurationFlag::Boolean;
-                let unit_index = CorticalUnitIndex::from(5u8);
+                let unit_index = CorticalUnitIndex::from(5u16);
                 let sub_unit_index = CorticalSubUnitIndex::from(3u8);
 
                 let cortical_id =
                     io_type.as_io_cortical_id(true, *b"tst", unit_index, sub_unit_index);
 
                 let bytes = cortical_id.as_bytes();
-                // Byte 7 is cortical_unit_index, byte 6 is cortical_sub_unit_index
-                assert_eq!(bytes[7], 5u8);
-                assert_eq!(bytes[6], 3u8);
+                assert_eq!(cortical_id.io_cortical_unit_index(), unit_index);
+                assert_eq!(cortical_id.io_cortical_sub_unit_index(), sub_unit_index);
+                // Bytes 6-7 are little-endian CorticalUnitIndex; subunit lives in flag bits 4-7.
+                assert_eq!(u16::from_le_bytes([bytes[6], bytes[7]]), 5u16);
+            }
+
+            #[test]
+            fn test_as_io_cortical_id_encodes_unit_index_above_u8() {
+                let io_type = IOCorticalAreaConfigurationFlag::Boolean;
+                let unit_index = CorticalUnitIndex::from(416u16);
+                let sub_unit_index = CorticalSubUnitIndex::from(2u8);
+
+                let cortical_id =
+                    io_type.as_io_cortical_id(true, *b"tst", unit_index, sub_unit_index);
+
+                assert_eq!(cortical_id.io_cortical_unit_index(), unit_index);
+                assert_eq!(cortical_id.io_cortical_sub_unit_index(), sub_unit_index);
+            }
+
+            #[test]
+            fn test_as_io_cortical_id_encodes_segmented_vision_subunit_eight() {
+                let io_type =
+                    IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute);
+                let unit_index = CorticalUnitIndex::from(10u16);
+                let sub_unit_index = CorticalSubUnitIndex::from(8u8);
+
+                let cortical_id =
+                    io_type.as_io_cortical_id(true, *b"svi", unit_index, sub_unit_index);
+
+                assert_eq!(cortical_id.io_cortical_unit_index(), unit_index);
+                assert_eq!(cortical_id.io_cortical_sub_unit_index(), sub_unit_index);
             }
         }
 
@@ -1526,7 +1554,7 @@ mod test_motor_cortical_unit {
 
     #[test]
     fn test_object_segmentation_cortical_id_and_default_topology() {
-        let group = CorticalUnitIndex::from(0u8);
+        let group = CorticalUnitIndex::from(0u16);
         let ids = MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
             FrameChangeHandling::Absolute,
             group,
@@ -1559,7 +1587,7 @@ mod test_motor_cortical_unit {
 
     #[test]
     fn test_text_english_output_cortical_id_and_default_topology() {
-        let group = CorticalUnitIndex::from(0u8);
+        let group = CorticalUnitIndex::from(0u16);
         let ids = MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
             FrameChangeHandling::Absolute,
             group,
@@ -1665,7 +1693,7 @@ mod test_sensory_cortical_unit {
 
         #[test]
         fn test_depth_map_cortical_id_and_default_topology() {
-            let group = CorticalUnitIndex::from(2u8);
+            let group = CorticalUnitIndex::from(2u16);
             let ids = SensoryCorticalUnit::get_cortical_ids_array_for_depth_map_with_parameters(
                 FrameChangeHandling::Absolute,
                 group,
@@ -1705,7 +1733,7 @@ mod test_sensory_cortical_unit {
 
         #[test]
         fn test_object_segmentation_input_cortical_id_and_default_topology() {
-            let group = CorticalUnitIndex::from(2u8);
+            let group = CorticalUnitIndex::from(2u16);
             let ids = SensoryCorticalUnit::get_cortical_ids_array_for_object_segmentation_input_with_parameters(
                 FrameChangeHandling::Absolute,
                 group,
@@ -1731,7 +1759,7 @@ mod test_sensory_cortical_unit {
 
         #[test]
         fn test_text_english_input_cortical_id_and_default_topology() {
-            let group = CorticalUnitIndex::from(0u8);
+            let group = CorticalUnitIndex::from(0u16);
             let ids =
                 SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
                     FrameChangeHandling::Absolute,
@@ -1789,7 +1817,7 @@ mod test_sensory_cortical_unit {
         fn test_infrared_cortical_ids_array() {
             let frame_handling = FrameChangeHandling::Absolute;
             let positioning = PercentageNeuronPositioning::Linear;
-            let group = CorticalUnitIndex::from(5u8);
+            let group = CorticalUnitIndex::from(5u16);
 
             let ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
                 frame_handling,
@@ -1830,7 +1858,7 @@ mod test_sensory_cortical_unit {
         #[test]
         fn test_segmented_vision_cortical_ids_array() {
             let frame_handling = FrameChangeHandling::Incremental;
-            let group = CorticalUnitIndex::from(3u8);
+            let group = CorticalUnitIndex::from(3u16);
 
             let ids =
                 SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
@@ -1869,7 +1897,7 @@ mod test_sensory_cortical_unit {
         #[test]
         fn test_different_frame_handling_produces_different_ids() {
             let positioning = PercentageNeuronPositioning::Linear;
-            let group = CorticalUnitIndex::from(0u8);
+            let group = CorticalUnitIndex::from(0u16);
 
             let absolute_ids =
                 SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
@@ -1894,7 +1922,7 @@ mod test_sensory_cortical_unit {
         #[test]
         fn test_different_positioning_produces_different_ids() {
             let frame_handling = FrameChangeHandling::Absolute;
-            let group = CorticalUnitIndex::from(0u8);
+            let group = CorticalUnitIndex::from(0u16);
 
             let linear_ids =
                 SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
@@ -1925,14 +1953,14 @@ mod test_sensory_cortical_unit {
                 SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
                     frame_handling,
                     positioning,
-                    CorticalUnitIndex::from(0u8),
+                    CorticalUnitIndex::from(0u16),
                 );
 
             let group1_ids =
                 SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
                     frame_handling,
                     positioning,
-                    CorticalUnitIndex::from(1u8),
+                    CorticalUnitIndex::from(1u16),
                 );
 
             assert_ne!(
@@ -1962,7 +1990,7 @@ mod test_sensory_cortical_unit {
                 ),
             ];
 
-            let group = CorticalUnitIndex::from(0u8);
+            let group = CorticalUnitIndex::from(0u16);
             let mut all_ids = Vec::new();
 
             for (frame, pos) in params.iter() {
@@ -2001,7 +2029,7 @@ mod test_sensory_cortical_unit {
 
             let frame_handling = FrameChangeHandling::Absolute;
             let positioning = PercentageNeuronPositioning::Linear;
-            let group = CorticalUnitIndex::from(0u8);
+            let group = CorticalUnitIndex::from(0u16);
 
             let ids = SensoryCorticalUnit::get_cortical_ids_array_for_raw_i_m_u_with_parameters(
                 frame_handling,
@@ -2019,9 +2047,48 @@ mod test_sensory_cortical_unit {
                     "RawIMU sub-area must carry subtype 'rim'"
                 );
             }
-            assert_eq!(ids[0].as_bytes()[6], 0, "Sub-area 0 must be accelerometer");
-            assert_eq!(ids[1].as_bytes()[6], 1, "Sub-area 1 must be gyroscope");
-            assert_eq!(ids[2].as_bytes()[6], 2, "Sub-area 2 must be magnetometer");
+            assert_eq!(
+                ids[0].io_cortical_sub_unit_index(),
+                CorticalSubUnitIndex::from(0u8),
+                "Sub-area 0 must be accelerometer"
+            );
+            assert_eq!(
+                ids[1].io_cortical_sub_unit_index(),
+                CorticalSubUnitIndex::from(1u8),
+                "Sub-area 1 must be gyroscope"
+            );
+            assert_eq!(
+                ids[2].io_cortical_sub_unit_index(),
+                CorticalSubUnitIndex::from(2u8),
+                "Sub-area 2 must be magnetometer"
+            );
+        }
+
+        /// Subunit bits live in the IO flag (bits 4-7). Decoding must mask them
+        /// off before reading the variant, or Raw IMU gyro/magnetometer IDs
+        /// fail connectome validation with ``Invalid variant type!``.
+        #[test]
+        fn test_raw_imu_subunit_ids_decode_cortical_type() {
+            let ids = SensoryCorticalUnit::get_cortical_ids_array_for_raw_i_m_u_with_parameters(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear,
+                CorticalUnitIndex::from(2u16),
+            );
+            for id in ids.iter() {
+                id.as_cortical_type().unwrap_or_else(|error| {
+                    panic!(
+                        "RawIMU id {} must decode an IO variant: {}",
+                        id.as_base_64(),
+                        error
+                    )
+                });
+            }
+            let magnetometer = CorticalID::try_from_base_64("aXJpbScAAgA=")
+                .expect("Abdomen Raw IMU magnetometer wire id");
+            assert_eq!(magnetometer.as_base_64(), ids[2].as_base_64());
+            magnetometer
+                .as_cortical_type()
+                .expect("aXJpbScAAgA= must produce a runtime cortical type");
         }
 
         /// Each `RawIMU` sub-area is a 3x1x10 signed-percentage volume (3 axes,
@@ -2072,7 +2139,7 @@ mod test_sensory_cortical_unit {
 
             let frame_handling = FrameChangeHandling::Absolute;
             let positioning = PercentageNeuronPositioning::Linear;
-            let group = CorticalUnitIndex::from(0u8);
+            let group = CorticalUnitIndex::from(0u16);
 
             let ids = SensoryCorticalUnit::get_cortical_ids_array_for_smart_i_m_u_with_parameters(
                 frame_handling,
@@ -2137,7 +2204,7 @@ mod test_sensory_cortical_unit {
 
             let frame_handling = FrameChangeHandling::Absolute;
             let positioning = PercentageNeuronPositioning::Linear;
-            let group = CorticalUnitIndex::from(0u8);
+            let group = CorticalUnitIndex::from(0u16);
 
             let ids =
                 SensoryCorticalUnit::get_cortical_ids_array_for_cartesian_position_with_parameters(
@@ -2189,7 +2256,7 @@ mod test_sensory_cortical_unit {
         fn test_cartesian_position_uses_unsigned_percentage_3d_flag() {
             let frame_handling = FrameChangeHandling::Absolute;
             let positioning = PercentageNeuronPositioning::Linear;
-            let group = CorticalUnitIndex::from(0u8);
+            let group = CorticalUnitIndex::from(0u16);
             let id =
                 SensoryCorticalUnit::get_cortical_ids_array_for_cartesian_position_with_parameters(
                     frame_handling,
@@ -2233,7 +2300,7 @@ mod test_sensory_cortical_unit {
             let ids = MotorCorticalUnit::get_cortical_ids_array_for_spatial_pointer_with_parameters(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
             );
             assert_eq!(ids.len(), 1);
             let bytes = ids[0].as_bytes();
@@ -2287,7 +2354,7 @@ mod test_sensory_cortical_unit {
             let ids = MotorCorticalUnit::get_cortical_ids_array_for_angular_pointer_with_parameters(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
             );
             assert_eq!(ids.len(), 1);
             let bytes = ids[0].as_bytes();
@@ -2322,7 +2389,7 @@ mod test_sensory_cortical_unit {
             let id = MotorCorticalUnit::get_cortical_ids_array_for_angular_pointer_with_parameters(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
             )[0];
             let flag = id
                 .extract_io_data_flag()

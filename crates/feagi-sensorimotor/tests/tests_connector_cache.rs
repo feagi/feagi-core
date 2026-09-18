@@ -102,7 +102,7 @@ mod test_export_import {
             let mut sensor_cache = cache.get_sensor_cache();
             sensor_cache
                 .infrared_register(
-                    CorticalUnitIndex::from(0u8),
+                    CorticalUnitIndex::from(0u16),
                     CorticalChannelCount::new(1).unwrap(),
                     FrameChangeHandling::Absolute,
                     feagi_structures::genomic::cortical_area::descriptors::NeuronDepth::new(10)
@@ -137,7 +137,7 @@ mod test_export_import {
 
             motor_cache
                 .simple_vision_output_register(
-                    feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex::from(0u8),
+                    feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex::from(0u16),
                     feagi_structures::genomic::cortical_area::descriptors::CorticalChannelCount::new(1).unwrap(),
                     feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute,
                     image_props,
@@ -160,7 +160,7 @@ mod test_export_import {
             let mut sensor_cache = cache1.get_sensor_cache();
             sensor_cache
                 .infrared_register(
-                    CorticalUnitIndex::from(0u8),
+                    CorticalUnitIndex::from(0u16),
                     CorticalChannelCount::new(2).unwrap(),
                     FrameChangeHandling::Absolute,
                     feagi_structures::genomic::cortical_area::descriptors::NeuronDepth::new(8)
@@ -245,7 +245,7 @@ mod test_imu_register_write_contract {
 
         sensor_cache
             .smart_i_m_u_register(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelCount::new(1).unwrap(),
                 FrameChangeHandling::Absolute,
                 NeuronDepth::new(10).unwrap(),
@@ -262,7 +262,7 @@ mod test_imu_register_write_contract {
 
         sensor_cache
             .smart_i_m_u_write(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelIndex::from(0u32),
                 WrappedIOData::SignedPercentage_4D(identity_quat),
             )
@@ -283,7 +283,7 @@ mod test_imu_register_write_contract {
 
         sensor_cache
             .smart_i_m_u_register(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelCount::new(1).unwrap(),
                 FrameChangeHandling::Absolute,
                 NeuronDepth::new(10).unwrap(),
@@ -293,7 +293,7 @@ mod test_imu_register_write_contract {
 
         let mismatched = WrappedIOData::Percentage(Percentage::new_from_0_1(0.5).unwrap());
         let result = sensor_cache.smart_i_m_u_write(
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
             CorticalChannelIndex::from(0u32),
             mismatched,
         );
@@ -312,7 +312,7 @@ mod test_imu_register_write_contract {
 
         sensor_cache
             .raw_i_m_u_register(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelCount::new(1).unwrap(),
                 FrameChangeHandling::Absolute,
                 NeuronDepth::new(10).unwrap(),
@@ -326,7 +326,7 @@ mod test_imu_register_write_contract {
 
         sensor_cache
             .raw_i_m_u_write(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelIndex::from(0u32),
                 WrappedIOData::RawIMU(composite),
             )
@@ -349,7 +349,7 @@ mod test_imu_register_write_contract {
 
         sensor_cache
             .raw_i_m_u_register(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelCount::new(1).unwrap(),
                 FrameChangeHandling::Absolute,
                 NeuronDepth::new(10).unwrap(),
@@ -362,7 +362,7 @@ mod test_imu_register_write_contract {
 
         sensor_cache
             .raw_i_m_u_write_gyroscope(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelIndex::from(0u32),
                 new_gyro,
             )
@@ -370,7 +370,7 @@ mod test_imu_register_write_contract {
 
         let after_gyro = sensor_cache
             .raw_i_m_u_read_postprocessed_cache_value(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelIndex::from(0u32),
             )
             .expect("must be able to read RawIMU back after partial write");
@@ -392,7 +392,7 @@ mod test_imu_register_write_contract {
         let new_mag = SignedPercentage3D::new(signed_pct(-0.1), signed_pct(-0.2), signed_pct(-0.3));
         sensor_cache
             .raw_i_m_u_write_magnetometer(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelIndex::from(0u32),
                 new_mag,
             )
@@ -400,7 +400,7 @@ mod test_imu_register_write_contract {
 
         let after_mag = sensor_cache
             .raw_i_m_u_read_postprocessed_cache_value(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelIndex::from(0u32),
             )
             .expect("must be able to read RawIMU back after second partial write");
@@ -431,7 +431,7 @@ mod test_imu_register_write_contract {
         let triple = SignedPercentage3D::new(signed_pct(0.1), signed_pct(0.2), signed_pct(0.3));
 
         let err = sensor_cache.raw_i_m_u_write_accelerometer(
-            CorticalUnitIndex::from(0u8),
+            CorticalUnitIndex::from(0u16),
             CorticalChannelIndex::from(0u32),
             triple,
         );

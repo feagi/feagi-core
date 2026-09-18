@@ -274,7 +274,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                     };
 
                     if let Some(idx) = tile_idx {
-                        let group_index: CorticalUnitIndex = 0.into();
+                        let group_index: CorticalUnitIndex = 0u16.into();
                         let segmented =
                             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                                 FrameChangeHandling::Absolute,
@@ -304,9 +304,8 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                     // migrate to a supported MiscData IPU cortical ID with a unique group ID.
                     if name == "vision_ipu" {
                         // Allocate the smallest available MiscData IPU group deterministically.
-                        for group_u16 in 0u16..=u8::MAX as u16 {
-                            let group_u8 = group_u16 as u8;
-                            let group_index: CorticalUnitIndex = group_u8.into();
+                        for group_u16 in 0u16..=u16::MAX {
+                            let group_index: CorticalUnitIndex = group_u16.into();
                             let new_id = SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
                                 FrameChangeHandling::Absolute,
                                 group_index,
@@ -322,7 +321,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                             result.cortical_ids_migrated += 1;
                             result.warnings.push(format!(
                                 "Legacy base64 vision cortical ID '{}' (subtype=mis, name='{}') migrated to MiscData IPU(group={}) → '{}'",
-                                id, name, group_u8, new_id
+                                id, name, group_u16, new_id
                             ));
                             break;
                         }
@@ -465,7 +464,7 @@ fn apply_legacy_io_shorthand_migration(
             };
 
             if let Some(idx) = tile_idx {
-                let group_index: CorticalUnitIndex = 0.into();
+                let group_index: CorticalUnitIndex = 0u16.into();
                 let segmented =
                     SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                         frame_handling,
@@ -652,7 +651,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                     // Generate proper 8-byte ID using SensoryCorticalUnit
                     // Priority: Absolute over Incremental (segmented vision doesn't use positioning)
                     let frame_handling = FrameChangeHandling::Absolute;
-                    let group_index: CorticalUnitIndex = 0.into();
+                    let group_index: CorticalUnitIndex = 0u16.into();
                     let cortical_ids =
                         SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                             frame_handling,
@@ -677,7 +676,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 // Priority: Absolute over Incremental, Linear over Fractional
                 let frame_handling = FrameChangeHandling::Absolute;
                 let positioning = PercentageNeuronPositioning::Linear;
-                let group_index: CorticalUnitIndex = 0.into();
+                let group_index: CorticalUnitIndex = 0u16.into();
                 let cortical_ids =
                     MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
                         frame_handling,
@@ -705,7 +704,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 // Priority: Absolute over Incremental, Linear over Fractional
                 let frame_handling = FrameChangeHandling::Absolute;
                 let positioning = PercentageNeuronPositioning::Linear;
-                let group_index: CorticalUnitIndex = 0.into();
+                let group_index: CorticalUnitIndex = 0u16.into();
                 let cortical_ids =
                     MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
                         frame_handling,
@@ -967,7 +966,7 @@ mod tests {
         use feagi_structures::genomic::SensoryCorticalUnit;
 
         // IPU migrations - should return base64 IDs with Absolute frame handling
-        let group_index: CorticalUnitIndex = 0.into();
+        let group_index: CorticalUnitIndex = 0u16.into();
         let frame_handling = FrameChangeHandling::Absolute;
         let expected_svi0 =
             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
@@ -1250,7 +1249,7 @@ mod tests {
         let expected_center =
             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                 FrameChangeHandling::Absolute,
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
             )[4]
             .as_base_64();
 
@@ -1293,7 +1292,7 @@ mod tests {
         let expected =
             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                 FrameChangeHandling::Absolute,
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
             )[6]
             .as_base_64();
 

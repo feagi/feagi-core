@@ -74,6 +74,27 @@ fn test_load_barebones_genome() {
     // Verify stats
     assert!(genome.stats.innate_cortical_area_count > 0);
 
+    let power = genome
+        .cortical_areas
+        .get(&power_id)
+        .expect("barebones genome must include Power");
+    assert_eq!(
+        power
+            .properties
+            .get("degeneration")
+            .and_then(|v| v.as_f64()),
+        Some(0.0),
+        "barebones Power degeneration must be 0"
+    );
+    assert_eq!(
+        power
+            .properties
+            .get("psp_uniform_distribution")
+            .and_then(|v| v.as_bool()),
+        Some(true),
+        "barebones Power must have PSP uniformity on"
+    );
+
     println!("✅ Successfully loaded barebones genome:");
     println!("   - Genome ID: {}", genome.metadata.genome_id);
     println!("   - Cortical areas: {}", genome.cortical_areas.len());
@@ -114,6 +135,29 @@ fn test_load_all_sample_genomes() {
                     genome.metadata.version
                 );
                 assert!(genome.cortical_areas.len() >= 3); // At least _death, _power, and _fatigue
+
+                let power_id = feagi_evolutionary::genome::parser::string_to_cortical_id("_power")
+                    .expect("Valid ID");
+                let power = genome
+                    .cortical_areas
+                    .get(&power_id)
+                    .expect("default genomes must include Power");
+                assert_eq!(
+                    power
+                        .properties
+                        .get("degeneration")
+                        .and_then(|v| v.as_f64()),
+                    Some(0.0),
+                    "{genome_file} Power degeneration must be 0"
+                );
+                assert_eq!(
+                    power
+                        .properties
+                        .get("psp_uniform_distribution")
+                        .and_then(|v| v.as_bool()),
+                    Some(true),
+                    "{genome_file} Power must have PSP uniformity on"
+                );
             }
             Err(e) => {
                 println!(

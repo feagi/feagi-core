@@ -464,6 +464,19 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_pattern_elements_absolute_range() {
+        let json = serde_json::json!(["1..98", "*", "*"]);
+        let elements = parse_pattern_elements(&json).unwrap();
+
+        assert_eq!(elements.len(), 3);
+        assert_eq!(elements[0], PatternElement::AbsoluteRange(1, 98));
+        assert_eq!(elements[1], PatternElement::Wildcard);
+        assert_eq!(elements[2], PatternElement::Wildcard);
+        let serialized = serde_json::to_value(&elements[0]).unwrap();
+        assert_eq!(serialized, serde_json::json!("1..98"));
+    }
+
+    #[test]
     fn test_parse_physiology_with_migration() {
         // Test burst_delay → simulation_timestep migration
         let json = serde_json::json!({

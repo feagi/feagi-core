@@ -5,7 +5,7 @@ use crate::{define_index, define_nonzero_count, define_xyz_coordinates, define_x
 
 define_index!(
     CorticalUnitIndex,
-    u8,
+    u16,
     "Index for grouping cortical units of the same type within a genome.
 
 This index distinguishes between multiple instances of the same cortical type.
@@ -13,15 +13,18 @@ For example, multiple vision sensors would have different CorticalUnitIndex
 values (0, 1, 2, etc.) while sharing the same base cortical type.
 
 # Range
-Values are limited to 0-255 (u8) and are encoded in hexadecimal within cortical IDs.
-This provides support for up to 256 instances of each cortical unit type.
+Values are 0-65535 (u16). IO cortical IDs store the index as a little-endian
+u16 in bytes 6-7 of the 8-byte cortical ID.
 
 # Usage in Cortical IDs
-The index appears as the last two characters of a cortical ID:
-- \"ivis00\" = Vision sensor, grouping index 0
-- \"ivis01\" = Vision sensor, grouping index 1
-- \"omot0A\" = Motor output, grouping index 10 (hexadecimal A)"
+IO cortical IDs pack this index in bytes 6-7 (little-endian u16)."
 );
+
+impl From<u8> for CorticalUnitIndex {
+    fn from(value: u8) -> Self {
+        Self::from(value as u16)
+    }
+}
 
 define_index!(
     CorticalSubUnitIndex,

@@ -94,8 +94,8 @@ pub trait CorticalAreaExt {
     /// Get postsynaptic_current from properties
     fn postsynaptic_current(&self) -> f32;
 
-    /// Get psp_uniform_distribution from properties (defaults to true for memory cortical areas,
-    /// false for other types when the key is absent)
+    /// Get psp_uniform_distribution from properties (defaults to true for Power and memory
+    /// cortical areas, false for other types when the key is absent)
     fn psp_uniform_distribution(&self) -> bool;
 
     /// Get degeneration from properties
@@ -330,6 +330,9 @@ impl CorticalAreaExt for CorticalArea {
         let default = matches!(
             self.cortical_type,
             feagi_structures::genomic::cortical_area::CorticalAreaType::Memory(_)
+                | feagi_structures::genomic::cortical_area::CorticalAreaType::Core(
+                    CoreCorticalType::Power
+                )
         );
         self.get_bool_property("psp_uniform_distribution", default)
     }
@@ -485,5 +488,29 @@ mod tests {
             Some(&serde_json::json!("visual"))
         );
         assert_eq!(area.get_property("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_power_defaults_zero_degeneration_and_psp_uniform() {
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type = cortical_id
+            .as_cortical_type()
+            .expect("Failed to get cortical type");
+        let dims = CorticalAreaDimensions::new(1, 1, 1).unwrap();
+        let area = CorticalArea::new(
+            cortical_id,
+            1,
+            "Brain_Power".to_string(),
+            dims,
+            (0, 0, -20).into(),
+            cortical_type,
+        )
+        .unwrap();
+
+        assert_eq!(area.degeneration(), 0.0);
+        assert!(
+            area.psp_uniform_distribution(),
+            "Power must default to PSP uniformity when the genome omits the flag"
+        );
     }
 }

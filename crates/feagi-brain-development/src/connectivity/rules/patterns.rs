@@ -4,7 +4,7 @@
 /*!
 Pattern-based connectivity - wildcard matching and transformations.
 
-Supports absolute patterns (*, ?, !, int) and source-relative directional
+Supports absolute patterns (*, ?, !, int, N..M) and source-relative directional
 patterns (?+, ?-, ?+=, ?-=, ?+N, ?-N, ?-N:?+M) for spatial connectivity.
 */
 
@@ -38,6 +38,8 @@ pub enum PatternElement {
     Offset(i32),
     /// `"?-A:?+B"` - inclusive range [src + lo, src + hi]
     Range(i32, i32),
+    /// `"N..M"` - inclusive absolute range [N, M], independent of source
+    AbsoluteRange(i32, i32),
 }
 
 impl PatternElement {
@@ -54,6 +56,9 @@ impl PatternElement {
             _ => {
                 if let Some(range_str) = Self::try_parse_range(value) {
                     return range_str;
+                }
+                if let Some(abs_range) = Self::try_parse_absolute_range(value) {
+                    return abs_range;
                 }
                 if let Some(offset) = Self::try_parse_offset(value) {
                     return offset;
@@ -91,6 +96,17 @@ impl PatternElement {
         let lo = Self::extract_relative_offset(parts[0])?;
         let hi = Self::extract_relative_offset(parts[1])?;
         Some(PatternElement::Range(lo, hi))
+    }
+
+    /// Attempt to parse an absolute inclusive range `"N..M"`.
+    fn try_parse_absolute_range(value: &str) -> Option<PatternElement> {
+        let idx = value.find("..")?;
+        if value[idx + 2..].contains("..") {
+            return None;
+        }
+        let lo = value[..idx].parse::<i32>().ok()?;
+        let hi = value[idx + 2..].parse::<i32>().ok()?;
+        Some(PatternElement::AbsoluteRange(lo, hi))
     }
 
     /// Attempt to parse a single offset pattern like "?+3" or "?-2".
@@ -133,6 +149,7 @@ pub fn match_pattern_element(element: &PatternElement, coordinate: i32, src_coor
         PatternElement::Range(lo, hi) => {
             coordinate >= src_coord + lo && coordinate <= src_coord + hi
         }
+        PatternElement::AbsoluteRange(lo, hi) => coordinate >= *lo && coordinate <= *hi,
     }
 }
 
@@ -182,6 +199,50 @@ fn expand_axis(element: &PatternElement, src_coord: u32, dim: usize) -> Vec<u32>
                 (start..end_exclusive).collect()
             }
         }
+        PatternElement::AbsoluteRange(lo, hi) => expand_absolute_range(*lo, *hi, dim),
+    }
+}
+
+/// Inclusive absolute range `[lo, hi]` clamped to `[0, dim)`.
+fn expand_absolute_range(lo: i32, hi: i32, dim: usize) -> Vec<u32> {
+    if lo > hi {
+        return vec![];
+    }
+    let start = lo.max(0) as u32;
+    let end_exclusive = (hi + 1).min(dim as i32).max(0) as u32;
+    if start >= end_exclusive {
+        vec![]
+    } else {
+        (start..end_exclusive).collect()
+    }
+}
+
+/// Source-side expansion: `*`, exact N, and `N..M` filter; other tokens are wildcards.
+fn expand_source_axis(element: &PatternElement, dim: usize) -> Vec<u32> {
+    match element {
+        PatternElement::Wildcard => (0..dim as u32).collect(),
+        PatternElement::Exact(val) => {
+            if *val >= 0 && (*val as usize) < dim {
+                vec![*val as u32]
+            } else {
+                vec![]
+            }
+        }
+        PatternElement::AbsoluteRange(lo, hi) => expand_absolute_range(*lo, *hi, dim),
+        _ => (0..dim as u32).collect(),
+    }
+}
+
+/// Source-side match for one axis of a live neuron coordinate.
+fn source_axis_matches(element: &PatternElement, coord: u32) -> bool {
+    match element {
+        PatternElement::Wildcard => true,
+        PatternElement::Exact(val) => *val >= 0 && coord == (*val as u32),
+        PatternElement::AbsoluteRange(lo, hi) => {
+            let value = coord as i32;
+            value >= *lo && value <= *hi
+        }
+        _ => true,
     }
 }
 
@@ -220,41 +281,9 @@ pub fn find_source_coordinates(
 ) -> Vec<Position> {
     let (src_width, src_height, src_depth) = src_dimensions;
 
-    let x_range: Vec<u32> = match &src_pattern.0 {
-        PatternElement::Wildcard => (0..src_width as u32).collect(),
-        PatternElement::Exact(val) => {
-            if *val >= 0 && (*val as usize) < src_width {
-                vec![*val as u32]
-            } else {
-                vec![]
-            }
-        }
-        _ => (0..src_width as u32).collect(),
-    };
-
-    let y_range: Vec<u32> = match &src_pattern.1 {
-        PatternElement::Wildcard => (0..src_height as u32).collect(),
-        PatternElement::Exact(val) => {
-            if *val >= 0 && (*val as usize) < src_height {
-                vec![*val as u32]
-            } else {
-                vec![]
-            }
-        }
-        _ => (0..src_height as u32).collect(),
-    };
-
-    let z_range: Vec<u32> = match &src_pattern.2 {
-        PatternElement::Wildcard => (0..src_depth as u32).collect(),
-        PatternElement::Exact(val) => {
-            if *val >= 0 && (*val as usize) < src_depth {
-                vec![*val as u32]
-            } else {
-                vec![]
-            }
-        }
-        _ => (0..src_depth as u32).collect(),
-    };
+    let x_range = expand_source_axis(&src_pattern.0, src_width);
+    let y_range = expand_source_axis(&src_pattern.1, src_height);
+    let z_range = expand_source_axis(&src_pattern.2, src_depth);
 
     let mut results = Vec::with_capacity(x_range.len() * y_range.len() * z_range.len());
     for x in &x_range {
@@ -280,23 +309,9 @@ pub fn match_patterns_batch(
     for (src_pattern, dst_pattern) in patterns {
         let (src_x, src_y, src_z) = src_coordinate;
 
-        let x_match = match &src_pattern.0 {
-            PatternElement::Wildcard => true,
-            PatternElement::Exact(val) => src_x == (*val as u32),
-            _ => true,
-        };
-
-        let y_match = match &src_pattern.1 {
-            PatternElement::Wildcard => true,
-            PatternElement::Exact(val) => src_y == (*val as u32),
-            _ => true,
-        };
-
-        let z_match = match &src_pattern.2 {
-            PatternElement::Wildcard => true,
-            PatternElement::Exact(val) => src_z == (*val as u32),
-            _ => true,
-        };
+        let x_match = source_axis_matches(&src_pattern.0, src_x);
+        let y_match = source_axis_matches(&src_pattern.1, src_y);
+        let z_match = source_axis_matches(&src_pattern.2, src_z);
 
         if x_match && y_match && z_match {
             let mut results = find_destination_coordinates(
@@ -628,6 +643,10 @@ mod tests {
             PatternElement::from_value("?+2:?+5"),
             PatternElement::Range(2, 5)
         );
+        assert_eq!(
+            PatternElement::from_value("1..98"),
+            PatternElement::AbsoluteRange(1, 98)
+        );
     }
 
     #[test]
@@ -676,5 +695,59 @@ mod tests {
         let results = match_patterns_batch((3, 0, 0), &patterns, (8, 1, 1), (8, 1, 1));
 
         assert_eq!(results, vec![(4, 0, 0), (5, 0, 0), (6, 0, 0), (7, 0, 0)]);
+    }
+
+    #[test]
+    fn test_absolute_range_filters_source_x() {
+        let src_pattern = (
+            PatternElement::from_value("1..3"),
+            PatternElement::Wildcard,
+            PatternElement::Wildcard,
+        );
+        let sources = find_source_coordinates(&src_pattern, (8, 1, 1));
+        assert_eq!(sources, vec![(1, 0, 0), (2, 0, 0), (3, 0, 0)]);
+    }
+
+    #[test]
+    fn test_absolute_range_destination_expand() {
+        let src_pattern = (
+            PatternElement::Wildcard,
+            PatternElement::Wildcard,
+            PatternElement::Wildcard,
+        );
+        let dst_pattern = (
+            PatternElement::AbsoluteRange(1, 3),
+            PatternElement::Exact(0),
+            PatternElement::Exact(0),
+        );
+        let results =
+            find_destination_coordinates((10, 1, 1), (7, 0, 0), &src_pattern, &dst_pattern);
+        assert_eq!(results, vec![(1, 0, 0), (2, 0, 0), (3, 0, 0)]);
+    }
+
+    #[test]
+    fn test_absolute_range_batch_skips_outside_source() {
+        let patterns = [(
+            (
+                PatternElement::AbsoluteRange(1, 3),
+                PatternElement::Wildcard,
+                PatternElement::Wildcard,
+            ),
+            (
+                PatternElement::Skip,
+                PatternElement::Skip,
+                PatternElement::Exact(0),
+            ),
+        )];
+        let inside = match_patterns_batch((2, 0, 0), &patterns, (8, 1, 1), (8, 1, 1));
+        assert_eq!(inside, vec![(2, 0, 0)]);
+        let outside = match_patterns_batch((5, 0, 0), &patterns, (8, 1, 1), (8, 1, 1));
+        assert!(outside.is_empty());
+    }
+
+    #[test]
+    fn test_absolute_range_inverted_is_empty() {
+        let results = expand_absolute_range(5, 1, 10);
+        assert!(results.is_empty());
     }
 }

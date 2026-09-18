@@ -62,7 +62,7 @@ fn count_input_id() -> feagi_structures::genomic::cortical_area::CorticalID {
     SensoryCorticalUnit::get_cortical_ids_array_for_count_input_with_parameters(
         FrameChangeHandling::Absolute,
         PercentageNeuronPositioning::Linear,
-        CorticalUnitIndex::from(0u8),
+        CorticalUnitIndex::from(0u16),
     )[0]
 }
 
@@ -70,7 +70,7 @@ fn count_output_id() -> feagi_structures::genomic::cortical_area::CorticalID {
     MotorCorticalUnit::get_cortical_ids_array_for_count_output_with_parameters(
         FrameChangeHandling::Absolute,
         PercentageNeuronPositioning::Linear,
-        CorticalUnitIndex::from(0u8),
+        CorticalUnitIndex::from(0u16),
     )[0]
 }
 
@@ -158,7 +158,7 @@ fn decoder_argmaxes_strongest_class_channel() {
         let mut sensor_cache = cache.get_sensor_cache();
         sensor_cache
             .count_input_register(
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
                 CorticalChannelCount::new(3).unwrap(),
                 FrameChangeHandling::Absolute,
                 NeuronDepth::new(BINS).unwrap(),
@@ -168,7 +168,7 @@ fn decoder_argmaxes_strongest_class_channel() {
         for (channel, value) in [0.1_f32, 0.9, 0.2].into_iter().enumerate() {
             sensor_cache
                 .count_input_write(
-                    CorticalUnitIndex::from(0u8),
+                    CorticalUnitIndex::from(0u16),
                     CorticalChannelIndex::from(channel as u32),
                     WrappedIOData::Percentage(Percentage::new_from_0_1(value).unwrap()),
                 )

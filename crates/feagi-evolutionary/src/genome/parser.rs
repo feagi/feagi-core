@@ -905,6 +905,35 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_raw_imu_magnetometer_wire_id() {
+        // Embodiment-registered Raw IMU magnetometer (subunit 2) from live FEAGI.
+        // Connectome auto-save must be able to rehydrate this into a runtime genome.
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {
+                "aXJpbScAAgA=": {
+                    "cortical_name": "feagi_body_imu__Abdomen-2",
+                    "block_boundaries": [3, 1, 10],
+                    "relative_coordinate": [90, 0, -10],
+                    "cortical_type": "IPU"
+                }
+            },
+            "brain_regions": {}
+        }"#;
+
+        let parsed = GenomeParser::parse(json).expect("Raw IMU magnetometer genome");
+        assert_eq!(parsed.cortical_areas.len(), 1);
+        assert_eq!(
+            parsed.cortical_areas[0].cortical_id.as_base_64(),
+            "aXJpbScAAgA="
+        );
+        parsed.cortical_areas[0]
+            .cortical_id
+            .as_cortical_type()
+            .expect("magnetometer IO flag must decode");
+    }
+
+    #[test]
     fn test_string_to_cortical_id_legacy_power_padded() {
         // 8-char padded form ___pwr__ (from 6-char padding in legacy flat genomes).
         use feagi_structures::genomic::cortical_area::CoreCorticalType;

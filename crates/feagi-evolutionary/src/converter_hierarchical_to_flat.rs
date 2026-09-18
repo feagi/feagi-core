@@ -247,7 +247,18 @@ fn convert_area_to_flat(
 
     // Convert all properties from area.properties using reverse mapping
     // This includes cortical_group (_group-t) which should come from properties, not area_type
-    convert_properties_to_flat(&prefix, &properties_with_group, flat_blueprint)?;
+    let default_psp_uniform = matches!(
+        area.cortical_type,
+        feagi_structures::genomic::cortical_area::CorticalAreaType::Core(
+            feagi_structures::genomic::cortical_area::CoreCorticalType::Power
+        )
+    );
+    convert_properties_to_flat(
+        &prefix,
+        &properties_with_group,
+        flat_blueprint,
+        default_psp_uniform,
+    )?;
 
     Ok(())
 }
@@ -257,6 +268,7 @@ fn convert_properties_to_flat(
     prefix: &str,
     properties: &HashMap<String, Value>,
     flat_blueprint: &mut serde_json::Map<String, Value>,
+    default_psp_uniform: bool,
 ) -> EvoResult<()> {
     // Reverse property mapping: hierarchical_key -> (flat_suffix, scope)
     // This MUST match converter_flat_full.rs PROPERTY_MAPPINGS exactly (reversed)
@@ -318,7 +330,7 @@ fn convert_properties_to_flat(
         ("group_id", json!("CUSTOM")),
         ("sub_group_id", json!("")),
         ("degeneration", json!(0.0)),
-        ("psp_uniform_distribution", json!(false)),
+        ("psp_uniform_distribution", json!(default_psp_uniform)),
         ("mp_charge_accumulation", json!(false)),
         ("mp_driven_psp", json!(false)),
         ("is_mem_type", json!(false)),
@@ -482,6 +494,7 @@ fn pattern_elements_to_json(elements: &[crate::PatternElement]) -> Value {
                 };
                 json!(format!("{}:{}", lo_str, hi_str))
             }
+            crate::PatternElement::AbsoluteRange(lo, hi) => json!(format!("{}..{}", lo, hi)),
         })
         .collect();
 
@@ -710,5 +723,62 @@ mod tests {
         let b64 = cid.as_base_64();
         assert_eq!(blueprint[&format!("_____10c-{}-cx-2dcorx-i", b64)], 400);
         assert_eq!(blueprint[&format!("_____10c-{}-cx-2dcory-i", b64)], 120);
+    }
+
+    #[test]
+    fn test_power_defaults_written_when_properties_omitted() {
+        use feagi_structures::genomic::cortical_area::{
+            CoreCorticalType, CorticalArea, CorticalAreaDimensions,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "Power defaults".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+        };
+
+        let power_id = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type = power_id.as_cortical_type().expect("Power type");
+        let power_area = CorticalArea::new(
+            power_id,
+            1,
+            "Brain_Power".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            GenomeCoordinate3D::new(0, 0, -20),
+            cortical_type,
+        )
+        .unwrap();
+        genome.cortical_areas.insert(power_id, power_area);
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let blueprint = flat["blueprint"].as_object().unwrap();
+        let b64 = power_id.as_base_64();
+        assert_eq!(
+            blueprint[&format!("_____10c-{}-cx-de_gen-f", b64)],
+            0.0,
+            "Power degeneration must default to 0"
+        );
+        assert_eq!(
+            blueprint[&format!("_____10c-{}-cx-pspuni-b", b64)],
+            true,
+            "Power PSP uniformity must default to on"
+        );
     }
 }
