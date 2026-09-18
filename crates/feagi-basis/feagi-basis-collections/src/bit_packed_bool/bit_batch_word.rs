@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 /// The uint used as the packing for each BitBatchCollection Struct for holding the bits
 pub trait BitBatchWord: Sized + Clone + Copy + core::fmt::Debug + core::hash::Hash
-+ Serialize + Deserialize<'static> + sealed::BitBatchWordSealing{
++ Send + Sync
++ Serialize + Deserialize<'static> + sealed::BitBatchWordSealing {
     /// How many bits can this uint contain?
     const NUMBER_BITS: u8 = (size_of::<Self>() as u8) * 8u8;
 
