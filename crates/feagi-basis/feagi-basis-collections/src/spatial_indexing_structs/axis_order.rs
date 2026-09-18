@@ -9,7 +9,6 @@ pub struct SpatialAxisOrder<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: u
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> SpatialAxisOrder<QI, NUM_DIMS> {
-    
     /// Constructor.
     pub fn new_axis_order(data: [QI; NUM_DIMS]) -> Result<Self, FeagiDataCollectionError> {
         // Axis order must be a permutation of [0, 1, ..., NUM_DIMS - 1].
@@ -53,6 +52,6 @@ impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> Default for Spati
             out[i] = x;
             x += QI::QUANT_ONE;
         };
-        SpatialAxisOrder{ data: out}
+        SpatialAxisOrder { data: out }
     }
 }

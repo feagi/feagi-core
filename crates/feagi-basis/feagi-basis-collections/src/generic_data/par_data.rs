@@ -6,7 +6,7 @@ use crate::feagi_collection_error::{FeagiDataCollectionError, ParDataInvalidRang
 
 /// Shared read behaviour for quantized-indexed collections backed by contiguous
 /// generic data.
-pub trait GenericParData<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug>: Index<QI, Output = D> {
+pub trait GenericParData<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug>: Index<QI, Output=D> {
     /// Borrows the backing storage as a regular shared slice.
     fn as_slice(&self) -> &[D];
 
@@ -77,7 +77,8 @@ pub trait GenericParData<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug>
     #[cfg(feature = "alloc")]
     /// Copies the internal elements to a new owned vector structure.
     fn clone_to_vector(&self) -> ParDataVector<QI, D>
-    where D: Clone
+    where
+        D: Clone,
     {
         ParDataVector::from_vec(self.as_slice().to_vec())
     }
@@ -89,7 +90,7 @@ pub trait GenericParData<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug>
 /// exclusively borrow their storage ([`ParDataVector`], [`ParDataSliceMut`], and
 /// [`ParDataArray`]).
 pub trait GenericParDataMut<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug>:
-GenericParData<QI, D> + IndexMut<QI, Output = D>
+GenericParData<QI, D> + IndexMut<QI, Output=D>
 {
     /// Mutably borrows the backing storage as a regular slice.
     fn as_mut_slice(&mut self) -> &mut [D];
@@ -180,7 +181,8 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> ParDataVector<QI, D
     /// Builds a vector of `number_elements` entries, every one initialised to
     /// `initial_value`.
     pub fn new_uniform(number_elements: QI, initial_value: D) -> ParDataVector<QI, D>
-    where D: Clone
+    where
+        D: Clone,
     {
         Self {
             data: vec![initial_value; number_elements.quant_to_usize()],
@@ -201,7 +203,8 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> ParDataVector<QI, D
     /// Appends `number_elements` new entries to the end of the vector, each
     /// initialised to `value`.
     pub fn append(&mut self, number_elements: QI, value: D)
-    where D: Clone
+    where
+        D: Clone,
     {
         let additional = number_elements.quant_to_usize();
         if additional == 0 {
@@ -394,7 +397,8 @@ pub struct ParDataArray<QI: QuantizedUnsignedIntegerTrait, D, const N: usize> {
 impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> ParDataArray<QI, D, N> {
     /// Builds an array of `N` entries, every one initialised to `initial_value`.
     pub fn new_uniform(initial_value: D) -> ParDataArray<QI, D, N>
-    where D: Clone
+    where
+        D: Clone,
     {
         Self {
             data: [(); N].map(|_| initial_value.clone()),
@@ -468,7 +472,8 @@ pub struct ParDataHeaplessVec<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::D
 impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> ParDataHeaplessVec<QI, D, N> {
     /// Builds an array of `N` entries, every one initialised to `initial_value`.
     pub fn new_uniform(initial_value: D) -> ParDataHeaplessVec<QI, D, N>
-    where D: Clone
+    where
+        D: Clone,
     {
         Self {
             data: ::heapless::Vec::from_array([(); N].map(|_| initial_value.clone())),
@@ -478,7 +483,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> Par
 
     /// Wraps an existing array.
     pub fn from_array(data: [D; N]) -> ParDataHeaplessVec<QI, D, N> {
-        Self { data: ::heapless::Vec::from_array(data) , _marker: PhantomData }
+        Self { data: ::heapless::Vec::from_array(data), _marker: PhantomData }
     }
 
     /// Consumes the wrapper, returning the backing array.

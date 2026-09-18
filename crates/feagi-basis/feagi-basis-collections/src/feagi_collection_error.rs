@@ -1,6 +1,6 @@
 use feagi_basis_error_logging::prelude::*;
 
-generate_feagi_error!{
+generate_feagi_error! {
     /// Error related to a collection type within FEAGI
     FeagiDataCollectionError,
     keys: {

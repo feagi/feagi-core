@@ -9,7 +9,6 @@ pub struct SpatialDimensions<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: 
 }
 
 impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> SpatialDimensions<QI, NUM_DIMS> {
-    
     /// Constructor for dimensions; no axis may be zero.
     pub fn new_dimensions(data: [QI; NUM_DIMS]) -> Result<Self, FeagiDataCollectionError> {
         if data.contains(&QI::QUANT_ZERO) {

@@ -15,7 +15,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> SpatialCoordinate
 
     /// Create a new coordinate.
     pub fn new_coordinate(data: [QI; NUM_DIMS]) -> Self {
-        Self {data}
+        Self { data }
     }
 
     /// Borrow coordinate entries as a fixed-size slice.

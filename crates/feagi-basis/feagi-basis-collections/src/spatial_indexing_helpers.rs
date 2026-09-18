@@ -1,11 +1,10 @@
-use feagi_basis_quantization::prelude::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 use crate::spatial_indexing_structs::axis_order::SpatialAxisOrder;
 use crate::spatial_indexing_structs::coordinate::SpatialCoordinate;
 use crate::spatial_indexing_structs::dimensions::SpatialDimensions;
 use crate::spatial_indexing_structs::stride::SpatialStride;
+use feagi_basis_quantization::prelude::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 
-pub trait SpatialIndexingHelper<QI: QuantizedUnsignedIntegerUnwrappedTrait<QuantType = QI>, const NUM_DIMS: usize> {
-
+pub trait SpatialIndexingHelper<QI: QuantizedUnsignedIntegerUnwrappedTrait<QuantType=QI>, const NUM_DIMS: usize> {
     const AXIS_ORDER: SpatialAxisOrder<QI, NUM_DIMS>;
 
     type LinearIndex: QuantizedUnsignedIntegerTrait<QuantType=QI>;
@@ -33,6 +32,4 @@ pub trait SpatialIndexingHelper<QI: QuantizedUnsignedIntegerUnwrappedTrait<Quant
 
     #[doc(hidden)]
     fn _get_stride_mut(&mut self) -> &mut SpatialStride<QI, NUM_DIMS>;
-
 }
-

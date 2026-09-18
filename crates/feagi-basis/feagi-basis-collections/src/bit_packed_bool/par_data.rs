@@ -5,11 +5,11 @@ use crate::bit_packed_bool::bit_batch_word::BitBatchWord;
 use crate::feagi_collection_error::{BitBatchParDataInvalidRange, FeagiDataCollectionError};
 
 pub trait BitBatchParData<QWord, QBit, Word>:
-Index<QWord, Output = Word> + Index<Range<QWord>, Output = [Word]>
+Index<QWord, Output=Word> + Index<Range<QWord>, Output=[Word]>
 + core::fmt::Debug
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Borrows the backing storage as a regular shared bit packed slice.
@@ -49,7 +49,7 @@ where
             bool_index.quant_to_usize() >> Word::BIT_SHIFT_DISTANCE
         ))
     }
-    
+
     /// From the collection bool index, get the index of the bool relevant to its word. 
     /// Is unchecked.
     fn get_word_bit_index_from_bool_index(&self, bool_index: QBit) -> usize {
@@ -97,7 +97,7 @@ where
             QWord::quant_from_usize_unchecked(word_count + 1)
         }
     }
-    
+
     fn iter_words(&self) -> core::slice::Iter<'_, Word> {
         self.as_words().iter()
     }
@@ -107,7 +107,7 @@ where
         use rayon::iter::IntoParallelRefIterator;
         self.as_words().par_iter()
     }
-    
+
     /// Raw pointer to the first word.
     fn as_word_ptr(&self) -> *const Word {
         self.as_words().as_ptr()
@@ -121,7 +121,7 @@ where
         debug_assert!(word_index.quant_to_usize() < self.as_words().len());
         &*self.as_word_ptr().add(word_index.quant_to_usize())
     }
-    
+
     /// Given the word index, gets the word without checking for bounds.
     unsafe fn get_word_unchecked(&self, word_index: QWord) -> &Word {
         self.get_word_par(word_index)
@@ -158,11 +158,11 @@ where
 
 pub trait BitBatchParDataMut<QWord, QBit, Word>:
 BitBatchParData<QWord, QBit, Word>
-+ IndexMut<QWord, Output = Word>
-+ IndexMut<Range<QWord>, Output = [Word]>
++ IndexMut<QWord, Output=Word>
++ IndexMut<Range<QWord>, Output=[Word]>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Borrows the backing storage as a regular shared bit packed mut slice.
@@ -239,7 +239,7 @@ where
             None => Err(BitBatchParDataInvalidRange::new("subslice range is out of bounds", start, end).into()),
         }
     }
-    
+
     //endregion
 }
 
@@ -253,7 +253,7 @@ where
 pub struct BitBatchParDataVector<QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     pub(crate) words: Vec<Word>,
@@ -265,7 +265,7 @@ where
 impl<QWord, QBit, Word> BitBatchParDataVector<QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Builds a padded word vector for `number_valid_bools`, with every word set to `initial_word`.
@@ -297,7 +297,7 @@ where
 impl<QWord, QBit, Word> BitBatchParData<QWord, QBit, Word> for BitBatchParDataVector<QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn as_words(&self) -> &[Word] {
@@ -313,7 +313,7 @@ where
 impl<QWord, QBit, Word> BitBatchParDataMut<QWord, QBit, Word> for BitBatchParDataVector<QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn as_words_mut(&mut self) -> &mut [Word] {
@@ -325,7 +325,7 @@ where
 impl<QWord, QBit, Word> Index<QWord> for BitBatchParDataVector<QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = Word;
@@ -339,7 +339,7 @@ where
 impl<QWord, QBit, Word> Index<Range<QWord>> for BitBatchParDataVector<QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = [Word];
@@ -353,7 +353,7 @@ where
 impl<QWord, QBit, Word> IndexMut<QWord> for BitBatchParDataVector<QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn index_mut(&mut self, index: QWord) -> &mut Self::Output {
@@ -365,7 +365,7 @@ where
 impl<QWord, QBit, Word> IndexMut<Range<QWord>> for BitBatchParDataVector<QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn index_mut(&mut self, range: Range<QWord>) -> &mut Self::Output {
@@ -382,7 +382,7 @@ where
 pub struct BitBatchParDataSlice<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     pub(crate) words: &'a [Word],
@@ -393,7 +393,7 @@ where
 impl<'a, QWord, QBit, Word> BitBatchParDataSlice<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Wraps an existing shared bit-packed slice and valid-bool count.
@@ -414,7 +414,7 @@ where
 impl<'a, QWord, QBit, Word> BitBatchParData<QWord, QBit, Word> for BitBatchParDataSlice<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn as_words(&self) -> &[Word] {
@@ -429,7 +429,7 @@ where
 impl<'a, QWord, QBit, Word> Index<QWord> for BitBatchParDataSlice<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = Word;
@@ -442,7 +442,7 @@ where
 impl<'a, QWord, QBit, Word> Index<Range<QWord>> for BitBatchParDataSlice<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = [Word];
@@ -461,7 +461,7 @@ where
 pub struct BitBatchParDataSliceMut<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     pub(crate) words: &'a mut [Word],
@@ -472,7 +472,7 @@ where
 impl<'a, QWord, QBit, Word> BitBatchParDataSliceMut<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Wraps an existing mutable bit-packed slice and valid-bool count.
@@ -498,7 +498,7 @@ where
 impl<'a, QWord, QBit, Word> BitBatchParData<QWord, QBit, Word> for BitBatchParDataSliceMut<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn as_words(&self) -> &[Word] {
@@ -513,7 +513,7 @@ where
 impl<'a, QWord, QBit, Word> BitBatchParDataMut<QWord, QBit, Word> for BitBatchParDataSliceMut<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn as_words_mut(&mut self) -> &mut [Word] {
@@ -524,7 +524,7 @@ where
 impl<'a, QWord, QBit, Word> Index<QWord> for BitBatchParDataSliceMut<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = Word;
@@ -537,7 +537,7 @@ where
 impl<'a, QWord, QBit, Word> Index<Range<QWord>> for BitBatchParDataSliceMut<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = [Word];
@@ -550,7 +550,7 @@ where
 impl<'a, QWord, QBit, Word> IndexMut<QWord> for BitBatchParDataSliceMut<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn index_mut(&mut self, index: QWord) -> &mut Self::Output {
@@ -561,7 +561,7 @@ where
 impl<'a, QWord, QBit, Word> IndexMut<Range<QWord>> for BitBatchParDataSliceMut<'a, QWord, QBit, Word>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn index_mut(&mut self, range: Range<QWord>) -> &mut Self::Output {
@@ -579,7 +579,7 @@ where
 pub struct BitBatchParDataArray<QWord, QBit, Word, const N: usize>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     pub(crate) words: [Word; N],
@@ -590,7 +590,7 @@ where
 impl<QWord, QBit, Word, const N: usize> BitBatchParDataArray<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Builds a fixed-size array where each word is `initial_word`.
@@ -620,7 +620,7 @@ where
 impl<QWord, QBit, Word, const N: usize> BitBatchParData<QWord, QBit, Word> for BitBatchParDataArray<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn as_words(&self) -> &[Word] {
@@ -635,7 +635,7 @@ where
 impl<QWord, QBit, Word, const N: usize> BitBatchParDataMut<QWord, QBit, Word> for BitBatchParDataArray<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn as_words_mut(&mut self) -> &mut [Word] {
@@ -646,7 +646,7 @@ where
 impl<QWord, QBit, Word, const N: usize> Index<QWord> for BitBatchParDataArray<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = Word;
@@ -659,7 +659,7 @@ where
 impl<QWord, QBit, Word, const N: usize> Index<Range<QWord>> for BitBatchParDataArray<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = [Word];
@@ -672,7 +672,7 @@ where
 impl<QWord, QBit, Word, const N: usize> IndexMut<QWord> for BitBatchParDataArray<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn index_mut(&mut self, index: QWord) -> &mut Self::Output {
@@ -683,7 +683,7 @@ where
 impl<QWord, QBit, Word, const N: usize> IndexMut<Range<QWord>> for BitBatchParDataArray<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn index_mut(&mut self, range: Range<QWord>) -> &mut Self::Output {
@@ -701,7 +701,7 @@ where
 pub struct BitBatchParDataHeaplessVec<QWord, QBit, Word, const N: usize>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     pub(crate) words: ::heapless::Vec<Word, N>,
@@ -713,7 +713,7 @@ where
 impl<QWord, QBit, Word, const N: usize> BitBatchParDataHeaplessVec<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Builds a capacity-`N` heapless vector with each word set to `initial_word`.
@@ -740,7 +740,7 @@ impl<QWord, QBit, Word, const N: usize> BitBatchParData<QWord, QBit, Word>
 for BitBatchParDataHeaplessVec<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn as_words(&self) -> &[Word] {
@@ -757,7 +757,7 @@ impl<QWord, QBit, Word, const N: usize> BitBatchParDataMut<QWord, QBit, Word>
 for BitBatchParDataHeaplessVec<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn as_words_mut(&mut self) -> &mut [Word] {
@@ -769,7 +769,7 @@ where
 impl<QWord, QBit, Word, const N: usize> Index<QWord> for BitBatchParDataHeaplessVec<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = Word;
@@ -783,7 +783,7 @@ where
 impl<QWord, QBit, Word, const N: usize> Index<Range<QWord>> for BitBatchParDataHeaplessVec<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     type Output = [Word];
@@ -797,7 +797,7 @@ where
 impl<QWord, QBit, Word, const N: usize> IndexMut<QWord> for BitBatchParDataHeaplessVec<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn index_mut(&mut self, index: QWord) -> &mut Self::Output {
@@ -809,7 +809,7 @@ where
 impl<QWord, QBit, Word, const N: usize> IndexMut<Range<QWord>> for BitBatchParDataHeaplessVec<QWord, QBit, Word, N>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
     Word: BitBatchWord,
 {
     fn index_mut(&mut self, range: Range<QWord>) -> &mut Self::Output {

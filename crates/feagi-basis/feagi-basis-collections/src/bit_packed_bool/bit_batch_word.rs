@@ -142,7 +142,6 @@ impl BitBatchWordSize {
 }
 
 
-
 mod sealed {
     /// Marker trait to prevent impl `BitBatchWord` to other structs
     pub trait BitBatchWordSealing {}

@@ -47,7 +47,7 @@ impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const NUM_DIMS: usize> SpatialS
 
     /// Convert from coordinate to linear index.
     pub fn coordinate_to_linear<
-        Linear: QuantizedUnsignedIntegerTrait<QuantType = QI::QuantType>,
+        Linear: QuantizedUnsignedIntegerTrait<QuantType=QI::QuantType>,
         QCoords: QuantizedUnsignedIntegerTrait<QuantType=QI>,
     >(
         &self,
@@ -64,7 +64,7 @@ impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const NUM_DIMS: usize> SpatialS
 
     /// Convert from linear index to coordinate.
     pub fn linear_to_coordinate<
-        Linear: QuantizedUnsignedIntegerTrait<QuantType = QI::QuantType>,
+        Linear: QuantizedUnsignedIntegerTrait<QuantType=QI::QuantType>,
         QCoords: QuantizedUnsignedIntegerTrait<QuantType=QI>,
         QDims: QuantizedUnsignedIntegerTrait<QuantType=QI>,
     >(
@@ -72,7 +72,7 @@ impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const NUM_DIMS: usize> SpatialS
         linear_index: Linear,
         dims: &SpatialDimensions<QDims, NUM_DIMS>,
     ) -> SpatialCoordinate<QCoords, NUM_DIMS> {
-        let linear_index_usize = linear_index.quant_to_usize() ;
+        let linear_index_usize = linear_index.quant_to_usize();
         let mut coordinate_data = [QCoords::QUANT_ZERO; NUM_DIMS];
 
         for axis in 0..NUM_DIMS {
