@@ -59,4 +59,4 @@ SpatialIndexingBase<'de, QI, NUM_DIMS> {
 
 use super::coordinate::TestCoordinate;
 
-generate_quantized_dimension!(pub, dimens, 3, TestCoordinate);
+generate_quantized_dimension!(pub, Dimens, 3, TestCoordinate);
