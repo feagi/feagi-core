@@ -33,7 +33,7 @@ pub struct DefaultSpatialIndexingContext<QI: QuantizedUnsignedIntegerTrait> {
     // stride is constant
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait>
+//impl<QI: QuantizedUnsignedIntegerTrait>
 
 
 
