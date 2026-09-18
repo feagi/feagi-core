@@ -1,3 +1,3 @@
-pub mod bit_batch_word;
 pub mod par_data;
+pub mod par_data_error;
 pub mod spatial;

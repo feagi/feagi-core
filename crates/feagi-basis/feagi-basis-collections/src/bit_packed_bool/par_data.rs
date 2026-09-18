@@ -16,6 +16,7 @@ where
     /// How many bools that are valid (IE not extra from padding) are included?
     fn number_valid_bools(&self) -> QBit;
 
+    //region Default Impls
     /// How many words are contained?
     fn number_words(&self) -> QWord {
         QWord::quant_from_usize_unchecked(self.as_words().len())
@@ -113,6 +114,7 @@ where
     
     // Can't do the same for bools as we cant give out single bits at a time!
     
+    //endregion
 }
 
 pub trait BitBatchParDataMut<QWord, QBit, Word>: BitBatchParData<QWord, QBit, Word>
@@ -123,6 +125,61 @@ where
 {
     /// Borrows the backing storage as a regular shared bit packed mut slice.
     fn as_words_mut(&mut self) -> &mut [Word];
+
+    //region Default impls
+    /// Tries to get a mutable word at a given index if it exists. Otherwise, returns none.
+    fn get_word_mut(&mut self, word_index: QWord) -> Option<&mut Word> {
+        self.as_words_mut().get_mut(word_index.quant_to_usize())
+    }
+
+    /// Mutable variant of getting the holding word index from a bool index.
+    fn get_word_index_from_bool_index_mut(&mut self, bool_index: QBit) -> Option<QWord> {
+        self.get_word_index_from_bool_index(bool_index)
+    }
+
+    /// Mutable variant of getting the local bit index for a bool index.
+    fn get_word_bit_index_from_bool_index_mut(&mut self, bool_index: QBit) -> usize {
+        self.get_word_bit_index_from_bool_index(bool_index)
+    }
+
+    /// Tries to get the mutable holding word for a bool index if it exists.
+    fn get_word_from_bool_index_mut(&mut self, bool_index: QBit) -> Option<&mut Word> {
+        let word_index = self.get_word_index_from_bool_index_mut(bool_index)?;
+        self.get_word_mut(word_index)
+    }
+
+    /// Get mutable raw pointer to the first word.
+    fn get_first_word_mut_ptr(&mut self) -> *mut Word {
+        self.as_words_mut().as_mut_ptr()
+    }
+
+    /// Gets a mutable word without checking for bounds.
+    unsafe fn get_word_mut_unchecked(&mut self, word_index: QWord) -> &mut Word {
+        debug_assert!(word_index.quant_to_usize() < self.as_words_mut().len());
+        self.as_words_mut().get_unchecked_mut(word_index.quant_to_usize())
+    }
+
+    /// Mutable variant of bool-index to word-index conversion without checks.
+    unsafe fn get_word_index_from_bool_index_mut_unchecked(&mut self, bool_index: QBit) -> QWord {
+        self.get_word_index_from_bool_index_unchecked(bool_index)
+    }
+
+    /// Gets the mutable holding word for a bool index without any bounds checks.
+    unsafe fn get_word_from_bool_index_mut_unchecked(&mut self, bool_index: QBit) -> &mut Word {
+        let word_index = self.get_word_index_from_bool_index_mut_unchecked(bool_index);
+        self.get_word_mut_unchecked(word_index)
+    }
+
+    /// Mutable iterator over all words.
+    fn iter_words_mut(&mut self) -> core::slice::IterMut<'_, Word> {
+        self.as_words_mut().iter_mut()
+    }
+
+    #[cfg(feature = "expose_rayon")]
+    fn iter_words_mut_rayon(&self) -> rayon::slice::IterMut<'_, Word> {
+        use rayon::iter::IntoParallelRefMutIterator;
+        self.as_words_mut().par_iter_mut()
+    }
     
-    
+    //endregion
 }
