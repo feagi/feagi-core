@@ -200,6 +200,7 @@ fn poll_source(descriptor_present: bool) -> &'static str {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_row(
     session_id: Option<String>,
     descriptor_bound_session_id: Option<String>,

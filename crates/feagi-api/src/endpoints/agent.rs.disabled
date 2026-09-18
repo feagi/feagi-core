@@ -1062,7 +1062,7 @@ pub async fn get_device_registration_store(
                 .filter(|row| row.segmented_vision_only_in_descriptor)
                 .count();
         }
-        return Ok(Json(payload));
+        Ok(Json(payload))
     }
 
     #[cfg(not(feature = "feagi-agent"))]
