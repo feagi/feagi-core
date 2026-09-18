@@ -31,6 +31,8 @@ use feagi_api::common::agent_registration::{
     derive_motor_cortical_ids_from_device_registrations,
     derive_sensory_cortical_ids_from_device_registrations,
 };
+#[cfg(feature = "feagi-agent")]
+use feagi_api::common::device_registration_store::build_device_registration_store_compare;
 use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
 use feagi_api::endpoints::agent::register_agent;
 use feagi_api::endpoints::cortical_area::delete_multi_cortical_area;
@@ -2291,6 +2293,62 @@ async fn test_force_deregister_preserves_descriptor_device_registrations_for_rec
             .is_some(),
         "descriptor device registrations should persist for reconnect mapping"
     );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[test]
+fn test_device_registration_store_compare_flags_stale_segmented_vision() {
+    let mut handler = FeagiAgentHandler::new(Box::new(DummyAuth {}));
+    let descriptor =
+        AgentDescriptor::new("neuraville", "Lite6", 1).expect("descriptor creation failed");
+    let session_id = AgentID::new([5u8; AgentID::NUMBER_BYTES]);
+    handler.set_device_registrations_by_descriptor(
+        session_id.to_base64(),
+        descriptor.clone(),
+        json!({
+            "input_units_and_encoder_properties": {
+                "SegmentedVision": [[
+                    {"friendly_name": "hand_bottom", "cortical_unit_index": 0},
+                    {}
+                ]]
+            },
+            "output_units_and_decoder_properties": {}
+        }),
+    );
+    handler.set_device_registrations_by_agent(
+        session_id,
+        json!({
+            "input_units_and_encoder_properties": {
+                "Vision": [[
+                    {"friendly_name": "scene_cam", "cortical_unit_index": 0},
+                    {}
+                ]]
+            },
+            "output_units_and_decoder_properties": {}
+        }),
+    );
+    handler.register_logical_agent(
+        session_id,
+        descriptor,
+        vec![AgentCapabilities::SendSensorData],
+    );
+
+    let compare = build_device_registration_store_compare(
+        handler.get_all_registered_agents(),
+        handler.get_device_registrations_by_descriptor_store(),
+        handler.get_device_registrations_by_agent_store(),
+        handler.get_descriptor_session_ids(),
+    );
+    assert_eq!(compare.count, 1);
+    assert_eq!(compare.mismatch_count, 1);
+    assert_eq!(compare.segmented_vision_descriptor_stale_count, 1);
+    let row = &compare.agents[0];
+    assert_eq!(row.poll_source, "descriptor");
+    assert!(row.segmented_vision_only_in_descriptor);
+    assert!(row
+        .keys_only_in_descriptor
+        .contains(&"SegmentedVision".to_string()));
+    assert!(row.keys_only_in_session.contains(&"Vision".to_string()));
 }
 
 #[cfg(feature = "feagi-agent")]

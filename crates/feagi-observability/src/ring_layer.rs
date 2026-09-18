@@ -94,15 +94,21 @@ impl LogRingBuffer {
     /// * `min_level`   - drop records below this level (TRACE < DEBUG < INFO < WARN < ERROR)
     /// * `target_prefix` - drop records whose `target` does not start with this prefix
     /// * `limit`       - return at most this many records (most recent records win)
+    /// * `message_contains` - case-insensitive substring match on `message`
     pub fn snapshot(
         &self,
         since_ts_ms: Option<i64>,
         min_level: Option<&str>,
         target_prefix: Option<&str>,
         limit: Option<usize>,
+        message_contains: Option<&str>,
     ) -> Vec<LogRecord> {
         let inner = self.inner.read();
         let min_rank = min_level.and_then(level_rank);
+        let message_needle = message_contains
+            .map(str::trim)
+            .filter(|needle| !needle.is_empty())
+            .map(str::to_lowercase);
         let mut filtered: Vec<LogRecord> = inner
             .iter()
             .filter(|r| match since_ts_ms {
@@ -115,6 +121,10 @@ impl LogRingBuffer {
             })
             .filter(|r| match target_prefix {
                 Some(prefix) => r.target.starts_with(prefix),
+                None => true,
+            })
+            .filter(|r| match message_needle.as_deref() {
+                Some(needle) => r.message.to_lowercase().contains(needle),
                 None => true,
             })
             .cloned()
@@ -298,7 +308,7 @@ mod tests {
                 fields: None,
             });
         }
-        let snap = ring.snapshot(None, None, None, None);
+        let snap = ring.snapshot(None, None, None, None, None);
         assert_eq!(snap.len(), 3);
         assert_eq!(snap[0].message, "msg-2");
         assert_eq!(snap[2].message, "msg-4");
@@ -335,20 +345,24 @@ mod tests {
             fields: None,
         });
 
-        let warnings = ring.snapshot(None, Some("warn"), None, None);
+        let warnings = ring.snapshot(None, Some("warn"), None, None, None);
         assert_eq!(warnings.len(), 2);
 
-        let api_only = ring.snapshot(None, None, Some("feagi-api"), None);
+        let api_only = ring.snapshot(None, None, Some("feagi-api"), None, None);
         assert_eq!(api_only.len(), 2);
         assert!(api_only.iter().all(|r| r.target.starts_with("feagi-api")));
 
-        let recent = ring.snapshot(Some(250), None, None, None);
+        let recent = ring.snapshot(Some(250), None, None, None, None);
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].timestamp_ms, 300);
 
-        let limited = ring.snapshot(None, None, None, Some(2));
+        let limited = ring.snapshot(None, None, None, Some(2), None);
         assert_eq!(limited.len(), 2);
         assert_eq!(limited.last().unwrap().timestamp_ms, 300);
+
+        let by_message = ring.snapshot(None, None, None, None, Some("ERR"));
+        assert_eq!(by_message.len(), 1);
+        assert_eq!(by_message[0].message, "error");
     }
 
     #[test]
@@ -363,6 +377,6 @@ mod tests {
             message: "x".into(),
             fields: None,
         });
-        assert!(ring.snapshot(None, None, None, None).is_empty());
+        assert!(ring.snapshot(None, None, None, None, None).is_empty());
     }
 }

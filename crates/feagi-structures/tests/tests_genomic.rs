@@ -1635,6 +1635,38 @@ mod test_motor_cortical_unit {
         assert_eq!(incremental.channel_dimensions_default, [2, 1, 20]);
         assert_eq!(speed.channel_dimensions_default, [1, 1, 20]);
     }
+
+    /// Subunit bits live in the IO flag (bits 4-7). Decoding must mask them
+    /// off before reading the variant, or PositionalServo incremental/speed IDs
+    /// fail connectome validation with ``Invalid variant type!``.
+    #[test]
+    fn test_positional_servo_subunit_ids_decode_cortical_type() {
+        let ids = MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalUnitIndex::from(0u16),
+        );
+        assert_eq!(ids.len(), 3);
+        for id in ids.iter() {
+            id.as_cortical_type().unwrap_or_else(|error| {
+                panic!(
+                    "PositionalServo id {} must decode an IO variant: {}",
+                    id.as_base_64(),
+                    error
+                )
+            });
+        }
+        let speed = CorticalID::try_from_base_64("b3BzZSEAAAA=")
+            .expect("live Positional Servo Speed wire id");
+        assert_eq!(speed.as_base_64(), ids[2].as_base_64());
+        assert_eq!(
+            speed.io_cortical_sub_unit_index(),
+            CorticalSubUnitIndex::from(2u8)
+        );
+        speed
+            .as_cortical_type()
+            .expect("b3BzZSEAAAA= must produce a runtime cortical type");
+    }
 }
 
 /// Tests for genomic/sensory_cortical_unit.rs

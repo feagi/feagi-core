@@ -786,6 +786,7 @@ pub struct LogTailResponse {
 /// * `since_ts_ms` - only records with `timestamp_ms >= since_ts_ms`
 /// * `level`       - minimum severity (`TRACE` < `DEBUG` < `INFO` < `WARN` < `ERROR`)
 /// * `target_prefix` - only records whose tracing target starts with this prefix
+/// * `message_contains` - case-insensitive substring match on the log message
 /// * `limit`       - cap on returned record count (most recent records win)
 ///
 /// The buffer is bounded; old records are dropped when capacity is exceeded.
@@ -799,6 +800,7 @@ pub struct LogTailResponse {
         ("since_ts_ms" = Option<i64>, Query, description = "Only return records emitted at or after this Unix timestamp (ms)"),
         ("level" = Option<String>, Query, description = "Minimum severity (TRACE/DEBUG/INFO/WARN/ERROR)"),
         ("target_prefix" = Option<String>, Query, description = "Restrict to tracing targets starting with this prefix"),
+        ("message_contains" = Option<String>, Query, description = "Case-insensitive substring match on the log message"),
         ("limit" = Option<usize>, Query, description = "Maximum number of records to return")
     ),
     responses(
@@ -812,6 +814,7 @@ pub async fn get_log_tail(
     let since_ts_ms = query.get("since_ts_ms").and_then(|v| v.parse::<i64>().ok());
     let level = query.get("level").map(|v| v.as_str());
     let target_prefix = query.get("target_prefix").map(|v| v.as_str());
+    let message_contains = query.get("message_contains").map(|v| v.as_str());
     let limit = query.get("limit").and_then(|v| v.parse::<usize>().ok());
 
     let Some(ring) = feagi_observability::global_ring() else {
@@ -823,7 +826,7 @@ pub async fn get_log_tail(
         }));
     };
 
-    let snap = ring.snapshot(since_ts_ms, level, target_prefix, limit);
+    let snap = ring.snapshot(since_ts_ms, level, target_prefix, limit, message_contains);
     let records: Vec<LogTailRecord> = snap
         .into_iter()
         .map(|r| LogTailRecord {

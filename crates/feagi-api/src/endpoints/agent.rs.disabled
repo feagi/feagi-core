@@ -1012,6 +1012,68 @@ fn export_device_registrations_from_connector(
     ))
 }
 
+/// Compact session vs descriptor device-registration comparison.
+///
+/// The auto-create poll prefers descriptor-scoped registrations. Session-only
+/// dumps (`/v1/agent/capabilities/all`) hide leftover sensory keys such as
+/// `SegmentedVision` that keep recreating IPU areas after a camera-mode change.
+#[utoipa::path(
+    get,
+    path = "/v1/agent/device_registration_store",
+    params(
+        ("agent_name" = Option<String>, Query, description = "Restrict rows to this agent_name (exact match)")
+    ),
+    responses(
+        (status = 200, description = "Compact registration-store comparison", body = crate::common::device_registration_store::DeviceRegistrationStoreResponse),
+        (status = 500, description = "agent_handler is not configured")
+    ),
+    tag = "agent"
+)]
+pub async fn get_device_registration_store(
+    State(state): State<ApiState>,
+    Query(query): Query<HashMap<String, String>>,
+) -> ApiResult<Json<crate::common::device_registration_store::DeviceRegistrationStoreResponse>> {
+    let agent_name_filter = query
+        .get("agent_name")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    #[cfg(feature = "feagi-agent")]
+    {
+        use crate::common::device_registration_store::build_device_registration_store_compare;
+        let handler = state
+            .agent_handler
+            .as_ref()
+            .ok_or_else(|| ApiError::internal("agent_handler is not configured"))?;
+        let handler_guard = handler.lock().unwrap();
+        let mut payload = build_device_registration_store_compare(
+            handler_guard.get_all_registered_agents(),
+            handler_guard.get_device_registrations_by_descriptor_store(),
+            handler_guard.get_device_registrations_by_agent_store(),
+            handler_guard.get_descriptor_session_ids(),
+        );
+        if let Some(agent_name) = agent_name_filter {
+            payload.agents.retain(|row| row.agent_name == agent_name);
+            payload.count = payload.agents.len();
+            payload.mismatch_count = payload.agents.iter().filter(|row| row.mismatch).count();
+            payload.segmented_vision_descriptor_stale_count = payload
+                .agents
+                .iter()
+                .filter(|row| row.segmented_vision_only_in_descriptor)
+                .count();
+        }
+        return Ok(Json(payload));
+    }
+
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        let _ = (state, agent_name_filter);
+        Err(ApiError::internal(
+            "device_registration_store requires the feagi-agent feature",
+        ))
+    }
+}
+
 /// Get comprehensive agent information including status, capabilities, version, and connection details.
 #[utoipa::path(
     get,

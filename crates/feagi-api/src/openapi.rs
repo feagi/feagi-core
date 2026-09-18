@@ -94,6 +94,7 @@ use crate::{
         crate::endpoints::agent::get_fq_sampler_status,
         crate::endpoints::agent::get_capabilities,
         crate::endpoints::agent::get_all_agent_capabilities,
+        crate::endpoints::agent::get_device_registration_store,
         crate::endpoints::agent::get_agent_info,
         crate::endpoints::agent::post_configure,
 
@@ -540,6 +541,9 @@ use crate::{
             crate::v1::AgentListResponse,
             crate::v1::AgentPropertiesResponse,
             crate::v1::AgentCapabilitiesSummary,
+            crate::common::device_registration_store::DeviceRegistrationStoreResponse,
+            crate::common::device_registration_store::DeviceRegistrationStoreRow,
+            crate::common::device_registration_store::RegistrationIoSummary,
             crate::v1::AgentDeregistrationRequest,
             crate::v1::SuccessResponse,
             crate::v1::ManualStimulationRequest,

@@ -4,6 +4,7 @@
 // Common types used across all transports
 
 pub mod agent_registration;
+pub mod device_registration_store;
 pub mod error;
 pub mod request;
 pub mod response;

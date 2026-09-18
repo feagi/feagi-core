@@ -313,6 +313,23 @@ impl FeagiAgentHandler {
             .get(agent_descriptor)
     }
 
+    /// Descriptor-scoped registration map used by auto-create after reconnect.
+    pub fn get_device_registrations_by_descriptor_store(
+        &self,
+    ) -> &HashMap<AgentDescriptor, serde_json::Value> {
+        &self.device_registrations_by_descriptor
+    }
+
+    /// Session-scoped registration map for currently connected agents.
+    pub fn get_device_registrations_by_agent_store(&self) -> &HashMap<AgentID, serde_json::Value> {
+        &self.device_registrations_by_agent
+    }
+
+    /// Last session id bound to each descriptor (survives session teardown).
+    pub fn get_descriptor_session_ids(&self) -> &HashMap<AgentDescriptor, String> {
+        &self.agent_id_by_descriptor
+    }
+
     /// Store device registrations by AgentID (active connection)
     pub fn set_device_registrations_by_agent(
         &mut self,

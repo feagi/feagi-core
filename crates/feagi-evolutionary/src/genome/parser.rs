@@ -934,6 +934,35 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_positional_servo_speed_wire_id() {
+        // Embodiment-registered Positional Servo Speed (subunit 2) from live FEAGI.
+        // Connectome auto-save must be able to rehydrate this into a runtime genome.
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {
+                "b3BzZSEAAAA=": {
+                    "cortical_name": "Positional Servo Speed",
+                    "block_boundaries": [6, 1, 20],
+                    "relative_coordinate": [-58, 0, -10],
+                    "cortical_type": "OPU"
+                }
+            },
+            "brain_regions": {}
+        }"#;
+
+        let parsed = GenomeParser::parse(json).expect("Positional Servo Speed genome");
+        assert_eq!(parsed.cortical_areas.len(), 1);
+        assert_eq!(
+            parsed.cortical_areas[0].cortical_id.as_base_64(),
+            "b3BzZSEAAAA="
+        );
+        parsed.cortical_areas[0]
+            .cortical_id
+            .as_cortical_type()
+            .expect("positional servo speed IO flag must decode");
+    }
+
+    #[test]
     fn test_string_to_cortical_id_legacy_power_padded() {
         // 8-char padded form ___pwr__ (from 6-char padding in legacy flat genomes).
         use feagi_structures::genomic::cortical_area::CoreCorticalType;

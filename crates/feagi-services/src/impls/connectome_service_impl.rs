@@ -1118,6 +1118,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
             manager
                 .remove_cortical_area(&cortical_id_typed)
                 .map_err(ServiceError::from)?;
+            // Mapping dst entries on remaining areas were stripped above. Publish
+            // cortical_mappings_hash so Brain Visualizer's existing hash poll matches
+            // add/update_cortical_mapping.
+            manager.refresh_cortical_mappings_hash();
 
             Some(manager.recompute_brain_region_io_registry().map_err(|e| {
                 ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e))
@@ -4683,9 +4687,31 @@ mod tests {
 
         let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
 
+        let areas_hash_before = feagi_state_manager::StateManager::instance()
+            .read()
+            .get_cortical_areas_hash();
+        let geometry_hash_before = feagi_state_manager::StateManager::instance()
+            .read()
+            .get_brain_geometry_hash();
+
         // Act: delete by base64 string.
         let cortical_id_base64 = cortical_id.as_base_64();
         svc.delete_cortical_area(&cortical_id_base64).await?;
+
+        let areas_hash_after = feagi_state_manager::StateManager::instance()
+            .read()
+            .get_cortical_areas_hash();
+        let geometry_hash_after = feagi_state_manager::StateManager::instance()
+            .read()
+            .get_brain_geometry_hash();
+        assert_ne!(
+            areas_hash_before, areas_hash_after,
+            "delete must republish cortical_areas_hash for Brain Visualizer"
+        );
+        assert_ne!(
+            geometry_hash_before, geometry_hash_after,
+            "delete must republish brain_geometry_hash for Brain Visualizer"
+        );
 
         // Assert: RuntimeGenome no longer contains the area nor region membership.
         {
@@ -4927,7 +4953,19 @@ mod tests {
         let current_genome = Arc::new(RwLock::new(None));
         let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
 
+        let mappings_hash_before = feagi_state_manager::StateManager::instance()
+            .read()
+            .get_cortical_mappings_hash();
+
         svc.delete_cortical_area(&doomed_id.as_base_64()).await?;
+
+        let mappings_hash_after = feagi_state_manager::StateManager::instance()
+            .read()
+            .get_cortical_mappings_hash();
+        assert_ne!(
+            mappings_hash_before, mappings_hash_after,
+            "delete must republish cortical_mappings_hash after stripping mapping dst"
+        );
 
         {
             let mut npu = dyn_npu.lock().unwrap();

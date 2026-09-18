@@ -414,6 +414,10 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/capabilities/all",
             get(agent::get_all_agent_capabilities),
         )
+        .route(
+            "/agent/device_registration_store",
+            get(agent::get_device_registration_store),
+        )
         .route("/agent/info/{agent_id}", get(agent::get_agent_info))
         .route(
             "/agent/properties/{agent_id}",
