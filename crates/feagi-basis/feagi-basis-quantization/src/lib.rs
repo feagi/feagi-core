@@ -4,7 +4,7 @@
 pub mod values;
 
 /// Collections that are quantized, allow parallel mutable (unsafe) access
-pub mod generic_collections;
+//pub mod generic_collections;
 
 /// Common levels of quantizations that is used throughout FEAGI
 pub mod quantization_levels;

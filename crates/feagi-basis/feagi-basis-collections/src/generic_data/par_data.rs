@@ -22,7 +22,7 @@ pub trait GenericParData<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug>
         self.as_slice().is_empty()
     }
 
-    /// Copies out the element at `index`, or `None` if out of bounds.
+    /// Gets the element at `index`, or `None` if out of bounds.
     fn get(&self, index: QI) -> Option<&D> {
         self.as_slice().get(index.quant_to_usize())
     }

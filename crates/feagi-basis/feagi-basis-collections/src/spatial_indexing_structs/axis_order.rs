@@ -1,4 +1,7 @@
 
+/// Due to limitations with constants in mainline rust, we need to use AxisOrderIdentifier as a
+/// stand in for `AxisOrder` and convert it ourselves later.
+pub type AxisOrderIdentifier = u8;
 
 pub type AxisOrderArray<const NUM_DIMS: usize> = [usize; NUM_DIMS];
 
@@ -24,7 +27,11 @@ impl<const NUM_DIMS: usize> AxisOrder<NUM_DIMS> {
             }
         }
     }
-    
+
+    pub const fn from_identifier(u: AxisOrderIdentifier)  -> AxisOrder<NUM_DIMS> {
+        Self::from_u8(u)
+    }
+
     pub const fn from_u8(u: u8) -> AxisOrder<NUM_DIMS> {
         match u { 
             0 => AxisOrder::DefaultIncrementing,

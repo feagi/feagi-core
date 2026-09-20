@@ -1,5 +1,4 @@
 use feagi_basis_error_logging::prelude::*;
-use crate::generic_collections::feagi_data_collections_error::FeagiDataCollectionError;
 use crate::values::quantizable::FeagiDataValueQuantizationError;
 use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
 
@@ -17,7 +16,6 @@ generate_feagi_error! {
         Etc: FeagiFailQuantizationEtc,
     },
     sub_errors: {
-        DataCollection: FeagiDataCollectionError,
         Spatial: FeagiDataValuesSpatialError,
         Value: FeagiDataValueQuantizationError
     },

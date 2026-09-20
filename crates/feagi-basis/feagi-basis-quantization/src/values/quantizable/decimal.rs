@@ -76,7 +76,7 @@ pub trait QuantizedDecimalTrait:
     /// Defines the quantization type. Is simply Self for unwrapped, but for wrapped is the quant type.
     /// This allows universal compatibility checking between wrapped and unwrapped that the quantization level
     /// is the same
-    type QuantType: QuantizedDecimalTrait;
+    type QuantType: QuantizedDecimalUnwrappedTrait;
 
     const LEVEL: DecimalQuantizationLevel;
     

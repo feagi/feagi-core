@@ -68,7 +68,7 @@ pub trait QuantizedSignedIntegerTrait:
     /// Defines the quantization type. Is simply Self for unwrapped, but for wrapped is the quant type.
     /// This allows universal compatibility checking between wrapped and unwrapped that the quantization level
     /// is the same
-    type QuantType: QuantizedSignedIntegerTrait;
+    type QuantType: QuantizedSignedIntegerUnwrappedTrait;
     const LEVEL: SignedIntegerQuantizationLevel;
 
     const QUANT_MAX: Self;
