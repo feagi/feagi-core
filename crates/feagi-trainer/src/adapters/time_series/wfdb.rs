@@ -437,7 +437,7 @@ pub fn write_test_record(
     n_signals: usize,
     annotations: &[(u64, u8)],
 ) -> Result<(), TrainerError> {
-    if samples.len() % n_signals != 0 {
+    if !samples.len().is_multiple_of(n_signals) {
         return Err(TrainerError::Config(
             "test sample count is not divisible by n_signals".to_string(),
         ));
@@ -493,7 +493,7 @@ fn encode_mit_annotations(annotations: &[(u64, u8)]) -> Result<Vec<u8>, TrainerE
         }
         let delta = time - prev;
         if delta > 0x03ff {
-            let skip = 0u16 | ((SKIP as u16) << 10);
+            let skip = (SKIP as u16) << 10;
             out.extend_from_slice(&skip.to_le_bytes());
             let extra = i32::try_from(delta)
                 .map_err(|_| TrainerError::Config("annotation delta exceeds i32".to_string()))?;
@@ -567,7 +567,7 @@ mod tests {
         let mut samples = Vec::new();
         for t in 0..8 {
             samples.push(t as i16);
-            samples.push((t as i16) * -1);
+            samples.push(-(t as i16));
         }
         write_test_record(&dir, "100", &samples, 2, &[(3, 1), (5, 5)]).expect("write");
         let cfg = config(vec![

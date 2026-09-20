@@ -32,7 +32,7 @@ pub fn window_event(
         }
     };
 
-    let sample_count = episode.sample_count().map_err(|e| TrainerError::Parse(e))?;
+    let sample_count = episode.sample_count().map_err(TrainerError::Parse)?;
     let start = match event.sample_index.checked_sub(config.window.pre_samples) {
         Some(start) => start,
         None => {
