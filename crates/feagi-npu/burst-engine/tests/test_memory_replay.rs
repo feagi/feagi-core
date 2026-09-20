@@ -24,8 +24,20 @@ fn add_neuron_at(
     y: u32,
     z: u32,
 ) -> NeuronId {
+    add_neuron_at_with_threshold(npu, cortical_idx, x, y, z, 1.0)
+}
+
+/// Add a neuron with an explicit fire threshold (for pattern-only replay tests).
+fn add_neuron_at_with_threshold(
+    npu: &mut RustNPU<StdRuntime, f32, CPUBackend>,
+    cortical_idx: u32,
+    x: u32,
+    y: u32,
+    z: u32,
+    threshold: f32,
+) -> NeuronId {
     npu.add_neuron(
-        1.0,
+        threshold,
         f32::MAX,
         0.1,
         0.0,
@@ -163,5 +175,62 @@ fn test_memory_replay_respects_offsets() {
     assert!(
         window4.iter().any(|(_, bm)| bm.contains(twin_neuron.0)),
         "Expected replay firing at burst4 (offset=2)"
+    );
+}
+
+/// Pattern-only replay (no stored MPs) must force-fire twin voxels even when
+/// their LIF threshold is far above the old fixed 1.0 inject potential.
+#[test]
+fn test_memory_replay_force_fires_high_threshold_twin_without_mp() {
+    let mut npu = create_npu();
+
+    npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+    let memory_area_idx = 24u32;
+    let upstream_area_idx = 34u32;
+    let twin_area_idx = 35u32;
+
+    let memory_id = CorticalID::try_from_bytes(b"mmem0003").unwrap();
+    let upstream_id = CorticalID::try_from_bytes(b"csrc0005").unwrap();
+    let twin_id = CorticalID::try_from_bytes(b"csrc0006").unwrap();
+
+    npu.register_cortical_area(memory_area_idx, memory_id.as_base_64());
+    npu.register_cortical_area(upstream_area_idx, upstream_id.as_base_64());
+    npu.register_cortical_area(twin_area_idx, twin_id.as_base_64());
+
+    npu.configure_fire_ledger_window(twin_area_idx, 1)
+        .expect("Failed to configure fire ledger window");
+
+    let twin_low = add_neuron_at_with_threshold(&mut npu, twin_area_idx, 0, 0, 0, 1.0);
+    let twin_mid = add_neuron_at_with_threshold(&mut npu, twin_area_idx, 0, 1, 0, 11.0);
+    let twin_high = add_neuron_at_with_threshold(&mut npu, twin_area_idx, 0, 3, 0, 31.0);
+
+    let memory_neuron_id = 50_000_020u32;
+    npu.register_dynamic_neuron_mapping(memory_neuron_id, memory_id);
+    npu.register_memory_twin_mapping(memory_area_idx, upstream_area_idx, twin_area_idx, 1.0);
+    npu.register_memory_replay_frames(
+        memory_neuron_id,
+        vec![MemoryReplayFrame {
+            offset: 0,
+            upstream_area_idx,
+            coords: vec![(0, 0, 0), (0, 1, 0), (0, 3, 0)],
+            membrane_potentials: None,
+        }],
+    );
+
+    npu.inject_memory_neuron_to_fcl(memory_neuron_id, memory_area_idx, 5.0);
+    let burst1 = npu.process_burst().expect("Burst failed").burst;
+    let burst2 = npu.process_burst().expect("Burst failed").burst;
+    assert_eq!(burst2, burst1 + 1);
+
+    let window = npu
+        .get_fire_ledger_dense_window_bitmaps(twin_area_idx, burst2, 1)
+        .expect("Missing FireLedger window for twin area");
+    assert!(
+        window.iter().any(|(_, bm)| {
+            bm.contains(twin_low.0) && bm.contains(twin_mid.0) && bm.contains(twin_high.0)
+        }),
+        "Expected pattern-only replay to force-fire all stored twin coords"
     );
 }

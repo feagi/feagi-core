@@ -1490,3 +1490,132 @@ fn test_mp_ema_averaging_on_reactivation() {
         first_mp
     );
 }
+
+/// Pattern-only memory replay must force-fire twin voxels whose LIF threshold
+/// is higher than the old fixed 1.0 inject (RGB-style Y threshold ramps).
+#[test]
+fn test_mp_learning_off_force_fires_high_threshold_twin() {
+    let npu = build_npu("memory-force-fire-high-threshold-twin");
+    let upstream_idx = 7u32;
+    let memory_idx = 100u32;
+    let twin_idx = 8u32;
+
+    let (upstream_ids, twin_high_id) = {
+        let mut npu_lock = npu.lock().unwrap();
+        npu_lock.register_cortical_area(upstream_idx, "upstream".to_string());
+        npu_lock.register_cortical_area(memory_idx, "memory".to_string());
+        npu_lock.register_cortical_area(twin_idx, "twin".to_string());
+        npu_lock
+            .create_cortical_area_neurons(
+                upstream_idx,
+                1,
+                2,
+                1,
+                1,
+                1.0,
+                0.0,
+                10.0,
+                0.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                false,
+            )
+            .expect("Failed to create upstream neurons");
+        npu_lock
+            .create_cortical_area_neurons(
+                twin_idx,
+                1,
+                2,
+                1,
+                1,
+                1.0,
+                0.0,
+                30.0,
+                0.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                false,
+            )
+            .expect("Failed to create twin neurons");
+        npu_lock
+            .configure_fire_ledger_window(twin_idx, 1)
+            .expect("Failed to configure twin fire ledger");
+        npu_lock.register_memory_twin_mapping(memory_idx, upstream_idx, twin_idx, 1.0);
+
+        let upstream_ids = npu_lock.get_neurons_in_cortical_area(upstream_idx);
+        let twin_high_id = npu_lock
+            .get_neurons_in_cortical_area(twin_idx)
+            .into_iter()
+            .find(|id| npu_lock.get_neuron_coordinates(*id) == Some((0, 1, 0)))
+            .expect("Missing twin neuron at (0,1,0)");
+        (upstream_ids, twin_high_id)
+    };
+    assert_eq!(upstream_ids.len(), 2);
+
+    let service = PlasticityService::new(
+        PlasticityConfig::default(),
+        feagi_npu_plasticity::create_memory_stats_cache(),
+        npu.clone(),
+    );
+    service.start();
+    service.register_memory_area(
+        memory_idx,
+        "mem_00".to_string(),
+        1,
+        vec![upstream_idx],
+        None,
+        false,
+    );
+
+    let burst = {
+        let mut npu_lock = npu.lock().unwrap();
+        let injections: Vec<(NeuronId, f32)> = upstream_ids
+            .iter()
+            .map(|id| (NeuronId(*id), 50.0))
+            .collect();
+        npu_lock.inject_sensory_with_potentials(&injections);
+        npu_lock.process_burst().expect("Burst failed").burst
+    };
+    service.notify_burst(burst);
+
+    let commands = wait_for_commands(&service);
+    apply_plasticity_commands(&npu, &commands);
+
+    let replay_has_high_coord = commands.iter().any(|cmd| match cmd {
+        PlasticityCommand::InjectMemoryNeuronToFCL { replay_frames, .. } => replay_frames
+            .iter()
+            .any(|frame| frame.coords.contains(&(0, 1, 0)) && frame.membrane_potentials.is_none()),
+        _ => false,
+    });
+    assert!(
+        replay_has_high_coord,
+        "Expected pattern-only replay frames to include twin coord (0,1,0)"
+    );
+
+    {
+        let npu_lock = npu.lock().unwrap();
+        let memory_fire = npu_lock.process_burst().expect("Memory fire burst failed");
+        let replay_burst = npu_lock.process_burst().expect("Replay burst failed");
+        assert_eq!(replay_burst.burst, memory_fire.burst + 1);
+
+        let window = npu_lock
+            .get_fire_ledger_dense_window_bitmaps(twin_idx, replay_burst.burst, 1)
+            .expect("Missing FireLedger window for twin");
+        assert!(
+            window.iter().any(|(_, bm)| bm.contains(twin_high_id)),
+            "Expected pattern-only replay to force-fire high-threshold twin voxel (0,1,0)"
+        );
+    }
+}

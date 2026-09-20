@@ -199,7 +199,7 @@ pub async fn get_regions_members(
                     region.region_id.clone(),
                     serde_json::json!({
                         "title": region.name,
-                        "description": "",  // TODO: Add description field to BrainRegionInfo
+                        "description": region_description_from_properties(&region.properties),
                         "parent_region_id": region.parent_id,
                         "coordinate_2d": coordinate_2d,
                         "coordinate_3d": coordinate_3d,
@@ -664,12 +664,7 @@ pub async fn get_region_detail(
         })
         .unwrap_or_else(|| serde_json::json!([0, 0]));
 
-    let description = region
-        .properties
-        .get("description")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let description = region_description_from_properties(&region.properties);
 
     let mut response = HashMap::new();
     response.insert("region_id".to_string(), serde_json::json!(region.region_id));
@@ -731,4 +726,46 @@ pub async fn put_change_cortical_area_region(
         "message".to_string(),
         "Cortical area region association change not yet implemented".to_string(),
     )])))
+}
+
+/// Plain-text region purpose from genome `properties.description`.
+/// Missing, null, or non-string values are an empty string (no invented text).
+fn region_description_from_properties(properties: &HashMap<String, serde_json::Value>) -> String {
+    properties
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::region_description_from_properties;
+    use std::collections::HashMap;
+
+    #[test]
+    fn description_from_string_property() {
+        let mut properties = HashMap::new();
+        properties.insert(
+            "description".to_string(),
+            serde_json::json!("Visual scanning circuit"),
+        );
+        assert_eq!(
+            region_description_from_properties(&properties),
+            "Visual scanning circuit"
+        );
+    }
+
+    #[test]
+    fn description_from_missing_property_is_empty() {
+        let properties = HashMap::new();
+        assert_eq!(region_description_from_properties(&properties), "");
+    }
+
+    #[test]
+    fn description_from_null_property_is_empty() {
+        let mut properties = HashMap::new();
+        properties.insert("description".to_string(), serde_json::Value::Null);
+        assert_eq!(region_description_from_properties(&properties), "");
+    }
 }

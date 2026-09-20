@@ -8297,6 +8297,41 @@ mod tests {
     }
 
     #[test]
+    fn test_update_brain_region_description_property() {
+        ConnectomeManager::reset_for_testing();
+
+        let instance = ConnectomeManager::instance();
+        let mut manager = instance.write();
+
+        let region_id = feagi_structures::genomic::brain_regions::RegionID::new();
+        let region_id_str = region_id.to_string();
+        let root = BrainRegion::new(
+            region_id,
+            "Root".to_string(),
+            feagi_structures::genomic::brain_regions::RegionType::Undefined,
+        )
+        .unwrap();
+        manager.add_brain_region(root, None).unwrap();
+
+        let mut properties = std::collections::HashMap::new();
+        properties.insert(
+            "description".to_string(),
+            serde_json::json!("Holds core physiology"),
+        );
+        manager
+            .update_brain_region_properties(&region_id_str, properties)
+            .unwrap();
+
+        let updated = manager
+            .get_brain_region(&region_id_str)
+            .expect("region exists after description update");
+        assert_eq!(
+            updated.get_property("description"),
+            Some(&serde_json::json!("Holds core physiology"))
+        );
+    }
+
+    #[test]
     fn test_synapse_operations() {
         use feagi_npu_burst_engine::npu::RustNPU;
         use feagi_npu_burst_engine::TracingMutex;

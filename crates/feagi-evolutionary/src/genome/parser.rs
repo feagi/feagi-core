@@ -1055,6 +1055,39 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_brain_region_plain_text_description() {
+        let json = r#"{
+            "version": "2.1",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Core",
+                    "block_boundaries": [10, 10, 10],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "description": "Holds core physiology and embodiment IO",
+                    "parent_region_id": null,
+                    "areas": ["_power"]
+                }
+            }
+        }"#;
+
+        let parsed = GenomeParser::parse(json).unwrap();
+        assert_eq!(parsed.brain_regions.len(), 1);
+        let (region, _) = &parsed.brain_regions[0];
+        assert_eq!(
+            region.get_property("description"),
+            Some(&serde_json::json!(
+                "Holds core physiology and embodiment IO"
+            ))
+        );
+    }
+
+    #[test]
     fn test_invalid_version() {
         let json = r#"{
             "version": "1.0",

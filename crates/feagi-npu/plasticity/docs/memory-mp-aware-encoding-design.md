@@ -11,7 +11,7 @@ Current episodic memory captures **which** neurons fired (binary identity) and *
 | Current storage | Missing for reconstruction |
 |----------------|---------------------------|
 | `Vec<(u32, u32, u32)>` coords per frame | Per-coordinate membrane potential at encoding time |
-| Fixed replay potential (`firing_threshold + increment`) | Variable per-coordinate replay potential |
+| Pattern-only force-fire of those coords on the twin | Variable per-coordinate replay potential |
 
 ---
 
@@ -21,8 +21,8 @@ Current episodic memory captures **which** neurons fired (binary identity) and *
 
 Memory areas gain a boolean property `mp_learning_enabled` (default: `false`).
 
-- **Off (default)**: Behavior unchanged. `ReplayFrame` stores coords only. Replay uses fixed potential from `MemoryReplayTarget`.
-- **On**: `ReplayFrame` stores coords with associated MP values. Replay injects per-coordinate potentials.
+- **Off (default)**: `ReplayFrame` stores coords only. Replay force-fires those twin voxels (authoritative FQ), ignoring per-voxel LIF thresholds. Membrane potentials are not reconstructed.
+- **On**: `ReplayFrame` stores coords with associated MP values. Replay injects per-coordinate potentials so intensity also appears on the twin.
 
 This property is defined in the genome (memory cortical area properties) and propagated through `MemoryAreaConfig` at registration time.
 
@@ -77,8 +77,8 @@ pub struct MemoryReplayFrame {
     pub upstream_area_idx: u32,
     pub coords: Vec<(u32, u32, u32)>,
     /// Per-coordinate membrane potentials for MP-aware replay.
-    /// When Some, replay injects each coordinate at its stored potential
-    /// instead of the fixed twin target potential.
+    /// When Some, replay injects each coordinate at its stored potential.
+    /// When None, replay force-fires the stored coordinates (pattern-only).
     pub membrane_potentials: Option<Vec<f32>>,
 }
 ```
@@ -101,14 +101,13 @@ pub struct ReplayInjection {
     pub target_burst: u64,
     pub twin_area_idx: u32,
     pub coords: Vec<(u32, u32, u32)>,
-    /// When None, use the fixed MemoryReplayTarget.potential for all coords.
-    /// When Some, inject each coordinate at its stored potential.
+    /// Force-fire stored coords, or inject stored per-coordinate MPs.
     pub potentials: ReplayPotentialMode,
 }
 
 pub enum ReplayPotentialMode {
-    /// All coordinates replayed at a single fixed potential (current behavior).
-    Fixed(f32),
+    /// Pattern-only replay: force-fire each stored coord, bypassing LIF/threshold.
+    ForceFire,
     /// Each coordinate replayed at its own stored potential.
     PerCoordinate(Vec<f32>),
 }
@@ -172,7 +171,7 @@ When building `ReplayInjection`:
 ```rust
 let potential_mode = match &frame.membrane_potentials {
     Some(mps) => ReplayPotentialMode::PerCoordinate(mps.clone()),
-    None => ReplayPotentialMode::Fixed(target.potential),
+    None => ReplayPotentialMode::ForceFire,
 };
 ```
 
@@ -180,8 +179,8 @@ let potential_mode = match &frame.membrane_potentials {
 
 When processing `ReplayInjection` during the target burst:
 
-- `ReplayPotentialMode::Fixed(p)`: Current behavior -- all coords injected at potential `p`.
-- `ReplayPotentialMode::PerCoordinate(mps)`: Each coordinate injected at its corresponding `mps[i]` value.
+- `ReplayPotentialMode::ForceFire`: Merge stored twin coords into the fire queue after Phase 2 (`pending_authoritative_fq`). They fire even when local thresholds exceed any PSP inject.
+- `ReplayPotentialMode::PerCoordinate(mps)`: Each coordinate injected at its corresponding `mps[i]` value through LIF so stored intensities appear on the twin.
 
 ---
 
@@ -339,7 +338,7 @@ No `neuron_` prefix needed -- this is a memory-area-level behavior toggle, not a
 | Pattern hash computation | **Unchanged** -- hash is still from neuron IDs only. MP values do not affect pattern identity. |
 | Lifecycle (aging, LTM conversion) | **Unchanged** -- MP data persists with the replay frames regardless of lifecycle state. |
 | Associative STDP path | **Unchanged** -- associative memory uses its own sparse LIF state independent of episodic replay. |
-| Twin area creation | **Unchanged** -- twin dimensions and morphology remain the same. The fixed `potential` field on `MemoryReplayTarget` becomes a fallback for the `Fixed` mode. |
+| Twin area creation | **Unchanged** -- twin dimensions and morphology remain the same. Pattern-only replay force-fires stored coords; MP-aware replay injects stored potentials. |
 | Episodic precedence (Section 7 of base design) | **Unchanged**. |
 
 ---
@@ -348,7 +347,7 @@ No `neuron_` prefix needed -- this is a memory-area-level behavior toggle, not a
 
 1. **Unit**: `ReplayFrame` with/without MPs; EMA averaging correctness over multiple reactivations.
 2. **Integration**: End-to-end encode-replay cycle verifying per-coordinate potentials arrive at twin area.
-3. **Regression**: Existing memory tests pass unchanged when `mp_learning_enabled = false`.
+3. **Regression**: Pattern-only replay (`mp_learning_enabled = false`) still force-fires every stored twin coord, including voxels whose LIF threshold exceeds 1.0.
 4. **Benchmark**: Memory overhead and replay latency with MP learning on vs. off across various upstream area sizes.
 
 ---

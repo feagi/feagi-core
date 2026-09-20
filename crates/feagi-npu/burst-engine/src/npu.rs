@@ -439,8 +439,8 @@ pub struct MemoryReplayFrame {
     pub upstream_area_idx: u32,
     pub coords: Vec<(u32, u32, u32)>,
     /// Per-coordinate membrane potentials for MP-aware replay.
-    /// When Some, replay injects each coordinate at its stored potential
-    /// instead of the fixed twin target potential.
+    /// When Some, replay injects each coordinate at its stored potential.
+    /// When None, replay force-fires the stored coordinates (pattern-only).
     pub membrane_potentials: Option<Vec<f32>>,
 }
 
@@ -455,16 +455,16 @@ pub(crate) struct ReplayInjection {
     target_burst: u64,
     twin_area_idx: u32,
     coords: Vec<(u32, u32, u32)>,
-    /// Replay potential mode: fixed for all coords or per-coordinate.
+    /// Pattern-only force-fire vs MP-aware per-coordinate injection.
     potentials: ReplayPotentialMode,
 }
 
-/// How membrane potentials are applied during twin area replay injection.
+/// How twin-area replay is applied on the scheduled burst.
 #[derive(Debug, Clone)]
 pub(crate) enum ReplayPotentialMode {
-    /// All coordinates replayed at a single fixed potential (default behavior).
-    Fixed(f32),
-    /// Each coordinate replayed at its own stored potential.
+    /// Pattern-only replay: force-fire each stored coord, bypassing LIF/threshold.
+    ForceFire,
+    /// MP-aware replay: inject stored per-coordinate potentials through LIF.
     PerCoordinate(Vec<f32>),
 }
 
@@ -2097,7 +2097,7 @@ impl<
                             coords: frame.coords.clone(),
                             potentials: match &frame.membrane_potentials {
                                 Some(mps) => ReplayPotentialMode::PerCoordinate(mps.clone()),
-                                None => ReplayPotentialMode::Fixed(target.potential),
+                                None => ReplayPotentialMode::ForceFire,
                             },
                         });
                     scheduled += 1;
@@ -2188,9 +2188,11 @@ impl<
                 let neuron_ids =
                     neuron_storage.batch_coordinate_lookup(replay.twin_area_idx, &replay.coords);
                 match &replay.potentials {
-                    ReplayPotentialMode::Fixed(potential) => {
+                    ReplayPotentialMode::ForceFire => {
                         for idx in neuron_ids.into_iter().flatten() {
-                            staged.push((NeuronId(idx as u32), *potential));
+                            fire_structures
+                                .pending_authoritative_fq
+                                .push((NeuronId(idx as u32), 1.0));
                             total_replay_candidates += 1;
                         }
                     }
@@ -6506,7 +6508,7 @@ mod tests {
                     target_burst: 0,
                     twin_area_idx: 3,
                     coords: vec![(0, 0, 0)],
-                    potentials: ReplayPotentialMode::Fixed(10.0),
+                    potentials: ReplayPotentialMode::ForceFire,
                 });
         }
 
