@@ -28,4 +28,12 @@ impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> SpatialDimensions
     pub fn as_mut_slice(&mut self) -> &mut [QI; NUM_DIMS] {
         &mut self.data
     }
+
+    /// Total number of elements in the index space (product of all axis lengths).
+    pub fn spatial_element_count(&self) -> usize {
+        self.data
+            .iter()
+            .map(|dim| dim.quant_to_usize())
+            .product()
+    }
 }
