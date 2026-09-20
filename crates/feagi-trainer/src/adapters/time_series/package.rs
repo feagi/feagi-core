@@ -136,8 +136,10 @@ pub fn load_package(root: &Path) -> Result<Vec<AnalogEpisode>, TrainerError> {
                 )));
             }
             let values: Vec<f32> = bytes
-                .chunks_exact(4)
-                .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|chunk| f32::from_le_bytes(*chunk))
                 .collect();
             if values.len() as u64 != entry.sample_count {
                 return Err(TrainerError::Parse(format!(

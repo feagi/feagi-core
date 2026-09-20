@@ -269,8 +269,8 @@ fn decode_format_16(
         )));
     }
     let mut out = Vec::with_capacity(sample_count * n_signals);
-    for chunk in bytes[..expected].chunks_exact(2) {
-        out.push(i16::from_le_bytes([chunk[0], chunk[1]]) as i32);
+    for chunk in bytes[..expected].as_chunks::<2>().0 {
+        out.push(i16::from_le_bytes(*chunk) as i32);
     }
     Ok(out)
 }
