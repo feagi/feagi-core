@@ -49,6 +49,10 @@ fn enums_use_snake_case() {
         "\"cpu\""
     );
     assert_eq!(
+        serde_json::to_string(&Modality::TimeSeries).expect("serialize"),
+        "\"time_series\""
+    );
+    assert_eq!(
         serde_json::to_string(&Modality::Multimodal).expect("serialize"),
         "\"multimodal\""
     );

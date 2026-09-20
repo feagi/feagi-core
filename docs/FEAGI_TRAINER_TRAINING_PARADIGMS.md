@@ -41,11 +41,11 @@ Capture/replay stays embodiment-agnostic: capture at the **cortical (FEAGI-nativ
 ### 2.1 Reward & punishment (reinforcement-style)
 The first-class, versioned `RewardPolicy` axis maps an outcome onto the native affect channels. This is the backbone of every supervised and reinforcement run. Two flavors:
 
-- **Supervised-correctness reward** — prediction-vs-label drives Pleasure/Pain (e.g. the IRIS slice via `PainPleasureReward`). **Implemented.**
+- **Supervised-correctness reward** — previously the Trainer mapped prediction-vs-label onto Pleasure/Pain (`PainPleasureReward`). Dataset classification no longer does this: **Pain/Pleasure is genome-internal**. The `RewardPolicy` type remains for embodied/environment reward. **Implemented** (dataset path: observe-only).
 - **Environmental / episodic reward** — the outcome of an embodied rollout drives affect, with success evidence from a telemetry predicate or goal-distance signal (ADR-014). Delivered by the Trainer **co-agent** in parallel with the controller. When reward is intrinsic to the genome (e.g. the pendulum's R-STDP `balance_homeostatic` personality), this axis is a **no-op / observe-only** and the Trainer scores rather than shapes. This flavor cannot be expressed by the current `RewardPolicy::reward(prediction, target)` signature (it has no per-step target); it requires the co-agent seam (Section 3).
 
 ### 2.2 Supervised associative learning
-Present the input *and* a correctness / expected signal during a train phase so FEAGI associates stimulus → response. Mechanically this is delivered *through* the reward channel (the policy emits the correctness signal into the affect areas during the train phase — Appendix B.3). In FEAGI terms "supervised" is a special case of reward-shaping, not a separate optimizer. **Implemented** for classification (IRIS).
+Present the input *and* a correctness / expected signal during a train phase so FEAGI associates stimulus → response. For dataset classification the expected signal is a **teacher IPU** (e.g. stream Misc B holding the class). The Trainer does **not** inject Pain/Pleasure and does **not** wait for OPU detection during train. Test/infer may read the Misc OPU for scoring; a silent OPU is a warning, not a failed run. **Implemented** for classification (IRIS snapshot + ECG stream).
 
 ### 2.3 Imitation / behavior cloning (teaching / supervised forcing)
 Inject the *demonstrated action* as expected motor output before the burst, teaching FEAGI to reproduce it. This uses the **reserved** teaching / target-motor channel (`FeagiRuntime::submit_target_motor`, default `Unsupported`). The seam exists (plan Phase 1b) so the loop is not reopened later; the mode itself is **scheduled for Phase 5** (VLA slice — learning from demonstrations alongside reward).
@@ -74,8 +74,8 @@ The **co-agent seam (ADR-014)** resolves this generally: because the Trainer inj
 
 | Paradigm | Primary channel(s) | Status | Milestone |
 |---|---|---|---|
-| Reward & punishment — supervised-correctness | affect | Implemented | M1 (IRIS) |
-| Supervised associative classification | sensory + affect | Implemented | M1 (IRIS) |
+| Reward & punishment — supervised-correctness | genome-internal affect | Trainer no longer injects | M1 (IRIS) / ECG stream |
+| Supervised associative classification | sensory + teacher IPU | Implemented | M1 (IRIS) / ECG stream |
 | Reward & punishment — environmental/episodic | affect (co-agent) | Metric pack built; live co-agent path pending | Phase 1d (re-scoped) |
 | Closed-loop embodied control (RL-style) | sensory + affect (co-agent) | Topology decided (ADR-014); metric pack built; live path pending | Phase 1d (re-scoped) |
 | Imitation / behavior cloning | teaching / target-motor | Reserved seam (Phase 1b) | Phase 5 |
@@ -134,7 +134,7 @@ Modern ML tools (W&B, MLflow, Roboflow, Isaac Lab) set researcher expectations p
 
 ### 7.3 Language and anti-patterns
 
-The UI must **not** label plasticity controls as "learning rate" or show loss curves that imply backprop. Prefer: **reward magnitude**, **protocol phase**, **affect channel**, **ticks per sample**, **Scorecard / evaluation protocol version**. This is an intentional divergence from PyTorch/Hugging Face — document it in onboarding copy on Step 1 (Training setup).
+The UI must **not** label plasticity controls as "learning rate" or show loss curves that imply backprop. Prefer: **reward magnitude**, **protocol phase**, **affect channel**, **ticks per sample**, **Scorecard / evaluation protocol version**. This is an intentional divergence from PyTorch/Hugging Face — keep that language in **Advanced** on Training setup, not on the entry tiles.
 
 ### 7.4 Cross-reference
 

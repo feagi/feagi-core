@@ -27,7 +27,7 @@ pub use common::{
 };
 pub use dataset_manifest::{DatasetManifest, SplitDescriptor};
 pub use evaluation_spec::EvaluationSpec;
-pub use ir_sample::{CoordinateFrame, IRSample, Payload, TypedTarget};
+pub use ir_sample::{CoordinateFrame, HoldEnd, IRSample, Payload, TypedTarget};
 pub use metric_stats::MetricStat;
 pub use prediction_record::{PredictionRecord, TypedPrediction};
 pub use run_event::{MetricScope, RunEvent, RunEventKind};

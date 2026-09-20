@@ -51,6 +51,9 @@ pub enum RunEventKind {
         repeat_index: u32,
         /// Total number of repeats (1 for a single run).
         repeat_total: u32,
+        /// Analog values just submitted as graded P. Not a FEAGI XYZP frame (ADR-005).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        sent_values: Vec<f64>,
     },
     /// A metric snapshot — interim ([`MetricScope::Partial`]) or final
     /// ([`MetricScope::Aggregate`]). Values are deterministically ordered.
@@ -70,6 +73,11 @@ pub enum RunEventKind {
     /// The run terminated with an error (includes cooperative cancellation).
     Failed {
         /// Human-readable failure description.
+        message: String,
+    },
+    /// A non-fatal condition; the run continues (e.g. no detection readout from FEAGI).
+    Warning {
+        /// Human-readable warning description.
         message: String,
     },
 }
@@ -124,6 +132,7 @@ mod tests {
                 samples_total: 10,
                 repeat_index: 1,
                 repeat_total: 5,
+                sent_values: vec![-0.25, 1.5],
             },
         );
         let json = serde_json::to_string(&event).expect("serialize");
@@ -155,5 +164,19 @@ mod tests {
             let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
             assert_eq!(event, restored);
         }
+    }
+
+    #[test]
+    fn warning_event_round_trips() {
+        let event = RunEvent::new(
+            run_id(),
+            RunEventKind::Warning {
+                message: "no detection result has been received from FEAGI".to_string(),
+            },
+        );
+        let json = serde_json::to_string(&event).expect("serialize");
+        assert!(json.contains("\"type\":\"warning\""));
+        let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(event, restored);
     }
 }

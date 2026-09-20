@@ -53,6 +53,31 @@ fn i64_from_integer_like_json_value(v: &serde_json::Value, field: &str) -> Resul
     Ok(f as i64)
 }
 
+/// Read an optional integer-like object field. Missing and JSON null are absent.
+///
+/// GET mapping_properties must not 400 when a stored non-plastic rule omits
+/// `plasticity_constant` / LTP / LTD / window. PUT validation stays strict.
+fn optional_i64_field(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<Option<i64>, ApiError> {
+    match obj.get(field) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => Ok(Some(i64_from_integer_like_json_value(value, field)?)),
+    }
+}
+
+/// Read an optional i8 object field. Missing and JSON null are absent.
+fn optional_i8_field(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<Option<i8>, ApiError> {
+    match obj.get(field) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => Ok(Some(i8_ltd_ltp_from_json_value(value, field)?)),
+    }
+}
+
 /// POST /v1/cortical_mapping/afferents
 #[utoipa::path(
     post,
@@ -214,26 +239,10 @@ pub async fn post_mapping_properties(
                 .get("plasticity_flag")
                 .and_then(|v| v.as_bool())
                 .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
-            let plasticity_constant = i64_from_integer_like_json_value(
-                obj.get("plasticity_constant")
-                    .ok_or_else(|| ApiError::invalid_input("plasticity_constant missing"))?,
-                "plasticity_constant",
-            )?;
-            let ltp_multiplier = i8_ltd_ltp_from_json_value(
-                obj.get("ltp_multiplier")
-                    .ok_or_else(|| ApiError::invalid_input("ltp_multiplier missing"))?,
-                "ltp_multiplier",
-            )?;
-            let ltd_multiplier = i8_ltd_ltp_from_json_value(
-                obj.get("ltd_multiplier")
-                    .ok_or_else(|| ApiError::invalid_input("ltd_multiplier missing"))?,
-                "ltd_multiplier",
-            )?;
-            let plasticity_window = i64_from_integer_like_json_value(
-                obj.get("plasticity_window")
-                    .ok_or_else(|| ApiError::invalid_input("plasticity_window missing"))?,
-                "plasticity_window",
-            )?;
+            let plasticity_constant = optional_i64_field(obj, "plasticity_constant")?;
+            let ltp_multiplier = optional_i8_field(obj, "ltp_multiplier")?;
+            let ltd_multiplier = optional_i8_field(obj, "ltd_multiplier")?;
+            let plasticity_window = optional_i64_field(obj, "plasticity_window")?;
 
             let synaptic_delay_bursts: u64 = obj
                 .get("synaptic_delay_bursts")
@@ -628,7 +637,10 @@ pub async fn delete_mapping(
 
 #[cfg(test)]
 mod tests {
-    use super::{f64_from_json_value, i64_from_integer_like_json_value};
+    use super::{
+        f64_from_json_value, i64_from_integer_like_json_value, optional_i64_field,
+        optional_i8_field,
+    };
 
     #[test]
     fn f64_parser_accepts_integer_and_float_json() {
@@ -672,6 +684,47 @@ mod tests {
     fn i64_parser_rejects_fractional_values() {
         let fractional = serde_json::json!(3.5);
         assert!(i64_from_integer_like_json_value(&fractional, "plasticity_constant").is_err());
+    }
+
+    #[test]
+    fn optional_integer_fields_treat_missing_and_null_as_absent() {
+        let missing = serde_json::json!({
+            "morphology_id": "projector",
+            "plasticity_flag": false
+        });
+        let obj = missing.as_object().expect("object");
+        assert_eq!(
+            optional_i64_field(obj, "plasticity_constant").expect("missing is ok"),
+            None
+        );
+        assert_eq!(
+            optional_i8_field(obj, "ltp_multiplier").expect("missing is ok"),
+            None
+        );
+
+        let with_null = serde_json::json!({"plasticity_window": null});
+        let null_obj = with_null.as_object().expect("object");
+        assert_eq!(
+            optional_i64_field(null_obj, "plasticity_window").expect("null is ok"),
+            None
+        );
+    }
+
+    #[test]
+    fn optional_integer_fields_parse_present_values() {
+        let present = serde_json::json!({
+            "plasticity_constant": 2,
+            "ltp_multiplier": 1
+        });
+        let obj = present.as_object().expect("object");
+        assert_eq!(
+            optional_i64_field(obj, "plasticity_constant").expect("present"),
+            Some(2)
+        );
+        assert_eq!(
+            optional_i8_field(obj, "ltp_multiplier").expect("present"),
+            Some(1)
+        );
     }
 }
 

@@ -1167,9 +1167,17 @@ pub async fn post_cortical_area(
             }
         }
 
+        let area_name = request
+            .get("cortical_name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| format!("{} Unit {}", cortical_type_key, group_id));
+
         let params = CreateCorticalAreaParams {
             cortical_id: cortical_id.clone(),
-            name: format!("{} Unit {}", cortical_type_key, unit_idx),
+            name: area_name,
             dimensions,
             position,
             area_type: cortical_type_str.to_string(),

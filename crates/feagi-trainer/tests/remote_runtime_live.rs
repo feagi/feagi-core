@@ -89,11 +89,12 @@ fn remote_runtime_registers_and_drives_a_live_feagi() {
     // Motor output depends on the loaded genome; a timeout here is acceptable for a smoke test, an
     // explicit error from the transport layer is not.
     match runtime.collect_motor() {
-        Ok(frame) => eprintln!(
+        Ok(Some(frame)) => eprintln!(
             "collected motor frame with {} cortical area(s)",
             frame.len()
         ),
-        Err(error) => eprintln!("no motor frame collected (acceptable for smoke test): {error}"),
+        Ok(None) => eprintln!("no motor frame collected (acceptable for smoke test)"),
+        Err(error) => eprintln!("motor subscriber error: {error}"),
     }
 
     runtime.shutdown().expect("deregister from live FEAGI");

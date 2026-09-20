@@ -15,7 +15,10 @@ for the full design and ADRs (ADR-001..006, ADR-012).
 
 ## Status
 
-Initial vertical slice (IRIS tabular classification). Current scope:
+Vertical slices: IRIS tabular classification, Cityscapes-style image segmentation, and
+annotated analog time series (WFDB / canonical package event-window classification).
+
+Current scope:
 
 - `contracts`: the public, versioned data contracts (the stable seam). v1 types:
   `DatasetManifest`, `IRSample`, `RunSpec`, `Scorecard`, `EvaluationSpec`,
@@ -23,8 +26,9 @@ Initial vertical slice (IRIS tabular classification). Current scope:
   `QuantizationFingerprint`, forward-compatible with the quantization-capable NPU direction.)
 - `plugins`: the pure (non-runtime) plugin-axis interfaces — `AdapterPlugin`,
   `SamplerPlugin`, `MetricPackPlugin`.
-- `adapters` / `samplers` / `metrics`: concrete implementations for the IRIS path —
-  `TabularCsvAdapter`, `SequentialSampler`, `ClassificationMetricPack`.
+- `adapters` / `samplers` / `metrics`: `TabularCsvAdapter`,
+  `ImageFolderSegmentationAdapter`, `TimeSeriesPackageAdapter` (WFDB + analog package),
+  `SequentialSampler`, classification and segmentation metric packs.
 
 The FEAGI binding selectors (`EncoderPlugin` / `DecoderPlugin`), `RewardPolicy`, and run
 execution land next, behind a Trainer-owned runtime abstraction (remote/ZMQ path first,
@@ -56,9 +60,11 @@ src/
     scorecard.rs          Scorecard (status + visibility)
   plugins/                pure plugin-axis traits (adapter, sampler, metric_pack)
   adapters/tabular_csv.rs TabularCsvAdapter
+  adapters/time_series/   TimeSeriesPackageAdapter (WFDB + package)
   samplers/sequential.rs  SequentialSampler
   metrics/classification.rs ClassificationMetricPack
 tests/
   contracts_roundtrip.rs  serde round-trip integration tests
   iris_pipeline.rs        adapter -> sampler -> metric pack integration
+  ecg_timeseries_pipeline.rs WFDB windows -> classification metrics
 ```

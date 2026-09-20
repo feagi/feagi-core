@@ -6,10 +6,15 @@
 //! composing plugins, never by editing this loop (ADR-002):
 //!
 //! ```text
-//! sample -> encoder -> runtime.submit_sensory -> runtime.step -> runtime.collect_motor
-//!        -> decoder -> (reward policy -> runtime.submit_reward) -> PredictionRecord
-//! ...then: metric pack(predictions, targets) -> RunSummary
+//! train: sample -> encoder -> runtime.submit_sensory -> runtime.step
+//! test:  sample -> encoder -> runtime.submit_sensory -> runtime.step
+//!        -> optional collect_motor -> decoder -> PredictionRecord
+//! ...then: metric pack(observed predictions, targets) -> RunSummary
 //! ```
+//!
+//! Dataset train does not read the OPU and does not inject Pain/Pleasure. Affect for
+//! learning is owned by the genome. Dataset test scores a motor frame when one arrives
+//! and emits [`RunEventKind::Warning`] when FEAGI is silent.
 //!
 //! It is transport-agnostic by construction: the same loop drives the deterministic
 //! [`StubFeagiRuntime`](crate::binding::StubFeagiRuntime) and the remote ZMQ runtime, because
@@ -31,13 +36,15 @@ use crate::binding::{
     DecoderPlugin, EncoderPlugin, Environment, EnvironmentRewardPolicy, FeagiRuntime,
     ObservationEncoder, RewardPolicy,
 };
+use crate::contracts::ir_sample::Payload;
 use crate::contracts::prediction_record::SCHEMA_VERSION as PREDICTION_RECORD_SCHEMA_VERSION;
 use crate::contracts::run_summary::SCHEMA_VERSION as RUN_SUMMARY_SCHEMA_VERSION;
 use crate::contracts::scorecard::SCHEMA_VERSION as SCORECARD_SCHEMA_VERSION;
 use crate::contracts::TypedPrediction;
 use crate::contracts::{
     BackendFingerprint, ContentHash, DatasetAssetId, IRSample, PredictionRecord, RunId, RunSpec,
-    RunStatus, RunSummary, Scorecard, ScorecardId, ScorecardStatus, ScorecardVisibility,
+    RunStatus, RunSummary, SampleId, Scorecard, ScorecardId, ScorecardStatus, ScorecardVisibility,
+    Split,
 };
 use crate::contracts::{MetricScope, RunEvent, RunEventKind};
 use crate::control::{CancelToken, NoopEventSink, RunEventSink};
@@ -55,6 +62,59 @@ use crate::plugins::{MetricPackPlugin, MetricResult};
 pub struct ExecutorConfig {
     /// Number of bursts to step the runtime per sample (must be non-zero).
     pub ticks_per_sample: u32,
+}
+
+/// Warning text when FEAGI publishes no motor/OPU frame during a test/infer collect.
+pub const NO_DETECTION_RESULT_WARNING: &str = "no detection result has been received from FEAGI";
+
+/// Train split is sensory (and teacher IPU) only. Detection readout is test/val.
+pub(crate) fn observes_detection(split: &Split) -> bool {
+    !matches!(split, Split::Train)
+}
+
+/// Metric pack result when no detection readouts were observed.
+pub(crate) fn empty_metric_result() -> MetricResult {
+    MetricResult {
+        metrics: BTreeMap::new(),
+        confusion: None,
+    }
+}
+
+/// Scores the labeled detections, or returns empty metrics when none were observed.
+pub(crate) fn evaluate_or_empty<M: MetricPackPlugin>(
+    metric_pack: &M,
+    predictions: &[crate::contracts::TypedPrediction],
+    targets: &[crate::contracts::TypedTarget],
+) -> Result<MetricResult, TrainerError> {
+    if predictions.is_empty() {
+        return Ok(empty_metric_result());
+    }
+    metric_pack.evaluate(predictions, targets)
+}
+
+/// Emits a non-fatal warning that no OPU detection frame arrived for `sample_id`.
+pub(crate) fn emit_no_detection_warning(
+    events: &mut dyn RunEventSink,
+    run_id: &RunId,
+    sample_id: &SampleId,
+) {
+    events.emit(RunEvent::new(
+        run_id.clone(),
+        RunEventKind::Warning {
+            message: format!("{NO_DETECTION_RESULT_WARNING} (sample {})", sample_id.0),
+        },
+    ));
+}
+
+/// Analog scalars submitted as graded P for the live trainer preview.
+pub(crate) fn analog_sent_values(sample: &IRSample) -> Vec<f64> {
+    match &sample.payload {
+        Payload::Tabular(values)
+        | Payload::TimeSeries {
+            samples: values, ..
+        } => values.clone(),
+        Payload::Text(_) | Payload::Bytes(_) => Vec::new(),
+    }
 }
 
 /// The artifacts produced by a single rollout over a sample stream.
@@ -101,10 +161,10 @@ pub struct ScorecardProvenance {
 /// Drives one closed-loop rollout over `samples` (already in sampler order) and returns the
 /// per-sample predictions, aggregate metrics, and terminal [`RunSummary`].
 ///
-/// For each sample the loop encodes the sample, submits it to the runtime, steps the runtime,
-/// collects + decodes the motor frame into a [`TypedPrediction`](crate::contracts::TypedPrediction),
-/// and — when the sample is labeled — derives a reward via `reward_policy` and submits it. The
-/// labeled subset is then scored by `metric_pack`.
+/// For each sample the loop encodes the sample, submits it, and steps the runtime. Train
+/// samples stop there. Test/val samples collect a motor frame when FEAGI publishes one,
+/// decode it, and score labeled detections. A silent OPU emits a warning and does not fail
+/// the run. The trainer does not inject Pain/Pleasure; that stays inside the genome.
 ///
 /// The encoder/decoder frame types are bound to the runtime's `SensoryFrame`/`MotorFrame`, so a
 /// mismatched binding is a compile error rather than a runtime failure.
@@ -174,7 +234,7 @@ pub fn run_rollout_with_events<R, E, D, RP, M>(
     encoder_profile: &EncoderBindingProfile,
     decoder: &mut D,
     decoder_profile: &DecoderBindingProfile,
-    reward_policy: &RP,
+    _reward_policy: &RP,
     metric_pack: &M,
     config: &ExecutorConfig,
     events: &mut dyn RunEventSink,
@@ -195,40 +255,41 @@ where
 
     let total_samples = samples.len() as u64;
     let mut predictions: Vec<PredictionRecord> = Vec::with_capacity(samples.len());
-    // The labeled subset that participates in scoring + reward (aligned by construction).
+    // Labeled detections that produced a motor frame (aligned by construction).
     let mut scored_predictions = Vec::new();
     let mut scored_targets = Vec::new();
 
     for (index, sample) in samples.iter().enumerate() {
-        if cancel.is_cancelled() {
-            return Err(TrainerError::Cancelled(format!(
-                "stopped after {index} of {total_samples} samples"
-            )));
-        }
+        cancel.interrupt(format!("stopped after {index} of {total_samples} samples"))?;
 
         let frame = encoder.encode(sample, encoder_profile)?;
         runtime.submit_sensory(frame)?;
         runtime.step(config.ticks_per_sample)?;
-        let motor = runtime.collect_motor()?;
-        let prediction = decoder.decode(motor, decoder_profile)?;
 
-        if let Some(target) = &sample.target {
-            let signals = reward_policy.reward(&prediction, target)?;
-            runtime.submit_reward(&signals)?;
-            scored_predictions.push(prediction.clone());
-            scored_targets.push(target.clone());
+        if observes_detection(&sample.split) {
+            match runtime.collect_motor()? {
+                Some(motor) => {
+                    let prediction = decoder.decode(motor, decoder_profile)?;
+                    if let Some(target) = &sample.target {
+                        scored_predictions.push(prediction.clone());
+                        scored_targets.push(target.clone());
+                    }
+                    predictions.push(PredictionRecord {
+                        schema_version: PREDICTION_RECORD_SCHEMA_VERSION,
+                        run_id: run_id.clone(),
+                        sample_id: sample.sample_id.clone(),
+                        output_type: sample.output_type,
+                        prediction,
+                        target: sample.target.clone(),
+                        timestamp: None,
+                        metadata: BTreeMap::new(),
+                    });
+                }
+                None => {
+                    emit_no_detection_warning(events, run_id, &sample.sample_id);
+                }
+            }
         }
-
-        predictions.push(PredictionRecord {
-            schema_version: PREDICTION_RECORD_SCHEMA_VERSION,
-            run_id: run_id.clone(),
-            sample_id: sample.sample_id.clone(),
-            output_type: sample.output_type,
-            prediction,
-            target: sample.target.clone(),
-            timestamp: None,
-            metadata: BTreeMap::new(),
-        });
 
         events.emit(RunEvent::new(
             run_id.clone(),
@@ -237,11 +298,12 @@ where
                 samples_total: total_samples,
                 repeat_index: 0,
                 repeat_total: 1,
+                sent_values: analog_sent_values(sample),
             },
         ));
     }
 
-    let metric_result = metric_pack.evaluate(&scored_predictions, &scored_targets)?;
+    let metric_result = evaluate_or_empty(metric_pack, &scored_predictions, &scored_targets)?;
 
     events.emit(RunEvent::new(
         run_id.clone(),
@@ -451,7 +513,11 @@ where
             let frame = encoder.encode_observation(&observation, encoder_profile)?;
             runtime.submit_sensory(frame)?;
             runtime.step(config.ticks_per_step)?;
-            let motor = runtime.collect_motor()?;
+            let motor = runtime.collect_motor()?.ok_or_else(|| {
+                TrainerError::Runtime(
+                    "no motor frame received from FEAGI within the collect timeout".to_string(),
+                )
+            })?;
             let prediction = decoder.decode(motor, decoder_profile)?;
 
             let normalized = match prediction {
@@ -517,7 +583,7 @@ where
 mod tests {
     use super::*;
     use crate::binding::encoding_scheme::{BinSpacing, EncodingScheme};
-    use crate::binding::reward::{AffectChannel, PainPleasureReward};
+    use crate::binding::reward::PainPleasureReward;
     use crate::binding::StubFeagiRuntime;
     use crate::contracts::common::{
         BackendKind, ConnectomeHash, EvaluationProtocolVersion, PluginId, Split,
@@ -629,6 +695,9 @@ mod tests {
             },
             image_width: None,
             image_height: None,
+            stream: None,
+            teacher: None,
+            cortical_name: None,
         }
     }
 
@@ -640,6 +709,7 @@ mod tests {
             mask_width: None,
             mask_height: None,
             mask_depth: None,
+            cortical_name: None,
         }
     }
 
@@ -682,11 +752,9 @@ mod tests {
         assert_eq!(outcome.predictions.len(), 3);
         assert!((outcome.metric_result.metrics["accuracy"] - 1.0).abs() < 1e-12);
 
-        // Every sample matched, so every reward must be Pleasure, and the runtime stepped once
-        // per sample at the configured tick count.
-        let rewards = runtime.submitted_rewards();
-        assert_eq!(rewards.len(), 3);
-        assert!(rewards.iter().all(|r| r.channel == AffectChannel::Pleasure));
+        // Detection is observed for scoring only; the trainer does not inject affect.
+        assert!(runtime.submitted_rewards().is_empty());
+        assert_eq!(runtime.motor_collects(), 3);
         assert_eq!(runtime.burst_count(), 3 * 4);
     }
 
@@ -726,9 +794,7 @@ mod tests {
         .expect("rollout");
 
         assert!((outcome.metric_result.metrics["accuracy"] - 0.0).abs() < 1e-12);
-        let rewards = runtime.submitted_rewards();
-        assert_eq!(rewards.len(), 3);
-        assert!(rewards.iter().all(|r| r.channel == AffectChannel::Pain));
+        assert!(runtime.submitted_rewards().is_empty());
     }
 
     #[test]
@@ -762,11 +828,90 @@ mod tests {
         )
         .expect("rollout");
 
-        // Both samples produce a record, but only the labeled one is scored / rewarded.
+        // Both samples produce a record, but only the labeled one is scored.
         assert_eq!(outcome.predictions.len(), 2);
         assert_eq!(outcome.summary.total_samples, 2);
         assert_eq!(outcome.summary.evaluated_samples, 1);
-        assert_eq!(runtime.submitted_rewards().len(), 1);
+        assert!(runtime.submitted_rewards().is_empty());
+    }
+
+    #[test]
+    fn train_split_does_not_collect_motor_or_inject_reward() {
+        let mut sample = one_hot_sample(0, 0, 3);
+        sample.split = Split::Train;
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut encoder = PassthroughEncoder;
+        let mut decoder = ArgmaxDecoder;
+        let reward = PainPleasureReward::new(0.8).unwrap();
+        let metric = ClassificationMetricPack::new();
+
+        let outcome = run_rollout(
+            &RunId("run-train".to_string()),
+            &[sample],
+            &mut runtime,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &config(),
+        )
+        .expect("rollout");
+
+        assert_eq!(outcome.summary.status, RunStatus::Completed);
+        assert_eq!(outcome.summary.total_samples, 1);
+        assert_eq!(outcome.summary.evaluated_samples, 0);
+        assert!(outcome.predictions.is_empty());
+        assert!(outcome.metric_result.metrics.is_empty());
+        assert_eq!(runtime.burst_count(), 4);
+        assert_eq!(runtime.motor_collects(), 0);
+        assert!(runtime.submitted_rewards().is_empty());
+    }
+
+    #[test]
+    fn test_split_silent_motor_warns_and_completes() {
+        use crate::control::CollectingEventSink;
+
+        let samples = vec![one_hot_sample(0, 0, 3)];
+        let mut runtime = StubFeagiRuntime::silent();
+        let mut encoder = PassthroughEncoder;
+        let mut decoder = ArgmaxDecoder;
+        let reward = PainPleasureReward::new(0.8).unwrap();
+        let metric = ClassificationMetricPack::new();
+        let mut sink = CollectingEventSink::default();
+
+        let outcome = run_rollout_with_events(
+            &RunId("run-silent".to_string()),
+            &samples,
+            &mut runtime,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &config(),
+            &mut sink,
+            &CancelToken::new(),
+        )
+        .expect("rollout");
+
+        assert_eq!(outcome.summary.status, RunStatus::Completed);
+        assert_eq!(outcome.summary.evaluated_samples, 0);
+        assert!(outcome.predictions.is_empty());
+        assert_eq!(runtime.motor_collects(), 1);
+        let warnings: Vec<_> = sink
+            .events
+            .iter()
+            .filter_map(|event| match &event.kind {
+                RunEventKind::Warning { message } => Some(message.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains(NO_DETECTION_RESULT_WARNING));
+        assert!(warnings[0].contains("s-0000"));
     }
 
     #[test]
@@ -859,6 +1004,42 @@ mod tests {
         // No samples were stepped or scored before the stop.
         assert_eq!(runtime.burst_count(), 0);
         assert!(sink.events.is_empty());
+    }
+
+    #[test]
+    fn rollout_completes_after_pause_then_resume() {
+        use crate::control::CollectingEventSink;
+
+        let samples = vec![one_hot_sample(0, 0, 3)];
+        let cancel = CancelToken::new();
+        cancel.pause();
+        let waiter = cancel.clone();
+        let handle = std::thread::spawn(move || {
+            let mut runtime = StubFeagiRuntime::identity();
+            let mut encoder = PassthroughEncoder;
+            let mut decoder = ArgmaxDecoder;
+            let reward = PainPleasureReward::new(0.8).unwrap();
+            let metric = ClassificationMetricPack::new();
+            let mut sink = CollectingEventSink::default();
+            run_rollout_with_events(
+                &RunId("run-pause".to_string()),
+                &samples,
+                &mut runtime,
+                &mut encoder,
+                &encoder_profile(),
+                &mut decoder,
+                &decoder_profile(),
+                &reward,
+                &metric,
+                &config(),
+                &mut sink,
+                &waiter,
+            )
+        });
+        cancel.resume();
+        let outcome = handle.join().expect("rollout thread").expect("rollout");
+        assert_eq!(outcome.summary.status, RunStatus::Completed);
+        assert_eq!(outcome.summary.total_samples, 1);
     }
 
     #[test]

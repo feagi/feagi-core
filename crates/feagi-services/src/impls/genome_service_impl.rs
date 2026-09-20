@@ -15,7 +15,11 @@ use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
-use feagi_npu_burst_engine::{BurstLoopRunner, ParameterUpdateQueue};
+use feagi_npu_burst_engine::{
+    is_firing_threshold_increment_param, is_firing_threshold_param, json_number_as_f32,
+    merge_firing_threshold_increment, should_rewrite_threshold_gradient, BurstLoopRunner,
+    ParameterUpdateQueue,
+};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
@@ -1317,45 +1321,110 @@ impl GenomeServiceImpl {
 
         // Queue parameter updates for burst loop to consume (non-blocking!)
         if let Some(queue) = &self.parameter_queue {
-            // Get base threshold for spatial gradient updates
-            let base_threshold = {
+            // Resolve the static threshold rewrite once. Fire uses stored thresholds[],
+            // so increment/base changes must become one [x,y,z] write with the new base.
+            let (current_base, current_increment) = {
                 let manager = self.connectome.read();
-                manager
-                    .get_cortical_area(&cortical_id_typed)
-                    .map(|area| area.firing_threshold())
+                match manager.get_cortical_area(&cortical_id_typed) {
+                    Some(area) => (
+                        Some(area.firing_threshold()),
+                        Some([
+                            area.firing_threshold_increment_x(),
+                            area.firing_threshold_increment_y(),
+                            area.firing_threshold_increment_z(),
+                        ]),
+                    ),
+                    None => (None, None),
+                }
             };
 
-            for (param_name, value) in &changes {
-                // Only queue parameters that affect NPU neurons
-                let classifier = CorticalChangeClassifier::parameter_changes();
-                if classifier.contains(param_name.as_str()) {
-                    // Include base threshold for spatial gradient updates
-                    let bt = if param_name == "neuron_fire_threshold_increment"
-                        || param_name == "firing_threshold_increment"
-                    {
-                        base_threshold
-                    } else {
-                        None
-                    };
+            let increment_changed = changes
+                .keys()
+                .any(|k| is_firing_threshold_increment_param(k));
+            let threshold_changed = changes.keys().any(|k| is_firing_threshold_param(k));
 
+            let resolved_base = if threshold_changed {
+                changes
+                    .get("neuron_fire_threshold")
+                    .or_else(|| changes.get("firing_threshold"))
+                    .and_then(json_number_as_f32)
+                    .or(current_base)
+            } else {
+                current_base
+            };
+
+            let resolved_increment = match current_increment {
+                Some(current) if increment_changed => {
+                    merge_firing_threshold_increment(current, &changes)
+                }
+                other => other,
+            };
+
+            let apply_gradient = should_rewrite_threshold_gradient(
+                increment_changed,
+                threshold_changed,
+                resolved_increment.unwrap_or([0.0, 0.0, 0.0]),
+            );
+
+            if increment_changed && resolved_increment.is_none() {
+                warn!(
+                    target: "feagi-services",
+                    "[PARAM-QUEUE] Invalid firing_threshold_increment payload for area {}; NPU thresholds not rewritten",
+                    cortical_id
+                );
+            }
+
+            let classifier = CorticalChangeClassifier::parameter_changes();
+            for (param_name, value) in &changes {
+                if !classifier.contains(param_name.as_str()) {
+                    continue;
+                }
+                if is_firing_threshold_increment_param(param_name) {
+                    continue;
+                }
+                if apply_gradient && is_firing_threshold_param(param_name) {
+                    continue;
+                }
+
+                queue.push(feagi_npu_burst_engine::ParameterUpdate {
+                    cortical_idx,
+                    cortical_id: cortical_id.to_string(),
+                    parameter_name: param_name.clone(),
+                    value: value.clone(),
+                    dimensions: None,
+                    neurons_per_voxel: None,
+                    base_threshold: None,
+                });
+                trace!(
+                    target: "feagi-services",
+                    "[PARAM-QUEUE] Queued {}={} for area {}",
+                    param_name,
+                    value,
+                    cortical_id
+                );
+            }
+
+            if apply_gradient {
+                if let (Some(base), Some(inc)) = (resolved_base, resolved_increment) {
                     queue.push(feagi_npu_burst_engine::ParameterUpdate {
                         cortical_idx,
                         cortical_id: cortical_id.to_string(),
-                        parameter_name: param_name.clone(),
-                        value: value.clone(),
-                        dimensions: None, // Not needed anymore - neurons have stored positions
+                        parameter_name: "neuron_fire_threshold_increment".to_string(),
+                        value: serde_json::json!([inc[0], inc[1], inc[2]]),
+                        dimensions: None,
                         neurons_per_voxel: None,
-                        base_threshold: bt,
+                        base_threshold: Some(base),
                     });
                     trace!(
                         target: "feagi-services",
-                        "[PARAM-QUEUE] Queued {}={} for area {}",
-                        param_name,
-                        value,
+                        "[PARAM-QUEUE] Queued neuron_fire_threshold_increment={:?} base={} for area {}",
+                        inc,
+                        base,
                         cortical_id
                     );
                 }
             }
+
             info!(target: "feagi-services", "[FAST-UPDATE] Queued parameter updates (will apply in next burst)");
         } else {
             warn!(target: "feagi-services", "Parameter queue not available - updates will not affect neurons");
@@ -4795,5 +4864,144 @@ mod tests {
             loaded.cortical_areas[&mem_id].properties["memory_twin_of"],
             serde_json::json!(src_id.as_base_64())
         );
+    }
+
+    #[tokio::test]
+    async fn parameter_queue_normalizes_per_axis_increment_to_full_vector() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::{increment_from_parameter_update, ParameterUpdateQueue};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"cincrsv1").unwrap();
+        let mut area = CorticalArea::new(
+            area_id,
+            10,
+            "increment-test".to_string(),
+            CorticalAreaDimensions::new(4, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        area.properties
+            .insert("firing_threshold".to_string(), serde_json::json!(0.5));
+        area.properties.insert(
+            "firing_threshold_increment_x".to_string(),
+            serde_json::json!(1.0),
+        );
+        area.properties.insert(
+            "firing_threshold_increment_y".to_string(),
+            serde_json::json!(2.0),
+        );
+        area.properties.insert(
+            "firing_threshold_increment_z".to_string(),
+            serde_json::json!(3.0),
+        );
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(area).unwrap();
+        }
+
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome, queue.clone());
+
+        let mut changes = HashMap::new();
+        changes.insert(
+            "firing_threshold_increment_x".to_string(),
+            serde_json::json!(10),
+        );
+        svc.update_cortical_area(&area_id.as_base_64(), changes)
+            .await
+            .expect("parameter update");
+
+        let pending = queue.drain_all();
+        let increment_updates: Vec<_> = pending
+            .iter()
+            .filter(|u| u.parameter_name == "neuron_fire_threshold_increment")
+            .collect();
+        assert_eq!(increment_updates.len(), 1);
+        assert_eq!(
+            increment_from_parameter_update(increment_updates[0]),
+            Some((0.5, [10.0, 2.0, 3.0]))
+        );
+        assert!(pending
+            .iter()
+            .all(|u| u.parameter_name != "firing_threshold_increment_x"));
+    }
+
+    #[tokio::test]
+    async fn parameter_queue_rewrites_gradient_when_base_changes() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::{increment_from_parameter_update, ParameterUpdateQueue};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"cincrsv2").unwrap();
+        let mut area = CorticalArea::new(
+            area_id,
+            11,
+            "increment-base-test".to_string(),
+            CorticalAreaDimensions::new(3, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        area.properties
+            .insert("firing_threshold".to_string(), serde_json::json!(1.0));
+        area.properties.insert(
+            "firing_threshold_increment_x".to_string(),
+            serde_json::json!(100.0),
+        );
+        area.properties.insert(
+            "firing_threshold_increment_y".to_string(),
+            serde_json::json!(0.0),
+        );
+        area.properties.insert(
+            "firing_threshold_increment_z".to_string(),
+            serde_json::json!(0.0),
+        );
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(area).unwrap();
+        }
+
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome, queue.clone());
+
+        let mut changes = HashMap::new();
+        changes.insert("neuron_fire_threshold".to_string(), serde_json::json!(5));
+        svc.update_cortical_area(&area_id.as_base_64(), changes)
+            .await
+            .expect("parameter update");
+
+        let pending = queue.drain_all();
+        let increment_updates: Vec<_> = pending
+            .iter()
+            .filter(|u| u.parameter_name == "neuron_fire_threshold_increment")
+            .collect();
+        assert_eq!(increment_updates.len(), 1);
+        assert_eq!(
+            increment_from_parameter_update(increment_updates[0]),
+            Some((5.0, [100.0, 0.0, 0.0]))
+        );
+        assert!(pending
+            .iter()
+            .all(|u| u.parameter_name != "neuron_fire_threshold"));
     }
 }

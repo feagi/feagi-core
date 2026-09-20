@@ -24,9 +24,11 @@ pub struct StubFeagiRuntime {
     transform: fn(&[f64]) -> Vec<f64>,
     last_sensory: Option<Vec<f64>>,
     burst_count: u64,
+    motor_collects: u64,
     submitted_rewards: Vec<RewardSignal>,
     submitted_targets: Vec<Vec<f64>>,
     teaching_supported: bool,
+    emit_motor: bool,
 }
 
 impl StubFeagiRuntime {
@@ -41,10 +43,19 @@ impl StubFeagiRuntime {
             transform,
             last_sensory: None,
             burst_count: 0,
+            motor_collects: 0,
             submitted_rewards: Vec::new(),
             submitted_targets: Vec::new(),
             teaching_supported,
+            emit_motor: true,
         }
+    }
+
+    /// Identity stub that never emits a motor frame (silent OPU).
+    pub fn silent() -> Self {
+        let mut runtime = Self::identity();
+        runtime.emit_motor = false;
+        runtime
     }
 
     /// Creates an identity stub (motor output echoes the last sensory frame), no teaching.
@@ -65,6 +76,11 @@ impl StubFeagiRuntime {
     /// Target-motor (teaching) frames submitted so far, in submission order.
     pub fn submitted_targets(&self) -> &[Vec<f64>] {
         &self.submitted_targets
+    }
+
+    /// How many times [`FeagiRuntime::collect_motor`] was called.
+    pub fn motor_collects(&self) -> u64 {
+        self.motor_collects
     }
 }
 
@@ -97,9 +113,13 @@ impl FeagiRuntime for StubFeagiRuntime {
         Ok(())
     }
 
-    fn collect_motor(&mut self) -> Result<Self::MotorFrame, TrainerError> {
+    fn collect_motor(&mut self) -> Result<Option<Self::MotorFrame>, TrainerError> {
+        self.motor_collects += 1;
+        if !self.emit_motor {
+            return Ok(None);
+        }
         match &self.last_sensory {
-            Some(sensory) => Ok((self.transform)(sensory)),
+            Some(sensory) => Ok(Some((self.transform)(sensory))),
             None => Err(TrainerError::Runtime(
                 "collect_motor called before any sensory frame was submitted".to_string(),
             )),
@@ -129,8 +149,8 @@ mod tests {
         fn step(&mut self, _ticks: u32) -> Result<(), TrainerError> {
             Ok(())
         }
-        fn collect_motor(&mut self) -> Result<(), TrainerError> {
-            Ok(())
+        fn collect_motor(&mut self) -> Result<Option<()>, TrainerError> {
+            Ok(Some(()))
         }
     }
 
@@ -147,7 +167,7 @@ mod tests {
         runtime.submit_sensory(vec![0.1, 0.2, 0.7]).unwrap();
         runtime.step(4).unwrap();
         let motor = runtime.collect_motor().unwrap();
-        assert_eq!(motor, vec![0.1, 0.2, 0.7]);
+        assert_eq!(motor, Some(vec![0.1, 0.2, 0.7]));
         assert_eq!(runtime.burst_count(), 4);
     }
 
@@ -156,7 +176,16 @@ mod tests {
         let mut runtime = StubFeagiRuntime::new(|s| s.iter().map(|v| v * 2.0).collect(), false);
         runtime.submit_sensory(vec![1.0, 2.0]).unwrap();
         runtime.submit_sensory(vec![3.0, 4.0]).unwrap();
-        assert_eq!(runtime.collect_motor().unwrap(), vec![6.0, 8.0]);
+        assert_eq!(runtime.collect_motor().unwrap(), Some(vec![6.0, 8.0]));
+    }
+
+    #[test]
+    fn silent_runtime_returns_no_motor_frame() {
+        let mut runtime = StubFeagiRuntime::silent();
+        runtime.submit_sensory(vec![1.0]).unwrap();
+        runtime.step(1).unwrap();
+        assert_eq!(runtime.collect_motor().unwrap(), None);
+        assert_eq!(runtime.motor_collects(), 1);
     }
 
     #[test]

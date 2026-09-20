@@ -16,6 +16,7 @@ pub mod contracts;
 pub mod control;
 pub mod error;
 pub mod executor;
+pub mod executor_stream;
 pub mod metrics;
 pub mod plugins;
 pub mod run_config;

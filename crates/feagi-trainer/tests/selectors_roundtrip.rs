@@ -55,7 +55,14 @@ fn population_profile(channels: u32) -> EncoderBindingProfile {
         },
         image_width: None,
         image_height: None,
+        stream: None,
+        teacher: None,
+        cortical_name: None,
     }
+}
+
+fn snapshot_misc_id() -> feagi_structures::genomic::cortical_area::CorticalID {
+    PopulationEncoder::target_cortical_id()
 }
 
 fn count_input_id() -> feagi_structures::genomic::cortical_area::CorticalID {
@@ -84,8 +91,8 @@ fn encoder_produces_neurons_for_all_features() {
         )
         .expect("encode");
     let neurons = frame
-        .get_neurons_of(&count_input_id())
-        .expect("count_input area present");
+        .get_neurons_of(&snapshot_misc_id())
+        .expect("misc IPU area present");
     let (xs, ..) = neurons.borrow_xyzp_vectors();
     assert!(!xs.is_empty(), "expected spikes for the encoded features");
 }
@@ -102,7 +109,7 @@ fn roundtrip_decode_single(value: f64) -> f64 {
     let mut motor = CorticalMappedXYZPNeuronVoxels::new();
     {
         let source = encoded
-            .get_neurons_of(&count_input_id())
+            .get_neurons_of(&snapshot_misc_id())
             .expect("encoded neurons present");
         let (xs, ys, zs, ps) = source.borrow_xyzp_vectors();
         let destination = motor.ensure_clear_and_borrow_mut(&count_output_id());
@@ -119,6 +126,7 @@ fn roundtrip_decode_single(value: f64) -> f64 {
         mask_width: None,
         mask_height: None,
         mask_depth: None,
+        cortical_name: None,
     };
     match decoder.decode(motor, &profile).expect("decode") {
         TypedPrediction::Class { scores, .. } => scores[0],
@@ -201,6 +209,7 @@ fn decoder_argmaxes_strongest_class_channel() {
         mask_width: None,
         mask_height: None,
         mask_depth: None,
+        cortical_name: None,
     };
     let prediction = decoder.decode(motor, &profile).expect("decode");
     match prediction {

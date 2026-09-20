@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::adapters::{
     ImageFolderSegmentationAdapter, ImageFolderSegmentationConfig, TabularCsvAdapter,
-    TabularCsvConfig,
+    TabularCsvConfig, TimeSeriesPackageAdapter, TimeSeriesPackageConfig,
 };
 use crate::binding::profile::{DecoderBindingProfile, EncoderBindingProfile};
 use crate::binding::reward::SegmentationOverlapReward;
@@ -37,10 +37,14 @@ pub const SUPPORTED_REWARD_ID: &str = "reward.pain_pleasure";
 pub const SUPPORTED_SEGMENTATION_REWARD_ID: &str = SegmentationOverlapReward::PLUGIN_ID;
 /// Encoder coder id the CLI resolves to [`PopulationEncoder`](crate::binding::PopulationEncoder).
 pub const SUPPORTED_ENCODER_CODER_ID: &str = "percentage_encoder";
+/// Encoder coder id the CLI resolves to [`MiscStreamEncoder`](crate::binding::MiscStreamEncoder).
+pub const SUPPORTED_MISC_STREAM_ENCODER_CODER_ID: &str = "misc_data_encoder";
 /// Encoder coder id the CLI resolves to [`ImageFrameEncoder`](crate::binding::ImageFrameEncoder).
 pub const SUPPORTED_IMAGE_ENCODER_CODER_ID: &str = "image_encoder";
 /// Decoder coder id the CLI resolves to [`ClassDecoder`](crate::binding::ClassDecoder).
 pub const SUPPORTED_DECODER_CODER_ID: &str = "percentage_decoder";
+/// Decoder coder id the CLI resolves to [`MiscClassDecoder`](crate::binding::MiscClassDecoder).
+pub const SUPPORTED_MISC_CLASS_DECODER_CODER_ID: &str = "misc_data_class_decoder";
 /// Decoder coder id the CLI resolves to [`SegmentationMaskDecoder`](crate::binding::SegmentationMaskDecoder).
 pub const SUPPORTED_SEGMENTATION_DECODER_CODER_ID: &str = "misc_data_decoder";
 
@@ -52,6 +56,8 @@ pub enum DatasetAdapterConfig {
     Tabular(TabularCsvConfig),
     /// Image-folder semantic segmentation layout (`layout` discriminates this variant).
     ImageFolder(ImageFolderSegmentationConfig),
+    /// Annotated analog time series (`source_kind` discriminates this variant).
+    TimeSeries(TimeSeriesPackageConfig),
 }
 
 /// Where the dataset bytes come from and how the adapter parses them.
@@ -186,6 +192,78 @@ impl RunConfig {
                     }
                 }
             }
+            TimeSeriesPackageAdapter::PLUGIN_ID => {
+                check(
+                    "metric pack",
+                    &spec.metric_pack.id.0,
+                    ClassificationMetricPack::PLUGIN_ID,
+                )?;
+                check(
+                    "reward policy",
+                    &spec.reward_policy.plugin.id.0,
+                    SUPPORTED_REWARD_ID,
+                )?;
+                if self.encoder_profile.stream.is_some() {
+                    check(
+                        "encoder coder",
+                        &spec.binding.encoder.coder_id,
+                        SUPPORTED_MISC_STREAM_ENCODER_CODER_ID,
+                    )?;
+                    check(
+                        "decoder coder",
+                        &spec.binding.decoder.coder_id,
+                        SUPPORTED_MISC_CLASS_DECODER_CODER_ID,
+                    )?;
+                    if let Some(stream) = &self.encoder_profile.stream {
+                        stream.validate()?;
+                    }
+                    if !matches!(
+                        self.encoder_profile.scheme,
+                        crate::binding::EncodingScheme::Value
+                    ) {
+                        return Err(TrainerError::Config(
+                            "stream presentation requires encoding scheme 'value'".to_string(),
+                        ));
+                    }
+                } else {
+                    check(
+                        "encoder coder",
+                        &spec.binding.encoder.coder_id,
+                        SUPPORTED_ENCODER_CODER_ID,
+                    )?;
+                    check(
+                        "decoder coder",
+                        &spec.binding.decoder.coder_id,
+                        SUPPORTED_DECODER_CODER_ID,
+                    )?;
+                    let teacher = self.encoder_profile.teacher.as_ref().ok_or_else(|| {
+                        TrainerError::Config(
+                            "ECG snapshot requires encoder_profile.teacher so the class IPU is created and written"
+                                .to_string(),
+                        )
+                    })?;
+                    teacher.validate()?;
+                    if teacher.class_count != self.decoder_profile.class_count {
+                        return Err(TrainerError::Config(format!(
+                            "snapshot teacher class_count {} does not match decoder class_count {}",
+                            teacher.class_count, self.decoder_profile.class_count
+                        )));
+                    }
+                    if let DatasetAdapterConfig::TimeSeries(ts) = &self.dataset.adapter {
+                        if ts.normalize == crate::adapters::TimeSeriesNormalize::None
+                            && !matches!(
+                                self.encoder_profile.scheme,
+                                crate::binding::EncodingScheme::Value
+                            )
+                        {
+                            return Err(TrainerError::Config(
+                                "time-series normalize=none requires encoding scheme 'value'"
+                                    .to_string(),
+                            ));
+                        }
+                    }
+                }
+            }
             other => {
                 return Err(TrainerError::Config(format!(
                     "unsupported adapter '{other}'"
@@ -211,6 +289,10 @@ impl RunConfig {
             }
             DatasetAdapterConfig::ImageFolder(config) => {
                 let adapter = ImageFolderSegmentationAdapter::new(config.clone());
+                Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?
+            }
+            DatasetAdapterConfig::TimeSeries(config) => {
+                let adapter = TimeSeriesPackageAdapter::new(config.clone());
                 Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?
             }
         };
@@ -355,14 +437,15 @@ impl RunConfig {
         events: &mut dyn crate::control::RunEventSink,
         cancel: &crate::control::CancelToken,
     ) -> Result<(crate::contracts::RunSummary, crate::contracts::Scorecard), TrainerError> {
-        use crate::adapters::ImageFolderSegmentationAdapter;
+        use crate::adapters::{ImageFolderSegmentationAdapter, TimeSeriesPackageAdapter};
         use crate::binding::{
-            ClassDecoder, ImageFrameEncoder, PainPleasureReward, PopulationEncoder,
-            RemoteFeagiRuntime, RemoteRuntimeConfig, SegmentationMaskDecoder,
-            SegmentationOverlapReward,
+            ClassDecoder, ImageFrameEncoder, MiscClassDecoder, MiscStreamEncoder,
+            PainPleasureReward, PopulationEncoder, RemoteFeagiRuntime, RemoteRuntimeConfig,
+            SegmentationMaskDecoder, SegmentationOverlapReward,
         };
         use crate::contracts::ExecutionMode;
         use crate::executor::{assemble_scorecard, run_rollout_with_events};
+        use crate::executor_stream::run_stream_rollout_with_events;
         use std::time::Duration;
 
         if self.run_spec.execution_mode != ExecutionMode::Remote {
@@ -416,6 +499,45 @@ impl RunConfig {
                     events,
                     cancel,
                 )
+            }
+            TimeSeriesPackageAdapter::PLUGIN_ID => {
+                let reward = PainPleasureReward::new(self.reward_magnitude)?;
+                let metric = ClassificationMetricPack::new();
+                if self.encoder_profile.stream.is_some() {
+                    let mut encoder = MiscStreamEncoder::new();
+                    let mut decoder = MiscClassDecoder::new();
+                    run_stream_rollout_with_events(
+                        &self.run_spec.run_id,
+                        samples,
+                        &mut runtime,
+                        &mut encoder,
+                        &self.encoder_profile,
+                        &mut decoder,
+                        &self.decoder_profile,
+                        &reward,
+                        &metric,
+                        &self.executor,
+                        events,
+                        cancel,
+                    )
+                } else {
+                    let mut encoder = PopulationEncoder::new();
+                    let mut decoder = ClassDecoder::new();
+                    run_rollout_with_events(
+                        &self.run_spec.run_id,
+                        samples,
+                        &mut runtime,
+                        &mut encoder,
+                        &self.encoder_profile,
+                        &mut decoder,
+                        &self.decoder_profile,
+                        &reward,
+                        &metric,
+                        &self.executor,
+                        events,
+                        cancel,
+                    )
+                }
             }
             ImageFolderSegmentationAdapter::PLUGIN_ID => {
                 let mut encoder = ImageFrameEncoder::new();
@@ -564,6 +686,9 @@ mod tests {
                 },
                 image_width: None,
                 image_height: None,
+                stream: None,
+                teacher: None,
+                cortical_name: None,
             },
             decoder_profile: DecoderBindingProfile {
                 cortical_area_id: "o____C".to_string(),
@@ -572,6 +697,7 @@ mod tests {
                 mask_width: None,
                 mask_height: None,
                 mask_depth: None,
+                cortical_name: None,
             },
             executor: ExecutorConfig {
                 ticks_per_sample: 3,

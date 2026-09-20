@@ -143,6 +143,8 @@ pub enum Modality {
     Text,
     /// Tabular rows (e.g. CSV/TSV).
     Tabular,
+    /// Annotated multi-channel analog / biosignal time series (e.g. ECG).
+    TimeSeries,
     /// Combination of multiple modalities.
     Multimodal,
 }

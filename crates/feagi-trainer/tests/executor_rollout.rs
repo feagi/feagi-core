@@ -204,6 +204,9 @@ fn full_pipeline_produces_summary_and_scorecard() {
             },
             image_width: None,
             image_height: None,
+            stream: None,
+            teacher: None,
+            cortical_name: None,
         },
         &mut decoder,
         &DecoderBindingProfile {
@@ -213,6 +216,7 @@ fn full_pipeline_produces_summary_and_scorecard() {
             mask_width: None,
             mask_height: None,
             mask_depth: None,
+            cortical_name: None,
         },
         &reward,
         &metric,
@@ -228,7 +232,7 @@ fn full_pipeline_produces_summary_and_scorecard() {
     assert_eq!(outcome.summary.evaluated_samples, 4);
     assert_eq!(outcome.predictions.len(), 4);
     assert!((outcome.metric_result.metrics["accuracy"] - 1.0).abs() < 1e-12);
-    assert_eq!(runtime.submitted_rewards().len(), 4);
+    assert!(runtime.submitted_rewards().is_empty());
 
     // Assemble a portable scorecard from the run provenance + computed metrics.
     let card = assemble_scorecard(

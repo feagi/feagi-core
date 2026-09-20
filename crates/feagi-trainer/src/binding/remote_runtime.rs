@@ -271,7 +271,7 @@ impl FeagiRuntime for RemoteFeagiRuntime {
         Ok(())
     }
 
-    fn collect_motor(&mut self) -> Result<Self::MotorFrame, TrainerError> {
+    fn collect_motor(&mut self) -> Result<Option<Self::MotorFrame>, TrainerError> {
         let deadline = Instant::now() + self.motor_collect_timeout;
         let mut received = false;
 
@@ -316,10 +316,8 @@ impl FeagiRuntime for RemoteFeagiRuntime {
         }
 
         if !received {
-            return Err(TrainerError::Runtime(
-                "no motor frame received from FEAGI within the collect timeout".to_string(),
-            ));
+            return Ok(None);
         }
-        Ok(self.motor_buffer.clone())
+        Ok(Some(self.motor_buffer.clone()))
     }
 }

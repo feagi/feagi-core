@@ -21,9 +21,9 @@ use crate::error::TrainerError;
 ///
 /// Two supervisory channels feed learning, injected at different points in the loop:
 ///
-/// - **Reward** ([`submit_reward`](Self::submit_reward)) — affect-channel stimulation derived
-///   from the *observed* output, so it is injected *after* [`collect_motor`](Self::collect_motor).
-///   This is the path implemented for the pendulum slice (plan Phase 1).
+/// - **Reward** ([`submit_reward`](Self::submit_reward)) — affect-channel stimulation. Dataset
+///   classification no longer injects Pain/Pleasure (genome-internal). Embodied/control still
+///   uses this after a motor frame is observed (pendulum / environment reward).
 /// - **Target-motor / teaching** ([`submit_target_motor`](Self::submit_target_motor)) — a
 ///   *demonstrated* action injected *with sensory input, before* [`step`](Self::step) for
 ///   supervised forcing (behavior cloning). It is **reserved** here (default `Unsupported`) so
@@ -57,5 +57,9 @@ pub trait FeagiRuntime {
     fn step(&mut self, ticks: u32) -> Result<(), TrainerError>;
 
     /// Collects the motor/OPU output produced since the last collection.
-    fn collect_motor(&mut self) -> Result<Self::MotorFrame, TrainerError>;
+    ///
+    /// `Ok(None)` means the brain produced no motor frame in the collect window (silent OPU).
+    /// That is not a transport failure. Dataset train does not call this; dataset test treats
+    /// `None` as a warning. Embodied control still requires `Some`.
+    fn collect_motor(&mut self) -> Result<Option<Self::MotorFrame>, TrainerError>;
 }

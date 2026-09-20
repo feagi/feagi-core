@@ -127,7 +127,12 @@ pub use fq_sampler::*;
 pub use neural_dynamics::*;
 // Neuron models now in feagi-neural::models
 pub use npu::*;
-pub use parameter_update_queue::{ParameterUpdate, ParameterUpdateQueue};
+pub use parameter_update_queue::{
+    increment_from_parameter_update, is_firing_threshold_increment_param,
+    is_firing_threshold_param, json_number_as_f32, merge_firing_threshold_increment,
+    parse_firing_threshold_increment, should_rewrite_threshold_gradient, ParameterUpdate,
+    ParameterUpdateQueue,
+};
 pub use rate_modulated_leak::{RateModulatedLeakConfig, RateModulatedLeakRegistry};
 pub use runtime_taps::{
     AgentPublishStats, AreaActivity as TapAreaActivity, BurstActivitySummary, BurstTaps,

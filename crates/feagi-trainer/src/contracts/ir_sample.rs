@@ -37,6 +37,33 @@ pub enum Payload {
     Text(String),
     /// Raw bytes (e.g. an encoded image), interpreted per modality + adapter.
     Bytes(Vec<u8>),
+    /// One time-window of analog samples in the adapter's chosen scale.
+    ///
+    /// `samples` is interleaved channel-major in time: length equals
+    /// `channel_ids.len() * time_points`. With `normalize = none` these are physical
+    /// units. Min-max modes map them to `[0, 1]` for population Z-bin encoders.
+    /// Stream infer uses the same shape for a full episode and lists score ticks in
+    /// `hold_ends`.
+    TimeSeries {
+        /// Sampling rate of the window in Hz (provenance; encoding uses `samples` only).
+        sample_rate_hz: f64,
+        /// Stream ids in interleave order.
+        channel_ids: Vec<String>,
+        /// Analog samples, interleaved by time then channel.
+        samples: Vec<f64>,
+        /// Inclusive sample indices at which to collect the Misc OPU (stream infer).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hold_ends: Option<Vec<HoldEnd>>,
+    },
+}
+
+/// One stream-infer score point (end of the 90+1+180 hold for an annotation).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HoldEnd {
+    /// Inclusive index into `TimeSeries.samples` (single-stream, one value per tick).
+    pub sample_index: u64,
+    /// Ground-truth class at this hold.
+    pub class_id: u32,
 }
 
 /// The typed ground-truth target for a sample, selected by `OutputType`.

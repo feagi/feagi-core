@@ -30,6 +30,26 @@ pub trait EncoderPlugin {
     ) -> Result<Self::Frame, TrainerError>;
 }
 
+/// Encodes one streamed tick (parallel amplitudes + optional class teacher) into a frame.
+pub trait TickEncoder {
+    /// The runtime sensory-frame type this encoder produces.
+    type Frame;
+
+    /// Versioned identity of this encoder selector (recorded in provenance).
+    fn plugin_ref(&self) -> PluginRef;
+
+    /// Encodes one burst. `amplitudes` and `class_ids` are aligned on X (parallel beats).
+    ///
+    /// `class_ids[i] = None` leaves teacher column `i` silent.
+    fn encode_tick(
+        &mut self,
+        amplitudes: &[f64],
+        class_ids: &[Option<u32>],
+        profile: &EncoderBindingProfile,
+        class_count: u32,
+    ) -> Result<Self::Frame, TrainerError>;
+}
+
 /// Encodes a raw environment [`Observation`] into a runtime sensory frame for closed-loop
 /// control rollouts (plan Phase 1d).
 ///

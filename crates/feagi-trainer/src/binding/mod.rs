@@ -28,6 +28,8 @@ pub mod encoder;
 pub mod encoding_scheme;
 pub mod environment;
 pub mod image_frame_encoder;
+pub mod misc_class_decoder;
+pub mod misc_stream_encoder;
 pub mod motor_decoder;
 pub mod population_encoder;
 pub mod profile;
@@ -39,14 +41,18 @@ pub mod segmentation_mask_decoder;
 pub mod stub_runtime;
 
 pub use class_decoder::ClassDecoder;
-pub use decoder::DecoderPlugin;
-pub use encoder::{EncoderPlugin, ObservationEncoder};
+pub use decoder::{DecoderPlugin, SlotDecoder};
+pub use encoder::{EncoderPlugin, ObservationEncoder, TickEncoder};
 pub use encoding_scheme::{BinSpacing, EncodingScheme, ResolvedEncodingScheme};
 pub use environment::{Action, Environment, Observation, StepOutcome, StubEnvironment};
 pub use image_frame_encoder::ImageFrameEncoder;
+pub use misc_class_decoder::MiscClassDecoder;
+pub use misc_stream_encoder::MiscStreamEncoder;
 pub use motor_decoder::{ContinuousDecodeScheme, ContinuousMotorDecoder};
 pub use population_encoder::PopulationEncoder;
-pub use profile::{DecoderBindingProfile, EncoderBindingProfile};
+pub use profile::{
+    ClassTeacherBinding, DecoderBindingProfile, EncoderBindingProfile, StreamBinding, StreamMode,
+};
 #[cfg(feature = "remote-runtime")]
 pub use remote_runtime::{RemoteFeagiRuntime, RemoteRuntimeConfig};
 pub use reward::{

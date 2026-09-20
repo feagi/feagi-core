@@ -47,7 +47,7 @@ pub enum EncodingScheme {
         /// Number of ticks the latency is measured within.
         window_ticks: u32,
     },
-    /// Value encoded as graded potential. Registered; not yet available.
+    /// Value encoded as graded potential (MiscData P). Snapshot and stream.
     Value,
 }
 
@@ -73,7 +73,10 @@ impl EncodingScheme {
 
     /// Whether this scheme is backed by a FEAGI coder today.
     pub fn is_available(&self) -> bool {
-        matches!(self, EncodingScheme::PopulationSingleSpike { .. })
+        matches!(
+            self,
+            EncodingScheme::PopulationSingleSpike { .. } | EncodingScheme::Value
+        )
     }
 
     /// Resolves the scheme to a concrete configuration, or fails explicitly.
@@ -93,9 +96,13 @@ impl EncodingScheme {
                     spacing: *spacing,
                 })
             }
+            EncodingScheme::Value => Ok(ResolvedEncodingScheme {
+                bins: 1,
+                spacing: BinSpacing::Linear,
+            }),
             other => Err(TrainerError::Config(format!(
                 "encoding scheme '{}' is registered but not yet available in feagi-sensorimotor \
-                 (see design Appendix E); select 'population_single_spike' or add the coder in core",
+                 (see design Appendix E); select 'population_single_spike' or 'value'",
                 other.name()
             ))),
         }
@@ -135,11 +142,18 @@ mod tests {
                 max_rate: 5,
             },
             EncodingScheme::Temporal { window_ticks: 10 },
-            EncodingScheme::Value,
         ] {
             assert!(!scheme.is_available());
             assert!(matches!(scheme.resolve(), Err(TrainerError::Config(_))));
         }
+    }
+
+    #[test]
+    fn value_resolves_as_depth_one() {
+        assert!(EncodingScheme::Value.is_available());
+        let resolved = EncodingScheme::Value.resolve().expect("resolve");
+        assert_eq!(resolved.bins, 1);
+        assert_eq!(resolved.spacing, BinSpacing::Linear);
     }
 
     #[test]

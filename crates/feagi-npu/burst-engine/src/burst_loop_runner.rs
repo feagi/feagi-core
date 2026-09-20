@@ -19,7 +19,7 @@
 //! - Power neurons injected every burst
 //! - Sensory neurons injected by separate threads directly into FCL
 
-use crate::parameter_update_queue::ParameterUpdateQueue;
+use crate::parameter_update_queue::{increment_from_parameter_update, ParameterUpdateQueue};
 use crate::sensory::AgentManager;
 use crate::update_sim_timestep_from_hz;
 #[cfg(feature = "std")]
@@ -1750,39 +1750,48 @@ fn burst_loop(
                                     0
                                 }
                             }
-                            // Spatial gradient threshold increments - uses stored neuron positions
+                            // One-shot rewrite of stored per-neuron thresholds. Increment is
+                            // not consulted during fire; only thresholds[] is used after this.
                             "neuron_fire_threshold_increment" | "firing_threshold_increment" => {
-                                // This is sent as array [x, y, z] from BV
-                                if let Some(arr) = update.value.as_array() {
-                                    if arr.len() == 3 {
-                                        if let (Some(inc_x), Some(inc_y), Some(inc_z)) =
-                                            (arr[0].as_f64(), arr[1].as_f64(), arr[2].as_f64())
-                                        {
-                                            // Get base threshold from update metadata
-                                            if let Some(base_threshold) = update.base_threshold {
-                                                npu_lock
-                                                    .update_cortical_area_threshold_with_gradient(
-                                                        update.cortical_idx,
-                                                        base_threshold,
-                                                        inc_x as f32,
-                                                        inc_y as f32,
-                                                        inc_z as f32,
-                                                    )
-                                            } else {
-                                                warn!(
-                                                    "[PARAM-QUEUE] Spatial gradient update missing base_threshold - skipping"
-                                                );
-                                                0
-                                            }
-                                        } else {
-                                            0
+                                match increment_from_parameter_update(&update) {
+                                    Some((base_threshold, [inc_x, inc_y, inc_z])) => {
+                                        let count = npu_lock
+                                            .update_cortical_area_threshold_with_gradient(
+                                                update.cortical_idx,
+                                                base_threshold,
+                                                inc_x,
+                                                inc_y,
+                                                inc_z,
+                                            );
+                                        if count == 0 {
+                                            warn!(
+                                                "[PARAM-QUEUE] firing_threshold_increment applied to 0 neurons (cortical_idx={}, cortical_id={}, value={})",
+                                                update.cortical_idx,
+                                                update.cortical_id,
+                                                update.value
+                                            );
                                         }
-                                    } else {
+                                        count
+                                    }
+                                    None => {
+                                        warn!(
+                                            "[PARAM-QUEUE] firing_threshold_increment skipped: need numeric [x,y,z]/{{x,y,z}}/scalar plus base_threshold (cortical_id={}, value={:?}, base_threshold={:?})",
+                                            update.cortical_id,
+                                            update.value,
+                                            update.base_threshold
+                                        );
                                         0
                                     }
-                                } else {
-                                    0
                                 }
+                            }
+                            "firing_threshold_increment_x"
+                            | "firing_threshold_increment_y"
+                            | "firing_threshold_increment_z" => {
+                                warn!(
+                                    "[PARAM-QUEUE] per-axis increment {} must be merged into [x,y,z] before queue; skipping (cortical_id={})",
+                                    update.parameter_name, update.cortical_id
+                                );
+                                0
                             }
                             // IMPORTANT: firing_threshold_limit is NOT the firing threshold.
                             // Previously this was (incorrectly) routed into update_cortical_area_threshold(),

@@ -285,7 +285,7 @@ The UI label "task preset" maps to **`TaskTemplate`**: a named, versioned bundle
 
 #### Desktop Trainer UI design record (2026-06)
 
-The feagi-desktop plugin (`/trainer`) implements ADR-005 as a **single-focus wizard** (six steps: setup → dataset → compatibility → bindings → run → results), not a fixed CSV/Image/Video tab strip. Full step definitions and chrome (`ActiveExperimentWidget`, precondition strip, browse-vs-run-ready gating on `experimentRunSessionId`) are in `FEAGI_TRAINER_ARCHITECTURE_AND_DESIGN.md` Section 7.4.
+The feagi-desktop plugin (`/trainer`) implements ADR-005 as a **single-focus wizard** (seven steps: setup → dataset → compatibility → bindings → encoding scheme → run → results), not a fixed CSV/Image/Video tab strip. Full step definitions and chrome (`ActiveExperimentWidget`, precondition strip, browse-vs-run-ready gating on `experimentRunSessionId`) are in `FEAGI_TRAINER_ARCHITECTURE_AND_DESIGN.md` Section 7.4.
 
 **Browse vs run-ready:** the window always opens; without an active experiment session the user may configure and browse the Experience Catalog but cannot validate bindings or start a protocol. This matches modern "configure offline, run when environment is live" without blocking exploration.
 
@@ -756,7 +756,7 @@ Avoid building each layer horizontally. Land one **complete vertical slice** end
 **Phase 1 — Vertical slice (MVP, maps to design doc Phase 1 + ADR-004 M1)**
 - L1: orchestrator + registry + `validate_run` + artifact store for one run lifecycle.
 - L2: AdapterPlugin (tabular CSV), scalar Encoder + class Decoder selectors, classification MetricPack, baseline RewardPolicy (Pain/Pleasure).
-- L3: minimal desktop plugin UI — **six-step wizard** (setup → dataset [Catalog default] → compatibility → bindings → run → results); browse-only without experiment session; `ActiveExperimentWidget` + precondition strip; observe `RunEvent` stream; wireframe in `feagi-desktop/src/plugins/trainer/` pending backend; one plugin-contributed config panel to prove the UI-contribution contract.
+- L3: minimal desktop plugin UI — **seven-step wizard** (setup → dataset [Catalog default] → compatibility → bindings → encoding scheme → run → results); browse-only without experiment session; `ActiveExperimentWidget` + precondition strip; observe `RunEvent` stream; wireframe in `feagi-desktop/src/plugins/trainer/` pending backend; one plugin-contributed config panel to prove the UI-contribution contract.
 - L5 (M1): the IRIS path runs entirely through service APIs (no direct-WS).
 - **Scorecard (ADR-012)**: emit a `Scorecard` for the run's final connectome (pinned `connectome_hash`, local `dataset_asset_id`, `evaluation_protocol_version`) into the local artifact store; support local self-verification (re-run matches within tolerance).
 - Exit: IRIS train/test run is reproducible, provenance-complete, produces a verifiable Scorecard, and is viewed end-to-end in the UI.

@@ -117,6 +117,9 @@ fn encoder_profile() -> EncoderBindingProfile {
         },
         image_width: None,
         image_height: None,
+        stream: None,
+        teacher: None,
+        cortical_name: None,
     }
 }
 
@@ -128,6 +131,7 @@ fn decoder_profile() -> DecoderBindingProfile {
         mask_width: None,
         mask_height: None,
         mask_depth: None,
+        cortical_name: None,
     }
 }
 

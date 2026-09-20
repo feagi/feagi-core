@@ -17,7 +17,7 @@ use feagi_trainer::contracts::{
     scorecard,
 };
 use feagi_trainer::plugins::DatasetSource;
-use feagi_trainer::run_config::RunConfig;
+use feagi_trainer::run_config::{DatasetAdapterConfig, RunConfig};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -45,10 +45,17 @@ fn run(args: &[String]) -> Result<(), Box<dyn Error>> {
     let config = RunConfig::from_json(&json)?;
     config.validate_supported()?;
 
-    let bytes = std::fs::read(&config.dataset.path)?;
-    let source = DatasetSource {
-        uri: config.dataset.path.clone(),
-        bytes,
+    let source = match &config.dataset.adapter {
+        DatasetAdapterConfig::Tabular(_) => DatasetSource {
+            uri: config.dataset.path.clone(),
+            bytes: std::fs::read(&config.dataset.path)?,
+        },
+        DatasetAdapterConfig::ImageFolder(_) | DatasetAdapterConfig::TimeSeries(_) => {
+            DatasetSource {
+                uri: config.dataset.path.clone(),
+                bytes: Vec::new(),
+            }
+        }
     };
     let (manifest, samples) = config.plan(&source)?;
     eprintln!(

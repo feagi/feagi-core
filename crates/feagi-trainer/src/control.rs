@@ -2,7 +2,7 @@
 //!
 //! Per ADR-011 the Control API is a **library surface**, not a network service: the open crate
 //! exposes a [`RunControl`] trait, a [`RunEventSink`] the engine emits through, and a
-//! [`CancelToken`] for cooperative stop. A host (e.g. a `feagi-desktop` Tauri plugin) implements
+//! [`CancelToken`] for cooperative stop and pause. A host (e.g. a `feagi-desktop` Tauri plugin) implements
 //! the transport by supplying a sink that re-emits each [`RunEvent`] as a Tauri event, and by
 //! holding the cancel token. The crate opens no socket of its own, preserving the open/closed and
 //! embedded/RTOS invariants (ADR-006).
@@ -15,33 +15,100 @@
 //! fully testable without a live backend.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 
 use crate::contracts::{RunEvent, RunEventKind, RunStatus, RunSummary};
 use crate::error::TrainerError;
 
-/// A cloneable, thread-safe cooperative-cancellation handle for a run.
+/// Shared flags the host uses to stop or pause a run.
+#[derive(Debug)]
+struct CancelInner {
+    cancelled: AtomicBool,
+    paused: AtomicBool,
+    park: Mutex<()>,
+    cv: Condvar,
+}
+
+/// A cloneable, thread-safe cooperative-cancellation and pause handle for a run.
 ///
-/// The engine checks [`is_cancelled`](Self::is_cancelled) at safe points (e.g. between samples)
-/// and stops with [`TrainerError::Cancelled`]; a host calls [`cancel`](Self::cancel) from any
-/// thread to request that stop. Cancellation is cooperative — it never interrupts mid-step.
-#[derive(Debug, Clone, Default)]
-pub struct CancelToken(Arc<AtomicBool>);
+/// The engine checks [`interrupt`](Self::interrupt) at safe points (e.g. between samples).
+/// A host calls [`cancel`](Self::cancel) to stop, or [`pause`](Self::pause) / [`resume`](Self::resume)
+/// to hold and continue. Both are cooperative — they never interrupt mid-step.
+#[derive(Debug, Clone)]
+pub struct CancelToken(Arc<CancelInner>);
+
+impl Default for CancelToken {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl CancelToken {
-    /// Creates a fresh, un-cancelled token.
+    /// Creates a fresh, un-cancelled, un-paused token.
     pub fn new() -> Self {
-        Self(Arc::new(AtomicBool::new(false)))
+        Self(Arc::new(CancelInner {
+            cancelled: AtomicBool::new(false),
+            paused: AtomicBool::new(false),
+            park: Mutex::new(()),
+            cv: Condvar::new(),
+        }))
     }
 
     /// Requests cancellation. Idempotent and callable from any thread.
     pub fn cancel(&self) {
-        self.0.store(true, Ordering::SeqCst);
+        self.0.cancelled.store(true, Ordering::SeqCst);
+        self.0.cv.notify_all();
+    }
+
+    /// Holds the run at the next interrupt point until [`resume`](Self::resume) or
+    /// [`cancel`](Self::cancel).
+    pub fn pause(&self) {
+        self.0.paused.store(true, Ordering::SeqCst);
+        self.0.cv.notify_all();
+    }
+
+    /// Continues a paused run. Idempotent when not paused.
+    pub fn resume(&self) {
+        self.0.paused.store(false, Ordering::SeqCst);
+        self.0.cv.notify_all();
     }
 
     /// Returns whether cancellation has been requested.
     pub fn is_cancelled(&self) -> bool {
-        self.0.load(Ordering::SeqCst)
+        self.0.cancelled.load(Ordering::SeqCst)
+    }
+
+    /// Returns whether the run is held at the next interrupt point.
+    pub fn is_paused(&self) -> bool {
+        self.0.paused.load(Ordering::SeqCst)
+    }
+
+    /// Blocks while paused. Returns immediately when not paused or when cancelled.
+    pub fn park_if_paused(&self) {
+        let mut guard = self
+            .0
+            .park
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        while self.is_paused() && !self.is_cancelled() {
+            guard = self
+                .0
+                .cv
+                .wait(guard)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+    }
+
+    /// Parks while paused, then fails if cancellation was requested.
+    ///
+    /// # Errors
+    /// [`TrainerError::Cancelled`] with `cancelled_message` when the host has stopped the run.
+    pub fn interrupt(&self, cancelled_message: String) -> Result<(), TrainerError> {
+        self.park_if_paused();
+        if self.is_cancelled() {
+            return Err(TrainerError::Cancelled(cancelled_message));
+        }
+        Ok(())
     }
 }
 
@@ -207,6 +274,59 @@ mod tests {
         clone.cancel();
         // Clones share the same flag.
         assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn pause_and_resume_round_trip() {
+        let token = CancelToken::new();
+        assert!(!token.is_paused());
+        token.pause();
+        assert!(token.is_paused());
+        token.resume();
+        assert!(!token.is_paused());
+    }
+
+    #[test]
+    fn park_returns_immediately_when_not_paused() {
+        let token = CancelToken::new();
+        token.park_if_paused();
+        assert!(!token.is_cancelled());
+    }
+
+    #[test]
+    fn cancel_unblocks_a_paused_waiter() {
+        let token = CancelToken::new();
+        token.pause();
+        let waiter = token.clone();
+        let handle = std::thread::spawn(move || {
+            waiter.park_if_paused();
+            waiter.is_cancelled()
+        });
+        token.cancel();
+        assert!(handle.join().expect("waiter"));
+    }
+
+    #[test]
+    fn resume_unblocks_a_paused_waiter() {
+        let token = CancelToken::new();
+        token.pause();
+        let waiter = token.clone();
+        let handle = std::thread::spawn(move || {
+            waiter.park_if_paused();
+            !waiter.is_cancelled() && !waiter.is_paused()
+        });
+        token.resume();
+        assert!(handle.join().expect("waiter"));
+    }
+
+    #[test]
+    fn interrupt_fails_after_cancel() {
+        let token = CancelToken::new();
+        token.cancel();
+        assert!(matches!(
+            token.interrupt("stopped".to_string()),
+            Err(TrainerError::Cancelled(_))
+        ));
     }
 
     #[test]

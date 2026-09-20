@@ -304,3 +304,145 @@ fn test_firing_threshold_negative_gradient() {
     assert!((threshold_1 - 90.0).abs() < 0.001);
     assert!((threshold_2 - 80.0).abs() < 0.001);
 }
+
+fn create_line_area(
+    npu: &mut RustNPU<StdRuntime, f32, CPUBackend>,
+    cortical_idx: u32,
+    width: u32,
+    base: f32,
+    increment_x: f32,
+) -> u32 {
+    npu.register_cortical_area(
+        cortical_idx,
+        CoreCorticalType::Death.to_cortical_id().as_base_64(),
+    );
+    npu.create_cortical_area_neurons(
+        cortical_idx,
+        width,
+        1,
+        1,
+        1,
+        base,
+        increment_x,
+        0.0,
+        0.0,
+        f32::MAX,
+        0.0,
+        0.0,
+        0,
+        0,
+        1.0,
+        0,
+        0,
+        false,
+    )
+    .expect("Neuron creation failed")
+}
+
+#[test]
+fn test_live_update_large_increment_rewrites_stored_thresholds() {
+    let mut npu =
+        RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1)
+            .unwrap();
+    let cortical_idx = 10;
+    let base = 0.01;
+    let count = create_line_area(&mut npu, cortical_idx, 5, base, 0.0);
+    assert_eq!(count, 5);
+
+    let updated =
+        npu.update_cortical_area_threshold_with_gradient(cortical_idx, base, 10.0, 0.0, 0.0);
+    assert_eq!(updated, 5);
+
+    for x in 0..5 {
+        let expected = base + (x as f32 * 10.0);
+        let actual = npu
+            .get_neuron_property_by_index(x, "threshold")
+            .expect("Threshold should exist");
+        assert!(
+            (actual - expected).abs() < 0.001,
+            "Neuron at x={} should have threshold {:.2}, got {:.2}",
+            x,
+            expected,
+            actual
+        );
+    }
+}
+
+#[test]
+fn test_live_update_increment_100_rewrites_stored_thresholds() {
+    let mut npu =
+        RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1)
+            .unwrap();
+    let cortical_idx = 10;
+    let base = 1.0;
+    create_line_area(&mut npu, cortical_idx, 4, base, 1.0);
+
+    let updated =
+        npu.update_cortical_area_threshold_with_gradient(cortical_idx, base, 100.0, 0.0, 0.0);
+    assert_eq!(updated, 4);
+
+    for x in 0..4 {
+        let expected = base + (x as f32 * 100.0);
+        let actual = npu
+            .get_neuron_property_by_index(x, "threshold")
+            .expect("Threshold should exist");
+        assert!(
+            (actual - expected).abs() < 0.001,
+            "Neuron at x={} should have threshold {:.1}, got {:.1}",
+            x,
+            expected,
+            actual
+        );
+    }
+}
+
+#[test]
+fn test_parameter_update_integer_json_rewrites_thresholds() {
+    use feagi_npu_burst_engine::{increment_from_parameter_update, ParameterUpdate};
+
+    let mut npu =
+        RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1)
+            .unwrap();
+    let cortical_idx = 10;
+    let base = 0.01;
+    create_line_area(&mut npu, cortical_idx, 3, base, 0.0);
+
+    let update = ParameterUpdate {
+        cortical_idx,
+        cortical_id: "test".to_string(),
+        parameter_name: "neuron_fire_threshold_increment".to_string(),
+        value: serde_json::json!([10, 0, 0]),
+        dimensions: None,
+        neurons_per_voxel: None,
+        base_threshold: Some(base),
+    };
+    let (resolved_base, [inc_x, inc_y, inc_z]) =
+        increment_from_parameter_update(&update).expect("integer increment payload must parse");
+    let updated = npu.update_cortical_area_threshold_with_gradient(
+        cortical_idx,
+        resolved_base,
+        inc_x,
+        inc_y,
+        inc_z,
+    );
+    assert_eq!(updated, 3);
+    assert!((npu.get_neuron_property_by_index(0, "threshold").unwrap() - 0.01).abs() < 0.001);
+    assert!((npu.get_neuron_property_by_index(1, "threshold").unwrap() - 10.01).abs() < 0.001);
+    assert!((npu.get_neuron_property_by_index(2, "threshold").unwrap() - 20.01).abs() < 0.001);
+}
+
+#[test]
+fn test_base_threshold_change_keeps_existing_large_increment() {
+    let mut npu =
+        RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1)
+            .unwrap();
+    let cortical_idx = 10;
+    create_line_area(&mut npu, cortical_idx, 3, 1.0, 10.0);
+
+    let updated =
+        npu.update_cortical_area_threshold_with_gradient(cortical_idx, 5.0, 10.0, 0.0, 0.0);
+    assert_eq!(updated, 3);
+    assert!((npu.get_neuron_property_by_index(0, "threshold").unwrap() - 5.0).abs() < 0.001);
+    assert!((npu.get_neuron_property_by_index(1, "threshold").unwrap() - 15.0).abs() < 0.001);
+    assert!((npu.get_neuron_property_by_index(2, "threshold").unwrap() - 25.0).abs() < 0.001);
+}
