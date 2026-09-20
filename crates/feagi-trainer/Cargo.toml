@@ -41,6 +41,7 @@ feagi-dataset-contracts = { workspace = true }
 feagi-structures = { version = "=0.0.32", path = "../feagi-structures" }
 feagi-sensorimotor = { version = "=0.0.32", path = "../feagi-sensorimotor" }
 image = { workspace = true }
+base64 = "0.22"
 
 # Remote/ZMQ runtime path (optional; behind `remote-runtime`). The open crate stays a pure
 # ZMQ/`feagi-agent` client — no Composer/REST coupling (ADR-006).

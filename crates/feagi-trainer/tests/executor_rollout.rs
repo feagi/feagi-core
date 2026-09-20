@@ -109,6 +109,7 @@ fn adapter_config() -> TabularCsvConfig {
         ],
         split: Split::Test,
         split_id: SplitId("test".to_string()),
+        class_keep_percents: std::collections::BTreeMap::new(),
     }
 }
 
@@ -146,7 +147,7 @@ fn run_spec() -> RunSpec {
         },
         reward_policy: RewardPolicyBinding {
             plugin: PluginRef {
-                id: PluginId("reward.pain_pleasure".to_string()),
+                id: PluginId("reward.none".to_string()),
                 version: "1.0.0".to_string(),
             },
             config: serde_json::json!({}),
@@ -206,6 +207,7 @@ fn full_pipeline_produces_summary_and_scorecard() {
             image_height: None,
             stream: None,
             teacher: None,
+            segmentation_teacher: None,
             cortical_name: None,
         },
         &mut decoder,

@@ -518,6 +518,7 @@ mod tests {
         UnknownLabelPolicy,
     };
     use crate::contracts::{Split, SplitId};
+    use std::collections::BTreeMap;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_dir() -> PathBuf {
@@ -549,6 +550,7 @@ mod tests {
             annotation_suffix: Some("atr".to_string()),
             channel_map: Some(map),
             presentation: crate::adapters::time_series::config::TimeSeriesPresentation::Snapshot,
+            class_keep_percents: BTreeMap::new(),
         }
     }
 

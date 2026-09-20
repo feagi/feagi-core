@@ -3,8 +3,11 @@
 //! Every field is required by the caller. The adapter never infers window size, class labels,
 //! channel names, or edge policy.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
+use crate::adapters::class_keep::validate_class_keep_percents;
 use crate::contracts::common::{Split, SplitId};
 
 /// On-disk source the adapter reads.
@@ -117,6 +120,9 @@ pub struct TimeSeriesPackageConfig {
     /// Snapshot vs sample-by-sample stream. Default is snapshot (existing ECG path).
     #[serde(default)]
     pub presentation: TimeSeriesPresentation,
+    /// Per-class keep percent (0..=100). Empty keeps every eligible window.
+    #[serde(default)]
+    pub class_keep_percents: BTreeMap<String, u32>,
 }
 
 impl TimeSeriesPackageConfig {
@@ -158,6 +164,14 @@ impl TimeSeriesPackageConfig {
                 ));
             }
         }
+        if self.presentation == TimeSeriesPresentation::StreamInfer
+            && !self.class_keep_percents.is_empty()
+        {
+            return Err(
+                "class_keep_percents apply to event-window training, not stream infer".to_string(),
+            );
+        }
+        validate_class_keep_percents(&self.class_keep_percents, &self.class_labels)?;
         if self.presentation == TimeSeriesPresentation::StreamInfer
             && self.normalize == TimeSeriesNormalize::MinMaxPerWindow
         {
@@ -210,6 +224,7 @@ mod tests {
             annotation_suffix: None,
             channel_map: None,
             presentation: TimeSeriesPresentation::StreamInfer,
+            class_keep_percents: BTreeMap::new(),
         }
     }
 
@@ -224,5 +239,13 @@ mod tests {
         cfg.normalize = TimeSeriesNormalize::MinMaxPerWindow;
         let err = cfg.validate().expect_err("window minmax");
         assert!(err.contains("min_max_per_window"));
+    }
+
+    #[test]
+    fn stream_infer_rejects_class_keep_percents() {
+        let mut cfg = base_infer();
+        cfg.class_keep_percents.insert("N".to_string(), 50);
+        let err = cfg.validate().expect_err("keep on infer");
+        assert!(err.contains("class_keep_percents"));
     }
 }

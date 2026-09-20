@@ -51,13 +51,14 @@ pub use misc_stream_encoder::MiscStreamEncoder;
 pub use motor_decoder::{ContinuousDecodeScheme, ContinuousMotorDecoder};
 pub use population_encoder::PopulationEncoder;
 pub use profile::{
-    ClassTeacherBinding, DecoderBindingProfile, EncoderBindingProfile, StreamBinding, StreamMode,
+    ClassTeacherBinding, DecoderBindingProfile, EncoderBindingProfile, SegmentationTeacherBinding,
+    StreamBinding, StreamMode,
 };
 #[cfg(feature = "remote-runtime")]
 pub use remote_runtime::{RemoteFeagiRuntime, RemoteRuntimeConfig};
 pub use reward::{
-    AffectChannel, EnvironmentRewardPolicy, PainPleasureReward, RewardPolicy, RewardSignal,
-    SegmentationOverlapReward, SurvivalReward,
+    AffectChannel, EnvironmentRewardPolicy, NoAffectReward, PainPleasureReward, RewardPolicy,
+    RewardSignal, SegmentationOverlapReward, SurvivalReward,
 };
 pub use runtime::FeagiRuntime;
 pub use segmentation_mask_decoder::SegmentationMaskDecoder;

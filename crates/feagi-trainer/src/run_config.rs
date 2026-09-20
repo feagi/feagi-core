@@ -20,7 +20,6 @@ use crate::adapters::{
     TabularCsvConfig, TimeSeriesPackageAdapter, TimeSeriesPackageConfig,
 };
 use crate::binding::profile::{DecoderBindingProfile, EncoderBindingProfile};
-use crate::binding::reward::SegmentationOverlapReward;
 use crate::contracts::{
     BackendFingerprint, DatasetManifest, IRSample, RunSpec, ScorecardId, ScorecardStatus,
     ScorecardVisibility,
@@ -28,13 +27,14 @@ use crate::contracts::{
 use crate::error::TrainerError;
 use crate::executor::{ExecutorConfig, ScorecardProvenance};
 use crate::metrics::{ClassificationMetricPack, SegmentationMetricPack};
+use crate::planned_samples::PlannedSamples;
 use crate::plugins::{AdapterPlugin, DatasetSource, SamplerPlugin};
 use crate::samplers::SequentialSampler;
 
 /// Reward-policy plugin id the CLI resolves to [`PainPleasureReward`](crate::binding::PainPleasureReward).
 pub const SUPPORTED_REWARD_ID: &str = "reward.pain_pleasure";
-/// Reward-policy plugin id for dense segmentation overlap.
-pub const SUPPORTED_SEGMENTATION_REWARD_ID: &str = SegmentationOverlapReward::PLUGIN_ID;
+/// Reward-policy plugin id for labeled dataset runs that do not inject affect.
+pub const SUPPORTED_NONE_REWARD_ID: &str = crate::binding::reward::NoAffectReward::PLUGIN_ID;
 /// Encoder coder id the CLI resolves to [`PopulationEncoder`](crate::binding::PopulationEncoder).
 pub const SUPPORTED_ENCODER_CODER_ID: &str = "percentage_encoder";
 /// Encoder coder id the CLI resolves to [`MiscStreamEncoder`](crate::binding::MiscStreamEncoder).
@@ -97,8 +97,9 @@ pub struct RunConfig {
     pub decoder_profile: DecoderBindingProfile,
     /// Per-run executor tuning (ticks per sample).
     pub executor: ExecutorConfig,
-    /// Pain/pleasure reward stimulation magnitude in `[0.0, 1.0]`.
-    pub reward_magnitude: f64,
+    /// Trainer-injected affect magnitude in `[0.0, 1.0]`. Absent on labeled dataset runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reward_magnitude: Option<f64>,
     /// Mean-IoU threshold for segmentation overlap reward in `[0.0, 1.0]`.
     #[serde(default)]
     pub segmentation_iou_threshold: Option<f64>,
@@ -145,8 +146,14 @@ impl RunConfig {
                 check(
                     "reward policy",
                     &spec.reward_policy.plugin.id.0,
-                    SUPPORTED_REWARD_ID,
+                    SUPPORTED_NONE_REWARD_ID,
                 )?;
+                if self.reward_magnitude.is_some() {
+                    return Err(TrainerError::Config(
+                        "labeled runs must not set reward_magnitude; trainer does not inject Pain/Pleasure"
+                            .to_string(),
+                    ));
+                }
                 check(
                     "encoder coder",
                     &spec.binding.encoder.coder_id,
@@ -167,8 +174,14 @@ impl RunConfig {
                 check(
                     "reward policy",
                     &spec.reward_policy.plugin.id.0,
-                    SUPPORTED_SEGMENTATION_REWARD_ID,
+                    SUPPORTED_NONE_REWARD_ID,
                 )?;
+                if self.reward_magnitude.is_some() {
+                    return Err(TrainerError::Config(
+                        "labeled runs must not set reward_magnitude; trainer does not inject Pain/Pleasure"
+                            .to_string(),
+                    ));
+                }
                 check(
                     "encoder coder",
                     &spec.binding.encoder.coder_id,
@@ -201,8 +214,14 @@ impl RunConfig {
                 check(
                     "reward policy",
                     &spec.reward_policy.plugin.id.0,
-                    SUPPORTED_REWARD_ID,
+                    SUPPORTED_NONE_REWARD_ID,
                 )?;
+                if self.reward_magnitude.is_some() {
+                    return Err(TrainerError::Config(
+                        "labeled runs must not set reward_magnitude; trainer does not inject Pain/Pleasure"
+                            .to_string(),
+                    ));
+                }
                 if self.encoder_profile.stream.is_some() {
                     check(
                         "encoder coder",
@@ -273,32 +292,82 @@ impl RunConfig {
         Ok(())
     }
 
-    /// Ingests the dataset and plans the deterministic visit order — the runtime-independent
-    /// half of the pipeline.
+    /// Indexes the dataset and plans the deterministic visit order.
     ///
-    /// Returns the resolved [`DatasetManifest`] (provenance) plus the samples for the run's split
-    /// in sampler order. Errors explicitly on a failed validation gate or an empty/unknown split.
+    /// Image-folder plans keep paths only; pixels are decoded on each visit. Tables and ECG
+    /// still materialize the split because those samples are small analog/tabular rows.
     pub fn plan(
         &self,
         source: &DatasetSource,
-    ) -> Result<(DatasetManifest, Vec<IRSample>), TrainerError> {
-        let (manifest, samples) = match &self.dataset.adapter {
+    ) -> Result<(DatasetManifest, PlannedSamples), TrainerError> {
+        self.plan_with_progress(source, |_, _, _| {})
+    }
+
+    /// Same as [`Self::plan`], reporting index stages to `on_progress`.
+    pub fn plan_with_progress<F>(
+        &self,
+        source: &DatasetSource,
+        on_progress: F,
+    ) -> Result<(DatasetManifest, PlannedSamples), TrainerError>
+    where
+        F: Fn(&str, Option<u64>, Option<u64>) + Send + Sync + 'static,
+    {
+        let progress = std::sync::Arc::new(on_progress);
+        match &self.dataset.adapter {
             DatasetAdapterConfig::Tabular(config) => {
+                progress("Loading table rows", None, None);
                 let adapter = TabularCsvAdapter::new(config.clone());
-                Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?
+                let (manifest, samples) =
+                    Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?;
+                progress("Ordering samples", None, None);
+                Ok((
+                    manifest,
+                    Self::order_memory_samples(samples, self.run_spec.sampler.seed),
+                ))
             }
             DatasetAdapterConfig::ImageFolder(config) => {
+                progress("Scanning image/mask pairs", None, None);
                 let adapter = ImageFolderSegmentationAdapter::new(config.clone());
-                Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?
+                let (manifest, pairs) = adapter.index(source)?;
+                let report = adapter.validate(&manifest)?;
+                if !report.passed {
+                    return Err(TrainerError::Validation(format!(
+                        "dataset failed validation: {}",
+                        report.issues.join("; ")
+                    )));
+                }
+                let pair_count = pairs.len() as u64;
+                progress(
+                    "Scanning image/mask pairs",
+                    Some(pair_count),
+                    Some(pair_count),
+                );
+                progress("Ordering samples", None, None);
+                let order = SequentialSampler::new().plan(pairs.len(), self.run_spec.sampler.seed);
+                let version_id = manifest.dataset_version_id.clone();
+                Ok((
+                    manifest,
+                    PlannedSamples::from_image_folder(adapter, pairs, version_id, order)?,
+                ))
             }
             DatasetAdapterConfig::TimeSeries(config) => {
+                progress("Loading time-series records", None, None);
                 let adapter = TimeSeriesPackageAdapter::new(config.clone());
-                Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?
+                let (manifest, samples) =
+                    Self::plan_with_adapter(&adapter, source, &self.run_spec.split_id)?;
+                progress("Ordering samples", None, None);
+                Ok((
+                    manifest,
+                    Self::order_memory_samples(samples, self.run_spec.sampler.seed),
+                ))
             }
-        };
-        let order = SequentialSampler::new().plan(samples.len(), self.run_spec.sampler.seed);
+        }
+    }
+
+    fn order_memory_samples(samples: Vec<IRSample>, seed: u64) -> PlannedSamples {
+        let order = SequentialSampler::new().plan(samples.len(), seed);
         let ordered = order.iter().map(|&i| samples[i].clone()).collect();
-        Ok((manifest, ordered))
+        PlannedSamples::from_ordered(ordered)
     }
 
     fn plan_with_adapter<A: AdapterPlugin>(
@@ -387,7 +456,7 @@ impl RunConfig {
     pub fn execute_remote(
         &self,
         manifest: &DatasetManifest,
-        samples: &[IRSample],
+        samples: &PlannedSamples,
         connection: &RemoteConnection,
     ) -> Result<(crate::contracts::RunSummary, crate::contracts::Scorecard), TrainerError> {
         // CLI convenience: the same assembly as the observed path, but events are dropped and the
@@ -431,7 +500,7 @@ impl RunConfig {
     pub fn execute_remote_with_events(
         &self,
         manifest: &DatasetManifest,
-        samples: &[IRSample],
+        samples: &PlannedSamples,
         connection: &RemoteConnection,
         identity: &AgentIdentity,
         events: &mut dyn crate::control::RunEventSink,
@@ -439,9 +508,8 @@ impl RunConfig {
     ) -> Result<(crate::contracts::RunSummary, crate::contracts::Scorecard), TrainerError> {
         use crate::adapters::{ImageFolderSegmentationAdapter, TimeSeriesPackageAdapter};
         use crate::binding::{
-            ClassDecoder, ImageFrameEncoder, MiscClassDecoder, MiscStreamEncoder,
-            PainPleasureReward, PopulationEncoder, RemoteFeagiRuntime, RemoteRuntimeConfig,
-            SegmentationMaskDecoder, SegmentationOverlapReward,
+            ClassDecoder, ImageFrameEncoder, MiscClassDecoder, MiscStreamEncoder, NoAffectReward,
+            PopulationEncoder, RemoteFeagiRuntime, RemoteRuntimeConfig, SegmentationMaskDecoder,
         };
         use crate::contracts::ExecutionMode;
         use crate::executor::{assemble_scorecard, run_rollout_with_events};
@@ -483,7 +551,7 @@ impl RunConfig {
             TabularCsvAdapter::PLUGIN_ID => {
                 let mut encoder = PopulationEncoder::new();
                 let mut decoder = ClassDecoder::new();
-                let reward = PainPleasureReward::new(self.reward_magnitude)?;
+                let reward = NoAffectReward;
                 let metric = ClassificationMetricPack::new();
                 run_rollout_with_events(
                     &self.run_spec.run_id,
@@ -501,14 +569,14 @@ impl RunConfig {
                 )
             }
             TimeSeriesPackageAdapter::PLUGIN_ID => {
-                let reward = PainPleasureReward::new(self.reward_magnitude)?;
+                let reward = NoAffectReward;
                 let metric = ClassificationMetricPack::new();
                 if self.encoder_profile.stream.is_some() {
                     let mut encoder = MiscStreamEncoder::new();
                     let mut decoder = MiscClassDecoder::new();
                     run_stream_rollout_with_events(
                         &self.run_spec.run_id,
-                        samples,
+                        samples.as_ordered_slice()?,
                         &mut runtime,
                         &mut encoder,
                         &self.encoder_profile,
@@ -542,12 +610,12 @@ impl RunConfig {
             ImageFolderSegmentationAdapter::PLUGIN_ID => {
                 let mut encoder = ImageFrameEncoder::new();
                 let mut decoder = SegmentationMaskDecoder::new();
-                let iou_threshold = self.segmentation_iou_threshold.ok_or_else(|| {
+                let _iou_threshold = self.segmentation_iou_threshold.ok_or_else(|| {
                     TrainerError::Config(
                         "segmentation runs require segmentation_iou_threshold".to_string(),
                     )
                 })?;
-                let reward = SegmentationOverlapReward::new(self.reward_magnitude, iou_threshold)?;
+                let reward = NoAffectReward;
                 let metric = SegmentationMetricPack::new();
                 run_rollout_with_events(
                     &self.run_spec.run_id,
@@ -618,6 +686,7 @@ mod tests {
             ],
             split: Split::Test,
             split_id: SplitId("test".to_string()),
+            class_keep_percents: std::collections::BTreeMap::new(),
         }
     }
 
@@ -656,7 +725,7 @@ mod tests {
                 },
                 reward_policy: RewardPolicyBinding {
                     plugin: PluginRef {
-                        id: PluginId(SUPPORTED_REWARD_ID.to_string()),
+                        id: PluginId(SUPPORTED_NONE_REWARD_ID.to_string()),
                         version: "1.0.0".to_string(),
                     },
                     config: json!({}),
@@ -688,6 +757,7 @@ mod tests {
                 image_height: None,
                 stream: None,
                 teacher: None,
+                segmentation_teacher: None,
                 cortical_name: None,
             },
             decoder_profile: DecoderBindingProfile {
@@ -702,7 +772,7 @@ mod tests {
             executor: ExecutorConfig {
                 ticks_per_sample: 3,
             },
-            reward_magnitude: 0.8,
+            reward_magnitude: None,
             segmentation_iou_threshold: None,
             scorecard: ScorecardInput {
                 scorecard_id: ScorecardId("sc-cfg-0001".to_string()),
@@ -723,6 +793,20 @@ mod tests {
     #[test]
     fn validate_supported_accepts_known_selectors() {
         assert!(run_config().validate_supported().is_ok());
+    }
+
+    #[test]
+    fn labeled_run_rejects_trainer_injected_affect() {
+        let mut config = run_config();
+        config.run_spec.reward_policy.plugin.id = PluginId(SUPPORTED_REWARD_ID.to_string());
+        assert!(matches!(
+            config.validate_supported(),
+            Err(TrainerError::Config(_))
+        ));
+        config = run_config();
+        config.reward_magnitude = Some(0.8);
+        let err = config.validate_supported().unwrap_err();
+        assert!(err.to_string().contains("reward_magnitude"));
     }
 
     #[test]
@@ -752,10 +836,61 @@ mod tests {
         };
         let (manifest, samples) = config.plan(&source).expect("plan");
         assert_eq!(samples.len(), 3);
-        // Sequential sampler preserves source order.
-        let ids: Vec<&str> = samples.iter().map(|s| s.sample_id.0.as_str()).collect();
-        assert_eq!(ids[0], samples[0].sample_id.0.as_str());
+        assert_eq!(samples.as_ordered_slice().expect("csv").len(), 3);
         assert_eq!(manifest.output_type, crate::contracts::OutputType::Class);
+    }
+
+    #[test]
+    fn plan_indexes_image_folder_and_loads_one_visit() {
+        use crate::planned_samples::SampleVisit;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path();
+        let images = root.join("images");
+        let labels = root.join("labels");
+        std::fs::create_dir_all(&images).expect("mkdir images");
+        std::fs::create_dir_all(&labels).expect("mkdir labels");
+        image::RgbImage::from_pixel(2, 2, image::Rgb([10, 20, 30]))
+            .save(images.join("a.png"))
+            .expect("write image");
+        image::GrayImage::from_pixel(2, 2, image::Luma([1]))
+            .save(labels.join("a.png"))
+            .expect("write mask");
+
+        let mut config = run_config();
+        config.run_spec.split_id = SplitId("train".to_string());
+        config.dataset = DatasetInput {
+            path: root.to_string_lossy().into_owned(),
+            adapter: DatasetAdapterConfig::ImageFolder(ImageFolderSegmentationConfig {
+                dataset_name: "mini_seg".to_string(),
+                layout: crate::adapters::SegmentationDatasetLayout::PairedFolders,
+                split: Split::Train,
+                split_id: SplitId("train".to_string()),
+                class_count: 4,
+                ignore_label: 255,
+                feed_width: 2,
+                feed_height: 2,
+                cityscapes_split: None,
+                images_subdir: Some("images".to_string()),
+                labels_subdir: Some("labels".to_string()),
+                train_id_remap: None,
+            }),
+        };
+        let source = DatasetSource {
+            uri: root.to_string_lossy().into_owned(),
+            bytes: Vec::new(),
+        };
+        let (manifest, samples) = config.plan(&source).expect("plan");
+        assert_eq!(
+            manifest.output_type,
+            crate::contracts::OutputType::SegmentationMask
+        );
+        assert_eq!(samples.len(), 1);
+        assert!(samples.as_ordered_slice().is_err());
+        let sample = samples.load_visit(0).expect("visit");
+        assert_eq!(
+            sample.output_type,
+            crate::contracts::OutputType::SegmentationMask
+        );
     }
 
     #[test]
@@ -788,7 +923,7 @@ mod tests {
     }
 
     #[cfg(feature = "remote-runtime")]
-    fn planned() -> (RunConfig, DatasetManifest, Vec<IRSample>) {
+    fn planned() -> (RunConfig, DatasetManifest, PlannedSamples) {
         let config = run_config();
         let source = DatasetSource {
             uri: "mem://one_hot.csv".to_string(),

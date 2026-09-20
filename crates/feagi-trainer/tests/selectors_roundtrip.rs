@@ -57,6 +57,7 @@ fn population_profile(channels: u32) -> EncoderBindingProfile {
         image_height: None,
         stream: None,
         teacher: None,
+        segmentation_teacher: None,
         cortical_name: None,
     }
 }

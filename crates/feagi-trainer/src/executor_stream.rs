@@ -165,6 +165,15 @@ where
                     repeat_index: 0,
                     repeat_total: 1,
                     sent_values: amplitudes,
+                    tick_index: Some(tick as u64),
+                    window_values: if tick == 0 {
+                        series[0].to_vec()
+                    } else {
+                        Vec::new()
+                    },
+                    image_png_base64: None,
+                    mask_png_base64: None,
+                    preview_name: None,
                 },
             ));
         }
@@ -178,6 +187,11 @@ where
                 repeat_index: 0,
                 repeat_total: 1,
                 sent_values: Vec::new(),
+                tick_index: None,
+                window_values: Vec::new(),
+                image_png_base64: None,
+                mask_png_base64: None,
+                preview_name: None,
             },
         ));
     }
@@ -256,6 +270,11 @@ where
                     repeat_index: 0,
                     repeat_total: 1,
                     sent_values: vec![*amplitude],
+                    tick_index: Some(tick as u64),
+                    window_values: Vec::new(),
+                    image_png_base64: None,
+                    mask_png_base64: None,
+                    preview_name: None,
                 },
             ));
             let Some(&class_id) = hold_by_tick.get(&tick) else {
@@ -299,6 +318,11 @@ where
                     repeat_index: 0,
                     repeat_total: 1,
                     sent_values: vec![*amplitude],
+                    tick_index: Some(tick as u64),
+                    window_values: Vec::new(),
+                    image_png_base64: None,
+                    mask_png_base64: None,
+                    preview_name: None,
                 },
             ));
         }
@@ -502,6 +526,7 @@ mod tests {
                 mode,
             }),
             teacher: None,
+            segmentation_teacher: None,
         }
     }
 
@@ -572,6 +597,59 @@ mod tests {
         assert!(runtime.submitted_rewards().is_empty());
         assert!(outcome.predictions.is_empty());
         assert_eq!(outcome.summary.evaluated_samples, 0);
+    }
+
+    #[test]
+    fn train_emits_window_once_and_tick_on_every_sample() {
+        use crate::control::CollectingEventSink;
+
+        let samples = vec![beat(1, vec![0.1, 0.2, 0.3])];
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut encoder = EchoTickEncoder;
+        let mut decoder = TailArgmax;
+        let reward = PainPleasureReward::new(0.5).unwrap();
+        let metric = ClassificationMetricPack::new();
+        let mut sink = CollectingEventSink::default();
+        run_stream_rollout_with_events(
+            &RunId("run-stream-preview".to_string()),
+            &samples,
+            &mut runtime,
+            &mut encoder,
+            &stream_profile(StreamMode::Train),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &ExecutorConfig {
+                ticks_per_sample: 1,
+            },
+            &mut sink,
+            &CancelToken::new(),
+        )
+        .expect("rollout");
+        let ticks: Vec<(Option<u64>, Vec<f64>, Vec<f64>)> = sink
+            .events
+            .iter()
+            .filter_map(|event| match &event.kind {
+                RunEventKind::Progress {
+                    tick_index,
+                    window_values,
+                    sent_values,
+                    ..
+                } if tick_index.is_some() => {
+                    Some((*tick_index, window_values.clone(), sent_values.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            ticks,
+            vec![
+                (Some(0), vec![0.1, 0.2, 0.3], vec![0.1]),
+                (Some(1), Vec::new(), vec![0.2]),
+                (Some(2), Vec::new(), vec![0.3]),
+            ]
+        );
     }
 
     #[test]

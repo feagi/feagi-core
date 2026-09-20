@@ -7,6 +7,8 @@
 //! adapter never silently drops or coerces data.
 //!
 //! All configuration is explicit (no inferred defaults), satisfying the no-fallback rule.
+//! `class_keep_percents` keeps the first `floor(count * percent / 100)` rows per class.
+//! Empty keeps every row; omitted labels keep 100%. Preview row counts stay unfiltered.
 
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
@@ -40,6 +42,9 @@ pub struct TabularCsvConfig {
     pub split: Split,
     /// The split id all rows in this source are assigned to.
     pub split_id: SplitId,
+    /// Per-class keep percent (0..=100). Empty keeps every labeled row.
+    #[serde(default)]
+    pub class_keep_percents: BTreeMap<String, u32>,
 }
 
 /// Adapter that converts a single-split tabular CSV source into `IRSample`s.
@@ -155,6 +160,23 @@ impl TabularCsvAdapter {
             metadata: BTreeMap::new(),
         })
     }
+
+    /// Maps every data row, then applies per-class keep percents.
+    fn ingest_samples(&self, source: &DatasetSource) -> Result<Vec<IRSample>, TrainerError> {
+        let text = Self::decode(source)?;
+        let content_fingerprint = Self::fingerprint(&source.bytes);
+        let dataset_version_id = self.dataset_version_id(&content_fingerprint);
+        let rows = self.data_rows(text);
+        let mut samples = Vec::with_capacity(rows.len());
+        for (row_index, row) in rows.iter().enumerate() {
+            samples.push(self.map_row_to_ir(row_index, row, &source.uri, &dataset_version_id)?);
+        }
+        crate::adapters::class_keep::apply_class_keep_percents(
+            samples,
+            &self.config.class_keep_percents,
+            &self.config.class_labels,
+        )
+    }
 }
 
 impl AdapterPlugin for TabularCsvAdapter {
@@ -172,8 +194,7 @@ impl AdapterPlugin for TabularCsvAdapter {
         } else {
             ""
         };
-        let row_count = self.data_rows(text).len() as u64;
-
+        let samples = self.ingest_samples(source)?;
         let content_fingerprint = Self::fingerprint(&source.bytes);
         let dataset_version_id = self.dataset_version_id(&content_fingerprint);
 
@@ -190,7 +211,7 @@ impl AdapterPlugin for TabularCsvAdapter {
             splits: vec![SplitDescriptor {
                 id: self.config.split_id.clone(),
                 split: self.config.split.clone(),
-                sample_count: row_count,
+                sample_count: samples.len() as u64,
             }],
             metadata: BTreeMap::new(),
         })
@@ -242,16 +263,7 @@ impl AdapterPlugin for TabularCsvAdapter {
                 self.config.split_id
             )));
         }
-        let text = Self::decode(source)?;
-        let content_fingerprint = Self::fingerprint(&source.bytes);
-        let dataset_version_id = self.dataset_version_id(&content_fingerprint);
-
-        let rows = self.data_rows(text);
-        let mut samples = Vec::with_capacity(rows.len());
-        for (row_index, row) in rows.iter().enumerate() {
-            samples.push(self.map_row_to_ir(row_index, row, &source.uri, &dataset_version_id)?);
-        }
-        Ok(samples)
+        self.ingest_samples(source)
     }
 }
 
@@ -277,6 +289,7 @@ mod tests {
             ],
             split: Split::Train,
             split_id: SplitId("train".to_string()),
+            class_keep_percents: BTreeMap::new(),
         }
     }
 
@@ -362,5 +375,42 @@ mod tests {
             .stream(&bad, &SplitId("train".to_string()))
             .unwrap_err();
         assert!(matches!(err, TrainerError::Parse(_)));
+    }
+
+    #[test]
+    fn class_keep_percents_keep_first_rows_per_class() {
+        let mut percents = BTreeMap::new();
+        percents.insert("setosa".to_string(), 50);
+        percents.insert("versicolor".to_string(), 100);
+        percents.insert("virginica".to_string(), 100);
+        let adapter = TabularCsvAdapter::new(TabularCsvConfig {
+            class_keep_percents: percents,
+            ..config()
+        });
+        let source = DatasetSource {
+            uri: "mem://iris-keep.csv".to_string(),
+            bytes: "sepal_length,sepal_width,petal_length,petal_width,species\n\
+5.1,3.5,1.4,0.2,setosa\n\
+4.9,3.0,1.4,0.2,setosa\n\
+7.0,3.2,4.7,1.4,versicolor\n\
+6.3,3.3,6.0,2.5,virginica\n"
+                .as_bytes()
+                .to_vec(),
+        };
+        let samples = adapter
+            .stream(&source, &SplitId("train".to_string()))
+            .expect("stream");
+        let labels: Vec<_> = samples
+            .iter()
+            .map(|sample| match &sample.target {
+                Some(TypedTarget::Class {
+                    label: Some(label), ..
+                }) => label.clone(),
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        assert_eq!(labels, vec!["setosa", "versicolor", "virginica"]);
+        let manifest = adapter.discover(&source).expect("discover");
+        assert_eq!(manifest.splits[0].sample_count, 3);
     }
 }

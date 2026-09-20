@@ -140,7 +140,11 @@ impl TimeSeriesPackageAdapter {
                     .to_string(),
             ));
         }
-        Ok(samples)
+        crate::adapters::class_keep::apply_class_keep_percents(
+            samples,
+            &self.config.class_keep_percents,
+            &self.config.class_labels,
+        )
     }
 }
 
@@ -222,6 +226,7 @@ mod tests {
     };
     use crate::contracts::ir_sample::Payload;
     use crate::contracts::{Split, SplitId};
+    use std::collections::BTreeMap;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_dir(tag: &str) -> std::path::PathBuf {
@@ -253,6 +258,7 @@ mod tests {
             annotation_suffix: None,
             channel_map: None,
             presentation: TimeSeriesPresentation::Snapshot,
+            class_keep_percents: BTreeMap::new(),
         }
     }
 
@@ -287,6 +293,45 @@ mod tests {
             Payload::TimeSeries { samples, .. } => assert_eq!(samples.len(), 5),
             other => panic!("unexpected {other:?}"),
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn class_keep_percents_keep_first_windows_per_class() {
+        let dir = temp_dir("keep");
+        let samples: Vec<f32> = (0..24).map(|v| v as f32).collect();
+        package::write_test_package(
+            &dir,
+            360.0,
+            "rec0",
+            "lead_0",
+            &samples,
+            &[(4, "N"), (8, "N"), (12, "V"), (16, "N")],
+        )
+        .expect("write package");
+        let mut config = package_config();
+        config.class_keep_percents.insert("N".to_string(), 50);
+        config.class_keep_percents.insert("V".to_string(), 100);
+        let adapter = TimeSeriesPackageAdapter::new(config);
+        let source = DatasetSource {
+            uri: dir.to_string_lossy().into_owned(),
+            bytes: Vec::new(),
+        };
+        let ir = adapter
+            .stream(&source, &SplitId("train".to_string()))
+            .expect("stream");
+        let labels: Vec<_> = ir
+            .iter()
+            .map(|sample| match &sample.target {
+                Some(crate::contracts::TypedTarget::Class {
+                    label: Some(label), ..
+                }) => label.clone(),
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        assert_eq!(labels, vec!["N", "V"]);
+        let preview = adapter.preview(&source, 0, 8).expect("preview");
+        assert_eq!(preview.total_frames, 4);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -326,6 +371,7 @@ mod tests {
                 },
             ]),
             presentation: TimeSeriesPresentation::Snapshot,
+            class_keep_percents: BTreeMap::new(),
         };
         let adapter = TimeSeriesPackageAdapter::new(config);
         let source = DatasetSource {

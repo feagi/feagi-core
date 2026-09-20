@@ -1,11 +1,13 @@
 //! Built-in adapter implementations.
 
+pub mod class_keep;
 pub mod image_folder_segmentation;
 pub mod tabular_csv;
 pub mod time_series;
 
 pub use image_folder_segmentation::{
-    ImageFolderSegmentationAdapter, ImageFolderSegmentationConfig, SegmentationDatasetLayout,
+    ImageFolderSegmentationAdapter, ImageFolderSegmentationConfig, ImageLabelPair,
+    SegmentationDatasetLayout, SegmentationPreview, SegmentationPreviewFrame,
 };
 pub use tabular_csv::{TabularCsvAdapter, TabularCsvConfig};
 pub use time_series::{

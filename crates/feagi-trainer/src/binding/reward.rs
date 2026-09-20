@@ -107,6 +107,36 @@ impl RewardPolicy for PainPleasureReward {
     }
 }
 
+/// Explicit no-affect policy for labeled dataset runs.
+///
+/// The trainer teaches with the class/mask label. Pain/Pleasure stays in the genome.
+pub struct NoAffectReward;
+
+impl NoAffectReward {
+    /// Stable plugin id recorded on labeled run specs.
+    pub const PLUGIN_ID: &'static str = "reward.none";
+}
+
+impl RewardPolicy for NoAffectReward {
+    fn plugin_ref(&self) -> PluginRef {
+        PluginRef {
+            id: PluginId(Self::PLUGIN_ID.to_string()),
+            version: "1.0.0".to_string(),
+        }
+    }
+
+    fn reward(
+        &self,
+        _predicted: &TypedPrediction,
+        _target: &TypedTarget,
+    ) -> Result<Vec<RewardSignal>, TrainerError> {
+        Err(TrainerError::Config(
+            "reward.none does not inject affect; labeled runs leave Pain/Pleasure to the genome"
+                .to_string(),
+        ))
+    }
+}
+
 /// Segmentation overlap reward: Pleasure when mean IoU meets threshold, Pain otherwise.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SegmentationOverlapReward {
@@ -400,5 +430,13 @@ mod tests {
         let policy = SurvivalReward::new(0.7, 0.9).unwrap();
         let signals = policy.reward(-0.5, false).unwrap();
         assert_eq!(signals[0].channel, AffectChannel::Pain);
+    }
+
+    #[test]
+    fn no_affect_reward_refuses_to_inject() {
+        let err = NoAffectReward
+            .reward(&predict(0), &class(0))
+            .expect_err("none");
+        assert!(err.to_string().contains("does not inject affect"));
     }
 }

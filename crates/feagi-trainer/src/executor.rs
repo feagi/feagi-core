@@ -31,12 +31,14 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::adapters::image_folder_segmentation::colorize_mask_png;
 use crate::binding::profile::{DecoderBindingProfile, EncoderBindingProfile};
 use crate::binding::{
     DecoderPlugin, EncoderPlugin, Environment, EnvironmentRewardPolicy, FeagiRuntime,
     ObservationEncoder, RewardPolicy,
 };
-use crate::contracts::ir_sample::Payload;
+use crate::contracts::common::MetadataValue;
+use crate::contracts::ir_sample::{Payload, TypedTarget};
 use crate::contracts::prediction_record::SCHEMA_VERSION as PREDICTION_RECORD_SCHEMA_VERSION;
 use crate::contracts::run_summary::SCHEMA_VERSION as RUN_SUMMARY_SCHEMA_VERSION;
 use crate::contracts::scorecard::SCHEMA_VERSION as SCORECARD_SCHEMA_VERSION;
@@ -49,6 +51,7 @@ use crate::contracts::{
 use crate::contracts::{MetricScope, RunEvent, RunEventKind};
 use crate::control::{CancelToken, NoopEventSink, RunEventSink};
 use crate::error::TrainerError;
+use crate::planned_samples::SampleVisit;
 use crate::plugins::{EpisodeOutcome, EpisodeTrajectory, EpisodicMetricPack};
 use crate::plugins::{MetricPackPlugin, MetricResult};
 
@@ -117,6 +120,62 @@ pub(crate) fn analog_sent_values(sample: &IRSample) -> Vec<f64> {
     }
 }
 
+/// Live run preview of the image + colorized mask just submitted to iimg/iseg.
+fn segmentation_progress_preview(
+    sample: &IRSample,
+    decoder_profile: &DecoderBindingProfile,
+) -> Result<(Option<String>, Option<String>, Option<String>), TrainerError> {
+    let Payload::Bytes(image_png) = &sample.payload else {
+        return Ok((None, None, None));
+    };
+    let Some(TypedTarget::SegmentationMask {
+        width,
+        height,
+        labels,
+        ignore_label,
+    }) = &sample.target
+    else {
+        return Ok((None, None, None));
+    };
+    let depth = decoder_profile.mask_depth.ok_or_else(|| {
+        TrainerError::Config(
+            "segmentation progress preview requires decoder_profile.mask_depth".to_string(),
+        )
+    })?;
+    let mask_png = colorize_mask_png(labels, *width, *height, depth, *ignore_label)?;
+    Ok((
+        Some(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            image_png,
+        )),
+        Some(base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            mask_png,
+        )),
+        Some(segmentation_preview_name(sample)),
+    ))
+}
+
+fn segmentation_preview_name(sample: &IRSample) -> String {
+    match sample.metadata.get("image_path") {
+        Some(MetadataValue::Text(path)) => {
+            let path = std::path::Path::new(path);
+            match (
+                path.parent()
+                    .and_then(|parent| parent.file_name())
+                    .and_then(|name| name.to_str())
+                    .filter(|name| !name.is_empty()),
+                path.file_name().and_then(|name| name.to_str()),
+            ) {
+                (Some(parent), Some(file)) => format!("{parent}/{file}"),
+                (_, Some(file)) => file.to_string(),
+                _ => sample.sample_id.0.clone(),
+            }
+        }
+        _ => sample.sample_id.0.clone(),
+    }
+}
+
 /// The artifacts produced by a single rollout over a sample stream.
 ///
 /// `predictions` are the per-sample evidence (one [`PredictionRecord`] per sample, in visit
@@ -173,9 +232,9 @@ pub struct ScorecardProvenance {
 /// Returns the first [`TrainerError`] raised by any stage (encode/submit/step/collect/decode/
 /// reward/metric). The loop is fail-fast and deterministic: it does not partially score.
 #[allow(clippy::too_many_arguments)]
-pub fn run_rollout<R, E, D, RP, M>(
+pub fn run_rollout<R, E, D, RP, M, S>(
     run_id: &RunId,
-    samples: &[IRSample],
+    samples: &S,
     runtime: &mut R,
     encoder: &mut E,
     encoder_profile: &EncoderBindingProfile,
@@ -191,6 +250,7 @@ where
     D: DecoderPlugin<Frame = R::MotorFrame>,
     RP: RewardPolicy,
     M: MetricPackPlugin,
+    S: SampleVisit + ?Sized,
 {
     // Non-observed, non-cancellable convenience wrapper: drops events and never cancels, so all
     // existing callers keep identical behaviour.
@@ -226,9 +286,9 @@ where
 /// Returns the first [`TrainerError`] raised by any stage, or [`TrainerError::Cancelled`] if a
 /// stop was requested mid-rollout.
 #[allow(clippy::too_many_arguments)]
-pub fn run_rollout_with_events<R, E, D, RP, M>(
+pub fn run_rollout_with_events<R, E, D, RP, M, S>(
     run_id: &RunId,
-    samples: &[IRSample],
+    samples: &S,
     runtime: &mut R,
     encoder: &mut E,
     encoder_profile: &EncoderBindingProfile,
@@ -246,6 +306,7 @@ where
     D: DecoderPlugin<Frame = R::MotorFrame>,
     RP: RewardPolicy,
     M: MetricPackPlugin,
+    S: SampleVisit + ?Sized,
 {
     if config.ticks_per_sample == 0 {
         return Err(TrainerError::Config(
@@ -253,16 +314,17 @@ where
         ));
     }
 
-    let total_samples = samples.len() as u64;
-    let mut predictions: Vec<PredictionRecord> = Vec::with_capacity(samples.len());
+    let total_samples = samples.visit_count() as u64;
+    let mut predictions: Vec<PredictionRecord> = Vec::with_capacity(samples.visit_count());
     // Labeled detections that produced a motor frame (aligned by construction).
     let mut scored_predictions = Vec::new();
     let mut scored_targets = Vec::new();
 
-    for (index, sample) in samples.iter().enumerate() {
+    for index in 0..samples.visit_count() {
         cancel.interrupt(format!("stopped after {index} of {total_samples} samples"))?;
+        let sample = samples.load_visit(index)?;
 
-        let frame = encoder.encode(sample, encoder_profile)?;
+        let frame = encoder.encode(&sample, encoder_profile)?;
         runtime.submit_sensory(frame)?;
         runtime.step(config.ticks_per_sample)?;
 
@@ -291,6 +353,8 @@ where
             }
         }
 
+        let (image_png_base64, mask_png_base64, preview_name) =
+            segmentation_progress_preview(&sample, decoder_profile)?;
         events.emit(RunEvent::new(
             run_id.clone(),
             RunEventKind::Progress {
@@ -298,7 +362,12 @@ where
                 samples_total: total_samples,
                 repeat_index: 0,
                 repeat_total: 1,
-                sent_values: analog_sent_values(sample),
+                sent_values: analog_sent_values(&sample),
+                tick_index: None,
+                window_values: Vec::new(),
+                image_png_base64,
+                mask_png_base64,
+                preview_name,
             },
         ));
     }
@@ -697,6 +766,7 @@ mod tests {
             image_height: None,
             stream: None,
             teacher: None,
+            segmentation_teacher: None,
             cortical_name: None,
         }
     }
@@ -717,6 +787,74 @@ mod tests {
         ExecutorConfig {
             ticks_per_sample: 4,
         }
+    }
+
+    fn rgb_png(width: u32, height: u32) -> Vec<u8> {
+        let img = image::RgbImage::from_fn(width, height, |x, y| {
+            image::Rgb([(x % 256) as u8, (y % 256) as u8, 80])
+        });
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .expect("png");
+        bytes
+    }
+
+    #[test]
+    fn segmentation_progress_preview_encodes_image_and_mask() {
+        use crate::contracts::common::{DatasetVersionId, Modality, OutputType, SampleId, Split};
+        use crate::contracts::ir_sample::SCHEMA_VERSION;
+        use std::collections::BTreeMap;
+
+        let png = rgb_png(2, 2);
+        let sample = IRSample {
+            schema_version: SCHEMA_VERSION,
+            sample_id: SampleId("s".to_string()),
+            dataset_version_id: DatasetVersionId("d".to_string()),
+            split: Split::Train,
+            modality: Modality::Image,
+            payload: Payload::Bytes(png.clone()),
+            target: Some(TypedTarget::SegmentationMask {
+                width: 2,
+                height: 2,
+                labels: vec![0, 1, 255, 1],
+                ignore_label: Some(255),
+            }),
+            output_type: OutputType::SegmentationMask,
+            coordinate_frame: None,
+            timestamp: None,
+            metadata: BTreeMap::from([(
+                "image_path".to_string(),
+                crate::contracts::common::MetadataValue::Text(
+                    "/data/hamburg/hamburg_000000_000019_leftImg8bit.png".to_string(),
+                ),
+            )]),
+        };
+        let mut profile = decoder_profile();
+        profile.mask_depth = Some(2);
+        let (image, mask, name) =
+            segmentation_progress_preview(&sample, &profile).expect("preview");
+        assert_eq!(
+            name.as_deref(),
+            Some("hamburg/hamburg_000000_000019_leftImg8bit.png")
+        );
+        let image = image.expect("image");
+        let mask = mask.expect("mask");
+        assert_eq!(
+            analog_sent_values(&sample),
+            Vec::<f64>::new(),
+            "image samples do not produce analog sent_values"
+        );
+        let image_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, image)
+            .expect("image b64");
+        let mask_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, mask)
+            .expect("mask b64");
+        assert_eq!(image_bytes, png);
+        assert!(image_bytes.starts_with(&[137, 80, 78, 71]));
+        assert!(mask_bytes.starts_with(&[137, 80, 78, 71]));
     }
 
     #[test]
@@ -1102,7 +1240,7 @@ mod tests {
             },
             reward_policy: RewardPolicyBinding {
                 plugin: PluginRef {
-                    id: PluginId("reward.pain_pleasure".to_string()),
+                    id: PluginId("reward.none".to_string()),
                     version: "1.0.0".to_string(),
                 },
                 config: json!({}),

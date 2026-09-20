@@ -13,6 +13,7 @@ use feagi_trainer::contracts::{SplitId, TypedPrediction, TypedTarget};
 use feagi_trainer::metrics::ClassificationMetricPack;
 use feagi_trainer::plugins::{AdapterPlugin, DatasetSource, MetricPackPlugin, SamplerPlugin};
 use feagi_trainer::samplers::SequentialSampler;
+use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
@@ -65,6 +66,7 @@ fn wfdb_event_windows_compose_with_classification_metrics() {
             },
         ]),
         presentation: TimeSeriesPresentation::Snapshot,
+        class_keep_percents: BTreeMap::new(),
     });
 
     let source = DatasetSource {

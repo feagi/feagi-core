@@ -2231,6 +2231,7 @@ dependencies = [
 name = "feagi-trainer"
 version = "0.0.32"
 dependencies = [
+ "base64 0.22.1",
  "distrs",
  "feagi-agent",
  "feagi-dataset-contracts",

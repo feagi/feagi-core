@@ -415,7 +415,7 @@ Grounded findings from the current code that constrain this decision:
 
 **2. The normalized `RunEvent` stream is a public, versioned contract in the open crate.** A `RunEvent` (with `schema_version`) is emitted by the engine through a sink/callback the host supplies. v1 variants:
 - lifecycle: `Created` / `Validating` / `Running` / `Completed` / `Failed` (mirrors `RunStatus`);
-- `Progress { samples_done, samples_total, repeat_index, repeat_total }`;
+- `Progress { samples_done, samples_total, repeat_index, repeat_total, sent_values, tick_index, window_values }`;
 - `MetricUpdate { partial | aggregate metric values }`;
 - `SampleEvent { … }` (optional, sampled — never raw motor/sensory frames);
 - `ScorecardReady { scorecard_id }`;

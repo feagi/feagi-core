@@ -172,6 +172,7 @@ mod tests {
                 mode: StreamMode::Train,
             }),
             teacher: None,
+            segmentation_teacher: None,
         }
     }
 

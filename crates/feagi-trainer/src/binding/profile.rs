@@ -101,6 +101,40 @@ impl StreamBinding {
     }
 }
 
+/// Mask teacher IPU for image segmentation (`iseg`, W×H×C, Z = class).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SegmentationTeacherBinding {
+    /// Provenance id for the iseg area (genome-owned circuit still maps it).
+    pub cortical_area_id: String,
+    /// Operator-visible genome title applied when Trainer creates the iseg IPU.
+    #[serde(default)]
+    pub cortical_name: Option<String>,
+    /// Mask width in pixels. Must match the sample `SegmentationMask`.
+    pub mask_width: u32,
+    /// Mask height in pixels. Must match the sample `SegmentationMask`.
+    pub mask_height: u32,
+    /// Surviving class count along Z. Pixel class ids must be `< mask_depth`.
+    pub mask_depth: u32,
+}
+
+impl SegmentationTeacherBinding {
+    /// Returns blocking configuration errors. Never repairs values.
+    pub fn validate(&self) -> Result<(), TrainerError> {
+        if self.cortical_area_id.trim().is_empty() {
+            return Err(TrainerError::Config(
+                "segmentation teacher cortical_area_id must be non-empty".to_string(),
+            ));
+        }
+        if self.mask_width == 0 || self.mask_height == 0 || self.mask_depth == 0 {
+            return Err(TrainerError::Config(
+                "segmentation teacher mask_width, mask_height, and mask_depth must be > 0"
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// How an encoder selector maps sample features onto a FEAGI sensory (IPU) area.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EncoderBindingProfile {
@@ -125,6 +159,9 @@ pub struct EncoderBindingProfile {
     /// Snapshot class-teacher Misc B. Required for ECG snapshot; unused for stream.
     #[serde(default)]
     pub teacher: Option<ClassTeacherBinding>,
+    /// Object-segmentation mask teacher (`iseg`). Required for image-folder segmentation.
+    #[serde(default)]
+    pub segmentation_teacher: Option<SegmentationTeacherBinding>,
 }
 
 /// How a decoder selector reads a FEAGI motor (OPU) area into a typed prediction.
@@ -197,6 +234,7 @@ mod tests {
                 mode: StreamMode::Train,
             }),
             teacher: None,
+            segmentation_teacher: None,
         };
         let json = serde_json::to_string(&encoder).expect("json");
         let parsed: EncoderBindingProfile = serde_json::from_str(&json).expect("parse");

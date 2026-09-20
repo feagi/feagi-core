@@ -270,6 +270,7 @@ mod tests {
             cortical_name: None,
             stream: None,
             teacher: None,
+            segmentation_teacher: None,
         }
     }
 
@@ -320,6 +321,7 @@ mod tests {
             cortical_name: None,
             stream: None,
             teacher: None,
+            segmentation_teacher: None,
         };
         let result = PopulationEncoder::new().encode_features(&[0.5], &profile);
         assert!(result.is_err());
@@ -389,6 +391,7 @@ mod tests {
             cortical_name: None,
             stream: None,
             teacher: None,
+            segmentation_teacher: None,
         };
         let encoder = PopulationEncoder::new();
         let frame = encoder

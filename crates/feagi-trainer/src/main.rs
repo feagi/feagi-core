@@ -105,7 +105,7 @@ fn parse_run_args(args: &[String]) -> Result<(String, Option<String>), Box<dyn E
 fn execute(
     config: &RunConfig,
     manifest: &feagi_trainer::contracts::DatasetManifest,
-    samples: &[feagi_trainer::contracts::IRSample],
+    samples: &feagi_trainer::planned_samples::PlannedSamples,
     out_path: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     use feagi_trainer::run_config::RemoteConnection;
@@ -149,7 +149,7 @@ fn execute(
 fn execute(
     _config: &RunConfig,
     _manifest: &feagi_trainer::contracts::DatasetManifest,
-    _samples: &[feagi_trainer::contracts::IRSample],
+    _samples: &feagi_trainer::planned_samples::PlannedSamples,
     _out_path: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
     Err(

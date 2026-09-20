@@ -193,6 +193,7 @@ mod tests {
             annotation_suffix: None,
             channel_map: None,
             presentation: TimeSeriesPresentation::StreamInfer,
+            class_keep_percents: BTreeMap::new(),
         }
     }
 

@@ -253,6 +253,7 @@ mod tests {
             annotation_suffix: None,
             channel_map: None,
             presentation: crate::adapters::time_series::config::TimeSeriesPresentation::Snapshot,
+            class_keep_percents: BTreeMap::new(),
         }
     }
 

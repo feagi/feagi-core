@@ -54,6 +54,22 @@ pub enum RunEventKind {
         /// Analog values just submitted as graded P. Not a FEAGI XYZP frame (ADR-005).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         sent_values: Vec<f64>,
+        /// Zero-based index of the analog sample just submitted (stream presentation).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tick_index: Option<u64>,
+        /// Full analog window for the current beat. Stream train sends this on tick 0
+        /// so the desktop can draw the beat and a playhead without repeating it every burst.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        window_values: Vec<f64>,
+        /// Feed-size RGB PNG (standard base64) for the sample just submitted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        image_png_base64: Option<String>,
+        /// Colorized class-mask PNG (standard base64) for the sample just submitted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mask_png_base64: Option<String>,
+        /// Operator-facing name of the pair just submitted (image file path tail).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preview_name: Option<String>,
     },
     /// A metric snapshot — interim ([`MetricScope::Partial`]) or final
     /// ([`MetricScope::Aggregate`]). Values are deterministically ordered.
@@ -133,13 +149,44 @@ mod tests {
                 repeat_index: 1,
                 repeat_total: 5,
                 sent_values: vec![-0.25, 1.5],
+                tick_index: Some(4),
+                window_values: vec![0.1, -0.25, 1.5],
+                image_png_base64: None,
+                mask_png_base64: None,
+                preview_name: None,
             },
         );
         let json = serde_json::to_string(&event).expect("serialize");
         // Tagged representation is consumable from the desktop/TS side.
         assert!(json.contains("\"type\":\"progress\""));
+        assert!(json.contains("\"tick_index\":4"));
         let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(event, restored);
+    }
+
+    #[test]
+    fn progress_event_accepts_payload_without_stream_preview_fields() {
+        let json = r#"{"schema_version":1,"run_id":"run-evt-0001","timestamp":null,"kind":{"type":"progress","samples_done":1,"samples_total":2,"repeat_index":0,"repeat_total":1}}"#;
+        let restored: RunEvent = serde_json::from_str(json).expect("deserialize");
+        match restored.kind {
+            RunEventKind::Progress {
+                tick_index,
+                window_values,
+                sent_values,
+                image_png_base64,
+                mask_png_base64,
+                preview_name,
+                ..
+            } => {
+                assert_eq!(tick_index, None);
+                assert!(window_values.is_empty());
+                assert!(sent_values.is_empty());
+                assert_eq!(image_png_base64, None);
+                assert_eq!(mask_png_base64, None);
+                assert_eq!(preview_name, None);
+            }
+            other => panic!("expected progress, got {other:?}"),
+        }
     }
 
     #[test]
