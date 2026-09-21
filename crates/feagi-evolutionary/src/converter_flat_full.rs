@@ -69,6 +69,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("excite-f", "neuron_excitability"),
     ("devcnt-i", "dev_count"),
     ("twinrf-t", "memory_twin_of"),
+    ("brsten-b", "burst_engine_active"),
 ];
 
 /// Build property mapping lookup table

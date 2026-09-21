@@ -191,11 +191,38 @@ pub struct RawClassifier {
     pub coordinates_3d: Option<Vec<i32>>,
     pub kernel_area_id: Option<String>,
     pub class_area_id: Option<String>,
+    /// Current field bindings. Each entry is one Classifier mapping and its twin.
+    pub fields: Option<Vec<feagi_structures::genomic::classifiers::ClassifierField>>,
+    /// Previous singular field record. Loaded as one binding when `fields` is absent.
     pub field_area_id: Option<String>,
     pub kernel_memory_id: Option<String>,
     pub class_memory_id: Option<String>,
+    /// Previous singular twin record. Paired with `field_area_id` on load.
     pub scan_twin_id: Option<String>,
     pub properties: Option<HashMap<String, Value>>,
+}
+
+fn classifier_fields_from_raw(
+    raw: &RawClassifier,
+) -> Vec<feagi_structures::genomic::classifiers::ClassifierField> {
+    if let Some(fields) = &raw.fields {
+        return fields
+            .iter()
+            .filter(|field| !field.field_area_id.is_empty() && !field.scan_twin_id.is_empty())
+            .cloned()
+            .collect();
+    }
+    match (&raw.field_area_id, &raw.scan_twin_id) {
+        (Some(field_area_id), Some(scan_twin_id))
+            if !field_area_id.is_empty() && !scan_twin_id.is_empty() =>
+        {
+            vec![feagi_structures::genomic::classifiers::ClassifierField {
+                field_area_id: field_area_id.clone(),
+                scan_twin_id: scan_twin_id.clone(),
+            }]
+        }
+        _ => Vec::new(),
+    }
 }
 
 /// Convert cortical_mapping_dst keys from old format to base64
@@ -889,12 +916,7 @@ impl GenomeParser {
                     classifier_id
                 ))
             })?;
-            let scan_twin_id = raw.scan_twin_id.clone().ok_or_else(|| {
-                EvoError::InvalidArea(format!(
-                    "Classifier '{}' is missing scan_twin_id",
-                    classifier_id
-                ))
-            })?;
+            let fields = classifier_fields_from_raw(&raw);
             classifiers.push(Classifier {
                 classifier_id: classifier_id.clone(),
                 name,
@@ -902,10 +924,9 @@ impl GenomeParser {
                 coordinates_3d,
                 kernel_area_id: raw.kernel_area_id.clone(),
                 class_area_id: raw.class_area_id.clone(),
-                field_area_id: raw.field_area_id.clone(),
+                fields,
                 kernel_memory_id,
                 class_memory_id,
-                scan_twin_id,
                 properties: raw.properties.clone().unwrap_or_default(),
             });
         }
@@ -1337,10 +1358,11 @@ mod tests {
         assert_eq!(classifier.classifier_id, "clf-1");
         assert_eq!(classifier.name, "object_class");
         assert_eq!(classifier.parent_region_id, "root");
-        assert_eq!(classifier.field_area_id.as_deref(), Some("cfield"));
+        assert_eq!(classifier.fields.len(), 1);
+        assert_eq!(classifier.fields[0].field_area_id, "cfield");
         assert_eq!(classifier.kernel_memory_id, "mkmem1");
         assert_eq!(classifier.class_memory_id, "mcmem1");
-        assert_eq!(classifier.scan_twin_id, "cscan1");
+        assert_eq!(classifier.fields[0].scan_twin_id, "cscan1");
         assert_eq!(classifier.owned_area_ids().len(), 3);
     }
 }

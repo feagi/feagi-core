@@ -135,6 +135,29 @@ pub enum PlasticityCommand {
     ResetMemoryNeuronsInArea { cortical_idx: u32 },
 }
 
+fn command_targets_area(command: &PlasticityCommand, area_idx: u32) -> bool {
+    match command {
+        PlasticityCommand::RegisterMemoryNeuron {
+            area_idx: command_area,
+            ..
+        }
+        | PlasticityCommand::MemoryNeuronConvertedToLtm {
+            area_idx: command_area,
+            ..
+        }
+        | PlasticityCommand::InjectMemoryNeuronToFCL {
+            area_idx: command_area,
+            ..
+        }
+        | PlasticityCommand::UpdateStateCounters {
+            area_idx: command_area,
+            ..
+        } => *command_area == area_idx,
+        PlasticityCommand::ResetMemoryNeuronsInArea { cortical_idx } => *cortical_idx == area_idx,
+        PlasticityCommand::UpdateWeightsDelta { .. } => false,
+    }
+}
+
 /// Replay frame describing a single temporal slice for an upstream area.
 #[derive(Debug, Clone)]
 pub struct ReplayFrame {
@@ -1404,6 +1427,39 @@ impl PlasticityService {
         discarded
     }
 
+    /// Stop pattern detection for one cortical index and delete its memory neurons.
+    ///
+    /// Deleting a cortical area removes it from the connectome index map. A
+    /// registration left behind keeps detecting patterns and queues injections
+    /// the burst loop cannot apply, because that index no longer has an id.
+    pub fn unregister_memory_area(&self, area_idx: u32) {
+        let was_registered = self.memory_areas.lock().unwrap().contains_key(&area_idx);
+        if !was_registered {
+            return;
+        }
+        self.reset_memory_neurons_in_area(area_idx);
+        self.memory_areas.lock().unwrap().remove(&area_idx);
+        self.memory_lifecycle_configs
+            .lock()
+            .unwrap()
+            .remove(&area_idx);
+        self.memory_area_names.lock().unwrap().remove(&area_idx);
+        self.pattern_detector
+            .detectors
+            .lock()
+            .unwrap()
+            .remove(&area_idx);
+        self.command_queue
+            .lock()
+            .unwrap()
+            .retain(|command| !command_targets_area(command, area_idx));
+        tracing::info!(
+            target: "plasticity",
+            "[PLASTICITY] Unregistered memory area idx={}",
+            area_idx
+        );
+    }
+
     /// Return sorted registered memory-area indexes for diagnostics and verification.
     pub fn registered_memory_area_indexes(&self) -> Vec<u32> {
         let mut indexes: Vec<u32> = self.memory_areas.lock().unwrap().keys().copied().collect();
@@ -1781,6 +1837,54 @@ mod tests {
     }
 
     #[test]
+    fn unregister_memory_area_stops_that_index_only() {
+        let config = PlasticityConfig::default();
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-unregister-area-test-npu",
+        ));
+        let service = PlasticityService::new(config, cache, npu);
+        service.register_memory_area(23, "deleted-memory".to_string(), 1, vec![16], None, false);
+        service.register_memory_area(35, "live-memory".to_string(), 1, vec![16], None, false);
+        service.pattern_detector.get_detector(23, 1);
+        {
+            let mut array = service.memory_neuron_array.lock().unwrap();
+            let lifecycle = MemoryNeuronLifecycleConfig::default();
+            array
+                .create_memory_neuron(41, 23, 0, &lifecycle)
+                .expect("memory neuron in the deleted area");
+            array
+                .create_memory_neuron(42, 35, 0, &lifecycle)
+                .expect("memory neuron in the live area");
+        }
+        service.enqueue_commands_for_test(vec![PlasticityCommand::InjectMemoryNeuronToFCL {
+            neuron_id: 41,
+            area_idx: 23,
+            membrane_potential: 1.5,
+            pattern_hash: 7,
+            is_reactivation: false,
+            replay_frames: Vec::new(),
+        }]);
+
+        service.unregister_memory_area(23);
+
+        let indexes = service.registered_memory_area_indexes();
+        assert_eq!(indexes, vec![35]);
+        assert!(service
+            .pattern_detector
+            .detectors
+            .lock()
+            .unwrap()
+            .get(&23)
+            .is_none());
+        assert!(service.command_queue.lock().unwrap().is_empty());
+        let array = service.memory_neuron_array.lock().unwrap();
+        assert!(array.get_active_neurons_by_area(23).is_empty());
+        assert_eq!(array.get_active_neurons_by_area(35).len(), 1);
+    }
+
+    #[test]
     fn reset_all_memory_state_discards_neurons_and_registrations() {
         let config = PlasticityConfig::default();
         let cache = create_memory_stats_cache();
@@ -1942,6 +2046,166 @@ mod tests {
         assert_eq!(
             lifecycle.max_reactivations,
             config.memory_lifecycle_config.max_reactivations
+        );
+    }
+
+    /// A trained spatial match is stamped onto that field's twin at the bound
+    /// class channel. A different signature does not light the twin.
+    #[test]
+    fn episodic_scan_injects_match_into_bound_twin_only() {
+        use std::collections::HashMap;
+
+        const FIELD_IDX: u32 = 10;
+        const KERNEL_IDX: u32 = 11;
+        const TWIN_IDX: u32 = 12;
+        const CLASS_CHANNEL: u32 = 2;
+
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 64, 64, 8).unwrap(),
+            "classifier-scan-injection-npu",
+        ));
+        let _service = PlasticityService::new(PlasticityConfig::default(), cache, Arc::clone(&npu));
+
+        let (field_neuron, twin_match, twin_decoy, timestep) = {
+            let mut guard = npu.lock().unwrap();
+            guard.register_cortical_area(FIELD_IDX, "Y2ZpZWxkMDE=".to_string());
+            guard.register_cortical_area(KERNEL_IDX, "bWttZW0wMDE=".to_string());
+            guard.register_cortical_area(TWIN_IDX, "Y3R3aW4wMDE=".to_string());
+            guard.configure_fire_ledger_window(FIELD_IDX, 1).unwrap();
+            let field_neuron = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    FIELD_IDX,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+            let twin_decoy = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    TWIN_IDX,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+            let twin_match = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    TWIN_IDX,
+                    0,
+                    0,
+                    CLASS_CHANNEL,
+                )
+                .unwrap();
+            guard.inject_sensory_with_potentials(&[(field_neuron, 2.0)]);
+            let burst = guard.process_burst().unwrap();
+            assert!(
+                burst.fired_neurons.contains(&field_neuron),
+                "the field must fire before the scan can match it"
+            );
+            (field_neuron, twin_match, twin_decoy, burst.burst)
+        };
+
+        let signature = super::spatial_signature_hash(&[vec![(0, 0, 0)]]);
+        let mut array = MemoryNeuronArray::new(16);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 100,
+            longterm_threshold: 100,
+            ..Default::default()
+        };
+        let neuron_idx = array
+            .create_memory_neuron(0xC1A5, KERNEL_IDX, 0, &config)
+            .unwrap();
+        array.set_spatial_signature(neuron_idx, signature);
+        array.bind_class_channel(neuron_idx, CLASS_CHANNEL);
+        assert_eq!(array.check_longterm_conversion(100), vec![neuron_idx]);
+
+        let scan = MemoryScanConfig {
+            kernel: super::ScanKernel {
+                width: 1,
+                height: 1,
+                depth: 1,
+            },
+            min_window_activity: 1,
+            scan_skip_density: 1.0,
+            class_channel_count: 3,
+            class_area_width: 1,
+            class_area_height: 1,
+            class_memory_area_idx: 99,
+            sources: vec![MemoryScanSource {
+                field_area_idx: FIELD_IDX,
+                twin_area_idx: TWIN_IDX,
+                field_width: 1,
+                field_height: 1,
+                field_depth: 1,
+            }],
+        };
+        let mut areas = HashMap::new();
+        areas.insert(
+            KERNEL_IDX,
+            MemoryAreaConfig {
+                temporal_depth: 1,
+                upstream_areas: vec![FIELD_IDX],
+                mp_learning_enabled: false,
+                scan: Some(scan),
+            },
+        );
+        PlasticityService::run_episodic_scan(&npu, &mut array, &areas, timestep);
+        let matched = npu.lock().unwrap().process_burst().unwrap();
+        assert!(
+            matched.fired_neurons.contains(&twin_match),
+            "the matching class channel on the bound twin must fire"
+        );
+        assert!(
+            !matched.fired_neurons.contains(&twin_decoy),
+            "a voxel that is not the matched class channel must stay quiet"
+        );
+        assert!(
+            !matched.fired_neurons.contains(&field_neuron),
+            "the scan must not re-fire the field"
+        );
+
+        array.set_spatial_signature(neuron_idx, signature.wrapping_add(1));
+        let missed_timestep = {
+            let mut guard = npu.lock().unwrap();
+            guard.inject_sensory_with_potentials(&[(field_neuron, 2.0)]);
+            guard.process_burst().unwrap().burst
+        };
+        PlasticityService::run_episodic_scan(&npu, &mut array, &areas, missed_timestep);
+        let missed = npu.lock().unwrap().process_burst().unwrap();
+        assert!(
+            !missed.fired_neurons.contains(&twin_match),
+            "a signature that does not match long-term memory must not light the twin"
         );
     }
 }

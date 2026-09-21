@@ -1056,12 +1056,6 @@ impl GenomeService for GenomeServiceImpl {
                     serde_json::json!(leak_variability),
                 );
             }
-            if let Some(burst_engine_active) = param.burst_engine_active {
-                area.add_property_mut(
-                    "burst_engine_active".to_string(),
-                    serde_json::json!(burst_engine_active),
-                );
-            }
             if matches!(area_type, CorticalAreaType::Memory(_)) {
                 let merged = merge_memory_area_properties(
                     area.properties.clone(),
@@ -1070,6 +1064,14 @@ impl GenomeService for GenomeServiceImpl {
                 area.properties = merged;
             } else if let Some(properties) = &param.properties {
                 area.properties = properties.clone();
+            }
+            // Custom-area `properties` replace wipes earlier param keys. Burst must
+            // be written after that assign or classifier twins / custom fields stay off.
+            if let Some(burst_engine_active) = param.burst_engine_active {
+                area.add_property_mut(
+                    "burst_engine_active".to_string(),
+                    serde_json::json!(burst_engine_active),
+                );
             }
 
             // IO areas (IPU/OPU) must always be in root region; default if missing
@@ -3137,6 +3139,18 @@ impl GenomeServiceImpl {
                                 warn!(target: "feagi-services", "[GENOME-UPDATE] coordinate_2d must be array or object, got: {:?}", value);
                             }
                         }
+                        "memory_twin_areas" => {
+                            let Some(map) = value.as_object() else {
+                                return Err(ServiceError::InvalidInput(
+                                    "memory_twin_areas must be an object of field area id to twin area id"
+                                        .to_string(),
+                                ));
+                            };
+                            area.properties.insert(
+                                "memory_twin_areas".to_string(),
+                                serde_json::Value::Object(map.clone()),
+                            );
+                        }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1
                             info!(target: "feagi-services", "[GENOME-UPDATE] Received visualization_voxel_granularity update: {:?}", value);
@@ -3251,6 +3265,18 @@ impl GenomeServiceImpl {
                         } else {
                             warn!(target: "feagi-services", "[CONNECTOME-UPDATE] coordinate_2d must be array or object, got: {:?}", value);
                         }
+                    }
+                    "memory_twin_areas" => {
+                        let Some(map) = value.as_object() else {
+                            return Err(ServiceError::InvalidInput(
+                                "memory_twin_areas must be an object of field area id to twin area id"
+                                    .to_string(),
+                            ));
+                        };
+                        area.properties.insert(
+                            "memory_twin_areas".to_string(),
+                            serde_json::Value::Object(map.clone()),
+                        );
                     }
                     "visualization_voxel_granularity" => {
                         // Only store if != 1x1x1 (default), delete if set to 1x1x1
@@ -5011,5 +5037,176 @@ mod tests {
         assert!(pending
             .iter()
             .all(|u| u.parameter_name != "neuron_fire_threshold"));
+    }
+
+    /// The classifier field attach writes `memory_twin_areas` through the same
+    /// cortical-area update the API uses. Scan injection reads that map, so a
+    /// dropped write leaves the detection twin dark.
+    #[tokio::test]
+    async fn classifier_field_twin_map_survives_area_update() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let mem_id = CorticalID::try_from_bytes(b"mkmem001").unwrap();
+        let field_a = CorticalID::try_from_bytes(b"cfield01").unwrap();
+        let field_b = CorticalID::try_from_bytes(b"cfield02").unwrap();
+        let twin_a = CorticalID::try_from_bytes(b"ctwin001").unwrap();
+        let twin_b = CorticalID::try_from_bytes(b"ctwin002").unwrap();
+
+        let mut mem = CorticalArea::new(
+            mem_id,
+            0,
+            "kernel_mem".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties
+            .insert("init_lifespan".to_string(), serde_json::json!(9));
+        mem.properties
+            .insert("memory_twin_areas".to_string(), serde_json::json!({}));
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(mem.clone()).unwrap();
+        }
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "clf".to_string(),
+                genome_title: "clf".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(mem_id, mem)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let svc = GenomeServiceImpl::new(Arc::clone(&connectome));
+        *svc.get_current_genome_arc().write() = Some(genome);
+
+        let mut both = HashMap::new();
+        both.insert(
+            "memory_twin_areas".to_string(),
+            serde_json::json!({
+                field_a.as_base_64(): twin_a.as_base_64(),
+                field_b.as_base_64(): twin_b.as_base_64(),
+            }),
+        );
+        svc.update_cortical_area(&mem_id.as_base_64(), both)
+            .await
+            .expect("field twin map must be stored");
+
+        {
+            let manager = connectome.read();
+            let area = manager.get_cortical_area(&mem_id).unwrap();
+            let twins = area
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .expect("memory_twin_areas must remain an object");
+            assert_eq!(
+                twins
+                    .get(&field_a.as_base_64())
+                    .and_then(|value| value.as_str()),
+                Some(twin_a.as_base_64().as_str())
+            );
+            assert_eq!(
+                twins
+                    .get(&field_b.as_base_64())
+                    .and_then(|value| value.as_str()),
+                Some(twin_b.as_base_64().as_str())
+            );
+            assert_eq!(
+                area.properties
+                    .get("init_lifespan")
+                    .and_then(|value| value.as_u64()),
+                Some(9),
+                "recording a twin target must not rebuild or wipe kernel memory"
+            );
+        }
+
+        let mut moved = HashMap::new();
+        moved.insert("coordinates_3d".to_string(), serde_json::json!([4, 5, 6]));
+        svc.update_cortical_area(&mem_id.as_base_64(), moved)
+            .await
+            .expect("position update");
+        {
+            let manager = connectome.read();
+            let area = manager.get_cortical_area(&mem_id).unwrap();
+            let twins = area
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .expect("a position update must keep the twin map");
+            assert_eq!(twins.len(), 2);
+            assert_eq!(area.position.x, 4);
+        }
+
+        let mut remaining = HashMap::new();
+        remaining.insert(
+            "memory_twin_areas".to_string(),
+            serde_json::json!({
+                field_a.as_base_64(): twin_a.as_base_64(),
+            }),
+        );
+        svc.update_cortical_area(&mem_id.as_base_64(), remaining)
+            .await
+            .expect("detach one field");
+        {
+            let manager = connectome.read();
+            let twins = manager
+                .get_cortical_area(&mem_id)
+                .unwrap()
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .unwrap();
+            assert!(twins.get(&field_b.as_base_64()).is_none());
+            assert!(twins.get(&field_a.as_base_64()).is_some());
+        }
+
+        let mut invalid = HashMap::new();
+        invalid.insert(
+            "memory_twin_areas".to_string(),
+            serde_json::json!("not-a-map"),
+        );
+        let rejected = svc
+            .update_cortical_area(&mem_id.as_base_64(), invalid)
+            .await;
+        assert!(rejected.is_err(), "a non-object twin map must be rejected");
+        let manager = connectome.read();
+        let twins = manager
+            .get_cortical_area(&mem_id)
+            .unwrap()
+            .properties
+            .get("memory_twin_areas")
+            .and_then(|value| value.as_object())
+            .unwrap();
+        assert!(
+            twins.get(&field_a.as_base_64()).is_some(),
+            "a rejected twin-map write must leave the previous map in place"
+        );
     }
 }

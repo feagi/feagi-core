@@ -874,10 +874,12 @@ mod tests {
                 coordinates_3d: [0, 0, 0],
                 kernel_area_id: None,
                 class_area_id: None,
-                field_area_id: None,
+                fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
+                    field_area_id: "cfield".to_string(),
+                    scan_twin_id: "cscan1".to_string(),
+                }],
                 kernel_memory_id: "mkmem1".to_string(),
                 class_memory_id: "mcmem1".to_string(),
-                scan_twin_id: "cscan1".to_string(),
                 properties: HashMap::new(),
             },
         );

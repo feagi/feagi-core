@@ -922,6 +922,7 @@ impl Neuroembryogenesis {
                     }
                 }
             }
+            manager.apply_loaded_classifier_assemblies();
             info!(
                 target: "feagi-bdu",
                 "  Loaded {} classifier assemblies from genome",
@@ -1332,6 +1333,7 @@ impl Neuroembryogenesis {
                                     Some(lifecycle_config),
                                     mem_props.mp_learning_enabled,
                                 );
+                                manager.configure_memory_scan_on_executor(&*exec, area_id);
 
                                 registered_count += 1;
                             }

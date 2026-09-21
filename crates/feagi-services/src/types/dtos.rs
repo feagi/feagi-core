@@ -281,10 +281,9 @@ pub struct ClassifierInfo {
     pub coordinates_3d: [i32; 3],
     pub kernel_area_id: Option<String>,
     pub class_area_id: Option<String>,
-    pub field_area_id: Option<String>,
+    pub fields: Vec<feagi_structures::genomic::classifiers::ClassifierField>,
     pub kernel_memory_id: String,
     pub class_memory_id: String,
-    pub scan_twin_id: String,
     pub properties: HashMap<String, serde_json::Value>,
 }
 
@@ -297,10 +296,9 @@ impl From<feagi_structures::genomic::classifiers::Classifier> for ClassifierInfo
             coordinates_3d: classifier.coordinates_3d,
             kernel_area_id: classifier.kernel_area_id,
             class_area_id: classifier.class_area_id,
-            field_area_id: classifier.field_area_id,
+            fields: classifier.fields,
             kernel_memory_id: classifier.kernel_memory_id,
             class_memory_id: classifier.class_memory_id,
-            scan_twin_id: classifier.scan_twin_id,
             properties: classifier.properties,
         }
     }

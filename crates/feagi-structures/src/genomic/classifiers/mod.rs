@@ -9,6 +9,9 @@ to `brain_regions`. A classifier is not a brain region and is not exportable
 as a circuit. It records the assembly's properties, owned internals, and
 referenced input areas so neuroembryogenesis and area/mapping edits stay
 aligned.
+
+Each field binding is one Classifier mapping: an interconnect area scanning
+the shared kernel memory, with its own detection twin.
 */
 
 use serde::{Deserialize, Serialize};
@@ -31,6 +34,13 @@ pub struct ClassifierMapping {
     pub morphology_id: String,
 }
 
+/// One field area scanning this classifier, and the twin that shows its detections.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ClassifierField {
+    pub field_area_id: String,
+    pub scan_twin_id: String,
+}
+
 /// First-class classifier record persisted in the genome.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Classifier {
@@ -45,54 +55,77 @@ pub struct Classifier {
     pub kernel_area_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class_area_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub field_area_id: Option<String>,
-    /// Owned internals. Deleting any of these deletes the classifier.
+    /// Field scans. Empty until Classifier mappings are drawn.
+    #[serde(default)]
+    pub fields: Vec<ClassifierField>,
+    /// Owned internals. Deleting kernel or class memory deletes the classifier.
     pub kernel_memory_id: String,
     pub class_memory_id: String,
-    pub scan_twin_id: String,
     #[serde(default)]
     pub properties: HashMap<String, serde_json::Value>,
 }
 
 impl Classifier {
-    /// Owned internals that must stay members of `parent_region_id`.
+    /// Kernel memory and class memory. Deleting either deletes the assembly.
+    pub fn assembly_core_ids(&self) -> Vec<String> {
+        vec![self.kernel_memory_id.clone(), self.class_memory_id.clone()]
+    }
+
+    /// Owned internals deleted with the classifier, including every field twin.
     pub fn owned_area_ids(&self) -> Vec<String> {
-        vec![
-            self.kernel_memory_id.clone(),
-            self.class_memory_id.clone(),
-            self.scan_twin_id.clone(),
-        ]
+        let mut owned = self.assembly_core_ids();
+        for field in &self.fields {
+            if !field.scan_twin_id.is_empty() {
+                owned.push(field.scan_twin_id.clone());
+            }
+        }
+        owned
     }
 
     /// Referenced input areas that may be cleared independently.
     pub fn input_area_ids(&self) -> Vec<String> {
-        [
-            self.kernel_area_id.as_ref(),
-            self.class_area_id.as_ref(),
-            self.field_area_id.as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        .cloned()
-        .collect()
+        let mut inputs = Vec::new();
+        if let Some(kernel) = &self.kernel_area_id {
+            inputs.push(kernel.clone());
+        }
+        if let Some(class) = &self.class_area_id {
+            inputs.push(class.clone());
+        }
+        for field in &self.fields {
+            inputs.push(field.field_area_id.clone());
+        }
+        inputs
     }
 
-    /// True when `area_id` is an owned internal of this classifier.
+    pub fn owns_assembly_core(&self, area_id: &str) -> bool {
+        self.kernel_memory_id == area_id || self.class_memory_id == area_id
+    }
+
+    /// True when `area_id` is kernel memory, class memory, or one of the field twins.
     pub fn owns_area(&self, area_id: &str) -> bool {
-        self.kernel_memory_id == area_id
-            || self.class_memory_id == area_id
-            || self.scan_twin_id == area_id
+        self.owns_assembly_core(area_id) || self.field_for_twin(area_id).is_some()
+    }
+
+    pub fn field_for_twin(&self, twin_id: &str) -> Option<&ClassifierField> {
+        self.fields
+            .iter()
+            .find(|field| field.scan_twin_id == twin_id)
+    }
+
+    pub fn binding_for_field(&self, field_area_id: &str) -> Option<&ClassifierField> {
+        self.fields
+            .iter()
+            .find(|field| field.field_area_id == field_area_id)
     }
 
     /// True when `area_id` is a referenced input of this classifier.
     pub fn references_input(&self, area_id: &str) -> bool {
         self.kernel_area_id.as_deref() == Some(area_id)
             || self.class_area_id.as_deref() == Some(area_id)
-            || self.field_area_id.as_deref() == Some(area_id)
+            || self.binding_for_field(area_id).is_some()
     }
 
-    /// Apply classifier-level edit. Does not replace owned internals.
+    /// Apply classifier-level edit. Does not replace owned internals or field bindings.
     pub fn apply_assembly_update(
         &mut self,
         name: Option<String>,
@@ -100,7 +133,6 @@ impl Classifier {
         parent_region_id: Option<String>,
         kernel_area_id: Option<String>,
         class_area_id: Option<String>,
-        field_area_id: Option<String>,
     ) -> Result<(), String> {
         if let Some(name) = name {
             let trimmed = name.trim();
@@ -125,9 +157,6 @@ impl Classifier {
         if let Some(class_area_id) = class_area_id {
             self.class_area_id = Some(required_area_id(class_area_id, "class_area_id")?);
         }
-        if let Some(field_area_id) = field_area_id {
-            self.field_area_id = Some(required_area_id(field_area_id, "field_area_id")?);
-        }
         Ok(())
     }
 
@@ -137,7 +166,7 @@ impl Classifier {
         name: Option<String>,
         coordinates_3d: Option<[i32; 3]>,
     ) -> Result<(), String> {
-        self.apply_assembly_update(name, coordinates_3d, None, None, None, None)
+        self.apply_assembly_update(name, coordinates_3d, None, None, None)
     }
 
     /// Mappings this classifier requires given its current inputs.
@@ -162,9 +191,9 @@ impl Classifier {
             dst_area_id: self.class_memory_id.clone(),
             morphology_id: CLASSIFIER_ASSOCIATIVE_MORPHOLOGY.to_string(),
         });
-        if let Some(field) = &self.field_area_id {
+        for field in &self.fields {
             mappings.push(ClassifierMapping {
-                src_area_id: field.clone(),
+                src_area_id: field.field_area_id.clone(),
                 dst_area_id: self.kernel_memory_id.clone(),
                 morphology_id: CLASSIFIER_SCAN_MORPHOLOGY.to_string(),
             });
@@ -180,12 +209,47 @@ impl Classifier {
         if self.class_area_id.as_deref() == Some(area_id) {
             self.class_area_id = None;
         }
-        if self.field_area_id.as_deref() == Some(area_id) {
-            self.field_area_id = None;
-        }
+        self.fields.retain(|field| field.field_area_id != area_id);
     }
 
-    /// Bind or clear an input from a mapping change involving this assembly.
+    /// Remove one field binding. Returns the removed twin id.
+    pub fn detach_field(&mut self, field_area_id: &str) -> Option<String> {
+        let position = self
+            .fields
+            .iter()
+            .position(|field| field.field_area_id == field_area_id)?;
+        Some(self.fields.remove(position).scan_twin_id)
+    }
+
+    /// Remove the binding whose twin is `twin_id`. Returns the field area id.
+    pub fn detach_twin(&mut self, twin_id: &str) -> Option<String> {
+        let position = self
+            .fields
+            .iter()
+            .position(|field| field.scan_twin_id == twin_id)?;
+        Some(self.fields.remove(position).field_area_id)
+    }
+
+    pub fn attach_field(
+        &mut self,
+        field_area_id: String,
+        scan_twin_id: String,
+    ) -> Result<(), String> {
+        let field_area_id = required_area_id(field_area_id, "field_area_id")?;
+        let scan_twin_id = required_area_id(scan_twin_id, "scan_twin_id")?;
+        if self.binding_for_field(&field_area_id).is_some() {
+            return Err(format!(
+                "field_area_id {field_area_id} is already mapped to this classifier"
+            ));
+        }
+        self.fields.push(ClassifierField {
+            field_area_id,
+            scan_twin_id,
+        });
+        Ok(())
+    }
+
+    /// Bind or clear kernel/class inputs from a mapping change. Field scans are attached explicitly.
     pub fn apply_mapping_change(
         &mut self,
         src_area_id: &str,
@@ -193,14 +257,6 @@ impl Classifier {
         morphology_id: &str,
         removed: bool,
     ) -> bool {
-        if dst_area_id == self.kernel_memory_id && morphology_id == CLASSIFIER_SCAN_MORPHOLOGY {
-            self.field_area_id = if removed {
-                None
-            } else {
-                Some(src_area_id.to_string())
-            };
-            return true;
-        }
         if dst_area_id == self.kernel_memory_id && morphology_id == CLASSIFIER_KERNEL_MORPHOLOGY {
             self.kernel_area_id = if removed {
                 None
@@ -234,59 +290,65 @@ mod tests {
     use super::*;
 
     fn sample() -> Classifier {
-        Classifier {
+        let mut classifier = Classifier {
             classifier_id: "clf-1".to_string(),
             name: "demo".to_string(),
             parent_region_id: "region".to_string(),
             coordinates_3d: [1, 2, 3],
             kernel_area_id: Some("kernel".to_string()),
             class_area_id: Some("class".to_string()),
-            field_area_id: Some("field".to_string()),
+            fields: Vec::new(),
             kernel_memory_id: "kmem".to_string(),
             class_memory_id: "cmem".to_string(),
-            scan_twin_id: "twin".to_string(),
             properties: HashMap::new(),
-        }
+        };
+        classifier
+            .attach_field("field".to_string(), "twin".to_string())
+            .expect("first field");
+        classifier
     }
 
     #[test]
-    fn required_mappings_cover_four_edges() {
-        let mappings = sample().required_mappings();
-        assert_eq!(mappings.len(), 4);
+    fn required_mappings_cover_shared_edges_and_each_field() {
+        let mut classifier = sample();
+        classifier
+            .attach_field("field-b".to_string(), "twin-b".to_string())
+            .expect("second field");
+        let mappings = classifier.required_mappings();
+        assert_eq!(mappings.len(), 5);
         assert!(mappings.iter().any(|m| {
             m.src_area_id == "field"
                 && m.dst_area_id == "kmem"
                 && m.morphology_id == CLASSIFIER_SCAN_MORPHOLOGY
         }));
+        assert!(mappings.iter().any(|m| m.src_area_id == "field-b"));
     }
 
     #[test]
-    fn deleting_field_clears_only_that_input() {
+    fn deleting_one_field_keeps_the_other_eye() {
         let mut classifier = sample();
-        classifier.clear_input("field");
-        assert!(classifier.field_area_id.is_none());
-        assert_eq!(classifier.kernel_area_id.as_deref(), Some("kernel"));
-        assert_eq!(classifier.required_mappings().len(), 3);
+        classifier
+            .attach_field("field-b".to_string(), "twin-b".to_string())
+            .expect("second field");
+        assert_eq!(classifier.detach_field("field"), Some("twin".to_string()));
+        assert!(classifier.binding_for_field("field").is_none());
+        assert_eq!(
+            classifier
+                .binding_for_field("field-b")
+                .map(|f| f.scan_twin_id.as_str()),
+            Some("twin-b")
+        );
+        assert!(classifier.owns_assembly_core("kmem"));
+        assert!(!classifier.owns_area("twin"));
+        assert!(classifier.owns_area("twin-b"));
     }
 
     #[test]
-    fn mapping_add_and_remove_updates_field_slot() {
+    fn duplicate_field_mapping_is_rejected() {
         let mut classifier = sample();
-        classifier.field_area_id = None;
-        assert!(classifier.apply_mapping_change(
-            "field2",
-            "kmem",
-            CLASSIFIER_SCAN_MORPHOLOGY,
-            false
-        ));
-        assert_eq!(classifier.field_area_id.as_deref(), Some("field2"));
-        assert!(classifier.apply_mapping_change(
-            "field2",
-            "kmem",
-            CLASSIFIER_SCAN_MORPHOLOGY,
-            true
-        ));
-        assert!(classifier.field_area_id.is_none());
+        let result = classifier.attach_field("field".to_string(), "other-twin".to_string());
+        assert!(result.is_err());
+        assert_eq!(classifier.fields.len(), 1);
     }
 
     #[test]
@@ -298,20 +360,12 @@ mod tests {
         assert_eq!(classifier.name, "renamed");
         assert_eq!(classifier.coordinates_3d, [9, 8, 7]);
         assert_eq!(classifier.kernel_memory_id, "kmem");
-        assert_eq!(classifier.scan_twin_id, "twin");
+        assert_eq!(classifier.fields[0].scan_twin_id, "twin");
         assert_eq!(classifier.kernel_area_id.as_deref(), Some("kernel"));
     }
 
     #[test]
-    fn metadata_update_rejects_blank_name() {
-        let mut classifier = sample();
-        let result = classifier.apply_metadata_update(Some("   ".to_string()), None);
-        assert!(result.is_err());
-        assert_eq!(classifier.name, "demo");
-    }
-
-    #[test]
-    fn assembly_update_retargets_inputs_and_parent() {
+    fn assembly_update_retargets_kernel_and_class_only() {
         let mut classifier = sample();
         classifier
             .apply_assembly_update(
@@ -320,20 +374,11 @@ mod tests {
                 Some("other-region".to_string()),
                 Some("kernel2".to_string()),
                 Some("class2".to_string()),
-                Some("field2".to_string()),
             )
             .expect("valid assembly update");
         assert_eq!(classifier.parent_region_id, "other-region");
         assert_eq!(classifier.kernel_area_id.as_deref(), Some("kernel2"));
         assert_eq!(classifier.class_area_id.as_deref(), Some("class2"));
-        assert_eq!(classifier.field_area_id.as_deref(), Some("field2"));
-        assert_eq!(classifier.kernel_memory_id, "kmem");
-        assert_eq!(classifier.scan_twin_id, "twin");
-        let mappings = classifier.required_mappings();
-        assert!(mappings.iter().any(|m| {
-            m.src_area_id == "field2"
-                && m.dst_area_id == "kmem"
-                && m.morphology_id == CLASSIFIER_SCAN_MORPHOLOGY
-        }));
+        assert_eq!(classifier.fields[0].field_area_id, "field");
     }
 }

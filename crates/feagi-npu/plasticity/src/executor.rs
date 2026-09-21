@@ -181,6 +181,20 @@ impl AsyncPlasticityExecutor {
         service.restore_long_term_memory_neurons(neurons)
     }
 
+    /// Stop pattern detection for one cortical index and delete its memory neurons.
+    pub fn unregister_memory_area(&self, area_idx: u32) {
+        let Ok(guard) = self.service.lock() else {
+            warn!(
+                "[PLASTICITY-EXEC] Failed to lock service while unregistering area_idx={}",
+                area_idx
+            );
+            return;
+        };
+        if let Some(service) = guard.as_ref() {
+            service.unregister_memory_area(area_idx);
+        }
+    }
+
     /// Remove runtime registrations tied to the previous cortical index map.
     pub fn clear_memory_area_registrations(&self) -> Result<(), String> {
         let guard = self

@@ -571,6 +571,11 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::get(cortical_area::list_classifiers),
         )
         .route(
+            "/cortical_area/classifier/:classifier_id/field",
+            axum::routing::post(cortical_area::post_classifier_field)
+                .delete(cortical_area::delete_classifier_field),
+        )
+        .route(
             "/cortical_area/classifier/:classifier_id",
             axum::routing::get(cortical_area::get_classifier)
                 .put(cortical_area::update_classifier)

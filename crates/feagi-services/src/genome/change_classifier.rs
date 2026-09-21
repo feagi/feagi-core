@@ -94,6 +94,8 @@ impl CorticalChangeClassifier {
             "position",
             // Visualization-only aggregation control (BV/UI-driven)
             "visualization_voxel_granularity",
+            // Field-to-twin index used by classifier episodic_scan injection.
+            "memory_twin_areas",
             // IO coding updates (cortical ID remap)
             "coding_signage",
             "coding_behavior",

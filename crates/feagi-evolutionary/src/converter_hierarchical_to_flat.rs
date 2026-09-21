@@ -314,6 +314,7 @@ fn convert_properties_to_flat(
         ("neuron_excitability", ("excite-f", "nx")),
         ("dev_count", ("devcnt-i", "cx")),
         ("memory_twin_of", ("twinrf-t", "cx")),
+        ("burst_engine_active", ("brsten-b", "cx")),
     ]
     .iter()
     .cloned()
@@ -586,16 +587,21 @@ mod tests {
                 coordinates_3d: [1, 2, 3],
                 kernel_area_id: Some("ckern1".to_string()),
                 class_area_id: Some("ccls01".to_string()),
-                field_area_id: Some("cfield".to_string()),
+                fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
+                    field_area_id: "cfield".to_string(),
+                    scan_twin_id: "cscan1".to_string(),
+                }],
                 kernel_memory_id: "mkmem1".to_string(),
                 class_memory_id: "mcmem1".to_string(),
-                scan_twin_id: "cscan1".to_string(),
                 properties: HashMap::new(),
             },
         );
         let flat = convert_hierarchical_to_flat(&genome).unwrap();
         assert_eq!(flat["classifiers"]["clf-1"]["name"], "object_class");
-        assert_eq!(flat["classifiers"]["clf-1"]["scan_twin_id"], "cscan1");
+        assert_eq!(
+            flat["classifiers"]["clf-1"]["fields"][0]["scan_twin_id"],
+            "cscan1"
+        );
         assert_eq!(flat["classifiers"]["clf-1"]["parent_region_id"], "root");
     }
 

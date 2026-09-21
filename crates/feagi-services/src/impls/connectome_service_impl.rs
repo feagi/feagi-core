@@ -957,25 +957,50 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
         let deleted_id_base64 = cortical_id_typed.as_base_64();
-        let sibling_owned_ids = {
+        let (sibling_owned_ids, detached_scans) = {
             let mut manager = self.connectome.write();
             let owning = manager.classifiers_owning_area(&deleted_id_base64);
             let mut siblings = Vec::new();
+            let mut detached_scans = Vec::new();
             for classifier in owning {
-                manager.remove_classifier(&classifier.classifier_id);
-                siblings.extend(
-                    classifier
-                        .owned_area_ids()
-                        .into_iter()
-                        .filter(|id| id != &deleted_id_base64),
-                );
+                if classifier.owns_assembly_core(&deleted_id_base64) {
+                    manager.remove_classifier(&classifier.classifier_id);
+                    siblings.extend(
+                        classifier
+                            .owned_area_ids()
+                            .into_iter()
+                            .filter(|id| id != &deleted_id_base64),
+                    );
+                    continue;
+                }
+                let mut detached = classifier.clone();
+                if let Some(field_area_id) = detached.detach_twin(&deleted_id_base64) {
+                    let _ = manager
+                        .remove_memory_twin_mapping(&detached.kernel_memory_id, &field_area_id);
+                    detached_scans.push((field_area_id, detached.kernel_memory_id.clone()));
+                    manager.upsert_classifier(detached);
+                }
+            }
+            let classifiers = manager.list_classifiers();
+            for classifier in classifiers.values() {
+                if let Some(binding) = classifier.binding_for_field(&deleted_id_base64) {
+                    let _ = manager.remove_memory_twin_mapping(
+                        &classifier.kernel_memory_id,
+                        &deleted_id_base64,
+                    );
+                    siblings.push(binding.scan_twin_id.clone());
+                }
             }
             manager.clear_classifier_inputs_for_area(&deleted_id_base64);
             if let Some(genome) = self.current_genome.write().as_mut() {
                 genome.classifiers = manager.list_classifiers();
             }
-            siblings
+            (siblings, detached_scans)
         };
+        for (field_area_id, kernel_memory_id) in detached_scans {
+            self.update_cortical_mapping(field_area_id, kernel_memory_id, Vec::new())
+                .await?;
+        }
         for sibling_id in sibling_owned_ids {
             Box::pin(self.delete_cortical_area(&sibling_id)).await?;
         }
