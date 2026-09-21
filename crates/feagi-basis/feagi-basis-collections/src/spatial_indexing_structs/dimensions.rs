@@ -16,6 +16,11 @@ impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> SpatialDimensions
         }
         Ok(Self { data })
     }
+    
+    pub fn new_dimensions_from_usize(data: [usize; NUM_DIMS]) -> Result<Self, FeagiDataCollectionError> {
+        let data_in: [QI; NUM_DIMS] = data.map(|e| QI::quant_try_from_usize(e).unwrap()); // TODO Error Handling
+        Self::new_dimensions(data_in)        
+    }
 
     /// Borrow dimensions as a fixed-size slice.
     pub fn as_slice(&self) -> &[QI; NUM_DIMS] {

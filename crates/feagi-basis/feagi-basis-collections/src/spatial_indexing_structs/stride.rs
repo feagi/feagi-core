@@ -85,11 +85,3 @@ impl<const NUM_DIMS: usize> SpatialStride<NUM_DIMS> {
         SpatialCoordinate::new_coordinate(coordinate_data)
     }
 }
-
-impl<const NUM_DIMS: usize> Default for SpatialStride<NUM_DIMS> {
-    fn default() -> Self {
-        SpatialStride {
-            data: [0; NUM_DIMS]
-        }
-    }
-}
