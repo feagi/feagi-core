@@ -2312,10 +2312,10 @@ pub async fn post_classifier_field(
     let mut bytes = [0u8; 8];
     bytes[0] = b'c';
     let name_bytes = classifier.name.as_bytes();
-    for i in 1..7 {
-        bytes[i] = name_bytes.get(i - 1).copied().unwrap_or(b'_');
-        if !(bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
-            bytes[i] = b'_';
+    for (dest_index, byte) in bytes[1..7].iter_mut().enumerate() {
+        *byte = name_bytes.get(dest_index).copied().unwrap_or(b'_');
+        if !(byte.is_ascii_alphanumeric() || *byte == b'_') {
+            *byte = b'_';
         }
     }
     bytes[7] = (timestamp & 0xFF) as u8;

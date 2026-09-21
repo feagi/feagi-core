@@ -21,7 +21,7 @@ pub struct PlannedSamples {
 enum SampleStore {
     Memory(Vec<IRSample>),
     ImageFolder {
-        adapter: ImageFolderSegmentationAdapter,
+        adapter: Box<ImageFolderSegmentationAdapter>,
         pairs: Vec<ImageLabelPair>,
         dataset_version_id: DatasetVersionId,
         order: Vec<usize>,
@@ -53,7 +53,7 @@ impl PlannedSamples {
         }
         Ok(Self {
             store: SampleStore::ImageFolder {
-                adapter,
+                adapter: Box::new(adapter),
                 pairs,
                 dataset_version_id,
                 order,

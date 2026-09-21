@@ -916,7 +916,7 @@ impl GenomeParser {
                     classifier_id
                 ))
             })?;
-            let fields = classifier_fields_from_raw(&raw);
+            let fields = classifier_fields_from_raw(raw);
             classifiers.push(Classifier {
                 classifier_id: classifier_id.clone(),
                 name,

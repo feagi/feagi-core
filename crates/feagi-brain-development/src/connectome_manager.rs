@@ -11228,10 +11228,9 @@ mod tests {
             "twin burst must survive save and load"
         );
         assert!(
-            loaded.cortical_areas[&mem_id]
+            !loaded.cortical_areas[&mem_id]
                 .properties
-                .get("classifier_kernel_area_id")
-                .is_none(),
+                .contains_key("classifier_kernel_area_id"),
             "the blueprint does not store classifier area ids; load must restore them"
         );
 

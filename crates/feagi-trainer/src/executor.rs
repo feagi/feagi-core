@@ -120,11 +120,13 @@ pub(crate) fn analog_sent_values(sample: &IRSample) -> Vec<f64> {
     }
 }
 
+type SegmentationProgressPreview = (Option<String>, Option<String>, Option<String>);
+
 /// Live run preview of the image + colorized mask just submitted to iimg/iseg.
 fn segmentation_progress_preview(
     sample: &IRSample,
     decoder_profile: &DecoderBindingProfile,
-) -> Result<(Option<String>, Option<String>, Option<String>), TrainerError> {
+) -> Result<SegmentationProgressPreview, TrainerError> {
     let Payload::Bytes(image_png) = &sample.payload else {
         return Ok((None, None, None));
     };

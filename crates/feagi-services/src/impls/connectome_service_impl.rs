@@ -647,7 +647,7 @@ impl ConnectomeServiceImpl {
         }
     }
 
-    /// Replace connectome metadata (areas, regions, morphologies) from a RuntimeGenome.
+    /// Replace connectome metadata (areas, regions, morphologies, classifiers) from a RuntimeGenome.
     fn apply_runtime_genome_to_connectome(
         &self,
         genome: &feagi_evolutionary::RuntimeGenome,
@@ -736,6 +736,21 @@ impl ConnectomeServiceImpl {
             }
             pending = next;
         }
+
+        // Genome load writes the classifier registry and projects it onto kernel
+        // memory (`classifier_role`, field scan twins). Full connectome import
+        // must do the same or the saved assembly comes back as kernel memory only.
+        manager.replace_classifiers(genome.classifiers.clone());
+        for classifier in genome.classifiers.values() {
+            if let Some(region) = manager.get_brain_region_mut(&classifier.parent_region_id) {
+                for area_id in classifier.owned_area_ids() {
+                    if let Ok(cortical_id) = CorticalID::try_from_base_64(&area_id) {
+                        region.add_area(cortical_id);
+                    }
+                }
+            }
+        }
+        manager.apply_loaded_classifier_assemblies();
 
         Ok(())
     }
@@ -5819,6 +5834,194 @@ mod tests {
             assert_ne!(
                 mappings_hash, 0,
                 "connectome import must publish a non-zero cortical_mappings_hash"
+            );
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn import_connectome_restores_classifier_assembly() -> ServiceResult<()> {
+        use crate::traits::ConnectomeService;
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::classifiers::{Classifier, ClassifierField};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        let kernel_id = CorticalID::try_from_bytes(b"ckernimp").unwrap();
+        let class_id = CorticalID::try_from_bytes(b"cclassim").unwrap();
+        let field_id = CorticalID::try_from_bytes(b"cfieldim").unwrap();
+        let kernel_mem_id = CorticalID::try_from_bytes(b"mkernimp").unwrap();
+        let class_mem_id = CorticalID::try_from_bytes(b"mclassim").unwrap();
+        let twin_id = CorticalID::try_from_bytes(b"ctwinimp").unwrap();
+
+        let custom = |id: CorticalID, name: &str| {
+            CorticalArea::new(
+                id,
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap()
+        };
+        let memory = |id: CorticalID, name: &str| {
+            let mut area = CorticalArea::new(
+                id,
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Memory(MemoryCorticalType::Memory),
+            )
+            .unwrap();
+            area.properties
+                .insert("is_mem_type".to_string(), serde_json::json!(true));
+            area
+        };
+
+        let region = BrainRegion::new(
+            RegionID::new(),
+            "Classifier".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap();
+        let region_key = region.region_id.to_string();
+        let classifier = Classifier {
+            classifier_id: "clf-import".to_string(),
+            name: "Checker".to_string(),
+            parent_region_id: region_key.clone(),
+            coordinates_3d: [45, 15, 0],
+            kernel_area_id: Some(kernel_id.as_base_64()),
+            class_area_id: Some(class_id.as_base_64()),
+            fields: vec![ClassifierField {
+                field_area_id: field_id.as_base_64(),
+                scan_twin_id: twin_id.as_base_64(),
+            }],
+            kernel_memory_id: kernel_mem_id.as_base_64(),
+            class_memory_id: class_mem_id.as_base_64(),
+            properties: HashMap::new(),
+        };
+
+        let mut cortical_areas = HashMap::new();
+        for area in [
+            custom(kernel_id, "Kernel"),
+            custom(class_id, "Class"),
+            custom(field_id, "field"),
+            memory(kernel_mem_id, "Checker_kernel_mem"),
+            memory(class_mem_id, "Checker_class_mem"),
+            custom(twin_id, "Checker_field_twin"),
+        ] {
+            cortical_areas.insert(area.cortical_id, area);
+        }
+        let mut brain_regions = HashMap::new();
+        brain_regions.insert(region_key.clone(), region);
+        let mut classifiers = HashMap::new();
+        classifiers.insert(classifier.classifier_id.clone(), classifier);
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "clf-import".to_string(),
+                genome_title: "clf-import".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: Some(region_key.clone()),
+            },
+            cortical_areas,
+            brain_regions,
+            classifiers,
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
+
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
+        let current_genome = Arc::new(RwLock::new(None));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
+            genome_json: Some(genome_json),
+            memory_area_ids: vec![kernel_mem_id.as_base_64(), class_mem_id.as_base_64()],
+            plastic_mappings: Vec::new(),
+            brain_region_ids: vec![region_key.clone()],
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        };
+        svc.import_connectome(snapshot).await?;
+
+        {
+            let manager = connectome.read();
+            let restored = manager
+                .get_classifier("clf-import")
+                .expect("classifier registry restored");
+            assert_eq!(restored.class_memory_id, class_mem_id.as_base_64());
+            assert_eq!(
+                restored.fields[0].scan_twin_id,
+                twin_id.as_base_64(),
+                "field scan twin must survive connectome import"
+            );
+            let kernel_mem = manager
+                .get_cortical_area(&kernel_mem_id)
+                .expect("kernel memory area");
+            assert_eq!(
+                kernel_mem
+                    .properties
+                    .get("classifier_role")
+                    .and_then(|value| value.as_str()),
+                Some("kernel_memory")
+            );
+            let twins = kernel_mem
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .expect("field scan twin projected onto kernel memory");
+            assert_eq!(
+                twins
+                    .get(&field_id.as_base_64())
+                    .and_then(|value| value.as_str()),
+                Some(twin_id.as_base_64().as_str())
+            );
+            let class_mem = manager
+                .get_cortical_area(&class_mem_id)
+                .expect("class memory area");
+            assert_eq!(
+                class_mem
+                    .properties
+                    .get("classifier_role")
+                    .and_then(|value| value.as_str()),
+                Some("class_memory")
+            );
+        }
+        {
+            let genome_guard = current_genome.read();
+            let stored = genome_guard.as_ref().expect("runtime genome");
+            assert!(
+                stored.classifiers.contains_key("clf-import"),
+                "sync must keep the restored classifier on the runtime genome"
             );
         }
         Ok(())

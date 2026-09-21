@@ -8,6 +8,9 @@
 use std::collections::{HashMap, HashSet};
 use xxhash_rust::xxh64::xxh64;
 
+type Coord = (u32, u32, u32);
+type FrameCoords = (u32, Vec<Coord>);
+
 /// Kernel geometry used as the scan window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScanKernel {
@@ -114,7 +117,7 @@ pub fn window_relative_coords(
 }
 
 /// Group fired coords by burst offset for temporal stacking.
-pub fn frames_to_coord_lists(frames: &[(u32, Vec<(u32, u32, u32)>)]) -> Vec<Vec<(u32, u32, u32)>> {
+pub fn frames_to_coord_lists(frames: &[FrameCoords]) -> Vec<Vec<Coord>> {
     frames.iter().map(|(_, coords)| coords.clone()).collect()
 }
 
