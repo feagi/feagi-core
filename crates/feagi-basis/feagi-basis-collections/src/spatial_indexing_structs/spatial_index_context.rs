@@ -6,6 +6,10 @@ use crate::spatial_indexing_structs::spatial_index_mapper::SpatialIndexMapper;
 use crate::spatial_indexing_structs::SpatialStride;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(bound(
+    serialize = "SpatialDimensions<QDims, NUM_DIMS>: Serialize, AxisOrderArray<NUM_DIMS>: Serialize, SpatialStride<NUM_DIMS>: Serialize",
+    deserialize = "SpatialDimensions<QDims, NUM_DIMS>: Deserialize<'de>, AxisOrderArray<NUM_DIMS>: Deserialize<'de>, SpatialStride<NUM_DIMS>: Deserialize<'de>"
+))]
 pub struct SpatialIndexContext<QDims, const NUM_DIMS: usize>
 where
     QDims: QuantizedUnsignedIntegerTrait
