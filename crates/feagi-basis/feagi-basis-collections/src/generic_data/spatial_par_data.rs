@@ -4,9 +4,8 @@ use serde::{Deserialize, Serialize};
 use crate::feagi_collection_error::{FeagiDataCollectionError, FeagiFailInvalidDimensions};
 use crate::generic_data::par_data::{GenericParData, GenericParDataMut, ParDataArray};
 use crate::spatial_indexing_structs::axis_order::AxisOrderIdentifier;
-use crate::spatial_indexing_structs::coordinate::SpatialCoordinate;
-use crate::spatial_indexing_structs::dimensions::SpatialDimensions;
-use crate::spatial_indexing_structs::helper_implementations::owning_spatial_indexing_helper::OwningSpatialIndexingHelper;
+use crate::spatial_indexing_structs::SpatialCoordinate;
+use crate::spatial_indexing_structs::SpatialDimensions;
 use crate::spatial_indexing_structs::spatial_indexing_helpers::SpatialIndexingHelper;
 
 #[cfg(feature = "heapless")]
@@ -16,6 +15,7 @@ use core::marker::PhantomData;
 
 #[cfg(feature = "alloc")]
 use crate::generic_data::par_data::ParDataVector;
+use crate::spatial_indexing_structs::helper_implementations::owning_spatial_indexing_helper::OwningSpatialIndexingHelper;
 
 /// Spatial nonmut access to elements
 pub trait GenericSpatialParData<QLinear, GPD, SIH, D, const NUM_DIMS: usize, const AXIS_ORDER_IDENTIFIER: AxisOrderIdentifier>

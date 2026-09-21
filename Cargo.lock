@@ -295,6 +295,7 @@ dependencies = [
 name = "feagi-basis-neuron"
 version = "0.1.1"
 dependencies = [
+ "feagi-basis-collections",
  "feagi-basis-error-logging",
  "feagi-basis-quantization",
  "half",

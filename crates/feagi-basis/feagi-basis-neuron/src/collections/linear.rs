@@ -1,5 +1,4 @@
-use feagi_basis_quantization::generic_collections::bitpacked::linear::{BitPackedArraySizeAware, BitPackedSliceMutSizeAware, BitPackedSliceSizeAware, BitPackedVectorSizeAware};
-use feagi_basis_quantization::generic_collections::generic_par_data::linear::{ParDataArray, ParDataSlice, ParDataSliceMut};
+/*
 use feagi_basis_quantization::values::quantizable::{QuantizedDecimalTrait, QuantizedUnsignedIntegerTrait};
 #[cfg(feature = "alloc")]
 use feagi_basis_quantization::generic_collections::generic_par_data::linear::{ParDataVector};
@@ -37,3 +36,6 @@ pub type LinearCorticalNeuronPotentialSliceMut<'a, QI: QuantizedUnsignedIntegerT
 pub type LinearCorticalNeuronPotentialArray<QI: QuantizedUnsignedIntegerTrait, Q: QuantizedDecimalTrait, const N: usize> =
     ParDataArray<CorticalAreaNeuronLocalIndex<QI>, CorticalAreaNeuronPotential<Q>, N>;
 
+
+
+ */

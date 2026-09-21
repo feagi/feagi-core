@@ -17,12 +17,7 @@ create_wrapped_quantized_decimal!(
     pub CorticalAreaNeuronPotential
 );
 
-create_wrapped_quantized_decimal!(
-    /// Represents the Membrane Potential of the neuron(s) in a voxel. Most of the time, each
-    /// voxel contains a single neuron, but in cases where there are more, they are averaged to
-    /// make this
-    pub CorticalAreaVoxelPotential
-);
+
 
 //endregion
 
@@ -33,11 +28,7 @@ create_wrapped_quantized_unsigned_integer!(
     pub CorticalAreaNeuronLocalIndex
 );
 
-create_wrapped_quantized_unsigned_integer!(
-    /// Represents the index of a voxel in a collection using a single uint value that represents
-    /// the overall index incrementing from X, Y and Z
-    pub CorticalAreaVoxelLinearIndex
-);
+
 
 create_wrapped_quantized_unsigned_integer!(
     /// Represents the index of a voxel in a cortical interface channel using a single uint value
@@ -54,10 +45,7 @@ create_wrapped_quantized_unsigned_integer!(
     pub CorticalAreaNeuronCount
 );
 
-create_wrapped_quantized_unsigned_integer!(
-    /// The number of voxels within a dimensional cortical area
-    pub CorticalAreaVoxelCount
-);
+
 
 create_wrapped_quantized_unsigned_integer!(
     /// The number of voxels within a channel of a cortical interface area
@@ -85,11 +73,7 @@ create_wrapped_quantized_unsigned_integer!(
     pub VoxelCount
 );
 
-impl<Q: QuantizedUnsignedIntegerUnwrappedTrait> Into<VoxelCount<Q>> for CorticalAreaVoxelCount<Q> {
-    fn into(self) -> VoxelCount<Q> {
-        VoxelCount::new(self.0)
-    }
-}
+
 
 impl<Q: QuantizedUnsignedIntegerUnwrappedTrait> Into<VoxelCount<Q>> for CorticalChannelVoxelCount<Q> {
     fn into(self) -> VoxelCount<Q> {
@@ -108,10 +92,7 @@ create_wrapped_quantized_unsigned_integer!(
     pub CorticalAreaCoordinateAxisIndex
 );
 
-create_wrapped_quantized_unsigned_integer!(
-    /// Index of a voxel along one of the XYZ directions within a cortical area
-    pub CorticalAreaVoxelCoordinateAxisIndex
-);
+
 
 create_wrapped_quantized_unsigned_integer!(
     /// Index of a voxel along one of the XYZ directions within a channel of a cortical interface area
@@ -136,13 +117,6 @@ create_wrapped_unsigned_integer_spatial_coordinate!(
 );
 
 create_wrapped_unsigned_integer_spatial_coordinate!(
-    /// Represents a 3D coordinate of a voxel within a dimensional cortical area
-    pub CorticalAreaVoxelCoordinate,
-    3,
-    (0, x, CorticalAreaVoxelCoordinateAxisIndex), (1, y, CorticalAreaVoxelCoordinateAxisIndex), (2, z, CorticalAreaVoxelCoordinateAxisIndex)
-);
-
-create_wrapped_unsigned_integer_spatial_coordinate!(
     /// Represents a 3D coordinate of a voxel within a channel of a cortical interface
     pub CorticalChannelVoxelCoordinate,
     3,
@@ -163,15 +137,7 @@ create_wrapped_unsigned_integer_spatial_dimensions!(
     (0, x, CorticalAreaCoordinateAxisIndex), (1, y, CorticalAreaCoordinateAxisIndex), (2, z, CorticalAreaCoordinateAxisIndex), (3, d, NeuronVoxelDensity)
 );
 
-create_wrapped_unsigned_integer_spatial_dimensions!(
-    /// Represents the dimensions of the voxels of a cortical area
-    pub CorticalAreaVoxelDimensions,
-    CorticalAreaVoxelCoordinate,
-    CorticalAreaVoxelLinearIndex,
-    CorticalAreaVoxelCount,
-    3,
-    (0, x, CorticalAreaCoordinateAxisIndex), (1, y, CorticalAreaCoordinateAxisIndex), (2, z, CorticalAreaCoordinateAxisIndex),
-);
+
 
 create_wrapped_unsigned_integer_spatial_dimensions!(
     /// Represents the dimensions of the voxels within a channel of a cortical area

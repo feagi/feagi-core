@@ -29,7 +29,9 @@ rayon = [
 
 # Sibling Crates
 feagi-basis-error-logging = {path = "../feagi-basis-error-logging"}
-feagi-basis-quantization = {path = "../feagi-basis-quantization" } # This should be the ONLY FEAGI sibling crate!
+feagi-basis-quantization = {path = "../feagi-basis-quantization" }
+feagi-basis-collections = {path = "../feagi-basis-collections"}
+
 
 # Root Crates
 # NONE! NOTHING WITHIN BASIS CAN USE OTHER ROOT CRATES!

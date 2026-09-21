@@ -13,8 +13,8 @@ pub trait GenericParData<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug>
     //region Default impls
 
     /// Number of elements in this collection.
-    fn len(&self) -> QI {
-        QI::quant_from_usize_unchecked(self.as_slice().len())
+    fn len(&self) -> usize { 
+        self.as_slice().len()
     }
 
     /// Returns `true` if there are no elements.
