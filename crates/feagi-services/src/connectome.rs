@@ -390,6 +390,8 @@ mod tests {
                 creation_burst: 1,
                 last_activation_burst: 2,
                 activation_count: 3,
+                spatial_signature: None,
+                class_channels: Vec::new(),
             }],
             long_term_memory_replay_frames: vec![(
                 50_000_000,

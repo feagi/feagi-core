@@ -56,6 +56,11 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         brain_regions.insert(region.region_id.to_string(), region);
     }
 
+    let mut classifiers = HashMap::new();
+    for classifier in parsed.classifiers {
+        classifiers.insert(classifier.classifier_id.clone(), classifier);
+    }
+
     // Parse morphologies
     let morphologies = parse_morphologies(&parsed.neuron_morphologies)?;
 
@@ -78,6 +83,7 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         metadata,
         cortical_areas,
         brain_regions,
+        classifiers,
         morphologies,
         physiology,
         signatures,

@@ -2037,6 +2037,28 @@ impl<
         );
     }
 
+    /// Queue a class-map stamp or motif replay onto a twin for a future burst.
+    pub fn schedule_replay_injection(
+        &self,
+        target_burst: u64,
+        twin_area_idx: u32,
+        coords: Vec<(u32, u32, u32)>,
+        membrane_potentials: Option<Vec<f32>>,
+    ) {
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures
+            .pending_replay_injections
+            .push(ReplayInjection {
+                target_burst,
+                twin_area_idx,
+                coords,
+                potentials: match membrane_potentials {
+                    Some(mps) => ReplayPotentialMode::PerCoordinate(mps),
+                    None => ReplayPotentialMode::ForceFire,
+                },
+            });
+    }
+
     /// Remove the replay target owned by one memory/upstream cortical-area pair.
     ///
     /// Returns `true` when a runtime replay route was present.

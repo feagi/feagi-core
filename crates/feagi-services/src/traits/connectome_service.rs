@@ -395,4 +395,25 @@ pub trait ConnectomeService: Send + Sync {
         &self,
         snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
     ) -> ServiceResult<()>;
+
+    /// Persist a first-class classifier assembly on the live connectome and genome.
+    async fn upsert_classifier(
+        &self,
+        classifier: feagi_structures::genomic::classifiers::Classifier,
+    ) -> ServiceResult<()>;
+
+    async fn list_classifiers(&self) -> ServiceResult<Vec<ClassifierInfo>>;
+
+    async fn get_classifier(&self, classifier_id: &str) -> ServiceResult<ClassifierInfo>;
+
+    /// Move scan-twin ownership from one field source to another without deleting the stamp.
+    async fn rekey_memory_twin_source(
+        &self,
+        memory_area_id: &str,
+        old_src_area_id: &str,
+        new_src_area_id: &str,
+    ) -> ServiceResult<()>;
+
+    /// Remove the classifier record and delete its owned internals.
+    async fn delete_classifier(&self, classifier_id: &str) -> ServiceResult<()>;
 }

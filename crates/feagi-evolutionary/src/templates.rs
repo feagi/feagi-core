@@ -252,6 +252,7 @@ pub fn create_minimal_genome(genome_id: String, genome_title: String) -> Runtime
         },
         cortical_areas: HashMap::new(),
         brain_regions: HashMap::new(),
+        classifiers: HashMap::new(),
         morphologies: MorphologyRegistry::new(),
         physiology: PhysiologyConfig::default(),
         signatures: GenomeSignatures {
@@ -408,6 +409,7 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         "bitmask_decoder_y",
         "bitmask_decoder_z",
         "episodic_memory",
+        "episodic_scan",
         "memory_replay",
         "associative_memory",
         "rotator_z",
@@ -536,6 +538,16 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
     // episodic_memory - Function-based morphology
     registry.add_morphology(
         "episodic_memory".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // episodic_scan - Function-based morphology (semantic-only field search)
+    registry.add_morphology(
+        "episodic_scan".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},
@@ -932,6 +944,9 @@ mod tests {
         assert!(registry.contains("all_to_0-0-0"));
         assert!(registry.contains("lateral_+x"));
         assert!(registry.contains("lateral_-z"));
+        assert!(registry.contains("episodic_memory"));
+        assert!(registry.contains("episodic_scan"));
+        assert!(registry.contains("associative_memory"));
     }
 
     #[test]

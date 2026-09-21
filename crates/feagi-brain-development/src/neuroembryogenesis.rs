@@ -907,6 +907,26 @@ impl Neuroembryogenesis {
             }
 
             info!(target: "feagi-bdu","  Total brain regions in ConnectomeManager: {}", manager.get_brain_region_ids().len());
+
+            manager.replace_classifiers(genome.classifiers.clone());
+            for classifier in genome.classifiers.values() {
+                if let Some(region) = manager.get_brain_region_mut(&classifier.parent_region_id) {
+                    for area_id in classifier.owned_area_ids() {
+                        if let Ok(cortical_id) =
+                            feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                &area_id,
+                            )
+                        {
+                            region.add_area(cortical_id);
+                        }
+                    }
+                }
+            }
+            info!(
+                target: "feagi-bdu",
+                "  Loaded {} classifier assemblies from genome",
+                genome.classifiers.len()
+            );
         } // Lock released
 
         self.update_stage(DevelopmentStage::Corticogenesis, 100);

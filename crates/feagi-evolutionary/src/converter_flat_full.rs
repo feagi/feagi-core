@@ -64,6 +64,8 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("mem_ls-i", "init_lifespan"),
     ("tmpdpt-i", "temporal_depth"),
     ("mplrn-b", "mp_learning_enabled"),
+    ("mnwin-i", "min_window_activity"),
+    ("scnsk-f", "scan_skip_density"),
     ("excite-f", "neuron_excitability"),
     ("devcnt-i", "dev_count"),
     ("twinrf-t", "memory_twin_of"),
@@ -204,6 +206,11 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
 
     if let Some(root) = flat_genome.get("brain_regions_root") {
         hierarchical.insert("brain_regions_root".to_string(), root.clone());
+    }
+    if let Some(classifiers) = flat_genome.get("classifiers") {
+        hierarchical.insert("classifiers".to_string(), classifiers.clone());
+    } else {
+        hierarchical.insert("classifiers".to_string(), json!({}));
     }
 
     Ok(Value::Object(hierarchical))

@@ -15,6 +15,7 @@ pub struct HashState {
     brain_geometry_hash: AtomicU64,
     morphologies_hash: AtomicU64,
     cortical_mappings_hash: AtomicU64,
+    classifiers_hash: AtomicU64,
     agent_data_hash: AtomicU64,
 }
 
@@ -74,6 +75,16 @@ impl HashState {
         self.cortical_mappings_hash.store(value, Ordering::Release);
     }
 
+    /// Get classifiers hash.
+    pub fn get_classifiers_hash(&self) -> u64 {
+        self.classifiers_hash.load(Ordering::Acquire)
+    }
+
+    /// Set classifiers hash.
+    pub fn set_classifiers_hash(&self, value: u64) {
+        self.classifiers_hash.store(value, Ordering::Release);
+    }
+
     /// Get agent data hash.
     pub fn get_agent_data_hash(&self) -> u64 {
         self.agent_data_hash.load(Ordering::Acquire)
@@ -82,5 +93,18 @@ impl HashState {
     /// Set agent data hash.
     pub fn set_agent_data_hash(&self, value: u64) {
         self.agent_data_hash.store(value, Ordering::Release);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classifiers_hash_roundtrip() {
+        let state = HashState::new();
+        assert_eq!(state.get_classifiers_hash(), 0);
+        state.set_classifiers_hash(42);
+        assert_eq!(state.get_classifiers_hash(), 42);
     }
 }

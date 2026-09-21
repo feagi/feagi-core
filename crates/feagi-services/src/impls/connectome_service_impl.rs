@@ -118,6 +118,12 @@ fn merge_memory_area_properties(
         .entry("init_lifespan".to_string())
         .or_insert(Value::from(memory_defaults.init_lifespan));
     defaults
+        .entry("min_window_activity".to_string())
+        .or_insert(Value::from(memory_defaults.min_window_activity));
+    defaults
+        .entry("scan_skip_density".to_string())
+        .or_insert(Value::from(memory_defaults.scan_skip_density));
+    defaults
         .entry("psp_uniform_distribution".to_string())
         .or_insert(Value::from(true));
 
@@ -951,6 +957,28 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
         let deleted_id_base64 = cortical_id_typed.as_base_64();
+        let sibling_owned_ids = {
+            let mut manager = self.connectome.write();
+            let owning = manager.classifiers_owning_area(&deleted_id_base64);
+            let mut siblings = Vec::new();
+            for classifier in owning {
+                manager.remove_classifier(&classifier.classifier_id);
+                siblings.extend(
+                    classifier
+                        .owned_area_ids()
+                        .into_iter()
+                        .filter(|id| id != &deleted_id_base64),
+                );
+            }
+            manager.clear_classifier_inputs_for_area(&deleted_id_base64);
+            if let Some(genome) = self.current_genome.write().as_mut() {
+                genome.classifiers = manager.list_classifiers();
+            }
+            siblings
+        };
+        for sibling_id in sibling_owned_ids {
+            Box::pin(self.delete_cortical_area(&sibling_id)).await?;
+        }
         let deleted_cortical_idx = {
             let manager = self.connectome.read();
             manager.get_cortical_idx(&cortical_id_typed)
@@ -2534,8 +2562,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
             })
         };
         let removed_owned_twin_id = if mapping_data.is_empty() {
-            self.connectome
-                .read()
+            let manager = self.connectome.read();
+            let twin_id = manager
                 .get_cortical_area(&dst_id)
                 .and_then(|memory_area| memory_area.properties.get("memory_twin_areas"))
                 .and_then(|value| value.as_object())
@@ -2548,7 +2576,17 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         "Invalid owned memory twin ID for {} -> {}: {}",
                         src_area_id, dst_area_id, error
                     ))
-                })?
+                })?;
+            match twin_id {
+                Some(twin_id)
+                    if manager
+                        .classifiers_owning_area(&twin_id.as_base_64())
+                        .is_empty() =>
+                {
+                    Some(twin_id)
+                }
+                _ => None,
+            }
         } else {
             None
         };
@@ -2686,6 +2724,17 @@ impl ConnectomeService for ConnectomeServiceImpl {
             manager
                 .update_cortical_mapping(&src_id, &dst_id, normalized_mapping_data.clone())
                 .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
+            let mapping_morphology = normalized_mapping_data
+                .first()
+                .and_then(|rule| rule.get("morphology_id"))
+                .and_then(|value| value.as_str())
+                .unwrap_or("");
+            manager.apply_classifier_mapping_change(
+                &src_id.as_base_64(),
+                &dst_id.as_base_64(),
+                mapping_morphology,
+                normalized_mapping_data.is_empty(),
+            );
 
             // Regenerate synapses for this mapping
             let synapse_count = manager
@@ -2714,6 +2763,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         // Persist updated region IO into RuntimeGenome so genome save/export stays consistent.
         if let Some(genome) = self.current_genome.write().as_mut() {
+            genome.classifiers = self.connectome.read().list_classifiers();
             if let Some(twin_id) = removed_owned_twin_id {
                 genome.cortical_areas.remove(&twin_id);
                 for region in genome.brain_regions.values_mut() {
@@ -2809,6 +2859,171 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     // Note: unit tests for mapping persistence behavior are below in this module.
+
+    async fn upsert_classifier(
+        &self,
+        classifier: feagi_structures::genomic::classifiers::Classifier,
+    ) -> ServiceResult<()> {
+        let region_io = {
+            let mut manager = self.connectome.write();
+            if let Some(existing) = manager.get_classifier(&classifier.classifier_id).cloned() {
+                if existing.parent_region_id != classifier.parent_region_id {
+                    if let Some(old_region) =
+                        manager.get_brain_region_mut(&existing.parent_region_id)
+                    {
+                        for area_id in existing.owned_area_ids() {
+                            if let Ok(cortical_id) = CorticalID::try_from_base_64(&area_id) {
+                                old_region.remove_area(&cortical_id);
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(region) = manager.get_brain_region_mut(&classifier.parent_region_id) {
+                for area_id in classifier.owned_area_ids() {
+                    if let Ok(cortical_id) = CorticalID::try_from_base_64(&area_id) {
+                        region.add_area(cortical_id);
+                    }
+                }
+            }
+            manager.upsert_classifier(classifier.clone());
+            manager.recompute_brain_region_io_registry().map_err(|e| {
+                ServiceError::Backend(format!(
+                    "Failed to recompute region IO after classifier upsert: {}",
+                    e
+                ))
+            })?
+        };
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            if let Some(existing) = genome.classifiers.get(&classifier.classifier_id) {
+                if existing.parent_region_id != classifier.parent_region_id {
+                    if let Some(old_region) =
+                        genome.brain_regions.get_mut(&existing.parent_region_id)
+                    {
+                        for area_id in existing.owned_area_ids() {
+                            if let Ok(cortical_id) = CorticalID::try_from_base_64(&area_id) {
+                                old_region.remove_area(&cortical_id);
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(region) = genome.brain_regions.get_mut(&classifier.parent_region_id) {
+                for area_id in classifier.owned_area_ids() {
+                    if let Ok(cortical_id) = CorticalID::try_from_base_64(&area_id) {
+                        region.add_area(cortical_id);
+                    }
+                }
+            }
+            for (region_id, (inputs, outputs)) in region_io {
+                if let Some(region) = genome.brain_regions.get_mut(&region_id) {
+                    if inputs.is_empty() {
+                        region.properties.remove("inputs");
+                    } else {
+                        region
+                            .properties
+                            .insert("inputs".to_string(), serde_json::json!(inputs));
+                    }
+                    if outputs.is_empty() {
+                        region.properties.remove("outputs");
+                    } else {
+                        region
+                            .properties
+                            .insert("outputs".to_string(), serde_json::json!(outputs));
+                    }
+                }
+            }
+            genome
+                .classifiers
+                .insert(classifier.classifier_id.clone(), classifier);
+        }
+        Ok(())
+    }
+
+    async fn list_classifiers(&self) -> ServiceResult<Vec<ClassifierInfo>> {
+        Ok(self
+            .connectome
+            .read()
+            .list_classifiers()
+            .into_values()
+            .map(ClassifierInfo::from)
+            .collect())
+    }
+
+    async fn rekey_memory_twin_source(
+        &self,
+        memory_area_id: &str,
+        old_src_area_id: &str,
+        new_src_area_id: &str,
+    ) -> ServiceResult<()> {
+        {
+            let mut manager = self.connectome.write();
+            manager
+                .rekey_memory_twin_source(memory_area_id, old_src_area_id, new_src_area_id)
+                .map_err(|e| {
+                    ServiceError::Backend(format!("Failed to rekey memory twin source: {}", e))
+                })?;
+        }
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            if let Ok(memory_id) = CorticalID::try_from_base_64(memory_area_id) {
+                let mut moved_twin_id: Option<String> = None;
+                if let Some(area) = genome.cortical_areas.get_mut(&memory_id) {
+                    if let Some(twins) = area
+                        .properties
+                        .get_mut("memory_twin_areas")
+                        .and_then(|value| value.as_object_mut())
+                    {
+                        if let Some(twin_id) = twins.remove(old_src_area_id) {
+                            moved_twin_id = twin_id.as_str().map(|value| value.to_string());
+                            twins.insert(new_src_area_id.to_string(), twin_id);
+                        }
+                    }
+                }
+                if let Some(twin_b64) = moved_twin_id {
+                    if let Ok(twin_id) = CorticalID::try_from_base_64(&twin_b64) {
+                        if let Some(twin) = genome.cortical_areas.get_mut(&twin_id) {
+                            twin.properties.insert(
+                                "memory_twin_of".to_string(),
+                                serde_json::json!(new_src_area_id),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn get_classifier(&self, classifier_id: &str) -> ServiceResult<ClassifierInfo> {
+        self.connectome
+            .read()
+            .get_classifier(classifier_id)
+            .cloned()
+            .map(ClassifierInfo::from)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "classifier".to_string(),
+                id: classifier_id.to_string(),
+            })
+    }
+
+    async fn delete_classifier(&self, classifier_id: &str) -> ServiceResult<()> {
+        let classifier = {
+            let mut manager = self.connectome.write();
+            manager
+                .remove_classifier(classifier_id)
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "classifier".to_string(),
+                    id: classifier_id.to_string(),
+                })?
+        };
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            genome.classifiers.remove(classifier_id);
+        }
+        for area_id in classifier.owned_area_ids() {
+            self.delete_cortical_area(&area_id).await?;
+        }
+        Ok(())
+    }
 
     // ========================================================================
     // CONNECTOME I/O OPERATIONS
@@ -3033,6 +3248,8 @@ fn attach_long_term_memory_to_snapshot(
             creation_burst: detail.creation_burst,
             last_activation_burst: detail.last_activation_burst,
             activation_count: detail.activation_count,
+            spatial_signature: detail.spatial_signature,
+            class_channels: detail.class_channels,
         })
         .collect();
     snapshot.retain_regular_and_long_term_memory_synapses(&ltm_ids);
@@ -3806,6 +4023,8 @@ fn restore_long_term_memory_from_snapshot(
             creation_burst: n.creation_burst,
             last_activation_burst: n.last_activation_burst,
             activation_count: n.activation_count,
+            spatial_signature: n.spatial_signature,
+            class_channels: n.class_channels.clone(),
         })
         .collect();
     let exec = executor
@@ -4128,6 +4347,7 @@ mod tests {
             },
             cortical_areas,
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -4187,6 +4407,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -4335,6 +4556,7 @@ mod tests {
             },
             cortical_areas: HashMap::from([(src_id, src_area.clone()), (dst_id, dst_area.clone())]),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies,
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -4445,6 +4667,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies,
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -4563,6 +4786,7 @@ mod tests {
             },
             cortical_areas: HashMap::from([(src_id, src_area), (dst_id, dst_area)]),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -4664,6 +4888,7 @@ mod tests {
             },
             cortical_areas: HashMap::from([(cortical_id, area.clone())]),
             brain_regions: HashMap::from([(region_key.clone(), region.clone())]),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -4797,6 +5022,7 @@ mod tests {
                 (child_key.clone(), child.clone()),
                 (grandchild_key.clone(), grandchild.clone()),
             ]),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -5171,6 +5397,7 @@ mod tests {
                 (memory_id, memory.clone()),
             ]),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -5506,6 +5733,7 @@ mod tests {
             },
             cortical_areas,
             brain_regions,
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -5606,6 +5834,7 @@ mod tests {
             },
             cortical_areas,
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -5751,6 +5980,7 @@ mod tests {
             },
             cortical_areas,
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -5949,6 +6179,7 @@ mod tests {
             },
             cortical_areas,
             brain_regions: HashMap::from([(region_id.clone(), region)]),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -6017,6 +6248,8 @@ mod tests {
                     creation_burst: 1,
                     last_activation_burst: 2,
                     activation_count: 3,
+                    spatial_signature: None,
+                    class_channels: Vec::new(),
                 }])
                 .map_err(crate::types::ServiceError::Backend)?;
             }
@@ -6274,6 +6507,7 @@ mod tests {
             },
             cortical_areas,
             brain_regions: HashMap::from([(region_id.clone(), region)]),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -6359,6 +6593,8 @@ mod tests {
                         creation_burst: 3,
                         last_activation_burst: 4,
                         activation_count: 5,
+                        spatial_signature: None,
+                        class_channels: Vec::new(),
                     },
                     MemoryNeuronDetail {
                         neuron_id: second_ltm_id,
@@ -6372,6 +6608,8 @@ mod tests {
                         creation_burst: 5,
                         last_activation_burst: 6,
                         activation_count: 4,
+                        spatial_signature: None,
+                        class_channels: Vec::new(),
                     },
                 ])
                 .map_err(crate::types::ServiceError::Backend)?;
@@ -6855,6 +7093,8 @@ mod tests {
                     creation_burst: 1,
                     last_activation_burst: 2,
                     activation_count: 3,
+                    spatial_signature: None,
+                    class_channels: Vec::new(),
                 },
             ],
             long_term_memory_replay_frames: Vec::new(),
@@ -7016,6 +7256,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::from([(incoming_id.clone(), incoming)]),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
@@ -7134,6 +7375,8 @@ mod tests {
                 creation_burst: 0,
                 last_activation_burst: 0,
                 activation_count: 1,
+                spatial_signature: None,
+                class_channels: Vec::new(),
             }],
             long_term_memory_replay_frames: if replay_frames.is_empty() {
                 Vec::new()
@@ -7293,6 +7536,8 @@ mod tests {
                 creation_burst: 0,
                 last_activation_burst: 0,
                 activation_count: 1,
+                spatial_signature: None,
+                class_channels: Vec::new(),
             }],
             long_term_memory_replay_frames: Vec::new(),
             lite_synapses: Vec::new(),
@@ -7372,6 +7617,8 @@ mod tests {
                 creation_burst: 0,
                 last_activation_burst: 0,
                 activation_count: 1,
+                spatial_signature: None,
+                class_channels: Vec::new(),
             }],
             long_term_memory_replay_frames: Vec::new(),
             lite_synapses: Vec::new(),

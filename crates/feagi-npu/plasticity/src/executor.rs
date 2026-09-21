@@ -58,6 +58,9 @@ pub trait PlasticityExecutor: Send + Sync {
         mp_learning_enabled: bool,
     );
 
+    /// Attach scan configuration to a registered kernel memory area.
+    fn configure_memory_scan(&self, area_idx: u32, scan: Option<crate::MemoryScanConfig>);
+
     /// Start the executor (for async implementations)
     ///
     /// Default implementation is no-op (for sync implementations).
@@ -320,6 +323,12 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
         }
     }
 
+    fn configure_memory_scan(&self, area_idx: u32, scan: Option<crate::MemoryScanConfig>) {
+        if let Some(service) = self.service.lock().unwrap().as_mut() {
+            service.configure_memory_scan(area_idx, scan);
+        }
+    }
+
     fn start(&mut self) {
         if self.running {
             tracing::warn!(target: "plasticity", "⚠️  PlasticityExecutor already running");
@@ -400,6 +409,10 @@ impl PlasticityExecutor for SyncPlasticityExecutor {
         _lifecycle_config: Option<crate::MemoryNeuronLifecycleConfig>,
         _mp_learning_enabled: bool,
     ) {
+        unimplemented!("SyncPlasticityExecutor not yet implemented");
+    }
+
+    fn configure_memory_scan(&self, _area_idx: u32, _scan: Option<crate::MemoryScanConfig>) {
         unimplemented!("SyncPlasticityExecutor not yet implemented");
     }
 }

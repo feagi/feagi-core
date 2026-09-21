@@ -189,6 +189,14 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         Value::Object(brain_regions_map),
     );
 
+    let mut classifiers_map = serde_json::Map::new();
+    for (classifier_id, classifier) in &genome.classifiers {
+        let classifier_json = serde_json::to_value(classifier)
+            .map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
+        classifiers_map.insert(classifier_id.clone(), classifier_json);
+    }
+    flat_genome.insert("classifiers".to_string(), Value::Object(classifiers_map));
+
     Ok(Value::Object(flat_genome))
 }
 
@@ -301,6 +309,8 @@ fn convert_properties_to_flat(
         ("init_lifespan", ("mem_ls-i", "cx")),
         ("temporal_depth", ("tmpdpt-i", "cx")),
         ("mp_learning_enabled", ("mplrn-b", "cx")),
+        ("min_window_activity", ("mnwin-i", "cx")),
+        ("scan_skip_density", ("scnsk-f", "cx")),
         ("neuron_excitability", ("excite-f", "nx")),
         ("dev_count", ("devcnt-i", "cx")),
         ("memory_twin_of", ("twinrf-t", "cx")),
@@ -520,6 +530,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
@@ -538,6 +549,54 @@ mod tests {
         assert!(flat["blueprint"].is_object());
         assert!(flat["neuron_morphologies"].is_object());
         assert!(flat["physiology"].is_object());
+        assert!(flat["classifiers"].is_object());
+        assert_eq!(flat["classifiers"].as_object().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_convert_preserves_classifiers() {
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "A test genome".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+        };
+        genome.classifiers.insert(
+            "clf-1".to_string(),
+            feagi_structures::genomic::classifiers::Classifier {
+                classifier_id: "clf-1".to_string(),
+                name: "object_class".to_string(),
+                parent_region_id: "root".to_string(),
+                coordinates_3d: [1, 2, 3],
+                kernel_area_id: Some("ckern1".to_string()),
+                class_area_id: Some("ccls01".to_string()),
+                field_area_id: Some("cfield".to_string()),
+                kernel_memory_id: "mkmem1".to_string(),
+                class_memory_id: "mcmem1".to_string(),
+                scan_twin_id: "cscan1".to_string(),
+                properties: HashMap::new(),
+            },
+        );
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        assert_eq!(flat["classifiers"]["clf-1"]["name"], "object_class");
+        assert_eq!(flat["classifiers"]["clf-1"]["scan_twin_id"], "cscan1");
+        assert_eq!(flat["classifiers"]["clf-1"]["parent_region_id"], "root");
     }
 
     #[test]
@@ -559,6 +618,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
@@ -640,6 +700,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
@@ -693,6 +754,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
@@ -743,6 +805,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {

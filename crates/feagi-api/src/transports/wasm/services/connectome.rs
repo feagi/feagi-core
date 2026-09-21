@@ -481,6 +481,54 @@ impl ConnectomeService for WasmConnectomeService {
         ))
     }
 
+    async fn upsert_classifier(
+        &self,
+        _classifier: feagi_structures::genomic::classifiers::Classifier,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn list_classifiers(&self) -> ServiceResult<Vec<ClassifierInfo>> {
+        Ok(self
+            .genome
+            .classifiers
+            .values()
+            .cloned()
+            .map(ClassifierInfo::from)
+            .collect())
+    }
+
+    async fn rekey_memory_twin_source(
+        &self,
+        _memory_area_id: &str,
+        _old_src_area_id: &str,
+        _new_src_area_id: &str,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn get_classifier(&self, classifier_id: &str) -> ServiceResult<ClassifierInfo> {
+        self.genome
+            .classifiers
+            .get(classifier_id)
+            .cloned()
+            .map(ClassifierInfo::from)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "classifier".to_string(),
+                id: classifier_id.to_string(),
+            })
+    }
+
+    async fn delete_classifier(&self, _classifier_id: &str) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
     #[cfg(feature = "connectome-io")]
     async fn export_connectome(
         &self,

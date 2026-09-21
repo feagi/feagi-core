@@ -341,6 +341,7 @@ fn test_save_load_roundtrip_memory_plastic_and_regions() {
         },
         cortical_areas,
         brain_regions,
+        classifiers: std::collections::HashMap::new(),
         morphologies,
         physiology: feagi_evolutionary::PhysiologyConfig::default(),
         signatures: feagi_evolutionary::GenomeSignatures {

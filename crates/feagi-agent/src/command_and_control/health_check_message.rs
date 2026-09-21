@@ -58,6 +58,9 @@ pub struct HealthCheckResponse {
     /// Hash of cortical mappings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_mappings_hash: Option<u64>,
+    /// Hash of first-class genome classifiers (parallel to brain_regions)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub classifiers_hash: Option<u64>,
     /// Hash of agent data (ids, capabilities, connection properties)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_data_hash: Option<u64>,

@@ -201,6 +201,7 @@ mod tests {
             },
             cortical_areas,
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {

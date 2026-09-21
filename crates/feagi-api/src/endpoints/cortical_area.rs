@@ -8,6 +8,7 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
@@ -142,6 +143,8 @@ pub struct MemoryCorticalAreaParamsResponse {
     pub lifespan_growth_rate: f32,
     pub init_lifespan: u32,
     pub mp_learning_enabled: bool,
+    pub min_window_activity: u32,
+    pub scan_skip_density: f32,
 }
 
 /// Response for [`get_memory_cortical_area`].
@@ -647,6 +650,9 @@ pub async fn get_cortical_area_geometry(
                         "parent_region_id": area.parent_region_id,
                         // Visualization voxel granularity for large-area rendering (optional)
                         "visualization_voxel_granularity": area.visualization_voxel_granularity.map(|(x, y, z)| serde_json::json!([x, y, z])),
+                        "scan_twin": geometry_scan_twin_flag(&area.properties),
+                        "classifier_role": geometry_classifier_role(&area.properties),
+                        "temporal_depth": area.temporal_depth,
                     });
                     (area.cortical_id.clone(), data)
                 })
@@ -1536,6 +1542,708 @@ pub async fn post_custom_cortical_area(
     Ok(Json(response))
 }
 
+fn classifier_memory_params(
+    cortical_id: String,
+    name: String,
+    position: (i32, i32, i32),
+    parent_region_id: &str,
+    extra_properties: HashMap<String, serde_json::Value>,
+) -> feagi_services::types::CreateCorticalAreaParams {
+    let mut properties = extra_properties;
+    properties.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(parent_region_id.to_string()),
+    );
+    properties.insert("classifier_assembly".to_string(), serde_json::json!(true));
+    feagi_services::types::CreateCorticalAreaParams {
+        cortical_id,
+        name,
+        dimensions: (1, 1, 1),
+        position,
+        area_type: "Memory".to_string(),
+        visible: Some(false),
+        sub_group: Some("MEMORY".to_string()),
+        neurons_per_voxel: Some(1),
+        postsynaptic_current: None,
+        plasticity_constant: Some(0.0),
+        degeneration: Some(0.0),
+        psp_uniform_distribution: Some(false),
+        firing_threshold_increment: Some(0.0),
+        firing_threshold_limit: Some(0.0),
+        consecutive_fire_count: Some(0),
+        snooze_period: Some(0),
+        refractory_period: Some(0),
+        leak_coefficient: Some(0.0),
+        leak_variability: Some(0.0),
+        burst_engine_active: Some(true),
+        properties: Some(properties),
+    }
+}
+
+/// Place the class-map twin above the classifier. Y clearance is the twin's own
+/// height so the volume does not overlap the stamp at the classifier origin.
+fn classifier_twin_position(
+    classifier_position: (i32, i32, i32),
+    twin_dimensions: (usize, usize, usize),
+) -> (i32, i32, i32) {
+    let clearance = twin_dimensions.1.max(1) as i32;
+    (
+        classifier_position.0,
+        classifier_position.1 + clearance,
+        classifier_position.2,
+    )
+}
+
+fn classifier_scan_twin_dimensions(
+    field_dimensions: (usize, usize, usize),
+    class_dimensions: (usize, usize, usize),
+) -> (usize, usize, usize) {
+    let class_channel_count = class_dimensions
+        .0
+        .saturating_mul(class_dimensions.1)
+        .saturating_mul(class_dimensions.2)
+        .max(1);
+    (
+        field_dimensions.0.max(1),
+        field_dimensions.1.max(1),
+        class_channel_count,
+    )
+}
+
+fn classifier_scan_twin_params(
+    cortical_id: String,
+    name: String,
+    dimensions: (usize, usize, usize),
+    position: (i32, i32, i32),
+    parent_region_id: &str,
+    field_area_id: &str,
+    kernel_memory_id: &str,
+) -> feagi_services::types::CreateCorticalAreaParams {
+    let mut properties = HashMap::new();
+    properties.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(parent_region_id.to_string()),
+    );
+    properties.insert("classifier_assembly".to_string(), serde_json::json!(true));
+    properties.insert(
+        "classifier_role".to_string(),
+        serde_json::json!("scan_twin"),
+    );
+    properties.insert("scan_twin".to_string(), serde_json::json!(true));
+    properties.insert("is_mem_type".to_string(), serde_json::json!(false));
+    properties.insert(
+        "memory_twin_of".to_string(),
+        serde_json::json!(field_area_id),
+    );
+    properties.insert(
+        "memory_twin_for".to_string(),
+        serde_json::json!(kernel_memory_id),
+    );
+    feagi_services::types::CreateCorticalAreaParams {
+        cortical_id,
+        name,
+        dimensions,
+        position,
+        area_type: "Custom".to_string(),
+        visible: Some(true),
+        sub_group: None,
+        neurons_per_voxel: Some(1),
+        postsynaptic_current: None,
+        plasticity_constant: Some(0.0),
+        degeneration: Some(0.0),
+        psp_uniform_distribution: Some(false),
+        firing_threshold_increment: Some(0.0),
+        firing_threshold_limit: Some(0.0),
+        consecutive_fire_count: Some(0),
+        snooze_period: Some(0),
+        refractory_period: Some(0),
+        leak_coefficient: Some(0.0),
+        leak_variability: Some(0.0),
+        burst_engine_active: Some(true),
+        properties: Some(properties),
+    }
+}
+
+fn geometry_scan_twin_flag(properties: &HashMap<String, serde_json::Value>) -> bool {
+    properties.get("scan_twin").and_then(|v| v.as_bool()) == Some(true)
+}
+
+fn geometry_classifier_role(properties: &HashMap<String, serde_json::Value>) -> serde_json::Value {
+    match properties.get("classifier_role").and_then(|v| v.as_str()) {
+        Some(role) if !role.is_empty() => serde_json::Value::String(role.to_string()),
+        _ => serde_json::Value::Null,
+    }
+}
+
+fn classifier_mapping_rule(morphology_id: &str, associative_window: u32) -> serde_json::Value {
+    let is_associative = morphology_id == "associative_memory";
+    serde_json::json!({
+        "morphology_id": morphology_id,
+        "morphology_scalar": [1, 1, 1],
+        "postSynapticCurrent_multiplier": 1,
+        "plasticity_flag": is_associative,
+        "plasticity_constant": 0,
+        "ltp_multiplier": 0,
+        "ltd_multiplier": 0,
+        "plasticity_window": if is_associative { associative_window } else { 0 },
+    })
+}
+
+/// Assemble a classifier inside an existing brain region (not a region or exportable circuit).
+#[utoipa::path(post, path = "/v1/cortical_area/classifier", tag = "cortical_area")]
+pub async fn post_classifier(
+    State(state): State<ApiState>,
+    Json(request): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    use base64::{engine::general_purpose, Engine as _};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let name = request
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("name required"))?;
+    let brain_region_id = request
+        .get("brain_region_id")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| ApiError::invalid_input("brain_region_id required"))?;
+    let kernel_area_id = request
+        .get("kernel_area_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("kernel_area_id required"))?;
+    let class_area_id = request
+        .get("class_area_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("class_area_id required"))?;
+    let field_area_id = request
+        .get("field_area_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("field_area_id required"))?;
+    let coordinates_3d: Vec<i32> = request
+        .get("coordinates_3d")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            if arr.len() == 3 {
+                Some(vec![
+                    arr[0].as_i64()? as i32,
+                    arr[1].as_i64()? as i32,
+                    arr[2].as_i64()? as i32,
+                ])
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| ApiError::invalid_input("coordinates_3d must be [x, y, z]"))?;
+
+    let connectome_service = state.connectome_service.as_ref();
+    let field_area = connectome_service
+        .get_cortical_area(field_area_id)
+        .await
+        .map_err(|e| ApiError::invalid_input(format!("field_area_id not found: {}", e)))?;
+    if field_area.area_type.eq_ignore_ascii_case("Memory") {
+        return Err(ApiError::invalid_input(
+            "field_area_id must not be a memory area",
+        ));
+    }
+    let class_area = connectome_service
+        .get_cortical_area(class_area_id)
+        .await
+        .map_err(|e| ApiError::invalid_input(format!("class_area_id not found: {}", e)))?;
+    let stamp_dimensions =
+        classifier_scan_twin_dimensions(field_area.dimensions, class_area.dimensions);
+    if class_area.dimensions.0 == 0 || class_area.dimensions.1 == 0 || class_area.dimensions.2 == 0
+    {
+        return Err(ApiError::invalid_input(
+            "class_area_id has zero volume; scan twin cannot be sized",
+        ));
+    }
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let make_area_id = |prefix: u8, suffix: u8| -> String {
+        let mut bytes = [0u8; 8];
+        bytes[0] = prefix;
+        let name_bytes = name.as_bytes();
+        for i in 1..7 {
+            bytes[i] = if i - 1 < name_bytes.len() {
+                let c = name_bytes[i - 1];
+                if c.is_ascii_alphanumeric() || c == b'_' {
+                    c
+                } else {
+                    b'_'
+                }
+            } else {
+                b'_'
+            };
+        }
+        bytes[7] = ((timestamp.wrapping_add(suffix as u64)) & 0xFF) as u8;
+        general_purpose::STANDARD.encode(bytes)
+    };
+    let kernel_mem_id = make_area_id(b'm', 1);
+    let class_mem_id = make_area_id(b'm', 2);
+    let scan_twin_id = make_area_id(b'c', 3);
+
+    let mut kernel_mem_props = HashMap::new();
+    kernel_mem_props.insert(
+        "classifier_role".to_string(),
+        serde_json::json!("kernel_memory"),
+    );
+    kernel_mem_props.insert(
+        "classifier_kernel_area_id".to_string(),
+        serde_json::json!(kernel_area_id),
+    );
+    kernel_mem_props.insert(
+        "classifier_class_area_id".to_string(),
+        serde_json::json!(class_area_id),
+    );
+    kernel_mem_props.insert(
+        "classifier_class_memory_id".to_string(),
+        serde_json::json!(class_mem_id),
+    );
+    kernel_mem_props.insert(
+        "memory_twin_areas".to_string(),
+        serde_json::json!({ field_area_id: scan_twin_id }),
+    );
+
+    let mut class_mem_props = HashMap::new();
+    class_mem_props.insert(
+        "classifier_role".to_string(),
+        serde_json::json!("class_memory"),
+    );
+    class_mem_props.insert(
+        "classifier_kernel_memory_id".to_string(),
+        serde_json::json!(kernel_mem_id),
+    );
+    class_mem_props.insert(
+        "classifier_class_area_id".to_string(),
+        serde_json::json!(class_area_id),
+    );
+
+    let mut kernel_mem_params = classifier_memory_params(
+        kernel_mem_id.clone(),
+        format!("{}_kernel_mem", name),
+        (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]),
+        brain_region_id,
+        kernel_mem_props,
+    );
+    kernel_mem_params.visible = Some(true);
+    let class_mem_params = classifier_memory_params(
+        class_mem_id.clone(),
+        format!("{}_class_mem", name),
+        (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]),
+        brain_region_id,
+        class_mem_props,
+    );
+    let scan_twin_params = classifier_scan_twin_params(
+        scan_twin_id.clone(),
+        format!("{}_twin", name),
+        stamp_dimensions,
+        classifier_twin_position(
+            (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]),
+            stamp_dimensions,
+        ),
+        brain_region_id,
+        field_area_id,
+        &kernel_mem_id,
+    );
+
+    let genome_service = state.genome_service.as_ref();
+    let created_areas = genome_service
+        .create_cortical_areas(vec![kernel_mem_params, class_mem_params, scan_twin_params])
+        .await
+        .map_err(|e| {
+            ApiError::internal(format!("Failed to create classifier assembly areas: {}", e))
+        })?;
+    let associative_window = created_areas
+        .iter()
+        .find(|area| area.cortical_id == kernel_mem_id)
+        .and_then(|area| area.temporal_depth)
+        .ok_or_else(|| {
+            ApiError::internal(
+                "Classifier kernel memory is missing temporal_depth; associative mapping cannot be created".to_string(),
+            )
+        })?;
+
+    let mappings = [
+        (kernel_area_id, kernel_mem_id.as_str(), "episodic_memory"),
+        (class_area_id, class_mem_id.as_str(), "episodic_memory"),
+        (
+            kernel_mem_id.as_str(),
+            class_mem_id.as_str(),
+            "associative_memory",
+        ),
+        (field_area_id, kernel_mem_id.as_str(), "episodic_scan"),
+    ];
+    for (src, dst, morphology) in mappings {
+        connectome_service
+            .update_cortical_mapping(
+                src.to_string(),
+                dst.to_string(),
+                vec![classifier_mapping_rule(morphology, associative_window)],
+            )
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to map {} -> {} ({}) : {}",
+                    src, dst, morphology, e
+                ))
+            })?;
+    }
+
+    let mut response = HashMap::new();
+    response.insert(
+        "message".to_string(),
+        "Classifier assembly created".to_string(),
+    );
+    let classifier_id = feagi_structures::genomic::brain_regions::RegionID::new().to_string();
+    let classifier = feagi_structures::genomic::classifiers::Classifier {
+        classifier_id: classifier_id.clone(),
+        name: name.to_string(),
+        parent_region_id: brain_region_id.to_string(),
+        coordinates_3d: [coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]],
+        kernel_area_id: Some(kernel_area_id.to_string()),
+        class_area_id: Some(class_area_id.to_string()),
+        field_area_id: Some(field_area_id.to_string()),
+        kernel_memory_id: kernel_mem_id.clone(),
+        class_memory_id: class_mem_id.clone(),
+        scan_twin_id: scan_twin_id.clone(),
+        properties: HashMap::new(),
+    };
+    connectome_service
+        .upsert_classifier(classifier)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to register classifier: {}", e)))?;
+
+    response.insert("classifier_id".to_string(), classifier_id);
+    response.insert("kernel_memory_id".to_string(), kernel_mem_id);
+    response.insert("class_memory_id".to_string(), class_mem_id);
+    response.insert("scan_twin_id".to_string(), scan_twin_id);
+    response.insert("name".to_string(), name.to_string());
+    Ok(Json(response))
+}
+
+#[utoipa::path(get, path = "/v1/cortical_area/classifiers", tag = "cortical_area")]
+pub async fn list_classifiers(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<Vec<feagi_services::types::ClassifierInfo>>> {
+    let classifiers = state
+        .connectome_service
+        .list_classifiers()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list classifiers: {}", e)))?;
+    Ok(Json(classifiers))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/classifier/{classifier_id}",
+    tag = "cortical_area"
+)]
+pub async fn get_classifier(
+    State(state): State<ApiState>,
+    Path(classifier_id): Path<String>,
+) -> ApiResult<Json<feagi_services::types::ClassifierInfo>> {
+    state
+        .connectome_service
+        .get_classifier(&classifier_id)
+        .await
+        .map(Json)
+        .map_err(|e| match e {
+            feagi_services::types::errors::ServiceError::NotFound { resource, id } => {
+                ApiError::not_found(&resource, &id)
+            }
+            other => ApiError::internal(format!("Failed to get classifier: {}", other)),
+        })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct UpdateClassifierRequest {
+    pub name: Option<String>,
+    pub coordinates_3d: Option<[i32; 3]>,
+    pub parent_region_id: Option<String>,
+    pub kernel_area_id: Option<String>,
+    pub class_area_id: Option<String>,
+    pub field_area_id: Option<String>,
+}
+
+fn classifier_from_info(
+    existing: feagi_services::types::ClassifierInfo,
+) -> feagi_structures::genomic::classifiers::Classifier {
+    feagi_structures::genomic::classifiers::Classifier {
+        classifier_id: existing.classifier_id,
+        name: existing.name,
+        parent_region_id: existing.parent_region_id,
+        coordinates_3d: existing.coordinates_3d,
+        kernel_area_id: existing.kernel_area_id,
+        class_area_id: existing.class_area_id,
+        field_area_id: existing.field_area_id,
+        kernel_memory_id: existing.kernel_memory_id,
+        class_memory_id: existing.class_memory_id,
+        scan_twin_id: existing.scan_twin_id,
+        properties: existing.properties,
+    }
+}
+
+async fn remap_classifier_input(
+    connectome_service: &Arc<dyn feagi_services::ConnectomeService + Send + Sync>,
+    old_src: Option<&str>,
+    new_src: Option<&str>,
+    dst: &str,
+    morphology: &str,
+    associative_window: u32,
+    kernel_memory_id: &str,
+) -> ApiResult<()> {
+    if old_src == new_src {
+        return Ok(());
+    }
+    if morphology == feagi_structures::genomic::classifiers::CLASSIFIER_SCAN_MORPHOLOGY {
+        if let (Some(old_field), Some(new_field)) = (old_src, new_src) {
+            connectome_service
+                .rekey_memory_twin_source(kernel_memory_id, old_field, new_field)
+                .await
+                .map_err(|e| {
+                    ApiError::internal(format!("Failed to rekey classifier scan twin: {}", e))
+                })?;
+        }
+    }
+    if let Some(old_src) = old_src {
+        connectome_service
+            .update_cortical_mapping(old_src.to_string(), dst.to_string(), Vec::new())
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to clear classifier mapping {} -> {}: {}",
+                    old_src, dst, e
+                ))
+            })?;
+    }
+    if let Some(new_src) = new_src {
+        connectome_service
+            .update_cortical_mapping(
+                new_src.to_string(),
+                dst.to_string(),
+                vec![classifier_mapping_rule(morphology, associative_window)],
+            )
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to set classifier mapping {} -> {}: {}",
+                    new_src, dst, e
+                ))
+            })?;
+    }
+    Ok(())
+}
+
+#[utoipa::path(
+    put,
+    path = "/v1/cortical_area/classifier/{classifier_id}",
+    tag = "cortical_area"
+)]
+pub async fn update_classifier(
+    State(state): State<ApiState>,
+    Path(classifier_id): Path<String>,
+    Json(request): Json<UpdateClassifierRequest>,
+) -> ApiResult<Json<feagi_services::types::ClassifierInfo>> {
+    let existing = state
+        .connectome_service
+        .get_classifier(&classifier_id)
+        .await
+        .map_err(|e| match e {
+            feagi_services::types::errors::ServiceError::NotFound { resource, id } => {
+                ApiError::not_found(&resource, &id)
+            }
+            other => ApiError::internal(format!("Failed to get classifier: {}", other)),
+        })?;
+    let previous = existing.clone();
+    let mut classifier = classifier_from_info(existing);
+    classifier
+        .apply_assembly_update(
+            request.name,
+            request.coordinates_3d,
+            request.parent_region_id,
+            request.kernel_area_id,
+            request.class_area_id,
+            request.field_area_id,
+        )
+        .map_err(ApiError::invalid_input)?;
+
+    let kernel_area_id = classifier
+        .kernel_area_id
+        .as_deref()
+        .ok_or_else(|| ApiError::invalid_input("kernel_area_id required"))?;
+    let class_area_id = classifier
+        .class_area_id
+        .as_deref()
+        .ok_or_else(|| ApiError::invalid_input("class_area_id required"))?;
+    let field_area_id = classifier
+        .field_area_id
+        .as_deref()
+        .ok_or_else(|| ApiError::invalid_input("field_area_id required"))?;
+    let field_area = state
+        .connectome_service
+        .get_cortical_area(field_area_id)
+        .await
+        .map_err(|e| ApiError::invalid_input(format!("field_area_id not found: {}", e)))?;
+    if field_area.area_type.eq_ignore_ascii_case("Memory") {
+        return Err(ApiError::invalid_input(
+            "field_area_id must not be a memory area",
+        ));
+    }
+    let class_area = state
+        .connectome_service
+        .get_cortical_area(class_area_id)
+        .await
+        .map_err(|e| ApiError::invalid_input(format!("class_area_id not found: {}", e)))?;
+    state
+        .connectome_service
+        .get_cortical_area(kernel_area_id)
+        .await
+        .map_err(|e| ApiError::invalid_input(format!("kernel_area_id not found: {}", e)))?;
+    let kernel_mem = state
+        .connectome_service
+        .get_cortical_area(&classifier.kernel_memory_id)
+        .await
+        .map_err(|e| ApiError::internal(format!("Classifier kernel memory is missing: {}", e)))?;
+    let associative_window = kernel_mem.temporal_depth.ok_or_else(|| {
+        ApiError::internal(
+            "Classifier kernel memory is missing temporal_depth; mappings cannot be updated"
+                .to_string(),
+        )
+    })?;
+
+    remap_classifier_input(
+        &state.connectome_service,
+        previous.kernel_area_id.as_deref(),
+        classifier.kernel_area_id.as_deref(),
+        &classifier.kernel_memory_id,
+        feagi_structures::genomic::classifiers::CLASSIFIER_KERNEL_MORPHOLOGY,
+        associative_window,
+        &classifier.kernel_memory_id,
+    )
+    .await?;
+    remap_classifier_input(
+        &state.connectome_service,
+        previous.class_area_id.as_deref(),
+        classifier.class_area_id.as_deref(),
+        &classifier.class_memory_id,
+        feagi_structures::genomic::classifiers::CLASSIFIER_CLASS_MORPHOLOGY,
+        associative_window,
+        &classifier.kernel_memory_id,
+    )
+    .await?;
+    remap_classifier_input(
+        &state.connectome_service,
+        previous.field_area_id.as_deref(),
+        classifier.field_area_id.as_deref(),
+        &classifier.kernel_memory_id,
+        feagi_structures::genomic::classifiers::CLASSIFIER_SCAN_MORPHOLOGY,
+        associative_window,
+        &classifier.kernel_memory_id,
+    )
+    .await?;
+
+    state
+        .connectome_service
+        .upsert_classifier(classifier.clone())
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to update classifier: {}", e)))?;
+
+    let twin_dimensions =
+        classifier_scan_twin_dimensions(field_area.dimensions, class_area.dimensions);
+    let mut twin_changes = HashMap::new();
+    twin_changes.insert(
+        "cortical_name".to_string(),
+        serde_json::json!(format!("{}_twin", classifier.name)),
+    );
+    twin_changes.insert(
+        "coordinates_3d".to_string(),
+        serde_json::json!(classifier_twin_position(
+            (
+                classifier.coordinates_3d[0],
+                classifier.coordinates_3d[1],
+                classifier.coordinates_3d[2],
+            ),
+            twin_dimensions,
+        )),
+    );
+    twin_changes.insert(
+        "cortical_dimensions".to_string(),
+        serde_json::json!([twin_dimensions.0, twin_dimensions.1, twin_dimensions.2]),
+    );
+    twin_changes.insert(
+        "parent_region_id".to_string(),
+        serde_json::json!(classifier.parent_region_id),
+    );
+    twin_changes.insert(
+        "neuron_burst_engine_active".to_string(),
+        serde_json::json!(true),
+    );
+    state
+        .genome_service
+        .update_cortical_area(&classifier.scan_twin_id, twin_changes)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to update classifier twin: {}", e)))?;
+
+    for owned_id in [
+        classifier.kernel_memory_id.clone(),
+        classifier.class_memory_id.clone(),
+    ] {
+        let mut owned_changes = HashMap::new();
+        owned_changes.insert(
+            "coordinates_3d".to_string(),
+            serde_json::json!(classifier.coordinates_3d),
+        );
+        owned_changes.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(classifier.parent_region_id),
+        );
+        if owned_id == classifier.kernel_memory_id {
+            owned_changes.insert("visible".to_string(), serde_json::json!(true));
+        }
+        state
+            .genome_service
+            .update_cortical_area(&owned_id, owned_changes)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to update classifier internal {}: {}",
+                    owned_id, e
+                ))
+            })?;
+    }
+
+    Ok(Json(feagi_services::types::ClassifierInfo::from(
+        classifier,
+    )))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/v1/cortical_area/classifier/{classifier_id}",
+    tag = "cortical_area"
+)]
+pub async fn delete_classifier(
+    State(state): State<ApiState>,
+    Path(classifier_id): Path<String>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    state
+        .connectome_service
+        .delete_classifier(&classifier_id)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to delete classifier: {}", e)))?;
+    let mut response = HashMap::new();
+    response.insert(
+        "message".to_string(),
+        "Classifier assembly deleted".to_string(),
+    );
+    response.insert("classifier_id".to_string(), classifier_id);
+    Ok(Json(response))
+}
+
 /// Clone an existing cortical area with all its properties and structure. (Not yet implemented)
 #[utoipa::path(post, path = "/v1/cortical_area/clone", tag = "cortical_area")]
 pub async fn post_clone(
@@ -2271,6 +2979,8 @@ pub async fn get_memory_cortical_area(
             lifespan_growth_rate: mem_props.lifespan_growth_rate,
             init_lifespan: mem_props.init_lifespan,
             mp_learning_enabled: mem_props.mp_learning_enabled,
+            min_window_activity: mem_props.min_window_activity,
+            scan_skip_density: mem_props.scan_skip_density,
         },
         upstream_cortical_area_indices,
         upstream_cortical_area_count,
@@ -2672,5 +3382,106 @@ mod voxel_neurons_dto_tests {
         assert_eq!(v["neuron_count"], serde_json::json!(0));
         assert_eq!(v["synapse_page"], serde_json::json!(0));
         assert_eq!(v["neurons"], serde_json::json!([]));
+    }
+}
+
+#[cfg(test)]
+mod classifier_mapping_rule_tests {
+    use super::classifier_mapping_rule;
+
+    #[test]
+    fn classifier_associative_rule_uses_memory_temporal_depth() {
+        let window = feagi_evolutionary::MemoryAreaProperties::default().temporal_depth;
+        assert!(window > 0);
+        let associative = classifier_mapping_rule("associative_memory", window);
+        assert_eq!(associative["plasticity_flag"], serde_json::json!(true));
+        assert_eq!(associative["plasticity_window"], serde_json::json!(window));
+        let scan = classifier_mapping_rule("episodic_scan", window);
+        assert_eq!(scan["plasticity_flag"], serde_json::json!(false));
+        assert_eq!(scan["plasticity_window"], serde_json::json!(0));
+    }
+
+    #[test]
+    fn geometry_flags_read_scan_twin_and_classifier_role() {
+        use super::{geometry_classifier_role, geometry_scan_twin_flag};
+        use std::collections::HashMap;
+
+        let mut properties = HashMap::new();
+        assert!(!geometry_scan_twin_flag(&properties));
+        assert_eq!(
+            geometry_classifier_role(&properties),
+            serde_json::Value::Null
+        );
+
+        properties.insert("scan_twin".to_string(), serde_json::json!(true));
+        properties.insert(
+            "classifier_role".to_string(),
+            serde_json::json!("kernel_memory"),
+        );
+        assert!(geometry_scan_twin_flag(&properties));
+        assert_eq!(
+            geometry_classifier_role(&properties),
+            serde_json::json!("kernel_memory")
+        );
+    }
+
+    #[test]
+    fn classifier_memory_areas_are_created_hidden() {
+        use super::classifier_memory_params;
+        use std::collections::HashMap;
+
+        let params = classifier_memory_params(
+            "memid001".to_string(),
+            "demo_kernel_mem".to_string(),
+            (0, 0, 0),
+            "region",
+            HashMap::new(),
+        );
+        assert_eq!(params.visible, Some(false));
+        assert_eq!(params.name, "demo_kernel_mem");
+    }
+
+    #[test]
+    fn classifier_scan_twin_dimensions_use_field_xy_and_class_volume() {
+        use super::classifier_scan_twin_dimensions;
+        assert_eq!(
+            classifier_scan_twin_dimensions((12, 8, 4), (2, 3, 1)),
+            (12, 8, 6)
+        );
+    }
+
+    #[test]
+    fn classifier_twin_sits_above_the_classifier() {
+        use super::classifier_twin_position;
+        assert_eq!(
+            classifier_twin_position((-29, 57, 10), (10, 6, 6)),
+            (-29, 63, 10)
+        );
+    }
+
+    #[test]
+    fn classifier_scan_twin_is_custom_visible_and_flagged() {
+        use super::classifier_scan_twin_params;
+
+        let params = classifier_scan_twin_params(
+            "ctwin001".to_string(),
+            "demo".to_string(),
+            (8, 8, 3),
+            (10, 20, 30),
+            "region",
+            "field001",
+            "memid001",
+        );
+        assert_eq!(params.name, "demo");
+        assert_eq!(params.area_type, "Custom");
+        assert_eq!(params.visible, Some(true));
+        assert_eq!(params.dimensions, (8, 8, 3));
+        assert_eq!(params.position, (10, 20, 30));
+        let properties = params.properties.expect("scan twin properties");
+        assert_eq!(properties.get("scan_twin"), Some(&serde_json::json!(true)));
+        assert_eq!(
+            properties.get("classifier_role"),
+            Some(&serde_json::json!("scan_twin"))
+        );
     }
 }

@@ -563,6 +563,20 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(cortical_area::post_custom_cortical_area),
         )
         .route(
+            "/cortical_area/classifier",
+            axum::routing::post(cortical_area::post_classifier),
+        )
+        .route(
+            "/cortical_area/classifiers",
+            axum::routing::get(cortical_area::list_classifiers),
+        )
+        .route(
+            "/cortical_area/classifier/:classifier_id",
+            axum::routing::get(cortical_area::get_classifier)
+                .put(cortical_area::update_classifier)
+                .delete(cortical_area::delete_classifier),
+        )
+        .route(
             "/cortical_area/clone",
             axum::routing::post(cortical_area::post_clone),
         )

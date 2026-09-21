@@ -647,6 +647,45 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
         }
     }
 
+    for (classifier_id, classifier) in &genome.classifiers {
+        if classifier.name.trim().is_empty() {
+            result.add_error(format!("Classifier '{}' has an empty name", classifier_id));
+        }
+        if !genome
+            .brain_regions
+            .contains_key(&classifier.parent_region_id)
+        {
+            result.add_error(format!(
+                "Classifier '{}' references unknown parent_region_id '{}'",
+                classifier_id, classifier.parent_region_id
+            ));
+        }
+        for area_id in classifier.owned_area_ids() {
+            if crate::genome::parser::string_to_cortical_id(&area_id)
+                .ok()
+                .and_then(|id| genome.cortical_areas.get(&id).map(|_| ()))
+                .is_none()
+            {
+                result.add_error(format!(
+                    "Classifier '{}' references missing owned area '{}'",
+                    classifier_id, area_id
+                ));
+            }
+        }
+        for area_id in classifier.input_area_ids() {
+            if crate::genome::parser::string_to_cortical_id(&area_id)
+                .ok()
+                .and_then(|id| genome.cortical_areas.get(&id).map(|_| ()))
+                .is_none()
+            {
+                result.add_error(format!(
+                    "Classifier '{}' references missing input area '{}'",
+                    classifier_id, area_id
+                ));
+            }
+        }
+    }
+
     // Validate composite morphology references
     for (morphology_id, morphology) in genome.morphologies.iter() {
         if let MorphologyParameters::Composite {
@@ -684,6 +723,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
@@ -715,6 +755,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
@@ -821,6 +862,36 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_validate_classifier_requires_parent_region() {
+        let mut genome = create_minimal_genome();
+        genome.classifiers.insert(
+            "clf-1".to_string(),
+            feagi_structures::genomic::classifiers::Classifier {
+                classifier_id: "clf-1".to_string(),
+                name: "demo".to_string(),
+                parent_region_id: "missing".to_string(),
+                coordinates_3d: [0, 0, 0],
+                kernel_area_id: None,
+                class_area_id: None,
+                field_area_id: None,
+                kernel_memory_id: "mkmem1".to_string(),
+                class_memory_id: "mcmem1".to_string(),
+                scan_twin_id: "cscan1".to_string(),
+                properties: HashMap::new(),
+            },
+        );
+        let result = validate_genome(&genome);
+        assert!(result
+            .errors
+            .iter()
+            .any(|error| error.contains("unknown parent_region_id")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|error| error.contains("missing owned area")));
+    }
+
     fn create_minimal_genome() -> RuntimeGenome {
         RuntimeGenome {
             metadata: GenomeMetadata {
@@ -833,6 +904,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {

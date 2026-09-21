@@ -1121,6 +1121,30 @@ where
         }
     }
 
+    /// Queue a class-map stamp onto a twin for a future burst.
+    pub fn schedule_replay_injection(
+        &self,
+        target_burst: u64,
+        twin_area_idx: u32,
+        coords: Vec<(u32, u32, u32)>,
+        membrane_potentials: Option<Vec<f32>>,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.schedule_replay_injection(
+                target_burst,
+                twin_area_idx,
+                coords,
+                membrane_potentials,
+            ),
+            DynamicNPUGeneric::INT8(npu) => npu.schedule_replay_injection(
+                target_burst,
+                twin_area_idx,
+                coords,
+                membrane_potentials,
+            ),
+        }
+    }
+
     /// Remove the replay target owned by one memory/upstream cortical-area pair.
     ///
     /// Returns `true` when a runtime replay route was present.

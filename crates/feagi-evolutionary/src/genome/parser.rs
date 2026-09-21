@@ -47,6 +47,7 @@ use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
 use feagi_structures::genomic::brain_regions::RegionID;
+use feagi_structures::genomic::classifiers::Classifier;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions as Dimensions,
@@ -67,6 +68,9 @@ pub struct ParsedGenome {
 
     /// Brain regions and hierarchy
     pub brain_regions: Vec<(BrainRegion, Option<String>)>, // (region, parent_id)
+
+    /// First-class classifier assemblies (parallel to brain_regions)
+    pub classifiers: Vec<Classifier>,
 
     /// Raw neuron morphologies (for later processing)
     pub neuron_morphologies: HashMap<String, Value>,
@@ -91,6 +95,8 @@ pub struct RawGenome {
     pub blueprint: HashMap<String, RawCorticalArea>,
     #[serde(default)]
     pub brain_regions: HashMap<String, RawBrainRegion>,
+    #[serde(default)]
+    pub classifiers: HashMap<String, RawClassifier>,
     #[serde(default)]
     pub neuron_morphologies: HashMap<String, Value>,
     #[serde(default)]
@@ -143,6 +149,8 @@ pub struct RawCorticalArea {
     pub init_lifespan: Option<u32>,
     pub temporal_depth: Option<u32>,
     pub mp_learning_enabled: Option<bool>,
+    pub min_window_activity: Option<u32>,
+    pub scan_skip_density: Option<f32>,
     pub consecutive_fire_cnt_max: Option<u32>,
     pub snooze_length: Option<u32>,
 
@@ -170,6 +178,23 @@ pub struct RawBrainRegion {
     pub designated_outputs: Option<Vec<String>>,
     pub signature: Option<String>,
     /// v3 `serde_json::to_value(BrainRegion)` nests `inputs` / `designated_*` under `properties`.
+    pub properties: Option<HashMap<String, Value>>,
+}
+
+/// Raw classifier assembly from the top-level `classifiers` genome key.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RawClassifier {
+    #[serde(alias = "title")]
+    pub name: Option<String>,
+    pub parent_region_id: Option<String>,
+    #[serde(alias = "coordinate_3d")]
+    pub coordinates_3d: Option<Vec<i32>>,
+    pub kernel_area_id: Option<String>,
+    pub class_area_id: Option<String>,
+    pub field_area_id: Option<String>,
+    pub kernel_memory_id: Option<String>,
+    pub class_memory_id: Option<String>,
+    pub scan_twin_id: Option<String>,
     pub properties: Option<HashMap<String, Value>>,
 }
 
@@ -375,6 +400,7 @@ impl GenomeParser {
 
         // Parse brain regions
         let brain_regions = Self::parse_brain_regions(&raw.brain_regions)?;
+        let classifiers = Self::parse_classifiers(&raw.classifiers)?;
 
         Ok(ParsedGenome {
             genome_id: raw.genome_id.unwrap_or_else(|| "unknown".to_string()),
@@ -382,6 +408,7 @@ impl GenomeParser {
             version: raw.version,
             cortical_areas,
             brain_regions,
+            classifiers,
             neuron_morphologies: raw.neuron_morphologies,
             physiology: raw.physiology,
         })
@@ -597,6 +624,14 @@ impl GenomeParser {
                 area.properties
                     .insert("mp_learning_enabled".to_string(), serde_json::json!(v));
             }
+            if let Some(v) = raw_area.min_window_activity {
+                area.properties
+                    .insert("min_window_activity".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.scan_skip_density {
+                area.properties
+                    .insert("scan_skip_density".to_string(), serde_json::json!(v));
+            }
             if let Some(v) = raw_area.consecutive_fire_cnt_max {
                 area.properties
                     .insert("consecutive_fire_cnt_max".to_string(), serde_json::json!(v));
@@ -808,6 +843,74 @@ impl GenomeParser {
 
         Ok(regions)
     }
+
+    fn parse_classifiers(
+        raw_classifiers: &HashMap<String, RawClassifier>,
+    ) -> EvoResult<Vec<Classifier>> {
+        let mut classifiers = Vec::with_capacity(raw_classifiers.len());
+        for (classifier_id, raw) in raw_classifiers {
+            let name = raw
+                .name
+                .clone()
+                .filter(|n| !n.trim().is_empty())
+                .ok_or_else(|| {
+                    EvoError::InvalidArea(format!("Classifier '{}' is missing name", classifier_id))
+                })?;
+            let parent_region_id = raw
+                .parent_region_id
+                .clone()
+                .filter(|n| !n.trim().is_empty())
+                .ok_or_else(|| {
+                    EvoError::InvalidArea(format!(
+                        "Classifier '{}' is missing parent_region_id",
+                        classifier_id
+                    ))
+                })?;
+            let coordinates_3d = match &raw.coordinates_3d {
+                Some(coords) if coords.len() == 3 => [coords[0], coords[1], coords[2]],
+                Some(coords) => {
+                    return Err(EvoError::InvalidArea(format!(
+                        "Classifier '{}' coordinates_3d must have 3 values, got {}",
+                        classifier_id,
+                        coords.len()
+                    )))
+                }
+                None => [0, 0, 0],
+            };
+            let kernel_memory_id = raw.kernel_memory_id.clone().ok_or_else(|| {
+                EvoError::InvalidArea(format!(
+                    "Classifier '{}' is missing kernel_memory_id",
+                    classifier_id
+                ))
+            })?;
+            let class_memory_id = raw.class_memory_id.clone().ok_or_else(|| {
+                EvoError::InvalidArea(format!(
+                    "Classifier '{}' is missing class_memory_id",
+                    classifier_id
+                ))
+            })?;
+            let scan_twin_id = raw.scan_twin_id.clone().ok_or_else(|| {
+                EvoError::InvalidArea(format!(
+                    "Classifier '{}' is missing scan_twin_id",
+                    classifier_id
+                ))
+            })?;
+            classifiers.push(Classifier {
+                classifier_id: classifier_id.clone(),
+                name,
+                parent_region_id,
+                coordinates_3d,
+                kernel_area_id: raw.kernel_area_id.clone(),
+                class_area_id: raw.class_area_id.clone(),
+                field_area_id: raw.field_area_id.clone(),
+                kernel_memory_id,
+                class_memory_id,
+                scan_twin_id,
+                properties: raw.properties.clone().unwrap_or_default(),
+            });
+        }
+        Ok(classifiers)
+    }
 }
 
 #[cfg(test)]
@@ -879,6 +982,7 @@ mod tests {
         }"#;
 
         let parsed = GenomeParser::parse(json).unwrap();
+        assert!(parsed.classifiers.is_empty());
 
         assert_eq!(parsed.cortical_areas.len(), 2);
 
@@ -1170,5 +1274,73 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_parse_classifiers_key_parallel_to_regions() {
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {
+                "cfield": {
+                    "cortical_name": "Field",
+                    "cortical_type": "CUSTOM",
+                    "block_boundaries": [4, 4, 1],
+                    "relative_coordinate": [0, 0, 0]
+                },
+                "mkmem1": {
+                    "cortical_name": "KernelMem",
+                    "cortical_type": "MEMORY",
+                    "block_boundaries": [2, 2, 2],
+                    "relative_coordinate": [10, 0, 0]
+                },
+                "mcmem1": {
+                    "cortical_name": "ClassMem",
+                    "cortical_type": "MEMORY",
+                    "block_boundaries": [2, 2, 2],
+                    "relative_coordinate": [20, 0, 0]
+                },
+                "cscan1": {
+                    "cortical_name": "ScanTwin",
+                    "cortical_type": "CUSTOM",
+                    "block_boundaries": [4, 4, 3],
+                    "relative_coordinate": [30, 0, 0]
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "root",
+                    "parent_region_id": "",
+                    "coordinate_2d": [0, 0],
+                    "coordinate_3d": [0, 0, 0],
+                    "areas": ["cfield", "mkmem1", "mcmem1", "cscan1"],
+                    "regions": [],
+                    "inputs": [],
+                    "outputs": []
+                }
+            },
+            "classifiers": {
+                "clf-1": {
+                    "name": "object_class",
+                    "parent_region_id": "root",
+                    "coordinates_3d": [30, 0, 0],
+                    "field_area_id": "cfield",
+                    "kernel_memory_id": "mkmem1",
+                    "class_memory_id": "mcmem1",
+                    "scan_twin_id": "cscan1"
+                }
+            }
+        }"#;
+
+        let parsed = GenomeParser::parse(json).expect("classifier genome");
+        assert_eq!(parsed.classifiers.len(), 1);
+        let classifier = &parsed.classifiers[0];
+        assert_eq!(classifier.classifier_id, "clf-1");
+        assert_eq!(classifier.name, "object_class");
+        assert_eq!(classifier.parent_region_id, "root");
+        assert_eq!(classifier.field_area_id.as_deref(), Some("cfield"));
+        assert_eq!(classifier.kernel_memory_id, "mkmem1");
+        assert_eq!(classifier.class_memory_id, "mcmem1");
+        assert_eq!(classifier.scan_twin_id, "cscan1");
+        assert_eq!(classifier.owned_area_ids().len(), 3);
     }
 }

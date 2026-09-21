@@ -102,6 +102,10 @@ pub struct MemoryAreaProperties {
     pub init_lifespan: u32,
     /// When true, membrane potentials are captured and stored with replay frames
     pub mp_learning_enabled: bool,
+    /// Minimum fired voxels inside a scan window for that window to be considered.
+    pub min_window_activity: u32,
+    /// Skip the entire field scan when current-burst density exceeds this fraction (0.0-1.0).
+    pub scan_skip_density: f32,
 }
 
 impl Default for MemoryAreaProperties {
@@ -114,6 +118,8 @@ impl Default for MemoryAreaProperties {
             lifespan_growth_rate: 1.0,
             init_lifespan: 9,
             mp_learning_enabled: false,
+            min_window_activity: 1,
+            scan_skip_density: 1.0,
         }
     }
 }
@@ -160,6 +166,16 @@ pub fn extract_memory_properties(
             .get("mp_learning_enabled")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        min_window_activity: properties
+            .get("min_window_activity")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1)
+            .max(1) as u32,
+        scan_skip_density: properties
+            .get("scan_skip_density")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0)
+            .clamp(0.0, 1.0) as f32,
     })
 }
 

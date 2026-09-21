@@ -25,3 +25,7 @@ These generally should not be instantiated directly, and instead be instantiated
 To see an explanation of all possible Input / Output cortical types in FEAGI, please read the FEAGI documentation here (TODO).
 
 This enum can be instantiated with one of its many "constructor" helper functions for ease of use.
+
+## Classifier
+
+A first-class genome object stored under the top-level `classifiers` key, parallel to `brain_regions`. A classifier is not a brain region and is not exportable as a circuit. The record holds assembly properties, referenced inputs (`kernel_area_id`, `class_area_id`, `field_area_id`), and owned internals (`kernel_memory_id`, `class_memory_id`, `scan_twin_id`). Neuroembryogenesis loads this map; deleting an owned internal deletes the classifier and remaining internals; deleting a referenced input clears that slot; mapping add/remove to internals updates the matching input slot.

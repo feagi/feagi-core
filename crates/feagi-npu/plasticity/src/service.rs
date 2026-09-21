@@ -19,6 +19,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
+use crate::episodic_scan::{
+    class_channel_index, collect_active_scan_windows, should_skip_scan, spatial_signature_hash,
+    ScanKernel,
+};
 use crate::log_rate_limiter::BurstLogRateLimiter;
 use crate::memory_neuron_array::{
     MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig,
@@ -143,12 +147,39 @@ pub struct ReplayFrame {
     pub membrane_potentials: Option<Vec<f32>>,
 }
 
+/// One field mapped into a kernel memory area with `episodic_scan`.
+#[derive(Debug, Clone)]
+pub struct MemoryScanSource {
+    pub field_area_idx: u32,
+    pub twin_area_idx: u32,
+    pub field_width: u32,
+    pub field_height: u32,
+    pub field_depth: u32,
+}
+
+/// Scan assembly attached to a kernel memory area.
+///
+/// Absent unless a kernel area, class area, associative Mem1→Mem2 mapping,
+/// and at least one `episodic_scan` source are all present.
+#[derive(Debug, Clone)]
+pub struct MemoryScanConfig {
+    pub kernel: ScanKernel,
+    pub min_window_activity: u32,
+    pub scan_skip_density: f32,
+    pub class_channel_count: u32,
+    pub class_area_width: u32,
+    pub class_area_height: u32,
+    pub class_memory_area_idx: u32,
+    pub sources: Vec<MemoryScanSource>,
+}
+
 /// Memory area configuration
 #[derive(Debug, Clone)]
 pub struct MemoryAreaConfig {
     pub temporal_depth: u32,
     pub upstream_areas: Vec<u32>,
     pub mp_learning_enabled: bool,
+    pub scan: Option<MemoryScanConfig>,
 }
 
 /// Runtime counts for a memory cortical area (plasticity layer).
@@ -384,6 +415,7 @@ impl PlasticityService {
 
         let mut commands = Vec::new();
         let mut array = memory_neuron_array.lock().unwrap();
+        let mut encoded_this_burst: Vec<(u32, usize, Vec<ReplayFrame>)> = Vec::new();
 
         // Step 1: Check for long-term memory conversion BEFORE aging.
         //
@@ -718,6 +750,15 @@ impl PlasticityService {
                                 neuron_id
                             );
                         }
+                        array.set_spatial_signature(
+                            existing_neuron_idx,
+                            Self::spatial_signature_from_replay(&final_replay_frames),
+                        );
+                        encoded_this_burst.push((
+                            *memory_area_idx,
+                            existing_neuron_idx,
+                            final_replay_frames.clone(),
+                        ));
                         commands.push(PlasticityCommand::InjectMemoryNeuronToFCL {
                             neuron_id,
                             area_idx: *memory_area_idx,
@@ -795,6 +836,15 @@ impl PlasticityService {
                                 neuron_id
                             );
                         }
+                        array.set_spatial_signature(
+                            neuron_idx,
+                            Self::spatial_signature_from_replay(&replay_frames),
+                        );
+                        encoded_this_burst.push((
+                            *memory_area_idx,
+                            neuron_idx,
+                            replay_frames.clone(),
+                        ));
                         commands.push(PlasticityCommand::InjectMemoryNeuronToFCL {
                             neuron_id,
                             area_idx: *memory_area_idx,
@@ -839,6 +889,13 @@ impl PlasticityService {
                 );
             }
         }
+
+        Self::bind_classifier_class_channels(
+            &mut array,
+            &memory_areas_snapshot,
+            &encoded_this_burst,
+        );
+        Self::run_episodic_scan(npu, &mut array, &memory_areas_snapshot, current_timestep);
 
         // Enqueue commands
         if !commands.is_empty() {
@@ -973,6 +1030,156 @@ impl PlasticityService {
             .collect()
     }
 
+    fn spatial_signature_from_replay(frames: &[ReplayFrame]) -> u64 {
+        let mut by_offset: std::collections::BTreeMap<u32, Vec<(u32, u32, u32)>> =
+            std::collections::BTreeMap::new();
+        for frame in frames {
+            by_offset
+                .entry(frame.offset)
+                .or_default()
+                .extend(frame.coords.iter().copied());
+        }
+        let stacked: Vec<Vec<(u32, u32, u32)>> = by_offset.into_values().collect();
+        spatial_signature_hash(&stacked)
+    }
+
+    fn class_channels_from_replay(
+        frames: &[ReplayFrame],
+        class_width: u32,
+        class_height: u32,
+        class_channel_count: u32,
+    ) -> Vec<u32> {
+        let mut channels = HashSet::new();
+        for frame in frames {
+            for &(x, y, z) in &frame.coords {
+                let channel = class_channel_index(x, y, z, class_width, class_height);
+                if channel < class_channel_count {
+                    channels.insert(channel);
+                }
+            }
+        }
+        let mut out: Vec<u32> = channels.into_iter().collect();
+        out.sort_unstable();
+        out
+    }
+
+    /// Snapshot class-memory encode hits onto kernel-memory LTM neurons.
+    fn bind_classifier_class_channels(
+        array: &mut MemoryNeuronArray,
+        memory_areas: &HashMap<u32, MemoryAreaConfig>,
+        encoded_this_burst: &[(u32, usize, Vec<ReplayFrame>)],
+    ) {
+        for (kernel_area_idx, kernel_cfg) in memory_areas {
+            let Some(scan) = kernel_cfg.scan.as_ref() else {
+                continue;
+            };
+            let class_hits: Vec<u32> = encoded_this_burst
+                .iter()
+                .filter(|(area_idx, _, _)| *area_idx == scan.class_memory_area_idx)
+                .flat_map(|(_, _, frames)| {
+                    Self::class_channels_from_replay(
+                        frames,
+                        scan.class_area_width,
+                        scan.class_area_height,
+                        scan.class_channel_count,
+                    )
+                })
+                .collect();
+            if class_hits.is_empty() {
+                continue;
+            }
+            for neuron_idx in array.active_ltm_indices_in_area(*kernel_area_idx) {
+                for channel in &class_hits {
+                    array.bind_class_channel(neuron_idx, *channel);
+                }
+            }
+        }
+    }
+
+    fn run_episodic_scan(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        array: &mut MemoryNeuronArray,
+        memory_areas: &HashMap<u32, MemoryAreaConfig>,
+        current_timestep: u64,
+    ) {
+        for (kernel_area_idx, kernel_cfg) in memory_areas {
+            let Some(scan) = kernel_cfg.scan.as_ref() else {
+                continue;
+            };
+            if scan.kernel.voxel_count() == 0 || scan.sources.is_empty() {
+                continue;
+            }
+            let temporal_depth = kernel_cfg.temporal_depth.max(1) as usize;
+            for source in &scan.sources {
+                let field_volume = u64::from(source.field_width)
+                    .saturating_mul(u64::from(source.field_height))
+                    .saturating_mul(u64::from(source.field_depth));
+                let (frames, fired_count) = {
+                    let npu_lock = npu.lock().unwrap();
+                    let window = match npu_lock.get_fire_ledger_dense_window_bitmaps(
+                        source.field_area_idx,
+                        current_timestep,
+                        temporal_depth,
+                    ) {
+                        Ok(w) => w,
+                        Err(_) => continue,
+                    };
+                    let mut coord_frames: Vec<Vec<(u32, u32, u32)>> = Vec::new();
+                    let mut newest_count = 0usize;
+                    for (i, (_t, bitmap)) in window.iter().enumerate() {
+                        let mut coords: Vec<(u32, u32, u32)> = bitmap
+                            .iter()
+                            .filter_map(|neuron_id| npu_lock.get_neuron_coordinates(neuron_id))
+                            .collect();
+                        coords.sort_unstable();
+                        if i + 1 == window.len() {
+                            newest_count = coords.len();
+                        }
+                        coord_frames.push(coords);
+                    }
+                    (coord_frames, newest_count)
+                };
+                if should_skip_scan(fired_count, field_volume, scan.scan_skip_density) {
+                    continue;
+                }
+                let windows = collect_active_scan_windows(
+                    &frames,
+                    scan.kernel,
+                    source.field_width,
+                    source.field_height,
+                    source.field_depth,
+                    scan.min_window_activity,
+                );
+                let mut stamps: HashMap<(u32, u32, u32), ()> = HashMap::new();
+                for window in windows {
+                    let matches =
+                        array.find_ltm_by_spatial_signature(*kernel_area_idx, window.spatial_hash);
+                    for neuron_idx in matches {
+                        for class_z in array.get_class_channels(neuron_idx) {
+                            if class_z >= scan.class_channel_count {
+                                continue;
+                            }
+                            stamps.insert((window.origin.0, window.origin.1, class_z), ());
+                        }
+                    }
+                }
+                if stamps.is_empty() {
+                    continue;
+                }
+                let mut coords: Vec<(u32, u32, u32)> = stamps.into_keys().collect();
+                coords.sort_unstable();
+                if let Ok(npu_lock) = npu.lock() {
+                    npu_lock.schedule_replay_injection(
+                        current_timestep.saturating_add(1),
+                        source.twin_area_idx,
+                        coords,
+                        None,
+                    );
+                }
+            }
+        }
+    }
+
     /// Register a memory area for pattern detection
     pub fn register_memory_area(
         &self,
@@ -986,12 +1193,14 @@ impl PlasticityService {
         let upstream_len = upstream_areas.len();
         let upstream_clone = upstream_areas.clone();
         let mut areas = self.memory_areas.lock().unwrap();
+        let existing_scan = areas.get(&area_idx).and_then(|cfg| cfg.scan.clone());
         areas.insert(
             area_idx,
             MemoryAreaConfig {
                 temporal_depth,
                 upstream_areas,
                 mp_learning_enabled,
+                scan: existing_scan,
             },
         );
 
@@ -1091,6 +1300,46 @@ impl PlasticityService {
             upstream_len
         );
 
+        true
+    }
+
+    /// Attach or replace scan configuration for a registered kernel memory area.
+    ///
+    /// Re-registering the area via [`Self::register_memory_area`] keeps this
+    /// config. Passing `None` clears scan for the area.
+    pub fn configure_memory_scan(&self, area_idx: u32, scan: Option<MemoryScanConfig>) -> bool {
+        let mut areas = self.memory_areas.lock().unwrap();
+        let Some(cfg) = areas.get_mut(&area_idx) else {
+            return false;
+        };
+        if let Some(ref scan_cfg) = scan {
+            if let Ok(mut npu) = self.npu.lock() {
+                let desired = cfg.temporal_depth as usize;
+                let existing_configs = npu.get_all_fire_ledger_configs();
+                for source in &scan_cfg.sources {
+                    let existing = existing_configs
+                        .iter()
+                        .find(|(idx, _)| *idx == source.field_area_idx)
+                        .map(|(_, w)| *w)
+                        .unwrap_or(0);
+                    let resolved = existing.max(desired);
+                    if resolved != existing {
+                        if let Err(e) =
+                            npu.configure_fire_ledger_window(source.field_area_idx, resolved)
+                        {
+                            tracing::warn!(
+                                target: "plasticity",
+                                "[PLASTICITY] Failed to configure FireLedger window for scan field {} (requested={}): {}",
+                                source.field_area_idx,
+                                resolved,
+                                e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        cfg.scan = scan;
         true
     }
 

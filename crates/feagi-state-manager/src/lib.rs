@@ -443,6 +443,16 @@ impl StateManager {
         self.hash_state.set_cortical_mappings_hash(value)
     }
 
+    /// Get classifiers hash.
+    pub fn get_classifiers_hash(&self) -> u64 {
+        self.hash_state.get_classifiers_hash()
+    }
+
+    /// Set classifiers hash.
+    pub fn set_classifiers_hash(&self, value: u64) {
+        self.hash_state.set_classifiers_hash(value)
+    }
+
     /// Get agent data hash.
     pub fn get_agent_data_hash(&self) -> u64 {
         self.hash_state.get_agent_data_hash()

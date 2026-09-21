@@ -49,6 +49,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {

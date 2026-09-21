@@ -125,7 +125,17 @@ If **both** episodic activation and associative (LIF) integration would affect t
 
 ---
 
-## 12. Revision history
+## 12. Episodic scan and in-region classifier
+
+- **`episodic_scan`** is a semantic-only function morphology. It never enters `get_episodic_memory_upstream_cortical_areas` or the holistic ID hash. Old episodic encode/replay is unchanged when no scan mapping exists.
+- **Classifier assembly** is a first-class genome object under the top-level `classifiers` key (parallel to `brain_regions`). It is not a `BrainRegion` and is not exportable as a circuit. The record stores name, parent region, coordinates, referenced inputs, and owned internals (`kernel_memory_id`, `class_memory_id`, `scan_twin_id`). Neuroembryogenesis loads this map; area delete and mapping edits update the record and its required mappings.
+- Wiring: kernel `--episodic_memory-->` Mem1; class `--episodic_memory-->` Mem2; Mem1 `--associative_memory-->` Mem2; field `--episodic_scan-->` Mem1.
+- Scan twin dimensions are **field_x × field_y × C** where `C` is the class-area volume. The twin is a classical, connectable cortical area named `{classifier}_twin`, placed at the classifier X/Z with **Y above the classifier** by the twin's own height, with burst engine on. It is not a field clone and does not receive `memory_replay`.
+- Brain Visualizer stamp is the **memory assembly body** hosted on kernel memory: XY from stored internal memory neuron count (`ceil(sqrt(N))`), Z from kernel `temporal_depth`. Class memory stays hidden. Clicking the stamp selects the classifier. The twin is a standard interconnect with a visual classifier → twin edge; user mappings from the twin stay real connectome mappings.
+- LTM stores a spatial occupancy sidecar (not a replacement hash). After encode, Mem1 LTM is bound to Mem2 class channels. Scan stamps class hits at `(x, y, class_z)` via NPU `schedule_replay_injection`.
+- Skip the field when `F / field_volume > scan_skip_density`. Skip a window when occupancy `< min_window_activity`. Defaults come from `MemoryAreaProperties` (1 and 1.0). No kernel, class area, associative mapping, or scan source means no scan.
+
+## 13. Revision history
 
 | Date | Notes |
 |------|--------|
@@ -134,3 +144,7 @@ If **both** episodic activation and associative (LIF) integration would affect t
 | 2026-03-28 | `SynapseStorage::edge_flags`; STDP batch + connectome `associative_memory` (memory↔memory) stamp `SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`; `count_synapses_with_edge_flag_bits` on NPU. |
 | 2026-03-28 | Dual `FireLedger` + `FiringNeuron::fire_kind`; episodic vs STDP archive paths; plasticity registers episodic memory area window. |
 | 2026-03-28 | §10: sparse associative LIF for memory neurons (`sparse_memory_lif`, `memory_associative_fcl_input` from propagation, `process_neural_dynamics` wiring); §10 marked implemented. |
+| 2026-09-20 | §12: `episodic_scan`, spatial LTM sidecar, class-map twin, in-region classifier assembly. |
+| 2026-09-20 | §12: first-class genome `classifiers` key (parallel to `brain_regions`), not exportable as a circuit. |
+| 2026-09-20 | §12: stamp is kernel-memory assembly (XY from neuron count, Z from temporal depth); twin is a separate field_x×field_y×C cortical area. |
+| 2026-09-21 | §12: twin Y is above the classifier by the twin height; X/Z stay on the classifier. |

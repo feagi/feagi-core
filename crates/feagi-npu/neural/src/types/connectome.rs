@@ -57,6 +57,10 @@ pub struct SerializableLongTermMemoryNeuron {
     pub creation_burst: u64,
     pub last_activation_burst: u64,
     pub activation_count: u32,
+    #[serde(default)]
+    pub spatial_signature: Option<u64>,
+    #[serde(default)]
+    pub class_channels: Vec<u32>,
 }
 
 /// Learned episodic replay frame for one long-term memory neuron.
@@ -1305,6 +1309,8 @@ mod tests {
             creation_burst: 1,
             last_activation_burst: 2,
             activation_count: 4,
+            spatial_signature: None,
+            class_channels: Vec::new(),
         }];
 
         let ltm_ids = HashSet::from([50_000_001]);

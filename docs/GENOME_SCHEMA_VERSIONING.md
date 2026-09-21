@@ -217,6 +217,12 @@ per `vN → vN+1` step. The existing `v2 → v3` migrator is **not** to be
 retroactively split into smaller hops — that is archaeology with no
 payoff.
 
+## v3 additive keys
+
+`classifiers` is an optional top-level map parallel to `brain_regions`.
+Missing or empty maps deserialize to `{}`. This does not bump
+`genome_schema_version`.
+
 ## References
 
 - Current monolithic migrator: `feagi-evolutionary/src/genome/migrator.rs`

@@ -342,6 +342,7 @@ pub fn subset_runtime_genome_for_region_branch(
         metadata,
         cortical_areas,
         brain_regions,
+        classifiers: HashMap::new(),
         morphologies: genome.morphologies.clone(),
         physiology: genome.physiology.clone(),
         signatures: GenomeSignatures {
@@ -395,6 +396,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions,
+            classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
@@ -555,6 +557,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions,
+            classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {

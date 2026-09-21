@@ -75,6 +75,9 @@ pub struct HealthCheckResponse {
     /// Hash of cortical mappings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_mappings_hash: Option<u64>,
+    /// Hash of first-class genome classifiers (parallel to brain_regions)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub classifiers_hash: Option<u64>,
     /// Hash of agent data (ids, capabilities, connection properties)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_data_hash: Option<u64>,
@@ -298,6 +301,7 @@ pub async fn get_health_check(
         brain_geometry_hash,
         morphologies_hash,
         cortical_mappings_hash,
+        classifiers_hash,
         agent_data_hash,
         genome_loading,
         genome_state,
@@ -321,6 +325,7 @@ pub async fn get_health_check(
             Some(state_manager.get_brain_geometry_hash()),
             Some(state_manager.get_morphologies_hash()),
             Some(state_manager.get_cortical_mappings_hash()),
+            Some(state_manager.get_classifiers_hash()),
             Some(state_manager.get_agent_data_hash()),
             genome_loading,
             genome_state,
@@ -357,6 +362,7 @@ pub async fn get_health_check(
         brain_geometry_hash,
         morphologies_hash,
         cortical_mappings_hash,
+        classifiers_hash,
         agent_data_hash,
         brain_regions_root, // NEW: Root region ID for O(1) lookup
         fatigue,

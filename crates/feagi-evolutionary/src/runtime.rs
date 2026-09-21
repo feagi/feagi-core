@@ -11,6 +11,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+use feagi_structures::genomic::classifiers::Classifier;
 use feagi_structures::genomic::cortical_area::CorticalArea;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::BrainRegion;
@@ -28,6 +29,10 @@ pub struct RuntimeGenome {
 
     /// Brain regions (by region_id)
     pub brain_regions: HashMap<String, BrainRegion>,
+
+    /// Classifier assemblies (by classifier_id). Parallel to `brain_regions`;
+    /// not a region and not exportable as a circuit.
+    pub classifiers: HashMap<String, Classifier>,
 
     /// Morphology registry
     pub morphologies: MorphologyRegistry,

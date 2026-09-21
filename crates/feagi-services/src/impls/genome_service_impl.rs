@@ -95,6 +95,12 @@ fn merge_memory_area_properties(
         .entry("init_lifespan".to_string())
         .or_insert(Value::from(memory_defaults.init_lifespan));
     defaults
+        .entry("min_window_activity".to_string())
+        .or_insert(Value::from(memory_defaults.min_window_activity));
+    defaults
+        .entry("scan_skip_density".to_string())
+        .or_insert(Value::from(memory_defaults.scan_skip_density));
+    defaults
         .entry("psp_uniform_distribution".to_string())
         .or_insert(Value::from(true));
 
@@ -312,6 +318,7 @@ pub fn sync_runtime_genome_from_connectome(
         genome.metadata.brain_regions_root = Some(root_id);
     }
 
+    genome.classifiers = manager.list_classifiers();
     genome.morphologies = manager.get_morphologies().clone();
 
     let live_ids: HashSet<CorticalID> = manager
@@ -4830,6 +4837,7 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {

@@ -272,6 +272,40 @@ pub struct BrainRegionInfo {
     pub properties: HashMap<String, serde_json::Value>,
 }
 
+/// First-class genome classifier assembly (not a region).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassifierInfo {
+    pub classifier_id: String,
+    pub name: String,
+    pub parent_region_id: String,
+    pub coordinates_3d: [i32; 3],
+    pub kernel_area_id: Option<String>,
+    pub class_area_id: Option<String>,
+    pub field_area_id: Option<String>,
+    pub kernel_memory_id: String,
+    pub class_memory_id: String,
+    pub scan_twin_id: String,
+    pub properties: HashMap<String, serde_json::Value>,
+}
+
+impl From<feagi_structures::genomic::classifiers::Classifier> for ClassifierInfo {
+    fn from(classifier: feagi_structures::genomic::classifiers::Classifier) -> Self {
+        Self {
+            classifier_id: classifier.classifier_id,
+            name: classifier.name,
+            parent_region_id: classifier.parent_region_id,
+            coordinates_3d: classifier.coordinates_3d,
+            kernel_area_id: classifier.kernel_area_id,
+            class_area_id: classifier.class_area_id,
+            field_area_id: classifier.field_area_id,
+            kernel_memory_id: classifier.kernel_memory_id,
+            class_memory_id: classifier.class_memory_id,
+            scan_twin_id: classifier.scan_twin_id,
+            properties: classifier.properties,
+        }
+    }
+}
+
 /// Parameters for creating a brain region
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateBrainRegionParams {
