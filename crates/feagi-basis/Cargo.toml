@@ -27,12 +27,14 @@ use-rayon = [
 
 std = [
     "alloc",
-    "serde/std", "serde_json/std", "ahash/std"
+    "serde/std", "serde_json/std", "ahash/std",
+    "feagi-basis-quantization/std", "feagi-basis-neuron/std", "feagi-basis-genome/std"
 ]
 
 alloc = [
     "serde_json",
     "serde/alloc", "serde/derive", "serde_json/alloc", "ahash/serde",
+    "feagi-basis-quantization/alloc", "feagi-basis-neuron/alloc", "feagi-basis-genome/alloc"
 ]
 
 channel_flume = [
