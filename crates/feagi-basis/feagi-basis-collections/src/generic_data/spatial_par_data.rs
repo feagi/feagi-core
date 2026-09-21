@@ -6,7 +6,7 @@ use crate::generic_data::par_data::{GenericParData, GenericParDataMut, ParDataAr
 use crate::spatial_indexing_structs::axis_order::AxisOrderIdentifier;
 use crate::spatial_indexing_structs::SpatialCoordinate;
 use crate::spatial_indexing_structs::SpatialDimensions;
-use crate::spatial_indexing_structs::spatial_indexing_helpers::SpatialIndexingHelper;
+use crate::spatial_indexing_structs::OwningSpatialIndexing;
 
 #[cfg(feature = "heapless")]
 use crate::generic_data::par_data::ParDataHeaplessVec;
@@ -15,14 +15,13 @@ use core::marker::PhantomData;
 
 #[cfg(feature = "alloc")]
 use crate::generic_data::par_data::ParDataVector;
-use crate::spatial_indexing_structs::helper_implementations::owning_spatial_indexing_helper::OwningSpatialIndexingHelper;
+
 
 /// Spatial nonmut access to elements
 pub trait GenericSpatialParData<QLinear, GPD, SIH, D, const NUM_DIMS: usize, const AXIS_ORDER_IDENTIFIER: AxisOrderIdentifier>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     GPD: GenericParData<QLinear, D>,
-    SIH: SpatialIndexingHelper<QLinear, NUM_DIMS, AXIS_ORDER_IDENTIFIER>,
     D: core::fmt::Debug,
 {
     fn get_data_view<'a>(&'a self) -> &'a GPD
@@ -35,7 +34,7 @@ where
 
     //region Default Impls
 
-    fn get_dimensions<'a>(&'a self) -> &'a SpatialDimensions<SIH::DimensionsQuant, NUM_DIMS>
+    fn get_dimensions<'a>(&'a self) -> &'a SpatialDimensions<QLinear::QuantType, NUM_DIMS>
     where
         SIH: 'a,
     {
@@ -43,7 +42,7 @@ where
     }
 
     /// Gets the element at the given coordinate or None if out of bounds
-    fn get_coord<'a>(&'a self, coordinate: SpatialCoordinate<SIH::CoordinateQuant, NUM_DIMS>) -> Option<&'a D>
+    fn get_coord<'a>(&'a self, coordinate: SpatialCoordinate<QLinear::QuantType, NUM_DIMS>) -> Option<&'a D>
     where
         GPD: 'a,
     {
@@ -52,7 +51,7 @@ where
     }
 
     /// Iterates each coordinate with its corresponding data element, in linear index order.
-    fn iter_coord_data<'a>(&'a self) -> impl Iterator<Item = (SpatialCoordinate<SIH::CoordinateQuant, NUM_DIMS>, &'a D)> + 'a
+    fn iter_coord_data<'a>(&'a self) -> impl Iterator<Item = (SpatialCoordinate<QLinear::QuantType, NUM_DIMS>, &'a D)> + 'a
     where
         GPD: 'a,
         SIH: 'a,
@@ -67,13 +66,13 @@ where
     #[cfg(feature = "expose_rayon")]
     fn rayon_iter_coord_data<'a>(
         &'a self,
-    ) -> rayon::iter::Map<rayon::range::Iter<usize>, impl Fn(usize) -> (SpatialCoordinate<SIH::CoordinateQuant, NUM_DIMS>, &'a D) + Send + Sync>
+    ) -> rayon::iter::Map<rayon::range::Iter<usize>, impl Fn(usize) -> (SpatialCoordinate<QLinear::QuantType, NUM_DIMS>, &'a D) + Send + Sync>
     where
         GPD: 'a,
         SIH: 'a,
         D: 'a + Sync,
         QLinear: Send,
-        SIH::CoordinateQuant: Send,
+        QLinear::QuantType: Send,
     {
         use rayon::prelude::*;
 
@@ -85,7 +84,7 @@ where
 
         (0..total).into_par_iter().map(move |index| {
             let linear = QLinear::quant_from_usize_unchecked(index);
-            let coordinate = stride.linear_to_coordinate::<QLinear, SIH::CoordinateQuant, SIH::DimensionsQuant>(linear, &dimensions);
+            let coordinate = stride.linear_to_coordinate::<QLinear, QLinear::QuantType, SIH::DimensionsQuant>(linear, &dimensions);
             (coordinate, &data[index])
         })
     }
@@ -99,7 +98,6 @@ pub trait GenericSpatialParDataMut<QLinear, GPD, SIH, D, const NUM_DIMS: usize, 
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     GPD: GenericParDataMut<QLinear, D>,
-    SIH: SpatialIndexingHelper<QLinear, NUM_DIMS, AXIS_ORDER_IDENTIFIER>,
     D: core::fmt::Debug,
 {
     fn get_data_view_mut<'a>(&'a mut self) -> &'a mut GPD
@@ -109,7 +107,7 @@ where
     //region Default Impls
 
     /// Mutably borrows the element at the given coordinate, or `None` if out of bounds.
-    fn get_coord_mut<'a>(&'a mut self, coordinate: SpatialCoordinate<SIH::CoordinateQuant, NUM_DIMS>) -> Option<&'a mut D>
+    fn get_coord_mut<'a>(&'a mut self, coordinate: SpatialCoordinate<QLinear::QuantType, NUM_DIMS>) -> Option<&'a mut D>
     where
         GPD: 'a,
         D: 'a,
@@ -119,7 +117,7 @@ where
     }
 
     /// Iterates each coordinate with its corresponding mutable data element, in linear index order.
-    fn iter_coord_data_mut<'a>(&'a mut self) -> impl Iterator<Item = (SpatialCoordinate<SIH::CoordinateQuant, NUM_DIMS>, &'a mut D)> + 'a
+    fn iter_coord_data_mut<'a>(&'a mut self) -> impl Iterator<Item = (SpatialCoordinate<QLinear::QuantType, NUM_DIMS>, &'a mut D)> + 'a
     where
         GPD: 'a,
         D: 'a,
@@ -129,7 +127,7 @@ where
         let dimensions = *helper.get_dimensions();
         self.get_data_view_mut().iter_mut().enumerate().map(move |(index, value)| {
             let linear = QLinear::quant_from_usize_unchecked(index);
-            let coordinate = stride.linear_to_coordinate::<QLinear, SIH::CoordinateQuant, SIH::DimensionsQuant>(linear, &dimensions);
+            let coordinate = stride.linear_to_coordinate::<QLinear, QLinear::QuantType, QLinear::QuantType>(linear, &dimensions);
             (coordinate, value)
         })
     }
@@ -140,13 +138,13 @@ where
         &'a mut self,
     ) -> rayon::iter::Map<
         rayon::iter::Enumerate<rayon::slice::IterMut<'a, D>>,
-        impl Fn((usize, &'a mut D)) -> (SpatialCoordinate<SIH::CoordinateQuant, NUM_DIMS>, &'a mut D) + Send,
+        impl Fn((usize, &'a mut D)) -> (SpatialCoordinate<QLinear::QuantType, NUM_DIMS>, &'a mut D) + Send,
     >
     where
         GPD: 'a,
         D: 'a + Send + Sync,
         QLinear: Send,
-        SIH::CoordinateQuant: Send,
+        QLinear::QuantType: Send,
     {
         use rayon::prelude::*;
 
@@ -159,7 +157,7 @@ where
             .enumerate()
             .map(move |(index, value)| {
                 let linear = QLinear::quant_from_usize_unchecked(index);
-                let coordinate = stride.linear_to_coordinate::<QLinear, SIH::CoordinateQuant, SIH::DimensionsQuant>(linear, &dimensions);
+                let coordinate = stride.linear_to_coordinate::<QLinear, QLinear::QuantType, SIH::DimensionsQuant>(linear, &dimensions);
                 (coordinate, value)
             })
     }
@@ -182,7 +180,7 @@ fn validate_data_len_matches_dimensions<QDim: QuantizedUnsignedIntegerTrait, con
 
 //region Vector
 
-/// Owned heap-backed spatial par data with an embedded [`OwningSpatialIndexingHelper`].
+/// Owned heap-backed spatial par data with an embedded [`OwningSpatialIndexing`].
 #[cfg(feature = "alloc")]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(
@@ -198,7 +196,7 @@ pub struct SpatialParDataVector<
     const AXIS_ORDER_IDENTIFIER: AxisOrderIdentifier,
 > {
     pub(crate) data: ParDataVector<QLinear, D>,
-    pub(crate) indexing: OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>,
+    pub(crate) indexing: OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>,
 }
 
 #[cfg(feature = "alloc")]
@@ -219,7 +217,7 @@ impl<
         let element_count = dimensions.spatial_element_count();
         Ok(Self {
             data: ParDataVector::new_uniform(QLinear::quant_from_usize_unchecked(element_count), initial_value),
-            indexing: OwningSpatialIndexingHelper::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
+            indexing: OwningSpatialIndexing::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
         })
     }
 
@@ -228,7 +226,7 @@ impl<
         validate_data_len_matches_dimensions(data.len(), &dimensions)?;
         Ok(Self {
             data: ParDataVector::from_vec(data),
-            indexing: OwningSpatialIndexingHelper::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
+            indexing: OwningSpatialIndexing::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
         })
     }
 }
@@ -245,7 +243,7 @@ impl<
     GenericSpatialParData<
         QLinear,
         ParDataVector<QLinear, D>,
-        OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>,
+        OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>,
         D,
         NUM_DIMS,
         AXIS_ORDER_IDENTIFIER,
@@ -258,9 +256,9 @@ impl<
         &self.data
     }
 
-    fn get_indexing_helper<'a>(&'a self) -> &'a OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>
+    fn get_indexing_helper<'a>(&'a self) -> &'a OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>
     where
-        OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>: 'a,
+        OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>: 'a,
     {
         &self.indexing
     }
@@ -278,7 +276,7 @@ impl<
     GenericSpatialParDataMut<
         QLinear,
         ParDataVector<QLinear, D>,
-        OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>,
+        OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>,
         D,
         NUM_DIMS,
         AXIS_ORDER_IDENTIFIER,
@@ -296,7 +294,7 @@ impl<
 
 //region Array
 
-/// Owned fixed-size spatial par data with an embedded [`OwningSpatialIndexingHelper`].
+/// Owned fixed-size spatial par data with an embedded [`OwningSpatialIndexing`].
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(
     serialize = "ParDataArray<QLinear, D, N>: Serialize, OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>: Serialize",
@@ -312,7 +310,7 @@ pub struct SpatialParDataArray<
     const N: usize,
 > {
     pub(crate) data: ParDataArray<QLinear, D, N>,
-    pub(crate) indexing: OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>,
+    pub(crate) indexing: OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>,
 }
 
 impl<
@@ -333,7 +331,7 @@ impl<
         validate_data_len_matches_dimensions(N, &dimensions)?;
         Ok(Self {
             data: ParDataArray::new_uniform(initial_value),
-            indexing: OwningSpatialIndexingHelper::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
+            indexing: OwningSpatialIndexing::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
         })
     }
 
@@ -342,7 +340,7 @@ impl<
         validate_data_len_matches_dimensions(N, &dimensions)?;
         Ok(Self {
             data: ParDataArray::from_array(data),
-            indexing: OwningSpatialIndexingHelper::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
+            indexing: OwningSpatialIndexing::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
         })
     }
 }
@@ -359,7 +357,7 @@ impl<
     GenericSpatialParData<
         QLinear,
         ParDataArray<QLinear, D, N>,
-        OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>,
+        OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>,
         D,
         NUM_DIMS,
         AXIS_ORDER_IDENTIFIER,
@@ -372,9 +370,9 @@ impl<
         &self.data
     }
 
-    fn get_indexing_helper<'a>(&'a self) -> &'a OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>
+    fn get_indexing_helper<'a>(&'a self) -> &'a OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>
     where
-        OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>: 'a,
+        OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>: 'a,
     {
         &self.indexing
     }
@@ -392,7 +390,7 @@ impl<
     GenericSpatialParDataMut<
         QLinear,
         ParDataArray<QLinear, D, N>,
-        OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>,
+        OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>,
         D,
         NUM_DIMS,
         AXIS_ORDER_IDENTIFIER,
@@ -411,7 +409,7 @@ impl<
 //region Heapless Vector
 
 #[cfg(feature = "heapless")]
-/// Owned stack-capacity spatial par data with an embedded [`OwningSpatialIndexingHelper`].
+/// Owned stack-capacity spatial par data with an embedded [`OwningSpatialIndexing`].
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(
     serialize = "ParDataHeaplessVec<QLinear, D, N>: Serialize, OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>: Serialize",
@@ -427,7 +425,7 @@ pub struct SpatialParDataHeaplessVec<
     const N: usize,
 > {
     pub(crate) data: ParDataHeaplessVec<QLinear, D, N>,
-    pub(crate) indexing: OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>,
+    pub(crate) indexing: OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>,
 }
 
 #[cfg(feature = "heapless")]
@@ -457,7 +455,7 @@ impl<
         }
         Ok(Self {
             data: ParDataHeaplessVec { data, _marker: PhantomData },
-            indexing: OwningSpatialIndexingHelper::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
+            indexing: OwningSpatialIndexing::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
         })
     }
 
@@ -466,7 +464,7 @@ impl<
         validate_data_len_matches_dimensions(N, &dimensions)?;
         Ok(Self {
             data: ParDataHeaplessVec::from_array(data),
-            indexing: OwningSpatialIndexingHelper::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
+            indexing: OwningSpatialIndexing::<QLinear, QCoord, QDim, NUM_DIMS>::from_dimensions(dimensions, AXIS_ORDER_IDENTIFIER),
         })
     }
 }
@@ -484,7 +482,7 @@ impl<
     GenericSpatialParData<
         QLinear,
         ParDataHeaplessVec<QLinear, D, N>,
-        OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>,
+        OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>,
         D,
         NUM_DIMS,
         AXIS_ORDER_IDENTIFIER,
@@ -497,9 +495,9 @@ impl<
         &self.data
     }
 
-    fn get_indexing_helper<'a>(&'a self) -> &'a OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>
+    fn get_indexing_helper<'a>(&'a self) -> &'a OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>
     where
-        OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>: 'a,
+        OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>: 'a,
     {
         &self.indexing
     }
@@ -518,7 +516,7 @@ impl<
     GenericSpatialParDataMut<
         QLinear,
         ParDataHeaplessVec<QLinear, D, N>,
-        OwningSpatialIndexingHelper<QLinear, QCoord, QDim, NUM_DIMS>,
+        OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>,
         D,
         NUM_DIMS,
         AXIS_ORDER_IDENTIFIER,

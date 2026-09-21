@@ -1,5 +1,5 @@
-use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 use crate::feagi_collection_error::{FeagiDataCollectionError, FeagiFailInvalidDimensions};
+use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 
 /// Generic owned dimensions value for an N-dimensional index space.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
@@ -12,9 +12,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> SpatialDimensions
     /// Constructor for dimensions; no axis may be zero.
     pub fn new_dimensions(data: [QI; NUM_DIMS]) -> Result<Self, FeagiDataCollectionError> {
         if data.contains(&QI::QUANT_ZERO) {
-            return Err(
-                FeagiFailInvalidDimensions::new("Dimensions cannot be 0 in any direction!").into(),
-            );
+            return Err(FeagiFailInvalidDimensions::new("Dimensions cannot be 0 in any direction!").into());
         }
         Ok(Self { data })
     }
@@ -31,9 +29,6 @@ impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> SpatialDimensions
 
     /// Total number of elements in the index space (product of all axis lengths).
     pub fn spatial_element_count(&self) -> usize {
-        self.data
-            .iter()
-            .map(|dim| dim.quant_to_usize())
-            .product()
+        self.data.iter().map(|dim| dim.quant_to_usize()).product()
     }
 }

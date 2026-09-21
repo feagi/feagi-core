@@ -1,42 +1,85 @@
 use core::iter::FusedIterator;
-use core::marker::PhantomData;
-
-use crate::spatial_indexing_structs::axis_order::{AxisOrder, AxisOrderIdentifier};
-use crate::spatial_indexing_structs::coordinate::SpatialCoordinate;
+use serde::{Serialize, Deserialize};
+use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
+use crate::prelude::SpatialCoordinate;
+use crate::spatial_indexing_structs::axis_order::{AxisOrderEnum, AxisOrderArray};
 use crate::spatial_indexing_structs::dimensions::SpatialDimensions;
 use crate::spatial_indexing_structs::stride::SpatialStride;
-use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 
-/// A trait to easily group dimensions, stride, and axis order to handle linear coordinate conversions
-pub trait SpatialIndexingHelper<
+struct OwningSpatialIndexingHelper<QLinear, QCoord, QDim, const NUM_DIMS: usize>
+where
     QLinear: QuantizedUnsignedIntegerTrait,
-    const NUM_DIMS: usize,
-    const AXIS_ORDER_IDENTIFIER: AxisOrderIdentifier
-> {
-    const AXIS_ORDER: AxisOrder<NUM_DIMS> = AxisOrder::from_identifier(AXIS_ORDER_IDENTIFIER);
+    QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+    QDim: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+{
+    dimensions: SpatialDimensions<QDim, NUM_DIMS>,
+    axis_order: AxisOrderArray<NUM_DIMS>,
+    _p: core::marker::PhantomData<(QLinear, QCoord)>,
+}
 
-    type CoordinateQuant: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Serialize, Deserialize)]
+pub struct OwningSpatialIndexing<QLinear, QCoord, QDim, const NUM_DIMS: usize>
+where
+    QLinear: QuantizedUnsignedIntegerTrait,
+    QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+    QDim: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+{
+    dimensions: SpatialDimensions<QDim, NUM_DIMS>,
+    axis_order: AxisOrderArray<NUM_DIMS>,
+    #[serde(skip)]
+    stride: SpatialStride<NUM_DIMS>,
+    #[serde(skip)]
+    _p: core::marker::PhantomData<(QLinear, QCoord)>,
+}
 
-    type DimensionsQuant: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>;
-
-    /// Get the current in use dimensions
-    fn get_dimensions(&self) -> &SpatialDimensions<Self::DimensionsQuant, NUM_DIMS>;
-
-    fn coordinate_to_linear(&self, coordinate: &SpatialCoordinate<Self::CoordinateQuant, NUM_DIMS>) -> QLinear {
-        let stride = self._get_stride();
-        stride.coordinate_to_linear::<QLinear, Self::CoordinateQuant>(coordinate)
+impl<QLinear, QCoord, QDim, const NUM_DIMS: usize> 
+OwningSpatialIndexing<QLinear, QCoord, QDim, NUM_DIMS>
+where
+    QLinear: QuantizedUnsignedIntegerTrait,
+    QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+    QDim: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+{
+    /// Builds an owned helper from `dimensions` and the given axis-order enum.
+    pub fn from_dimensions(
+        dimensions: SpatialDimensions<QDim, NUM_DIMS>,
+        axis_order_enum: AxisOrderEnum,
+    ) -> Self {
+        let axis_order = axis_order_enum.generate_axis_order_array::<NUM_DIMS>();
+        
+        let stride = SpatialStride::new_stride(
+            &dimensions,
+            &axis_order,
+        );
+        Self {
+            dimensions,
+            axis_order,
+            stride,
+            _p: core::marker::PhantomData,
+        }
     }
 
-    fn linear_to_coordinate(&self, linear_index: QLinear) -> SpatialCoordinate<Self::CoordinateQuant, NUM_DIMS> {
-        let stride = self._get_stride();
-        stride.linear_to_coordinate::<QLinear, Self::CoordinateQuant, Self::DimensionsQuant>(linear_index, self.get_dimensions())
+    pub fn get_dimensions(&self) -> &SpatialDimensions<QDim, NUM_DIMS> {
+        &self.dimensions
+    }
+    
+    pub fn update_dimensions(&mut self, new_dimensions: SpatialDimensions<QDim, NUM_DIMS>) {
+        self.dimensions = new_dimensions;
+        self.update_stride();
+    }
+
+    pub fn linear_to_coordinate(&self, linear: QLinear) -> SpatialCoordinate<QCoord, NUM_DIMS> {
+        self.stride.linear_to_coordinate(linear, &self.dimensions)
+    }
+    
+    pub fn coordinate_to_linear(&self, coordinate: &SpatialCoordinate<QCoord, NUM_DIMS>) -> QLinear {
+        self.stride.coordinate_to_linear(coordinate)
     }
 
     /// Iterates all coordinates within the current dimensions, in linear index order.
     fn iter_coordinates(
         &self,
-    ) -> SpatialCoordinateIter<'_, QLinear, Self::CoordinateQuant, Self::DimensionsQuant, NUM_DIMS> {
-        SpatialCoordinateIter::new(self._get_stride(), self.get_dimensions())
+    ) -> SpatialCoordinateIter<'_, QLinear, QCoord, QDim, NUM_DIMS> {
+        SpatialCoordinateIter::new(&self.stride, self.get_dimensions())
     }
 
     /// Parallel iterator over all coordinates within the current dimensions.
@@ -53,7 +96,7 @@ pub trait SpatialIndexingHelper<
     {
         use rayon::prelude::*;
         let total = self.get_dimensions().spatial_element_count();
-        let stride = *self._get_stride();
+        let stride = self.stride;
         let dimensions = *self.get_dimensions();
         (0..total).into_par_iter().map(move |index| {
             let linear = QLinear::quant_from_usize_unchecked(index);
@@ -63,36 +106,13 @@ pub trait SpatialIndexingHelper<
             )
         })
     }
-
-    // NOTE: Yes, this is a bit ugly here, but the best way above to handle this that I can think of right now
-
-    #[doc(hidden)]
-    fn _get_stride(&self) -> &SpatialStride<QLinear::QuantType, NUM_DIMS>;
-
-}
-
-/// A trait to easily group dimensions, stride, and axis order to handle linear coordinate
-/// conversions, AS WELL as modifying the dimensions of a given struct
-pub trait SpatialIndexingHelperMut<
-    QLinear: QuantizedUnsignedIntegerTrait,
-    const NUM_DIMS: usize,
-    const AXIS_ORDER_IDENTIFIER: AxisOrderIdentifier
->: SpatialIndexingHelper<QLinear, NUM_DIMS, AXIS_ORDER_IDENTIFIER>
-{
-    /// Update dimensions, including updating the stride as well
-    fn update_dimensions(&mut self, new_dims: SpatialDimensions<Self::DimensionsQuant, NUM_DIMS>) {
-        self._get_stride_mut().update_stride(&new_dims, &Self::AXIS_ORDER.generate_axis_order_array());
-        *self._get_dimensions_mut() = new_dims;
+    
+    /// If dimensions or axis order changes, run this to update the stride cache
+    fn update_stride(&mut self) {
+        self.stride = SpatialStride::new_stride(&self.dimensions, &self.axis_order);
     }
-
-    // NOTE: Yes, this is a bit ugly here, but the best way above to handle this that I can think of right now
-
-    #[doc(hidden)]
-    fn _get_dimensions_mut(&mut self) -> &mut SpatialDimensions<Self::DimensionsQuant, NUM_DIMS>;
-
-    #[doc(hidden)]
-    fn _get_stride_mut(&mut self) -> &mut SpatialStride<QLinear::QuantType, NUM_DIMS>;
 }
+
 
 //region Iterator
 /// Iterates every coordinate in a dimension box, in linear index order.
@@ -103,11 +123,11 @@ pub struct SpatialCoordinateIter<
     QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     const NUM_DIMS: usize,
 > {
-    stride: &'a SpatialStride<QLinear::QuantType, NUM_DIMS>,
+    stride: &'a SpatialStride<NUM_DIMS>,
     dimensions: &'a SpatialDimensions<QDims, NUM_DIMS>,
     current: usize,
     total: usize,
-    _p: PhantomData<(QLinear, QCoord)>,
+    _p: core::marker::PhantomData<(QLinear, QCoord)>,
 }
 
 impl<
@@ -118,7 +138,7 @@ impl<
     const NUM_DIMS: usize,
 > SpatialCoordinateIter<'a, QLinear, QCoord, QDims, NUM_DIMS> {
     pub(crate) fn new(
-        stride: &'a SpatialStride<QLinear::QuantType, NUM_DIMS>,
+        stride: &'a SpatialStride<NUM_DIMS>,
         dimensions: &'a SpatialDimensions<QDims, NUM_DIMS>,
     ) -> Self {
         let total = dimensions.spatial_element_count();
@@ -127,7 +147,7 @@ impl<
             dimensions,
             current: 0,
             total,
-            _p: PhantomData,
+            _p: core::marker::PhantomData,
         }
     }
 }

@@ -5,26 +5,25 @@ use crate::spatial_indexing_structs::dimensions::SpatialDimensions;
 
 /// Generic owned stride value for an N-dimensional index space.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
-pub struct SpatialStride<QI: QuantizedUnsignedIntegerUnwrappedTrait, const NUM_DIMS: usize> {
+pub struct SpatialStride<const NUM_DIMS: usize> {
     #[serde(with = "serde_arrays")]
-    data: [QI; NUM_DIMS],
+    data: [usize; NUM_DIMS],
 }
 
-impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const NUM_DIMS: usize> SpatialStride<QI, NUM_DIMS> {
+impl<const NUM_DIMS: usize> SpatialStride<NUM_DIMS> {
     /// Create a new stride from dimensions and axis order.
-    pub fn new_stride<
-        QDims: QuantizedUnsignedIntegerTrait<QuantType=QI>,
-    >(
-        dims: &SpatialDimensions<QDims, NUM_DIMS>,
+    pub fn new_stride<QI: QuantizedUnsignedIntegerTrait>
+    (
+        dims: &SpatialDimensions<QI, NUM_DIMS>,
         axis_order: &AxisOrderArray<NUM_DIMS>,
     ) -> Self {
-        let mut stride_data = [QI::QUANT_ZERO; NUM_DIMS];
+        let mut stride_data = [0usize; NUM_DIMS];
         let mut next_stride = 1usize;
 
         // Build per-axis strides from the axis traversal order.
-        for &axis in axis_order.iter() {
+        for &axis in axis_order.as_slice().iter() {
             let axis_index = axis;
-            stride_data[axis_index] = QI::quant_from_usize_unchecked(next_stride);
+            stride_data[axis_index] = next_stride;
             let dim_axis = dims.as_slice()[axis_index].quant_to_usize();
             next_stride = next_stride.saturating_mul(dim_axis);
         }
@@ -33,11 +32,10 @@ impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const NUM_DIMS: usize> SpatialS
     }
 
     /// Given changes to dimensions and axis order, update this stride.
-    pub fn update_stride<
-        QDims: QuantizedUnsignedIntegerTrait<QuantType=QI>,
-    >(
+    pub fn update_stride<QI: QuantizedUnsignedIntegerTrait>
+    (
         &mut self,
-        dims: &SpatialDimensions<QDims, NUM_DIMS>,
+        dims: &SpatialDimensions<QI, NUM_DIMS>,
         axis_order: &AxisOrderArray<NUM_DIMS>
     ) {
         *self = Self::new_stride(dims, axis_order);
@@ -45,36 +43,36 @@ impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const NUM_DIMS: usize> SpatialS
 
     /// Convert from coordinate to linear index.
     pub fn coordinate_to_linear<
-        Linear: QuantizedUnsignedIntegerTrait<QuantType=QI>,
-        QCoords: QuantizedUnsignedIntegerTrait<QuantType=QI>,
+        QLinear: QuantizedUnsignedIntegerTrait,
+        QCoords: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
     >(
         &self,
         coordinate: &SpatialCoordinate<QCoords, NUM_DIMS>,
-    ) -> Linear {
+    ) -> QLinear {
         let mut linear_index = 0usize;
         for axis in 0..NUM_DIMS {
             let coord_axis = coordinate.as_slice()[axis].quant_to_usize();
-            let stride_axis = self.data[axis].quant_to_usize();
+            let stride_axis = self.data[axis];
             linear_index = linear_index + (coord_axis * stride_axis);
         }
-        Linear::quant_from_usize_unchecked(linear_index)
+        QLinear::quant_from_usize_unchecked(linear_index)
     }
 
     /// Convert from linear index to coordinate.
     pub fn linear_to_coordinate<
-        Linear: QuantizedUnsignedIntegerTrait<QuantType=QI>,
-        QCoords: QuantizedUnsignedIntegerTrait<QuantType=QI>,
-        QDims: QuantizedUnsignedIntegerTrait<QuantType=QI>,
+        QLinear: QuantizedUnsignedIntegerTrait,
+        QCoords: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+        QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
     >(
         &self,
-        linear_index: Linear,
+        linear_index: QLinear,
         dims: &SpatialDimensions<QDims, NUM_DIMS>,
     ) -> SpatialCoordinate<QCoords, NUM_DIMS> {
         let linear_index_usize = linear_index.quant_to_usize();
         let mut coordinate_data = [QCoords::QUANT_ZERO; NUM_DIMS];
 
         for axis in 0..NUM_DIMS {
-            let stride_axis = self.data[axis].quant_to_usize();
+            let stride_axis = self.data[axis];
             let dim_axis = dims.as_slice()[axis].quant_to_usize();
             let coord_axis = if dim_axis == 0 || stride_axis == 0 {
                 0
@@ -85,5 +83,13 @@ impl<QI: QuantizedUnsignedIntegerUnwrappedTrait, const NUM_DIMS: usize> SpatialS
         }
 
         SpatialCoordinate::new_coordinate(coordinate_data)
+    }
+}
+
+impl<const NUM_DIMS: usize> Default for SpatialStride<NUM_DIMS> {
+    fn default() -> Self {
+        SpatialStride {
+            data: [0; NUM_DIMS]
+        }
     }
 }
