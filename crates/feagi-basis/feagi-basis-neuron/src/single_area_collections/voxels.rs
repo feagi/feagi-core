@@ -27,6 +27,7 @@ create_wrapped_quantized_unsigned_integer!(
     pub CorticalAreaVoxelCoordinateAxisIndex
 );
 
+
 /// Defines the voxel dimensions of a voxel cortical area
 pub type CorticalAreaVoxelCoordinates<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
 SpatialCoordinate<CorticalAreaVoxelCoordinateAxisIndex<QI>, 3>;
@@ -35,13 +36,15 @@ SpatialCoordinate<CorticalAreaVoxelCoordinateAxisIndex<QI>, 3>;
 pub type CorticalAreaVoxelDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
 SpatialDimensions<CorticalAreaVoxelCoordinateAxisIndex<QI>, 3>;
 
+
 /// Represents a single voxel and its coordinate within a dimensional cortical area
 pub struct CorticalAreaVoxel<QI: QuantizedUnsignedIntegerUnwrappedTrait, QP: QuantizedDecimalUnwrappedTrait> {
     pub coordinate: CorticalAreaVoxelCoordinates<QI>,
     pub potential: CorticalAreaVoxelPotential<QP>
 }
 
-/// A collection of Cortical Area Voxels thats owned
+
+/// A collection of Cortical Area Voxels that owns all its inner fields
 pub type CorticalAreaVoxels<
     QI: QuantizedUnsignedIntegerUnwrappedTrait,
     QP: QuantizedDecimalUnwrappedTrait,

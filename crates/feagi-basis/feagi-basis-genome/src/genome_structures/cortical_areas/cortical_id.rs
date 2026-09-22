@@ -1,5 +1,7 @@
 #[cfg(feature = "base64")]
 use base64::engine::general_purpose;
+#[cfg(feature = "base64")]
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use crate::identifiers::feagi_identifier_error::{FeagiFailCorticalID, FeagiGenomeIdenfitierError};
 

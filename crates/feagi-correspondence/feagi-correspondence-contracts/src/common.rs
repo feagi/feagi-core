@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use feagi_basis::feagi_genome::identifiers::cortical_id::CorticalID;
+use feagi_basis::feagi_genome::genome_structures::cortical_areas::cortical_id::CorticalID;
 
 /// Represents data being passed to or from a connected system
 pub trait CorrespondenceData<'de>: Clone + PartialEq + Serialize + Deserialize<'de> {

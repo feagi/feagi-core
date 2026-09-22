@@ -5,5 +5,6 @@ pub mod prelude {
 
 pub mod feagi_genome_error;
 pub mod identifiers;
-pub mod cortical_interfaces;
 pub mod spatial;
+pub mod genome_structures;
+

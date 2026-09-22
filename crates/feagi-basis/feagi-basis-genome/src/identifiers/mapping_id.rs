@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::identifiers::cortical_id::CorticalID;
+use crate::genome_structures::cortical_areas::cortical_id::CorticalID;
 
 /// Identifies a set of mapping entries between two cortical areas in a directional matter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
