@@ -68,6 +68,7 @@ crate_path_for() {
         feagi-npu-plasticity) echo "crates/feagi-npu/plasticity" ;;
         feagi-evolutionary) echo "crates/feagi-evolutionary" ;;
         feagi-brain-development) echo "crates/feagi-brain-development" ;;
+        feagi-dataset-contracts) echo "crates/feagi-dataset-contracts" ;;
         feagi-io) echo "crates/feagi-io" ;;
         feagi-sensorimotor) echo "crates/feagi-sensorimotor" ;;
         feagi-services) echo "crates/feagi-services" ;;
@@ -92,6 +93,7 @@ CRATE_ORDER=(
     "feagi-npu-plasticity"
     "feagi-evolutionary"
     "feagi-brain-development"
+    "feagi-dataset-contracts"
     "feagi-sensorimotor"
     "feagi-services"
     "feagi-io"

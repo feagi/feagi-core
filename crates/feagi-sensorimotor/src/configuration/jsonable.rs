@@ -24,7 +24,8 @@ use crate::neuron_voxel_coding::xyzp::encoders::{
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::WrappedIOData;
 use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
+    CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex, CorticalUnitIndex,
+    NeuronDepth,
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
@@ -487,8 +488,10 @@ impl JSONDecoderProperties {
                 GazePropertiesNeuronVoxelXYZPDecoder::new_box(
                     *cortical_ids.first().unwrap(), // Eccentricity
                     *cortical_ids.get(1).unwrap(),  // Modularity
-                    *eccentricity_neuron_depth,
-                    *modularity_neuron_depth,
+                    // Persisted properties store Z depth only, which is the two-column
+                    // eccentricity layout and the single modulation column.
+                    CorticalChannelDimensions::new(2, 1, u32::from(*eccentricity_neuron_depth))?,
+                    CorticalChannelDimensions::new(1, 1, u32::from(*modularity_neuron_depth))?,
                     number_channels,
                     *percentage_neuron_positioning,
                 )

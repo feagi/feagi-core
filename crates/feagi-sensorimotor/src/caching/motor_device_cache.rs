@@ -8,7 +8,8 @@ use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_serialization::FeagiByteContainer;
 use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
+    CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex, CorticalUnitIndex,
+    NeuronDepth,
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning, PoseSchema,
@@ -194,8 +195,8 @@ macro_rules! motor_unit_functions {
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
-                eccentricity_z_neuron_resolution: NeuronDepth,
-                modulation_z_neuron_resolution: NeuronDepth,
+                eccentricity_dimensions: CorticalChannelDimensions,
+                modulation_dimensions: CorticalChannelDimensions,
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
@@ -207,14 +208,15 @@ macro_rules! motor_unit_functions {
                     "percentage_neuron_positioning": percentage_neuron_positioning
                 }).as_object().unwrap().clone();
 
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = GazePropertiesNeuronVoxelXYZPDecoder::new_box(
-                    eccentricity_cortical_id,
-                    modularity_cortical_id,
-                    eccentricity_z_neuron_resolution,
-                    modulation_z_neuron_resolution,
-                    number_channels,
-                    percentage_neuron_positioning,
-                )?;
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> =
+                    GazePropertiesNeuronVoxelXYZPDecoder::new_box(
+                        eccentricity_cortical_id,
+                        modularity_cortical_id,
+                        eccentricity_dimensions,
+                        modulation_dimensions,
+                        number_channels,
+                        percentage_neuron_positioning,
+                    )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::GazeProperties(GazeProperties::create_default_centered());
                 self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
