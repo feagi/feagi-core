@@ -1,5 +1,3 @@
-//! Neuron Properties of cortical areas in general (not assuming dimensionality or otherwise)
-
 use feagi_basis_quantization::prelude::*;
 
 create_wrapped_quantized_decimal!(
