@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::FeagiMessage;
 use feagi_io::traits_and_enums::client::FeagiClientRequesterProperties;
-use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
+use feagi_io::traits_and_enums::client::{FeagiClient, FeagiClientPusher, FeagiClientSubscriber};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::FeagiNetworkError;
 use feagi_sensorimotor::configuration::jsonable::JSONInputOutputDefinition;
@@ -112,6 +112,21 @@ fn publish_sensor_payload_with_transient_retry(
     ))
 }
 
+/// Display plus `Error::source` chain.
+///
+/// `reqwest::Error`'s `Display` is only `error sending request for url (...)`.
+/// The timeout, reset, or refusal is on the source chain.
+fn transport_error_detail(err: &dyn std::error::Error) -> String {
+    let mut detail = err.to_string();
+    let mut source = err.source();
+    while let Some(inner) = source {
+        detail.push_str(": ");
+        detail.push_str(&inner.to_string());
+        source = inner.source();
+    }
+    detail
+}
+
 /// Tokio adapter over the runtime-agnostic session state machine.
 ///
 /// This type is appropriate for desktop/server apps (e.g., Tauri) that already run Tokio.
@@ -177,8 +192,12 @@ impl TokioEmbodimentAgent {
 
             match self.sm.phase() {
                 SessionPhase::Active => {
-                    self.send_agent_configuration_details()?;
+                    // Rate negotiation reads simulation_timestep over HTTP. It must finish
+                    // before AgentConfigurationDetails so health_check does not race a
+                    // later cortical auto-create. The configuration ACK is the ZMQ reply
+                    // and is sent as soon as FEAGI stores the payload.
                     self.apply_sensory_rate_negotiation_blocking()?;
+                    self.send_agent_configuration_details()?;
                     return Ok(());
                 }
                 SessionPhase::Failed => {
@@ -218,8 +237,10 @@ impl TokioEmbodimentAgent {
 
             match agent.sm.phase() {
                 SessionPhase::Active => {
-                    agent.send_agent_configuration_details()?;
+                    // See `connect_and_register_spin`: negotiate before device configuration
+                    // so health_check does not race cortical auto-create.
                     agent.apply_sensory_rate_negotiation_async().await?;
+                    agent.send_agent_configuration_details()?;
                     return Ok(agent);
                 }
                 SessionPhase::Failed => {
@@ -613,20 +634,40 @@ impl TokioEmbodimentAgent {
         Ok(())
     }
 
+    /// Close a data socket during teardown.
+    ///
+    /// `Inactive` is already closed. `Errored` uses the endpoint's error-ack close.
+    /// An active socket uses `request_disconnect`.
+    fn disconnect_open_client(client: &mut dyn FeagiClient) -> Result<(), FeagiAgentError> {
+        let state = client.poll().clone();
+        match state {
+            FeagiEndpointState::Inactive => Ok(()),
+            FeagiEndpointState::Errored(_) => client
+                .confirm_error_and_close()
+                .map_err(FeagiAgentError::from),
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                client.request_disconnect().map_err(FeagiAgentError::from)
+            }
+            FeagiEndpointState::Pending => {
+                client.request_disconnect().map_err(FeagiAgentError::from)
+            }
+        }
+    }
+
     fn force_disconnect_transports(&mut self) -> Result<(), FeagiAgentError> {
         let mut first_error: Option<FeagiAgentError> = None;
 
         if let Some(pusher) = self.sensor_pusher.as_mut() {
-            if let Err(e) = pusher.request_disconnect() {
+            if let Err(e) = Self::disconnect_open_client(pusher.as_mut()) {
                 if first_error.is_none() {
-                    first_error = Some(FeagiAgentError::from(e));
+                    first_error = Some(e);
                 }
             }
         }
         if let Some(sub) = self.motor_subscriber.as_mut() {
-            if let Err(e) = sub.request_disconnect() {
+            if let Err(e) = Self::disconnect_open_client(sub.as_mut()) {
                 if first_error.is_none() {
-                    first_error = Some(FeagiAgentError::from(e));
+                    first_error = Some(e);
                 }
             }
         }
@@ -735,7 +776,10 @@ impl TokioEmbodimentAgent {
             })?;
         let health_url = Self::health_check_url(&config);
         let health_response = client.get(&health_url).send().await.map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("health_check request failed: {e}"))
+            FeagiAgentError::ConnectionFailed(format!(
+                "health_check request failed: {}",
+                transport_error_detail(&e)
+            ))
         })?;
         let health_json = health_response
             .json::<serde_json::Value>()
@@ -768,7 +812,10 @@ impl TokioEmbodimentAgent {
         }
 
         let health_after = client.get(&health_url).send().await.map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("post-update health_check failed: {e}"))
+            FeagiAgentError::ConnectionFailed(format!(
+                "post-update health_check failed: {}",
+                transport_error_detail(&e)
+            ))
         })?;
         let health_after_json = health_after
             .json::<serde_json::Value>()
@@ -824,7 +871,10 @@ impl TokioEmbodimentAgent {
             })?;
         let health_url = Self::health_check_url(config);
         let health_response = client.get(&health_url).send().map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("health_check request failed: {e}"))
+            FeagiAgentError::ConnectionFailed(format!(
+                "health_check request failed: {}",
+                transport_error_detail(&e)
+            ))
         })?;
         let health_json = health_response.json::<serde_json::Value>().map_err(|e| {
             FeagiAgentError::ConnectionFailed(format!("health_check parse failed: {e}"))
@@ -852,12 +902,56 @@ impl TokioEmbodimentAgent {
         }
 
         let health_after = client.get(&health_url).send().map_err(|e| {
-            FeagiAgentError::ConnectionFailed(format!("post-update health_check failed: {e}"))
+            FeagiAgentError::ConnectionFailed(format!(
+                "post-update health_check failed: {}",
+                transport_error_detail(&e)
+            ))
         })?;
         let health_after_json = health_after.json::<serde_json::Value>().map_err(|e| {
             FeagiAgentError::ConnectionFailed(format!("post-update health_check parse failed: {e}"))
         })?;
         let updated_rate_hz = Self::parse_effective_rate_hz_from_health(&health_after_json)?;
         Ok(updated_rate_hz)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transport_error_detail;
+    use std::error::Error;
+    use std::fmt;
+
+    #[derive(Debug)]
+    struct ChainError {
+        message: &'static str,
+        source: Option<Box<dyn Error + Send + Sync>>,
+    }
+
+    impl fmt::Display for ChainError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str(self.message)
+        }
+    }
+
+    impl Error for ChainError {
+        fn source(&self) -> Option<&(dyn Error + 'static)> {
+            self.source
+                .as_ref()
+                .map(|inner| inner.as_ref() as &(dyn Error + 'static))
+        }
+    }
+
+    #[test]
+    fn transport_error_detail_includes_source_chain() {
+        let err = ChainError {
+            message: "error sending request for url (http://127.0.0.1:8000/v1/system/health_check)",
+            source: Some(Box::new(ChainError {
+                message: "operation timed out",
+                source: None,
+            })),
+        };
+        let detail = transport_error_detail(&err);
+        assert!(detail.contains("error sending request"));
+        assert!(detail.contains("operation timed out"), "detail={detail}");
     }
 }

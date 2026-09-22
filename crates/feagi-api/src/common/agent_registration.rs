@@ -1728,6 +1728,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
     }
 
     if to_create.is_empty() {
+        sync_connectome_cortical_ids_to_npu();
         return;
     }
 
@@ -1741,6 +1742,24 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
             "⚠️ [API] Failed to auto-create cortical areas from device registrations: {}",
             e
         );
+    }
+    sync_connectome_cortical_ids_to_npu();
+}
+
+/// Existing areas skip create. Their NPU name-map entries still have to exist
+/// before sensory injection addresses them.
+fn sync_connectome_cortical_ids_to_npu() {
+    let manager = feagi_brain_development::ConnectomeManager::instance();
+    let manager = manager.read();
+    match manager.sync_cortical_ids_to_npu() {
+        Ok(count) => info!(
+            "[API] Synced {} cortical IDs into the NPU name map after agent auto-create",
+            count
+        ),
+        Err(error) => warn!(
+            "[API] Failed to sync cortical IDs into the NPU name map: {}",
+            error
+        ),
     }
 }
 

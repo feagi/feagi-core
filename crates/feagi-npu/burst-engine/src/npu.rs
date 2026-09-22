@@ -4719,6 +4719,102 @@ impl<
         true
     }
 
+    /// Delete many neurons and the synapses that touch them.
+    ///
+    /// Synapse invalidation is one pass over synapse storage. Per-neuron
+    /// deletion repeats that scan and holds the NPU lock long enough to stall
+    /// the burst loop.
+    ///
+    /// Returns how many ids were inside the neuron array. The same id listed
+    /// twice counts twice, matching `delete_neuron`.
+    pub fn delete_neurons(&mut self, neuron_ids: &[u32]) -> usize {
+        let neuron_count = {
+            let neuron_storage = self.neuron_storage.read().unwrap();
+            neuron_storage.count()
+        };
+        if neuron_count == 0 || neuron_ids.is_empty() {
+            return 0;
+        }
+
+        let mut neuron_marked = vec![false; neuron_count];
+        let mut deleted_count = 0usize;
+        for &neuron_id in neuron_ids {
+            let idx = neuron_id as usize;
+            if idx < neuron_count {
+                neuron_marked[idx] = true;
+                deleted_count += 1;
+            }
+        }
+        if deleted_count == 0 {
+            return 0;
+        }
+
+        let (clear_power, affected_areas) = {
+            let neuron_storage = self.neuron_storage.read().unwrap();
+            let power_id = self
+                .power_neuron_id
+                .load(std::sync::atomic::Ordering::Relaxed);
+            let power_idx = power_id as usize;
+            let clear_power = power_id != POWER_NEURON_UNSET
+                && power_idx < neuron_count
+                && neuron_marked[power_idx]
+                && neuron_storage.valid_mask()[power_idx]
+                && neuron_storage.cortical_areas()[power_idx] == 1;
+            let mut affected_areas = Vec::new();
+            for (idx, marked) in neuron_marked.iter().enumerate() {
+                if *marked
+                    && neuron_storage
+                        .valid_mask()
+                        .get(idx)
+                        .copied()
+                        .unwrap_or(false)
+                {
+                    affected_areas.push(neuron_storage.cortical_areas()[idx]);
+                }
+            }
+            (clear_power, affected_areas)
+        };
+
+        self.synapse_storage
+            .write()
+            .unwrap()
+            .remove_synapses_touching_marked_neurons(&neuron_marked)
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Invariant violation: failed to remove synapses touching deleted neurons: {error:?}"
+                )
+            });
+
+        {
+            let mut neuron_storage = self.neuron_storage.write().unwrap();
+            neuron_storage.invalidate_lookup_caches_for_areas(&affected_areas);
+            let valid_mask = neuron_storage.valid_mask_mut();
+            for (idx, marked) in neuron_marked.iter().enumerate() {
+                if *marked {
+                    valid_mask[idx] = false;
+                }
+            }
+        }
+
+        if clear_power {
+            self.power_neuron_id
+                .store(POWER_NEURON_UNSET, std::sync::atomic::Ordering::Release);
+        }
+
+        deleted_count
+    }
+
+    /// Cortical area index for each neuron id, using one neuron-storage lock.
+    ///
+    /// `None` means the id is out of range or the neuron is already invalid.
+    pub fn cortical_area_indices_for(&self, neuron_ids: &[u32]) -> Vec<Option<u32>> {
+        let neuron_storage = self.neuron_storage.read().unwrap();
+        neuron_ids
+            .iter()
+            .map(|&neuron_id| neuron_storage.get_cortical_area(neuron_id as usize))
+            .collect()
+    }
+
     /// Check if a neuron exists and is valid (not deleted)
     pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
         let idx = neuron_id as usize;
@@ -6889,6 +6985,57 @@ mod tests {
         assert!(!npu.is_neuron_valid(deleted.0));
         assert_eq!(npu.get_synapse_count(), 1);
         assert!(npu.remove_synapse(source, target));
+        assert_eq!(npu.get_synapse_count(), 0);
+    }
+
+    #[test]
+    fn test_delete_neurons_clears_touched_synapses_in_one_pass() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+        let keep_a = npu
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .unwrap();
+        let drop_a = npu
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .unwrap();
+        let drop_b = npu
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 2, 0, 0)
+            .unwrap();
+        let keep_b = npu
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 3, 0, 0)
+            .unwrap();
+
+        for (from, to) in [
+            (keep_a, drop_a),
+            (drop_a, drop_b),
+            (drop_b, keep_b),
+            (keep_a, keep_b),
+        ] {
+            npu.add_synapse(
+                from,
+                to,
+                SynapticWeight(128.0),
+                SynapticPsp(255.0),
+                SynapseType::Excitatory,
+                0,
+                1,
+            )
+            .unwrap();
+        }
+        assert_eq!(npu.get_synapse_count(), 4);
+
+        let deleted = npu.delete_neurons(&[drop_a.0, drop_b.0, 10_000]);
+        assert_eq!(deleted, 2);
+        assert!(!npu.is_neuron_valid(drop_a.0));
+        assert!(!npu.is_neuron_valid(drop_b.0));
+        assert!(npu.is_neuron_valid(keep_a.0));
+        assert!(npu.is_neuron_valid(keep_b.0));
+        assert_eq!(npu.get_synapse_count(), 1);
+        assert!(npu.remove_synapse(keep_a, keep_b));
         assert_eq!(npu.get_synapse_count(), 0);
     }
 

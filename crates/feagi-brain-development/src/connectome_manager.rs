@@ -957,16 +957,19 @@ impl ConnectomeManager {
         // Use base64 format for proper CorticalID conversion
         if let Some(ref npu) = self.npu {
             trace!(target: "feagi-bdu", "[LOCK-TRACE] add_cortical_area: attempting NPU lock for registration");
-            if let Ok(mut npu_lock) = npu.lock() {
-                trace!(target: "feagi-bdu", "[LOCK-TRACE] add_cortical_area: acquired NPU lock for registration");
-                npu_lock.register_cortical_area(cortical_idx, cortical_id.as_base_64());
-                trace!(
-                    target: "feagi-bdu",
-                    "Registered cortical area idx={} -> '{}' in NPU",
-                    cortical_idx,
-                    cortical_id.as_base_64()
-                );
-            }
+            let mut npu_lock = npu.lock().map_err(|e| {
+                BduError::Internal(format!(
+                    "Failed to lock NPU for cortical area registration: {}",
+                    e
+                ))
+            })?;
+            npu_lock.register_cortical_area(cortical_idx, cortical_id.as_base_64());
+            trace!(
+                target: "feagi-bdu",
+                "Registered cortical area idx={} -> '{}' in NPU",
+                cortical_idx,
+                cortical_id.as_base_64()
+            );
         }
 
         // Synchronize cortical area flags with NPU (psp_uniform_distribution, mp_driven_psp, etc.)
@@ -5033,26 +5036,22 @@ impl ConnectomeManager {
         // Those areas won't be registered via `add_cortical_area()` (it registers only if NPU is present),
         // which causes visualization encoding to fall back to "area_{idx}" and subsequently drop the area
         // (base64 decode fails), making BV appear to "miss" firing activity for that cortical area.
-        let existing_area_count = self.cortical_id_to_idx.len();
-        if existing_area_count > 0 {
-            match npu.lock() {
-                Ok(mut npu_lock) => {
-                    for (cortical_id, cortical_idx) in self.cortical_id_to_idx.iter() {
-                        npu_lock.register_cortical_area(*cortical_idx, cortical_id.as_base_64());
-                    }
+        match self.sync_cortical_ids_to_npu() {
+            Ok(existing_area_count) => {
+                if existing_area_count > 0 {
                     info!(
                         target: "feagi-bdu",
-                        "🔁 Backfilled {} cortical area registrations into NPU",
+                        "Backfilled {} cortical area registrations into NPU",
                         existing_area_count
                     );
                 }
-                Err(e) => {
-                    warn!(
-                        target: "feagi-bdu",
-                        "⚠️ Failed to lock NPU for cortical area backfill registration: {}",
-                        e
-                    );
-                }
+            }
+            Err(e) => {
+                warn!(
+                    target: "feagi-bdu",
+                    "Failed to lock NPU for cortical area backfill registration: {}",
+                    e
+                );
             }
         }
 
@@ -5060,6 +5059,25 @@ impl ConnectomeManager {
         self.update_all_cached_stats();
         info!(target: "feagi-bdu","📊 Initialized cached stats: {} neurons, {} synapses",
             self.get_neuron_count(), self.get_synapse_count());
+    }
+
+    /// Write every connectome cortical ID into the NPU name map.
+    ///
+    /// Sensory injection looks up areas in that map. An area that exists only
+    /// in the connectome is invisible to injection.
+    pub fn sync_cortical_ids_to_npu(&self) -> BduResult<usize> {
+        let npu = self
+            .npu
+            .as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        let mut npu_lock = npu.lock().map_err(|e| {
+            BduError::Internal(format!("Failed to lock NPU for cortical ID sync: {}", e))
+        })?;
+        let count = self.cortical_id_to_idx.len();
+        for (cortical_id, cortical_idx) in &self.cortical_id_to_idx {
+            npu_lock.register_cortical_area(*cortical_idx, cortical_id.as_base_64());
+        }
+        Ok(count)
     }
 
     /// Check if NPU is connected
@@ -7990,7 +8008,13 @@ impl ConnectomeManager {
         Ok(neuron_ids)
     }
 
-    /// Delete multiple neurons at once (batch operation)
+    /// Delete multiple neurons at once (batch operation).
+    ///
+    /// Shared access is enough: neuron storage lives in the NPU mutex, and
+    /// counts are updated through `StateManager`. Callers must not hold the
+    /// connectome write lock across this call. `health_check` only needs a
+    /// shared connectome lock, and an exclusive lock here stalls it for the
+    /// whole deletion.
     ///
     /// # Arguments
     ///
@@ -8000,7 +8024,7 @@ impl ConnectomeManager {
     ///
     /// Number of neurons actually deleted
     ///
-    pub fn delete_neurons_batch(&mut self, neuron_ids: Vec<u64>) -> BduResult<usize> {
+    pub fn delete_neurons_batch(&self, neuron_ids: Vec<u64>) -> BduResult<usize> {
         // Get NPU
         let npu = self
             .npu
@@ -8011,23 +8035,19 @@ impl ConnectomeManager {
             .lock()
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
 
-        let mut deleted_count = 0;
+        let neuron_ids_u32: Vec<u32> = neuron_ids
+            .iter()
+            .map(|neuron_id| *neuron_id as u32)
+            .collect();
+        let cortical_indices = npu_lock.cortical_area_indices_for(&neuron_ids_u32);
+        let deleted_count = npu_lock.delete_neurons(&neuron_ids_u32);
+
         let mut per_area_deleted: std::collections::HashMap<String, usize> =
             std::collections::HashMap::new();
-
-        // Delete each neuron
-        // Note: Could be optimized with a batch delete method in NPU if needed
-        for neuron_id in neuron_ids {
-            let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
-            let cortical_id =
-                cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
-
-            if npu_lock.delete_neuron(neuron_id as u32) {
-                deleted_count += 1;
-                if let Some(cortical_id) = cortical_id {
-                    let key = cortical_id.as_base_64();
-                    *per_area_deleted.entry(key).or_insert(0) += 1;
-                }
+        for cortical_idx in cortical_indices.into_iter().flatten() {
+            if let Some(cortical_id) = self.cortical_idx_to_id.get(&cortical_idx) {
+                let key = cortical_id.as_base_64();
+                *per_area_deleted.entry(key).or_insert(0) += 1;
             }
         }
 

@@ -8,7 +8,9 @@ use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_burst_engine::TracingMutex;
 use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
-use std::sync::Arc;
+use parking_lot::RwLock;
+use std::sync::{Arc, Barrier};
+use std::thread;
 
 /// Helper to create an isolated test manager with NPU
 fn create_test_manager() -> ConnectomeManager {
@@ -324,6 +326,112 @@ fn test_batch_neuron_operations() {
     assert_eq!(deleted_count, 50);
 
     println!("✅ Test 4: Batch neuron operations - PASSED");
+}
+
+/// Structural rebuild deletes neurons while `health_check` still needs a
+/// shared connectome lock. Batch delete must run under that shared lock.
+#[test]
+fn delete_neurons_batch_allows_concurrent_connectome_read() {
+    let mut manager = create_test_manager();
+    let cortical_id = CorticalID::try_from_legacy_ascii("custdel1").unwrap();
+    let cortical_type = cortical_id
+        .as_cortical_type()
+        .expect("Failed to get cortical type");
+    let area = CorticalArea::new(
+        cortical_id,
+        0,
+        "Concurrent Delete".to_string(),
+        CorticalAreaDimensions::new(4, 4, 1).unwrap(),
+        (0, 0, 0).into(),
+        cortical_type,
+    )
+    .expect("Failed to create area");
+    manager.add_cortical_area(area).expect("Failed to add area");
+
+    let mut neurons_to_create = Vec::new();
+    for i in 0..4 {
+        neurons_to_create.push((
+            i,
+            0u32,
+            0u32,
+            1.0,
+            f32::MAX,
+            0.1,
+            0.0,
+            0,
+            2,
+            1.0,
+            3,
+            5,
+            false,
+        ));
+    }
+    let neuron_ids = manager
+        .batch_create_neurons(&cortical_id, neurons_to_create)
+        .expect("Failed to batch create neurons");
+
+    let connectome = Arc::new(RwLock::new(manager));
+    let started = Arc::new(Barrier::new(2));
+    let reader_connectome = Arc::clone(&connectome);
+    let reader_started = Arc::clone(&started);
+    let reader = thread::spawn(move || {
+        reader_started.wait();
+        reader_connectome.try_read().is_some()
+    });
+
+    let deleted_count = {
+        let shared = connectome.read();
+        started.wait();
+        shared
+            .delete_neurons_batch(neuron_ids)
+            .expect("Failed to batch delete under shared lock")
+    };
+    assert_eq!(deleted_count, 4);
+    assert!(
+        reader.join().expect("reader thread panicked"),
+        "health_check-style connectome read must succeed during neuron deletion"
+    );
+}
+
+#[test]
+fn sync_cortical_ids_to_npu_restores_names_after_npu_reset() {
+    let mut manager = create_test_manager();
+    let cortical_id = CorticalID::try_from_legacy_ascii("custsyn1").unwrap();
+    let cortical_type = cortical_id
+        .as_cortical_type()
+        .expect("Failed to get cortical type");
+    let area = CorticalArea::new(
+        cortical_id,
+        0,
+        "Sync Registry".to_string(),
+        CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+        (0, 0, 0).into(),
+        cortical_type,
+    )
+    .expect("Failed to create area");
+    manager.add_cortical_area(area).expect("Failed to add area");
+    let expected = cortical_id.as_base_64();
+    let cortical_idx = manager
+        .get_cortical_idx(&cortical_id)
+        .expect("added area has a cortical index");
+
+    {
+        let npu = manager.get_npu().expect("test manager has NPU");
+        let mut npu_lock = npu.lock().expect("NPU lock");
+        assert!(npu_lock.get_cortical_area_id(&expected).is_some());
+        npu_lock
+            .reset_for_new_genome()
+            .expect("NPU reset should succeed");
+        assert!(npu_lock.get_cortical_area_id(&expected).is_none());
+    }
+
+    let synced = manager
+        .sync_cortical_ids_to_npu()
+        .expect("sync should restore NPU names");
+    assert_eq!(synced, 1);
+    let npu = manager.get_npu().expect("test manager has NPU");
+    let npu_lock = npu.lock().expect("NPU lock");
+    assert_eq!(npu_lock.get_cortical_area_id(&expected), Some(cortical_idx));
 }
 
 // ============================================================================

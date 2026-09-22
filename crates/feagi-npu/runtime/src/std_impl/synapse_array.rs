@@ -308,6 +308,27 @@ impl SynapseStorage for SynapseArray {
         Ok(removed)
     }
 
+    fn remove_synapses_touching_marked_neurons(
+        &mut self,
+        neuron_marked: &[bool],
+    ) -> crate::traits::Result<usize> {
+        let mut removed = 0;
+        for idx in 0..self.count {
+            if !self.valid_mask[idx] {
+                continue;
+            }
+            let source = self.source_neurons[idx] as usize;
+            let target = self.target_neurons[idx] as usize;
+            let source_marked = neuron_marked.get(source).copied().unwrap_or(false);
+            let target_marked = neuron_marked.get(target).copied().unwrap_or(false);
+            if source_marked || target_marked {
+                self.valid_mask[idx] = false;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+
     fn remove_synapses_between(
         &mut self,
         source: u32,

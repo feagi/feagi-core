@@ -923,7 +923,9 @@ impl FeagiAgentHandler {
                     "Stored device registrations for agent {}",
                     agent_id.to_base64()
                 );
-                // Send acknowledgment so REQ/REP clients can complete the request
+                // Reply on this request immediately. Holding the reply until
+                // auto_create finishes leaves the control socket unanswered; a
+                // later stop/deregister on that socket terminates FEAGI.
                 self.send_message_to_agent(agent_id, FeagiMessage::HeartBeat, 0)?;
                 Ok(None)
             }

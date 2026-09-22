@@ -3646,10 +3646,15 @@ impl GenomeServiceImpl {
                 "[STRUCTURAL-REBUILD] Deleting {} existing neurons",
                 neurons_to_delete.len()
             );
-            let mut manager = connectome.write();
-            manager
+            // NPU deletion can take longer than the desktop health_check timeout.
+            // A write lock here blocks that read for the whole loop. Shared
+            // access is enough; the NPU mutex still excludes the burst loop.
+            let manager = connectome.read();
+            let count = manager
                 .delete_neurons_batch(neurons_to_delete)
-                .map_err(|e| ServiceError::Backend(format!("Failed to delete neurons: {}", e)))?
+                .map_err(|e| ServiceError::Backend(format!("Failed to delete neurons: {}", e)))?;
+            drop(manager);
+            count
         } else {
             0
         };
@@ -3976,6 +3981,16 @@ impl GenomeServiceImpl {
                 )
                 .map_err(|e| ServiceError::Backend(format!("NPU neuron creation failed: {}", e)))?
         };
+
+        {
+            let manager = connectome.read();
+            manager.sync_cortical_ids_to_npu().map_err(|e| {
+                ServiceError::Backend(format!(
+                    "Failed to sync cortical IDs to NPU after rebuild: {}",
+                    e
+                ))
+            })?;
+        }
 
         let creation_duration = creation_start.elapsed();
         info!(

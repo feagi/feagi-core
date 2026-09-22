@@ -569,6 +569,16 @@ where
         dispatch_mut!(self, delete_neuron(neuron_id))
     }
 
+    /// Delete many neurons with one synapse-storage pass. See `RustNPU::delete_neurons`.
+    pub fn delete_neurons(&mut self, neuron_ids: &[u32]) -> usize {
+        dispatch_mut!(self, delete_neurons(neuron_ids))
+    }
+
+    /// Cortical area index for each neuron id. See `RustNPU::cortical_area_indices_for`.
+    pub fn cortical_area_indices_for(&self, neuron_ids: &[u32]) -> Vec<Option<u32>> {
+        dispatch!(self, cortical_area_indices_for(neuron_ids))
+    }
+
     pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
         let idx = neuron_id as usize;
         match self {

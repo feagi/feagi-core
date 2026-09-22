@@ -433,6 +433,19 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         &mut self.valid_mask[..count]
     }
 
+    fn invalidate_lookup_caches_for_areas(&mut self, cortical_areas: &[u32]) {
+        if let Ok(mut cache) = self.coord_map_cache.lock() {
+            for area in cortical_areas {
+                cache.remove(area);
+            }
+        }
+        if let Ok(mut index) = self.cortical_area_neuron_index.lock() {
+            for area in cortical_areas {
+                index.remove(area);
+            }
+        }
+    }
+
     // Metadata
     fn count(&self) -> usize {
         self.count

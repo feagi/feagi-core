@@ -134,8 +134,21 @@ impl CommandControlAgent {
         let requester = self.requester.as_mut().ok_or_else(|| {
             FeagiAgentError::ConnectionFailed("No socket is active to disconnect!".to_string())
         })?;
-        requester.request_disconnect()?;
-        Ok(())
+        // Deregistration success already disconnects this socket inside
+        // `poll_for_messages`. A later teardown must treat that as done.
+        let state = requester.poll().clone();
+        match state {
+            FeagiEndpointState::Inactive => Ok(()),
+            FeagiEndpointState::Errored(_) => {
+                requester.confirm_error_and_close()?;
+                Ok(())
+            }
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                requester.request_disconnect()?;
+                Ok(())
+            }
+            FeagiEndpointState::Pending => requester.request_disconnect().map_err(Into::into),
+        }
     }
 
     //endregion
@@ -320,8 +333,15 @@ mod tests {
         }
 
         fn request_disconnect(&mut self) -> Result<(), feagi_io::FeagiNetworkError> {
-            self.state = FeagiEndpointState::Inactive;
-            Ok(())
+            match self.state {
+                FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                    self.state = FeagiEndpointState::Inactive;
+                    Ok(())
+                }
+                _ => Err(feagi_io::FeagiNetworkError::InvalidSocketProperties(
+                    "Cannot disconnect: client is not in Active state".to_string(),
+                )),
+            }
         }
 
         fn confirm_error_and_close(&mut self) -> Result<(), feagi_io::FeagiNetworkError> {
@@ -402,5 +422,26 @@ mod tests {
             !last_request.lock().expect("lock").is_empty(),
             "expected a serialized registration request to be published"
         );
+    }
+
+    #[test]
+    fn disconnect_is_success_when_control_socket_is_already_inactive() {
+        let endpoint = TransportProtocolEndpoint::Zmq(
+            ZmqUrl::new("tcp://example:1").expect("valid dummy endpoint"),
+        );
+        let props = Box::new(DummyRequesterProperties {
+            endpoint,
+            last_request: Arc::new(Mutex::new(Vec::new())),
+        });
+        let mut agent = CommandControlAgent::new(props);
+        agent
+            .request_connect()
+            .expect("connect request should succeed");
+        agent
+            .request_disconnect()
+            .expect("active control socket should disconnect");
+        agent
+            .request_disconnect()
+            .expect("second disconnect must not fail teardown");
     }
 }

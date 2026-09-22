@@ -194,6 +194,12 @@ pub trait NeuronStorage: Send + Sync {
     /// Mutable valid mask
     fn valid_mask_mut(&mut self) -> &mut [bool];
 
+    /// Drop cached coordinate and per-area neuron indexes for these cortical indices.
+    ///
+    /// Neuron deletion marks slots invalid. Leaving the caches in place makes later
+    /// sensory injection resolve coordinates to neurons that no longer exist.
+    fn invalidate_lookup_caches_for_areas(&mut self, _cortical_areas: &[u32]) {}
+
     // === Metadata ===
 
     /// Number of neurons currently stored
@@ -405,6 +411,13 @@ pub trait SynapseStorage: Send + Sync {
 
     /// Remove every incoming and outgoing synapse touching one neuron.
     fn remove_synapses_touching_neuron(&mut self, neuron_id: u32) -> Result<usize>;
+
+    /// Remove every synapse whose source or target is marked.
+    ///
+    /// `neuron_marked[neuron_id]` is true for a neuron being deleted. One pass
+    /// over synapse storage keeps a structural rebuild from scanning the whole
+    /// synapse array once per neuron.
+    fn remove_synapses_touching_marked_neurons(&mut self, neuron_marked: &[bool]) -> Result<usize>;
 
     /// Remove synapses between specific source and target
     fn remove_synapses_between(&mut self, source: u32, target: u32) -> Result<usize>;
