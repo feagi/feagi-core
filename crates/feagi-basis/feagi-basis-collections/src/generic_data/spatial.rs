@@ -69,25 +69,25 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound(deserialize = "QDims: ::serde::de::DeserializeOwned"))]
-pub struct SpatialParDataOwning<QLinear, QCoord, QDims, S, const NUM_DIMS: usize>
+pub struct SpatialParDataOwning<QLinear, QCoord, QDims, S, D, const NUM_DIMS: usize>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    S: ParDataStore + DeserializeOwned + 'static
+    S: ParDataStore<Elem=D> + DeserializeOwned + 'static,
 {
     context: SpatialContext<QDims, NUM_DIMS>,
     data: S,
     _p: core::marker::PhantomData<(QLinear, QCoord)>
 }
 
-impl <QLinear, QCoord, QDims, S, const NUM_DIMS: usize>
-SpatialParDataOwning<QLinear, QCoord, QDims, S, NUM_DIMS>
+impl <QLinear, QCoord, QDims, S, D, const NUM_DIMS: usize>
+SpatialParDataOwning<QLinear, QCoord, QDims, S, D, NUM_DIMS>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    S: ParDataStore + DeserializeOwned + 'static
+    S: ParDataStore<Elem=D> + DeserializeOwned + 'static,
 {
     pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>, axis_order: AxisOrderEnum, data: S) -> Result<Self, FeagiDataCollectionError> {
         if dimensions.spatial_element_count() != data.len() {
@@ -130,14 +130,14 @@ where
     }
 }
 
-impl <QLinear, QCoord, QDims, S, const NUM_DIMS: usize>
+impl <QLinear, QCoord, QDims, S, D, const NUM_DIMS: usize>
 SpatialParDataTrait<QLinear, QCoord, QDims, S, NUM_DIMS> for
-SpatialParDataOwning<QLinear, QCoord, QDims, S, NUM_DIMS>
+SpatialParDataOwning<QLinear, QCoord, QDims, S, D, NUM_DIMS>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    S: ParDataStore + DeserializeOwned + 'static
+    S: ParDataStore<Elem=D> + DeserializeOwned + 'static,
 {
     fn data_as_slice(&self) -> &[S::Elem] {
         self.data.store_as_slice()
