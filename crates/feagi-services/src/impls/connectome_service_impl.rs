@@ -2927,6 +2927,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
             }
             manager.upsert_classifier(classifier.clone());
+            manager.reconfigure_classifier_scan(&classifier.kernel_memory_id);
             manager.recompute_brain_region_io_registry().map_err(|e| {
                 ServiceError::Backend(format!(
                     "Failed to recompute region IO after classifier upsert: {}",
@@ -5898,8 +5899,11 @@ mod tests {
             name: "Checker".to_string(),
             parent_region_id: region_key.clone(),
             coordinates_3d: [45, 15, 0],
+            training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
             kernel_area_id: Some(kernel_id.as_base_64()),
             class_area_id: Some(class_id.as_base_64()),
+            mask_area_id: None,
+            kernel_size: None,
             fields: vec![ClassifierField {
                 field_area_id: field_id.as_base_64(),
                 scan_twin_id: twin_id.as_base_64(),
@@ -5984,6 +5988,13 @@ mod tests {
                 twin_id.as_base_64(),
                 "field scan twin must survive connectome import"
             );
+            assert_eq!(
+                restored.training_mode,
+                feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
+                "a connectome saved before scanner mode reloads as kernel training"
+            );
+            assert!(restored.mask_area_id.is_none());
+            assert!(restored.kernel_size.is_none());
             let kernel_mem = manager
                 .get_cortical_area(&kernel_mem_id)
                 .expect("kernel memory area");

@@ -529,6 +529,15 @@ impl MemoryNeuronArray {
         }
     }
 
+    /// Activations since creation. One means the neuron was created on this call.
+    pub fn get_activation_count(&self, neuron_idx: usize) -> Option<u32> {
+        if self.is_valid_index(neuron_idx) && self.is_active[neuron_idx] {
+            Some(self.activation_count[neuron_idx])
+        } else {
+            None
+        }
+    }
+
     /// Get cortical area ID at index
     pub fn get_cortical_area_id(&self, neuron_idx: usize) -> Option<u32> {
         if self.is_valid_index(neuron_idx) {

@@ -60,6 +60,6 @@ pub use neuron_id_manager::{
 pub use pattern_detector::{BatchPatternDetector, PatternConfig, PatternDetector, TemporalPattern};
 pub use service::{
     MemoryAreaConfig, MemoryCorticalAreaRuntimeInfo, MemoryScanConfig, MemoryScanSource,
-    PlasticityCommand, PlasticityConfig, PlasticityService, ReplayFrame,
+    PlasticityCommand, PlasticityConfig, PlasticityService, ReplayFrame, ScannerMaskSource,
 };
 pub use stdp::{compute_activity_factors, compute_timing_factors, STDPConfig};

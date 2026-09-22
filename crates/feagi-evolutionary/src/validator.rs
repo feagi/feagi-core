@@ -872,8 +872,12 @@ mod tests {
                 name: "demo".to_string(),
                 parent_region_id: "missing".to_string(),
                 coordinates_3d: [0, 0, 0],
+                training_mode:
+                    feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
                 kernel_area_id: None,
                 class_area_id: None,
+                mask_area_id: None,
+                kernel_size: None,
                 fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
                     field_area_id: "cfield".to_string(),
                     scan_twin_id: "cscan1".to_string(),

@@ -191,6 +191,10 @@ pub struct RawClassifier {
     pub coordinates_3d: Option<Vec<i32>>,
     pub kernel_area_id: Option<String>,
     pub class_area_id: Option<String>,
+    #[serde(default)]
+    pub training_mode: Option<feagi_structures::genomic::classifiers::ClassifierTrainingMode>,
+    pub mask_area_id: Option<String>,
+    pub kernel_size: Option<[u32; 3]>,
     /// Current field bindings. Each entry is one Classifier mapping and its twin.
     pub fields: Option<Vec<feagi_structures::genomic::classifiers::ClassifierField>>,
     /// Previous singular field record. Loaded as one binding when `fields` is absent.
@@ -871,6 +875,55 @@ impl GenomeParser {
         Ok(regions)
     }
 
+    fn normalize_classifier_training(
+        classifier_id: &str,
+        training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode,
+        kernel_area_id: Option<String>,
+        class_area_id: Option<String>,
+        mask_area_id: Option<String>,
+        kernel_size: Option<[u32; 3]>,
+    ) -> EvoResult<(
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<[u32; 3]>,
+    )> {
+        use feagi_structures::genomic::classifiers::ClassifierTrainingMode;
+        match training_mode {
+            ClassifierTrainingMode::Kernel => {
+                if mask_area_id.is_some() || kernel_size.is_some() {
+                    return Err(EvoError::InvalidArea(format!(
+                    "Classifier '{classifier_id}' is in kernel mode and cannot store a mask or kernel size"
+                )));
+                }
+                Ok((kernel_area_id, class_area_id, None, None))
+            }
+            ClassifierTrainingMode::Scanner => {
+                if kernel_area_id.is_some() || class_area_id.is_some() {
+                    return Err(EvoError::InvalidArea(format!(
+                    "Classifier '{classifier_id}' is in scanner mode and cannot store kernel or class areas"
+                )));
+                }
+                let mask = mask_area_id
+                    .filter(|id| !id.trim().is_empty())
+                    .ok_or_else(|| {
+                        EvoError::InvalidArea(format!(
+                    "Classifier '{classifier_id}' is in scanner mode and is missing mask_area_id"
+                ))
+                    })?;
+                let size = kernel_size.ok_or_else(|| {
+                    EvoError::InvalidArea(format!(
+                    "Classifier '{classifier_id}' is in scanner mode and is missing kernel_size"
+                ))
+                })?;
+                feagi_structures::genomic::classifiers::validate_kernel_size(size).map_err(
+                    |e| EvoError::InvalidArea(format!("Classifier '{classifier_id}' {e}")),
+                )?;
+                Ok((None, None, Some(mask), Some(size)))
+            }
+        }
+    }
+
     fn parse_classifiers(
         raw_classifiers: &HashMap<String, RawClassifier>,
     ) -> EvoResult<Vec<Classifier>> {
@@ -917,13 +970,26 @@ impl GenomeParser {
                 ))
             })?;
             let fields = classifier_fields_from_raw(raw);
+            let training_mode = raw.training_mode.unwrap_or_default();
+            let (kernel_area_id, class_area_id, mask_area_id, kernel_size) =
+                Self::normalize_classifier_training(
+                    classifier_id,
+                    training_mode,
+                    raw.kernel_area_id.clone(),
+                    raw.class_area_id.clone(),
+                    raw.mask_area_id.clone(),
+                    raw.kernel_size,
+                )?;
             classifiers.push(Classifier {
                 classifier_id: classifier_id.clone(),
                 name,
                 parent_region_id,
                 coordinates_3d,
-                kernel_area_id: raw.kernel_area_id.clone(),
-                class_area_id: raw.class_area_id.clone(),
+                training_mode,
+                kernel_area_id,
+                class_area_id,
+                mask_area_id,
+                kernel_size,
                 fields,
                 kernel_memory_id,
                 class_memory_id,
@@ -1364,5 +1430,41 @@ mod tests {
         assert_eq!(classifier.class_memory_id, "mcmem1");
         assert_eq!(classifier.fields[0].scan_twin_id, "cscan1");
         assert_eq!(classifier.owned_area_ids().len(), 3);
+        assert_eq!(
+            classifier.training_mode,
+            feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel
+        );
+        assert!(classifier.mask_area_id.is_none());
+        assert!(classifier.kernel_size.is_none());
+    }
+
+    #[test]
+    fn test_parse_scanner_classifier_round_trip_fields() {
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {},
+            "brain_regions": {},
+            "classifiers": {
+                "clf-scan": {
+                    "name": "scan",
+                    "parent_region_id": "root",
+                    "coordinates_3d": [1, 2, 3],
+                    "training_mode": "scanner",
+                    "mask_area_id": "cmask",
+                    "kernel_size": [8, 8, 3],
+                    "kernel_memory_id": "mkmem1",
+                    "class_memory_id": "mcmem1"
+                }
+            }
+        }"#;
+        let parsed = GenomeParser::parse(json).expect("scanner classifier");
+        let classifier = &parsed.classifiers[0];
+        assert_eq!(
+            classifier.training_mode,
+            feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner
+        );
+        assert_eq!(classifier.mask_area_id.as_deref(), Some("cmask"));
+        assert_eq!(classifier.kernel_size, Some([8, 8, 3]));
+        assert!(classifier.kernel_area_id.is_none());
     }
 }

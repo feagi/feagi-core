@@ -585,8 +585,12 @@ mod tests {
                 name: "object_class".to_string(),
                 parent_region_id: "root".to_string(),
                 coordinates_3d: [1, 2, 3],
+                training_mode:
+                    feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
                 kernel_area_id: Some("ckern1".to_string()),
                 class_area_id: Some("ccls01".to_string()),
+                mask_area_id: None,
+                kernel_size: None,
                 fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
                     field_area_id: "cfield".to_string(),
                     scan_twin_id: "cscan1".to_string(),

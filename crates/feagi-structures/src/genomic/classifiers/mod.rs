@@ -41,6 +41,38 @@ pub struct ClassifierField {
     pub scan_twin_id: String,
 }
 
+/// How a classifier learns. Recall uses the same kernel geometry as training.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ClassifierTrainingMode {
+    /// One kernel sample and one class sample per burst.
+    #[default]
+    Kernel,
+    /// Slide `kernel_size` across each mapped field and label it from the mask.
+    Scanner,
+}
+
+impl ClassifierTrainingMode {
+    /// Genome and API spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Kernel => "kernel",
+            Self::Scanner => "scanner",
+        }
+    }
+
+    /// Parse a stored mode. Absent values are not accepted here.
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "kernel" => Ok(Self::Kernel),
+            "scanner" => Ok(Self::Scanner),
+            other => Err(format!(
+                "training_mode must be \"kernel\" or \"scanner\", got \"{other}\""
+            )),
+        }
+    }
+}
+
 /// First-class classifier record persisted in the genome.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Classifier {
@@ -50,11 +82,21 @@ pub struct Classifier {
     /// Region that contains this assembly. Classifiers are not regions.
     pub parent_region_id: String,
     pub coordinates_3d: [i32; 3],
+    /// Kernel mode ingests one sample per burst. Scanner mode learns from field windows.
+    /// Genomes saved before modes existed load as kernel mode.
+    #[serde(default)]
+    pub training_mode: ClassifierTrainingMode,
     /// Referenced inputs. Cleared when that area is deleted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kernel_area_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class_area_id: Option<String>,
+    /// Scanner-mode label volume. Width and height match each mapped field. Depth is the class count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mask_area_id: Option<String>,
+    /// Scanner-mode kernel `[x, y, z]`. Z must equal each mapped field's depth.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kernel_size: Option<[u32; 3]>,
     /// Field scans. Empty until Classifier mappings are drawn.
     #[serde(default)]
     pub fields: Vec<ClassifierField>,
@@ -91,6 +133,9 @@ impl Classifier {
         if let Some(class) = &self.class_area_id {
             inputs.push(class.clone());
         }
+        if let Some(mask) = &self.mask_area_id {
+            inputs.push(mask.clone());
+        }
         for field in &self.fields {
             inputs.push(field.field_area_id.clone());
         }
@@ -122,7 +167,45 @@ impl Classifier {
     pub fn references_input(&self, area_id: &str) -> bool {
         self.kernel_area_id.as_deref() == Some(area_id)
             || self.class_area_id.as_deref() == Some(area_id)
+            || self.mask_area_id.as_deref() == Some(area_id)
             || self.binding_for_field(area_id).is_some()
+    }
+
+    /// Replace the training mode and its inputs. The other mode's slots are cleared.
+    ///
+    /// Returns true when long-term memory learned under the previous geometry must be dropped.
+    pub fn apply_training_inputs(
+        &mut self,
+        mode: ClassifierTrainingMode,
+        kernel_area_id: Option<String>,
+        class_area_id: Option<String>,
+        mask_area_id: Option<String>,
+        kernel_size: Option<[u32; 3]>,
+    ) -> Result<bool, String> {
+        let previous_mode = self.training_mode;
+        let previous_size = self.kernel_size;
+        match mode {
+            ClassifierTrainingMode::Kernel => {
+                let kernel = kernel_area_id.ok_or_else(|| "kernel_area_id required".to_string())?;
+                let class = class_area_id.ok_or_else(|| "class_area_id required".to_string())?;
+                self.kernel_area_id = Some(required_area_id(kernel, "kernel_area_id")?);
+                self.class_area_id = Some(required_area_id(class, "class_area_id")?);
+                self.mask_area_id = None;
+                self.kernel_size = None;
+            }
+            ClassifierTrainingMode::Scanner => {
+                let mask = mask_area_id.ok_or_else(|| "mask_area_id required".to_string())?;
+                let size = kernel_size.ok_or_else(|| "kernel_size required".to_string())?;
+                validate_kernel_size(size)?;
+                self.mask_area_id = Some(required_area_id(mask, "mask_area_id")?);
+                self.kernel_size = Some(size);
+                self.kernel_area_id = None;
+                self.class_area_id = None;
+            }
+        }
+        self.training_mode = mode;
+        Ok(previous_mode != mode
+            || (mode == ClassifierTrainingMode::Scanner && previous_size != self.kernel_size))
     }
 
     /// Apply classifier-level edit. Does not replace owned internals or field bindings.
@@ -209,6 +292,9 @@ impl Classifier {
         if self.class_area_id.as_deref() == Some(area_id) {
             self.class_area_id = None;
         }
+        if self.mask_area_id.as_deref() == Some(area_id) {
+            self.mask_area_id = None;
+        }
         self.fields.retain(|field| field.field_area_id != area_id);
     }
 
@@ -277,6 +363,39 @@ impl Classifier {
     }
 }
 
+/// Every kernel axis must be at least one voxel.
+pub fn validate_kernel_size(size: [u32; 3]) -> Result<(), String> {
+    if size[0] == 0 || size[1] == 0 || size[2] == 0 {
+        return Err("kernel_size axes must be greater than zero".to_string());
+    }
+    Ok(())
+}
+
+/// Scanner kernel Z matches the image depth, and the mask shares the image's width and height.
+pub fn validate_scanner_field(
+    kernel_size: [u32; 3],
+    field: [u32; 3],
+    mask: [u32; 3],
+) -> Result<(), String> {
+    validate_kernel_size(kernel_size)?;
+    if field[0] == 0 || field[1] == 0 || field[2] == 0 {
+        return Err("field dimensions must be greater than zero".to_string());
+    }
+    if mask[2] == 0 {
+        return Err("mask depth must be greater than zero".to_string());
+    }
+    if kernel_size[0] > field[0] || kernel_size[1] > field[1] {
+        return Err("kernel_size does not fit the field".to_string());
+    }
+    if kernel_size[2] != field[2] {
+        return Err("kernel depth must equal the field depth".to_string());
+    }
+    if mask[0] != field[0] || mask[1] != field[1] {
+        return Err("mask width and height must equal the field".to_string());
+    }
+    Ok(())
+}
+
 fn required_area_id(area_id: String, field: &str) -> Result<String, String> {
     let trimmed = area_id.trim();
     if trimmed.is_empty() {
@@ -295,8 +414,11 @@ mod tests {
             name: "demo".to_string(),
             parent_region_id: "region".to_string(),
             coordinates_3d: [1, 2, 3],
+            training_mode: ClassifierTrainingMode::Kernel,
             kernel_area_id: Some("kernel".to_string()),
             class_area_id: Some("class".to_string()),
+            mask_area_id: None,
+            kernel_size: None,
             fields: Vec::new(),
             kernel_memory_id: "kmem".to_string(),
             class_memory_id: "cmem".to_string(),
@@ -380,5 +502,69 @@ mod tests {
         assert_eq!(classifier.kernel_area_id.as_deref(), Some("kernel2"));
         assert_eq!(classifier.class_area_id.as_deref(), Some("class2"));
         assert_eq!(classifier.fields[0].field_area_id, "field");
+    }
+
+    #[test]
+    fn scanner_mode_clears_kernel_inputs_and_reports_geometry_change() {
+        let mut classifier = sample();
+        let changed = classifier
+            .apply_training_inputs(
+                ClassifierTrainingMode::Scanner,
+                None,
+                None,
+                Some("mask".to_string()),
+                Some([8, 8, 3]),
+            )
+            .expect("scanner inputs");
+        assert!(changed);
+        assert_eq!(classifier.training_mode, ClassifierTrainingMode::Scanner);
+        assert!(classifier.kernel_area_id.is_none());
+        assert!(classifier.class_area_id.is_none());
+        assert_eq!(classifier.mask_area_id.as_deref(), Some("mask"));
+        assert_eq!(classifier.kernel_size, Some([8, 8, 3]));
+        assert!(classifier.references_input("mask"));
+        let same = classifier
+            .apply_training_inputs(
+                ClassifierTrainingMode::Scanner,
+                None,
+                None,
+                Some("mask".to_string()),
+                Some([8, 8, 3]),
+            )
+            .expect("same scanner geometry");
+        assert!(!same);
+    }
+
+    #[test]
+    fn kernel_mode_clears_scanner_inputs() {
+        let mut classifier = sample();
+        classifier
+            .apply_training_inputs(
+                ClassifierTrainingMode::Scanner,
+                None,
+                None,
+                Some("mask".to_string()),
+                Some([2, 2, 1]),
+            )
+            .expect("scanner");
+        classifier
+            .apply_training_inputs(
+                ClassifierTrainingMode::Kernel,
+                Some("kernel".to_string()),
+                Some("class".to_string()),
+                None,
+                None,
+            )
+            .expect("kernel");
+        assert!(classifier.mask_area_id.is_none());
+        assert!(classifier.kernel_size.is_none());
+        assert_eq!(classifier.kernel_area_id.as_deref(), Some("kernel"));
+    }
+
+    #[test]
+    fn scanner_field_must_match_mask_and_kernel_depth() {
+        assert!(validate_scanner_field([8, 8, 3], [256, 128, 3], [256, 128, 10]).is_ok());
+        assert!(validate_scanner_field([8, 8, 1], [256, 128, 3], [256, 128, 10]).is_err());
+        assert!(validate_scanner_field([8, 8, 3], [256, 128, 3], [200, 128, 10]).is_err());
     }
 }

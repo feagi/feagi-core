@@ -656,12 +656,25 @@ impl ConnectomeManager {
             Self::hash_i32(&mut hasher, classifier.coordinates_3d[0]);
             Self::hash_i32(&mut hasher, classifier.coordinates_3d[1]);
             Self::hash_i32(&mut hasher, classifier.coordinates_3d[2]);
+            Self::hash_str(&mut hasher, classifier.training_mode.as_str());
             match &classifier.kernel_area_id {
                 Some(area_id) => Self::hash_str(&mut hasher, area_id),
                 None => Self::hash_str(&mut hasher, "null"),
             }
             match &classifier.class_area_id {
                 Some(area_id) => Self::hash_str(&mut hasher, area_id),
+                None => Self::hash_str(&mut hasher, "null"),
+            }
+            match &classifier.mask_area_id {
+                Some(area_id) => Self::hash_str(&mut hasher, area_id),
+                None => Self::hash_str(&mut hasher, "null"),
+            }
+            match classifier.kernel_size {
+                Some([x, y, z]) => {
+                    Self::hash_u32(&mut hasher, x);
+                    Self::hash_u32(&mut hasher, y);
+                    Self::hash_u32(&mut hasher, z);
+                }
                 None => Self::hash_str(&mut hasher, "null"),
             }
             for field in &classifier.fields {
@@ -2631,6 +2644,14 @@ impl ConnectomeManager {
             }
         }
 
+        if let Some(mask_area_id) = &classifier.mask_area_id {
+            if let Ok(mask_id) = CorticalID::try_from_base_64(mask_area_id) {
+                if let Some(mask_area) = self.cortical_areas.get_mut(&mask_id) {
+                    Self::ensure_assembly_burst(mask_area);
+                }
+            }
+        }
+
         if let Some(kernel_mem) = self.cortical_areas.get_mut(&kernel_mem_id) {
             kernel_mem
                 .properties
@@ -2639,18 +2660,7 @@ impl ConnectomeManager {
                 "classifier_role".to_string(),
                 serde_json::json!("kernel_memory"),
             );
-            if let Some(kernel_area_id) = &classifier.kernel_area_id {
-                kernel_mem.properties.insert(
-                    "classifier_kernel_area_id".to_string(),
-                    serde_json::json!(kernel_area_id),
-                );
-            }
-            if let Some(class_area_id) = &classifier.class_area_id {
-                kernel_mem.properties.insert(
-                    "classifier_class_area_id".to_string(),
-                    serde_json::json!(class_area_id),
-                );
-            }
+            Self::write_classifier_training_properties(kernel_mem, classifier);
             kernel_mem.properties.insert(
                 "classifier_class_memory_id".to_string(),
                 serde_json::json!(classifier.class_memory_id),
@@ -2678,8 +2688,65 @@ impl ConnectomeManager {
                     "classifier_class_area_id".to_string(),
                     serde_json::json!(class_area_id),
                 );
+            } else {
+                class_mem.properties.remove("classifier_class_area_id");
             }
             Self::ensure_assembly_burst(class_mem);
+        }
+    }
+
+    /// Copy the classifier training record onto kernel memory. Scan reads these
+    /// properties; genome save keeps the classifier record, and load writes them back.
+    fn write_classifier_training_properties(
+        kernel_mem: &mut CorticalArea,
+        classifier: &feagi_structures::genomic::classifiers::Classifier,
+    ) {
+        use feagi_structures::genomic::classifiers::ClassifierTrainingMode;
+        kernel_mem.properties.insert(
+            "classifier_training_mode".to_string(),
+            serde_json::json!(classifier.training_mode),
+        );
+        match classifier.training_mode {
+            ClassifierTrainingMode::Kernel => {
+                kernel_mem.properties.remove("classifier_mask_area_id");
+                kernel_mem.properties.remove("classifier_kernel_size");
+                if let Some(kernel_area_id) = &classifier.kernel_area_id {
+                    kernel_mem.properties.insert(
+                        "classifier_kernel_area_id".to_string(),
+                        serde_json::json!(kernel_area_id),
+                    );
+                } else {
+                    kernel_mem.properties.remove("classifier_kernel_area_id");
+                }
+                if let Some(class_area_id) = &classifier.class_area_id {
+                    kernel_mem.properties.insert(
+                        "classifier_class_area_id".to_string(),
+                        serde_json::json!(class_area_id),
+                    );
+                } else {
+                    kernel_mem.properties.remove("classifier_class_area_id");
+                }
+            }
+            ClassifierTrainingMode::Scanner => {
+                kernel_mem.properties.remove("classifier_kernel_area_id");
+                kernel_mem.properties.remove("classifier_class_area_id");
+                if let Some(mask_area_id) = &classifier.mask_area_id {
+                    kernel_mem.properties.insert(
+                        "classifier_mask_area_id".to_string(),
+                        serde_json::json!(mask_area_id),
+                    );
+                } else {
+                    kernel_mem.properties.remove("classifier_mask_area_id");
+                }
+                if let Some(kernel_size) = classifier.kernel_size {
+                    kernel_mem.properties.insert(
+                        "classifier_kernel_size".to_string(),
+                        serde_json::json!(kernel_size),
+                    );
+                } else {
+                    kernel_mem.properties.remove("classifier_kernel_size");
+                }
+            }
         }
     }
 
@@ -2697,8 +2764,34 @@ impl ConnectomeManager {
         classifier: feagi_structures::genomic::classifiers::Classifier,
     ) {
         self.classifiers
-            .insert(classifier.classifier_id.clone(), classifier);
+            .insert(classifier.classifier_id.clone(), classifier.clone());
+        if let Ok(kernel_mem_id) = CorticalID::try_from_base_64(&classifier.kernel_memory_id) {
+            if self.cortical_areas.contains_key(&kernel_mem_id) {
+                self.apply_loaded_classifier_assembly(&classifier);
+            }
+        }
         self.refresh_classifiers_hash();
+    }
+
+    /// Rebuild the live scan after the classifier record changes.
+    pub fn reconfigure_classifier_scan(&self, kernel_memory_id: &str) {
+        #[cfg(feature = "plasticity")]
+        {
+            let Ok(memory_id) = CorticalID::try_from_base_64(kernel_memory_id) else {
+                return;
+            };
+            let Some(executor) = &self.plasticity_executor else {
+                return;
+            };
+            let Ok(exec) = executor.lock() else {
+                return;
+            };
+            self.configure_memory_scan_on_executor(&*exec, &memory_id);
+        }
+        #[cfg(not(feature = "plasticity"))]
+        {
+            let _ = kernel_memory_id;
+        }
     }
 
     pub fn get_classifier(
@@ -2739,17 +2832,25 @@ impl ConnectomeManager {
 
     /// Drop input references when a non-owned area is deleted.
     pub fn clear_classifier_inputs_for_area(&mut self, area_id: &str) -> usize {
-        let mut updated = 0usize;
+        let mut updated = Vec::new();
         for classifier in self.classifiers.values_mut() {
             if classifier.references_input(area_id) {
                 classifier.clear_input(area_id);
-                updated += 1;
+                updated.push(classifier.clone());
             }
         }
-        if updated > 0 {
+        let count = updated.len();
+        for classifier in &updated {
+            if let Ok(kernel_mem_id) = CorticalID::try_from_base_64(&classifier.kernel_memory_id) {
+                if self.cortical_areas.contains_key(&kernel_mem_id) {
+                    self.apply_loaded_classifier_assembly(classifier);
+                }
+            }
+        }
+        if count > 0 {
             self.refresh_classifiers_hash();
         }
-        updated
+        count
     }
 
     /// Bind or clear classifier inputs when a mapping to an owned internal changes.
@@ -5518,6 +5619,17 @@ impl ConnectomeManager {
 
         let memory_area = self.cortical_areas.get(memory_id)?;
         let mem_props = extract_memory_properties(&memory_area.properties)?;
+        let training_mode = memory_area
+            .properties
+            .get("classifier_training_mode")
+            .and_then(|value| value.as_str())
+            .unwrap_or("kernel");
+        if training_mode == "scanner" {
+            return self.build_scanner_memory_scan_config(memory_id, memory_area, &mem_props);
+        }
+        if training_mode != "kernel" {
+            return None;
+        }
         let kernel_b64 = memory_area
             .properties
             .get("classifier_kernel_area_id")
@@ -5586,6 +5698,91 @@ impl ConnectomeManager {
             class_area_height: class_area.dimensions.height,
             class_memory_area_idx,
             sources,
+            scanner_mask: None,
+        })
+    }
+
+    #[cfg(feature = "plasticity")]
+    fn build_scanner_memory_scan_config(
+        &self,
+        memory_id: &CorticalID,
+        memory_area: &CorticalArea,
+        mem_props: &feagi_evolutionary::MemoryAreaProperties,
+    ) -> Option<feagi_npu_plasticity::MemoryScanConfig> {
+        use feagi_npu_plasticity::{
+            MemoryScanConfig, MemoryScanSource, ScanKernel, ScannerMaskSource,
+        };
+
+        let kernel_size = memory_area
+            .properties
+            .get("classifier_kernel_size")
+            .and_then(|value| value.as_array())
+            .filter(|values| values.len() == 3)?;
+        let kernel = ScanKernel {
+            width: kernel_size[0].as_u64().filter(|axis| *axis > 0)? as u32,
+            height: kernel_size[1].as_u64().filter(|axis| *axis > 0)? as u32,
+            depth: kernel_size[2].as_u64().filter(|axis| *axis > 0)? as u32,
+        };
+        let mask_b64 = memory_area
+            .properties
+            .get("classifier_mask_area_id")
+            .and_then(|value| value.as_str())?;
+        let class_mem_b64 = memory_area
+            .properties
+            .get("classifier_class_memory_id")
+            .and_then(|value| value.as_str())?;
+        let mask_id = CorticalID::try_from_base_64(mask_b64).ok()?;
+        let class_mem_id = CorticalID::try_from_base_64(class_mem_b64).ok()?;
+        if !self.mapping_from_src_to_dst_has_associative(memory_id, &class_mem_id) {
+            return None;
+        }
+        let mask_area = self.cortical_areas.get(&mask_id)?;
+        let class_memory_area_idx = *self.cortical_id_to_idx.get(&class_mem_id)?;
+        let class_channel_count = mask_area.dimensions.depth;
+        if class_channel_count == 0 {
+            return None;
+        }
+        let scan_fields = self.get_episodic_scan_upstream_cortical_areas(memory_id);
+        if scan_fields.is_empty() {
+            return None;
+        }
+        let twin_map = memory_area
+            .properties
+            .get("memory_twin_areas")
+            .and_then(|value| value.as_object())?;
+        let mut sources = Vec::new();
+        for field_idx in scan_fields {
+            let field_id = *self.cortical_idx_to_id.get(&field_idx)?;
+            let field_area = self.cortical_areas.get(&field_id)?;
+            let twin_b64 = twin_map.get(&field_id.as_base_64())?.as_str()?;
+            let twin_id = CorticalID::try_from_base_64(twin_b64).ok()?;
+            let twin_idx = *self.cortical_id_to_idx.get(&twin_id)?;
+            sources.push(MemoryScanSource {
+                field_area_idx: field_idx,
+                twin_area_idx: twin_idx,
+                field_width: field_area.dimensions.width,
+                field_height: field_area.dimensions.height,
+                field_depth: field_area.dimensions.depth,
+            });
+        }
+        if sources.is_empty() {
+            return None;
+        }
+        Some(MemoryScanConfig {
+            kernel,
+            min_window_activity: mem_props.min_window_activity,
+            scan_skip_density: mem_props.scan_skip_density,
+            class_channel_count,
+            class_area_width: 1,
+            class_area_height: 1,
+            class_memory_area_idx,
+            sources,
+            scanner_mask: Some(ScannerMaskSource {
+                mask_area_idx: *self.cortical_id_to_idx.get(&mask_id)?,
+                mask_width: mask_area.dimensions.width,
+                mask_height: mask_area.dimensions.height,
+                mask_depth: mask_area.dimensions.depth,
+            }),
         })
     }
 
@@ -9039,8 +9236,11 @@ mod tests {
             name: "hash_demo".to_string(),
             parent_region_id: "root".to_string(),
             coordinates_3d: [0, 0, 0],
+            training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
             kernel_area_id: None,
             class_area_id: None,
+            mask_area_id: None,
+            kernel_size: None,
             fields: Vec::new(),
             kernel_memory_id: "mkmem1".to_string(),
             class_memory_id: "mcmem1".to_string(),
@@ -10476,8 +10676,11 @@ mod tests {
             name: "demo".to_string(),
             parent_region_id: "root".to_string(),
             coordinates_3d: [0, 0, 0],
+            training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
             kernel_area_id: None,
             class_area_id: None,
+            mask_area_id: None,
+            kernel_size: None,
             fields: Vec::new(),
             kernel_memory_id: "mkmem1".to_string(),
             class_memory_id: "mcmem1".to_string(),
@@ -10522,8 +10725,11 @@ mod tests {
             name: "demo".to_string(),
             parent_region_id: "root".to_string(),
             coordinates_3d: [0, 0, 0],
+            training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
             kernel_area_id: Some("ckern1".to_string()),
             class_area_id: Some("ccls01".to_string()),
+            mask_area_id: None,
+            kernel_size: None,
             fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
                 field_area_id: "cfield".to_string(),
                 scan_twin_id: "cscan1".to_string(),
@@ -10777,8 +10983,11 @@ mod tests {
             name: "demo".to_string(),
             parent_region_id: "root".to_string(),
             coordinates_3d: [0, 0, 0],
+            training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
             kernel_area_id: Some("ckern001".to_string()),
             class_area_id: Some("ccls0001".to_string()),
+            mask_area_id: None,
+            kernel_size: None,
             fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
                 field_area_id: "cfield01".to_string(),
                 scan_twin_id: stamp_id.as_base_64(),
@@ -10892,8 +11101,11 @@ mod tests {
             name: "demo".to_string(),
             parent_region_id: "root".to_string(),
             coordinates_3d: [0, 0, 0],
+            training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
             kernel_area_id: Some("ckern001".to_string()),
             class_area_id: Some("ccls0001".to_string()),
+            mask_area_id: None,
+            kernel_size: None,
             fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
                 field_area_id: field_id.as_base_64(),
                 scan_twin_id: stamp_id.as_base_64(),
@@ -11197,8 +11409,12 @@ mod tests {
                 name: "asdf".to_string(),
                 parent_region_id: "root".to_string(),
                 coordinates_3d: [0, 0, 0],
+                training_mode:
+                    feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
                 kernel_area_id: Some(kernel_id.as_base_64()),
                 class_area_id: Some(class_id.as_base_64()),
+                mask_area_id: None,
+                kernel_size: None,
                 fields: vec![ClassifierField {
                     field_area_id: field_id.as_base_64(),
                     scan_twin_id: twin_id.as_base_64(),
@@ -11316,6 +11532,222 @@ mod tests {
             scan.sources[0].twin_area_idx,
             manager.get_cortical_idx(&twin_id).unwrap()
         );
+        assert_eq!(
+            scan.sources[0].field_area_idx,
+            manager.get_cortical_idx(&field_id).unwrap()
+        );
+    }
+
+    /// Scanner mode persists the mask and kernel size in the genome. Load writes
+    /// them back onto kernel memory so scan uses that size and the mask depth.
+    #[cfg(feature = "plasticity")]
+    #[test]
+    fn scanner_genome_round_trip_restores_mask_kernel_and_scan() {
+        use feagi_evolutionary::{
+            convert_hierarchical_to_flat, load_genome_from_json, GenomeMetadata, GenomeSignatures,
+            GenomeStats, PhysiologyConfig, RuntimeGenome,
+        };
+        use feagi_structures::genomic::classifiers::{
+            Classifier, ClassifierField, ClassifierTrainingMode,
+        };
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        let field_id = CorticalID::try_from_bytes(b"cfieldsc").unwrap();
+        let mask_id = CorticalID::try_from_bytes(b"cmaskscn").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mkmemscn").unwrap();
+        let class_mem_id = CorticalID::try_from_bytes(b"mcmemscn").unwrap();
+        let twin_id = CorticalID::try_from_bytes(b"ctwinscn").unwrap();
+
+        let custom = |id: CorticalID, name: &str, dims: (u32, u32, u32)| {
+            CorticalArea::new(
+                id,
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(dims.0, dims.1, dims.2).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap()
+        };
+        let memory = |id: CorticalID, name: &str| {
+            let mut area = CorticalArea::new(
+                id,
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Memory(MemoryCorticalType::Memory),
+            )
+            .unwrap();
+            area.properties
+                .insert("is_mem_type".to_string(), serde_json::json!(true));
+            area
+        };
+
+        let mut field = custom(field_id, "field", (4, 3, 3));
+        field.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "episodic_scan",
+                    "postSynapticCurrent_multiplier": 1.0,
+                    "plasticity_flag": false
+                }]
+            }),
+        );
+        let mask = custom(mask_id, "mask", (4, 3, 10));
+        let mut kernel_mem = memory(mem_id, "kernel_mem");
+        kernel_mem.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                class_mem_id.as_base_64(): [{
+                    "morphology_id": "associative_memory",
+                    "postSynapticCurrent_multiplier": 1.0,
+                    "plasticity_flag": false
+                }]
+            }),
+        );
+        let class_mem = memory(class_mem_id, "class_mem");
+        let mut twin = custom(twin_id, "twin", (4, 3, 10));
+        twin.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(field_id.as_base_64()),
+        );
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "clf-scanner".to_string(),
+                genome_title: "clf".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+        };
+        for area in [field, mask, kernel_mem, class_mem, twin] {
+            genome.cortical_areas.insert(area.cortical_id, area);
+        }
+        genome.classifiers.insert(
+            "clf-scan".to_string(),
+            Classifier {
+                classifier_id: "clf-scan".to_string(),
+                name: "scanner".to_string(),
+                parent_region_id: "root".to_string(),
+                coordinates_3d: [1, 2, 3],
+                training_mode: ClassifierTrainingMode::Scanner,
+                kernel_area_id: None,
+                class_area_id: None,
+                mask_area_id: Some(mask_id.as_base_64()),
+                kernel_size: Some([2, 2, 3]),
+                fields: vec![ClassifierField {
+                    field_area_id: field_id.as_base_64(),
+                    scan_twin_id: twin_id.as_base_64(),
+                }],
+                kernel_memory_id: mem_id.as_base_64(),
+                class_memory_id: class_mem_id.as_base_64(),
+                properties: HashMap::new(),
+            },
+        );
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        assert_eq!(flat["classifiers"]["clf-scan"]["training_mode"], "scanner");
+        assert_eq!(
+            flat["classifiers"]["clf-scan"]["kernel_size"],
+            serde_json::json!([2, 2, 3])
+        );
+        assert!(flat["classifiers"]["clf-scan"]
+            .get("kernel_area_id")
+            .is_none());
+        let loaded = load_genome_from_json(&flat.to_string()).unwrap();
+        let loaded_classifier = loaded.classifiers.get("clf-scan").unwrap();
+        assert_eq!(
+            loaded_classifier.training_mode,
+            ClassifierTrainingMode::Scanner
+        );
+        assert_eq!(
+            loaded_classifier.mask_area_id.as_deref(),
+            Some(mask_id.as_base_64().as_str())
+        );
+        assert_eq!(loaded_classifier.kernel_size, Some([2, 2, 3]));
+        assert!(loaded_classifier.kernel_area_id.is_none());
+        assert!(loaded_classifier.class_area_id.is_none());
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        for area in loaded.cortical_areas.values() {
+            manager.add_cortical_area(area.clone()).unwrap();
+        }
+        manager.replace_classifiers(loaded.classifiers);
+        manager.apply_loaded_classifier_assemblies();
+
+        let kernel_mem = manager.get_cortical_area(&mem_id).unwrap();
+        assert_eq!(
+            kernel_mem
+                .properties
+                .get("classifier_training_mode")
+                .and_then(|value| value.as_str()),
+            Some("scanner")
+        );
+        assert_eq!(
+            kernel_mem
+                .properties
+                .get("classifier_mask_area_id")
+                .and_then(|value| value.as_str()),
+            Some(mask_id.as_base_64().as_str())
+        );
+        assert_eq!(
+            kernel_mem
+                .properties
+                .get("classifier_kernel_size")
+                .and_then(|value| value.as_array())
+                .map(|values| values.len()),
+            Some(3)
+        );
+        assert!(!kernel_mem
+            .properties
+            .contains_key("classifier_kernel_area_id"));
+        assert!(!kernel_mem
+            .properties
+            .contains_key("classifier_class_area_id"));
+        assert_eq!(
+            manager
+                .get_cortical_area(&mask_id)
+                .unwrap()
+                .properties
+                .get("burst_engine_active")
+                .and_then(|value| value.as_bool()),
+            Some(true),
+            "a reloaded scanner mask must stay a burst source"
+        );
+
+        let scan = manager
+            .build_memory_scan_config(&mem_id)
+            .expect("a reloaded scanner classifier must scan from its kernel size");
+        assert_eq!(scan.kernel.width, 2);
+        assert_eq!(scan.kernel.height, 2);
+        assert_eq!(scan.kernel.depth, 3);
+        assert_eq!(scan.class_channel_count, 10);
+        let mask_source = scan.scanner_mask.expect("scanner mask source");
+        assert_eq!(
+            mask_source.mask_area_idx,
+            manager.get_cortical_idx(&mask_id).unwrap()
+        );
+        assert_eq!(mask_source.mask_depth, 10);
+        assert_eq!(scan.sources.len(), 1);
         assert_eq!(
             scan.sources[0].field_area_idx,
             manager.get_cortical_idx(&field_id).unwrap()

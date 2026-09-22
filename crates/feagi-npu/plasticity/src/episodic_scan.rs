@@ -32,6 +32,33 @@ pub fn class_channel_index(x: u32, y: u32, z: u32, width: u32, height: u32) -> u
     x + y * width + z * width * height
 }
 
+/// Class channels whose Z fires anywhere inside the kernel's XY footprint.
+///
+/// Mask Z is the class channel. The kernel does not slide through mask depth.
+pub fn mask_channels_in_window(
+    fired: &[(u32, u32, u32)],
+    origin_x: u32,
+    origin_y: u32,
+    kernel_width: u32,
+    kernel_height: u32,
+    mask_depth: u32,
+) -> Vec<u32> {
+    if kernel_width == 0 || kernel_height == 0 || mask_depth == 0 {
+        return Vec::new();
+    }
+    let mut channels = HashSet::new();
+    let x_end = origin_x.saturating_add(kernel_width);
+    let y_end = origin_y.saturating_add(kernel_height);
+    for &(x, y, z) in fired {
+        if z < mask_depth && x >= origin_x && x < x_end && y >= origin_y && y < y_end {
+            channels.insert(z);
+        }
+    }
+    let mut out: Vec<u32> = channels.into_iter().collect();
+    out.sort_unstable();
+    out
+}
+
 /// xxHash64 of sorted relative coords per temporal frame. Not the episodic ID hash.
 pub fn spatial_signature_hash(frames: &[Vec<(u32, u32, u32)>]) -> u64 {
     let mut buffer = Vec::new();
@@ -233,6 +260,13 @@ mod tests {
             },
         );
         assert_eq!(rel, vec![(1, 1, 0), (2, 1, 0)]);
+    }
+
+    #[test]
+    fn mask_channel_is_any_fire_inside_the_window() {
+        let fired = vec![(1, 1, 2), (4, 4, 0), (1, 1, 2)];
+        assert_eq!(mask_channels_in_window(&fired, 0, 0, 3, 3, 10), vec![2]);
+        assert_eq!(mask_channels_in_window(&fired, 3, 3, 2, 2, 10), vec![0]);
     }
 
     #[test]

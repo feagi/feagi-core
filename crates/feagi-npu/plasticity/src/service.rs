@@ -20,8 +20,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
 use crate::episodic_scan::{
-    class_channel_index, collect_active_scan_windows, should_skip_scan, spatial_signature_hash,
-    ScanKernel,
+    class_channel_index, collect_active_scan_windows, mask_channels_in_window, should_skip_scan,
+    spatial_signature_hash, ScanKernel,
 };
 use crate::log_rate_limiter::BurstLogRateLimiter;
 use crate::memory_neuron_array::{
@@ -180,10 +180,20 @@ pub struct MemoryScanSource {
     pub field_depth: u32,
 }
 
+/// Mask sampled in XY during scanner training. Depth is the class-channel count.
+#[derive(Debug, Clone)]
+pub struct ScannerMaskSource {
+    pub mask_area_idx: u32,
+    pub mask_width: u32,
+    pub mask_height: u32,
+    pub mask_depth: u32,
+}
+
 /// Scan assembly attached to a kernel memory area.
 ///
 /// Absent unless a kernel area, class area, associative Mem1→Mem2 mapping,
-/// and at least one `episodic_scan` source are all present.
+/// and at least one `episodic_scan` source are all present. Scanner mode
+/// replaces the kernel and class areas with `kernel` size and `scanner_mask`.
 #[derive(Debug, Clone)]
 pub struct MemoryScanConfig {
     pub kernel: ScanKernel,
@@ -194,6 +204,8 @@ pub struct MemoryScanConfig {
     pub class_area_height: u32,
     pub class_memory_area_idx: u32,
     pub sources: Vec<MemoryScanSource>,
+    /// Present only in scanner training mode.
+    pub scanner_mask: Option<ScannerMaskSource>,
 }
 
 /// Memory area configuration
@@ -918,6 +930,17 @@ impl PlasticityService {
             &memory_areas_snapshot,
             &encoded_this_burst,
         );
+        Self::run_scanner_training(
+            npu,
+            &mut array,
+            &memory_areas_snapshot,
+            memory_lifecycle_configs,
+            memory_area_names,
+            memory_stats_cache,
+            current_timestep,
+            &mut commands,
+            stats,
+        );
         Self::run_episodic_scan(npu, &mut array, &memory_areas_snapshot, current_timestep);
 
         // Enqueue commands
@@ -1111,9 +1134,149 @@ impl PlasticityService {
             if class_hits.is_empty() {
                 continue;
             }
+            if scan.scanner_mask.is_some() {
+                continue;
+            }
             for neuron_idx in array.active_ltm_indices_in_area(*kernel_area_idx) {
                 for channel in &class_hits {
                     array.bind_class_channel(neuron_idx, *channel);
+                }
+            }
+        }
+    }
+
+    /// Learn one long-term pattern per active image window, labeled by mask Z.
+    fn run_scanner_training(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        array: &mut MemoryNeuronArray,
+        memory_areas: &HashMap<u32, MemoryAreaConfig>,
+        memory_lifecycle_configs: &Arc<Mutex<HashMap<u32, MemoryNeuronLifecycleConfig>>>,
+        memory_area_names: &Arc<Mutex<HashMap<u32, String>>>,
+        memory_stats_cache: &crate::memory_stats_cache::MemoryStatsCache,
+        current_timestep: u64,
+        commands: &mut Vec<PlasticityCommand>,
+        stats: &Arc<Mutex<PlasticityStats>>,
+    ) {
+        let lifecycle_configs = memory_lifecycle_configs.lock().unwrap();
+        for (kernel_area_idx, kernel_cfg) in memory_areas {
+            let Some(scan) = kernel_cfg.scan.as_ref() else {
+                continue;
+            };
+            let Some(mask) = scan.scanner_mask.as_ref() else {
+                continue;
+            };
+            if scan.kernel.voxel_count() == 0 || scan.sources.is_empty() || mask.mask_depth == 0 {
+                continue;
+            }
+            let temporal_depth = kernel_cfg.temporal_depth.max(1) as usize;
+            let lifecycle_config = lifecycle_configs
+                .get(kernel_area_idx)
+                .copied()
+                .unwrap_or_default();
+            let mask_newest = {
+                let npu_lock = npu.lock().unwrap();
+                let window = match npu_lock.get_fire_ledger_dense_window_bitmaps(
+                    mask.mask_area_idx,
+                    current_timestep,
+                    temporal_depth,
+                ) {
+                    Ok(w) => w,
+                    Err(_) => continue,
+                };
+                let Some((_, newest)) = window.last() else {
+                    continue;
+                };
+                let mut coords: Vec<(u32, u32, u32)> = newest
+                    .iter()
+                    .filter_map(|neuron_id| npu_lock.get_neuron_coordinates(neuron_id))
+                    .collect();
+                coords.sort_unstable();
+                coords
+            };
+            if mask_newest.is_empty() {
+                continue;
+            }
+            for source in &scan.sources {
+                let frames = {
+                    let npu_lock = npu.lock().unwrap();
+                    let window = match npu_lock.get_fire_ledger_dense_window_bitmaps(
+                        source.field_area_idx,
+                        current_timestep,
+                        temporal_depth,
+                    ) {
+                        Ok(w) => w,
+                        Err(_) => continue,
+                    };
+                    let mut coord_frames: Vec<Vec<(u32, u32, u32)>> = Vec::new();
+                    for (_t, bitmap) in &window {
+                        let mut coords: Vec<(u32, u32, u32)> = bitmap
+                            .iter()
+                            .filter_map(|neuron_id| npu_lock.get_neuron_coordinates(neuron_id))
+                            .collect();
+                        coords.sort_unstable();
+                        coord_frames.push(coords);
+                    }
+                    coord_frames
+                };
+                let windows = collect_active_scan_windows(
+                    &frames,
+                    scan.kernel,
+                    source.field_width,
+                    source.field_height,
+                    source.field_depth,
+                    scan.min_window_activity,
+                );
+                for window in windows {
+                    let channels = mask_channels_in_window(
+                        &mask_newest,
+                        window.origin.0,
+                        window.origin.1,
+                        scan.kernel.width,
+                        scan.kernel.height,
+                        mask.mask_depth,
+                    );
+                    if channels.is_empty() {
+                        continue;
+                    }
+                    let Some(neuron_idx) = array.create_memory_neuron(
+                        window.spatial_hash,
+                        *kernel_area_idx,
+                        current_timestep,
+                        &lifecycle_config,
+                    ) else {
+                        continue;
+                    };
+                    let created = array
+                        .get_activation_count(neuron_idx)
+                        .is_some_and(|count| count == 1);
+                    array.set_spatial_signature(neuron_idx, window.spatial_hash);
+                    for channel in channels {
+                        if channel < scan.class_channel_count {
+                            array.bind_class_channel(neuron_idx, channel);
+                        }
+                    }
+                    let Some(neuron_id) = array.get_neuron_id(neuron_idx) else {
+                        continue;
+                    };
+                    if created {
+                        if let Some(area_name) =
+                            memory_area_names.lock().unwrap().get(kernel_area_idx)
+                        {
+                            crate::memory_stats_cache::on_neuron_created(
+                                memory_stats_cache,
+                                area_name,
+                            );
+                        }
+                        let mut recorded = stats.lock().unwrap();
+                        recorded.memory_neurons_created += 1;
+                        drop(recorded);
+                    }
+                    commands.push(PlasticityCommand::RegisterMemoryNeuron {
+                        neuron_id,
+                        area_idx: *kernel_area_idx,
+                        threshold: 1.0,
+                        membrane_potential: 0.0,
+                    });
                 }
             }
         }
@@ -1354,6 +1517,27 @@ impl PlasticityService {
                                 target: "plasticity",
                                 "[PLASTICITY] Failed to configure FireLedger window for scan field {} (requested={}): {}",
                                 source.field_area_idx,
+                                resolved,
+                                e
+                            );
+                        }
+                    }
+                }
+                if let Some(mask) = &scan_cfg.scanner_mask {
+                    let existing = existing_configs
+                        .iter()
+                        .find(|(idx, _)| *idx == mask.mask_area_idx)
+                        .map(|(_, w)| *w)
+                        .unwrap_or(0);
+                    let resolved = existing.max(desired);
+                    if resolved != existing {
+                        if let Err(e) =
+                            npu.configure_fire_ledger_window(mask.mask_area_idx, resolved)
+                        {
+                            tracing::warn!(
+                                target: "plasticity",
+                                "[PLASTICITY] Failed to configure FireLedger window for scan mask {} (requested={}): {}",
+                                mask.mask_area_idx,
                                 resolved,
                                 e
                             );
@@ -2169,6 +2353,7 @@ mod tests {
                 field_height: 1,
                 field_depth: 1,
             }],
+            scanner_mask: None,
         };
         let mut areas = HashMap::new();
         areas.insert(
@@ -2207,5 +2392,169 @@ mod tests {
             !missed.fired_neurons.contains(&twin_match),
             "a signature that does not match long-term memory must not light the twin"
         );
+    }
+
+    /// Scanner training writes one memory neuron per labeled window and does not
+    /// inject that window back into the kernel input.
+    #[test]
+    fn scanner_training_learns_mask_channel_without_kernel_injection() {
+        const FIELD_IDX: u32 = 10;
+        const KERNEL_IDX: u32 = 11;
+        const MASK_IDX: u32 = 13;
+        const CLASS_CHANNEL: u32 = 2;
+
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 64, 64, 8).unwrap(),
+            "classifier-scanner-training-npu",
+        ));
+        let service = PlasticityService::new(PlasticityConfig::default(), cache, Arc::clone(&npu));
+        let lifecycle = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 100,
+            longterm_threshold: 100,
+            ..Default::default()
+        };
+        assert!(service.register_memory_area(
+            KERNEL_IDX,
+            "kernel_mem".to_string(),
+            1,
+            vec![FIELD_IDX],
+            Some(lifecycle),
+            false,
+        ));
+
+        let (_labeled_neuron, _unlabeled_neuron, timestep) = {
+            let mut guard = npu.lock().unwrap();
+            guard.register_cortical_area(FIELD_IDX, "Y2ZpZWxkMDE=".to_string());
+            guard.register_cortical_area(MASK_IDX, "Y21hc2swMDE=".to_string());
+            guard.configure_fire_ledger_window(FIELD_IDX, 1).unwrap();
+            guard.configure_fire_ledger_window(MASK_IDX, 1).unwrap();
+            let labeled_neuron = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    FIELD_IDX,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+            let unlabeled_neuron = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    FIELD_IDX,
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap();
+            let mask_neuron = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    MASK_IDX,
+                    0,
+                    0,
+                    CLASS_CHANNEL,
+                )
+                .unwrap();
+            guard.inject_sensory_with_potentials(&[
+                (labeled_neuron, 2.0),
+                (unlabeled_neuron, 2.0),
+                (mask_neuron, 2.0),
+            ]);
+            let burst = guard.process_burst().unwrap();
+            assert!(burst.fired_neurons.contains(&labeled_neuron));
+            assert!(burst.fired_neurons.contains(&mask_neuron));
+            (labeled_neuron, unlabeled_neuron, burst.burst)
+        };
+
+        let scan = MemoryScanConfig {
+            kernel: super::ScanKernel {
+                width: 1,
+                height: 1,
+                depth: 1,
+            },
+            min_window_activity: 1,
+            scan_skip_density: 0.0,
+            class_channel_count: 3,
+            class_area_width: 1,
+            class_area_height: 1,
+            class_memory_area_idx: 99,
+            sources: vec![MemoryScanSource {
+                field_area_idx: FIELD_IDX,
+                twin_area_idx: 12,
+                field_width: 2,
+                field_height: 1,
+                field_depth: 1,
+            }],
+            scanner_mask: Some(ScannerMaskSource {
+                mask_area_idx: MASK_IDX,
+                mask_width: 2,
+                mask_height: 1,
+                mask_depth: 3,
+            }),
+        };
+        assert!(service.configure_memory_scan(KERNEL_IDX, Some(scan)));
+        let areas = service.memory_areas.lock().unwrap().clone();
+        let mut array = service.memory_neuron_array.lock().unwrap();
+        let mut commands = Vec::new();
+        PlasticityService::run_scanner_training(
+            &service.npu,
+            &mut array,
+            &areas,
+            &service.memory_lifecycle_configs,
+            &service.memory_area_names,
+            &service.memory_stats_cache,
+            timestep,
+            &mut commands,
+            &service.stats,
+        );
+
+        let expected_hash = super::spatial_signature_hash(&[vec![(0, 0, 0)]]);
+        assert_eq!(
+            array.get_stats().active_neurons,
+            1,
+            "only the masked window is a training sample"
+        );
+        let learned = array
+            .find_neuron_by_pattern(&expected_hash)
+            .expect("the labeled window is stored under its spatial hash");
+        assert_eq!(array.get_cortical_area_id(learned), Some(KERNEL_IDX));
+        assert_eq!(array.get_class_channels(learned), vec![CLASS_CHANNEL]);
+        assert!(commands.iter().any(|command| matches!(
+            command,
+            PlasticityCommand::RegisterMemoryNeuron { area_idx, .. } if *area_idx == KERNEL_IDX
+        )));
+        assert!(!commands
+            .iter()
+            .any(|command| matches!(command, PlasticityCommand::InjectMemoryNeuronToFCL { .. })));
+        drop(array);
+        drop(areas);
     }
 }
