@@ -3,10 +3,10 @@ use crate::spatial_indexing_structs::axis_order::AxisOrderArray;
 use crate::spatial_indexing_structs::coordinate::SpatialCoordinate;
 use crate::spatial_indexing_structs::dimensions::SpatialDimensions;
 
-/// Generic owned stride value for an N-dimensional index space.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
+/// Generic owned stride value for an N-dimensional index space. This can use usize since we do
+/// not actually serialize this, we skip it
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct SpatialStride<const NUM_DIMS: usize> {
-    #[serde(with = "serde_arrays")]
     data: [usize; NUM_DIMS],
 }
 
@@ -23,8 +23,8 @@ impl<const NUM_DIMS: usize> SpatialStride<NUM_DIMS> {
         // Build per-axis strides from the axis traversal order.
         for &axis in axis_order.as_slice().iter() {
             let axis_index = axis;
-            stride_data[axis_index] = next_stride;
-            let dim_axis = dims.as_slice()[axis_index].quant_to_usize();
+            stride_data[axis_index as usize] = next_stride;
+            let dim_axis = dims.as_slice()[axis_index as usize].quant_to_usize();
             next_stride = next_stride.saturating_mul(dim_axis);
         }
 

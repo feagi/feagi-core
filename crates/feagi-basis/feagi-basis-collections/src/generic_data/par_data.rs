@@ -31,6 +31,10 @@ pub trait ParDataStore {
 
     /// Borrows the whole store as slice.
     fn store_as_slice(&self) -> &[Self::Elem];
+    
+    fn len(&self) -> usize {
+        self.store_as_slice().len()
+    }
 }
 
 /// A `ParDataStore` whose elements can also be mutated in place.
