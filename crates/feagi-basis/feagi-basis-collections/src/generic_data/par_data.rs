@@ -31,7 +31,7 @@ pub trait ParDataStore {
 
     /// Borrows the whole store as slice.
     fn store_as_slice(&self) -> &[Self::Elem];
-    
+
     fn len(&self) -> usize {
         self.store_as_slice().len()
     }
@@ -41,6 +41,16 @@ pub trait ParDataStore {
 pub trait ParDataStoreMut: ParDataStore {
     /// Mutably borrows the whole store as a regular slice.
     fn store_as_mut_slice(&mut self) -> &mut [Self::Elem];
+}
+
+/// A `ParDataStoreMut` that can be resized.
+pub trait ParDataStoreResizable: ParDataStoreMut {
+    fn new_from_element_default(number_elements: usize) -> Self
+    where Self::Elem: Default;
+
+    fn new_from_element_clonable(number_elements: usize, source: Self::Elem) -> Self
+    where Self::Elem: Clone;
+
 }
 
 #[cfg(feature = "alloc")]
@@ -57,6 +67,26 @@ impl<D> ParDataStoreMut for Vec<D> {
         self
     }
 }
+
+#[cfg(feature = "alloc")]
+impl<D> ParDataStoreResizable for Vec<D> {
+    fn new_from_element_default(number_elements: usize) -> Self
+    where
+        Self::Elem: Default
+    {
+        let mut out = Vec::with_capacity(number_elements);
+        out.resize_with(number_elements, Self::Elem::default);
+        out
+    }
+
+    fn new_from_element_clonable(number_elements: usize, source: Self::Elem) -> Self
+    where
+        Self::Elem: Clone
+    {
+        vec![source; number_elements]
+    }
+}
+
 
 impl<D, const N: usize> ParDataStore for [D; N] {
     type Elem = D;

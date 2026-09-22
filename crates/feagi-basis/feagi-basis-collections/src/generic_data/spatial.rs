@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
+use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
-use crate::generic_data::par_data::{ParDataStore, ParDataStoreMut};
+use crate::feagi_collection_error::{FeagiDataCollectionError, FeagiFailInvalidDimensions};
+use crate::generic_data::par_data::{ParDataStore, ParDataStoreMut, ParDataStoreResizable};
 use crate::prelude::SpatialDimensions;
 use crate::spatial_indexing_structs::axis_order::{AxisOrderArray, AxisOrderEnum};
 use crate::spatial_indexing_structs::spatial_index_context::SpatialContext;
@@ -58,19 +61,20 @@ where
     }
 
 
-
     //endregion
 
 
     //endregion
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound(deserialize = "QDims: ::serde::de::DeserializeOwned"))]
 pub struct SpatialParDataOwning<QLinear, QCoord, QDims, S, const NUM_DIMS: usize>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    S: ParDataStore + 'static
+    S: ParDataStore + DeserializeOwned + 'static
 {
     context: SpatialContext<QDims, NUM_DIMS>,
     data: S,
@@ -83,11 +87,11 @@ where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    S: ParDataStore + 'static
+    S: ParDataStore + DeserializeOwned + 'static
 {
-    pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>, axis_order: AxisOrderEnum, data: S) -> Result<Self, ()> {
+    pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>, axis_order: AxisOrderEnum, data: S) -> Result<Self, FeagiDataCollectionError> {
         if dimensions.spatial_element_count() != data.len() {
-            return Err(())
+            return Err(FeagiFailInvalidDimensions::new("Dimensions are invalid for the given data size").into())
         }
         let context = SpatialContext::new(dimensions, axis_order);
         Ok(Self {
@@ -97,7 +101,33 @@ where
         })
     }
 
-    // TODO new default? new with cloning?
+    pub fn new_with_element_default(dimensions: SpatialDimensions<QDims, NUM_DIMS>, axis_order: AxisOrderEnum) -> Self
+    where
+        S: ParDataStoreResizable,
+        S::Elem: Default
+    {
+        let data = S::new_from_element_default(dimensions.spatial_element_count());
+        let context = SpatialContext::new(dimensions, axis_order);
+        Self {
+            context,
+            data,
+            _p: PhantomData
+        }
+    }
+
+    pub fn new_with_element_clone(dimensions: SpatialDimensions<QDims, NUM_DIMS>, axis_order: AxisOrderEnum, source_element: S::Elem) -> Self
+    where
+        S: ParDataStoreResizable,
+        S::Elem: Clone
+    {
+        let data = S::new_from_element_clonable(dimensions.spatial_element_count(), source_element);
+        let context = SpatialContext::new(dimensions, axis_order);
+        Self {
+            context,
+            data,
+            _p: PhantomData
+        }
+    }
 }
 
 impl <QLinear, QCoord, QDims, S, const NUM_DIMS: usize>
@@ -107,7 +137,7 @@ where
     QLinear: QuantizedUnsignedIntegerTrait,
     QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
     QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    S: ParDataStore + 'static
+    S: ParDataStore + DeserializeOwned + 'static
 {
     fn data_as_slice(&self) -> &[S::Elem] {
         self.data.store_as_slice()
