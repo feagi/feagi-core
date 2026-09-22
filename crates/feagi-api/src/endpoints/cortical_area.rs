@@ -4136,10 +4136,10 @@ mod classifier_mapping_rule_tests {
     }
 
     #[test]
-    fn classifier_scan_twin_dimensions_use_field_xy_and_class_volume() {
-        use super::classifier_scan_twin_dimensions;
+    fn classifier_scan_twin_dimensions_use_field_xy_and_channel_count() {
+        use super::classifier_twin_dimensions_for_channels;
         assert_eq!(
-            classifier_scan_twin_dimensions((12, 8, 4), (2, 3, 1)),
+            classifier_twin_dimensions_for_channels((12, 8, 4), 6),
             (12, 8, 6)
         );
     }

@@ -364,6 +364,14 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
 /// Genome parser
 pub struct GenomeParser;
 
+/// Kernel/class/mask area bindings and optional kernel size after training-mode normalization.
+type NormalizedClassifierTraining = (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<[u32; 3]>,
+);
+
 impl GenomeParser {
     /// Normalize cortical ID list properties (inputs, outputs, designated_*) to base64 strings.
     fn normalize_brain_region_cortical_id_list_properties(region: &mut BrainRegion, keys: &[&str]) {
@@ -882,12 +890,7 @@ impl GenomeParser {
         class_area_id: Option<String>,
         mask_area_id: Option<String>,
         kernel_size: Option<[u32; 3]>,
-    ) -> EvoResult<(
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<[u32; 3]>,
-    )> {
+    ) -> EvoResult<NormalizedClassifierTraining> {
         use feagi_structures::genomic::classifiers::ClassifierTrainingMode;
         match training_mode {
             ClassifierTrainingMode::Kernel => {

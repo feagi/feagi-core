@@ -1146,6 +1146,7 @@ impl PlasticityService {
     }
 
     /// Learn one long-term pattern per active image window, labeled by mask Z.
+    #[allow(clippy::too_many_arguments)]
     fn run_scanner_training(
         npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         array: &mut MemoryNeuronArray,
