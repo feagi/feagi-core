@@ -4,107 +4,215 @@ use serde::{Deserialize, Serialize};
 use feagi_basis_quantization::prelude::*;
 use crate::feagi_collection_error::{FeagiDataCollectionError, ParDataInvalidRange};
 
-/// Shared read behaviour for quantized-indexed collections backed by contiguous
-/// generic data.
-pub trait GenericParData<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug>: Index<QI, Output=D> {
-    /// Borrows the backing storage as a regular shared slice.
-    fn as_slice(&self) -> &[D];
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParData<QI, S> {
+    pub(crate) data: S,
+    pub(crate) _marker: PhantomData<QI>,
+}
 
-    //region Default impls
+#[cfg(feature = "alloc")]
+pub type ParDataVector<QI, D> = ParData<QI, Vec<D>>;
 
-    /// Number of elements in this collection.
-    fn len(&self) -> usize { 
-        self.as_slice().len()
+pub type ParDataArray<QI, D, const N: usize> = ParData<QI, [D; N]>;
+
+pub type ParDataSlice<'a, QI, D> = ParData<QI, &'a [D]>;
+
+pub type ParDataSliceMut<'a, QI, D> = ParData<QI, &'a mut [D]>;
+
+#[cfg(feature = "heapless")]
+pub type ParDataHeaplessVec<QI, D, const N: usize> = ParData<QI, ::heapless::Vec<D, N>>;
+
+//region Backing Stores
+
+/// Links a contiguous backing store to the element type it holds.
+pub trait ParDataStore {
+    /// The element type
+    type Elem;
+
+    /// Borrows the whole store as slice.
+    fn store_as_slice(&self) -> &[Self::Elem];
+}
+
+/// A `ParDataStore` whose elements can also be mutated in place.
+pub trait ParDataStoreMut: ParDataStore {
+    /// Mutably borrows the whole store as a regular slice.
+    fn store_as_mut_slice(&mut self) -> &mut [Self::Elem];
+}
+
+#[cfg(feature = "alloc")]
+impl<D> ParDataStore for Vec<D> {
+    type Elem = D;
+    fn store_as_slice(&self) -> &[D] {
+        self
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<D> ParDataStoreMut for Vec<D> {
+    fn store_as_mut_slice(&mut self) -> &mut [D] {
+        self
+    }
+}
+
+impl<D, const N: usize> ParDataStore for [D; N] {
+    type Elem = D;
+    fn store_as_slice(&self) -> &[D] {
+        self
+    }
+}
+
+impl<D, const N: usize> ParDataStoreMut for [D; N] {
+    fn store_as_mut_slice(&mut self) -> &mut [D] {
+        self
+    }
+}
+
+impl<'a, D> ParDataStore for &'a [D] {
+    type Elem = D;
+    fn store_as_slice(&self) -> &[D] {
+        self
+    }
+}
+
+impl<'a, D> ParDataStore for &'a mut [D] {
+    type Elem = D;
+    fn store_as_slice(&self) -> &[D] {
+        self
+    }
+}
+
+impl<'a, D> ParDataStoreMut for &'a mut [D] {
+    fn store_as_mut_slice(&mut self) -> &mut [D] {
+        self
+    }
+}
+
+#[cfg(feature = "heapless")]
+impl<D, const N: usize> ParDataStore for ::heapless::Vec<D, N> {
+    type Elem = D;
+    fn store_as_slice(&self) -> &[D] {
+        self
+    }
+}
+
+#[cfg(feature = "heapless")]
+impl<D, const N: usize> ParDataStoreMut for ::heapless::Vec<D, N> {
+    fn store_as_mut_slice(&mut self) -> &mut [D] {
+        self
+    }
+}
+
+//endregion
+
+//region Store-agnostic behaviour
+
+impl<QI, S> ParData<QI, S> {
+    /// Wraps a backing store, tagging it with the index type `QI`.
+    pub const fn from_store(data: S) -> Self {
+        Self { data, _marker: PhantomData } // TODO verify that the length doesnt exceed QI abilities
+    }
+
+    /// Consumes the wrapper, returning the backing store.
+    pub fn into_store(self) -> S {
+        self.data
+    }
+
+    /// Borrows the backing store.
+    pub fn store(&self) -> &S {
+        &self.data
+    }
+
+    /// Mutably borrows the backing store.
+    pub fn store_mut(&mut self) -> &mut S {
+        &mut self.data
+    }
+}
+
+impl<QI, S: Default> Default for ParData<QI, S> {
+    fn default() -> Self {
+        Self::from_store(S::default())
+    }
+}
+
+/// Shared behaviour
+impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStore> ParData<QI, S> {
+
+    /// Number of elements
+    pub fn len(&self) -> usize {
+        self.data.store_as_slice().len()
     }
 
     /// Returns `true` if there are no elements.
-    fn is_empty(&self) -> bool {
-        self.as_slice().is_empty()
+    pub fn is_empty(&self) -> bool {
+        self.data.store_as_slice().is_empty()
     }
 
     /// Gets the element at `index`, or `None` if out of bounds.
-    fn get(&self, index: QI) -> Option<&D> {
-        self.as_slice().get(index.quant_to_usize())
+    pub fn get(&self, index: QI) -> Option<&S::Elem> {
+        self.data.store_as_slice().get(index.quant_to_usize())
     }
 
     /// Iterates over shared references to the elements.
-    fn iter(&self) -> core::slice::Iter<'_, D> {
-        self.as_slice().iter()
+    pub fn iter(&self) -> core::slice::Iter<'_, S::Elem> {
+        self.data.store_as_slice().iter()
     }
 
-    /// Raw pointer to the first element. Valid for reads of [`Self::len`] elements
-    /// for as long as `self` is borrowed.
-    fn as_ptr(&self) -> *const D {
-        self.as_slice().as_ptr()
+    /// Raw pointer to the first element
+    pub fn as_ptr(&self) -> *const S::Elem {
+        self.data.store_as_slice().as_ptr()
     }
 
     /// Returns a shared reference to the element at `index`, without bounds checking.
-    ///
-    /// # Safety
-    /// - `index` must be in bounds (`index < self.len()`).
-    unsafe fn get_par(&self, index: QI) -> &D {
+    pub unsafe fn get_par(&self, index: QI) -> &S::Elem {
         &*self.as_ptr().add(index.quant_to_usize())
     }
 
-    /// Rayon parallel iterator over shared references to the elements.
+    /// Rayon parallel iterator
     #[cfg(feature = "expose_rayon")]
-    fn rayon_iter(&self) -> rayon::slice::Iter<'_, D>
+    pub fn rayon_iter(&self) -> rayon::slice::Iter<'_, S::Elem>
     where
-        D: Send + Sync,
+        S::Elem: Send + Sync,
     {
         use rayon::iter::IntoParallelRefIterator;
-        self.as_slice().par_iter()
+        self.data.store_as_slice().par_iter()
     }
 
     /// Borrows the whole collection as a [`ParDataSlice`] view.
-    fn as_data_slice(&self) -> ParDataSlice<'_, QI, D> {
-        ParDataSlice::new(self.as_slice())
+    pub fn as_data_slice(&self) -> ParDataSlice<'_, QI, S::Elem> {
+        ParData::from_store(self.data.store_as_slice())
     }
 
     /// Borrows a half-open element sub-range as a [`ParDataSlice`] view.
-    ///
-    /// Returns [`ParDataInvalidRange`] if `range` is out of bounds or its
-    /// start is greater than its end (rather than panicking like `self[range]`).
-    fn subslice(&self, range: Range<QI>) -> Result<ParDataSlice<'_, QI, D>, FeagiDataCollectionError> {
+    pub fn subslice(&self, range: Range<QI>) -> Result<ParDataSlice<'_, QI, S::Elem>, FeagiDataCollectionError> {
         let start = range.start.quant_to_usize();
         let end = range.end.quant_to_usize();
-        match self.as_slice().get(start..end) {
-            Some(slice) => Ok(ParDataSlice::new(slice)),
+        match self.data.store_as_slice().get(start..end) {
+            Some(slice) => Ok(ParData::from_store(slice)),
             None => Err(ParDataInvalidRange::new("subslice range is out of bounds", start, end).into()),
         }
     }
 
-    #[cfg(feature = "alloc")]
     /// Copies the internal elements to a new owned vector structure.
-    fn clone_to_vector(&self) -> ParDataVector<QI, D>
+    #[cfg(feature = "alloc")]
+    pub fn clone_to_vector(&self) -> ParDataVector<QI, S::Elem>
     where
-        D: Clone,
+        S::Elem: Clone,
     {
-        ParDataVector::from_vec(self.as_slice().to_vec())
+        ParData::from_store(self.data.store_as_slice().to_vec())
     }
-
-    //endregion
 }
 
-/// Shared mutable behaviour for quantized-indexed collections that own or
-/// exclusively borrow their storage ([`ParDataVector`], [`ParDataSliceMut`], and
-/// [`ParDataArray`]).
-pub trait GenericParDataMut<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug>:
-GenericParData<QI, D> + IndexMut<QI, Output=D>
-{
-    /// Mutably borrows the backing storage as a regular slice.
-    fn as_mut_slice(&mut self) -> &mut [D];
-
-    //region Default impls
+/// mutable
+impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStoreMut> ParData<QI, S> {
 
     /// Mutably borrows the element at `index`, or `None` if out of bounds.
-    fn get_mut(&mut self, index: QI) -> Option<&mut D> {
-        self.as_mut_slice().get_mut(index.quant_to_usize())
+    pub fn get_mut(&mut self, index: QI) -> Option<&mut S::Elem> {
+        self.data.store_as_mut_slice().get_mut(index.quant_to_usize())
     }
 
     /// Overwrites the element at `index`, returning the previous value if the
     /// index was in bounds (otherwise leaves the collection untouched).
-    fn set(&mut self, index: QI, value: D) -> Option<D> {
+    pub fn set(&mut self, index: QI, value: S::Elem) -> Option<S::Elem> {
         match self.get_mut(index) {
             Some(slot) => {
                 let returned = core::mem::replace(slot, value);
@@ -114,85 +222,81 @@ GenericParData<QI, D> + IndexMut<QI, Output=D>
         }
     }
 
-    /// Iterates over mutable references to the elements.
-    fn iter_mut(&mut self) -> core::slice::IterMut<'_, D> {
-        self.as_mut_slice().iter_mut()
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, S::Elem> {
+        self.data.store_as_mut_slice().iter_mut()
     }
 
-    /// Rayon parallel iterator over mutable references to the elements.
     #[cfg(feature = "expose_rayon")]
-    fn rayon_iter_mut(&mut self) -> rayon::slice::IterMut<'_, D>
+    pub fn rayon_iter_mut(&mut self) -> rayon::slice::IterMut<'_, S::Elem>
     where
-        D: Send + Sync,
+        S::Elem: Send + Sync,
     {
         use rayon::iter::IntoParallelRefMutIterator;
-        self.as_mut_slice().par_iter_mut()
+        self.data.store_as_mut_slice().par_iter_mut()
     }
 
-    /// Raw mutable pointer to the first element, derived from a shared `&self`.
-    ///
-    /// # Safety
-    /// The returned pointer aliases the collection's storage; writes through it
-    /// must only target indices not simultaneously accessed elsewhere.
-    unsafe fn as_mut_ptr_par(&self) -> *mut D {
-        self.as_ptr() as *mut D
+    /// Raw mutable pointer to the first element
+    pub unsafe fn as_mut_ptr_par(&self) -> *mut S::Elem {
+        self.as_ptr() as *mut S::Elem
     }
 
     /// Returns a mutable reference to the element at `index` through a shared
-    /// `&self`, enabling parallel mutation of disjoint indices.
-    ///
-    /// # Safety
-    /// - `index` must be in bounds (`index < self.len()`).
-    /// - No other reference (shared or mutable) to the *same* element may exist
-    ///   for the duration of the returned borrow. Concurrent callers must only ever
-    ///   target disjoint indices.
-    unsafe fn get_mut_par(&self, index: QI) -> &mut D {
+    /// `&self`, enabling parallel mutation of multiple indices. MUST NOT WRITE TO THE SAME
+    /// INDEX IN PARALLEL!
+    pub unsafe fn get_mut_par(&self, index: QI) -> &mut S::Elem {
         &mut *self.as_mut_ptr_par().add(index.quant_to_usize())
     }
 
     /// Mutably borrows a half-open element sub-range as a [`ParDataSliceMut`] view.
-    fn subslice_mut(&mut self, range: Range<QI>) -> Result<ParDataSliceMut<'_, QI, D>, FeagiDataCollectionError> {
+    pub fn subslice_mut(&mut self, range: Range<QI>) -> Result<ParDataSliceMut<'_, QI, S::Elem>, FeagiDataCollectionError> {
         let start = range.start.quant_to_usize();
         let end = range.end.quant_to_usize();
-        match self.as_mut_slice().get_mut(start..end) {
-            Some(slice) => Ok(ParDataSliceMut::new(slice)),
+        match self.data.store_as_mut_slice().get_mut(start..end) {
+            Some(slice) => Ok(ParData::from_store(slice)),
             None => Err(ParDataInvalidRange::new("subslice range is out of bounds", start, end).into()),
         }
     }
-
-    //endregion
 }
 
+impl<QI, S> Index<QI> for ParData<QI, S>
+where
+    QI: QuantizedUnsignedIntegerTrait,
+    S: ParDataStore,
+{
+    type Output = S::Elem;
+    fn index(&self, index: QI) -> &Self::Output {
+        &self.data.store_as_slice()[index.quant_to_usize()]
+    }
+}
 
-//region Implementations
+impl<QI, S> IndexMut<QI> for ParData<QI, S>
+where
+    QI: QuantizedUnsignedIntegerTrait,
+    S: ParDataStoreMut,
+{
+    fn index_mut(&mut self, index: QI) -> &mut Self::Output {
+        &mut self.data.store_as_mut_slice()[index.quant_to_usize()]
+    }
+}
+
+//endregion
 
 //region Vector
 
-/// An owned, heap-allocated run of generic elements indexed by `QI`.
 #[cfg(feature = "alloc")]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ParDataVector<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> {
-    pub(crate) data: Vec<D>,
-    pub(crate) _marker: PhantomData<QI>,
-}
-
-#[cfg(feature = "alloc")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> ParDataVector<QI, D> {
+impl<QI: QuantizedUnsignedIntegerTrait, D> ParData<QI, Vec<D>> {
     /// Builds a vector of `number_elements` entries, every one initialised to
     /// `initial_value`.
-    pub fn new_uniform(number_elements: QI, initial_value: D) -> ParDataVector<QI, D>
+    pub fn new_uniform(number_elements: QI, initial_value: D) -> Self
     where
         D: Clone,
     {
-        Self {
-            data: vec![initial_value; number_elements.quant_to_usize()],
-            _marker: PhantomData,
-        }
+        Self::from_store(vec![initial_value; number_elements.quant_to_usize()])
     }
 
     /// Wraps an existing `Vec` without copying.
-    pub fn from_vec(data: Vec<D>) -> ParDataVector<QI, D> {
-        Self { data, _marker: PhantomData }
+    pub fn from_vec(data: Vec<D>) -> Self {
+        Self::from_store(data)
     }
 
     /// Consumes the wrapper, returning the backing `Vec`.
@@ -215,54 +319,15 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> ParDataVector<QI, D
 }
 
 #[cfg(feature = "alloc")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> GenericParData<QI, D> for ParDataVector<QI, D> {
-    fn as_slice(&self) -> &[D] {
-        &self.data
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> GenericParDataMut<QI, D> for ParDataVector<QI, D> {
-    fn as_mut_slice(&mut self) -> &mut [D] {
-        &mut self.data
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> Index<QI> for ParDataVector<QI, D> {
-    type Output = D;
-    fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.quant_to_usize()]
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> IndexMut<QI> for ParDataVector<QI, D> {
-    fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.quant_to_usize()]
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> Default for ParDataVector<QI, D> {
-    fn default() -> Self {
-        Self {
-            data: vec![],
-            _marker: Default::default(),
-        }
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> From<Vec<D>> for ParDataVector<QI, D> {
+impl<QI, D> From<Vec<D>> for ParData<QI, Vec<D>> {
     fn from(value: Vec<D>) -> Self {
-        Self::from_vec(value)
+        Self::from_store(value)
     }
 }
 
 #[cfg(feature = "alloc")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> From<ParDataVector<QI, D>> for Vec<D> {
-    fn from(value: ParDataVector<QI, D>) -> Self {
+impl<QI, D> From<ParData<QI, Vec<D>>> for Vec<D> {
+    fn from(value: ParData<QI, Vec<D>>) -> Self {
         value.data
     }
 }
@@ -271,46 +336,26 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> From<ParDataVector<
 
 //region Slice
 
-/// A borrowed, read-only view over a run of generic elements indexed by `QI`.
-#[derive(Debug, Serialize)]
-pub struct ParDataSlice<'a, QI: QuantizedUnsignedIntegerTrait, D> {
-    pub(crate) data: &'a [D],
-    pub(crate) _marker: PhantomData<QI>,
-}
-
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> ParDataSlice<'a, QI, D> {
+impl<'a, QI, D> ParData<QI, &'a [D]> {
     /// Wraps an existing shared slice.
-    pub fn new(data: &'a [D]) -> ParDataSlice<'a, QI, D> {
-        Self { data, _marker: PhantomData }
+    pub const fn new(data: &'a [D]) -> Self {
+        Self::from_store(data)
     }
 
     /// Alias for [`Self::new`].
-    pub fn from_slice(data: &'a [D]) -> ParDataSlice<'a, QI, D> {
-        Self::new(data)
+    pub const fn from_slice(data: &'a [D]) -> Self {
+        Self::from_store(data)
     }
 
     /// Returns the underlying shared slice, keeping the original lifetime.
-    pub fn into_slice(self) -> &'a [D] {
+    pub const fn into_slice(self) -> &'a [D] {
         self.data
     }
 }
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> GenericParData<QI, D> for ParDataSlice<'a, QI, D> {
-    fn as_slice(&self) -> &[D] {
-        self.data
-    }
-}
-
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> Index<QI> for ParDataSlice<'a, QI, D> {
-    type Output = D;
-    fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.quant_to_usize()]
-    }
-}
-
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> From<&'a [D]> for ParDataSlice<'a, QI, D> {
+impl<'a, QI, D> From<&'a [D]> for ParData<QI, &'a [D]> {
     fn from(value: &'a [D]) -> Self {
-        Self::from_slice(value)
+        Self::from_store(value)
     }
 }
 
@@ -318,22 +363,15 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> From<&'a [D]> f
 
 //region Mut Slice
 
-/// A borrowed, mutable view over a run of generic elements indexed by `QI`.
-#[derive(Debug, Serialize)]
-pub struct ParDataSliceMut<'a, QI: QuantizedUnsignedIntegerTrait, D> {
-    pub(crate) data: &'a mut [D],
-    pub(crate) _marker: PhantomData<QI>,
-}
-
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> ParDataSliceMut<'a, QI, D> {
+impl<'a, QI, D> ParData<QI, &'a mut [D]> {
     /// Wraps an existing mutable slice.
-    pub fn new(data: &'a mut [D]) -> ParDataSliceMut<'a, QI, D> {
-        Self { data, _marker: PhantomData }
+    pub const fn new(data: &'a mut [D]) -> Self {
+        Self::from_store(data)
     }
 
     /// Alias for [`Self::new`].
-    pub fn from_slice_mut(data: &'a mut [D]) -> ParDataSliceMut<'a, QI, D> {
-        Self::new(data)
+    pub const fn from_slice_mut(data: &'a mut [D]) -> Self {
+        Self::from_store(data)
     }
 
     /// Returns the underlying mutable slice, keeping the original lifetime.
@@ -342,39 +380,14 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> ParDataSliceMut
     }
 
     /// Creates a shorter-lived, exclusive re-borrow of this view.
-    pub fn reborrow(&mut self) -> ParDataSliceMut<'_, QI, D> {
-        ParDataSliceMut::new(self.data)
+    pub fn reborrow(&mut self) -> ParData<QI, &mut [D]> {
+        ParData::from_store(&mut *self.data)
     }
 }
 
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> GenericParData<QI, D> for ParDataSliceMut<'a, QI, D> {
-    fn as_slice(&self) -> &[D] {
-        self.data
-    }
-}
-
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> GenericParDataMut<QI, D> for ParDataSliceMut<'a, QI, D> {
-    fn as_mut_slice(&mut self) -> &mut [D] {
-        self.data
-    }
-}
-
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> Index<QI> for ParDataSliceMut<'a, QI, D> {
-    type Output = D;
-    fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.quant_to_usize()]
-    }
-}
-
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> IndexMut<QI> for ParDataSliceMut<'a, QI, D> {
-    fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.quant_to_usize()]
-    }
-}
-
-impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> From<&'a mut [D]> for ParDataSliceMut<'a, QI, D> {
+impl<'a, QI, D> From<&'a mut [D]> for ParData<QI, &'a mut [D]> {
     fn from(value: &'a mut [D]) -> Self {
-        Self::from_slice_mut(value)
+        Self::from_store(value)
     }
 }
 
@@ -382,33 +395,18 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug> From<&'a mut [D
 
 //region Array
 
-/// An owned, stack-allocated run of generic elements backed by exactly `N`
-/// entries.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(bound(
-    serialize = "[D; N]: ::serde::Serialize",
-    deserialize = "[D; N]: ::serde::Deserialize<'de>"
-))]
-pub struct ParDataArray<QI: QuantizedUnsignedIntegerTrait, D, const N: usize> {
-    pub(crate) data: [D; N],
-    pub(crate) _marker: PhantomData<QI>,
-}
-
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> ParDataArray<QI, D, N> {
+impl<QI, D, const N: usize> ParData<QI, [D; N]> {
     /// Builds an array of `N` entries, every one initialised to `initial_value`.
-    pub fn new_uniform(initial_value: D) -> ParDataArray<QI, D, N>
+    pub fn new_uniform(initial_value: D) -> Self
     where
         D: Clone,
     {
-        Self {
-            data: [(); N].map(|_| initial_value.clone()),
-            _marker: PhantomData,
-        }
+        Self::from_store([(); N].map(|_| initial_value.clone()))
     }
 
     /// Wraps an existing array.
-    pub fn from_array(data: [D; N]) -> ParDataArray<QI, D, N> {
-        Self { data, _marker: PhantomData }
+    pub const fn from_array(data: [D; N]) -> Self {
+        Self::from_store(data)
     }
 
     /// Consumes the wrapper, returning the backing array.
@@ -417,34 +415,9 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> Par
     }
 }
 
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> GenericParData<QI, D> for ParDataArray<QI, D, N> {
-    fn as_slice(&self) -> &[D] {
-        &self.data
-    }
-}
-
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> GenericParDataMut<QI, D> for ParDataArray<QI, D, N> {
-    fn as_mut_slice(&mut self) -> &mut [D] {
-        &mut self.data
-    }
-}
-
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> Index<QI> for ParDataArray<QI, D, N> {
-    type Output = D;
-    fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.quant_to_usize()]
-    }
-}
-
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> IndexMut<QI> for ParDataArray<QI, D, N> {
-    fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.quant_to_usize()]
-    }
-}
-
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> From<[D; N]> for ParDataArray<QI, D, N> {
+impl<QI, D, const N: usize> From<[D; N]> for ParData<QI, [D; N]> {
     fn from(value: [D; N]) -> Self {
-        Self::from_array(value)
+        Self::from_store(value)
     }
 }
 
@@ -453,82 +426,37 @@ impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> Fro
 //region Heapless Vector
 
 #[cfg(feature = "heapless")]
-/// An owned, stack-allocated run of generic elements backed by exactly `N`
-/// entries.
-#[derive(Debug, Serialize, Deserialize)]
-/*
-#[serde(bound(
-    serialize = "[D; N]: ::serde::Serialize",
-    deserialize = "[D; N]: ::serde::Deserialize<'de>"
-))]
-
- */
-pub struct ParDataHeaplessVec<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> {
-    pub(crate) data: ::heapless::Vec<D, N>,
-    pub(crate) _marker: PhantomData<QI>,
-}
-
-#[cfg(feature = "heapless")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> ParDataHeaplessVec<QI, D, N> {
-    /// Builds an array of `N` entries, every one initialised to `initial_value`.
-    pub fn new_uniform(initial_value: D) -> ParDataHeaplessVec<QI, D, N>
+impl<QI, D, const N: usize> ParData<QI, ::heapless::Vec<D, N>> {
+    /// Builds a vector of `N` entries, every one initialised to `initial_value`.
+    pub fn new_uniform(initial_value: D) -> Self
     where
         D: Clone,
     {
-        Self {
-            data: ::heapless::Vec::from_array([(); N].map(|_| initial_value.clone())),
-            _marker: PhantomData,
-        }
+        Self::from_store(::heapless::Vec::from_array([(); N].map(|_| initial_value.clone())))
     }
 
-    /// Wraps an existing array.
-    pub fn from_array(data: [D; N]) -> ParDataHeaplessVec<QI, D, N> {
-        Self { data: ::heapless::Vec::from_array(data), _marker: PhantomData }
+    /// Wraps an existing array, filling the vector to capacity.
+    pub fn from_array(data: [D; N]) -> Self {
+        Self::from_store(::heapless::Vec::from_array(data))
     }
 
-    /// Consumes the wrapper, returning the backing array.
+    /// Consumes the wrapper, returning the elements as a full array.
+    ///
+    /// Panics if the vector is not filled to capacity.
     pub fn into_array(self) -> [D; N]
+    where
+        D: core::fmt::Debug,
     {
         self.data.into_array().unwrap()
     }
 }
 
 #[cfg(feature = "heapless")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> GenericParData<QI, D> for ParDataHeaplessVec<QI, D, N> {
-    fn as_slice(&self) -> &[D] {
-        &self.data
-    }
-}
-
-#[cfg(feature = "heapless")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> GenericParDataMut<QI, D> for ParDataHeaplessVec<QI, D, N> {
-    fn as_mut_slice(&mut self) -> &mut [D] {
-        &mut self.data
-    }
-}
-
-#[cfg(feature = "heapless")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> Index<QI> for ParDataHeaplessVec<QI, D, N> {
-    type Output = D;
-    fn index(&self, index: QI) -> &Self::Output {
-        &self.data[index.quant_to_usize()]
-    }
-}
-
-#[cfg(feature = "heapless")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> IndexMut<QI> for ParDataHeaplessVec<QI, D, N> {
-    fn index_mut(&mut self, index: QI) -> &mut Self::Output {
-        &mut self.data[index.quant_to_usize()]
-    }
-}
-
-#[cfg(feature = "heapless")]
-impl<QI: QuantizedUnsignedIntegerTrait, D: core::fmt::Debug, const N: usize> From<[D; N]> for ParDataHeaplessVec<QI, D, N> {
+impl<QI, D, const N: usize> From<[D; N]> for ParData<QI, ::heapless::Vec<D, N>> {
     fn from(value: [D; N]) -> Self {
-        Self::from_array(value)
+        Self::from_store(::heapless::Vec::from_array(value))
     }
 }
 
 //endregion
 
-//endregion

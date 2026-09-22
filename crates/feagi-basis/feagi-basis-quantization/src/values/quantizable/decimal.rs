@@ -44,7 +44,7 @@ impl TryFrom<u8> for DecimalQuantizationLevel {
     }
 }
 
-impl<'de> QuantizationLevelPacking<'de> for DecimalQuantizationLevel {
+impl QuantizationLevelPacking for DecimalQuantizationLevel {
     const NUMBER_BITS: usize = 4; // 16 quants ( we will need more custom types later)
 
     unsafe fn from_unpacked_byte(byte: u8) -> Self {

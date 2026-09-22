@@ -713,7 +713,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a mut [u32]> for BitPackedSli
 #[derive(Debug, Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(bound(
     serialize = "[u32; N]: ::serde::Serialize",
-    deserialize = "[u32; N]: ::serde::Deserialize<'de>"
+    deserialize = "[u32; N]: ::serde::de::DeserializeOwned"
 ))]
 pub struct BitPackedArraySizeUnaware<QI: QuantizedUnsignedIntegerTrait, const N: usize> {
     pub(crate) data: [u32; N],
@@ -1083,7 +1083,7 @@ impl<'a, QI: QuantizedUnsignedIntegerTrait> From<&'a mut [u32]> for BitPackedSli
 #[derive(Clone, Debug, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(bound(
     serialize = "[u32; N]: ::serde::Serialize",
-    deserialize = "[u32; N]: ::serde::Deserialize<'de>"
+    deserialize = "[u32; N]: ::serde::de::DeserializeOwned"
 ))]
 pub struct BitPackedArraySizeAware<QI: QuantizedUnsignedIntegerTrait, const N: usize> {
     pub(crate) data: [u32; N],

@@ -1,3 +1,4 @@
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 use crate::prelude::{SpatialCoordinate, SpatialDimensions};
@@ -8,7 +9,7 @@ use crate::spatial_indexing_structs::SpatialStride;
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(bound(
     serialize = "SpatialDimensions<QDims, NUM_DIMS>: Serialize, AxisOrderArray<NUM_DIMS>: Serialize, SpatialStride<NUM_DIMS>: Serialize",
-    deserialize = "SpatialDimensions<QDims, NUM_DIMS>: Deserialize<'de>, AxisOrderArray<NUM_DIMS>: Deserialize<'de>, SpatialStride<NUM_DIMS>: Deserialize<'de>"
+    deserialize = "SpatialDimensions<QDims, NUM_DIMS>: DeserializeOwned, AxisOrderArray<NUM_DIMS>: DeserializeOwned, SpatialStride<NUM_DIMS>: DeserializeOwned"
 ))]
 pub struct SpatialIndexContext<QDims, const NUM_DIMS: usize>
 where

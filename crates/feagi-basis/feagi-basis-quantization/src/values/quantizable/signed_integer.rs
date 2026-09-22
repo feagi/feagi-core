@@ -1,5 +1,6 @@
 use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
 use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 
@@ -33,7 +34,7 @@ impl TryFrom<u8> for SignedIntegerQuantizationLevel {
     }
 }
 
-impl<'de> QuantizationLevelPacking<'de> for SignedIntegerQuantizationLevel {
+impl QuantizationLevelPacking for SignedIntegerQuantizationLevel {
     const NUMBER_BITS: usize = 2;
 
     unsafe fn from_unpacked_byte(byte: u8) -> Self {
@@ -623,11 +624,11 @@ pub trait QuantizedSignedIntegerWrappedTrait:
 ///
 /// These enums hide the generic quantized wrapper type behind concrete variants
 /// (`I8`, `I16`, `I32`, `I64`) while preserving the wrapper family semantics.
-pub trait WrappedQuantizedSignedIntegerEnum<'de>:
+pub trait WrappedQuantizedSignedIntegerEnum:
 Copy + Clone + Send + Sync
 + core::fmt::Debug + core::cmp::PartialEq
 + core::cmp::Eq + core::hash::Hash
-+ Serialize + Deserialize<'de>
++ Serialize + DeserializeOwned
 + Sized + 'static
 {
     fn get_level(&self) -> SignedIntegerQuantizationLevel;
@@ -1032,7 +1033,7 @@ macro_rules! create_wrapped_quantized_signed_integer {
                 }
             }
 
-            impl<'de> $crate::values::quantizable::WrappedQuantizedSignedIntegerEnum<'de> for [<$struct_name Enum>] {
+            impl $crate::values::quantizable::WrappedQuantizedSignedIntegerEnum for [<$struct_name Enum>] {
                 fn get_level(&self) -> $crate::values::quantizable::SignedIntegerQuantizationLevel {
                     [<$struct_name Enum>]::get_level(self)
                 }

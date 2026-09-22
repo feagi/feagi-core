@@ -9,7 +9,7 @@ use crate::generic_collections::generic_par_data::linear::ParDataVector;
     feature = "alloc",
     serde(bound(
         serialize = "Dims: ::serde::Serialize, ParDataVector<QI, D>: ::serde::Serialize",
-        deserialize = "Dims: ::serde::Deserialize<'de>, ParDataVector<QI, D>: ::serde::Deserialize<'de>"
+        deserialize = "Dims: ::serde::de::DeserializeOwned, ParDataVector<QI, D>: ::serde::de::DeserializeOwned"
     ))
 )]
 pub struct SpatialCollectionVector<QI, D, Dims, const DIM_COUNT: usize>

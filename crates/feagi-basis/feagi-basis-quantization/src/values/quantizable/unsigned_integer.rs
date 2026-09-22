@@ -34,7 +34,7 @@ impl TryFrom<u8> for UnsignedIntegerQuantizationLevel {
     }
 }
 
-impl<'de> QuantizationLevelPacking<'de> for UnsignedIntegerQuantizationLevel {
+impl QuantizationLevelPacking for UnsignedIntegerQuantizationLevel {
     const NUMBER_BITS: usize = 2;
 
     unsafe fn from_unpacked_byte(byte: u8) -> Self {
