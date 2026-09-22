@@ -1,9 +1,10 @@
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 /// The uint used as the packing for each BitBatchCollection Struct for holding the bits
 pub trait BitBatchWord: Sized + Clone + Copy + core::fmt::Debug + core::hash::Hash
 + Send + Sync
-+ Serialize + Deserialize<'static> + sealed::BitBatchWordSealing {
++ Serialize + DeserializeOwned + sealed::BitBatchWordSealing {
     /// How many bits can this uint contain?
     const NUMBER_BITS: u8 = (size_of::<Self>() as u8) * 8u8;
 
@@ -14,12 +15,13 @@ pub trait BitBatchWord: Sized + Clone + Copy + core::fmt::Debug + core::hash::Ha
     const BIT_BATCH_WORD_SIZE: BitBatchWordSize =
         BitBatchWordSize::get_size_from_byte_count(Self::NUMBER_BYTES);
 
-    /// Amount to bitshift to get byte count
-    const BIT_SHIFT_DISTANCE: u8 = 2u8 + Self::NUMBER_BYTES;
+    /// Amount to right-shift a bool index by to get the index of its holding word,
+    const BIT_SHIFT_DISTANCE: u8 = Self::NUMBER_BITS.trailing_zeros() as u8;
 
-    /// A pass mask of all bits that are not representing the number of bits of this impl
+    /// Masks off the bits of a bool index that address a bit within its word
     const UPPER_BYTE_COUNT_BIT_MASK: u8 = 255u8 << (Self::BIT_SHIFT_DISTANCE);
-    /// A pass mask of all bits that are representing the number of bits of this impl
+    /// Selects the bits of a bool index that address a bit within its word, so
+    /// `NUMBER_BITS - 1`: 7, 15, 31, 63 for u8, u16, u32, u64
     const LOWER_BYTE_COUNT_BIT_MASK: u8 = !Self::UPPER_BYTE_COUNT_BIT_MASK;
 
     fn from_usize(u: usize) -> Self;
@@ -125,8 +127,8 @@ impl BitBatchWordSize {
         match byte_count {
             1 => BitBatchWordSize::U8,
             2 => BitBatchWordSize::U16,
-            3 => BitBatchWordSize::U32,
-            4 => BitBatchWordSize::U64,
+            4 => BitBatchWordSize::U32,
+            8 => BitBatchWordSize::U64,
             _ => panic!("Invalid byte count!")
         }
     }
@@ -135,8 +137,8 @@ impl BitBatchWordSize {
         match self {
             BitBatchWordSize::U8 => 1,
             BitBatchWordSize::U16 => 2,
-            BitBatchWordSize::U32 => 3,
-            BitBatchWordSize::U64 => 4,
+            BitBatchWordSize::U32 => 4,
+            BitBatchWordSize::U64 => 8,
         }
     }
 }
