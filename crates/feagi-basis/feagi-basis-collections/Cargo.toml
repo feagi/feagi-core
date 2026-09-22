@@ -51,3 +51,6 @@ serde_json = { workspace = true, optional = true, default-features = false}
 serde_arrays ={workspace = true}
 rayon = {workspace = true, optional = true, default-features = false}
 heapless = {workspace = true, optional = true, default-features = false, features = ["serde"]}
+
+[dev-dependencies]
+feagi-basis-quantization = { path = "../feagi-basis-quantization" }
