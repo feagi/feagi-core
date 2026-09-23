@@ -3,7 +3,17 @@ use syn::bracketed;
 use syn::parse::{Parse, ParseStream};
 use syn::{LitStr, Token};
 
-/// These are parameters that could be made during a request
+/// If a comma exists, parse it. If not, dont die
+pub fn parse_optional_comma(input: ParseStream) -> syn::Result<()> {
+    if input.peek(Token![,]) {
+        input.parse::<Token![,]>()?;
+    }
+    Ok(())
+}
+
+//region Struct Builder
+
+/// Represents all members (`StructBuilderParameterField`) to make a struct
 pub struct StructBuilderParameters(Vec<StructBuilderParameterField>);
 
 /*
@@ -67,3 +77,6 @@ impl Parse for StructBuilderParameterField {
         })
     }
 }
+
+
+//endregion

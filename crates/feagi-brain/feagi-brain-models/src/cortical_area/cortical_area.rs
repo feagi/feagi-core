@@ -1,3 +1,4 @@
+use feagi_basis::prelude::FeagiIndexQuantization;
 use crate::cortical_area::components::neuron_layout::NeuronLayout;
 
 /// Describes a cortical area model with all its dynamics

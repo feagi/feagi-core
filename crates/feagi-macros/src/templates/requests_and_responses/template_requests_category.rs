@@ -1,12 +1,12 @@
-use syn::parse::{Parse, ParseBuffer, ParseStream};
-use syn::{braced, LitStr, Result, Token};
+//! Handles processing request and responses for agent / server communication
 
-use crate::common::parse_optional_comma;
-use crate::struct_build::StructBuilderParameters;
+use proc_macro::TokenStream;
+use quote::format_ident;
+use syn::parse::{Parse, ParseBuffer, ParseStream};
+use syn::{braced, LitStr, Result, Token, Ident, parse_macro_input};
+use crate::common::{parse_optional_comma, StructBuilderParameters};
 
 mod kw {
-    syn::custom_keyword!(request_response);
-
     syn::custom_keyword!(read);
     syn::custom_keyword!(create);
     syn::custom_keyword!(edit);
@@ -19,49 +19,21 @@ mod kw {
     syn::custom_keyword!(response);
 }
 
-//region Request
 
-pub struct RootRequest {
-    pub macro_name: syn::Ident,
-    pub root_path: Vec<LitStr>,
-    pub categories: Vec<RequestCategories>,
+pub fn template_requests_category(input: TokenStream) -> TokenStream {
+    let request_category = parse_macro_input!(input as TemplateRequestCategory);
+
+    // TODO validations
+
+    // TODO Generate new macro
+
 }
 
-impl Parse for RootRequest {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let macro_name: syn::Ident = input.parse()?;
-        input.parse::<Token![,]>()?;
 
-        let root_lit: LitStr = input.parse()?;
-        let root_path: Vec<LitStr> = root_lit
-            .value()
-            .split('/')
-            .filter(|segment| !segment.is_empty())
-            .map(|segment| LitStr::new(segment, root_lit.span()))
-            .collect();
+//region Request Category
 
-        input.parse::<Token![,]>()?;
-        input.parse::<kw::request_response>()?;
-
-        let cat_input;
-        braced!(cat_input in input);
-        let mut categories: Vec<RequestCategories> = Vec::new();
-        while !cat_input.is_empty() {
-            categories.push(cat_input.parse::<RequestCategories>()?);
-            parse_optional_comma(&cat_input)?;
-        }
-
-        Ok(Self {
-            macro_name,
-            root_path,
-            categories,
-        })
-    }
-}
-
-//region Request Categories
-
-pub struct RequestCategories {
+pub struct TemplateRequestCategory {
+    pub category_macro_name: Ident,
     pub category_name: LitStr,
     pub read: Vec<RequestWithoutReqBody>,
     pub create: Vec<RequestWithReqBody>,
@@ -70,18 +42,18 @@ pub struct RequestCategories {
     pub patch: Vec<RequestWithReqBody>,
 }
 
-impl Parse for RequestCategories {
+impl Parse for TemplateRequestCategory {
     fn parse(input: ParseStream) -> Result<Self> {
 
-        fn parse_category<TYPE: Parse, BODY: Parse>(buffer: &ParseBuffer) -> Result<Vec<BODY>> {
-            buffer.parse::<TYPE>()?;
+        fn parse_category<RequestType: Parse, RequestBody: Parse>(buffer: &ParseBuffer) -> Result<Vec<RequestBody>> {
+            buffer.parse::<RequestType>()?;
             buffer.parse::<Token![:]>()?;
 
             let braced_buffer;
             braced!(braced_buffer in buffer);
             let mut request = Vec::new();
             while !braced_buffer.is_empty() {
-                request.push(braced_buffer.parse::<BODY>()?);
+                request.push(braced_buffer.parse::<RequestBody>()?);
                 parse_optional_comma(&braced_buffer)?;
             }
 
@@ -90,6 +62,10 @@ impl Parse for RequestCategories {
         }
 
         let category_name: LitStr = input.parse()?;
+        
+        let category_macro_name_str: String = "template_request_category_".to_string() + &*category_name.value();
+        let category_macro_name: Ident = format_ident!("{}", category_macro_name_str);
+        
         input.parse::<Token![:]>()?;
 
         let category_body;
@@ -102,6 +78,7 @@ impl Parse for RequestCategories {
         let patch = parse_category::<kw::patch, RequestWithReqBody>(&category_body)?;
 
         Ok(Self {
+            category_macro_name,
             category_name,
             read,
             create,
@@ -133,7 +110,7 @@ impl Parse for RequestWithoutReqBody {
         }
 
         let request_lit_str: LitStr = input.parse()?;
-        let request_path = path_elements_from_lit_str(&request_lit_str)?;
+        let request_path = PathElement::path_elements_from_lit_str(&request_lit_str)?;
 
         input.parse::<Token![:]>()?;
 
@@ -174,7 +151,7 @@ impl Parse for RequestWithReqBody {
         }
 
         let request_lit_str: LitStr = input.parse()?;
-        let request_path = path_elements_from_lit_str(&request_lit_str)?;
+        let request_path = PathElement::path_elements_from_lit_str(&request_lit_str)?;
 
         input.parse::<Token![:]>()?;
 
@@ -198,12 +175,6 @@ impl Parse for RequestWithReqBody {
 
 type URLEncodableStructBuilderParameters = StructBuilderParameters;
 
-//endregion
-
-//endregion
-
-//endregion
-
 /// An element of a path that may be statically defined or represent a parameter
 pub enum PathElement {
     /// A set path element name
@@ -213,6 +184,19 @@ pub enum PathElement {
 }
 
 impl PathElement {
+    pub fn path_elements_from_lit_str(path_lit: &LitStr) -> Result<Vec<PathElement>> {
+        let span = path_lit.span();
+        let value = path_lit.value();
+        if value.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(value
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .map(|segment| Self::from_path_segment(segment, span))
+            .collect())
+    }
+
     pub fn from_path_segment(segment: &str, span: proc_macro2::Span) -> Self {
         if segment.starts_with('{') && segment.ends_with('}') {
             Self::Parameter(LitStr::new(segment, span))
@@ -222,15 +206,7 @@ impl PathElement {
     }
 }
 
-fn path_elements_from_lit_str(path_lit: &LitStr) -> Result<Vec<PathElement>> {
-    let span = path_lit.span();
-    let value = path_lit.value();
-    if value.is_empty() {
-        return Ok(Vec::new());
-    }
-    Ok(value
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .map(|segment| PathElement::from_path_segment(segment, span))
-        .collect())
-}
+//endregion
+
+//endregion
+
