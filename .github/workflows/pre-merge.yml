@@ -292,8 +292,8 @@ jobs:
           feagi-observability feagi-structures feagi-config feagi-npu-neural
           feagi-npu-runtime feagi-serialization feagi-state-manager
           feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary
-          feagi-brain-development feagi-sensorimotor feagi-services feagi-io
-          feagi-agent feagi-api feagi-hal feagi
+          feagi-brain-development feagi-dataset-contracts feagi-sensorimotor
+          feagi-services feagi-io feagi-agent feagi-trainer feagi-api feagi-hal feagi
         )
 
         crate_path_for() {
@@ -309,11 +309,13 @@ jobs:
             feagi-npu-plasticity) echo "crates/feagi-npu/plasticity" ;;
             feagi-evolutionary) echo "crates/feagi-evolutionary" ;;
             feagi-brain-development) echo "crates/feagi-brain-development" ;;
+            feagi-dataset-contracts) echo "crates/feagi-dataset-contracts" ;;
             feagi-sensorimotor) echo "crates/feagi-sensorimotor" ;;
             feagi-services) echo "crates/feagi-services" ;;
             feagi-io) echo "crates/feagi-io" ;;
             feagi-api) echo "crates/feagi-api" ;;
             feagi-agent) echo "crates/feagi-agent" ;;
+            feagi-trainer) echo "crates/feagi-trainer" ;;
             feagi-hal) echo "crates/feagi-hal" ;;
             feagi) echo "." ;;
             *) return 1 ;;

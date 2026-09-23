@@ -52,6 +52,7 @@ CRATES=(
     # Layer 7: Evolutionary and development
     "crates/feagi-evolutionary"
     "crates/feagi-brain-development"
+    "crates/feagi-dataset-contracts"
     
     # Layer 8: I/O Layer
     "crates/feagi-io"
@@ -61,8 +62,9 @@ CRATES=(
     "crates/feagi-services"
     "crates/feagi-api"
     
-    # Layer 10: Agent & Platform
+    # Layer 10: Agent, Trainer & Platform
     "crates/feagi-agent"
+    "crates/feagi-trainer"
     "crates/feagi-hal"
     
     # Root workspace (meta-crate, publishes last)

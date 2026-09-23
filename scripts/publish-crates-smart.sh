@@ -74,6 +74,7 @@ crate_path_for() {
         feagi-services) echo "crates/feagi-services" ;;
         feagi-api) echo "crates/feagi-api" ;;
         feagi-agent) echo "crates/feagi-agent" ;;
+        feagi-trainer) echo "crates/feagi-trainer" ;;
         feagi-hal) echo "crates/feagi-hal" ;;
         feagi) echo "." ;;
         *) return 1 ;;
@@ -98,6 +99,7 @@ CRATE_ORDER=(
     "feagi-services"
     "feagi-io"
     "feagi-agent"
+    "feagi-trainer"
     "feagi-api"
     "feagi-hal"
     "feagi"

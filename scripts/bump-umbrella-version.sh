@@ -79,7 +79,7 @@ else
 fi
 
 # All publishable crates (unified = all get the same version)
-CHANGED_CRATES="feagi-observability feagi-structures feagi-config feagi-npu-neural feagi-npu-runtime feagi-serialization feagi-state-manager feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary feagi-brain-development feagi-dataset-contracts feagi-sensorimotor feagi-services feagi-io feagi-agent feagi-api feagi-hal feagi"
+CHANGED_CRATES="feagi-observability feagi-structures feagi-config feagi-npu-neural feagi-npu-runtime feagi-serialization feagi-state-manager feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary feagi-brain-development feagi-dataset-contracts feagi-sensorimotor feagi-services feagi-io feagi-agent feagi-trainer feagi-api feagi-hal feagi"
 
 echo "NEW_VERSION=$NEW"
 echo "CHANGED_CRATES=$CHANGED_CRATES"
