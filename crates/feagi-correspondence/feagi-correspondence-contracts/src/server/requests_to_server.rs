@@ -97,6 +97,15 @@ macro_rules! define_requests_to_server {
                         request: [],
                         response: []
                     }
+                },
+                edit: {
+
+                },
+                delete: {
+
+                },
+                patch: {
+
                 }
             },
             connectome: {
@@ -106,10 +115,22 @@ macro_rules! define_requests_to_server {
                         request: [],
                         response: []
                     ]
+                },
+                create: {
+
+                },
+                edit: {
+
+                },
+                delete: {
+
+                },
+                patch: {
+
                 }
             }
 
         }
-        
+
     ) => {};
 }
