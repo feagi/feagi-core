@@ -70,6 +70,7 @@ members = [
     "crates/feagi-correspondence/feagi-correspondence-io",
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-api",
     "crates/feagi-correspondence/feagi-correspondence-contracts",
+    "crates/feagi-correspondence/feagi-correspondence-contracts/feagi-contract-proc"
 
     #"crates/feagi-server",
 

@@ -1,0 +1,16 @@
+[package]
+name = "feagi-contract-proc"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[features]
+# No features here! This is all compile macro stuff!
+
+[dependencies]
+syn = { workspace = true, features = ["full"] }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+heck = { workspace = true }

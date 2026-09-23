@@ -358,6 +358,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-contract-proc"
+version = "0.1.0"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.5",
+]
+
+[[package]]
 name = "feagi-correspondence"
 version = "0.1.1"
 dependencies = [
