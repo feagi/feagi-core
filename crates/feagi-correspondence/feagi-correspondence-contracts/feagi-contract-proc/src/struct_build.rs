@@ -1,5 +1,5 @@
 use proc_macro2::Ident;
-use syn::{braced, bracketed};
+use syn::bracketed;
 use syn::parse::{Parse, ParseStream};
 use syn::{LitStr, Token};
 
@@ -14,21 +14,19 @@ pub struct StructBuilderParameters(Vec<StructBuilderParameterField>);
 */
 impl Parse for StructBuilderParameters {
     fn parse(fields_input: ParseStream) -> syn::Result<Self> {
-
         let field_input;
-        braced!(field_input in fields_input);
+        bracketed!(field_input in fields_input);
         let mut fields = Vec::new();
         while !field_input.is_empty() {
             fields.push(field_input.parse::<StructBuilderParameterField>()?);
-            if fields.is_empty() {
+            if field_input.is_empty() {
                 break;
             }
             field_input.parse::<Token![,]>()?;
-        };
+        }
         Ok(Self(fields))
     }
 }
-
 
 /// A field of a `StructBuilderParameters`, used to represent a members name, its type, and optional comment.
 pub struct StructBuilderParameterField {
@@ -47,7 +45,6 @@ pub struct StructBuilderParameterField {
 */
 impl Parse for StructBuilderParameterField {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-
         let parameter_name: LitStr = input.parse()?;
         input.parse::<Token![:]>()?;
         let parameter_type: Ident = input.parse()?;
@@ -63,7 +60,6 @@ impl Parse for StructBuilderParameterField {
             None
         };
 
-
         Ok(Self {
             parameter_name,
             parameter_type,
@@ -71,4 +67,3 @@ impl Parse for StructBuilderParameterField {
         })
     }
 }
-

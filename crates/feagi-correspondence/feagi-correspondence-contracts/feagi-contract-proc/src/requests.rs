@@ -1,12 +1,8 @@
-use proc_macro::TokenStream;
-use quote::{format_ident, quote, IdentFragment};
-use std::collections::HashSet;
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::spanned::Spanned;
-use syn::{braced, bracketed, parse_macro_input, Expr, ExprLit, ExprUnary, Ident, Lit, LitByteStr, LitInt, LitStr, Result, Token, UnOp};
-use crate::struct_build::StructBuilderParameters;
+use syn::parse::{Parse, ParseBuffer, ParseStream};
+use syn::{braced, LitStr, Result, Token};
+
 use crate::common::parse_optional_comma;
+use crate::struct_build::StructBuilderParameters;
 
 mod kw {
     syn::custom_keyword!(request_response);
@@ -25,15 +21,15 @@ mod kw {
 
 //region Request
 
-struct RootRequest {
-    macro_name: Ident,
-    root_path: Vec<LitStr>,
-    categories: Vec<RequestCategories>
+pub struct RootRequest {
+    pub macro_name: syn::Ident,
+    pub root_path: Vec<LitStr>,
+    pub categories: Vec<RequestCategories>,
 }
 
 impl Parse for RootRequest {
     fn parse(input: ParseStream) -> Result<Self> {
-        let macro_name: Ident = input.parse()?;
+        let macro_name: syn::Ident = input.parse()?;
         input.parse::<Token![,]>()?;
 
         let root_lit: LitStr = input.parse()?;
@@ -44,6 +40,7 @@ impl Parse for RootRequest {
             .map(|segment| LitStr::new(segment, root_lit.span()))
             .collect();
 
+        input.parse::<Token![,]>()?;
         input.parse::<kw::request_response>()?;
 
         let cat_input;
@@ -51,31 +48,46 @@ impl Parse for RootRequest {
         let mut categories: Vec<RequestCategories> = Vec::new();
         while !cat_input.is_empty() {
             categories.push(cat_input.parse::<RequestCategories>()?);
-            _ = parse_optional_comma(&cat_input)?;
+            parse_optional_comma(&cat_input)?;
         }
 
-        Ok( Self {
+        Ok(Self {
             macro_name,
             root_path,
-            categories
+            categories,
         })
-
     }
 }
 
 //region Request Categories
 
-struct RequestCategories {
-    category_name: LitStr,
-    read: RequestWithoutReqBody,
-    create: RequestWithReqBody,
-    edit: RequestWithReqBody,
-    delete: RequestWithReqBody,
-    patch: RequestWithReqBody,
+pub struct RequestCategories {
+    pub category_name: LitStr,
+    pub read: Vec<RequestWithoutReqBody>,
+    pub create: Vec<RequestWithReqBody>,
+    pub edit: Vec<RequestWithReqBody>,
+    pub delete: Vec<RequestWithReqBody>,
+    pub patch: Vec<RequestWithReqBody>,
 }
 
 impl Parse for RequestCategories {
     fn parse(input: ParseStream) -> Result<Self> {
+
+        fn parse_category<TYPE: Parse, BODY: Parse>(buffer: &ParseBuffer) -> Result<Vec<BODY>> {
+            buffer.parse::<TYPE>()?;
+            buffer.parse::<Token![:]>()?;
+
+            let braced_buffer;
+            braced!(braced_buffer in buffer);
+            let mut request = Vec::new();
+            while !braced_buffer.is_empty() {
+                request.push(braced_buffer.parse::<BODY>()?);
+                parse_optional_comma(&braced_buffer)?;
+            }
+
+            parse_optional_comma(&buffer)?;
+            Ok(request)
+        }
 
         let category_name: LitStr = input.parse()?;
         input.parse::<Token![:]>()?;
@@ -83,125 +95,104 @@ impl Parse for RequestCategories {
         let category_body;
         braced!(category_body in input);
 
-        input.parse::<kw::read>()?;
-        input.parse::<Token![:]>()?;
-        let read = ;
-        input.parse::<Token![,]>()?;
+        let read = parse_category::<kw::read, RequestWithoutReqBody>(&category_body)?;
+        let create = parse_category::<kw::create, RequestWithReqBody>(&category_body)?;
+        let edit = parse_category::<kw::edit, RequestWithReqBody>(&category_body)?;
+        let delete = parse_category::<kw::delete, RequestWithReqBody>(&category_body)?;
+        let patch = parse_category::<kw::patch, RequestWithReqBody>(&category_body)?;
 
-        input.parse::<kw::create>()?;
-        input.parse::<Token![:]>()?;
-        let create = ;
-        input.parse::<Token![,]>()?;
-
-        input.parse::<kw::edit>()?;
-        input.parse::<Token![:]>()?;
-        let edit = ;
-        input.parse::<Token![,]>()?;
-
-        input.parse::<kw::delete>()?;
-        input.parse::<Token![:]>()?;
-        let delete = ;
-        input.parse::<Token![,]>()?;
-
-        input.parse::<kw::patch>()?;
-        input.parse::<Token![:]>()?;
-        let patch = ;
-        parse_optional_comma(&category_body)?;
+        Ok(Self {
+            category_name,
+            read,
+            create,
+            edit,
+            delete,
+            patch,
+        })
     }
 }
 
 //region Request
 
-/// A request to read / get state. Does not get a response body (but can have request parameters)
-struct RequestWithoutReqBody {
-    request_path: Vec<PathElement>,
-    description: LitStr,
-    request_parameters: URLEncodableStructBuilderParameters,
-    response: StructBuilderParameters
+/// A request to read / get state (GET).
+pub struct RequestWithoutReqBody {
+    pub request_path: Vec<PathElement>,
+    pub description: LitStr,
+    pub request_parameters: URLEncodableStructBuilderParameters,
+    pub response: StructBuilderParameters,
 }
 
 impl Parse for RequestWithoutReqBody {
     fn parse(input: ParseStream) -> Result<Self> {
+        fn request_fields<FieldIdent: Parse, FieldType: Parse>(buffer: &ParseBuffer) -> Result<FieldType> {
+            buffer.parse::<FieldIdent>()?;
+            buffer.parse::<Token![:]>()?;
+            let output = buffer.parse::<FieldType>()?;
+            parse_optional_comma(&buffer)?;
+            Ok(output)
+        }
+
         let request_lit_str: LitStr = input.parse()?;
-        let request_path: Vec<PathElement> = request_lit_str
-            .value()
-            .split('/')
-            .filter(|segment| !segment.is_empty())
-            .map(|element| PathElement::from_str(element))
-            .collect();
+        let request_path = path_elements_from_lit_str(&request_lit_str)?;
 
         input.parse::<Token![:]>()?;
-
 
         let members;
         braced!(members in input);
 
-        members.parse::<kw::description>()?;
-        members.parse::<Token![:]>()?;
-        let description: LitStr = members.parse()?;
-        members.parse::<Token![,]>()?;
+        let description = request_fields::<kw::description, LitStr>(&members)?;
+        let request_parameters = request_fields::<kw::request_parameters, URLEncodableStructBuilderParameters>(&members)?;
+        let response = request_fields::<kw::response, StructBuilderParameters>(&members)?;
 
-        members.parse::<kw::request_parameters>()?;
-        members.parse::<Token![:]>()?;
-        let request_parameters = members.parse::<URLEncodableStructBuilderParameters>()?;
-        members.parse::<Token![,]>()?;
-
-        members.parse::<kw::response>()?;
-        members.parse::<Token![:]>()?;
-        let response = members.parse::<StructBuilderParameters>()?;
-        parse_optional_comma(&members)?;
-
-        Ok(Self {request_path, description, request_parameters, response})
+        Ok(Self {
+            request_path,
+            description,
+            request_parameters,
+            response,
+        })
     }
 }
 
-
-/// Any other request that isnt a Read Request
-struct RequestWithReqBody {
-    request_path: Vec<PathElement>,
-    description: LitStr,
-    request_parameters: URLEncodableStructBuilderParameters,
-    request: StructBuilderParameters,
-    response: StructBuilderParameters
+/// Any other request that is not a read request.
+pub struct RequestWithReqBody {
+    pub request_path: Vec<PathElement>,
+    pub description: LitStr,
+    pub request_parameters: URLEncodableStructBuilderParameters,
+    pub request: StructBuilderParameters,
+    pub response: StructBuilderParameters,
 }
 
 impl Parse for RequestWithReqBody {
     fn parse(input: ParseStream) -> Result<Self> {
+
+        fn request_fields<FieldIdent: Parse, FieldType: Parse>(buffer: &ParseBuffer) -> Result<FieldType> {
+            buffer.parse::<FieldIdent>()?;
+            buffer.parse::<Token![:]>()?;
+            let output = buffer.parse::<FieldType>()?;
+            parse_optional_comma(&buffer)?;
+            Ok(output)
+        }
+
         let request_lit_str: LitStr = input.parse()?;
-        let request_path: Vec<PathElement> = request_lit_str
-            .value()
-            .split('/')
-            .filter(|segment| !segment.is_empty())
-            .map(|element| PathElement::from_str(element))
-            .collect();
+        let request_path = path_elements_from_lit_str(&request_lit_str)?;
 
         input.parse::<Token![:]>()?;
-
 
         let members;
         braced!(members in input);
 
-        members.parse::<kw::description>()?;
-        members.parse::<Token![:]>()?;
-        let description: LitStr = members.parse()?;
-        members.parse::<Token![,]>()?;
+        let description = request_fields::<kw::description, LitStr>(&members)?;
+        let request_parameters = request_fields::<kw::request_parameters, URLEncodableStructBuilderParameters>(&members)?;
+        let request = request_fields::<kw::request, StructBuilderParameters>(&members)?;
+        let response = request_fields::<kw::response, StructBuilderParameters>(&members)?;
 
-        members.parse::<kw::request_parameters>()?;
-        members.parse::<Token![:]>()?;
-        let request_parameters = members.parse::<URLEncodableStructBuilderParameters>()?;
-        members.parse::<Token![,]>()?;
-
-        members.parse::<kw::request>()?;
-        members.parse::<Token![:]>()?;
-        let request = members.parse::<StructBuilderParameters>()?;
-        members.parse::<Token![,]>()?;
-
-        members.parse::<kw::response>()?;
-        members.parse::<Token![:]>()?;
-        let response = members.parse::<StructBuilderParameters>()?;
-        parse_optional_comma(&members)?;
-
-        Ok(Self {request_path, description, request_parameters, request, response})
+        Ok(Self {
+            request_path,
+            description,
+            request_parameters,
+            request,
+            response,
+        })
     }
 }
 
@@ -213,31 +204,33 @@ type URLEncodableStructBuilderParameters = StructBuilderParameters;
 
 //endregion
 
-
 /// An element of a path that may be statically defined or represent a parameter
-enum PathElement {
+pub enum PathElement {
     /// A set path element name
     Static(LitStr),
-    /// A parameter in the path itself
-    Parameter(LitStr)
+    /// A parameter in the path itself (`{name}` segment)
+    Parameter(LitStr),
 }
 
 impl PathElement {
-    pub fn from_str(str: &str) -> Self {
-        if str.contains("{") && str.contains("}") {
-            return Self::Parameter(LitStr::new(str, str.span().unwrap()))
-        }
-        return Self::Static(LitStr::new(str, str.span().unwrap()))
-    }
-}
-
-impl Parse for PathElement {
-    fn parse(input: ParseStream) -> Result<Self> {
-        if input.peek(syn::token::Brace) {
-            let param_body;
-            braced!(param_body in input);
-
+    pub fn from_path_segment(segment: &str, span: proc_macro2::Span) -> Self {
+        if segment.starts_with('{') && segment.ends_with('}') {
+            Self::Parameter(LitStr::new(segment, span))
+        } else {
+            Self::Static(LitStr::new(segment, span))
         }
     }
 }
 
+fn path_elements_from_lit_str(path_lit: &LitStr) -> Result<Vec<PathElement>> {
+    let span = path_lit.span();
+    let value = path_lit.value();
+    if value.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(value
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| PathElement::from_path_segment(segment, span))
+        .collect())
+}

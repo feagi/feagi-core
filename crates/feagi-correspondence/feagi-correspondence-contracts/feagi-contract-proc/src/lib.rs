@@ -1,3 +1,3 @@
 mod requests;
 mod struct_build;
-pub mod common;
+mod common;
