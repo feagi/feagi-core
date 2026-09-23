@@ -20,7 +20,7 @@
 macro_rules! define_request_response {
     (
         server_request_response,
-        permissionss: [Read, Write],
+        permissions: [Read, Write],
         requests_responses {
 
             //region Burst Engine
