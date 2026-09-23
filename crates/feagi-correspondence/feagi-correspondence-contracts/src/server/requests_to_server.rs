@@ -97,9 +97,9 @@ format:
 macro_rules! define_requests_to_server {
     (
         requests_to_server,
-        v2
+        "v2",
         request_response {
-            agent: {
+            "agent": {
                 read: {
                     (capabilities): {
                         description: "TODO",
@@ -197,7 +197,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            system: {
+            "system": {
                 read: {
                     (beacon/subscribers): {
                         description: "TODO",
@@ -356,7 +356,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            cortical_area: {
+            "cortical_area": {
                 read: {
                     (cortical_area/geometry): {
                         description: "TODO",
@@ -616,7 +616,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            morphology: {
+            "morphology": {
                 read: {
                     (info/{morphology_id}): {
                         description: "TODO",
@@ -712,7 +712,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            region: {
+            "region": {
                 read: {
                     (region/{region_id}): {
                         description: "TODO",
@@ -792,7 +792,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            cortical_mapping: {
+            "cortical_mapping": {
                 read: {
                     (mapping): {
                         description: "TODO",
@@ -862,7 +862,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            connectome: {
+            "connectome": {
                 read: {
                     (area_details): {
                         description: "TODO",
@@ -1088,7 +1088,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            burst_engine: {
+            "burst_engine": {
                 read: {
                     (burst_counter): {
                         description: "TODO",
@@ -1285,7 +1285,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            genome: {
+            "genome": {
                 read: {
                     (amalgamation): {
                         description: "TODO",
@@ -1487,7 +1487,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            feagi: {
+            "feagi": {
                 read: {
                 },
                 create: {
@@ -1505,7 +1505,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            neuroplasticity: {
+            "neuroplasticity": {
                 read: {
                     (plasticity_queue_depth): {
                         description: "TODO",
@@ -1556,7 +1556,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            insight: {
+            "insight": {
                 read: {
                     (analytics): {
                         description: "TODO",
@@ -1602,7 +1602,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            input: {
+            "input": {
                 read: {
                     (sensor_snapshot/last): {
                         description: "TODO",
@@ -1641,7 +1641,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            output: {
+            "output": {
                 read: {
                     (motor_snapshot/last): {
                         description: "TODO",
@@ -1669,7 +1669,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            physiology: {
+            "physiology": {
                 read: {
                     (): {
                         description: "TODO",
@@ -1692,7 +1692,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            simulation: {
+            "simulation": {
                 read: {
                     (stats): {
                         description: "TODO",
@@ -1732,7 +1732,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            training: {
+            "training": {
                 read: {
                     (brain_fitness): {
                         description: "TODO",
@@ -1862,7 +1862,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            visualization: {
+            "visualization": {
                 read: {
                     (status): {
                         description: "TODO",
@@ -1897,7 +1897,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            monitoring: {
+            "monitoring": {
                 read: {
                     (cortical_activity): {
                         description: "TODO",
@@ -1934,7 +1934,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            evolution: {
+            "evolution": {
                 read: {
                     (status): {
                         description: "TODO",
@@ -1957,7 +1957,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            network: {
+            "network": {
                 read: {
                     (connection_info): {
                         description: "TODO",
@@ -1985,24 +1985,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            : {
-                read: {
-                    (): {
-                        description: "TODO",
-                        request_parameters: [],
-                        response: []
-                    },
-                },
-                create: {
-                },
-                edit: {
-                },
-                delete: {
-                },
-                patch: {
-                },
-            },
-            api-docs: {
+            "api-docs": {
                 read: {
                     (openapi.json): {
                         description: "TODO",
@@ -2019,7 +2002,7 @@ macro_rules! define_requests_to_server {
                 patch: {
                 },
             },
-            snapshot: {
+            "snapshot": {
                 read: {
                     (): {
                         description: "TODO",
@@ -2052,47 +2035,6 @@ macro_rules! define_requests_to_server {
                         response: []
                     },
                     (upload): {
-                        description: "TODO",
-                        request_parameters: [],
-                        request: [],
-                        response: []
-                    },
-                },
-                edit: {
-                },
-                delete: {
-                    ({snapshot_id}): {
-                        description: "TODO",
-                        request_parameters: [],
-                        request: [],
-                        response: []
-                    },
-                },
-                patch: {
-                },
-            },
-            snapshots: {
-                read: {
-                    ({snapshot_id}/artifact/{fmt}): {
-                        description: "TODO",
-                        request_parameters: [],
-                        response: []
-                    },
-                },
-                create: {
-                    (connectome): {
-                        description: "TODO",
-                        request_parameters: [],
-                        request: [],
-                        response: []
-                    },
-                    (connectome/{snapshot_id}/restore): {
-                        description: "TODO",
-                        request_parameters: [],
-                        request: [],
-                        response: []
-                    },
-                    ({snapshot_id}/restore): {
                         description: "TODO",
                         request_parameters: [],
                         request: [],
