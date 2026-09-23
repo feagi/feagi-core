@@ -1,4 +1,5 @@
 use proc_macro2::Ident;
+use quote::quote;
 use syn::bracketed;
 use syn::parse::{Parse, ParseStream};
 use syn::{LitStr, Token};
@@ -15,6 +16,27 @@ pub fn parse_optional_comma(input: ParseStream) -> syn::Result<()> {
 
 /// Represents all members (`StructBuilderParameterField`) to make a struct
 pub struct StructBuilderParameters(Vec<StructBuilderParameterField>);
+
+impl StructBuilderParameters {
+    pub(crate) fn fields(&self) -> &[StructBuilderParameterField] {
+        &self.0
+    }
+
+    /// Re-emits this parameter list in contract DSL form (`[ ... ]`).
+    pub(crate) fn expand_template(&self) -> proc_macro2::TokenStream {
+        let fields = self.fields();
+        if fields.is_empty() {
+            return quote! { [] };
+        }
+
+        let entries = fields.iter().map(StructBuilderParameterField::expand_template);
+        quote! {
+            [
+                #(#entries,)*
+            ]
+        }
+    }
+}
 
 /*
     Parses the following:
@@ -78,5 +100,24 @@ impl Parse for StructBuilderParameterField {
     }
 }
 
+impl StructBuilderParameterField {
+    /// Re-emits a single struct-builder field entry inside `[ ... ]`.
+    pub(crate) fn expand_template(&self) -> proc_macro2::TokenStream {
+        let parameter_name = &self.parameter_name;
+        let parameter_type = &self.parameter_type;
+        match &self.description {
+            Some(description) => {
+                quote! {
+                    #parameter_name: #parameter_type, #description
+                }
+            }
+            None => {
+                quote! {
+                    #parameter_name: #parameter_type
+                }
+            }
+        }
+    }
+}
 
 //endregion

@@ -1,9 +1,11 @@
 //! Handles processing request and responses for agent / server communication
 
 use proc_macro::TokenStream;
-use quote::format_ident;
+use proc_macro2::Span;
+use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::{braced, LitStr, Result, Token, Ident, parse_macro_input};
+
 use crate::common::{parse_optional_comma, StructBuilderParameters};
 
 mod kw {
@@ -25,10 +27,8 @@ pub fn template_requests_category(input: TokenStream) -> TokenStream {
 
     // TODO validations
 
-    // TODO Generate new macro
-
+    TokenStream::from(request_category.expand_macro())
 }
-
 
 //region Request Category
 
@@ -89,6 +89,42 @@ impl Parse for TemplateRequestCategory {
     }
 }
 
+impl TemplateRequestCategory {
+    /// Emits `macro_rules! template_request_category_<name> { () => { ... } };`
+    pub fn expand_macro(&self) -> proc_macro2::TokenStream {
+        let macro_name = &self.category_macro_name;
+        let category_fragment = self.expand_template();
+
+        quote! {
+            macro_rules! #macro_name {
+                () => {
+                    #category_fragment
+                };
+            }
+        }
+    }
+
+    /// Emits `"category": { read: { ... }, create: { ... }, ... }`.
+    pub fn expand_template(&self) -> proc_macro2::TokenStream {
+        let category_name = &self.category_name;
+        let read = RequestWithoutReqBody::expand_read_bucket(&self.read);
+        let create = RequestWithReqBody::expand_verb_bucket("create", &self.create);
+        let edit = RequestWithReqBody::expand_verb_bucket("edit", &self.edit);
+        let delete = RequestWithReqBody::expand_verb_bucket("delete", &self.delete);
+        let patch = RequestWithReqBody::expand_verb_bucket("patch", &self.patch);
+
+        quote! {
+            #category_name: {
+                #read
+                #create
+                #edit
+                #delete
+                #patch
+            }
+        }
+    }
+}
+
 //region Request
 
 /// A request to read / get state (GET).
@@ -127,6 +163,32 @@ impl Parse for RequestWithoutReqBody {
             request_parameters,
             response,
         })
+    }
+}
+
+impl RequestWithoutReqBody {
+    pub fn expand_read_bucket(endpoints: &[Self]) -> proc_macro2::TokenStream {
+        let entries = endpoints.iter().map(Self::expand_template);
+        quote! {
+            read: {
+                #(#entries,)*
+            },
+        }
+    }
+
+    pub fn expand_template(&self) -> proc_macro2::TokenStream {
+        let path = PathElement::path_to_lit_str(&self.request_path);
+        let request_parameters = self.request_parameters.expand_template();
+        let response = self.response.expand_template();
+        let description = &self.description;
+
+        quote! {
+            #path: {
+                description: #description,
+                request_parameters: #request_parameters,
+                response: #response
+            }
+        }
     }
 }
 
@@ -173,6 +235,35 @@ impl Parse for RequestWithReqBody {
     }
 }
 
+impl RequestWithReqBody {
+    pub fn expand_verb_bucket(verb: &str, endpoints: &[Self]) -> proc_macro2::TokenStream {
+        let verb_ident = Ident::new(verb, Span::call_site());
+        let entries = endpoints.iter().map(Self::expand_template);
+        quote! {
+            #verb_ident: {
+                #(#entries,)*
+            },
+        }
+    }
+
+    pub fn expand_template(&self) -> proc_macro2::TokenStream {
+        let path = PathElement::path_to_lit_str(&self.request_path);
+        let request_parameters = self.request_parameters.expand_template();
+        let request = self.request.expand_template();
+        let response = self.response.expand_template();
+        let description = &self.description;
+
+        quote! {
+            #path: {
+                description: #description,
+                request_parameters: #request_parameters,
+                request: #request,
+                response: #response
+            }
+        }
+    }
+}
+
 type URLEncodableStructBuilderParameters = StructBuilderParameters;
 
 /// An element of a path that may be statically defined or represent a parameter
@@ -203,6 +294,26 @@ impl PathElement {
         } else {
             Self::Static(LitStr::new(segment, span))
         }
+    }
+
+    /// Joins parsed path elements back into a single path string literal for the contract DSL.
+    pub fn path_to_lit_str(elements: &[Self]) -> LitStr {
+        let span = elements
+            .first()
+            .map(|element| match element {
+                PathElement::Static(lit) | PathElement::Parameter(lit) => lit.span(),
+            })
+            .unwrap_or(Span::call_site());
+
+        let path = elements
+            .iter()
+            .map(|element| match element {
+                PathElement::Static(lit) | PathElement::Parameter(lit) => lit.value(),
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+
+        LitStr::new(&path, span)
     }
 }
 
