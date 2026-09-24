@@ -1,4 +1,5 @@
-use crate::cortical_area::data_structs::InverseOutgoingConnectionCount;
+use feagi_basis::feagi_neuron::single_area_collections::neurons_2::context::CorticalAreaNeuronPotential;
+use crate::cortical_area::data_structs::cortical_area_flags::CorticalAreaFlags;
 use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
 use crate::cortical_area::extendable_components::cortical_model_data_field::CorticalModelDataField;
 
@@ -19,6 +20,10 @@ where
     /// The cortical level data that is used for runtime processing, is not exposed to
     /// genome developers nor is it saved (starts clean with every init)
     pub cortical_data_scratch: CorticalDataScratch,
+    /// If PSP is cortical area driven (not membrane potential driven), use this value
+    pub cortical_level_psp: CorticalAreaNeuronPotential<CAQ::MembranePotentialQuant>,
+    /// Boolean flags used by all cortical areas
+    pub cortical_area_flags: CorticalAreaFlags,
 }
 
 impl<CAQ, CorticalDataProperties, CorticalDataInternal, CorticalDataScratch>

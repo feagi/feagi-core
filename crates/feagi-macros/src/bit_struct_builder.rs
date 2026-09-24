@@ -4,7 +4,7 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{parse_macro_input, Attribute, Ident, Token, Type};
+use syn::{parse_macro_input, Attribute, Ident, Token, Type, Visibility};
 
 use crate::common::parse_optional_comma;
 
@@ -19,6 +19,7 @@ pub fn bit_struct_builder(input: TokenStream) -> TokenStream {
 
 struct BitStructBuilderSpec {
     storage_type: Type,
+    vis: Visibility,
     struct_name: Ident,
     attrs: Vec<Attribute>,
     fields: Vec<Ident>,
@@ -29,6 +30,7 @@ impl Parse for BitStructBuilderSpec {
         let storage_type: Type = input.parse()?;
         input.parse::<Token![,]>()?;
 
+        let vis: Visibility = input.parse()?;
         let struct_name: Ident = input.parse()?;
         input.parse::<Token![,]>()?;
 
@@ -48,6 +50,7 @@ impl Parse for BitStructBuilderSpec {
 
         Ok(Self {
             storage_type,
+            vis,
             struct_name,
             attrs,
             fields,
@@ -73,6 +76,7 @@ impl BitStructBuilderSpec {
 
         let Self {
             storage_type,
+            vis,
             struct_name,
             attrs,
             fields,
@@ -85,12 +89,12 @@ impl BitStructBuilderSpec {
 
             quote! {
                 #[inline]
-                pub fn #field(&self) -> bool {
+                #vis fn #field(&self) -> bool {
                     (self.0 & ((1 as #storage_type) << #bit_index)) != 0
                 }
 
                 #[inline]
-                pub fn #setter(&mut self, value: bool) {
+                #vis fn #setter(&mut self, value: bool) {
                     let mask = (1 as #storage_type) << #bit_index;
                     if value {
                         self.0 |= mask;
@@ -100,7 +104,7 @@ impl BitStructBuilderSpec {
                 }
 
                 #[inline]
-                pub fn #toggler(&mut self) {
+                #vis fn #toggler(&mut self) {
                     self.0 ^= (1 as #storage_type) << #bit_index;
                 }
             }
@@ -108,16 +112,16 @@ impl BitStructBuilderSpec {
 
         Ok(quote! {
             #(#attrs)*
-            pub struct #struct_name(#storage_type);
+            #vis struct #struct_name(#storage_type);
 
             impl #struct_name {
                 #[inline]
-                pub const fn new(bits: #storage_type) -> Self {
+                #vis const fn new(bits: #storage_type) -> Self {
                     Self(bits)
                 }
 
                 #[inline]
-                pub const fn bits(&self) -> #storage_type {
+                #vis const fn bits(&self) -> #storage_type {
                     self.0
                 }
 

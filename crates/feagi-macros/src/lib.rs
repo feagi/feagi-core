@@ -25,7 +25,7 @@ pub fn template_request(input: TokenStream) -> TokenStream {
 ///
 /// bit_struct_builder! {
 ///     u8,
-///     ExampleFlags,
+///     pub ExampleFlags,
 ///     #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 ///     /// Runtime visibility and enable flags.
 ///     {

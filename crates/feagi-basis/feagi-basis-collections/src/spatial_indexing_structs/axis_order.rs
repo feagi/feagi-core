@@ -50,11 +50,11 @@ impl AxisOrderEnum {
         AxisOrderArray {data: out}
     }
 
-    pub const fn from_identifier<const NUM_DIMS: u8>(u: AxisOrderIdentifier)  -> AxisOrderEnum {
+    pub const fn from_identifier<const NUM_DIMS: usize>(u: AxisOrderIdentifier)  -> AxisOrderEnum {
         Self::from_u8::<NUM_DIMS>(u)
     }
 
-    pub const fn from_u8<const NUM_DIMS: u8>(u: u8) -> AxisOrderEnum {
+    pub const fn from_u8<const NUM_DIMS: usize>(u: u8) -> AxisOrderEnum {
         match u { 
             0 => AxisOrderEnum::DefaultIncrementing,
             1 => AxisOrderEnum::Decrementing,

@@ -12,13 +12,6 @@ use feagi_basis_quantization::{
 };
 //region Values
 
-create_wrapped_quantized_decimal!(
-    /// Represents the Membrane Potential of a single neuron
-    pub CorticalAreaNeuronPotential
-);
-
-
-
 //endregion
 
 //region Linear Indexing

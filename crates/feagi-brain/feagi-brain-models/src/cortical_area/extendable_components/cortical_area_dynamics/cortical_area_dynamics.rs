@@ -1,10 +1,10 @@
-use feagi_basis::feagi_neuron::wrapped_types::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
+use feagi_basis::feagi_neuron::wrapped_types::{CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::*;
 use crate::cortical_area::components::neuron_layout::NeuronLayout;
 use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
 use crate::cortical_area::extendable_components::cortical_model_data_field::CorticalModelDataField;
-use crate::cortical_area::extendable_components::cortical_model_data_fields::cortical_data_properties::CorticalDataPropertiesField;
 use crate::cortical_area::data_structs::{CorticalAreaModelConnectomeCorticalData, CorticalAreaModelNeuronData};
+
 
 type IsFiring = bool;
 
@@ -21,7 +21,7 @@ where
     
     /// The cortical level data that should be exposed to genome developers. Not mutable during
     /// cortical processing
-    type CorticalDataProperties: CorticalDataPropertiesField<CAQ>;
+    type CorticalDataProperties: CorticalModelDataField<CAQ>;
 
     /// The cortical level data that is for mutable internal processing, will not be
     /// exposed to genome developers but is saved in the connectome
@@ -118,8 +118,8 @@ where
 
         // We should apply any modifiers to the outgoing neuron potential, 
         // regardless of firing state
-        if !cortical_data.get_is_psp_membrane_driven() {
-            *processing_buffer = cortical_data.get_cortical_driven_psp();
+        if !cortical_data.cortical_area_flags.is_psp_uniform() {
+            *processing_buffer = cortical_data.cortical_level_psp;
         }
 
         if cortical_data.get_is_psp_uniform() {

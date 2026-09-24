@@ -1,5 +1,5 @@
 use serde::Serialize;
-use feagi_basis::feagi_neuron::wrapped_types::{CorticalAreaNeuronCoordinate, CorticalAreaNeuronDimensions, CorticalAreaNeuronLocalIndex, NeuronCount};
+use feagi_basis::feagi_neuron::single_area_collections::neurons_2::context::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::*;
 use crate::cortical_area::components::neuron_layout::NeuronLayout;
 
@@ -13,7 +13,7 @@ impl<FIQ: FeagiIndexQuantization> NeuronLayout<FIQ> for NeuronLayoutVoxel<FIQ> {
     type CorticalContext = CorticalAreaNeuronDimensions<FIQ::NeuronIndexQuant>;
     type PerNeuronContext = CorticalAreaNeuronCoordinate<FIQ::NeuronIndexQuant>;
 
-    fn get_neuron_count(&self) -> NeuronCount<FIQ::NeuronIndexQuant> {
+    fn get_neuron_count(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant> {
         self.cortical_dimensions.number_contained_elements().deref().into()
     }
 
