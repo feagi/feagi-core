@@ -1,4 +1,4 @@
-use feagi_basis::feagi_neuron::single_area_collections::neurons_2::context::CorticalAreaNeuronPotential;
+use feagi_basis::feagi_neuron::single_area_collections::neurons::CorticalAreaNeuronPotential;
 use crate::cortical_area::data_structs::cortical_area_flags::CorticalAreaFlags;
 use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
 use crate::cortical_area::extendable_components::cortical_model_data_field::CorticalModelDataField;

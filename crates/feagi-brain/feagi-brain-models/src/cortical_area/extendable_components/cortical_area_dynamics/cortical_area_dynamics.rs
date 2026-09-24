@@ -1,4 +1,4 @@
-use feagi_basis::feagi_neuron::wrapped_types::{CorticalAreaNeuronLocalIndex};
+use feagi_basis::feagi_neuron::single_area_collections::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::*;
 use crate::cortical_area::components::neuron_layout::NeuronLayout;
 use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;

@@ -58,6 +58,7 @@ SpatialCoordinate<DimensionalCorticalAreaNeuronAxisPosition<QI>, 4>;
 pub type DimensionalCorticalAreaDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
 SpatialDimensions<DimensionalCorticalAreaNeuronAxisPosition<QI>, 4>;
 
+
 /// A collection of dimensional neuron potentials that owns all its inner fields, using default
 /// incrementing indexing
 pub type DimensionalCorticalAreaPotentials<

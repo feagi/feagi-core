@@ -13,7 +13,7 @@
 # ============================================================================
 
 [package]
-name = "feagi"
+name = "feagi-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -54,7 +54,37 @@ feagi-agent = {path = "crates/feagi-agent"}
 
 [workspace]
 resolver = "2"
-members = ["crates/feagi-basis", "crates/feagi-basis/feagi-basis-quantization", "crates/feagi-basis/feagi-basis-collections", "crates/feagi-basis/feagi-basis-error-logging", "crates/feagi-basis/feagi-basis-error-logging/feagi-basis-error-logging-proc", "crates/feagi-basis/feagi-basis-genome", "crates/feagi-basis/feagi-basis-genome/feagi-basis-genome-proc", "crates/feagi-basis/feagi-basis-neuron", "crates/feagi-basis/feagi-basis-data-serialization", "crates/feagi-basis/feagi-basis-sensiomotor", "crates/feagi-brain", "crates/feagi-brain/feagi-brain-models", "crates/feagi-brain/feagi-brain-npu", "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines", "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-basis", "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon", "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32", "crates/feagi-correspondence", "crates/feagi-correspondence/feagi-correspondence-serialization", "crates/feagi-correspondence/feagi-correspondence-io", "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-api", "crates/feagi-correspondence/feagi-correspondence-contracts", "crates/feagi-macros"]
+members = [
+    "crates/feagi-basis",
+    "crates/feagi-basis/feagi-basis-quantization",
+    "crates/feagi-basis/feagi-basis-collections",
+    "crates/feagi-basis/feagi-basis-error-logging",
+    "crates/feagi-basis/feagi-basis-error-logging/feagi-basis-error-logging-proc",
+    "crates/feagi-basis/feagi-basis-genome",
+    "crates/feagi-basis/feagi-basis-genome/feagi-basis-genome-proc",
+    "crates/feagi-basis/feagi-basis-neuron",
+    "crates/feagi-basis/feagi-basis-data-serialization",
+    "crates/feagi-basis/feagi-basis-sensiomotor",
+
+    "crates/feagi-brain",
+    "crates/feagi-brain/feagi-brain-models",
+    "crates/feagi-brain/feagi-brain-npu",
+    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines",
+    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-basis",
+    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon",
+    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
+
+    "crates/feagi-correspondence",
+    "crates/feagi-correspondence/feagi-correspondence-serialization",
+    "crates/feagi-correspondence/feagi-correspondence-io",
+    "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-api",
+    "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-basis",
+    "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest",
+    "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest/feagi-rest-server",
+    "crates/feagi-correspondence/feagi-correspondence-contracts",
+
+    "crates/feagi-macros"
+]
 
 
 [workspace.package]
@@ -72,7 +102,7 @@ documentation = "https://docs.rs/feagi"
 # Macro Stuff
 paste = { version =  "1.0.15"}
 quote = "1.0.47"
-syn = { version = "3.0.5", features = ["full"] }
+syn = { version = "3.0.6", features = ["full"] }
 proc-macro2 = "1.0.107"
 heck = "0.5.0"
 

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use feagi_basis::feagi_neuron::single_area_collections::neurons_2::context::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
+use feagi_basis::feagi_neuron::single_area_collections::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::*;
 
 /// Root trait for defining Neuron Layout
