@@ -11,3 +11,4 @@ mod per_neuron_flags;
 mod inverse_outgoing_connection_count;
 mod cortical_area_model_connectome_cortical_data;
 mod cortical_area_model_neuron_data;
+pub mod cortical_area_flags;

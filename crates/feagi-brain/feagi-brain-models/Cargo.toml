@@ -33,6 +33,7 @@ alloc = [
 # Sibling Crates
 
 # Root Crates
+feagi-macros = {path = "../../feagi-macros"}
 feagi-basis = {path = "../../feagi-basis" }
 
 # External Crates
