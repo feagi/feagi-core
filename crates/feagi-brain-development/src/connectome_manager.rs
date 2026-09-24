@@ -1595,7 +1595,7 @@ impl ConnectomeManager {
         self.classifiers.values().any(|classifier| {
             let src_core = classifier.owns_assembly_core(&src_key);
             let dst_core = classifier.owns_assembly_core(&dst_key);
-            src_core || dst_core || (classifier.references_input(&src_key) && dst_core)
+            src_core || dst_core
         })
     }
 

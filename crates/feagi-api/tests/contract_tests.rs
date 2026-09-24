@@ -2162,7 +2162,7 @@ async fn test_post_cortical_area_resizes_existing_segmented_tile_for_the_same_gr
         .list_cortical_areas()
         .await
         .expect("Failed to list cortical areas");
-    let mut group0: HashMap<u8, (usize, usize, usize, (i32, i32, i32))> = HashMap::new();
+    let mut group0 = HashMap::new();
     for area in areas {
         let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
             continue;
