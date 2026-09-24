@@ -1,6 +1,0 @@
-
-
-
-pub struct CorticalAreaData<CAQ> {
-    
-}

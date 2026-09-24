@@ -8,7 +8,7 @@ use crate::values::quantizable::{DecimalQuantizationLevel, QuantizedDecimalTrait
 /// areas must have this property. This quantization is set per cortical area, and
 /// is controlled by the Neuron Model Quantization state, although this cortical level neuron
 /// potential quantization has discrete steps that must be followed.
-pub trait MembranePotentialQuantization: Clone + Copy + Hash + PartialEq
+pub trait MembranePotentialQuantization: Clone + Copy + PartialEq
 + core::fmt::Debug + Serialize + DeserializeOwned + Sync + Send + 'static {
     /// Defines the quantization of the membrane potential of a neuron within a cortical area.
     type MembranePotentialQuant: QuantizedDecimalUnwrappedTrait; // TODO wrap this actually

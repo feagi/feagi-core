@@ -2,6 +2,7 @@ use proc_macro::TokenStream;
 
 mod common;
 mod templates;
+pub mod bit_struct_builder;
 
 #[proc_macro]
 pub fn template_request_category(input: TokenStream) -> TokenStream {

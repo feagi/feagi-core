@@ -1,4 +1,4 @@
-use crate::cortical_area::implemented_components::cortical_area_quantization::CorticalAreaQuantization;
+use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
 
 /// Various fields of cortical models just need some form of model quantized data
 pub trait CorticalModelDataField<CAQ: CorticalAreaQuantization> {
@@ -14,4 +14,5 @@ impl<CAQ: CorticalAreaQuantization> CorticalModelDataField<CAQ> for NullCortical
     /// The one exception
     const IS_NULL: bool = true;
 }
+
 

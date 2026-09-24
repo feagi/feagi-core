@@ -17,7 +17,7 @@ pub trait CorticalAreaQuantization: MembranePotentialQuantization {
 
 /// Used by any cortical model that has no unique data pertaining to itself, 
 /// other than membrane potential which is universally required
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NullCorticalAreaQuantization<MembranePotential: QuantizedDecimalUnwrappedTrait>(PhantomData<MembranePotential>);
 
 

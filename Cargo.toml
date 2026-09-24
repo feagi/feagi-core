@@ -14,29 +14,38 @@
 
 [package]
 name = "feagi"
-version = "0.1.1"
-edition = "2021"
-authors = ["Neuraville Inc. <feagi@neuraville.com>"]
-license = "Apache-2.0"
-description = "Framework for Evolutionary Artificial General Intelligence - Bio-Inspired Neural Computation"
-repository = "https://github.com/feagi/feagi-core"
-readme = "README.md"
-keywords = ["neuroscience", "ai", "neural-network", "brain", "agi"]
-categories = ["science", "simulation"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 
 [lints]
 workspace = true
 
 [features]
 
+# TODO
 
 
 [dependencies]
 # FEAGI
-
+feagi-macros = {path = "crates/feagi-macros"}
+feagi-basis = {path = "crates/feagi-basis"}
+feagi-brain = {path = "crates/feagi-brain"}
+feagi-correspondence = {path = "crates/feagi-correspondence"}
+feagi-server = {path = "crates/feagi-server"}
+feagi-agent = {path = "crates/feagi-agent"}
 
 
 [dev-dependencies]
+
+
+
+
 
 
 # ============================================================================

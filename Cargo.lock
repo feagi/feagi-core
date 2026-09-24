@@ -201,6 +201,18 @@ dependencies = [
 [[package]]
 name = "feagi"
 version = "0.1.1"
+dependencies = [
+ "feagi-agent",
+ "feagi-basis",
+ "feagi-brain",
+ "feagi-correspondence",
+ "feagi-macros",
+ "feagi-server",
+]
+
+[[package]]
+name = "feagi-agent"
+version = "0.1.1"
 
 [[package]]
 name = "feagi-basis"
@@ -457,6 +469,10 @@ dependencies = [
  "rayon",
  "serde",
 ]
+
+[[package]]
+name = "feagi-server"
+version = "0.1.1"
 
 [[package]]
 name = "flume"
