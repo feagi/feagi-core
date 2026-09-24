@@ -1,34 +1,36 @@
-
+use std::marker::PhantomData;
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 use crate::prelude::{SpatialCoordinate, SpatialDimensions};
-use crate::spatial_indexing_structs::axis_order::{AxisOrderArray, AxisOrderEnum, AxisOrderIdentifier};
+use crate::spatial_indexing_structs::axis_order::{AxisOrder, AxisOrderArray};
 use crate::spatial_indexing_structs::SpatialStride;
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, ::serde::Serialize)]
 #[serde(bound(
     serialize = "QDims: ::serde::Serialize",
 ))]
-pub struct SpatialContext<QDims, const NUM_DIMS: usize, const AXIS_ORDER: AxisOrderIdentifier>
+pub struct SpatialContext<QDims, AxisOrderType, const NUM_DIMS: usize>
 where
     QDims: QuantizedUnsignedIntegerTrait,
+    AxisOrderType: AxisOrder<NUM_DIMS>,
 {
     dimensions: SpatialDimensions<QDims, NUM_DIMS>,
     axis_order: AxisOrderArray<NUM_DIMS>,
     #[serde(skip)]
     stride: SpatialStride<NUM_DIMS>,
+    #[serde(skip)]
+    _p: core::marker::PhantomData<AxisOrderType>
 }
 
-impl<QDims, const NUM_DIMS: usize, const AXIS_ORDER: AxisOrderIdentifier> SpatialContext<QDims, NUM_DIMS, AXIS_ORDER>
+impl<QDims, AxisOrderType, const NUM_DIMS: usize> SpatialContext<QDims, AxisOrderType, NUM_DIMS>
 where
-    QDims: QuantizedUnsignedIntegerTrait
+    QDims: QuantizedUnsignedIntegerTrait,
+    AxisOrderType: AxisOrder<NUM_DIMS>,
 {
-
     pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>) -> Self {
-        let axis_order_enum = AxisOrderEnum::from_identifier::<NUM_DIMS>(AXIS_ORDER);
-        let axis_order = AxisOrderEnum::generate_axis_order_array(axis_order_enum);
+        let axis_order = AxisOrderType::AXIS_ORDER_ARRAY;
         let stride = SpatialStride::new_stride(&dimensions, &axis_order);
         Self {
-            dimensions, axis_order, stride
+            dimensions, axis_order, stride, _p: PhantomData
         }
     }
 
@@ -66,27 +68,32 @@ where
 /// just used for deserializing and initing the stride again
 #[derive(::serde::Deserialize)]
 #[serde(bound(deserialize = "QDims: ::serde::de::DeserializeOwned"))]
-struct SpatialContextDe<QDims, const NUM_DIMS: usize, const AXIS_ORDER: AxisOrderIdentifier>
+struct SpatialContextDe<QDims, AxisOrderType, const NUM_DIMS: usize>
 where
     QDims: QuantizedUnsignedIntegerTrait,
+    AxisOrderType: AxisOrder<NUM_DIMS>,
 {
     dimensions: SpatialDimensions<QDims, NUM_DIMS>,
+    #[serde(skip)]
+    _p: PhantomData<AxisOrderType>
 }
-impl<'de, QDims, const NUM_DIMS: usize, const AXIS_ORDER: AxisOrderIdentifier> ::serde::Deserialize<'de>
-for SpatialContext<QDims, NUM_DIMS, AXIS_ORDER>
+impl<'de, QDims, AxisOrderType, const NUM_DIMS: usize> ::serde::Deserialize<'de>
+for SpatialContext<QDims, AxisOrderType, NUM_DIMS>
 where
     QDims: QuantizedUnsignedIntegerTrait,
+    AxisOrderType: AxisOrder<NUM_DIMS>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
     {
-        let de = SpatialContextDe::<QDims, NUM_DIMS, AXIS_ORDER>::deserialize(deserializer)?;
-        let axis_order = AxisOrderEnum::generate_axis_order_array(AxisOrderEnum::from_identifier::<NUM_DIMS>(AXIS_ORDER));
+        let de = SpatialContextDe::<QDims, AxisOrderType, NUM_DIMS>::deserialize(deserializer)?;
+        let axis_order = AxisOrderType::AXIS_ORDER_ARRAY;
         Ok(Self {
             dimensions: de.dimensions,
             axis_order,
             stride: SpatialStride::new_stride(&de.dimensions, &axis_order),
+            _p: Default::default(),
         })
     }
 }
