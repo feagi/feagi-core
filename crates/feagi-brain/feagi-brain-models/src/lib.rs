@@ -1,4 +1,4 @@
 
 pub mod cortical_area;
 pub mod common_cpu_structs;
-pub mod cortical_mappings;
+pub mod cortical_mapping_entry;
