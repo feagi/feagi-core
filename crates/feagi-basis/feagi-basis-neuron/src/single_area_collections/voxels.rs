@@ -23,29 +23,25 @@ create_wrapped_quantized_unsigned_integer!(
     pub CorticalAreaVoxelCount
 );
 
+// No linear collection needed, right?
+
+//region Dimensional Collections
+
 create_wrapped_quantized_unsigned_integer!(
     /// Index of a voxel along one of the XYZ directions within a cortical area
-    pub CorticalAreaVoxelCoordinateAxisIndex
+    pub CorticalAreaVoxelCoordinateAxisPosition
 );
-
 
 /// Defines the voxel dimensions of a voxel cortical area
 pub type CorticalAreaVoxelCoordinates<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-SpatialCoordinate<CorticalAreaVoxelCoordinateAxisIndex<QI>, 3>;
+SpatialCoordinate<CorticalAreaVoxelCoordinateAxisPosition<QI>, 3>;
 
 /// Defines the voxel dimensions of a voxel cortical area
 pub type CorticalAreaVoxelDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-SpatialDimensions<CorticalAreaVoxelCoordinateAxisIndex<QI>, 3>;
+SpatialDimensions<CorticalAreaVoxelCoordinateAxisPosition<QI>, 3>;
 
-
-/// Represents a single voxel and its coordinate within a dimensional cortical area
-pub struct CorticalAreaVoxel<QI: QuantizedUnsignedIntegerUnwrappedTrait, QP: QuantizedDecimalUnwrappedTrait> {
-    pub coordinate: CorticalAreaVoxelCoordinates<QI>,
-    pub potential: CorticalAreaVoxelPotential<QP>
-}
-
-
-/// A collection of Cortical Area Voxels that owns all its inner fields
+/// A collection of Cortical Area Voxels that owns all its inner fields, using default incrementing
+/// indexing
 pub type CorticalAreaVoxels<
     QI: QuantizedUnsignedIntegerUnwrappedTrait,
     QP: QuantizedDecimalUnwrappedTrait,
@@ -59,3 +55,5 @@ pub type CorticalAreaVoxels<
     CorticalAreaVoxelPotential<QP>,
     3
 >;
+
+//endregion
