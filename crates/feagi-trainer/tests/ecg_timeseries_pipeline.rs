@@ -66,7 +66,9 @@ fn wfdb_event_windows_compose_with_classification_metrics() {
             },
         ]),
         presentation: TimeSeriesPresentation::Snapshot,
+        amplitude_offset: 0.0,
         class_keep_percents: BTreeMap::new(),
+        dataset_unit_range: None,
     });
 
     let source = DatasetSource {

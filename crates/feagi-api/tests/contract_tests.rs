@@ -68,7 +68,7 @@ use feagi_services::RuntimeService;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 #[cfg(feature = "feagi-agent")]
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, PercentageNeuronPositioning,
+    FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
 };
 #[cfg(feature = "feagi-agent")]
 use feagi_structures::genomic::cortical_area::CorticalID;
@@ -2068,6 +2068,132 @@ async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_
         resized.position,
         (-100, 30, 0),
         "Existing sensory area position must remain unchanged during auto-create reconciliation"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_post_cortical_area_resizes_existing_segmented_tile_for_the_same_group() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let ids = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+        FrameChangeHandling::Absolute,
+        CorticalUnitIndex::from(0u16),
+    );
+    let mut seed_properties = HashMap::new();
+    seed_properties.insert("dev_count".to_string(), json!(1));
+    seed_properties.insert(
+        "cortical_dimensions_per_device".to_string(),
+        json!([8, 8, 1]),
+    );
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: ids[0].as_base_64(),
+            name: "partial-segmented".to_string(),
+            dimensions: (8, 8, 1),
+            position: (999, 777, 555),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(seed_properties),
+        }])
+        .await
+        .expect("Failed to seed one segmented-vision tile");
+
+    let data_type = IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute)
+        .to_data_type_configuration_flag();
+    let mut dimensions_by_subunit = serde_json::Map::new();
+    let mut data_type_configs_by_subunit = serde_json::Map::new();
+    for index in 0..9 {
+        let volume = if index == 4 {
+            json!([100, 80, 3])
+        } else {
+            json!([40, 24, 1])
+        };
+        dimensions_by_subunit.insert(index.to_string(), volume);
+        data_type_configs_by_subunit.insert(index.to_string(), json!(data_type));
+    }
+    let mut request = HashMap::new();
+    request.insert("cortical_id".to_string(), json!("isvi"));
+    request.insert("cortical_type".to_string(), json!("IPU"));
+    request.insert("group_id".to_string(), json!(0));
+    request.insert("device_count".to_string(), json!(1));
+    request.insert("coordinates_3d".to_string(), json!([0, 0, 0]));
+    request.insert(
+        "per_device_dimensions_by_subunit".to_string(),
+        Value::Object(dimensions_by_subunit),
+    );
+    request.insert(
+        "data_type_configs_by_subunit".to_string(),
+        Value::Object(data_type_configs_by_subunit),
+    );
+
+    let _response = feagi_api::endpoints::cortical_area::post_cortical_area(
+        ApiStateExtract(state.clone()),
+        ApiJson(request),
+    )
+    .await
+    .expect(
+        "Same-group segmented vision align should resize the existing tile and create the rest",
+    );
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let mut group0: HashMap<u8, (usize, usize, usize, (i32, i32, i32))> = HashMap::new();
+    for area in areas {
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
+            continue;
+        };
+        let bytes = cortical_id.as_bytes();
+        if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+            continue;
+        }
+        if *cortical_id.io_cortical_unit_index() != 0 {
+            continue;
+        }
+        group0.insert(
+            *cortical_id.io_cortical_sub_unit_index(),
+            (
+                area.dimensions.0,
+                area.dimensions.1,
+                area.dimensions.2,
+                area.position,
+            ),
+        );
+    }
+    assert_eq!(group0.len(), 9, "Expected all nine tiles of group 0");
+    assert_eq!(
+        group0.get(&0).copied(),
+        Some((40, 24, 1, (999, 777, 555))),
+        "Existing tile of the targeted group must be resized without moving it"
+    );
+    assert_eq!(
+        group0.get(&4).map(|tile| (tile.0, tile.1, tile.2)),
+        Some((100, 80, 3)),
+        "Missing center tile must be created at the registered size"
     );
 }
 

@@ -802,6 +802,98 @@ pub async fn post_multi_cortical_area_properties(
     Ok(Json(result))
 }
 
+fn parse_dimension_triplet(value: &serde_json::Value) -> Option<(usize, usize, usize)> {
+    let values = value.as_array()?;
+    if values.len() != 3 {
+        return None;
+    }
+    let width = values.first().and_then(serde_json::Value::as_u64)? as usize;
+    let height = values.get(1).and_then(serde_json::Value::as_u64)? as usize;
+    let depth = values.get(2).and_then(serde_json::Value::as_u64)? as usize;
+    if width == 0 || height == 0 || depth == 0 {
+        return None;
+    }
+    Some((width, height, depth))
+}
+
+/// Optional per-subunit volumes. Absent means every subunit uses the shared override or template.
+fn parse_per_device_dimensions_by_subunit(
+    request: &HashMap<String, serde_json::Value>,
+) -> Result<HashMap<u8, (usize, usize, usize)>, ApiError> {
+    let Some(raw) = request.get("per_device_dimensions_by_subunit") else {
+        return Ok(HashMap::new());
+    };
+    let object = raw.as_object().ok_or_else(|| {
+        ApiError::invalid_input("per_device_dimensions_by_subunit must be an object")
+    })?;
+    let mut parsed = HashMap::new();
+    for (key, value) in object {
+        let subunit_index = key.parse::<u8>().map_err(|_| {
+            ApiError::invalid_input("per_device_dimensions_by_subunit keys must be subunit indexes")
+        })?;
+        let dimensions = parse_dimension_triplet(value).ok_or_else(|| {
+            ApiError::invalid_input(format!(
+                "per_device_dimensions_by_subunit[{key}] must be [width, height, depth]"
+            ))
+        })?;
+        parsed.insert(subunit_index, dimensions);
+    }
+    Ok(parsed)
+}
+
+fn property_dev_count(properties: &Option<HashMap<String, serde_json::Value>>) -> Option<usize> {
+    properties
+        .as_ref()
+        .and_then(|properties| properties.get("dev_count"))
+        .and_then(|value| value.as_u64())
+        .map(|value| value as usize)
+}
+
+fn property_per_device_dimensions(
+    properties: &Option<HashMap<String, serde_json::Value>>,
+) -> Option<(usize, usize, usize)> {
+    properties
+        .as_ref()
+        .and_then(|properties| properties.get("cortical_dimensions_per_device"))
+        .and_then(parse_dimension_triplet)
+}
+
+/// True when the connectome area already has the volume this request would write.
+fn io_area_matches_requested_geometry(
+    current_dimensions: (usize, usize, usize),
+    current_dev_count: Option<usize>,
+    current_per_device: Option<(usize, usize, usize)>,
+    requested_dimensions: (usize, usize, usize),
+    requested_dev_count: Option<usize>,
+    requested_per_device: Option<(usize, usize, usize)>,
+) -> bool {
+    current_dimensions == requested_dimensions
+        && current_dev_count == requested_dev_count
+        && current_per_device == requested_per_device
+}
+
+fn dimension_update_changes(
+    dimensions: (usize, usize, usize),
+    per_device: Option<(usize, usize, usize)>,
+    dev_count: Option<usize>,
+) -> HashMap<String, serde_json::Value> {
+    let mut changes = HashMap::new();
+    changes.insert(
+        "dimensions".to_string(),
+        serde_json::json!([dimensions.0, dimensions.1, dimensions.2]),
+    );
+    if let Some(per_device) = per_device {
+        changes.insert(
+            "cortical_dimensions_per_device".to_string(),
+            serde_json::json!([per_device.0, per_device.1, per_device.2]),
+        );
+    }
+    if let Some(dev_count) = dev_count {
+        changes.insert("dev_count".to_string(), serde_json::json!(dev_count));
+    }
+    changes
+}
+
 /// Create IPU (sensory) or OPU (motor) cortical areas with proper topology and multi-unit support.
 #[utoipa::path(post, path = "/v1/cortical_area/cortical_area", tag = "cortical_area")]
 #[allow(unused_variables)] // In development - parameters will be used when implemented
@@ -879,18 +971,8 @@ pub async fn post_cortical_area(
     // Example: [1, 1, 32] for single-joint servo with 32-angle resolution
     let per_device_dimensions_override: Option<(usize, usize, usize)> = request
         .get("per_device_dimensions")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| {
-            if arr.len() == 3 {
-                Some((
-                    arr[0].as_u64()? as usize,
-                    arr[1].as_u64()? as usize,
-                    arr[2].as_u64()? as usize,
-                ))
-            } else {
-                None
-            }
-        });
+        .and_then(parse_dimension_triplet);
+    let per_device_dimensions_by_subunit = parse_per_device_dimensions_by_subunit(&request)?;
 
     // BREAKING CHANGE (unreleased API):
     // `data_type_config` is now per-subunit, because some cortical units have heterogeneous
@@ -1029,7 +1111,10 @@ pub async fn post_cortical_area(
         // total_x = device_count * per_device_x
         // If per_device_dimensions_override is provided, use it instead of topology defaults
         let (per_device_dimensions, dimensions) = if let Some(override_dims) =
-            per_device_dimensions_override
+            per_device_dimensions_by_subunit
+                .get(&(unit_idx as u8))
+                .copied()
+                .or(per_device_dimensions_override)
         {
             // Use custom per-device dimensions, scale X by device_count
             let total_x = override_dims.0.saturating_mul(device_count);
@@ -1208,17 +1293,83 @@ pub async fn post_cortical_area(
         creation_params.push(params);
     }
 
+    // Same group_id addresses the same cortical IDs. An existing subunit is resized to the
+    // requested volume. Only subunits that are absent are created, so a partial segmented
+    // vision group is completed at the agent's registered size.
+    let connectome_service = state.connectome_service.as_ref();
+    let mut to_create = Vec::new();
+    let mut resized_ids: Vec<String> = Vec::new();
+    for params in creation_params {
+        let exists = connectome_service
+            .cortical_area_exists(&params.cortical_id)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to check cortical area {}: {}",
+                    params.cortical_id, e
+                ))
+            })?;
+        if !exists {
+            to_create.push(params);
+            continue;
+        }
+        let current = connectome_service
+            .get_cortical_area(&params.cortical_id)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to read cortical area {}: {}",
+                    params.cortical_id, e
+                ))
+            })?;
+        let requested_per_device = property_per_device_dimensions(&params.properties);
+        let requested_dev_count = property_dev_count(&params.properties);
+        if io_area_matches_requested_geometry(
+            current.dimensions,
+            current.dev_count,
+            current.cortical_dimensions_per_device,
+            params.dimensions,
+            requested_dev_count,
+            requested_per_device,
+        ) {
+            continue;
+        }
+        let changes =
+            dimension_update_changes(params.dimensions, requested_per_device, requested_dev_count);
+        genome_service
+            .update_cortical_area(&params.cortical_id, changes)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to update cortical area {} to the registered size: {}",
+                    params.cortical_id, e
+                ))
+            })?;
+        tracing::info!(
+            "Updated existing cortical area {} to {:?} for group {}",
+            params.cortical_id,
+            params.dimensions,
+            group_id
+        );
+        resized_ids.push(params.cortical_id);
+    }
+
     tracing::info!(
-        "Calling GenomeService to create {} cortical areas",
-        creation_params.len()
+        "Calling GenomeService to create {} cortical areas (resized {})",
+        to_create.len(),
+        resized_ids.len()
     );
 
     // ARCHITECTURE: Call genome_service.create_cortical_areas (proper flow)
     // This will: 1) Update runtime genome, 2) Call neuroembryogenesis, 3) Create neurons/synapses
-    let areas_details = genome_service
-        .create_cortical_areas(creation_params)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to create cortical areas: {}", e)))?;
+    let areas_details = if to_create.is_empty() {
+        Vec::new()
+    } else {
+        genome_service
+            .create_cortical_areas(to_create)
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to create cortical areas: {}", e)))?
+    };
 
     tracing::info!(
         "✅ Successfully created {} cortical areas via GenomeService",
@@ -1228,19 +1379,27 @@ pub async fn post_cortical_area(
     // Serialize as JSON
     let areas_json = serde_json::to_value(&areas_details).unwrap_or_default();
 
-    // Extract cortical IDs from created areas
-    let created_ids: Vec<String> = areas_details
+    // Extract cortical IDs from created areas. Resized IDs stay in the response so a partial
+    // group reports every subunit this request aligned.
+    let mut created_ids: Vec<String> = areas_details
         .iter()
         .map(|a| a.cortical_id.clone())
         .collect();
+    created_ids.extend(resized_ids.iter().cloned());
 
     // Return comprehensive response
     let first_id = created_ids.first().cloned().unwrap_or_default();
+    let message = if resized_ids.is_empty() {
+        format!("Created {} cortical areas", areas_details.len())
+    } else {
+        format!(
+            "Created {} cortical areas, resized {}",
+            areas_details.len(),
+            resized_ids.len()
+        )
+    };
     let mut response = serde_json::Map::new();
-    response.insert(
-        "message".to_string(),
-        serde_json::Value::String(format!("Created {} cortical areas", created_ids.len())),
-    );
+    response.insert("message".to_string(), serde_json::Value::String(message));
     response.insert(
         "cortical_id".to_string(),
         serde_json::Value::String(first_id),

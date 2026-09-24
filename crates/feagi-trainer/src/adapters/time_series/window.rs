@@ -1,7 +1,8 @@
 //! Event-centered windowing and explicit analog normalization.
 
 use crate::adapters::time_series::config::{
-    IncompleteWindowPolicy, TimeSeriesNormalize, TimeSeriesPackageConfig, UnknownLabelPolicy,
+    apply_amplitude_offset, IncompleteWindowPolicy, TimeSeriesNormalize, TimeSeriesPackageConfig,
+    UnknownLabelPolicy,
 };
 use crate::adapters::time_series::corpus::{AnalogEpisode, AnalogEvent};
 use crate::contracts::common::{MetadataValue, Modality, OutputType, SampleId};
@@ -74,8 +75,16 @@ pub fn window_event(
         })?;
         let slice = &series[start as usize..=end_inclusive as usize];
         let resampled = resample_linear(slice, config.window.feature_count as usize)?;
-        let normalized = normalize_window(&resampled, config.normalize, episode, event)?;
-        channel_series.push(normalized);
+        let normalized = normalize_window(
+            &resampled,
+            config.normalize,
+            config.dataset_unit_range,
+            episode,
+            event,
+        )?;
+        let shifted = apply_amplitude_offset(&normalized, config.amplitude_offset)
+            .map_err(TrainerError::Config)?;
+        channel_series.push(shifted);
     }
 
     let time_points = config.window.feature_count as usize;
@@ -178,12 +187,28 @@ fn require_finite(
 fn normalize_window(
     values: &[f64],
     mode: TimeSeriesNormalize,
+    dataset_range: Option<(f64, f64)>,
     episode: &AnalogEpisode,
     event: &AnalogEvent,
 ) -> Result<Vec<f64>, TrainerError> {
     require_finite(values, episode, event)?;
     match mode {
         TimeSeriesNormalize::None => Ok(values.to_vec()),
+        TimeSeriesNormalize::MinMaxDataset => {
+            let (min, max) = dataset_range.ok_or_else(|| {
+                TrainerError::Config(
+                    "min_max_dataset requires the recording range before encoding".to_string(),
+                )
+            })?;
+            let span = max - min;
+            if span == 0.0 {
+                return Err(TrainerError::Parse(format!(
+                    "episode '{}': recording range is zero; population coding needs a span",
+                    episode.episode_id
+                )));
+            }
+            Ok(values.iter().map(|value| (value - min) / span).collect())
+        }
         TimeSeriesNormalize::MinMaxPerWindow | TimeSeriesNormalize::MinMaxPerEpisode => {
             let min = values.iter().copied().fold(f64::INFINITY, f64::min);
             let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
@@ -224,7 +249,9 @@ mod tests {
             annotation_suffix: None,
             channel_map: None,
             presentation: crate::adapters::time_series::config::TimeSeriesPresentation::Snapshot,
+            amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
+            dataset_unit_range: None,
         }
     }
 
@@ -239,6 +266,55 @@ mod tests {
                 sample_index: 2,
                 label: "N".to_string(),
             }],
+        }
+    }
+
+    #[test]
+    fn window_adds_amplitude_offset_after_physical_samples() {
+        let mut cfg = config();
+        cfg.normalize = TimeSeriesNormalize::None;
+        cfg.amplitude_offset = 1.0;
+        let ep = episode();
+        let sample = window_event(
+            &ep,
+            &ep.events[0],
+            0,
+            &cfg,
+            &DatasetVersionId("ecg@1".to_string()),
+            "file://pkg",
+        )
+        .expect("window")
+        .expect("kept");
+        match sample.payload {
+            Payload::TimeSeries { samples, .. } => {
+                assert_eq!(samples, vec![2.0, 3.0, 4.0]);
+            }
+            other => panic!("unexpected payload {other:?}"),
+        }
+    }
+
+    #[test]
+    fn window_scales_to_the_recording_range() {
+        let mut cfg = config();
+        cfg.normalize = TimeSeriesNormalize::MinMaxDataset;
+        cfg.amplitude_offset = 0.0;
+        cfg.dataset_unit_range = Some((0.0, 4.0));
+        let ep = episode();
+        let sample = window_event(
+            &ep,
+            &ep.events[0],
+            0,
+            &cfg,
+            &DatasetVersionId("ecg@1".to_string()),
+            "file://pkg",
+        )
+        .expect("window")
+        .expect("kept");
+        match sample.payload {
+            Payload::TimeSeries { samples, .. } => {
+                assert_eq!(samples, vec![0.25, 0.5, 0.75]);
+            }
+            other => panic!("unexpected payload {other:?}"),
         }
     }
 

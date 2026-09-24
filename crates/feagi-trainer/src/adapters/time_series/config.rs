@@ -53,6 +53,9 @@ pub enum TimeSeriesNormalize {
     MinMaxPerWindow,
     /// Min-max of one entire episode. Used when a `[0, 1]` coder needs a full-record range.
     MinMaxPerEpisode,
+    /// Min-max of every sample on the configured streams, across every loaded record.
+    /// Population coding uses this so one Z depth means the same amplitude in every window.
+    MinMaxDataset,
 }
 
 /// How analog events are presented to the encoder.
@@ -91,7 +94,7 @@ pub struct TimeSeriesWindowConfig {
 }
 
 /// Adapter configuration for WFDB or a canonical analog package.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TimeSeriesPackageConfig {
     /// Logical dataset name used in asset / version ids.
     pub dataset_name: String,
@@ -105,8 +108,13 @@ pub struct TimeSeriesPackageConfig {
     pub split: Split,
     /// Split id assigned to every emitted sample.
     pub split_id: SplitId,
-    /// Analog scaling applied before encoding.
+    /// Analog scaling applied before the amplitude offset.
     pub normalize: TimeSeriesNormalize,
+    /// Finite value added to every encoded sample. Zero leaves the scaled sample unchanged.
+    ///
+    /// `Eq` below treats this as a comparable config field. `validate` rejects non-finite values,
+    /// which is what makes that comparison reflexive.
+    pub amplitude_offset: f64,
     /// Policy for events too close to an episode edge.
     pub incomplete_window_policy: IncompleteWindowPolicy,
     /// Policy for annotation symbols not listed in `class_labels`.
@@ -123,7 +131,12 @@ pub struct TimeSeriesPackageConfig {
     /// Per-class keep percent (0..=100). Empty keeps every eligible window.
     #[serde(default)]
     pub class_keep_percents: BTreeMap<String, u32>,
+    /// Filled at ingest for `MinMaxDataset`. Not part of the run JSON.
+    #[serde(skip)]
+    pub dataset_unit_range: Option<(f64, f64)>,
 }
+
+impl Eq for TimeSeriesPackageConfig {}
 
 impl TimeSeriesPackageConfig {
     /// Returns blocking configuration errors. Never repairs values.
@@ -139,6 +152,15 @@ impl TimeSeriesPackageConfig {
         }
         if self.window.feature_count == 0 {
             return Err("window.feature_count must be greater than zero".to_string());
+        }
+        if !self.amplitude_offset.is_finite() {
+            return Err("amplitude_offset must be a finite number".to_string());
+        }
+        if self.normalize == TimeSeriesNormalize::MinMaxDataset && self.amplitude_offset != 0.0 {
+            return Err(
+                "min_max_dataset does not take an amplitude_offset; Z bins use the recording range"
+                    .to_string(),
+            );
         }
         let raw_window = self
             .window
@@ -176,7 +198,7 @@ impl TimeSeriesPackageConfig {
             && self.normalize == TimeSeriesNormalize::MinMaxPerWindow
         {
             return Err(
-                "stream_infer cannot use min_max_per_window (no per-event window); use none or min_max_per_episode"
+                "stream_infer cannot use min_max_per_window (no per-event window); use none, min_max_per_episode, or min_max_dataset"
                     .to_string(),
             );
         }
@@ -199,6 +221,22 @@ impl TimeSeriesPackageConfig {
         }
         Ok(())
     }
+}
+
+/// Adds `offset` to each sample that will be encoded. Rejects a non-finite offset or result.
+pub fn apply_amplitude_offset(values: &[f64], offset: f64) -> Result<Vec<f64>, String> {
+    if !offset.is_finite() {
+        return Err("amplitude_offset must be a finite number".to_string());
+    }
+    let mut shifted = Vec::with_capacity(values.len());
+    for value in values {
+        let next = value + offset;
+        if !next.is_finite() {
+            return Err("amplitude offset produced a non-finite sample".to_string());
+        }
+        shifted.push(next);
+    }
+    Ok(shifted)
 }
 
 #[cfg(test)]
@@ -224,7 +262,9 @@ mod tests {
             annotation_suffix: None,
             channel_map: None,
             presentation: TimeSeriesPresentation::StreamInfer,
+            amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
+            dataset_unit_range: None,
         }
     }
 
@@ -247,5 +287,31 @@ mod tests {
         cfg.class_keep_percents.insert("N".to_string(), 50);
         let err = cfg.validate().expect_err("keep on infer");
         assert!(err.contains("class_keep_percents"));
+    }
+
+    #[test]
+    fn amplitude_offset_must_be_finite() {
+        let mut cfg = base_infer();
+        cfg.amplitude_offset = f64::NAN;
+        let err = cfg.validate().expect_err("nan offset");
+        assert!(err.contains("amplitude_offset"));
+    }
+
+    #[test]
+    fn min_max_dataset_rejects_a_nonzero_offset() {
+        let mut cfg = base_infer();
+        cfg.normalize = TimeSeriesNormalize::MinMaxDataset;
+        cfg.amplitude_offset = 1.0;
+        let err = cfg.validate().expect_err("offset with dataset range");
+        assert!(err.contains("min_max_dataset"));
+    }
+
+    #[test]
+    fn amplitude_offset_adds_to_each_sample() {
+        assert_eq!(
+            apply_amplitude_offset(&[-0.5, 0.0, 1.5], 0.5).expect("shift"),
+            vec![0.0, 0.5, 2.0]
+        );
+        assert!(apply_amplitude_offset(&[1.0], f64::INFINITY).is_err());
     }
 }

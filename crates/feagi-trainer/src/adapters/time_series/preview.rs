@@ -52,6 +52,10 @@ pub struct TimeSeriesPreview {
     pub record_count: u64,
     /// Eligible-window counts per configured class, then any extra labels.
     pub class_counts: Vec<PreviewClassCount>,
+    /// Minimum physical sample on the configured streams, across every loaded record.
+    pub value_min: f64,
+    /// Maximum physical sample on the configured streams, across every loaded record.
+    pub value_max: f64,
     /// Event windows for this page, in annotation order.
     pub frames: Vec<TimeSeriesPreviewFrame>,
 }
@@ -93,6 +97,7 @@ pub fn preview_episodes(
             "preview frame_offset {frame_offset} is past the {total_frames} eligible frames"
         )));
     }
+    let (value_min, value_max) = streamed_value_range(episodes, &config.window.stream_ids)?;
     let class_counts = class_counts_from_frames(&eligible, &config.class_labels);
     let frames: Vec<TimeSeriesPreviewFrame> = eligible
         .into_iter()
@@ -120,8 +125,48 @@ pub fn preview_episodes(
         total_frames: total_frames as u64,
         record_count: episodes.len() as u64,
         class_counts,
+        value_min,
+        value_max,
         frames,
     })
+}
+
+/// Min and max of every physical sample on `stream_ids`. This is the recording range, not a window.
+pub(crate) fn streamed_value_range(
+    episodes: &[AnalogEpisode],
+    stream_ids: &[String],
+) -> Result<(f64, f64), TrainerError> {
+    let mut min = f64::INFINITY;
+    let mut max = f64::NEG_INFINITY;
+    let mut saw = false;
+    for episode in episodes {
+        for stream_id in stream_ids {
+            let series = episode.streams.get(stream_id).ok_or_else(|| {
+                TrainerError::Parse(format!(
+                    "episode '{}': stream '{}' is not in the corpus",
+                    episode.episode_id, stream_id
+                ))
+            })?;
+            for value in series {
+                let sample = f64::from(*value);
+                if !sample.is_finite() {
+                    return Err(TrainerError::Parse(format!(
+                        "episode '{}': non-finite sample on stream '{}'",
+                        episode.episode_id, stream_id
+                    )));
+                }
+                saw = true;
+                min = min.min(sample);
+                max = max.max(sample);
+            }
+        }
+    }
+    if !saw {
+        return Err(TrainerError::Parse(
+            "time-series preview found no samples on the configured streams".to_string(),
+        ));
+    }
+    Ok((min, max))
 }
 
 fn class_counts_from_frames(
@@ -253,7 +298,9 @@ mod tests {
             annotation_suffix: None,
             channel_map: None,
             presentation: crate::adapters::time_series::config::TimeSeriesPresentation::Snapshot,
+            amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
+            dataset_unit_range: None,
         }
     }
 
@@ -304,6 +351,8 @@ mod tests {
         assert_eq!(preview.frames.len(), 2);
         assert_eq!(preview.frames[0].label, "N");
         assert_eq!(preview.frames[0].record_id, "100");
+        assert_eq!(preview.value_min, 1.0);
+        assert_eq!(preview.value_max, 7.0);
         assert_eq!(preview.frames[0].values, vec![2.0, 3.0, 4.0]);
         assert_eq!(preview.frames[1].label, "V");
         assert_eq!(preview.frames[1].values, vec![5.0, 6.0, 7.0]);

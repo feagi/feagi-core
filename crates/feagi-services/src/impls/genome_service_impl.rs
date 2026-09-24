@@ -4043,9 +4043,6 @@ impl GenomeServiceImpl {
             let mut manager = connectome.write();
             let mut total = 0u32;
             for dst_id in outgoing_targets {
-                if dst_id == cortical_id_typed {
-                    continue;
-                }
                 let count = manager
                     .regenerate_synapses_for_mapping(&cortical_id_typed, &dst_id)
                     .map_err(|e| {
@@ -4056,6 +4053,12 @@ impl GenomeServiceImpl {
                             e
                         ))
                     })?;
+                if dst_id == cortical_id_typed {
+                    info!(
+                        "[STRUCTURAL-REBUILD] Rebuilt {} recursive synapses in {}",
+                        count, cortical_id
+                    );
+                }
                 total = total.saturating_add(count as u32);
             }
             total
@@ -4074,7 +4077,8 @@ impl GenomeServiceImpl {
             let mut total = 0u32;
             for (src_id, src_area) in &genome.cortical_areas {
                 if src_id == &cortical_id_typed {
-                    continue; // Skip self (already handled in outgoing)
+                    // Recursive mappings are rebuilt with the outgoing targets above.
+                    continue;
                 }
 
                 // Check if this area maps to our target area
@@ -5222,6 +5226,111 @@ mod tests {
         assert!(
             twins.get(&field_a.as_base_64()).is_some(),
             "a rejected twin-map write must leave the previous map in place"
+        );
+    }
+
+    #[test]
+    fn localized_rebuild_regenerates_recursive_mapping() {
+        use super::GenomeServiceImpl;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"crecursv").unwrap();
+        let mut area = CorticalArea::new(
+            area_id,
+            0,
+            "recursive".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                area_id.as_base_64(): [{
+                    "morphology_id": "projector",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "synaptic_delay_bursts": 1
+                }]
+            }),
+        );
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(npu),
+            "RecursiveRebuildTest",
+        ));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            dyn_npu.clone(),
+        )));
+        {
+            let mut manager = connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.add_cortical_area(area.clone()).unwrap();
+        }
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "recursive-rebuild".to_string(),
+                genome_title: "recursive-rebuild".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(area_id, area)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let genome_store = Arc::new(RwLock::new(Some(genome)));
+
+        let mut changes = HashMap::new();
+        changes.insert(
+            "cortical_dimensions".to_string(),
+            serde_json::json!([2, 1, 1]),
+        );
+        let info = GenomeServiceImpl::do_localized_rebuild(
+            &area_id.as_base_64(),
+            changes,
+            connectome.clone(),
+            genome_store,
+            None,
+        )
+        .expect("localized rebuild");
+
+        assert_eq!(info.dimensions, (2, 1, 1));
+
+        let npu = dyn_npu.lock().unwrap();
+        let neurons = npu.get_neurons_in_cortical_area(info.cortical_idx);
+        assert_eq!(
+            neurons.len(),
+            2,
+            "expanded area must contain the new neurons"
+        );
+        assert!(
+            npu.get_synapse_count() > 0,
+            "recursive mapping must be regenerated after the area is expanded"
         );
     }
 }

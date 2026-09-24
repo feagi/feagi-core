@@ -236,13 +236,31 @@ impl RunConfig {
                     if let Some(stream) = &self.encoder_profile.stream {
                         stream.validate()?;
                     }
-                    if !matches!(
-                        self.encoder_profile.scheme,
-                        crate::binding::EncodingScheme::Value
-                    ) {
-                        return Err(TrainerError::Config(
-                            "stream presentation requires encoding scheme 'value'".to_string(),
-                        ));
+                    match &self.encoder_profile.scheme {
+                        crate::binding::EncodingScheme::Value => {}
+                        crate::binding::EncodingScheme::PopulationSingleSpike { .. } => {
+                            let DatasetAdapterConfig::TimeSeries(series) = &self.dataset.adapter
+                            else {
+                                return Err(TrainerError::Config(
+                                    "stream presentation requires a time-series dataset"
+                                        .to_string(),
+                                ));
+                            };
+                            if series.normalize
+                                != crate::adapters::TimeSeriesNormalize::MinMaxDataset
+                            {
+                                return Err(TrainerError::Config(
+                                    "population code on a sequential time series requires normalize min_max_dataset"
+                                        .to_string(),
+                                ));
+                            }
+                        }
+                        other => {
+                            return Err(TrainerError::Config(format!(
+                                "stream presentation does not support encoding scheme '{}'",
+                                other.name()
+                            )));
+                        }
                     }
                 } else {
                     check(
@@ -815,6 +833,85 @@ mod tests {
         config.run_spec.adapter.id = PluginId("parquet".to_string());
         let err = config.validate_supported().unwrap_err();
         assert!(matches!(err, TrainerError::Config(_)));
+    }
+
+    fn sequential_time_series_config(
+        scheme: EncodingScheme,
+        normalize: crate::adapters::TimeSeriesNormalize,
+    ) -> RunConfig {
+        use crate::adapters::{
+            IncompleteWindowPolicy, TimeSeriesPackageConfig, TimeSeriesPresentation,
+            TimeSeriesSourceKind, TimeSeriesWindowConfig, UnknownLabelPolicy,
+        };
+        use crate::binding::{StreamBinding, StreamMode};
+
+        let mut config = run_config();
+        config.run_spec.adapter.id = PluginId(TimeSeriesPackageAdapter::PLUGIN_ID.to_string());
+        config.run_spec.binding.encoder.coder_id =
+            SUPPORTED_MISC_STREAM_ENCODER_CODER_ID.to_string();
+        config.run_spec.binding.encoder.io_type = "MiscData".to_string();
+        config.run_spec.binding.decoder.coder_id =
+            SUPPORTED_MISC_CLASS_DECODER_CODER_ID.to_string();
+        config.run_spec.binding.decoder.io_type = "MiscData".to_string();
+        config.dataset.adapter = DatasetAdapterConfig::TimeSeries(TimeSeriesPackageConfig {
+            dataset_name: "ecg".to_string(),
+            source_kind: TimeSeriesSourceKind::Package,
+            window: TimeSeriesWindowConfig {
+                pre_samples: 1,
+                post_samples: 1,
+                stream_ids: vec!["lead_0".to_string()],
+                feature_count: 3,
+            },
+            class_labels: vec!["N".to_string()],
+            split: Split::Train,
+            split_id: SplitId("train".to_string()),
+            normalize,
+            incomplete_window_policy: IncompleteWindowPolicy::Exclude,
+            unknown_label_policy: UnknownLabelPolicy::Exclude,
+            annotation_suffix: None,
+            channel_map: None,
+            presentation: TimeSeriesPresentation::StreamTrain,
+            amplitude_offset: 0.0,
+            class_keep_percents: std::collections::BTreeMap::new(),
+            dataset_unit_range: None,
+        });
+        config.encoder_profile.channels = 1;
+        config.encoder_profile.scheme = scheme;
+        config.encoder_profile.stream = Some(StreamBinding {
+            parallel_width: 1,
+            amplitude_unit: 0,
+            teacher_unit: 1,
+            teacher_cortical_area_id: "misc_input_teacher".to_string(),
+            teacher_cortical_name: Some("Class teacher".to_string()),
+            mode: StreamMode::Train,
+        });
+        config.decoder_profile.class_count = 1;
+        config
+    }
+
+    #[test]
+    fn sequential_population_code_is_a_supported_scheme() {
+        let config = sequential_time_series_config(
+            EncodingScheme::PopulationSingleSpike {
+                bins: 8,
+                spacing: BinSpacing::Linear,
+            },
+            crate::adapters::TimeSeriesNormalize::MinMaxDataset,
+        );
+        assert!(config.validate_supported().is_ok());
+    }
+
+    #[test]
+    fn sequential_population_code_requires_the_recording_range() {
+        let config = sequential_time_series_config(
+            EncodingScheme::PopulationSingleSpike {
+                bins: 8,
+                spacing: BinSpacing::Linear,
+            },
+            crate::adapters::TimeSeriesNormalize::None,
+        );
+        let err = config.validate_supported().unwrap_err();
+        assert!(err.to_string().contains("min_max_dataset"));
     }
 
     #[test]

@@ -16,6 +16,7 @@ use feagi_structures::neuron_voxels::xyzp::{
 
 use crate::binding::encoder::TickEncoder;
 use crate::binding::encoding_scheme::EncodingScheme;
+use crate::binding::population_encoder::PopulationEncoder;
 use crate::binding::profile::EncoderBindingProfile;
 use crate::contracts::common::{PluginId, PluginRef};
 use crate::error::TrainerError;
@@ -83,10 +84,11 @@ impl TickEncoder for MiscStreamEncoder {
         profile: &EncoderBindingProfile,
         class_count: u32,
     ) -> Result<Self::Frame, TrainerError> {
-        if !matches!(profile.scheme, EncodingScheme::Value) {
-            return Err(TrainerError::Config(
-                "misc stream encoder requires encoding scheme 'value'".to_string(),
-            ));
+        if !profile.scheme.is_available() {
+            return Err(TrainerError::Config(format!(
+                "misc stream encoder does not support scheme '{}'",
+                profile.scheme.name()
+            )));
         }
         let stream = profile.stream.as_ref().ok_or_else(|| {
             TrainerError::Config("misc stream encoder requires encoder_profile.stream".to_string())
@@ -126,8 +128,25 @@ impl TickEncoder for MiscStreamEncoder {
 
         let width = stream.parallel_width;
         let mut amp_arrays = NeuronVoxelXYZPArrays::new();
-        for (x, value) in amplitudes.iter().enumerate() {
-            amp_arrays.push_raw(x as u32, 0, 0, *value as f32);
+        match &profile.scheme {
+            EncodingScheme::Value => {
+                for (x, value) in amplitudes.iter().enumerate() {
+                    amp_arrays.push_raw(x as u32, 0, 0, *value as f32);
+                }
+            }
+            EncodingScheme::PopulationSingleSpike { .. } => {
+                let resolved = profile.scheme.resolve()?;
+                for (x, value) in amplitudes.iter().enumerate() {
+                    let z = PopulationEncoder::linear_z_index(*value, resolved.bins)?;
+                    amp_arrays.push_raw(x as u32, 0, z, 1.0);
+                }
+            }
+            other => {
+                return Err(TrainerError::Config(format!(
+                    "misc stream encoder does not support scheme '{}'",
+                    other.name()
+                )));
+            }
         }
 
         let teacher_cells = class_ids
@@ -206,6 +225,34 @@ mod tests {
             .collect();
         assert!(teacher_voxels.contains(&(0, 2)));
         assert!(teacher_voxels.contains(&(1, 0)));
+    }
+
+    #[test]
+    fn population_tick_places_one_spike_on_z() {
+        let mut encoder = MiscStreamEncoder::new();
+        let mut binding = profile(2);
+        binding.scheme = EncodingScheme::PopulationSingleSpike {
+            bins: 8,
+            spacing: crate::binding::encoding_scheme::BinSpacing::Linear,
+        };
+        let frame = encoder
+            .encode_tick(&[1.0, 0.0], &[Some(0), Some(1)], &binding, 5)
+            .expect("tick");
+        let amp = frame
+            .get_neurons_of(&MiscStreamEncoder::misc_id(0))
+            .expect("amp");
+        let voxels: Vec<_> = amp
+            .iter()
+            .map(|n| {
+                (
+                    n.neuron_voxel_coordinate.x,
+                    n.neuron_voxel_coordinate.z,
+                    n.potential,
+                )
+            })
+            .collect();
+        assert!(voxels.contains(&(0, 0, 1.0)));
+        assert!(voxels.contains(&(1, 7, 1.0)));
     }
 
     #[test]

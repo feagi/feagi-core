@@ -1,7 +1,8 @@
 //! Continuous-record IR emission for stream-infer presentation.
 
 use crate::adapters::time_series::config::{
-    IncompleteWindowPolicy, TimeSeriesNormalize, TimeSeriesPackageConfig, UnknownLabelPolicy,
+    apply_amplitude_offset, IncompleteWindowPolicy, TimeSeriesNormalize, TimeSeriesPackageConfig,
+    UnknownLabelPolicy,
 };
 use crate::adapters::time_series::corpus::AnalogEpisode;
 use crate::adapters::time_series::window::class_id_for_label;
@@ -38,7 +39,13 @@ pub fn episode_stream_sample(
     }
 
     let as_f64: Vec<f64> = series.iter().map(|v| f64::from(*v)).collect();
-    let samples = prepare_episode_samples(&as_f64, episode, config.normalize)?;
+    let samples = prepare_episode_samples(
+        &as_f64,
+        episode,
+        config.normalize,
+        config.amplitude_offset,
+        config.dataset_unit_range,
+    )?;
     let mut hold_ends = Vec::new();
     let mut seen_ends = BTreeMap::new();
 
@@ -137,6 +144,8 @@ fn prepare_episode_samples(
     values: &[f64],
     episode: &AnalogEpisode,
     mode: TimeSeriesNormalize,
+    amplitude_offset: f64,
+    dataset_range: Option<(f64, f64)>,
 ) -> Result<Vec<f64>, TrainerError> {
     if values.iter().any(|value| !value.is_finite()) {
         return Err(TrainerError::Parse(format!(
@@ -144,11 +153,28 @@ fn prepare_episode_samples(
             episode.episode_id
         )));
     }
-    match mode {
-        TimeSeriesNormalize::None => Ok(values.to_vec()),
-        TimeSeriesNormalize::MinMaxPerWindow => Err(TrainerError::Config(
-            "stream infer cannot use min_max_per_window".to_string(),
-        )),
+    let scaled = match mode {
+        TimeSeriesNormalize::None => values.to_vec(),
+        TimeSeriesNormalize::MinMaxDataset => {
+            let (min, max) = dataset_range.ok_or_else(|| {
+                TrainerError::Config(
+                    "min_max_dataset requires the recording range before encoding".to_string(),
+                )
+            })?;
+            let span = max - min;
+            if span == 0.0 {
+                return Err(TrainerError::Parse(format!(
+                    "episode '{}': recording range is zero; population coding needs a span",
+                    episode.episode_id
+                )));
+            }
+            values.iter().map(|value| (value - min) / span).collect()
+        }
+        TimeSeriesNormalize::MinMaxPerWindow => {
+            return Err(TrainerError::Config(
+                "stream infer cannot use min_max_per_window".to_string(),
+            ));
+        }
         TimeSeriesNormalize::MinMaxPerEpisode => {
             let min = values.iter().copied().fold(f64::INFINITY, f64::min);
             let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
@@ -159,9 +185,10 @@ fn prepare_episode_samples(
                     episode.episode_id
                 )));
             }
-            Ok(values.iter().map(|v| (v - min) / span).collect())
+            values.iter().map(|v| (v - min) / span).collect()
         }
-    }
+    };
+    apply_amplitude_offset(&scaled, amplitude_offset).map_err(TrainerError::Config)
 }
 
 #[cfg(test)]
@@ -193,7 +220,9 @@ mod tests {
             annotation_suffix: None,
             channel_map: None,
             presentation: TimeSeriesPresentation::StreamInfer,
+            amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
+            dataset_unit_range: None,
         }
     }
 

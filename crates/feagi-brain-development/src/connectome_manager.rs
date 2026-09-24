@@ -1547,29 +1547,55 @@ impl ConnectomeManager {
         )
     }
 
-    /// Classifier-owned mappings stay inside the parent region and must not become region I/O.
+    /// Kernel and class memory stay hidden. A detection twin is a normal custom area.
+    fn area_is_hidden_classifier_internal(area: &CorticalArea) -> bool {
+        match area
+            .properties
+            .get("classifier_role")
+            .and_then(|value| value.as_str())
+        {
+            Some("kernel_memory") | Some("class_memory") => true,
+            Some("scan_twin") => false,
+            _ => {
+                area.properties
+                    .get("classifier_assembly")
+                    .and_then(|value| value.as_bool())
+                    == Some(true)
+                    && area
+                        .properties
+                        .get("scan_twin")
+                        .and_then(|value| value.as_bool())
+                        != Some(true)
+            }
+        }
+    }
+
+    /// Hidden classifier memory edges stay inside the parent region.
+    ///
+    /// A detection twin maps like any other custom area, including across region
+    /// boundaries. Kernel memory and class memory do not.
     fn mapping_is_classifier_assembly_edge(
         &self,
         src_id: &CorticalID,
         dst_id: &CorticalID,
     ) -> bool {
-        let src_is_classifier = self
+        let src_hidden = self
             .cortical_areas
             .get(src_id)
-            .is_some_and(Self::area_belongs_to_classifier_assembly);
-        let dst_is_classifier = self
+            .is_some_and(Self::area_is_hidden_classifier_internal);
+        let dst_hidden = self
             .cortical_areas
             .get(dst_id)
-            .is_some_and(Self::area_belongs_to_classifier_assembly);
-        if src_is_classifier || dst_is_classifier {
+            .is_some_and(Self::area_is_hidden_classifier_internal);
+        if src_hidden || dst_hidden {
             return true;
         }
         let src_key = src_id.as_base_64();
         let dst_key = dst_id.as_base_64();
         self.classifiers.values().any(|classifier| {
-            classifier.owns_area(&src_key)
-                || classifier.owns_area(&dst_key)
-                || (classifier.references_input(&src_key) && classifier.owns_area(&dst_key))
+            let src_core = classifier.owns_assembly_core(&src_key);
+            let dst_core = classifier.owns_assembly_core(&dst_key);
+            src_core || dst_core || (classifier.references_input(&src_key) && dst_core)
         })
     }
 
@@ -10897,6 +10923,92 @@ mod tests {
         assert!(
             child_outputs.contains(&regular_field_id.as_base_64()),
             "non-classifier cross-region mappings must still become region outputs; got {child_outputs:?}"
+        );
+    }
+
+    #[test]
+    fn classifier_scan_twin_mapping_becomes_region_io() {
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        let root_id = RegionID::new();
+        let child_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let child_key = child_id.to_string();
+        manager
+            .add_brain_region(
+                BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap(),
+                None,
+            )
+            .unwrap();
+        manager
+            .add_brain_region(
+                BrainRegion::new(child_id, "Child".to_string(), RegionType::Undefined).unwrap(),
+                Some(root_key.clone()),
+            )
+            .unwrap();
+
+        let twin_id = CorticalID::try_from_bytes(b"ctwin001").unwrap();
+        let dest_id = CorticalID::try_from_bytes(b"cdst0001").unwrap();
+
+        let mut twin = CorticalArea::new(
+            twin_id,
+            0,
+            "detection_twin".to_string(),
+            CorticalAreaDimensions::new(3, 10, 10).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        twin.properties.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(child_key.clone()),
+        );
+        twin.properties
+            .insert("classifier_assembly".to_string(), serde_json::json!(true));
+        twin.properties.insert(
+            "classifier_role".to_string(),
+            serde_json::json!("scan_twin"),
+        );
+        twin.properties
+            .insert("scan_twin".to_string(), serde_json::json!(true));
+        twin.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                dest_id.as_base_64(): [{ "morphology_id": "projector" }]
+            }),
+        );
+
+        let mut dest = CorticalArea::new(
+            dest_id,
+            0,
+            "downstream".to_string(),
+            CorticalAreaDimensions::new(3, 10, 10).unwrap(),
+            (20, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        dest.properties.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(root_key.clone()),
+        );
+
+        manager.add_cortical_area(twin).unwrap();
+        manager.add_cortical_area(dest).unwrap();
+
+        let io = manager.recompute_brain_region_io_registry().unwrap();
+        let child_outputs = &io.get(&child_key).expect("child region io").1;
+        let root_inputs = &io.get(&root_key).expect("root region io").0;
+        assert!(
+            child_outputs.contains(&twin_id.as_base_64()),
+            "a detection twin must leave its circuit like any other area; got outputs {child_outputs:?}"
+        );
+        assert!(
+            root_inputs.contains(&dest_id.as_base_64()),
+            "the area a detection twin maps into must become a region input; got inputs {root_inputs:?}"
         );
     }
 

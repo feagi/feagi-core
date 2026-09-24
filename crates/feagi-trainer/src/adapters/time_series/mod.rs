@@ -103,8 +103,20 @@ impl TimeSeriesPackageAdapter {
         episodes: &[AnalogEpisode],
         dataset_version_id: &DatasetVersionId,
     ) -> Result<Vec<IRSample>, TrainerError> {
+        let mut config = self.config.clone();
+        if config.normalize
+            == crate::adapters::time_series::config::TimeSeriesNormalize::MinMaxDataset
+        {
+            let (min, max) = preview::streamed_value_range(episodes, &config.window.stream_ids)?;
+            if max == min {
+                return Err(TrainerError::Parse(
+                    "recording range is zero; population coding needs a span".to_string(),
+                ));
+            }
+            config.dataset_unit_range = Some((min, max));
+        }
         let mut samples = Vec::new();
-        match self.config.presentation {
+        match config.presentation {
             TimeSeriesPresentation::Snapshot | TimeSeriesPresentation::StreamTrain => {
                 for episode in episodes {
                     for (ordinal, event) in episode.events.iter().enumerate() {
@@ -112,7 +124,7 @@ impl TimeSeriesPackageAdapter {
                             episode,
                             event,
                             ordinal,
-                            &self.config,
+                            &config,
                             dataset_version_id,
                             &source.uri,
                         )? {
@@ -123,12 +135,9 @@ impl TimeSeriesPackageAdapter {
             }
             TimeSeriesPresentation::StreamInfer => {
                 for episode in episodes {
-                    if let Some(sample) = episode_stream_sample(
-                        episode,
-                        &self.config,
-                        dataset_version_id,
-                        &source.uri,
-                    )? {
+                    if let Some(sample) =
+                        episode_stream_sample(episode, &config, dataset_version_id, &source.uri)?
+                    {
                         samples.push(sample);
                     }
                 }
@@ -258,7 +267,9 @@ mod tests {
             annotation_suffix: None,
             channel_map: None,
             presentation: TimeSeriesPresentation::Snapshot,
+            amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
+            dataset_unit_range: None,
         }
     }
 
@@ -371,7 +382,9 @@ mod tests {
                 },
             ]),
             presentation: TimeSeriesPresentation::Snapshot,
+            amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
+            dataset_unit_range: None,
         };
         let adapter = TimeSeriesPackageAdapter::new(config);
         let source = DatasetSource {

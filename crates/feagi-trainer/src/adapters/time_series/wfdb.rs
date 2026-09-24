@@ -295,8 +295,10 @@ fn decode_format_212(
         let b0 = bytes[base] as i32;
         let b1 = bytes[base + 1] as i32;
         let b2 = bytes[base + 2] as i32;
-        let s0 = sign_extend_12(b0 | ((b2 & 0x0f) << 8));
-        let s1 = sign_extend_12(b1 | ((b2 & 0xf0) << 4));
+        // WFDB 212: b0 is the low 8 bits of sample 0, b2 is the low 8 bits of
+        // sample 1, and b1 holds the high 4 bits of each (sample 0 in the low nibble).
+        let s0 = sign_extend_12(b0 | ((b1 & 0x0f) << 8));
+        let s1 = sign_extend_12(b2 | ((b1 & 0xf0) << 4));
         out.push(s0);
         if out.len() < n_values {
             out.push(s1);
@@ -474,9 +476,10 @@ fn encode_format_212(samples: &[i16]) -> Vec<u8> {
         } else {
             0
         };
+        let high = ((s0 >> 8) & 0x0f) | ((s1 >> 4) & 0xf0);
         out.push((s0 & 0xff) as u8);
+        out.push(high as u8);
         out.push((s1 & 0xff) as u8);
-        out.push((((s0 >> 8) & 0x0f) | ((s1 >> 4) & 0xf0)) as u8);
         i += 2;
     }
     out
@@ -550,8 +553,19 @@ mod tests {
             annotation_suffix: Some("atr".to_string()),
             channel_map: Some(map),
             presentation: crate::adapters::time_series::config::TimeSeriesPresentation::Snapshot,
+            amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
+            dataset_unit_range: None,
         }
+    }
+
+    #[test]
+    fn format_212_matches_wfdb_byte_order() {
+        // Sample 0 = 0x123, sample 1 = 0x456. PhysioNet 212 packs the high
+        // nibbles into the middle byte, and the second sample's low byte last.
+        let decoded = decode_format_212(&[0x23, 0x41, 0x56], 1, 2).expect("decode");
+        assert_eq!(decoded, vec![0x123, 0x456]);
+        assert_eq!(encode_format_212(&[0x123, 0x456]), vec![0x23, 0x41, 0x56]);
     }
 
     #[test]
