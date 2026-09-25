@@ -1,5 +1,5 @@
 use proc_macro2::{Ident, Span};
-use quote::{format_ident, quote};
+use quote::quote;
 use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use crate::basis::{parse_optional_comma, StructBuilderParameters, TemplateStruct};
@@ -15,7 +15,7 @@ mod kw {
     syn::custom_keyword!(patch);
 
     syn::custom_keyword!(description);
-    syn::custom_keyword!(request_parameters);
+    syn::custom_keyword!(path_parameters);
     syn::custom_keyword!(request);
     syn::custom_keyword!(response);
 }
@@ -161,13 +161,12 @@ impl TemplateStruct for TemplateRequestCategory {
         let patch = RequestWithReqBody::expand_verb_bucket("patch", &self.patch);
 
         quote! {
-            #category_name: {
-                #read
-                #create
-                #edit
-                #delete
-                #patch
-            }
+            category_name: #category_name,
+            #read
+            #create
+            #edit
+            #delete
+            #patch
         }
     }
 }
@@ -178,7 +177,7 @@ impl TemplateStruct for TemplateRequestCategory {
 pub struct RequestWithoutReqBody {
     pub request_path: Vec<PathElement>,
     pub description: LitStr,
-    pub request_parameters: URLEncodableStructBuilderParameters,
+    pub path_parameters: URLEncodableStructBuilderParameters,
     pub response: StructBuilderParameters,
 }
 
@@ -201,13 +200,13 @@ impl Parse for RequestWithoutReqBody {
         braced!(members in input);
 
         let description = request_fields::<kw::description, LitStr>(&members)?;
-        let request_parameters = request_fields::<kw::request_parameters, URLEncodableStructBuilderParameters>(&members)?;
+        let path_parameters = request_fields::<kw::path_parameters, URLEncodableStructBuilderParameters>(&members)?;
         let response = request_fields::<kw::response, StructBuilderParameters>(&members)?;
 
         Ok(Self {
             request_path,
             description,
-            request_parameters,
+            path_parameters,
             response,
         })
     }
@@ -227,14 +226,14 @@ impl RequestWithoutReqBody {
 impl TemplateStruct for RequestWithoutReqBody {
     fn expand_template(&self) -> proc_macro2::TokenStream {
         let path = PathElement::path_to_lit_str(&self.request_path);
-        let request_parameters = self.request_parameters.expand_template();
+        let path_parameters = self.path_parameters.expand_template();
         let response = self.response.expand_template();
         let description = &self.description;
 
         quote! {
             #path: {
                 description: #description,
-                request_parameters: #request_parameters,
+                path_parameters: #path_parameters,
                 response: #response
             }
         }
@@ -245,7 +244,7 @@ impl TemplateStruct for RequestWithoutReqBody {
 pub struct RequestWithReqBody {
     pub request_path: Vec<PathElement>,
     pub description: LitStr,
-    pub request_parameters: URLEncodableStructBuilderParameters,
+    pub path_parameters: URLEncodableStructBuilderParameters,
     pub request: StructBuilderParameters,
     pub response: StructBuilderParameters,
 }
@@ -270,14 +269,14 @@ impl Parse for RequestWithReqBody {
         braced!(members in input);
 
         let description = request_fields::<kw::description, LitStr>(&members)?;
-        let request_parameters = request_fields::<kw::request_parameters, URLEncodableStructBuilderParameters>(&members)?;
+        let path_parameters = request_fields::<kw::path_parameters, URLEncodableStructBuilderParameters>(&members)?;
         let request = request_fields::<kw::request, StructBuilderParameters>(&members)?;
         let response = request_fields::<kw::response, StructBuilderParameters>(&members)?;
 
         Ok(Self {
             request_path,
             description,
-            request_parameters,
+            path_parameters,
             request,
             response,
         })
@@ -299,7 +298,7 @@ impl RequestWithReqBody {
 impl TemplateStruct for RequestWithReqBody {
     fn expand_template(&self) -> proc_macro2::TokenStream {
         let path = PathElement::path_to_lit_str(&self.request_path);
-        let request_parameters = self.request_parameters.expand_template();
+        let path_parameters = self.path_parameters.expand_template();
         let request = self.request.expand_template();
         let response = self.response.expand_template();
         let description = &self.description;
@@ -307,7 +306,7 @@ impl TemplateStruct for RequestWithReqBody {
         quote! {
             #path: {
                 description: #description,
-                request_parameters: #request_parameters,
+                path_parameters: #path_parameters,
                 request: #request,
                 response: #response
             }

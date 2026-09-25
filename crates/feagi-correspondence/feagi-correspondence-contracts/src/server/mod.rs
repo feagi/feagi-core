@@ -2,8 +2,8 @@ pub mod requests_to_server;
 
 /*
 
-for CompleteRequestResponsesTemplate:
-{
+// for CompleteRequestResponsesTemplate:
+template_request! {
     exported_macro_name: $GENERATED_MACRO_NAME,
     template: {
         root_path: "$ROOT_PATH",
@@ -19,8 +19,8 @@ for CompleteRequestResponsesTemplate:
 
 
 /*
-for TemplateRequestCategory:
-{
+// for TemplateRequestCategory:
+template_request_category! {
     exported_macro_name: $GENERATED_MACRO_NAME,
     template: {
         category_name: "$CATEGORY_NAME",
@@ -28,11 +28,11 @@ for TemplateRequestCategory:
             "$PATH_EXTENSION": {
                 description: "$DESCRIPTION",
                 path_parameters: [
-                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING, "optional docs",
                     ...
                 ],
                 response: [
-                    "$PARAMETER_NAME": $VALUE_TYPE,
+                    "$PARAMETER_NAME": $VALUE_TYPE, "optional docs",
                     ...
                 ],
             },
@@ -41,15 +41,15 @@ for TemplateRequestCategory:
             "$PATH_EXTENSION": {
                 description: "$DESCRIPTION",
                 path_parameters: [
-                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING, "optional docs",
                     ...
                 ],
                 request: [
-                    "$PARAMETER_NAME": $VALUE_TYPE,
+                    "$PARAMETER_NAME": $VALUE_TYPE, "optional docs",
                     ...
                 ],
                 response: [
-                    "$PARAMETER_NAME": $VALUE_TYPE,
+                    "$PARAMETER_NAME": $VALUE_TYPE, "optional docs",
                     ...
                 ],
             },
@@ -58,15 +58,15 @@ for TemplateRequestCategory:
             "$PATH_EXTENSION": {
                 description: "$DESCRIPTION",
                 path_parameters: [
-                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING, "optional docs",
                     ...
                 ],
                 request: [
-                    "$PARAMETER_NAME": $VALUE_TYPE,
+                    "$PARAMETER_NAME": $VALUE_TYPE, "optional docs",
                     ...
                 ],
                 response: [
-                    "$PARAMETER_NAME": $VALUE_TYPE,
+                    "$PARAMETER_NAME": $VALUE_TYPE, "optional docs",
                     ...
                 ],
             },
@@ -75,15 +75,15 @@ for TemplateRequestCategory:
             "$PATH_EXTENSION": {
                 description: "$DESCRIPTION",
                 path_parameters: [
-                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING, "optional docs",
                     ...
                 ],
                 request: [
-                    "$PARAMETER_NAME": $VALUE_TYPE,
+                    "$PARAMETER_NAME": $VALUE_TYPE, "optional docs",
                     ...
                 ],
                 response: [
-                    "$PARAMETER_NAME": $VALUE_TYPE,
+                    "$PARAMETER_NAME": $VALUE_TYPE, "optional docs",
                     ...
                 ],
             },
@@ -92,15 +92,15 @@ for TemplateRequestCategory:
             "$PATH_EXTENSION": {
                 description: "$DESCRIPTION",
                 path_parameters: [
-                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING, "optional docs",
                     ...
                 ],
                 request: [
-                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                    "$PARAMETER_NAME": $VALUE_TYPE, "optional docs",
                     ...
                 ],
                 response: [
-                    "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                    "$PARAMETER_NAME": $VALUE_TYPE, "optional docs",
                     ...
                 ],
             },
