@@ -24,8 +24,9 @@ use std::time::Instant;
 ///
 /// Incremental commands are integrated into the current cached position so the
 /// output is always an absolute target percentage. Incremental never encodes
-/// speed. When the speed area is silent, target-and-speed mode emits `1.0`
-/// (full agility).
+/// speed. Before any speed-area command, a silent speed area emits `1.0`
+/// (full agility). After a speed-area command, a silent speed area keeps that
+/// speed, including `0`.
 #[derive(Debug)]
 pub struct PositionalServoNeuronVoxelXYZPDecoder {
     channel_absolute_dimensions: CorticalChannelDimensions,
@@ -48,6 +49,8 @@ pub struct PositionalServoNeuronVoxelXYZPDecoder {
     default_speed_0_1_per_channel: Option<Vec<f32>>,
     /// Normalized incremental step applied per decode tick.
     incremental_step_size_0_1: f32,
+    /// True after the speed area has commanded that channel at least once.
+    speed_limit_set: Vec<bool>,
 }
 
 /// Maximum position change per tick at full deflection, expressed as a fraction
@@ -121,6 +124,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
             z_depth_speed_scratch_space: vec![Vec::new(); *number_channels as usize],
             default_speed_0_1_per_channel,
             incremental_step_size_0_1,
+            speed_limit_set: vec![false; *number_channels as usize],
         };
         Ok(Box::new(decoder))
     }
@@ -377,10 +381,9 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                 continue;
             }
 
-            // Speed-only updates the cached rate for the next target/incremental
-            // command. Marking the channel changed would fire the servo callback
-            // with the cached target and move the joint.
-            *changed_flag = has_absolute || has_incremental;
+            // Speed-only still publishes the cached target plus the new rate so
+            // the controller can change how fast it approaches that target.
+            *changed_flag = has_absolute || has_incremental || has_speed;
 
             let mut forward_value = Percentage::new_zero();
             let mut backward_value = Percentage::new_zero();
@@ -408,11 +411,15 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                     target_speed.a = Percentage::new_from_0_1(new_target)
                         .unwrap_or_else(|_| Percentage::new_from_0_1_unchecked(new_target));
                 }
-                // Dedicated speed area. Silent speed means full agility (1.0).
+                // Dedicated speed area. Before any speed command, silence means
+                // full agility. After a speed command, silence keeps that speed.
                 let speed = if has_speed {
+                    self.speed_limit_set[channel_index] = true;
                     let mut speed_value = Percentage::new_zero();
                     self.decode_speed_percentage(speed_scratch, &mut speed_value);
                     speed_value.get_as_0_1()
+                } else if self.speed_limit_set[channel_index] {
+                    target_speed.b.get_as_0_1()
                 } else {
                     1.0
                 };
@@ -919,8 +926,8 @@ mod tests {
         let changed = decode(&mut decoder, &neurons, &mut pipelines);
 
         assert!(
-            !changed[0],
-            "speed-only activation must not mark the channel changed"
+            changed[0],
+            "speed-only activation must publish the new rate with the cached target"
         );
         let (target, speed) = read_target_speed(&pipelines);
         assert!(
@@ -940,8 +947,8 @@ mod tests {
         let neurons = make_neuron_map(speed_cortical_id(), &[(0, 0, 9)]);
         let changed = decode(&mut decoder, &neurons, &mut pipelines);
         assert!(
-            !changed[0],
-            "speed-only activation must not mark the channel changed"
+            changed[0],
+            "speed-only activation must publish the new rate with the cached target"
         );
 
         let (target, speed) = read_target_speed(&pipelines);
@@ -982,7 +989,7 @@ mod tests {
     }
 
     #[test]
-    fn target_speed_mode_does_not_preserve_prior_speed_when_speed_area_is_silent() {
+    fn target_speed_mode_preserves_prior_speed_when_speed_area_is_silent() {
         let mut decoder = make_target_speed_decoder();
         let mut pipelines = one_channel_target_speed_pipeline();
 
@@ -1003,8 +1010,8 @@ mod tests {
             "absolute target must be decoded, got {target}"
         );
         assert!(
-            (decoded_speed - 1.0).abs() < 1e-6,
-            "silent speed area on a later tick must emit full agility, got {decoded_speed}"
+            (decoded_speed - established_speed).abs() < 1e-6,
+            "silent speed area on a later tick must keep the commanded speed, got {decoded_speed}"
         );
     }
 

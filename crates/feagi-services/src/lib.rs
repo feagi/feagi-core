@@ -101,7 +101,6 @@ pub mod types;
 // Re-export main API
 pub use traits::{
     AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
-    SnapshotCreateOptions, SnapshotMetadata, SnapshotService,
 };
 
 pub use types::{
@@ -144,7 +143,7 @@ pub use feagi_brain_development::models::CorticalAreaExt;
 #[cfg(feature = "std")]
 pub use impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
-    RuntimeServiceImpl, SnapshotServiceImpl,
+    RuntimeServiceImpl,
 };
 
 /// Version of this crate (for feagi-rust version reporting)

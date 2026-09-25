@@ -247,7 +247,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         neuron_service,
         runtime_service,
         system_service,
-        snapshot_service: None,
         feagi_session_timestamp,
         filesystem_data_root,
         memory_stats_cache: None,

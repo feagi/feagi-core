@@ -40,7 +40,6 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
             as Arc<dyn feagi_services::traits::NeuronService + Send + Sync>,
         system_service: system_service
             as Arc<dyn feagi_services::traits::SystemService + Send + Sync>,
-        snapshot_service: None, // TODO: Implement if needed
         feagi_session_timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()

@@ -408,16 +408,6 @@ use crate::{
         crate::endpoints::evolution::get_status,
         crate::endpoints::evolution::post_config,
 
-        // Snapshot endpoints
-        // TODO: Implement snapshot endpoints
-        // crate::endpoints::snapshot::post_create,
-        // crate::endpoints::snapshot::post_restore,
-        // crate::endpoints::snapshot::get_list,
-        // crate::endpoints::snapshot::delete_snapshot,
-        // crate::endpoints::snapshot::get_artifact,
-        // crate::endpoints::snapshot::post_compare,
-        // crate::endpoints::snapshot::post_upload,
-
         // Network endpoints
         crate::endpoints::network::get_status,
         crate::endpoints::network::post_config,
@@ -505,19 +495,6 @@ use crate::{
             crate::v1::EvolutionStatusResponse,
             crate::v1::EvolutionConfigRequest,
             crate::v1::EvolutionSuccessResponse,
-
-            // Snapshot
-            crate::v1::SnapshotCreateRequest,
-            crate::v1::SnapshotCreateResponse,
-            crate::v1::SnapshotRestoreRequest,
-            crate::v1::SnapshotListResponse,
-            crate::v1::SnapshotInfo,
-            crate::v1::SnapshotArtifactResponse,
-            crate::v1::SnapshotCompareRequest,
-            crate::v1::SnapshotCompareResponse,
-            crate::v1::SnapshotUploadRequest,
-            crate::v1::SnapshotUploadResponse,
-            crate::v1::SnapshotSuccessResponse,
 
             // Network
             crate::v1::NetworkStatusResponse,

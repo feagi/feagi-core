@@ -502,6 +502,7 @@ fn should_auto_rename_motor(
         return true;
     }
     (current_name == "Spatial Pointer Absolute" && desired_name == "Spatial Pointer Speed")
+        || (current_name == "Positional Servo Speed" && desired_name != current_name)
         || (desired_name == "Positional Servo Speed"
             && current_name.ends_with("-2")
             && (current_name.starts_with("Positional Servo-")
@@ -1016,16 +1017,18 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         motor_unit == MotorCorticalUnit::SpatialPointer
                             || motor_unit == MotorCorticalUnit::AngularPointer,
                     );
-                    let resolved_name =
-                        if motor_unit == MotorCorticalUnit::PositionalServo && i == 2 {
-                            "Positional Servo Speed".to_string()
-                        } else if resolved_base_name == registration_default_name
-                            || cortical_ids.len() == 1
-                        {
-                            resolved_base_name.clone()
-                        } else {
-                            format!("{}-{}", resolved_base_name, i)
-                        };
+                    let resolved_name = if motor_unit == MotorCorticalUnit::PositionalServo && i == 2 {
+                        match non_empty_string(unit_def.get("friendly_name")) {
+                            Some(name) => format!("{name} Speed"),
+                            None => "Positional Servo Speed".to_string(),
+                        }
+                    } else if resolved_base_name == registration_default_name
+                        || cortical_ids.len() == 1
+                    {
+                        resolved_base_name.clone()
+                    } else {
+                        format!("{}-{}", resolved_base_name, i)
+                    };
                     let exists = match connectome_service
                         .cortical_area_exists(&cortical_id_b64)
                         .await

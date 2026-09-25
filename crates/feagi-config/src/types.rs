@@ -41,7 +41,6 @@ pub struct FeagiConfig {
     pub visualization: VisualizationConfig,
     pub compression: CompressionConfig,
     pub memory_processing: MemoryProcessingConfig,
-    pub snapshot: SnapshotConfig,
 }
 
 /// System-level configuration
@@ -742,29 +741,6 @@ impl Default for SleepManagerConfig {
             fcl_low_activity_threshold: 5,
             monitor_interval_seconds: 2.0,
             gc_prune_inactive_after_bursts: 500,
-        }
-    }
-}
-
-/// Brain snapshot configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(default)]
-pub struct SnapshotConfig {
-    pub output_dir: String,
-    pub temp_dir: String,
-    pub zip_compression: String,
-    pub default_format: String,
-    pub fc_compression: String,
-}
-
-impl Default for SnapshotConfig {
-    fn default() -> Self {
-        Self {
-            output_dir: "output/snapshots".to_string(),
-            temp_dir: "output/snapshots/tmp".to_string(),
-            zip_compression: "deflate".to_string(),
-            default_format: "zip".to_string(),
-            fc_compression: "store".to_string(),
         }
     }
 }
