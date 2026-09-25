@@ -19,14 +19,14 @@ pub trait TemplateStruct: Parse {
 }
 
 pub struct TemplateRoot<T: TemplateStruct> {
-    macro_name: syn::Ident,
-    generated_template: T
+    pub macro_name: syn::Ident,
+    pub generated_template: T
 }
 
 impl<T: TemplateStruct> TemplateRoot<T> {
-    /// Given a template definition token stream, take the macro name, and parse the actual struct
-    /// T. If all is valid, export the generator macro of the given name for T
-    pub fn parse_template_and_generate_generator_macro(input: TokenStream) -> TokenStream {
+    /// Parse and validate a template definition, then export it as a reusable `macro_rules!`.
+    /// [`Self::parse_generator_input_macro`].
+    pub fn parse_template_and_generate_generator_input_macro(input: TokenStream) -> TokenStream {
         let template_root = parse_macro_input!(input as Self);
 
         let macro_name = template_root.macro_name;
@@ -34,17 +34,18 @@ impl<T: TemplateStruct> TemplateRoot<T> {
 
         quote! {
             macro_rules! #macro_name {
-                () => {
-                    #template
+                ($consumer:path) => {
+                    $consumer! {
+                        #template
+                    }
                 };
             }
         }.into()
     }
 
-    /// Read the generator macro (no deep validation needed as it was already confirmed valid), and
-    /// return the struct
-    pub fn parse_generator_macro(input: TokenStream) -> syn::Result<T> {
-
+    /// Parse the tokens a consumer receives from an exported template callback.
+    pub fn parse_generator_input_macro(input: TokenStream) -> syn::Result<T> {
+        T::parse.parse(input)
     }
 }
 

@@ -10,13 +10,13 @@ mod independent_builders;
 #[cfg(feature = "request_response_macros")]
 #[proc_macro]
 pub fn template_request_category(input: TokenStream) -> TokenStream {
-    TemplateRoot::<TemplateRequestCategory>::parse_template_and_generate_generator_macro(input)
+    TemplateRoot::<TemplateRequestCategory>::parse_template_and_generate_generator_input_macro(input)
 }
 
 #[cfg(feature = "request_response_macros")]
 #[proc_macro]
 pub fn template_request(input: TokenStream) -> TokenStream {
-    TemplateRoot::<CompleteRequestResponsesTemplate>::parse_template_and_generate_generator_macro(input)
+    TemplateRoot::<CompleteRequestResponsesTemplate>::parse_template_and_generate_generator_input_macro(input)
 }
 
 /// Builds a bit field struct around a uint with one named bit field per flag.

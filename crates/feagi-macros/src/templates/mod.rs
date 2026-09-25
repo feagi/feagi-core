@@ -1,11 +1,21 @@
-//! These goal of these macros is to parse some form of template into standard (token) structs,
-//! that then generator macros can then export as Rust Structs, Methods, and anything else.
+//! Parse a template DSL into token structs, validate it, and re-export that template as a
+//! reusable `macro_rules!`. Later generator proc macros (final consumers) can turn those
+//! structs into Rust source.
 //!
-//! The way this works is Parser Macros process the template input in the source files, validate it
-//! to the best of its ability, then exports that template as itself via a generated 
-//! exported macro_rules!, such that one template can be used in many places.
-//! Generator proc macros from in here can then take these macro_rules! macros and parse them to
-//! produce Rust Source code
+//! Parser macros validate the source-file template, then emit:
+//!
+//! ```ignore
+//! macro_rules! exported_name {
+//!     ($consumer:path) => {
+//!         $consumer! { /* T.expand_template() tokens */ }
+//!     };
+//! }
+//! ```
+//!
+//! `exported_name!(some_consumer)` unwraps the stored template into `some_consumer`.
+//! `some_consumer` then calls `TemplateRoot::parse_generator_input_macro` to rebuild `T`.
+//! Proc macros do not expand their input, so the callback is required; `exported_name!()`
+//! cannot be placed inside another proc-macro invocation and be unwrapped automatically.
 
 
 #[cfg(feature = "request_response_macros")]
