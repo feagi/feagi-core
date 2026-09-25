@@ -6,7 +6,7 @@ use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{parse_macro_input, Attribute, Ident, Token, Type, Visibility};
 
-use crate::common::parse_optional_comma;
+use crate::basis::parse_optional_comma;
 
 
 pub fn bit_struct_builder(input: TokenStream) -> TokenStream {

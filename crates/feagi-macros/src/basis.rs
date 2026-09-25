@@ -12,7 +12,8 @@ pub fn parse_optional_comma(input: ParseStream) -> syn::Result<()> {
     Ok(())
 }
 
-//region Struct Builder
+
+//region Struct Builder Parameters
 
 /// Represents all members (`StructBuilderParameterField`) to make a struct
 pub struct StructBuilderParameters(Vec<StructBuilderParameterField>);

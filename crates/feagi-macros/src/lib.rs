@@ -1,19 +1,21 @@
 use proc_macro::TokenStream;
+use independent_builders::bit_struct_builder;
 
-mod common;
+
+mod basis;
 mod templates;
-mod bit_struct_builder;
+mod independent_builders;
 
 #[cfg(feature = "request_response_macros")]
 #[proc_macro]
 pub fn template_request_category(input: TokenStream) -> TokenStream {
-    templates::requests_and_responses::template_requests_category::template_requests_category(input)
+    templates::requests_responses::request_response_category_parser::request_response_category_parser(input)
 }
 
 #[cfg(feature = "request_response_macros")]
 #[proc_macro]
 pub fn template_request(input: TokenStream) -> TokenStream {
-    templates::requests_and_responses::template_requests::template_requests(input)
+    templates::requests_responses::request_response_parser::request_response_parser(input)
 }
 
 /// Builds a bit field struct around a uint with one named bit field per flag.

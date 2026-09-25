@@ -171,10 +171,10 @@ fn manual_ohkami() -> Ohkami {
 fn run_manual_ohkami_server() {
     let bind = format!("127.0.0.1:{MANUAL_OHKAMI_PORT}");
 
-    eprintln!("Manual Ohkami server listening on {bind}");
-    eprintln!("Swagger UI: http://{bind}/swagger-ui/feagi-server.html");
-    eprintln!("OpenAPI:    http://{bind}/api-docs/openapi.json");
-    eprintln!("Stop with Ctrl+C");
+    println!("Manual Ohkami server listening on {bind}");
+    println!("Swagger UI: http://{bind}/swagger-ui/feagi-server.html");
+    println!("OpenAPI:    http://{bind}/api-docs/openapi.json");
+    println!("Stop with Ctrl+C");
 
     smol::block_on(async {
         manual_ohkami().howl(bind.as_str()).await;

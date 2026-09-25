@@ -1,14 +1,12 @@
-//! Handles processing request and responses for agent / server communication
-
-use proc_macro::TokenStream;
-use proc_macro2::Span;
+use proc_macro2::{Ident, Span};
 use quote::{format_ident, quote};
+use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use syn::{braced, LitStr, Result, Token, Ident, parse_macro_input};
-
-use crate::common::{parse_optional_comma, StructBuilderParameters};
+use crate::basis::{parse_optional_comma, StructBuilderParameters};
 
 mod kw {
+    syn::custom_keyword!(categories);
+    
     syn::custom_keyword!(read);
     syn::custom_keyword!(create);
     syn::custom_keyword!(edit);
@@ -22,13 +20,108 @@ mod kw {
 }
 
 
-pub fn template_requests_category(input: TokenStream) -> TokenStream {
-    let request_category = parse_macro_input!(input as TemplateRequestCategory);
 
-    // TODO validations
+//region Template Request
 
-    TokenStream::from(request_category.expand_macro())
+/// All request / responses of a certain category
+pub struct TemplateRequest {
+    pub macro_name: syn::Ident,
+    pub root_path: Vec<LitStr>,
+    pub categories: Vec<TemplateRequestCategory>,
 }
+
+impl Parse for TemplateRequest {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+
+        let macro_name: syn::Ident = input.parse()?;
+        input.parse::<Token![,]>()?;
+
+        let root_lit: LitStr = input.parse()?;
+        let root_path: Vec<LitStr> = root_lit
+            .value()
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .map(|segment| LitStr::new(segment, root_lit.span()))
+            .collect();
+
+        input.parse::<Token![,]>()?;
+        input.parse::<kw::categories>()?;
+
+        let cat_input;
+        braced!(cat_input in input);
+        let mut categories: Vec<TemplateRequestCategory> = Vec::new();
+        while !cat_input.is_empty() {
+            categories.push(cat_input.parse::<TemplateRequestCategory>()?);
+            parse_optional_comma(&cat_input)?;
+        }
+
+        Ok(Self {
+            macro_name,
+            root_path,
+            categories,
+        })
+    }
+}
+
+impl TemplateRequest {
+    /// Emits per-category `macro_rules!` helpers plus the root `macro_rules! #macro_name`.
+    pub fn expand_macro(&self) -> proc_macro2::TokenStream {
+        let category_macros = self.categories.iter().map(TemplateRequestCategory::expand_macro);
+        let macro_name = &self.macro_name;
+        let template_body = self.expand_template();
+
+        let root_macro = quote! {
+            macro_rules! #macro_name {
+                () => {
+                    #template_body
+                };
+            }
+        };
+
+        quote! {
+            #(#category_macros)*
+            #root_macro
+        }
+    }
+
+    /// Emits `#macro_name, "v2", categories { template_request_category_*!(), ... }`.
+    pub fn expand_template(&self) -> proc_macro2::TokenStream {
+        let macro_name = &self.macro_name;
+        let root_path = self.root_path_lit();
+        let category_invocations = self.categories.iter().map(|category| {
+            let category_macro_name = &category.category_macro_name;
+            quote! {
+                #category_macro_name!()
+            }
+        });
+
+        quote! {
+            #macro_name,
+            #root_path,
+            categories {
+                #(#category_invocations,)*
+            }
+        }
+    }
+
+    fn root_path_lit(&self) -> LitStr {
+        let span = self
+            .root_path
+            .first()
+            .map(LitStr::span)
+            .unwrap_or(Span::call_site());
+
+        let path = self
+            .root_path
+            .iter()
+            .map(LitStr::value)
+            .collect::<Vec<_>>()
+            .join("/");
+
+        LitStr::new(&path, span)
+    }
+}
+
 
 //region Request Category
 
@@ -43,9 +136,9 @@ pub struct TemplateRequestCategory {
 }
 
 impl Parse for TemplateRequestCategory {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
 
-        fn parse_category<RequestType: Parse, RequestBody: Parse>(buffer: &ParseBuffer) -> Result<Vec<RequestBody>> {
+        fn parse_category<RequestType: Parse, RequestBody: Parse>(buffer: &ParseBuffer) -> syn::Result<Vec<RequestBody>> {
             buffer.parse::<RequestType>()?;
             buffer.parse::<Token![:]>()?;
 
@@ -62,10 +155,10 @@ impl Parse for TemplateRequestCategory {
         }
 
         let category_name: LitStr = input.parse()?;
-        
+
         let category_macro_name_str: String = "template_request_category_".to_string() + &*category_name.value();
         let category_macro_name: Ident = format_ident!("{}", category_macro_name_str);
-        
+
         input.parse::<Token![:]>()?;
 
         let category_body;
@@ -136,8 +229,8 @@ pub struct RequestWithoutReqBody {
 }
 
 impl Parse for RequestWithoutReqBody {
-    fn parse(input: ParseStream) -> Result<Self> {
-        fn request_fields<FieldIdent: Parse, FieldType: Parse>(buffer: &ParseBuffer) -> Result<FieldType> {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        fn request_fields<FieldIdent: Parse, FieldType: Parse>(buffer: &ParseBuffer) -> syn::Result<FieldType> {
             buffer.parse::<FieldIdent>()?;
             buffer.parse::<Token![:]>()?;
             let output = buffer.parse::<FieldType>()?;
@@ -202,9 +295,9 @@ pub struct RequestWithReqBody {
 }
 
 impl Parse for RequestWithReqBody {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
 
-        fn request_fields<FieldIdent: Parse, FieldType: Parse>(buffer: &ParseBuffer) -> Result<FieldType> {
+        fn request_fields<FieldIdent: Parse, FieldType: Parse>(buffer: &ParseBuffer) -> syn::Result<FieldType> {
             buffer.parse::<FieldIdent>()?;
             buffer.parse::<Token![:]>()?;
             let output = buffer.parse::<FieldType>()?;
@@ -275,7 +368,7 @@ pub enum PathElement {
 }
 
 impl PathElement {
-    pub fn path_elements_from_lit_str(path_lit: &LitStr) -> Result<Vec<PathElement>> {
+    pub fn path_elements_from_lit_str(path_lit: &LitStr) -> syn::Result<Vec<PathElement>> {
         let span = path_lit.span();
         let value = path_lit.value();
         if value.is_empty() {
@@ -321,3 +414,4 @@ impl PathElement {
 
 //endregion
 
+//endregion
