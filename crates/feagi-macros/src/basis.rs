@@ -24,8 +24,10 @@ pub trait GeneratorFromTemplate<T: TemplateStruct> {
     fn generate_code_from_template(template: T) -> proc_macro2::TokenStream;
     
     fn read_template_and_generate_code(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-        let template: syn::Result<T> = TemplateRoot::parse_generator_input_macro(input.into());
-        Self::generate_code_from_template(template.unwrap()).into()
+        match TemplateRoot::<T>::parse_generator_input_macro(input.into()) {
+            Ok(template) => Self::generate_code_from_template(template).into(),
+            Err(err) => err.to_compile_error().into(),
+        }
     }
 }
 
