@@ -1,0 +1,48 @@
+swagger-ui-dist assets (vendored for local hosting)
+=====================================================
+
+Package:  swagger-ui-dist
+Version:  5.9.0
+Upstream: https://github.com/swagger-api/swagger-ui
+npm:      https://www.npmjs.com/package/swagger-ui-dist/v/5.9.0
+Downloaded from: https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/
+
+Files in this directory
+-----------------------
+swagger-ui-bundle.js   Swagger UI application (OpenAPI explorer + Try it out)
+swagger-ui.css         Styles for swagger-ui-bundle.js
+feagi-server.html      FEAGI page shell (not part of swagger-ui-dist)
+
+Not vendored (not required for BaseLayout):
+swagger-ui-standalone-preset.js
+
+License
+-------
+swagger-ui-dist 5.9.0 is licensed under Apache License 2.0.
+
+Copyright (NOTICE from the 5.9.0 package):
+  swagger-ui
+  Copyright 2020-2021 SmartBear Software Inc.
+
+Full license text: https://www.apache.org/licenses/LICENSE-2.0
+Package license field: Apache-2.0
+
+This file is a version/license/path reference only.
+Proper redistribution notices (LICENSE, NOTICE, attribution) are still to be implemented.
+
+Expected local HTTP paths (all files hosted by this server)
+-----------------------------------------------------------
+Page:   /swagger-ui/                  or  /swagger-ui/feagi-server.html
+CSS:    /swagger-ui/swagger-ui.css
+JS:     /swagger-ui/swagger-ui-bundle.js
+Spec:   /api-docs/openapi.json
+
+Filesystem (this folder) -> URL, if swagger_site/ is served at /swagger-ui/:
+  feagi-server.html     -> /swagger-ui/feagi-server.html
+  swagger-ui.css        -> /swagger-ui/swagger-ui.css
+  swagger-ui-bundle.js  -> /swagger-ui/swagger-ui-bundle.js
+
+Relative URLs from feagi-server.html when that page is under /swagger-ui/:
+  href="swagger-ui.css"
+  src="swagger-ui-bundle.js"
+  SwaggerUIBundle url: "/api-docs/openapi.json"

@@ -1,0 +1,103 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FEAGI REST Server",
+    "version": "0.1.1"
+  },
+  "servers": [],
+  "paths": {
+    "/testing/{parse_path}/{parse_path_2}": {
+      "get": {
+        "operationId": "handle_testing",
+        "summary": "Reverse both path strings and double both query integers",
+        "description": "Reverse both path strings and double both query integers.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "parse_path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "parse_path_2",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "parse_parameter",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "description": "First integer query parameter."
+            },
+            "description": "First integer query parameter.",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "parse_parameter_2",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "description": "Second integer query parameter."
+            },
+            "description": "Second integer query parameter.",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON body with both strings reversed and both integers doubled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestingResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TestingResponse": {
+        "type": "object",
+        "description": "JSON body with both path strings reversed and both query integers doubled.",
+        "properties": {
+          "parse_parameter": {
+            "type": "integer",
+            "format": "int32",
+            "description": "First query integer, doubled."
+          },
+          "parse_parameter_2": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Second query integer, doubled."
+          },
+          "parse_path": {
+            "type": "string",
+            "description": "First path segment, reversed."
+          },
+          "parse_path_2": {
+            "type": "string",
+            "description": "Second path segment, reversed."
+          }
+        },
+        "required": [
+          "parse_path",
+          "parse_path_2",
+          "parse_parameter",
+          "parse_parameter_2"
+        ]
+      }
+    }
+  }
+}

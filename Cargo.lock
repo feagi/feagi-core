@@ -831,6 +831,7 @@ dependencies = [
  "ohkami",
  "serde",
  "serde_json",
+ "smol",
 ]
 
 [[package]]

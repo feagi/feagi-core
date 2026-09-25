@@ -30,7 +30,7 @@ std_tokio = [
 
 # Webserver under the Smol async interface
 std_smol = [
-    "std", "ohkami", "ohkami/rt_smol"
+    "std", "smol", "ohkami", "ohkami/rt_smol"
 ]
 
 # TODO other async interfaces?
@@ -50,4 +50,11 @@ std_smol = [
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 ohkami = {workspace = true, optional = true, features = ["openapi"]}
+smol = {workspace = true, optional = true}
+
+[dev-dependencies]
+
+[[test]]
+name = "manual_ohkami_server_test"
+required-features = ["std_smol"]
 
