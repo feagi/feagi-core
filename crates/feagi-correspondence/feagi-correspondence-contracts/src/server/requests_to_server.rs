@@ -3,91 +3,93 @@
 
 format:
 {
-    $GENERATED_MACRO_NAME,
-    $ROOT_PATH_NAME,
-    request_response: {
-        $REGION_NAME: {
-            read: {
-                "$PATH_EXTENSION": {
-                    description: "$DESCRIPTION",
-                    request_parameters: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
-                    response: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
+    exported_macro_name: $GENERATED_MACRO_NAME,
+    template: {
+        $ROOT_PATH_NAME,
+        requests_responses: {
+            $REGION_NAME: {
+                read: {
+                    "$PATH_EXTENSION": {
+                        description: "$DESCRIPTION",
+                        request_parameters: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                        response: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                    },
                 },
-            },
-            create: {
-                "$PATH_EXTENSION": {
-                    description: "$DESCRIPTION",
-                    request_parameters: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
-                    request: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
-                    response: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
+                create: {
+                    "$PATH_EXTENSION": {
+                        description: "$DESCRIPTION",
+                        request_parameters: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                        request: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                        response: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                    },
                 },
-            },
-            edit: {
-                "$PATH_EXTENSION": {
-                    description: "$DESCRIPTION",
-                    request_parameters: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
-                    request: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
-                    response: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
+                edit: {
+                    "$PATH_EXTENSION": {
+                        description: "$DESCRIPTION",
+                        request_parameters: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                        request: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                        response: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                    },
                 },
-            },
-            delete: {
-                "$PATH_EXTENSION": {
-                    description: "$DESCRIPTION",
-                    request_parameters: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
-                    request: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
-                    response: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
+                delete: {
+                    "$PATH_EXTENSION": {
+                        description: "$DESCRIPTION",
+                        request_parameters: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                        request: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                        response: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                    },
                 },
-            },
-            patch: {
-                "$PATH_EXTENSION": {
-                    description: "$DESCRIPTION",
-                    request_parameters: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
-                    request: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
-                    response: [
-                        "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
-                        ...
-                    ],
+                patch: {
+                    "$PATH_EXTENSION": {
+                        description: "$DESCRIPTION",
+                        request_parameters: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                        request: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                        response: [
+                            "$PARAMETER_NAME": $VALUE_TYPE_SUPPORTING_BASE64_URL_ENCODING,
+                            ...
+                        ],
+                    },
                 },
-            },
+            }
         }
     }
 }

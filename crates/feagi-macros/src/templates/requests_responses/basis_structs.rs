@@ -24,17 +24,13 @@ mod kw {
 //region Template Request
 
 /// All request / responses of a certain category
-pub struct TemplateRequest {
-    pub macro_name: syn::Ident,
+pub struct CompleteRequestResponsesTemplate {
     pub root_path: Vec<LitStr>,
     pub categories: Vec<TemplateRequestCategory>,
 }
 
-impl Parse for TemplateRequest {
+impl Parse for CompleteRequestResponsesTemplate {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-
-        let macro_name: syn::Ident = input.parse()?;
-        input.parse::<Token![,]>()?;
 
         let root_lit: LitStr = input.parse()?;
         let root_path: Vec<LitStr> = root_lit
@@ -56,37 +52,23 @@ impl Parse for TemplateRequest {
         }
 
         Ok(Self {
-            macro_name,
             root_path,
             categories,
         })
     }
 }
 
-impl TemplateRequest {
+impl CompleteRequestResponsesTemplate {
     /// Emits per-category `macro_rules!` helpers plus the root `macro_rules! #macro_name`.
     pub fn expand_macro(&self) -> proc_macro2::TokenStream {
         let category_macros = self.categories.iter().map(TemplateRequestCategory::expand_macro);
-        let macro_name = &self.macro_name;
         let template_body = self.expand_template();
 
-        let root_macro = quote! {
-            macro_rules! #macro_name {
-                () => {
-                    #template_body
-                };
-            }
-        };
-
-        quote! {
-            #(#category_macros)*
-            #root_macro
-        }
+        quote! {#template_body}
     }
 
     /// Emits `#macro_name, "v2", categories { template_request_category_*!(), ... }`.
     pub fn expand_template(&self) -> proc_macro2::TokenStream {
-        let macro_name = &self.macro_name;
         let root_path = self.root_path_lit();
         let category_invocations = self.categories.iter().map(|category| {
             let category_macro_name = &category.category_macro_name;
@@ -96,9 +78,8 @@ impl TemplateRequest {
         });
 
         quote! {
-            #macro_name,
             #root_path,
-            categories {
+            requests_responses {
                 #(#category_invocations,)*
             }
         }
