@@ -18,6 +18,6 @@
 //! cannot be placed inside another proc-macro invocation and be unwrapped automatically.
 
 
-#[cfg(feature = "request_response_macros")]
+#[cfg(feature = "request_response_template_parsers")]
 pub mod requests_responses;
 pub mod template_root;

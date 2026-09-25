@@ -14,7 +14,9 @@ description = "Macros that are used throughout the FEAGI Core, and occasionally 
 proc-macro = true
 
 [features]
-request_response_macros = []
+request_response_template_parsers = []
+request_response_ahkami_codegen = ["request_response_template_parsers"]
+
 
 [dependencies]
 syn = { workspace = true, features = ["full"] }

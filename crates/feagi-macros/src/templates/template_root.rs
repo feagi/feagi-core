@@ -1,4 +1,3 @@
-use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::{braced, parse_macro_input, Token};
@@ -18,7 +17,7 @@ pub struct TemplateRoot<T: TemplateStruct> {
 impl<T: TemplateStruct> TemplateRoot<T> {
     /// Parse and validate a template definition, then export it as a reusable `macro_rules!`.
     /// [`Self::parse_generator_input_macro`].
-    pub fn parse_template_and_generate_generator_input_macro(input: TokenStream) -> TokenStream {
+    pub fn parse_template_and_generate_generator_input_macro(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         let template_root = parse_macro_input!(input as Self);
 
         let macro_name = template_root.macro_name;
@@ -36,8 +35,8 @@ impl<T: TemplateStruct> TemplateRoot<T> {
     }
 
     /// Parse the tokens a consumer receives from an exported template callback.
-    pub fn parse_generator_input_macro(input: TokenStream) -> syn::Result<T> {
-        T::parse.parse(input)
+    pub fn parse_generator_input_macro(input: proc_macro2::TokenStream) -> syn::Result<T> {
+        T::parse.parse(input.into())
     }
 }
 

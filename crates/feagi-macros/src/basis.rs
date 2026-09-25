@@ -1,8 +1,9 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident};
 use quote::quote;
 use syn::bracketed;
 use syn::parse::{Parse, ParseStream};
 use syn::{LitStr, Token};
+use crate::templates::template_root::TemplateRoot;
 
 /// If a comma exists, parse it. If not, dont die
 pub fn parse_optional_comma(input: ParseStream) -> syn::Result<()> {
@@ -15,7 +16,17 @@ pub fn parse_optional_comma(input: ParseStream) -> syn::Result<()> {
 /// A template fragment that can be parsed from tokens and re-emitted as the same DSL.
 pub trait TemplateStruct: Parse {
     /// Export this template into a token stream that can be parsed again
-    fn expand_template(&self) -> TokenStream;
+    fn expand_template(&self) -> proc_macro2::TokenStream;
+}
+
+/// Takes in a template data struct, then outputs actual usable source code
+pub trait GeneratorFromTemplate<T: TemplateStruct> {
+    fn generate_code_from_template(template: T) -> proc_macro2::TokenStream;
+    
+    fn read_template_and_generate_code(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+        let template: syn::Result<T> = TemplateRoot::parse_generator_input_macro(input.into());
+        Self::generate_code_from_template(template.unwrap()).into()
+    }
 }
 
 
@@ -32,7 +43,7 @@ impl StructBuilderParameters {
 
 impl TemplateStruct for StructBuilderParameters {
     /// Re-emits this parameter list in contract DSL form (`[ ... ]`).
-    fn expand_template(&self) -> TokenStream {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
         let fields = self.fields();
         if fields.is_empty() {
             return quote! { [] };
@@ -111,7 +122,7 @@ impl Parse for StructBuilderParameterField {
 
 impl TemplateStruct for StructBuilderParameterField {
     /// Re-emits a single struct-builder field entry inside `[ ... ]`.
-    fn expand_template(&self) -> TokenStream {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
         let parameter_name = &self.parameter_name;
         let parameter_type = &self.parameter_type;
         match &self.description {

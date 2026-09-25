@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::{Ident, Span};
 use quote::{format_ident, quote};
 use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
@@ -59,7 +59,7 @@ impl Parse for CompleteRequestResponsesTemplate {
 impl TemplateStruct for CompleteRequestResponsesTemplate {
 
     /// Emits `#macro_name, "v2", categories { template_request_category_*!(), ... }`.
-    fn expand_template(&self) -> TokenStream {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
         let root_path = self.root_path_lit();
         let category_invocations = self.categories.iter().map(|category| {
             let category_macro_name = &category.category_macro_name;
@@ -159,7 +159,7 @@ impl Parse for TemplateRequestCategory {
 }
 
 impl TemplateStruct for TemplateRequestCategory {
-    fn expand_template(&self) -> TokenStream {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
         let category_name = &self.category_name;
         let read = RequestWithoutReqBody::expand_read_bucket(&self.read);
         let create = RequestWithReqBody::expand_verb_bucket("create", &self.create);
@@ -221,7 +221,7 @@ impl Parse for RequestWithoutReqBody {
 }
 
 impl RequestWithoutReqBody {
-    pub fn expand_read_bucket(endpoints: &[Self]) -> TokenStream {
+    pub fn expand_read_bucket(endpoints: &[Self]) -> proc_macro2::TokenStream {
         let entries = endpoints.iter().map(TemplateStruct::expand_template);
         quote! {
             read: {
@@ -232,7 +232,7 @@ impl RequestWithoutReqBody {
 }
 
 impl TemplateStruct for RequestWithoutReqBody {
-    fn expand_template(&self) -> TokenStream {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
         let path = PathElement::path_to_lit_str(&self.request_path);
         let request_parameters = self.request_parameters.expand_template();
         let response = self.response.expand_template();
@@ -292,7 +292,7 @@ impl Parse for RequestWithReqBody {
 }
 
 impl RequestWithReqBody {
-    pub fn expand_verb_bucket(verb: &str, endpoints: &[Self]) -> TokenStream {
+    pub fn expand_verb_bucket(verb: &str, endpoints: &[Self]) -> proc_macro2::TokenStream {
         let verb_ident = Ident::new(verb, Span::call_site());
         let entries = endpoints.iter().map(TemplateStruct::expand_template);
         quote! {
@@ -304,7 +304,7 @@ impl RequestWithReqBody {
 }
 
 impl TemplateStruct for RequestWithReqBody {
-    fn expand_template(&self) -> TokenStream {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
         let path = PathElement::path_to_lit_str(&self.request_path);
         let request_parameters = self.request_parameters.expand_template();
         let request = self.request.expand_template();
