@@ -2,12 +2,12 @@ use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use crate::basis::{parse_optional_comma, StructBuilderParameters, TemplateStruct};
+use crate::basis::{parse_optional_comma, StructBuilderParameterField, StructBuilderParameters, TemplateStruct};
 
 mod kw {
-    syn::custom_keyword!(categories);
 
     syn::custom_keyword!(category_name);
+    syn::custom_keyword!(base_path);
     syn::custom_keyword!(read);
     syn::custom_keyword!(create);
     syn::custom_keyword!(edit);
@@ -20,89 +20,12 @@ mod kw {
     syn::custom_keyword!(response);
 }
 
-//region Template Request
-
-/// All request / responses of a certain category
-pub struct CompleteRequestResponsesTemplate {
-    pub root_path: Vec<LitStr>,
-    pub categories: Vec<TemplateRequestCategory>,
-}
-
-impl Parse for CompleteRequestResponsesTemplate {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-
-        let root_lit: LitStr = input.parse()?;
-        let root_path: Vec<LitStr> = root_lit
-            .value()
-            .split('/')
-            .filter(|segment| !segment.is_empty())
-            .map(|segment| LitStr::new(segment, root_lit.span()))
-            .collect();
-
-        input.parse::<Token![,]>()?;
-        input.parse::<kw::categories>()?;
-
-        let cat_input;
-        braced!(cat_input in input);
-        let mut categories: Vec<TemplateRequestCategory> = Vec::new();
-        while !cat_input.is_empty() {
-            categories.push(cat_input.parse::<TemplateRequestCategory>()?);
-            parse_optional_comma(&cat_input)?;
-        }
-
-        Ok(Self {
-            root_path,
-            categories,
-        })
-    }
-}
-
-impl TemplateStruct for CompleteRequestResponsesTemplate {
-
-    /// Emits `#macro_name, "v2", categories { template_request_category_*!(), ... }`.
-    fn expand_template(&self) -> proc_macro2::TokenStream {
-        let root_path = self.root_path_lit();
-        let category_invocations = self.categories.iter().map(|category| {
-            let category_macro_name = &category.category_macro_name;
-            quote! {
-                #category_macro_name!()
-            }
-        });
-
-        quote! {
-            #root_path,
-            requests_responses {
-                #(#category_invocations,)*
-            }
-        }
-    }
-}
-
-impl CompleteRequestResponsesTemplate {
-    fn root_path_lit(&self) -> LitStr {
-        let span = self
-            .root_path
-            .first()
-            .map(LitStr::span)
-            .unwrap_or(Span::call_site());
-
-        let path = self
-            .root_path
-            .iter()
-            .map(LitStr::value)
-            .collect::<Vec<_>>()
-            .join("/");
-
-        LitStr::new(&path, span)
-    }
-}
-
-
 //region Request Category
 
 pub struct TemplateRequestCategory {
     pub category_name: LitStr,
-    pub read: Vec<RequestWithoutReqBody>,
+    pub base_path: LitStr,
+    pub read: Vec<RequestWithReqBody>,
     pub create: Vec<RequestWithReqBody>,
     pub edit: Vec<RequestWithReqBody>,
     pub delete: Vec<RequestWithReqBody>,
@@ -134,7 +57,12 @@ impl Parse for TemplateRequestCategory {
         let category_name: LitStr = input.parse()?;
         input.parse::<Token![,]>()?;
 
-        let read = parse_category::<kw::read, RequestWithoutReqBody>(&input)?;
+        input.parse::<kw::base_path>()?;
+        input.parse::<Token![:]>()?;
+        let base_path: LitStr = input.parse()?;
+        input.parse::<Token![,]>()?;
+
+        let read = parse_category::<kw::read, RequestWithReqBody>(&input)?;
         let create = parse_category::<kw::create, RequestWithReqBody>(&input)?;
         let edit = parse_category::<kw::edit, RequestWithReqBody>(&input)?;
         let delete = parse_category::<kw::delete, RequestWithReqBody>(&input)?;
@@ -142,6 +70,7 @@ impl Parse for TemplateRequestCategory {
 
         Ok(Self {
             category_name,
+            base_path,
             read,
             create,
             edit,
@@ -154,7 +83,8 @@ impl Parse for TemplateRequestCategory {
 impl TemplateStruct for TemplateRequestCategory {
     fn expand_template(&self) -> proc_macro2::TokenStream {
         let category_name = &self.category_name;
-        let read = RequestWithoutReqBody::expand_read_bucket(&self.read);
+        let base_path = &self.base_path;
+        let read = RequestWithReqBody::expand_verb_bucket("read", &self.read);
         let create = RequestWithReqBody::expand_verb_bucket("create", &self.create);
         let edit = RequestWithReqBody::expand_verb_bucket("edit", &self.edit);
         let delete = RequestWithReqBody::expand_verb_bucket("delete", &self.delete);
@@ -162,6 +92,7 @@ impl TemplateStruct for TemplateRequestCategory {
 
         quote! {
             category_name: #category_name,
+            base_path: #base_path,
             #read
             #create
             #edit
@@ -172,73 +103,6 @@ impl TemplateStruct for TemplateRequestCategory {
 }
 
 //region Request
-
-/// A request to read / get state (GET).
-pub struct RequestWithoutReqBody {
-    pub request_path: Vec<PathElement>,
-    pub description: LitStr,
-    pub path_parameters: URLEncodableStructBuilderParameters,
-    pub response: StructBuilderParameters,
-}
-
-impl Parse for RequestWithoutReqBody {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        fn request_fields<FieldIdent: Parse, FieldType: Parse>(buffer: &ParseBuffer) -> syn::Result<FieldType> {
-            buffer.parse::<FieldIdent>()?;
-            buffer.parse::<Token![:]>()?;
-            let output = buffer.parse::<FieldType>()?;
-            parse_optional_comma(&buffer)?;
-            Ok(output)
-        }
-
-        let request_lit_str: LitStr = input.parse()?;
-        let request_path = PathElement::path_elements_from_lit_str(&request_lit_str)?;
-
-        input.parse::<Token![:]>()?;
-
-        let members;
-        braced!(members in input);
-
-        let description = request_fields::<kw::description, LitStr>(&members)?;
-        let path_parameters = request_fields::<kw::path_parameters, URLEncodableStructBuilderParameters>(&members)?;
-        let response = request_fields::<kw::response, StructBuilderParameters>(&members)?;
-
-        Ok(Self {
-            request_path,
-            description,
-            path_parameters,
-            response,
-        })
-    }
-}
-
-impl RequestWithoutReqBody {
-    pub fn expand_read_bucket(endpoints: &[Self]) -> proc_macro2::TokenStream {
-        let entries = endpoints.iter().map(TemplateStruct::expand_template);
-        quote! {
-            read: {
-                #(#entries,)*
-            },
-        }
-    }
-}
-
-impl TemplateStruct for RequestWithoutReqBody {
-    fn expand_template(&self) -> proc_macro2::TokenStream {
-        let path = PathElement::path_to_lit_str(&self.request_path);
-        let path_parameters = self.path_parameters.expand_template();
-        let response = self.response.expand_template();
-        let description = &self.description;
-
-        quote! {
-            #path: {
-                description: #description,
-                path_parameters: #path_parameters,
-                response: #response
-            }
-        }
-    }
-}
 
 /// Any other request that is not a read request.
 pub struct RequestWithReqBody {
@@ -263,6 +127,8 @@ impl Parse for RequestWithReqBody {
         let request_lit_str: LitStr = input.parse()?;
         let request_path = PathElement::path_elements_from_lit_str(&request_lit_str)?;
 
+        // TODO ensure no "Parameter" PathElements in request_path are repeating
+
         input.parse::<Token![:]>()?;
 
         let members;
@@ -270,8 +136,13 @@ impl Parse for RequestWithReqBody {
 
         let description = request_fields::<kw::description, LitStr>(&members)?;
         let path_parameters = request_fields::<kw::path_parameters, URLEncodableStructBuilderParameters>(&members)?;
+
+        // TODO ensure each member of path_parameters .parameter_name property has a a matching member from path_parameters "Parameter" PathElements and vice versa (there should be a 1-1 mapping between them with no open pairs)
+        
         let request = request_fields::<kw::request, StructBuilderParameters>(&members)?;
         let response = request_fields::<kw::response, StructBuilderParameters>(&members)?;
+
+
 
         Ok(Self {
             request_path,
@@ -367,8 +238,10 @@ impl PathElement {
     }
 }
 
-//endregion
+
+
 
 //endregion
 
 //endregion
+

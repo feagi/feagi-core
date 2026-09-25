@@ -1,7 +1,7 @@
 use independent_builders::bit_struct_builder;
 use crate::basis::GeneratorFromTemplate;
 use crate::templates::requests_responses::generators::request_response_ohkami_server_generator::OhkamiServerGenerator;
-use crate::templates::requests_responses::requests_responses_structs::{CompleteRequestResponsesTemplate, TemplateRequestCategory};
+use crate::templates::requests_responses::requests_responses_structs::{TemplateRequestCategory};
 use crate::templates::template_root::TemplateRoot;
 
 mod basis;
@@ -12,12 +12,6 @@ mod independent_builders;
 #[proc_macro]
 pub fn template_request_category(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     TemplateRoot::<TemplateRequestCategory>::parse_template_and_generate_generator_input_macro(input)
-}
-
-#[cfg(feature = "request_response_template_parsers")]
-#[proc_macro]
-pub fn template_request(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    TemplateRoot::<CompleteRequestResponsesTemplate>::parse_template_and_generate_generator_input_macro(input)
 }
 
 #[cfg(feature = "request_response_ahkami_codegen")]

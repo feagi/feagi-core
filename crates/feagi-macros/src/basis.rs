@@ -41,6 +41,8 @@ impl StructBuilderParameters {
     pub(crate) fn fields(&self) -> &[StructBuilderParameterField] {
         &self.0
     }
+
+    pub(crate) fn to_vec(self) -> Vec<StructBuilderParameterField> {self.0}
 }
 
 impl TemplateStruct for StructBuilderParameters {
