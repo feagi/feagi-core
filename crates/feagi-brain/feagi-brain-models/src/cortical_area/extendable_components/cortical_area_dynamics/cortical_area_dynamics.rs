@@ -118,12 +118,13 @@ where
 
         // We should apply any modifiers to the outgoing neuron potential, 
         // regardless of firing state
-        if !cortical_data.cortical_area_flags.is_psp_uniform() {
+        if !cortical_data.cortical_area_flags.is_psp_using_membrane_potential() {
             *processing_buffer = cortical_data.cortical_level_psp;
         }
 
-        if cortical_data.get_is_psp_uniform() {
-            *processing_buffer *= neuron_data.get_inverse_number_mappings_out().deref().into();
+        // We divide out the outgoing potential when PSP Uniformity is DISABLED!!!!!!!!!!!
+        if !cortical_data.cortical_area_flags.is_psp_uniform() {
+            *processing_buffer *= CorticalAreaNeuronPotential::new(neuron_data.inverse_outgoing_connection_count.deref());
         }
         
         // This struct will apply any force fires / probe overrides and store firing state 

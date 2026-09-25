@@ -10,4 +10,44 @@ homepage.workspace = true
 documentation.workspace = true
 description = "Runs the web server for FEAGI Server endpoint control"
 
+[features]
+# subcrates should not have default in order to avoid confusion
+
+std = [
+    "alloc",
+    "serde/std", "serde_json/std",
+]
+
+alloc = [
+    "serde_json",
+    "serde/alloc", "serde/derive", "serde_json/alloc",
+]
+
+# Webserver under the Tokio async interface
+std_tokio = [
+    "std", "ohkami", "ohkami/rt_tokio"
+]
+
+# Webserver under the Smol async interface
+std_smol = [
+    "std", "ohkami", "ohkami/rt_smol"
+]
+
+# TODO other async interfaces?
+
+# TODO any no_std impls?
+
+# Looks like it should be possible to have the OpenAPI generator work in the build rs script, and then spit out a file?
+# This could be helpful in certain situations but not important right now
+
+# WASM is unlikely to be supported (not practical to run a web server under wasm)
+
 [dependencies]
+
+
+
+# External crates
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+ohkami = {workspace = true, optional = true, features = ["openapi"]}
+

@@ -11,8 +11,17 @@ documentation.workspace = true
 description = "Defines the interfaces to exchange data by FEAGI agents and servers"
 
 [features]
-
 # subcrates should not have default in order to avoid confusion
+
+std = [
+    "alloc",
+    "serde/std", "serde_json/std",
+]
+
+alloc = [
+    "serde_json",
+    "serde/alloc", "serde/derive", "serde_json/alloc",
+]
 
 [dependencies]
 # Sub Crates
@@ -22,4 +31,6 @@ description = "Defines the interfaces to exchange data by FEAGI agents and serve
 # Root Crates
 feagi-basis = {path = "../../feagi-basis"}
 
-# External Crates
+# External crates
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }

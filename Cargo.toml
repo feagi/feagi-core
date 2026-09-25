@@ -128,6 +128,7 @@ flume = {version = "0.12.0"}
 ndarray = { version = "0.17.2", default-features = false}
 image = { version = "0.25.10", default-features = false }
 base64 = {version = "0.23.1", default-features = false}
+ohkami = {version = "0.24.9"}
 
 
 

@@ -1,6 +1,32 @@
 [package]
 name = "feagi-io-rest"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Allows Request / Response communication over HTTP Rest"
+
+[features]
+# subcrates should not have default in order to avoid confusion
+
+std = [
+    "alloc",
+    "serde/std", "serde_json/std",
+]
+
+alloc = [
+    "serde_json",
+    "serde/alloc", "serde/derive", "serde_json/alloc",
+]
 
 [dependencies]
+
+
+
+# External crates
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
