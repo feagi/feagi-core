@@ -2,8 +2,7 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use crate::basis::{parse_optional_comma, StructBuilderParameters};
-use crate::templates::template_root::TemplateStruct;
+use crate::basis::{parse_optional_comma, StructBuilderParameters, TemplateStruct};
 
 mod kw {
     syn::custom_keyword!(categories);
@@ -79,7 +78,6 @@ impl TemplateStruct for CompleteRequestResponsesTemplate {
 }
 
 impl CompleteRequestResponsesTemplate {
-
     fn root_path_lit(&self) -> LitStr {
         let span = self
             .root_path
@@ -181,42 +179,6 @@ impl TemplateStruct for TemplateRequestCategory {
     }
 }
 
-impl TemplateRequestCategory {
-    /// Emits `macro_rules! template_request_category_<name> { () => { ... } };`
-    pub fn expand_macro(&self) -> proc_macro2::TokenStream {
-        let macro_name = &self.category_macro_name;
-        let category_fragment = self.expand_template();
-
-        quote! {
-            macro_rules! #macro_name {
-                () => {
-                    #category_fragment
-                };
-            }
-        }
-    }
-
-    /// Emits `"category": { read: { ... }, create: { ... }, ... }`.
-    pub fn expand_template(&self) -> proc_macro2::TokenStream {
-        let category_name = &self.category_name;
-        let read = RequestWithoutReqBody::expand_read_bucket(&self.read);
-        let create = RequestWithReqBody::expand_verb_bucket("create", &self.create);
-        let edit = RequestWithReqBody::expand_verb_bucket("edit", &self.edit);
-        let delete = RequestWithReqBody::expand_verb_bucket("delete", &self.delete);
-        let patch = RequestWithReqBody::expand_verb_bucket("patch", &self.patch);
-
-        quote! {
-            #category_name: {
-                #read
-                #create
-                #edit
-                #delete
-                #patch
-            }
-        }
-    }
-}
-
 //region Request
 
 /// A request to read / get state (GET).
@@ -259,16 +221,18 @@ impl Parse for RequestWithoutReqBody {
 }
 
 impl RequestWithoutReqBody {
-    pub fn expand_read_bucket(endpoints: &[Self]) -> proc_macro2::TokenStream {
-        let entries = endpoints.iter().map(Self::expand_template);
+    pub fn expand_read_bucket(endpoints: &[Self]) -> TokenStream {
+        let entries = endpoints.iter().map(TemplateStruct::expand_template);
         quote! {
             read: {
                 #(#entries,)*
             },
         }
     }
+}
 
-    pub fn expand_template(&self) -> proc_macro2::TokenStream {
+impl TemplateStruct for RequestWithoutReqBody {
+    fn expand_template(&self) -> TokenStream {
         let path = PathElement::path_to_lit_str(&self.request_path);
         let request_parameters = self.request_parameters.expand_template();
         let response = self.response.expand_template();
@@ -328,17 +292,19 @@ impl Parse for RequestWithReqBody {
 }
 
 impl RequestWithReqBody {
-    pub fn expand_verb_bucket(verb: &str, endpoints: &[Self]) -> proc_macro2::TokenStream {
+    pub fn expand_verb_bucket(verb: &str, endpoints: &[Self]) -> TokenStream {
         let verb_ident = Ident::new(verb, Span::call_site());
-        let entries = endpoints.iter().map(Self::expand_template);
+        let entries = endpoints.iter().map(TemplateStruct::expand_template);
         quote! {
             #verb_ident: {
                 #(#entries,)*
             },
         }
     }
+}
 
-    pub fn expand_template(&self) -> proc_macro2::TokenStream {
+impl TemplateStruct for RequestWithReqBody {
+    fn expand_template(&self) -> TokenStream {
         let path = PathElement::path_to_lit_str(&self.request_path);
         let request_parameters = self.request_parameters.expand_template();
         let request = self.request.expand_template();

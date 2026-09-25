@@ -1,4 +1,4 @@
-use proc_macro2::Ident;
+use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::bracketed;
 use syn::parse::{Parse, ParseStream};
@@ -12,6 +12,12 @@ pub fn parse_optional_comma(input: ParseStream) -> syn::Result<()> {
     Ok(())
 }
 
+/// A template fragment that can be parsed from tokens and re-emitted as the same DSL.
+pub trait TemplateStruct: Parse {
+    /// Export this template into a token stream that can be parsed again
+    fn expand_template(&self) -> TokenStream;
+}
+
 
 //region Struct Builder Parameters
 
@@ -22,15 +28,17 @@ impl StructBuilderParameters {
     pub(crate) fn fields(&self) -> &[StructBuilderParameterField] {
         &self.0
     }
+}
 
+impl TemplateStruct for StructBuilderParameters {
     /// Re-emits this parameter list in contract DSL form (`[ ... ]`).
-    pub(crate) fn expand_template(&self) -> proc_macro2::TokenStream {
+    fn expand_template(&self) -> TokenStream {
         let fields = self.fields();
         if fields.is_empty() {
             return quote! { [] };
         }
 
-        let entries = fields.iter().map(StructBuilderParameterField::expand_template);
+        let entries = fields.iter().map(TemplateStruct::expand_template);
         quote! {
             [
                 #(#entries,)*
@@ -101,9 +109,9 @@ impl Parse for StructBuilderParameterField {
     }
 }
 
-impl StructBuilderParameterField {
+impl TemplateStruct for StructBuilderParameterField {
     /// Re-emits a single struct-builder field entry inside `[ ... ]`.
-    pub(crate) fn expand_template(&self) -> proc_macro2::TokenStream {
+    fn expand_template(&self) -> TokenStream {
         let parameter_name = &self.parameter_name;
         let parameter_type = &self.parameter_type;
         match &self.description {

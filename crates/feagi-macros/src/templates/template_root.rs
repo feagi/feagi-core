@@ -2,20 +2,12 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::{braced, parse_macro_input, Token};
+use crate::basis::TemplateStruct;
 
 mod kw {
     syn::custom_keyword!(exported_macro_name);
     syn::custom_keyword!(template);
 
-}
-
-/// Defines a struct that can be parsed but also exported to be parsed again
-pub trait TemplateStruct: Parse {
-
-    // parse() from Parse is for reading and validating input
-
-    /// Export this template into a token stream that can be parsed again
-    fn expand_template(&self) -> proc_macro2::TokenStream;
 }
 
 pub struct TemplateRoot<T: TemplateStruct> {
