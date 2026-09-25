@@ -6,7 +6,8 @@ use crate::basis::{parse_optional_comma, StructBuilderParameters, TemplateStruct
 
 mod kw {
     syn::custom_keyword!(categories);
-    
+
+    syn::custom_keyword!(category_name);
     syn::custom_keyword!(read);
     syn::custom_keyword!(create);
     syn::custom_keyword!(edit);
@@ -100,7 +101,6 @@ impl CompleteRequestResponsesTemplate {
 //region Request Category
 
 pub struct TemplateRequestCategory {
-    pub category_macro_name: Ident,
     pub category_name: LitStr,
     pub read: Vec<RequestWithoutReqBody>,
     pub create: Vec<RequestWithReqBody>,
@@ -129,25 +129,18 @@ impl Parse for TemplateRequestCategory {
         }
 
 
-
-        let category_name: LitStr = input.parse()?;
-
-        let category_macro_name_str: String = "template_request_category_".to_string() + &*category_name.value();
-        let category_macro_name: Ident = format_ident!("{}", category_macro_name_str);
-
+        input.parse::<kw::category_name>()?;
         input.parse::<Token![:]>()?;
+        let category_name: LitStr = input.parse()?;
+        input.parse::<Token![,]>()?;
 
-        let category_body;
-        braced!(category_body in input);
-
-        let read = parse_category::<kw::read, RequestWithoutReqBody>(&category_body)?;
-        let create = parse_category::<kw::create, RequestWithReqBody>(&category_body)?;
-        let edit = parse_category::<kw::edit, RequestWithReqBody>(&category_body)?;
-        let delete = parse_category::<kw::delete, RequestWithReqBody>(&category_body)?;
-        let patch = parse_category::<kw::patch, RequestWithReqBody>(&category_body)?;
+        let read = parse_category::<kw::read, RequestWithoutReqBody>(&input)?;
+        let create = parse_category::<kw::create, RequestWithReqBody>(&input)?;
+        let edit = parse_category::<kw::edit, RequestWithReqBody>(&input)?;
+        let delete = parse_category::<kw::delete, RequestWithReqBody>(&input)?;
+        let patch = parse_category::<kw::patch, RequestWithReqBody>(&input)?;
 
         Ok(Self {
-            category_macro_name,
             category_name,
             read,
             create,
