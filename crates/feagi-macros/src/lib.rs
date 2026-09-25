@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
 use independent_builders::bit_struct_builder;
-
+use crate::templates::requests_responses::requests_responses_structs::{CompleteRequestResponsesTemplate, TemplateRequestCategory};
+use crate::templates::template_root::TemplateRoot;
 
 mod basis;
 mod templates;
@@ -9,13 +10,13 @@ mod independent_builders;
 #[cfg(feature = "request_response_macros")]
 #[proc_macro]
 pub fn template_request_category(input: TokenStream) -> TokenStream {
-    templates::requests_responses::request_response_category_parser::request_response_category_parser(input)
+    TemplateRoot::<TemplateRequestCategory>::parse_template_and_generate_generator_macro(input)
 }
 
 #[cfg(feature = "request_response_macros")]
 #[proc_macro]
 pub fn template_request(input: TokenStream) -> TokenStream {
-    templates::requests_responses::request_response_parser::request_response_parser(input)
+    TemplateRoot::<CompleteRequestResponsesTemplate>::parse_template_and_generate_generator_macro(input)
 }
 
 /// Builds a bit field struct around a uint with one named bit field per flag.

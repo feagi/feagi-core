@@ -59,13 +59,8 @@ impl<T: TemplateStruct> Parse for TemplateRoot<T> {
         input.parse::<kw::template>()?;
         input.parse::<Token![:]>()?;
         let struct_stream;
-        let mut generated_template: T;
         braced!(struct_stream in input);
-        while !struct_stream.is_empty() {
-            generated_template = T::parse(&struct_stream)?;
-            // Yes, technically one could put multiple templates and we only read the last one. I dont care to fix this extreme intentional edge case rn
-        };
-
+        let generated_template: T = struct_stream.parse()?;
         Ok(Self {
             macro_name,
             generated_template
