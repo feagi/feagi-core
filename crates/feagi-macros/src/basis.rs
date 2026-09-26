@@ -1,7 +1,6 @@
-use proc_macro2::{Ident};
 use quote::quote;
 use syn::bracketed;
-use syn::parse::{Parse, ParseStream};
+use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::{LitStr, Token};
 use crate::templates::template_root::TemplateRoot;
 
@@ -11,6 +10,23 @@ pub fn parse_optional_comma(input: ParseStream) -> syn::Result<()> {
         input.parse::<Token![,]>()?;
     }
     Ok(())
+}
+
+/// Used to process "Ident : $SomeData" into SomeData
+pub fn parse_property_colon_member<FieldIdent: Parse, FieldType: Parse>(buffer: &ParseBuffer) -> syn::Result<FieldType> {
+    buffer.parse::<FieldIdent>()?;
+    buffer.parse::<Token![:]>()?;
+    let output = buffer.parse::<FieldType>()?;
+    parse_optional_comma(&buffer)?;
+    Ok(output)
+}
+
+pub fn lit_str_to_ident(lit_str: &LitStr) -> syn::Result<syn::Ident> {
+    lit_str.parse::<syn::Ident>()
+}
+
+pub fn ident_to_lit_str(ident: &syn::Ident) -> LitStr {
+    LitStr::new(&ident.to_string(), ident.span())
 }
 
 /// A template fragment that can be parsed from tokens and re-emitted as the same DSL.
@@ -43,6 +59,35 @@ impl StructBuilderParameters {
     }
 
     pub(crate) fn to_vec(self) -> Vec<StructBuilderParameterField> {self.0}
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl StructBuilderParameters {
+
+    /// Generate a basic struct source code output. Does not include comments or any metas
+    ///
+    /// $struct_name {
+    ///     #[doc = $doc1]
+    ///     field1: type1
+    ///     ...
+    /// }
+    pub fn generate_struct(&self, struct_name: syn::Ident) -> proc_macro2::TokenStream {
+
+        let mut fields: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
+
+        for field in &self.0 {
+            fields.extend(field.to_tokens());
+        }
+
+        quote! {
+            #struct_name {
+                #fields
+            }
+        }
+    }
 }
 
 impl TemplateStruct for StructBuilderParameters {
@@ -90,7 +135,7 @@ pub struct StructBuilderParameterField {
     /// This becomes the generated structs field member name so should be snake case
     pub parameter_name: LitStr,
     /// The data type of the parameter. Depending on the usecase, there may be various restrictions
-    pub parameter_type: Ident,
+    pub parameter_type: syn::Type,
     /// Optional description for this parameter
     pub description: Option<LitStr>,
 }
@@ -101,9 +146,10 @@ pub struct StructBuilderParameterField {
 */
 impl Parse for StructBuilderParameterField {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+
         let parameter_name: LitStr = input.parse()?;
         input.parse::<Token![:]>()?;
-        let parameter_type: Ident = input.parse()?;
+        let parameter_type: syn::Type = input.parse()?;
 
         let description = if input.peek(Token![,]) {
             input.parse::<Token![,]>()?;
@@ -140,6 +186,22 @@ impl TemplateStruct for StructBuilderParameterField {
                     #parameter_name: #parameter_type
                 }
             }
+        }
+    }
+}
+
+impl StructBuilderParameterField {
+    pub fn to_tokens(&self) -> proc_macro2::TokenStream {
+
+        let no_com = LitStr::new("", proc_macro2::Span::call_site());
+
+        let name = &self.parameter_name;
+        let par_type = &self.parameter_type;
+        let comment = self.description.clone().unwrap_or(no_com);
+
+        quote!{
+            #[doc = #comment]
+            #name : #par_type
         }
     }
 }

@@ -660,6 +660,10 @@ name = "feagi-basis-sensiomotor"
 version = "0.1.1"
 
 [[package]]
+name = "feagi-basis-templates"
+version = "0.1.1"
+
+[[package]]
 name = "feagi-brain"
 version = "0.1.1"
 dependencies = [

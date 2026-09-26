@@ -1,0 +1,27 @@
+[package]
+name = "feagi-basis-templates"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Defines Various Templates (as macros) that are used to generate code, as well as traits that may be needed"
+
+[features]
+
+# subcrates should not have default in order to avoid confusion
+
+std = [
+    "alloc",
+]
+
+alloc = [
+
+]
+
+template_requests_responses = []
+
+[dependencies]

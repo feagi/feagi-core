@@ -1,8 +1,8 @@
 use proc_macro2::{Ident, Span};
-use quote::quote;
+use quote::{quote, TokenStreamExt};
 use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use crate::basis::{parse_optional_comma, StructBuilderParameterField, StructBuilderParameters, TemplateStruct};
+use crate::basis::{parse_optional_comma, parse_property_colon_member, StructBuilderParameterField, StructBuilderParameters, TemplateStruct};
 
 mod kw {
 
@@ -14,6 +14,7 @@ mod kw {
     syn::custom_keyword!(delete);
     syn::custom_keyword!(patch);
 
+    syn::custom_keyword!(title);
     syn::custom_keyword!(description);
     syn::custom_keyword!(path_parameters);
     syn::custom_keyword!(request);
@@ -22,17 +23,17 @@ mod kw {
 
 //region Request Category
 
-pub struct TemplateRequestCategory {
+pub struct TemplateRequestResponseCategory {
     pub category_name: LitStr,
     pub base_path: LitStr,
-    pub read: Vec<RequestWithReqBody>,
-    pub create: Vec<RequestWithReqBody>,
-    pub edit: Vec<RequestWithReqBody>,
-    pub delete: Vec<RequestWithReqBody>,
-    pub patch: Vec<RequestWithReqBody>,
+    pub read: Vec<RequestResponseContract>,
+    pub create: Vec<RequestResponseContract>,
+    pub edit: Vec<RequestResponseContract>,
+    pub delete: Vec<RequestResponseContract>,
+    pub patch: Vec<RequestResponseContract>,
 }
 
-impl Parse for TemplateRequestCategory {
+impl Parse for TemplateRequestResponseCategory {
     fn parse(input: ParseStream) -> syn::Result<Self> {
 
         fn parse_category<RequestType: Parse, RequestBody: Parse>(buffer: &ParseBuffer) -> syn::Result<Vec<RequestBody>> {
@@ -51,22 +52,14 @@ impl Parse for TemplateRequestCategory {
             Ok(request)
         }
 
+        let category_name: LitStr = parse_property_colon_member::<kw::category_name, LitStr>(&input)?;
+        let base_path: LitStr = parse_property_colon_member::<kw::base_path, LitStr>(&input)?;
 
-        input.parse::<kw::category_name>()?;
-        input.parse::<Token![:]>()?;
-        let category_name: LitStr = input.parse()?;
-        input.parse::<Token![,]>()?;
-
-        input.parse::<kw::base_path>()?;
-        input.parse::<Token![:]>()?;
-        let base_path: LitStr = input.parse()?;
-        input.parse::<Token![,]>()?;
-
-        let read = parse_category::<kw::read, RequestWithReqBody>(&input)?;
-        let create = parse_category::<kw::create, RequestWithReqBody>(&input)?;
-        let edit = parse_category::<kw::edit, RequestWithReqBody>(&input)?;
-        let delete = parse_category::<kw::delete, RequestWithReqBody>(&input)?;
-        let patch = parse_category::<kw::patch, RequestWithReqBody>(&input)?;
+        let read = parse_category::<kw::read, RequestResponseContract>(&input)?;
+        let create = parse_category::<kw::create, RequestResponseContract>(&input)?;
+        let edit = parse_category::<kw::edit, RequestResponseContract>(&input)?;
+        let delete = parse_category::<kw::delete, RequestResponseContract>(&input)?;
+        let patch = parse_category::<kw::patch, RequestResponseContract>(&input)?;
 
         Ok(Self {
             category_name,
@@ -80,15 +73,15 @@ impl Parse for TemplateRequestCategory {
     }
 }
 
-impl TemplateStruct for TemplateRequestCategory {
+impl TemplateStruct for TemplateRequestResponseCategory {
     fn expand_template(&self) -> proc_macro2::TokenStream {
         let category_name = &self.category_name;
         let base_path = &self.base_path;
-        let read = RequestWithReqBody::expand_verb_bucket("read", &self.read);
-        let create = RequestWithReqBody::expand_verb_bucket("create", &self.create);
-        let edit = RequestWithReqBody::expand_verb_bucket("edit", &self.edit);
-        let delete = RequestWithReqBody::expand_verb_bucket("delete", &self.delete);
-        let patch = RequestWithReqBody::expand_verb_bucket("patch", &self.patch);
+        let read = RequestResponseContract::expand_verb_bucket("read", &self.read);
+        let create = RequestResponseContract::expand_verb_bucket("create", &self.create);
+        let edit = RequestResponseContract::expand_verb_bucket("edit", &self.edit);
+        let delete = RequestResponseContract::expand_verb_bucket("delete", &self.delete);
+        let patch = RequestResponseContract::expand_verb_bucket("patch", &self.patch);
 
         quote! {
             category_name: #category_name,
@@ -104,48 +97,43 @@ impl TemplateStruct for TemplateRequestCategory {
 
 //region Request
 
-/// Any other request that is not a read request.
-pub struct RequestWithReqBody {
-    pub request_path: Vec<PathElement>,
+/// A request of some sort
+pub struct RequestResponseContract {
+    /// The given request path, including path parameters, beyond the root path definition
+    pub request_path: ParameterElementPath,
+    /// The title of this ReqResContract, Mainly used for struct generation
+    pub title: LitStr,
+    /// The Doc String to use for the generated structs
     pub description: LitStr,
-    pub path_parameters: URLEncodableStructBuilderParameters,
+    /// What Struct will be sent as path parameters
+    pub path_parameters: StructBuilderParameters,
+    /// General Request Payload
     pub request: StructBuilderParameters,
+    /// Response Payload (assuming no error)
     pub response: StructBuilderParameters,
 }
 
-impl Parse for RequestWithReqBody {
+impl Parse for RequestResponseContract {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-
-        fn request_fields<FieldIdent: Parse, FieldType: Parse>(buffer: &ParseBuffer) -> syn::Result<FieldType> {
-            buffer.parse::<FieldIdent>()?;
-            buffer.parse::<Token![:]>()?;
-            let output = buffer.parse::<FieldType>()?;
-            parse_optional_comma(&buffer)?;
-            Ok(output)
-        }
-
         let request_lit_str: LitStr = input.parse()?;
-        let request_path = PathElement::path_elements_from_lit_str(&request_lit_str)?;
-
-        // TODO ensure no "Parameter" PathElements in request_path are repeating
-
+        let request_path = ParameterElementPath::parse(input)?;
         input.parse::<Token![:]>()?;
 
         let members;
         braced!(members in input);
 
-        let description = request_fields::<kw::description, LitStr>(&members)?;
-        let path_parameters = request_fields::<kw::path_parameters, URLEncodableStructBuilderParameters>(&members)?;
+        let title = parse_property_colon_member::<kw::title, LitStr>(&members)?;
+        let description = parse_property_colon_member::<kw::description, LitStr>(&members)?;
+        let path_parameters = parse_property_colon_member::<kw::path_parameters, StructBuilderParameters>(&members)?;
 
-        // TODO ensure each member of path_parameters .parameter_name property has a a matching member from path_parameters "Parameter" PathElements and vice versa (there should be a 1-1 mapping between them with no open pairs)
-        
-        let request = request_fields::<kw::request, StructBuilderParameters>(&members)?;
-        let response = request_fields::<kw::response, StructBuilderParameters>(&members)?;
+        let request = parse_property_colon_member::<kw::request, StructBuilderParameters>(&members)?;
+        let response = parse_property_colon_member::<kw::response, StructBuilderParameters>(&members)?;
 
 
 
         Ok(Self {
             request_path,
+            title,
             description,
             path_parameters,
             request,
@@ -154,7 +142,26 @@ impl Parse for RequestWithReqBody {
     }
 }
 
-impl RequestWithReqBody {
+impl TemplateStruct for RequestResponseContract {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
+        let request_path = self.request_path.expand_template();
+        let path_parameters = self.path_parameters.expand_template();
+        let request = self.request.expand_template();
+        let response = self.response.expand_template();
+        let description = &self.description;
+
+        quote! {
+            #request_path: {
+                description: #description,
+                path_parameters: #path_parameters,
+                request: #request,
+                response: #response
+            }
+        }
+    }
+}
+
+impl RequestResponseContract {
     pub fn expand_verb_bucket(verb: &str, endpoints: &[Self]) -> proc_macro2::TokenStream {
         let verb_ident = Ident::new(verb, Span::call_site());
         let entries = endpoints.iter().map(TemplateStruct::expand_template);
@@ -166,76 +173,128 @@ impl RequestWithReqBody {
     }
 }
 
-impl TemplateStruct for RequestWithReqBody {
-    fn expand_template(&self) -> proc_macro2::TokenStream {
-        let path = PathElement::path_to_lit_str(&self.request_path);
-        let path_parameters = self.path_parameters.expand_template();
-        let request = self.request.expand_template();
-        let response = self.response.expand_template();
-        let description = &self.description;
 
-        quote! {
-            #path: {
-                description: #description,
-                path_parameters: #path_parameters,
-                request: #request,
-                response: #response
-            }
-        }
+
+
+
+/// The root path, doesnt have any variance
+pub struct RootPath(Vec<syn::LitStr>);
+
+impl Parse for RootPath {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let path_str: syn::LitStr = input.parse()?;
+        let path_parts = path_str
+            .value()
+            .split('/')
+            .map(|s| LitStr::new(s, Span::call_site())).collect();
+        Ok(Self(path_parts))
     }
 }
 
-type URLEncodableStructBuilderParameters = StructBuilderParameters;
+impl TemplateStruct for RootPath {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
+        let string_out: String = self.0
+            .iter()
+            .map(|l| l.value().to_string())
+            .collect::<Vec<_>>()
+            .join("/");
+        quote! {#string_out}
+    }
+}
+
+impl RootPath {
+
+
+    pub fn to_vec(self) -> Vec<syn::LitStr> {self.0}
+}
+
+/// The vector of Parameter Elements that make up a path
+pub struct ParameterElementPath(Vec<ParameterPathElement>);
+
+impl Parse for ParameterElementPath {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let path_str: syn::LitStr = input.parse()?;
+        let path_parts: Vec<LitStr> = path_str
+            .value()
+            .split('/')
+            .map(|s| LitStr::new(s, Span::call_site())).collect();
+
+        // verify no collisions
+        // TODO check for repititions
+
+        let o: Vec<ParameterPathElement> =
+            path_parts.iter().map(|x| ParameterPathElement::from_lit_str(x)?).collect();
+
+        Ok(Self(o))
+    }
+}
+
+impl TemplateStruct for ParameterElementPath {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
+        let mut out: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
+        for element in self.0 {
+            let e = element.expand_template();
+            out.append(quote! {/#e});
+        };
+        out
+    }
+}
+
+
+
 
 /// An element of a path that may be statically defined or represent a parameter
-pub enum PathElement {
+pub enum ParameterPathElement {
     /// A set path element name
     Static(LitStr),
     /// A parameter in the path itself (`{name}` segment)
     Parameter(LitStr),
 }
 
-impl PathElement {
-    pub fn path_elements_from_lit_str(path_lit: &LitStr) -> syn::Result<Vec<PathElement>> {
-        let span = path_lit.span();
-        let value = path_lit.value();
-        if value.is_empty() {
-            return Ok(Vec::new());
-        }
-        Ok(value
-            .split('/')
-            .filter(|segment| !segment.is_empty())
-            .map(|segment| Self::from_path_segment(segment, span))
-            .collect())
+impl Parse for ParameterPathElement {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let element: syn::LitStr = input.parse()?;
+        Self::from_lit_str(&element)
     }
+}
 
-    pub fn from_path_segment(segment: &str, span: proc_macro2::Span) -> Self {
-        if segment.starts_with('{') && segment.ends_with('}') {
-            Self::Parameter(LitStr::new(segment, span))
+impl TemplateStruct for ParameterPathElement {
+    fn expand_template(&self) -> proc_macro2::TokenStream {
+        match &self {
+            ParameterPathElement::Static(e) => {quote!(e)}
+            ParameterPathElement::Parameter(e) => {
+                let o = format!("{{{}}}", e.value());
+                quote! {o}
+            }
+        }
+    }
+}
+
+impl ParameterPathElement {
+
+    pub fn from_lit_str(lit_str: &LitStr) -> syn::Result<Self> {
+        let element_str = lit_str.value();
+
+        let mut bracket_count: u8 = 0;
+        if element_str.starts_with("{") { bracket_count += 1; }
+        if element_str.ends_with("}") { bracket_count += 1; }
+
+        if bracket_count == 1u8 {
+            return Err(syn::Error::new(Span::call_site(), "Brackets needed on both ends!"))
+        }
+        if bracket_count == 0 {
+            return Ok(Self::Static(lit_str.clone()))
         } else {
-            Self::Static(LitStr::new(segment, span))
+            let mut c = element_str.chars();
+            c.next();
+            c.next_back();
+            let element_str = c.as_str();
+            let element: LitStr = LitStr::new(element_str, Span::call_site());
+            Ok(Self::Parameter(element))
         }
     }
 
-    /// Joins parsed path elements back into a single path string literal for the contract DSL.
-    pub fn path_to_lit_str(elements: &[Self]) -> LitStr {
-        let span = elements
-            .first()
-            .map(|element| match element {
-                PathElement::Static(lit) | PathElement::Parameter(lit) => lit.span(),
-            })
-            .unwrap_or(Span::call_site());
 
-        let path = elements
-            .iter()
-            .map(|element| match element {
-                PathElement::Static(lit) | PathElement::Parameter(lit) => lit.value(),
-            })
-            .collect::<Vec<_>>()
-            .join("/");
-
-        LitStr::new(&path, span)
-    }
 }
 
 
