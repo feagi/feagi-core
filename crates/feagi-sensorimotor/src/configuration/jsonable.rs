@@ -502,15 +502,16 @@ impl JSONDecoderProperties {
                 diff_z_depth,
                 percentage_neuron_positioning,
             ) => {
-                if cortical_ids.len() != 3 {
+                if cortical_ids.len() != 4 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected three cortical ids for ImageFilteringSettings!".to_string(),
+                        "Expected four cortical ids for ImageFilteringSettings!".to_string(),
                     ));
                 }
                 ImageFilteringSettingsNeuronVoxelXYZPDecoder::new_box(
                     *cortical_ids.first().unwrap(), // Brightness
                     *cortical_ids.get(1).unwrap(),  // Contrast
-                    *cortical_ids.get(2).unwrap(),  // Diff threshold
+                    *cortical_ids.get(2).unwrap(),  // Per-pixel diff
+                    *cortical_ids.get(3).unwrap(),  // Image diff
                     *brightness_z_depth,
                     *contrast_z_depth,
                     *diff_z_depth,

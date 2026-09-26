@@ -37,7 +37,7 @@ use std::sync::{Once, OnceLock};
 use tracing::debug;
 
 // Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
-use feagi_npu_neural::{apply_leak, excitability_random, update_neurons_lif_batch};
+use feagi_npu_neural::{excitability_random, update_neurons_lif_batch};
 
 // SIMD support (architecture-agnostic)
 // Note: Using LLVM auto-vectorization for now (architecture-agnostic)
@@ -334,13 +334,10 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                         continue;
                     }
 
-                    // Convert f32 from FCL to T
-                    let candidate_potential_t = T::from_f32(candidate_potential);
-
-                    // Process neuron
+                    // Keep the synaptic current in f32 until it is added to the membrane.
                     if let Some(neuron) = process_single_neuron(
                         neuron_id,
-                        candidate_potential_t,
+                        candidate_potential,
                         neuron_array,
                         burst_count,
                     ) {
@@ -537,7 +534,9 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
         // Gather: Collect data into contiguous arrays (including constraint data)
         let gather_start = profile_enabled.then(std::time::Instant::now);
         let mut batch_mp = Vec::with_capacity(batch_size);
+        let mut batch_mp_fractions = Vec::with_capacity(batch_size);
         let mut batch_thresholds = Vec::with_capacity(batch_size);
+        let mut batch_threshold_fractions = Vec::with_capacity(batch_size);
         let mut batch_threshold_limits = Vec::with_capacity(batch_size);
         let mut batch_leaks = Vec::with_capacity(batch_size);
         let mut batch_candidates = Vec::with_capacity(batch_size);
@@ -549,15 +548,16 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
         for &(neuron_id, candidate_potential) in batch {
             let idx = neuron_id.0 as usize;
             batch_mp.push(neuron_array.membrane_potentials()[idx]);
+            batch_mp_fractions.push(neuron_array.membrane_fractions()[idx]);
             batch_thresholds.push(neuron_array.thresholds()[idx]);
+            batch_threshold_fractions.push(neuron_array.threshold_fractions()[idx]);
             batch_threshold_limits.push(neuron_array.threshold_limits()[idx]);
             batch_leaks.push(neuron_array.leak_coefficients()[idx]);
-            let mut cand_t = T::from_f32(candidate_potential);
-            cand_t = fcl_candidate_respecting_mp_charge_accumulation(
-                neuron_array.mp_charge_accumulation()[idx],
-                cand_t,
-            );
-            batch_candidates.push(cand_t);
+            let mut cand = candidate_potential;
+            if neuron_array.mp_charge_accumulation()[idx] && cand < 0.0 {
+                cand = 0.0;
+            }
+            batch_candidates.push(cand);
             batch_consecutive_fire_counts.push(neuron_array.consecutive_fire_counts()[idx]);
             batch_consecutive_fire_limits.push(neuron_array.consecutive_fire_limits()[idx]);
             batch_excitabilities.push(neuron_array.excitabilities()[idx]);
@@ -573,10 +573,13 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
         // (matching LIF behavior). For downstream features (e.g., mp_driven_psp) and visualization,
         // we must preserve the *pre-reset* membrane potential at the moment of firing.
         let batch_mp_before_update = batch_mp.clone();
+        let batch_mp_fractions_before = batch_mp_fractions.clone();
         let mut fired_mask = vec![false; batch_size];
         update_neurons_lif_batch(
             &mut batch_mp,
+            &mut batch_mp_fractions,
             &batch_thresholds,
+            &batch_threshold_fractions,
             &batch_leaks,
             &batch_candidates,
             &mut fired_mask,
@@ -600,17 +603,18 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             // `update_neurons_lif_batch` resets MP to 0 for firing candidates, so we must
             // evaluate constraints using pre-reset MP to preserve scalar-path semantics.
             let threshold_limit = batch_threshold_limits[i];
-            let mp_before_reset = batch_mp_before_update[i].saturating_add(batch_candidates[i]);
-            // SIMD-friendly: uniform comparison (no branching for "no limit" case)
-            // If threshold_limit == T::MAX, MP will always be < MAX (unless MP is also MAX, which is unlikely)
-            if mp_before_reset.ge(threshold_limit)
-                && mp_before_reset.to_f32() != threshold_limit.to_f32()
-            {
+            let charge_before_reset = batch_mp_before_update[i].to_f32()
+                + batch_mp_fractions_before[i]
+                + batch_candidates[i];
+            // threshold_limit == T::MAX means no upper bound.
+            let limit_open = threshold_limit.to_f32() == T::max_value().to_f32();
+            if !limit_open && charge_before_reset > threshold_limit.to_f32() {
                 fired_mask[i] = false; // Blocked by threshold_limit
                                        // Match scalar path: blocked firings become no-fire path and leak is applied.
-                let mut mp_after_leak = mp_before_reset;
-                apply_leak(&mut mp_after_leak, batch_leaks[i]);
-                batch_mp[i] = mp_after_leak;
+                let (level, fraction) =
+                    T::split_charge(charge_before_reset * (1.0 - batch_leaks[i]));
+                batch_mp[i] = level;
+                batch_mp_fractions[i] = fraction;
                 continue;
             }
 
@@ -629,9 +633,10 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             if consecutive_fire_count >= consecutive_fire_limit {
                 fired_mask[i] = false; // Blocked by consecutive_fire_limit
                                        // Match scalar path: blocked firings become no-fire path and leak is applied.
-                let mut mp_after_leak = mp_before_reset;
-                apply_leak(&mut mp_after_leak, batch_leaks[i]);
-                batch_mp[i] = mp_after_leak;
+                let (level, fraction) =
+                    T::split_charge(charge_before_reset * (1.0 - batch_leaks[i]));
+                batch_mp[i] = level;
+                batch_mp_fractions[i] = fraction;
                 continue;
             }
 
@@ -641,9 +646,10 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
                 if excitability <= 0.0 {
                     fired_mask[i] = false; // Never fire
                                            // Match scalar path: blocked firings become no-fire path and leak is applied.
-                    let mut mp_after_leak = mp_before_reset;
-                    apply_leak(&mut mp_after_leak, batch_leaks[i]);
-                    batch_mp[i] = mp_after_leak;
+                    let (level, fraction) =
+                        T::split_charge(charge_before_reset * (1.0 - batch_leaks[i]));
+                    batch_mp[i] = level;
+                    batch_mp_fractions[i] = fraction;
                     continue;
                 }
                 // Probabilistic: use deterministic random (needs neuron_id, so sequential)
@@ -651,9 +657,10 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
                 if random_val >= excitability {
                     fired_mask[i] = false; // Blocked by excitability
                                            // Match scalar path: blocked firings become no-fire path and leak is applied.
-                    let mut mp_after_leak = mp_before_reset;
-                    apply_leak(&mut mp_after_leak, batch_leaks[i]);
-                    batch_mp[i] = mp_after_leak;
+                    let (level, fraction) =
+                        T::split_charge(charge_before_reset * (1.0 - batch_leaks[i]));
+                    batch_mp[i] = level;
+                    batch_mp_fractions[i] = fraction;
                     continue;
                 }
             }
@@ -667,6 +674,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
         for (i, (neuron_id, idx)) in batch_indices.iter().enumerate() {
             // Update membrane potential
             neuron_array.membrane_potentials_mut()[*idx] = batch_mp[i];
+            neuron_array.membrane_fractions_mut()[*idx] = batch_mp_fractions[i];
 
             if fired_mask[i] {
                 // Neuron fired - handle firing logic
@@ -690,11 +698,13 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
 
                 // Capture firing-time membrane potential BEFORE reset.
                 // LIF semantics: MP_fire = MP_old + candidate (no leak when firing).
-                let mp_at_fire = batch_mp_before_update[i].saturating_add(batch_candidates[i]);
+                let mp_at_fire = batch_mp_before_update[i].to_f32()
+                    + batch_mp_fractions_before[i]
+                    + batch_candidates[i];
 
                 results.push(FiringNeuron {
                     neuron_id: *neuron_id,
-                    membrane_potential: mp_at_fire.to_f32(),
+                    membrane_potential: mp_at_fire,
                     cortical_idx,
                     x,
                     y,
@@ -718,9 +728,8 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
     // Process sequential-only candidates (refractory, complex constraints)
     let sequential_start = profile_enabled.then(std::time::Instant::now);
     for (neuron_id, candidate_potential) in sequential_only {
-        let candidate_potential_t = T::from_f32(candidate_potential);
         if let Some(neuron) =
-            process_single_neuron(neuron_id, candidate_potential_t, neuron_array, burst_count)
+            process_single_neuron(neuron_id, candidate_potential, neuron_array, burst_count)
         {
             results.push(neuron);
         }
@@ -754,28 +763,13 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
     (results, refractory)
 }
 
-/// When MP charge accumulation is enabled, only non-negative (excitatory) FCL input
-/// contributes to the membrane update. Inhibitory (negative) candidates are not applied,
-/// so accumulated MP is not driven negative across bursts by inhibition.
-#[inline(always)]
-fn fcl_candidate_respecting_mp_charge_accumulation<T: NeuralValue>(
-    mp_charge_accumulation: bool,
-    candidate: T,
-) -> T {
-    if mp_charge_accumulation && candidate.to_f32() < 0.0 {
-        T::zero()
-    } else {
-        candidate
-    }
-}
-
 /// Process a single neuron's dynamics
 ///
 /// Returns Some(FiringNeuron) if the neuron fires, None otherwise
 #[inline(always)]
 fn process_single_neuron<T: NeuralValue>(
     neuron_id: NeuronId,
-    candidate_potential: T,
+    candidate_potential: f32,
     neuron_array: &mut impl NeuronStorage<Value = T>,
     burst_count: u64,
 ) -> Option<FiringNeuron> {
@@ -790,8 +784,11 @@ fn process_single_neuron<T: NeuralValue>(
     let cortical_idx = neuron_array.cortical_areas()[idx];
     let allow_trace = dynamics_trace_emit(neuron_id.0, cortical_idx);
     let mp_acc = neuron_array.mp_charge_accumulation()[idx];
-    let candidate_potential =
-        fcl_candidate_respecting_mp_charge_accumulation(mp_acc, candidate_potential);
+    let candidate_potential = if mp_acc && candidate_potential < 0.0 {
+        0.0
+    } else {
+        candidate_potential
+    };
 
     // CRITICAL DEBUG: Log entry for neuron 16438 (disabled to reduce spam)
     // if neuron_id.0 == 16438 {
@@ -831,23 +828,27 @@ fn process_single_neuron<T: NeuralValue>(
         return None;
     }
 
-    // 2. Add candidate potential (matches Python: add BEFORE checking threshold)
+    // 2. Add candidate potential (matches Python: add BEFORE checking threshold).
+    // The fraction keeps a sub-byte PSP and an inhibitory current that a byte cannot hold.
     let old_potential = neuron_array.membrane_potentials()[idx];
-    let current_potential = old_potential.saturating_add(candidate_potential);
+    let old_fraction = neuron_array.membrane_fractions()[idx];
+    let (current_potential, current_fraction) =
+        old_potential.integrate_charge(old_fraction, candidate_potential);
     neuron_array.membrane_potentials_mut()[idx] = current_potential;
+    neuron_array.membrane_fractions_mut()[idx] = current_fraction;
+    let charge = current_potential.to_f32() + current_fraction;
 
     // 3. Check threshold (matches Python: "Check firing conditions BEFORE decay")
     let threshold = neuron_array.thresholds()[idx];
+    let threshold_fraction = neuron_array.threshold_fractions()[idx];
     let threshold_limit = neuron_array.threshold_limits()[idx];
+    let threshold_charge = threshold.to_f32() + threshold_fraction;
 
-    // Firing window: threshold <= MP <= threshold_limit
-    // SIMD-friendly encoding: threshold_limit == T::MAX means no upper bound
-    // Note: using ge() and not lt() to implement <= (since le() doesn't exist in trait)
-    let above_min = current_potential.ge(threshold);
-    // SIMD-friendly: uniform comparison (no branching for "no limit" case)
-    // If threshold_limit == T::MAX, MP will always be < MAX (unless MP is also MAX, which is unlikely)
-    let below_max = !current_potential.ge(threshold_limit)
-        || current_potential.to_f32() == threshold_limit.to_f32();
+    // Firing window: threshold <= MP <= threshold_limit.
+    // threshold_limit == T::MAX means no upper bound.
+    let above_min = charge >= threshold_charge;
+    let limit_open = threshold_limit.to_f32() == T::max_value().to_f32();
+    let below_max = limit_open || charge <= threshold_limit.to_f32();
 
     if above_min && below_max {
         if allow_trace {
@@ -858,10 +859,10 @@ fn process_single_neuron<T: NeuralValue>(
                 neuron_id.0,
                 cortical_idx,
                 mp_acc,
-                old_potential.to_f32(),
-                candidate_potential.to_f32(),
-                current_potential.to_f32(),
-                threshold.to_f32(),
+                old_potential.to_f32() + old_fraction,
+                candidate_potential,
+                charge,
+                threshold_charge,
                 threshold_limit.to_f32(),
                 neuron_array.leak_coefficients()[idx],
                 neuron_array.excitabilities()[idx]
@@ -921,16 +922,17 @@ fn process_single_neuron<T: NeuralValue>(
                     neuron_id.0,
                     cortical_idx,
                     mp_acc,
-                    current_potential.to_f32(),
-                    threshold.to_f32(),
+                    charge,
+                    threshold_charge,
                     neuron_array.refractory_periods()[idx],
                     neuron_array.consecutive_fire_counts()[idx],
                     neuron_array.consecutive_fire_limits()[idx],
                     neuron_array.snooze_periods()[idx]
                 );
             }
-            // Reset membrane potential
+            // Reset membrane potential and the fractional leftover.
             neuron_array.membrane_potentials_mut()[idx] = T::zero();
+            neuron_array.membrane_fractions_mut()[idx] = 0.0;
 
             // Increment consecutive fire count (saturating to prevent overflow)
             let old_count = neuron_array.consecutive_fire_counts()[idx];
@@ -985,7 +987,7 @@ fn process_single_neuron<T: NeuralValue>(
 
             return Some(FiringNeuron {
                 neuron_id,
-                membrane_potential: current_potential.to_f32(),
+                membrane_potential: charge,
                 cortical_idx: neuron_array.cortical_areas()[idx], // Use cortical_idx directly - no conversion needed
                 x,
                 y,
@@ -1004,12 +1006,12 @@ fn process_single_neuron<T: NeuralValue>(
         neuron_array.consecutive_fire_counts_mut()[idx] = 0;
     }
 
-    // Apply LIF leak (using platform-agnostic function from feagi-neural)
+    // Apply LIF leak to the full charge, then store the byte and the leftover.
     let leak_coefficient = neuron_array.leak_coefficients()[idx];
-    apply_leak(
-        &mut neuron_array.membrane_potentials_mut()[idx],
-        leak_coefficient,
-    );
+    let leaked = charge * (1.0 - leak_coefficient);
+    let (leaked_level, leaked_fraction) = T::split_charge(leaked);
+    neuron_array.membrane_potentials_mut()[idx] = leaked_level;
+    neuron_array.membrane_fractions_mut()[idx] = leaked_fraction;
 
     if allow_trace {
         debug!(
@@ -1019,11 +1021,12 @@ fn process_single_neuron<T: NeuralValue>(
             neuron_id.0,
             cortical_idx,
             mp_acc,
-            old_potential.to_f32(),
-            candidate_potential.to_f32(),
-            current_potential.to_f32(),
-            neuron_array.membrane_potentials()[idx].to_f32(),
-            threshold.to_f32(),
+            old_potential.to_f32() + old_fraction,
+            candidate_potential,
+            charge,
+            neuron_array.membrane_potentials()[idx].to_f32()
+                + neuron_array.membrane_fractions()[idx],
+            threshold_charge,
             leak_coefficient
         );
     }

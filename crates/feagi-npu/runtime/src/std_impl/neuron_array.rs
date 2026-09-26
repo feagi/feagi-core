@@ -30,8 +30,14 @@ pub struct NeuronArray<T: NeuralValue> {
     /// Membrane potentials (quantized to T)
     pub membrane_potentials: Vec<T>,
 
+    /// Leftover membrane charge below one stored level, in `[0, 1)`.
+    pub membrane_fractions: Vec<f32>,
+
     /// Firing thresholds (quantized to T) - minimum MP to fire
     pub thresholds: Vec<T>,
+
+    /// Leftover threshold below one stored level, in `[0, 1)`.
+    pub threshold_fractions: Vec<f32>,
 
     /// Firing threshold limits (quantized to T) - maximum MP to fire (0 = no limit)
     pub threshold_limits: Vec<T>,
@@ -100,7 +106,9 @@ impl<T: NeuralValue> NeuronArray<T> {
         let mut result = Self {
             count: 0,
             membrane_potentials: Vec::with_capacity(capacity),
+            membrane_fractions: Vec::with_capacity(capacity),
             thresholds: Vec::with_capacity(capacity),
+            threshold_fractions: Vec::with_capacity(capacity),
             threshold_limits: Vec::with_capacity(capacity),
             leak_coefficients: Vec::with_capacity(capacity),
             resting_potentials: Vec::with_capacity(capacity),
@@ -120,7 +128,9 @@ impl<T: NeuralValue> NeuronArray<T> {
         };
         // Resize to capacity with default values
         result.membrane_potentials.resize(capacity, T::zero());
+        result.membrane_fractions.resize(capacity, 0.0);
         result.thresholds.resize(capacity, T::from_f32(1.0));
+        result.threshold_fractions.resize(capacity, 0.0);
         result.threshold_limits.resize(capacity, T::max_value()); // MAX = no limit (SIMD-friendly encoding)
         result.leak_coefficients.resize(capacity, 0.1);
         result.resting_potentials.resize(capacity, T::zero());
@@ -184,32 +194,35 @@ impl<T: NeuralValue> NeuronArray<T> {
             .into_par_iter()
             .map(|idx| {
                 if !self.valid_mask[idx] {
-                    return (idx, false, T::zero());
+                    return (idx, false, T::zero(), 0.0);
                 }
 
                 let in_refractory = self.refractory_countdowns[idx] > 0;
                 if in_refractory {
-                    return (idx, false, T::zero());
+                    return (idx, false, T::zero(), 0.0);
                 }
 
                 // Simulate neuron update (read-only)
                 let mut potential = self.membrane_potentials[idx];
+                let mut fraction = self.membrane_fractions[idx];
                 let input = candidate_potentials.get(idx).copied().unwrap_or(T::zero());
                 let fired = update_neuron_lif(
                     &mut potential,
+                    &mut fraction,
                     self.thresholds[idx],
+                    self.threshold_fractions[idx],
                     self.leak_coefficients[idx],
                     T::zero(),
-                    input,
+                    input.to_f32(),
                 );
 
-                (idx, fired, potential)
+                (idx, fired, potential, fraction)
             })
             .collect();
 
         // Phase 2: Apply mutations sequentially
         let mut fired_indices = Vec::new();
-        for (idx, fired, new_potential) in results {
+        for (idx, fired, new_potential, new_fraction) in results {
             // Apply refractory countdown
             if self.refractory_countdowns[idx] > 0 {
                 self.refractory_countdowns[idx] -= 1;
@@ -218,6 +231,7 @@ impl<T: NeuralValue> NeuronArray<T> {
 
             // Apply potential update
             self.membrane_potentials[idx] = new_potential;
+            self.membrane_fractions[idx] = new_fraction;
 
             if fired {
                 self.refractory_countdowns[idx] = self.refractory_periods[idx];
@@ -248,10 +262,12 @@ impl<T: NeuralValue> NeuronArray<T> {
             let input = candidate_potentials.get(idx).copied().unwrap_or(T::zero());
             let fired = update_neuron_lif(
                 &mut self.membrane_potentials[idx],
+                &mut self.membrane_fractions[idx],
                 self.thresholds[idx],
+                self.threshold_fractions[idx],
                 self.leak_coefficients[idx],
                 T::zero(),
-                input,
+                input.to_f32(),
             );
 
             if fired {
@@ -302,8 +318,16 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         &self.membrane_potentials[..self.count]
     }
 
+    fn membrane_fractions(&self) -> &[f32] {
+        &self.membrane_fractions[..self.count]
+    }
+
     fn thresholds(&self) -> &[Self::Value] {
         &self.thresholds[..self.count]
+    }
+
+    fn threshold_fractions(&self) -> &[f32] {
+        &self.threshold_fractions[..self.count]
     }
 
     fn threshold_limits(&self) -> &[Self::Value] {
@@ -366,6 +390,16 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     fn membrane_potentials_mut(&mut self) -> &mut [Self::Value] {
         let count = self.count;
         &mut self.membrane_potentials[..count]
+    }
+
+    fn membrane_fractions_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.membrane_fractions[..count]
+    }
+
+    fn threshold_fractions_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.threshold_fractions[..count]
     }
 
     fn thresholds_mut(&mut self) -> &mut [Self::Value] {
@@ -478,7 +512,9 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         // Grow if needed
         if idx >= self.membrane_potentials.len() {
             self.membrane_potentials.push(T::zero());
+            self.membrane_fractions.push(0.0);
             self.thresholds.push(threshold);
+            self.threshold_fractions.push(0.0);
             self.threshold_limits.push(threshold_limit);
             self.leak_coefficients.push(leak);
             self.resting_potentials.push(resting);
@@ -496,7 +532,9 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             self.coordinates.push(z);
             self.valid_mask.push(true);
         } else {
+            self.membrane_fractions[idx] = 0.0;
             self.thresholds[idx] = threshold;
+            self.threshold_fractions[idx] = 0.0;
             self.threshold_limits[idx] = threshold_limit;
             self.leak_coefficients[idx] = leak;
             self.resting_potentials[idx] = resting;

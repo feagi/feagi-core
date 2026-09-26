@@ -59,7 +59,9 @@ pub mod types;
 pub mod validator;
 
 // Re-export commonly used types
-pub use amalgamation_remap::remap_guest_custom_memory_cortical_ids_for_amalgamation;
+pub use amalgamation_remap::{
+    designated_io_lists_for_cloned_circuit, remap_guest_custom_memory_cortical_ids_for_amalgamation,
+};
 pub use converter_flat::convert_flat_to_hierarchical;
 pub use converter_flat_full::convert_flat_to_hierarchical_full;
 pub use converter_hierarchical_to_flat::convert_hierarchical_to_flat;

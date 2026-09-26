@@ -43,8 +43,14 @@ pub struct NeuronArray<T: NeuralValue, const N: usize> {
     /// Membrane potentials (quantized to T)
     pub membrane_potentials: [T; N],
 
+    /// Leftover membrane charge below one stored level, in `[0, 1)`.
+    pub membrane_fractions: [f32; N],
+
     /// Firing thresholds (quantized to T) - minimum MP to fire
     pub thresholds: [T; N],
+
+    /// Leftover threshold below one stored level, in `[0, 1)`.
+    pub threshold_fractions: [f32; N],
 
     /// Firing threshold limits (quantized to T) - maximum MP to fire (0 = no limit)
     pub threshold_limits: [T; N],
@@ -98,7 +104,9 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
         Self {
             count: 0,
             membrane_potentials: [T::zero(); N],
+            membrane_fractions: [0.0; N],
             thresholds: [T::from_f32(1.0); N],
+            threshold_fractions: [0.0; N],
             threshold_limits: [T::max_value(); N], // MAX = no limit (SIMD-friendly encoding)
             leak_coefficients: [0.1; N],
             resting_potentials: [T::zero(); N],
@@ -193,10 +201,12 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
             let input = candidate_potentials[idx];
             let fired = update_neuron_lif(
                 &mut self.membrane_potentials[idx],
+                &mut self.membrane_fractions[idx],
                 self.thresholds[idx],
+                self.threshold_fractions[idx],
                 self.leak_coefficients[idx],
                 T::zero(), // resting_potential
-                input,
+                input.to_f32(),
             );
 
             if fired {
@@ -224,8 +234,16 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         &self.membrane_potentials[..self.count]
     }
 
+    fn membrane_fractions(&self) -> &[f32] {
+        &self.membrane_fractions[..self.count]
+    }
+
     fn thresholds(&self) -> &[Self::Value] {
         &self.thresholds[..self.count]
+    }
+
+    fn threshold_fractions(&self) -> &[f32] {
+        &self.threshold_fractions[..self.count]
     }
 
     fn threshold_limits(&self) -> &[Self::Value] {
@@ -289,9 +307,19 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         &mut self.membrane_potentials[..count]
     }
 
+    fn membrane_fractions_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.membrane_fractions[..count]
+    }
+
     fn thresholds_mut(&mut self) -> &mut [Self::Value] {
         let count = self.count;
         &mut self.thresholds[..count]
+    }
+
+    fn threshold_fractions_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.threshold_fractions[..count]
     }
 
     fn threshold_limits_mut(&mut self) -> &mut [Self::Value] {
@@ -387,7 +415,9 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         }
 
         let idx = self.count;
+        self.membrane_fractions[idx] = 0.0;
         self.thresholds[idx] = threshold;
+        self.threshold_fractions[idx] = 0.0;
         self.threshold_limits[idx] = threshold_limit;
         self.leak_coefficients[idx] = leak;
         self.resting_potentials[idx] = resting;

@@ -143,22 +143,26 @@ where
                 y,
                 z,
             ),
-            DynamicNPUGeneric::INT8(npu) => npu.add_neuron(
-                INT8Value::from_f32(threshold),
-                INT8Value::from_f32(threshold_limit),
-                leak_coefficient,
-                INT8Value::from_f32(resting_potential),
-                neuron_type,
-                refractory_period,
-                excitability,
-                consecutive_fire_limit,
-                snooze_period,
-                mp_charge_accumulation,
-                cortical_area,
-                x,
-                y,
-                z,
-            ),
+            DynamicNPUGeneric::INT8(npu) => {
+                let neuron_id = npu.add_neuron(
+                    INT8Value::split_charge(threshold).0,
+                    INT8Value::from_f32(threshold_limit),
+                    leak_coefficient,
+                    INT8Value::from_f32(resting_potential),
+                    neuron_type,
+                    refractory_period,
+                    excitability,
+                    consecutive_fire_limit,
+                    snooze_period,
+                    mp_charge_accumulation,
+                    cortical_area,
+                    x,
+                    y,
+                    z,
+                )?;
+                npu.write_threshold_charges(neuron_id.0 as usize, &[threshold]);
+                Ok(neuron_id)
+            }
         }
     }
 
@@ -181,25 +185,37 @@ where
         z_coords: Vec<u32>,
     ) -> (u32, Vec<usize>) {
         match self {
-            DynamicNPUGeneric::F32(npu) => npu.add_neurons_batch(
-                thresholds,
-                threshold_limits,
-                leak_coefficients,
-                resting_potentials,
-                neuron_types,
-                refractory_periods,
-                excitabilities,
-                consecutive_fire_limits,
-                snooze_periods,
-                mp_charge_accumulations,
-                cortical_areas,
-                x_coords,
-                y_coords,
-                z_coords,
-            ),
+            DynamicNPUGeneric::F32(npu) => {
+                let exact_thresholds = thresholds.clone();
+                let start_idx = npu.neuron_storage.read().unwrap().count();
+                let created = npu.add_neurons_batch(
+                    thresholds,
+                    threshold_limits,
+                    leak_coefficients,
+                    resting_potentials,
+                    neuron_types,
+                    refractory_periods,
+                    excitabilities,
+                    consecutive_fire_limits,
+                    snooze_periods,
+                    mp_charge_accumulations,
+                    cortical_areas,
+                    x_coords,
+                    y_coords,
+                    z_coords,
+                );
+                if created.1.is_empty() {
+                    npu.write_threshold_charges(start_idx, &exact_thresholds);
+                }
+                created
+            }
             DynamicNPUGeneric::INT8(npu) => {
-                let thresholds_int8: Vec<INT8Value> =
-                    thresholds.into_iter().map(INT8Value::from_f32).collect();
+                let exact_thresholds = thresholds.clone();
+                let start_idx = npu.neuron_storage.read().unwrap().count();
+                let thresholds_int8: Vec<INT8Value> = thresholds
+                    .into_iter()
+                    .map(|value| INT8Value::split_charge(value).0)
+                    .collect();
                 let threshold_limits_int8: Vec<INT8Value> = threshold_limits
                     .into_iter()
                     .map(INT8Value::from_f32)
@@ -208,7 +224,7 @@ where
                     .into_iter()
                     .map(INT8Value::from_f32)
                     .collect();
-                npu.add_neurons_batch(
+                let created = npu.add_neurons_batch(
                     thresholds_int8,
                     threshold_limits_int8,
                     leak_coefficients,
@@ -223,7 +239,11 @@ where
                     x_coords,
                     y_coords,
                     z_coords,
-                )
+                );
+                if created.1.is_empty() {
+                    npu.write_threshold_charges(start_idx, &exact_thresholds);
+                }
+                created
             }
         }
     }
@@ -595,9 +615,9 @@ where
 
     pub fn update_neuron_threshold(&mut self, neuron_id: u32, threshold: f32) -> bool {
         match self {
-            DynamicNPUGeneric::F32(npu) => npu.update_neuron_threshold(neuron_id, threshold),
+            DynamicNPUGeneric::F32(npu) => npu.update_neuron_threshold_charge(neuron_id, threshold),
             DynamicNPUGeneric::INT8(npu) => {
-                npu.update_neuron_threshold(neuron_id, INT8Value::from_f32(threshold))
+                npu.update_neuron_threshold_charge(neuron_id, threshold)
             }
         }
     }

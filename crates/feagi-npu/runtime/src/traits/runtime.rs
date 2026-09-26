@@ -105,8 +105,16 @@ pub trait NeuronStorage: Send + Sync {
     /// Membrane potentials slice
     fn membrane_potentials(&self) -> &[Self::Value];
 
+    /// Fractional charge in `[0, 1)` kept beside each membrane byte.
+    ///
+    /// `f32` storage keeps this at 0 because the level already holds the full value.
+    fn membrane_fractions(&self) -> &[f32];
+
     /// Firing thresholds slice (minimum MP to fire)
     fn thresholds(&self) -> &[Self::Value];
+
+    /// Fractional part of each firing threshold, in `[0, 1)`.
+    fn threshold_fractions(&self) -> &[f32];
 
     /// Firing threshold limits slice (maximum MP to fire, 0 = no limit)
     fn threshold_limits(&self) -> &[Self::Value];
@@ -155,8 +163,14 @@ pub trait NeuronStorage: Send + Sync {
     /// Mutable membrane potentials slice
     fn membrane_potentials_mut(&mut self) -> &mut [Self::Value];
 
+    /// Mutable membrane fractions slice
+    fn membrane_fractions_mut(&mut self) -> &mut [f32];
+
     /// Mutable firing thresholds slice
     fn thresholds_mut(&mut self) -> &mut [Self::Value];
+
+    /// Mutable threshold fractions slice
+    fn threshold_fractions_mut(&mut self) -> &mut [f32];
 
     /// Mutable firing threshold limits slice
     fn threshold_limits_mut(&mut self) -> &mut [Self::Value];

@@ -37,6 +37,7 @@ pub struct ImageFilteringSettingsNeuronVoxelXYZPDecoder {
     brightness_cortical_id: CorticalID,
     contrast_cortical_id: CorticalID,
     diff_cortical_id: CorticalID,
+    image_diff_cortical_id: CorticalID,
     z_depth_brightness_scratch_space: Vec<Vec<u32>>,
     z_depth_contrast_scratch_space: Vec<Vec<u32>>,
     z_depth_diff_scratch_space: Vec<Vec<u32>>,
@@ -50,10 +51,11 @@ impl ImageFilteringSettingsNeuronVoxelXYZPDecoder {
     ///
     /// * `brightness_cortical_id` - Cortical ID for brightness channel
     /// * `contrast_cortical_id` - Cortical ID for contrast channel
-    /// * `diff_cortical_id` - Cortical ID for diff threshold channels (2 values: lower, upper)
+    /// * `diff_cortical_id` - Cortical ID for the per-pixel diff area (lower, upper)
+    /// * `image_diff_cortical_id` - Cortical ID for the whole-image diff area (lower, upper)
     /// * `brightness_z_depth` - Z depth for brightness neurons
     /// * `contrast_z_depth` - Z depth for contrast neurons
-    /// * `diff_z_depth` - Z depth for diff threshold neurons
+    /// * `diff_z_depth` - Z depth shared by both diff areas
     /// * `number_channels` - Number of channels
     /// * `interpolation` - Percentage neuron positioning mode
     #[allow(dead_code)]
@@ -62,6 +64,7 @@ impl ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         brightness_cortical_id: CorticalID,
         contrast_cortical_id: CorticalID,
         diff_cortical_id: CorticalID,
+        image_diff_cortical_id: CorticalID,
         brightness_z_depth: NeuronDepth,
         contrast_z_depth: NeuronDepth,
         diff_z_depth: NeuronDepth,
@@ -92,6 +95,7 @@ impl ImageFilteringSettingsNeuronVoxelXYZPDecoder {
             brightness_cortical_id,
             contrast_cortical_id,
             diff_cortical_id,
+            image_diff_cortical_id,
             interpolation,
             z_depth_brightness_scratch_space: vec![
                 Vec::new();
@@ -143,7 +147,7 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         let brightness_neuron_array = neurons_to_read.get_neurons_of(&self.brightness_cortical_id);
         let contrast_neuron_array = neurons_to_read.get_neurons_of(&self.contrast_cortical_id);
         let diff_neuron_array = neurons_to_read.get_neurons_of(&self.diff_cortical_id);
-        let diff_image_neuron_array = neurons_to_read.get_neurons_of(&self.diff_cortical_id);
+        let diff_image_neuron_array = neurons_to_read.get_neurons_of(&self.image_diff_cortical_id);
 
         // Check if we have any data to process
         if brightness_neuron_array.is_none()
@@ -172,6 +176,7 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         let brightness_z_depth: u32 = self.channel_brightness_dimensions.depth;
         let contrast_z_depth: u32 = self.channel_contrast_dimensions.depth;
         let diff_z_depth: u32 = self.channel_diff_dimensions.depth;
+        let image_diff_z_depth: u32 = self.channel_diff_image_dimensions.depth;
 
         // Collect brightness neuron data
         if let Some(brightness_neurons) = brightness_neuron_array {
@@ -245,13 +250,13 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
                 }
 
                 if neuron.neuron_voxel_coordinate.x >= (number_of_channels * DIFF_CHANNEL_WIDTH)
-                    || neuron.neuron_voxel_coordinate.z >= diff_z_depth
+                    || neuron.neuron_voxel_coordinate.z >= image_diff_z_depth
                 {
                     continue;
                 }
 
                 let z_row_vector = self
-                    .z_depth_diff_scratch_space
+                    .z_depth_image_diff_scratch_space
                     .get_mut(neuron.neuron_voxel_coordinate.x as usize)
                     .unwrap();
                 z_row_vector.push(neuron.neuron_voxel_coordinate.z);

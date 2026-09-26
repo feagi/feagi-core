@@ -155,6 +155,55 @@ pub fn remap_guest_custom_memory_cortical_ids_for_amalgamation(
     Ok(b64_remap)
 }
 
+fn json_string_list(value: Option<&Value>) -> Vec<String> {
+    value
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Declared region IO on the circuit that region-export wrapped under `Root Brain Region`.
+///
+/// Amalgamation hosts that circuit in a new region. These lists are already remapped to the
+/// guest cortical IDs and must be copied onto that new region or the clone drops input/output roles.
+pub fn designated_io_lists_for_cloned_circuit(
+    genome: &RuntimeGenome,
+) -> (Vec<String>, Vec<String>) {
+    use feagi_structures::genomic::brain_regions::ROOT_BRAIN_REGION_NAME;
+
+    let root_ids: HashSet<String> = genome
+        .brain_regions
+        .iter()
+        .filter(|(_, region)| region.name == ROOT_BRAIN_REGION_NAME)
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    let circuit = genome.brain_regions.values().find(|region| {
+        let parent = region
+            .properties
+            .get("parent_region_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if !root_ids.is_empty() {
+            root_ids.contains(parent)
+        } else {
+            parent.is_empty() && region.name != ROOT_BRAIN_REGION_NAME
+        }
+    });
+
+    let Some(region) = circuit else {
+        return (Vec::new(), Vec::new());
+    };
+    (
+        json_string_list(region.properties.get("designated_inputs")),
+        json_string_list(region.properties.get("designated_outputs")),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -239,5 +288,92 @@ mod tests {
                 .contains_key(&CorticalID::try_from_base_64(&sample_custom).unwrap()),
             "old custom id should not remain as a key when remapped"
         );
+    }
+
+    #[test]
+    fn cloned_circuit_designated_io_follows_remapped_area_ids() {
+        use feagi_structures::genomic::brain_regions::{
+            BrainRegion, RegionID, RegionType, ROOT_BRAIN_REGION_NAME,
+        };
+
+        let old_id = sample_custom_cortical_id();
+        let old_b64 = old_id.as_base_64();
+        let area = CorticalArea::new(
+            old_id,
+            0,
+            "io-area".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).expect("dims"),
+            GenomeCoordinate3D::new(0, 0, 0),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .expect("area");
+
+        let root_id = RegionID::new();
+        let circuit_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let circuit_key = circuit_id.to_string();
+        let root = BrainRegion::new(
+            root_id,
+            ROOT_BRAIN_REGION_NAME.to_string(),
+            RegionType::Undefined,
+        )
+        .expect("root");
+        let mut circuit_props = HashMap::new();
+        circuit_props.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(root_key.clone()),
+        );
+        circuit_props.insert(
+            "designated_inputs".to_string(),
+            serde_json::json!([old_b64.clone()]),
+        );
+        circuit_props.insert("designated_outputs".to_string(), serde_json::json!([]));
+        let circuit = BrainRegion::new(circuit_id, "Circuit".to_string(), RegionType::Undefined)
+            .expect("circuit")
+            .with_areas([old_id])
+            .with_properties(circuit_props);
+
+        let mut brain_regions = HashMap::new();
+        brain_regions.insert(root_key, root);
+        brain_regions.insert(circuit_key, circuit);
+        let mut cortical_areas = HashMap::new();
+        cortical_areas.insert(old_id, area);
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "t".to_string(),
+                genome_title: "t".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas,
+            brain_regions,
+            classifiers: HashMap::new(),
+            morphologies: MorphologyRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: String::new(),
+                blueprint: String::new(),
+                physiology: String::new(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+        };
+
+        let (inputs_before, _) = designated_io_lists_for_cloned_circuit(&genome);
+        assert_eq!(inputs_before, vec![old_b64.clone()]);
+
+        let mut host = HashSet::new();
+        host.insert(old_b64.clone());
+        let pairs = remap_guest_custom_memory_cortical_ids_for_amalgamation(&mut genome, &host)
+            .expect("remap");
+        let new_b64 = pairs.get(&old_b64).expect("remapped id");
+
+        let (inputs_after, outputs_after) = designated_io_lists_for_cloned_circuit(&genome);
+        assert_eq!(inputs_after, vec![new_b64.clone()]);
+        assert!(outputs_after.is_empty());
+        assert_ne!(inputs_after[0], old_b64);
     }
 }

@@ -1188,6 +1188,7 @@ impl<
         // Base threshold at (0,0,0), incremented by position dot product with increment vector
         // threshold(x,y,z) = base + x*increment_x + y*increment_y + z*increment_z
         let mut thresholds = Vec::with_capacity(total_neurons);
+        let mut exact_thresholds = Vec::with_capacity(total_neurons);
         let mut threshold_limits = Vec::with_capacity(total_neurons);
 
         // Pre-compute if we have spatial gradients
@@ -1211,6 +1212,7 @@ impl<
 
                         // Apply to all neurons in this voxel
                         for _ in 0..neurons_per_voxel {
+                            exact_thresholds.push(threshold_at_pos);
                             thresholds.push(T::from_f32(threshold_at_pos));
                             // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
                             let threshold_limit = if default_threshold_limit == 0.0 {
@@ -1225,6 +1227,7 @@ impl<
             }
         } else {
             // Uniform thresholds (no spatial gradient) - faster path
+            exact_thresholds.resize(total_neurons, default_threshold);
             thresholds.resize(total_neurons, T::from_f32(default_threshold));
             // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
             let threshold_limit = if default_threshold_limit == 0.0 {
@@ -1274,6 +1277,7 @@ impl<
         let alloc_time = alloc_start.elapsed();
 
         let batch_start = Instant::now();
+        let start_idx = self.neuron_storage.read().unwrap().count();
         // Call existing batch creation (already optimized with SIMD)
         let (success_count, failed) = self.add_neurons_batch(
             thresholds,
@@ -1291,6 +1295,9 @@ impl<
             y_coords,
             z_coords,
         );
+        if failed.is_empty() {
+            self.write_threshold_charges(start_idx, &exact_thresholds);
+        }
 
         let batch_time = batch_start.elapsed();
         let total_time = fn_start.elapsed();
@@ -2827,7 +2834,10 @@ impl<
             return None;
         }
         match property {
-            "threshold" => neuron_storage.thresholds().get(idx).map(|&v| v.to_f32()),
+            "threshold" => neuron_storage
+                .thresholds()
+                .get(idx)
+                .map(|&v| v.to_f32() + neuron_storage.threshold_fractions()[idx]),
             "threshold_limit" => neuron_storage
                 .threshold_limits()
                 .get(idx)
@@ -2836,7 +2846,7 @@ impl<
             "membrane_potential" => neuron_storage
                 .membrane_potentials()
                 .get(idx)
-                .map(|&v| v.to_f32()),
+                .map(|&v| v.to_f32() + neuron_storage.membrane_fractions()[idx]),
             "resting_potential" => neuron_storage
                 .resting_potentials()
                 .get(idx)
@@ -3303,12 +3313,14 @@ impl<
             membrane_potentials: neuron_storage
                 .membrane_potentials()
                 .iter()
-                .map(|&v| v.to_f32())
+                .enumerate()
+                .map(|(i, &v)| v.to_f32() + neuron_storage.membrane_fractions()[i])
                 .collect(),
             thresholds: neuron_storage
                 .thresholds()
                 .iter()
-                .map(|&v| v.to_f32())
+                .enumerate()
+                .map(|(i, &v)| v.to_f32() + neuron_storage.threshold_fractions()[i])
                 .collect(),
             leak_coefficients: neuron_storage.leak_coefficients().to_vec(),
             resting_potentials: neuron_storage
@@ -3473,8 +3485,14 @@ impl<
             {
                 let mut storage = self.neuron_storage.write().unwrap();
                 for i in 0..n {
-                    storage.membrane_potentials_mut()[i] =
-                        T::from_f32(snapshot.neurons.membrane_potentials[i]);
+                    let (membrane_level, membrane_fraction) =
+                        T::split_charge(snapshot.neurons.membrane_potentials[i]);
+                    storage.membrane_potentials_mut()[i] = membrane_level;
+                    storage.membrane_fractions_mut()[i] = membrane_fraction;
+                    let (threshold_level, threshold_fraction) =
+                        T::split_charge(snapshot.neurons.thresholds[i]);
+                    storage.thresholds_mut()[i] = threshold_level;
+                    storage.threshold_fractions_mut()[i] = threshold_fraction;
                     if i < snapshot.neurons.refractory_countdowns.len() {
                         storage.refractory_countdowns_mut()[i] =
                             snapshot.neurons.refractory_countdowns[i];
@@ -3753,7 +3771,40 @@ impl<
         }
 
         self.neuron_storage.write().unwrap().thresholds_mut()[idx] = threshold;
+        self.neuron_storage
+            .write()
+            .unwrap()
+            .threshold_fractions_mut()[idx] = 0.0;
         true
+    }
+
+    /// Store a linear firing threshold as a byte plus its leftover fraction.
+    pub fn update_neuron_threshold_charge(&mut self, neuron_id: u32, threshold: f32) -> bool {
+        let idx = neuron_id as usize;
+        if idx >= self.neuron_storage.read().unwrap().count()
+            || !self.neuron_storage.read().unwrap().valid_mask()[idx]
+        {
+            return false;
+        }
+        let (level, fraction) = T::split_charge(threshold);
+        let mut storage = self.neuron_storage.write().unwrap();
+        storage.thresholds_mut()[idx] = level;
+        storage.threshold_fractions_mut()[idx] = fraction;
+        true
+    }
+
+    /// Write linear thresholds onto neurons that were just appended at `start`.
+    pub fn write_threshold_charges(&mut self, start: usize, values: &[f32]) {
+        let mut storage = self.neuron_storage.write().unwrap();
+        for (offset, &value) in values.iter().enumerate() {
+            let idx = start + offset;
+            if idx >= storage.count() {
+                break;
+            }
+            let (level, fraction) = T::split_charge(value);
+            storage.thresholds_mut()[idx] = level;
+            storage.threshold_fractions_mut()[idx] = fraction;
+        }
     }
 
     /// Update leak coefficient for a specific neuron
@@ -3885,7 +3936,9 @@ impl<
             if neuron_storage_write.valid_mask()[idx]
                 && neuron_storage_write.cortical_areas()[idx] == cortical_area
             {
-                neuron_storage_write.thresholds_mut()[idx] = T::from_f32(threshold);
+                let (level, fraction) = T::split_charge(threshold);
+                neuron_storage_write.thresholds_mut()[idx] = level;
+                neuron_storage_write.threshold_fractions_mut()[idx] = fraction;
                 updated_count += 1;
             }
         }
@@ -3979,7 +4032,9 @@ impl<
                     + (z as f32 * increment_z);
 
                 // Update threshold (coordinates borrow is dropped here)
-                neuron_storage_write.thresholds_mut()[idx] = T::from_f32(threshold);
+                let (level, fraction) = T::split_charge(threshold);
+                neuron_storage_write.thresholds_mut()[idx] = level;
+                neuron_storage_write.threshold_fractions_mut()[idx] = fraction;
                 updated_count += 1;
             }
         }
@@ -4147,7 +4202,10 @@ impl<
             if idx < self.neuron_storage.read().unwrap().count()
                 && self.neuron_storage.read().unwrap().valid_mask()[idx]
             {
-                self.neuron_storage.write().unwrap().thresholds_mut()[idx] = T::from_f32(*value);
+                let (level, fraction) = T::split_charge(*value);
+                let mut storage = self.neuron_storage.write().unwrap();
+                storage.thresholds_mut()[idx] = level;
+                storage.threshold_fractions_mut()[idx] = fraction;
                 updated_count += 1;
             }
         }
@@ -4241,10 +4299,10 @@ impl<
             if idx < self.neuron_storage.read().unwrap().count()
                 && self.neuron_storage.read().unwrap().valid_mask()[idx]
             {
-                self.neuron_storage
-                    .write()
-                    .unwrap()
-                    .membrane_potentials_mut()[idx] = T::from_f32(*value);
+                let (level, fraction) = T::split_charge(*value);
+                let mut storage = self.neuron_storage.write().unwrap();
+                storage.membrane_potentials_mut()[idx] = level;
+                storage.membrane_fractions_mut()[idx] = fraction;
                 updated_count += 1;
             }
         }
@@ -4361,6 +4419,7 @@ impl<
                 && neuron_storage_write.cortical_areas()[idx] == cortical_area
             {
                 neuron_storage_write.membrane_potentials_mut()[idx] = T::zero();
+                neuron_storage_write.membrane_fractions_mut()[idx] = 0.0;
                 reset_count += 1;
             }
         }
@@ -4445,6 +4504,7 @@ impl<
                     && neuron_storage_write.cortical_areas()[idx] == cortical_area
                 {
                     neuron_storage_write.membrane_potentials_mut()[idx] = T::zero();
+                    neuron_storage_write.membrane_fractions_mut()[idx] = 0.0;
                     neuron_storage_write.refractory_countdowns_mut()[idx] = 0;
                     neuron_storage_write.consecutive_fire_counts_mut()[idx] = 0;
                     reset_count += 1;
@@ -4528,6 +4588,7 @@ impl<
                 updated_count += 1;
                 if !mp_charge_accumulation {
                     neuron_storage_write.membrane_potentials_mut()[idx] = T::zero();
+                    neuron_storage_write.membrane_fractions_mut()[idx] = 0.0;
                 }
             }
         }
@@ -5815,8 +5876,10 @@ impl<
                 .unwrap()
                 .consecutive_fire_limits()[idx],
             self.neuron_storage.read().unwrap().snooze_periods()[idx], // Extended refractory period (additive)
-            self.neuron_storage.read().unwrap().membrane_potentials()[idx].to_f32(),
-            self.neuron_storage.read().unwrap().thresholds()[idx].to_f32(),
+            self.neuron_storage.read().unwrap().membrane_potentials()[idx].to_f32()
+                + self.neuron_storage.read().unwrap().membrane_fractions()[idx],
+            self.neuron_storage.read().unwrap().thresholds()[idx].to_f32()
+                + self.neuron_storage.read().unwrap().threshold_fractions()[idx],
             self.neuron_storage.read().unwrap().refractory_countdowns()[idx],
         ))
     }
@@ -5955,6 +6018,7 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>>(
         }
         if !neuron_storage.mp_charge_accumulation()[idx] {
             neuron_storage.membrane_potentials_mut()[idx] = T::zero();
+            neuron_storage.membrane_fractions_mut()[idx] = 0.0;
         }
     }
 

@@ -506,6 +506,8 @@ pub async fn post_amalgamation_destination(
     let genome_service = state.genome_service.as_ref();
     let mut to_create: Vec<feagi_services::types::CreateCorticalAreaParams> = Vec::new();
     let mut skipped_existing: Vec<String> = Vec::new();
+    let mut cloned_region_member_ids: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
 
     // Get root region ID for IPU/OPU areas
     let root_region_id = connectome_service
@@ -581,6 +583,9 @@ pub async fn post_amalgamation_destination(
             "amalgamation_source".to_string(),
             serde_json::json!("amalgamation_by_payload"),
         );
+        if target_parent_region_id == amalgamation_id {
+            cloned_region_member_ids.insert(cortical_id.clone());
+        }
 
         to_create.push(feagi_services::types::CreateCorticalAreaParams {
             cortical_id,
@@ -896,6 +901,35 @@ pub async fn post_amalgamation_destination(
             imported_new_area_count,
             skipped_existing.len()
         );
+    }
+
+    // Copy the source circuit's declared input/output roles onto the new region.
+    // Cross-region edges are stripped on export, so connectivity alone does not restore them.
+    let (mut designated_inputs, mut designated_outputs) =
+        feagi_evolutionary::designated_io_lists_for_cloned_circuit(&imported_genome);
+    designated_inputs.retain(|id| cloned_region_member_ids.contains(id));
+    designated_outputs.retain(|id| cloned_region_member_ids.contains(id));
+    if !designated_inputs.is_empty() || !designated_outputs.is_empty() {
+        let mut io_properties: HashMap<String, serde_json::Value> = HashMap::new();
+        io_properties.insert(
+            "designated_inputs".to_string(),
+            serde_json::json!(designated_inputs),
+        );
+        io_properties.insert(
+            "designated_outputs".to_string(),
+            serde_json::json!(designated_outputs),
+        );
+        if let Err(error) = connectome_service
+            .update_brain_region(&amalgamation_id, io_properties)
+            .await
+        {
+            tracing::warn!(
+                target: "feagi-api",
+                "Amalgamation created region {} but could not copy region IO designations: {}",
+                amalgamation_id,
+                error
+            );
+        }
     }
 
     // 5) Invalidate all relevant health_check hashes to force BV cache refresh.
