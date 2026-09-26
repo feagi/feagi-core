@@ -37,10 +37,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for OhkamiServerGene
             output.extend(
                 quote! {
 
-
-
-
-
+                    
                 }
             )
 

@@ -1,8 +1,8 @@
 use proc_macro2::{Ident, Span};
-use quote::{quote, TokenStreamExt};
+use quote::quote;
 use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use crate::basis::{parse_optional_comma, parse_property_colon_member, StructBuilderParameterField, StructBuilderParameters, TemplateStruct};
+use crate::basis::{parse_optional_comma, parse_property_colon_member, StructBuilderParameters, TemplateStruct};
 
 mod kw {
 
@@ -115,8 +115,7 @@ pub struct RequestResponseContract {
 
 impl Parse for RequestResponseContract {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let request_lit_str: LitStr = input.parse()?;
-        let request_path = ParameterElementPath::parse(input)?;
+        let request_path = input.parse()?;
         input.parse::<Token![:]>()?;
 
         let members;
@@ -222,8 +221,10 @@ impl Parse for ParameterElementPath {
         // verify no collisions
         // TODO check for repititions
 
-        let o: Vec<ParameterPathElement> =
-            path_parts.iter().map(|x| ParameterPathElement::from_lit_str(x)?).collect();
+        let o: Vec<ParameterPathElement> = path_parts
+            .iter()
+            .map(ParameterPathElement::from_lit_str)
+            .collect::<syn::Result<Vec<_>>>()?;
 
         Ok(Self(o))
     }
@@ -231,12 +232,15 @@ impl Parse for ParameterElementPath {
 
 impl TemplateStruct for ParameterElementPath {
     fn expand_template(&self) -> proc_macro2::TokenStream {
-        let mut out: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
-        for element in self.0 {
-            let e = element.expand_template();
-            out.append(quote! {/#e});
-        };
-        out
+        let parts: Vec<String> = self.0
+            .iter()
+            .map(|element| match element {
+                ParameterPathElement::Static(segment) => segment.value(),
+                ParameterPathElement::Parameter(segment) => format!("{{{}}}", segment.value()),
+            })
+            .collect();
+        let path = LitStr::new(&parts.join("/"), Span::call_site());
+        quote! { #path }
     }
 }
 
@@ -260,11 +264,12 @@ impl Parse for ParameterPathElement {
 
 impl TemplateStruct for ParameterPathElement {
     fn expand_template(&self) -> proc_macro2::TokenStream {
-        match &self {
-            ParameterPathElement::Static(e) => {quote!(e)}
-            ParameterPathElement::Parameter(e) => {
-                let o = format!("{{{}}}", e.value());
-                quote! {o}
+        match self {
+            ParameterPathElement::Static(segment) => quote! { #segment },
+            ParameterPathElement::Parameter(segment) => {
+                let wrapped = format!("{{{}}}", segment.value());
+                let wrapped = LitStr::new(&wrapped, segment.span());
+                quote! { #wrapped }
             }
         }
     }
