@@ -258,6 +258,45 @@ fn spatial_pointer_dims_from_decoder_properties(
     Some((w, h, d.clamp(d_min, d_max) as usize))
 }
 
+/// Image Enhancements is one area. Absolute is three slider columns (diff,
+/// brightness, contrast). Incremental is six columns (increase, decrease per slider).
+/// Z depth follows the decoder when the registration carries one.
+fn registered_motor_channel_dimensions(
+    motor_unit: MotorCorticalUnit,
+    unit_topology: &UnitTopology,
+    decoder_properties: Option<&Value>,
+    frame_handling: Option<&str>,
+) -> (usize, usize, usize) {
+    let (width, height, depth) = per_channel_motor_dimensions_for_registration(
+        motor_unit,
+        unit_topology,
+        decoder_properties,
+    );
+    if motor_unit != MotorCorticalUnit::DynamicImageProcessing {
+        return (width, height, depth);
+    }
+    let slider_width = match frame_handling {
+        Some("Incremental") => 6,
+        Some("Absolute") => 3,
+        _ => width,
+    };
+    let depth_min = unit_topology.channel_dimensions_min[2].max(1) as usize;
+    let depth_max = unit_topology.channel_dimensions_max[2].max(1) as usize;
+    let slider_depth = image_filtering_registered_depth(decoder_properties)
+        .map(|decoded| decoded.clamp(depth_min, depth_max))
+        .unwrap_or(depth);
+    (slider_width, height, slider_depth)
+}
+
+fn image_filtering_registered_depth(decoder_properties: Option<&Value>) -> Option<usize> {
+    let depth_json = decoder_properties?
+        .get("ImageFilteringSettings")?
+        .as_array()?
+        .first()?;
+    let depth = percentage_tuple_first_depth_u32(depth_json)?;
+    (depth > 0).then_some(depth as usize)
+}
+
 fn build_friendly_unit_name(unit_label: &str, group: u16, sub_unit_index: usize) -> String {
     format!("{unit_label}-{}-{}", group, sub_unit_index)
 }
@@ -946,10 +985,11 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         continue;
                     };
                     let (per_channel_width, per_channel_height, per_channel_depth) =
-                        per_channel_motor_dimensions_for_registration(
+                        registered_motor_channel_dimensions(
                             motor_unit,
                             unit_topology,
                             decoder_properties,
+                            frame_handling.as_deref(),
                         );
                     let expected_dimensions = (
                         (per_channel_width * device_count).max(1),
@@ -1156,10 +1196,11 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
 
                     let friendly_name = resolved_name;
                     let (per_channel_width, per_channel_height, per_channel_depth) =
-                        per_channel_motor_dimensions_for_registration(
+                        registered_motor_channel_dimensions(
                             motor_unit,
                             unit_topology,
                             decoder_properties,
+                            frame_handling.as_deref(),
                         );
                     let dimensions = expected_dimensions;
                     let per_device_dims =
@@ -1915,7 +1956,10 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
 
 #[cfg(test)]
 mod count_output_registration_tests {
-    use super::{motor_registration_device_count, per_channel_motor_dimensions_for_registration};
+    use super::{
+        motor_registration_device_count, per_channel_motor_dimensions_for_registration,
+        registered_motor_channel_dimensions,
+    };
     use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
     use feagi_structures::genomic::MotorCorticalUnit;
     use serde_json::json;
@@ -2095,6 +2139,37 @@ mod count_output_registration_tests {
             ),
             3
         );
+    }
+
+    #[test]
+    fn image_enhancement_absolute_is_three_slider_columns() {
+        let motor = MotorCorticalUnit::DynamicImageProcessing;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let (w, h, d) = registered_motor_channel_dimensions(motor, ut, None, Some("Absolute"));
+        assert_eq!((w, h, d), (3, 1, 10));
+    }
+
+    #[test]
+    fn image_enhancement_incremental_is_six_slider_columns() {
+        let motor = MotorCorticalUnit::DynamicImageProcessing;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let (w, h, d) = registered_motor_channel_dimensions(motor, ut, None, Some("Incremental"));
+        assert_eq!((w, h, d), (6, 1, 10));
+    }
+
+    #[test]
+    fn image_enhancement_depth_follows_the_decoder() {
+        let motor = MotorCorticalUnit::DynamicImageProcessing;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({
+            "ImageFilteringSettings": [{"value": 12}, {"value": 12}, {"value": 12}, "Linear"]
+        });
+        let (w, h, d) =
+            registered_motor_channel_dimensions(motor, ut, Some(&dec), Some("Absolute"));
+        assert_eq!((w, h, d), (3, 1, 12));
     }
 }
 

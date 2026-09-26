@@ -144,21 +144,19 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
-                #[doc = "Image Processing configuration - dynamically control brightness, contrast, and per pixel diff thresholding"]
+                #[doc = "One area whose X columns are the sliders: diff, brightness, contrast. Absolute is 3 wide. Incremental is 6 wide (increase, decrease per slider). Z is the value, with Z 0 at the top of the range."]
                 DynamicImageProcessing => {
                     friendly_name: "Image Enhancements",
                     accepted_wrapped_io_data_type: ImageFilteringSettings,
                     cortical_id_unit_reference: *b"ifs",
-                    number_cortical_areas: 4,
+                    number_cortical_areas: 1,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
+                    allowed_frame_change_handling: [Absolute, Incremental],
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]), // brightness
-                        1 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]), // contrast
-                        2 => (IOCorticalAreaConfigurationFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -30], channel_dimensions_default: [2, 1, 10], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024]), // per pixel diff
-                        3 => (IOCorticalAreaConfigurationFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -30], channel_dimensions_default: [2, 1, 10], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024]) // image diff
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [6, 1, 1024])
                     }
                 },
 

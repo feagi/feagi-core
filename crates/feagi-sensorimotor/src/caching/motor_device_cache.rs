@@ -584,10 +584,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let brightness_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let contrast_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[1];
-                let diff_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[2];
-                let image_diff_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[3];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
 
                 let io_props: serde_json::Map<String, serde_json::Value> = json!({
                     "frame_change_handling": frame_change_handling,
@@ -595,12 +592,7 @@ macro_rules! motor_unit_functions {
                 }).as_object().unwrap().clone();
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = ImageFilteringSettingsNeuronVoxelXYZPDecoder::new_box(
-                    brightness_cortical_id,
-                    contrast_cortical_id,
-                    diff_cortical_id,
-                    image_diff_cortical_id,
-                    z_neuron_resolution,
-                    z_neuron_resolution,
+                    cortical_id,
                     z_neuron_resolution,
                     number_channels,
                     percentage_neuron_positioning)?;
