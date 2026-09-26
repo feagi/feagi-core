@@ -53,9 +53,9 @@ macro_rules! motor_cortical_units {
                 },
 
 
-                #[doc = "Miscellaneous motor that does not fit existing templates."]
+                #[doc = "Miscellaneous output that does not fit existing templates."]
                 MiscData => {
-                    friendly_name: "Miscellaneous Motor",
+                    friendly_name: "Miscellaneous Output",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"mis",
                     number_cortical_areas: 1,

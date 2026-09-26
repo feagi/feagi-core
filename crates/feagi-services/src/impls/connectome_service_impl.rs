@@ -35,7 +35,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{debug, info, trace, warn};
 
-fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
+pub fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
     let bytes = cortical_id.as_bytes();
     let is_input = bytes[0] == b'i';
     let is_output = bytes[0] == b'o';
@@ -89,6 +89,18 @@ fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
     }
 
     None
+}
+
+/// True when the stored title is the raw cortical-id label, such as "iimg Unit 0".
+fn is_raw_io_unit_placeholder(name: &str, cortical_id: &CorticalID) -> bool {
+    let bytes = cortical_id.as_bytes();
+    if bytes[0] != b'i' && bytes[0] != b'o' {
+        return false;
+    }
+    let key = String::from_utf8_lossy(&bytes[0..4]);
+    let key = key.trim_end_matches('\0');
+    let unit_index = *cortical_id.io_cortical_unit_index();
+    name == format!("{key} Unit {unit_index}")
 }
 
 /// Merge default template and memory properties into provided values.
@@ -1435,7 +1447,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
             }
         }
 
-        let name = if area.name.is_empty() || area.name == area.cortical_id.to_string() {
+        let name = if area.name.is_empty()
+            || area.name == area.cortical_id.to_string()
+            || is_raw_io_unit_placeholder(&area.name, &area.cortical_id)
+        {
             derive_friendly_cortical_name(&area.cortical_id).unwrap_or_else(|| area.name.clone())
         } else {
             area.name.clone()
@@ -8131,5 +8146,40 @@ mod tests {
             assert_eq!(restored_twin, twin_idx);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod raw_io_unit_name_tests {
+    use super::{derive_friendly_cortical_name, is_raw_io_unit_placeholder};
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+    use feagi_structures::genomic::SensoryCorticalUnit;
+
+    #[test]
+    fn raw_input_id_label_becomes_template_name() {
+        let vision = SensoryCorticalUnit::get_cortical_ids_array_for_vision_with_parameters(
+            FrameChangeHandling::Absolute,
+            CorticalUnitIndex::from(0u16),
+        );
+        let vision_id = &vision[0];
+        assert!(is_raw_io_unit_placeholder("iimg Unit 0", vision_id));
+        assert!(!is_raw_io_unit_placeholder("Simple Vision Unit 0", vision_id));
+        assert!(!is_raw_io_unit_placeholder("Left camera", vision_id));
+        assert_eq!(
+            derive_friendly_cortical_name(vision_id).as_deref(),
+            Some("Simple Vision Unit 0")
+        );
+
+        let misc = SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+            FrameChangeHandling::Absolute,
+            CorticalUnitIndex::from(0u16),
+        );
+        let misc_id = &misc[0];
+        assert!(is_raw_io_unit_placeholder("imis Unit 0", misc_id));
+        assert_eq!(
+            derive_friendly_cortical_name(misc_id).as_deref(),
+            Some("Miscellaneous Input Unit 0")
+        );
     }
 }

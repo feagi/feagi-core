@@ -1733,6 +1733,22 @@ mod test_sensory_cortical_unit {
         }
 
         #[test]
+        fn test_miscellaneous_io_depth_is_adjustable() {
+            let input_topology = SensoryCorticalUnit::MiscData.get_unit_default_topology();
+            let input = input_topology
+                .get(&0.into())
+                .expect("Missing topology entry for Miscellaneous Input");
+            let output_topology = MotorCorticalUnit::MiscData.get_unit_default_topology();
+            let output = output_topology
+                .get(&0.into())
+                .expect("Missing topology entry for Miscellaneous Output");
+            assert_eq!(input.channel_dimensions_min, [1, 1, 1]);
+            assert_eq!(input.channel_dimensions_max, [1024, 1024, 1024]);
+            assert_eq!(output.channel_dimensions_min, [1, 1, 1]);
+            assert_eq!(output.channel_dimensions_max, [1024, 1024, 1024]);
+        }
+
+        #[test]
         fn test_depth_map_cortical_id_and_default_topology() {
             let group = CorticalUnitIndex::from(2u16);
             let ids = SensoryCorticalUnit::get_cortical_ids_array_for_depth_map_with_parameters(

@@ -106,9 +106,9 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
-                #[doc = "Miscellaneous sensor that does not fit existing templates."]
+                #[doc = "Miscellaneous input that does not fit existing templates."]
                 MiscData => {
-                    friendly_name: "Miscellaneous Sensor",
+                    friendly_name: "Miscellaneous Input",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"mis",
                     number_cortical_areas: 1,
@@ -116,7 +116,7 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [220, 0, -30], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [220, 0, -30], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
                     }
                 },
 
