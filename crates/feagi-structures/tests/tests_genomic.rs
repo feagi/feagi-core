@@ -1724,6 +1724,15 @@ mod test_sensory_cortical_unit {
         }
 
         #[test]
+        fn test_simple_vision_default_canvas_is_128_square() {
+            let topology = SensoryCorticalUnit::Vision.get_unit_default_topology();
+            let unit = topology
+                .get(&0.into())
+                .expect("Missing topology entry for Vision area 0");
+            assert_eq!(unit.channel_dimensions_default, [128, 128, 3]);
+        }
+
+        #[test]
         fn test_depth_map_cortical_id_and_default_topology() {
             let group = CorticalUnitIndex::from(2u16);
             let ids = SensoryCorticalUnit::get_cortical_ids_array_for_depth_map_with_parameters(

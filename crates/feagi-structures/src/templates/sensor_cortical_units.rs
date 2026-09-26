@@ -164,7 +164,7 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::CartesianPlane(frame_change_handling), relative_position: [-100, 30, 0], channel_dimensions_default: [64, 64, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
+                        0 => (IOCorticalAreaConfigurationFlag::CartesianPlane(frame_change_handling), relative_position: [-100, 30, 0], channel_dimensions_default: [128, 128, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
                     }
                 },
 

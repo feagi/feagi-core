@@ -3885,7 +3885,7 @@ pub async fn get_ipu_types(
 
         // Default resolution based on type
         let resolution = if snake_name == "vision" {
-            vec![64, 64, 1] // Vision sensors typically 64x64
+            vec![128, 128, 3] // Simple vision default matches the Vision template (128x128 RGB)
         } else if snake_name == "segmented_vision" {
             vec![32, 32, 1] // Segmented vision segments are smaller
         } else if snake_name == "depth_map" {
