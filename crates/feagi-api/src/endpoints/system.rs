@@ -81,6 +81,10 @@ pub struct HealthCheckResponse {
     /// Hash of agent data (ids, capabilities, connection properties)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_data_hash: Option<u64>,
+    /// Advances when synaptic plasticity commits a weight change or creates a synapse.
+    /// Eligibility traces and unchanged weights do not advance it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub synaptic_plasticity_generation: Option<u64>,
     /// Root brain region ID (UUID string) for O(1) root lookup
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
@@ -303,6 +307,7 @@ pub async fn get_health_check(
         cortical_mappings_hash,
         classifiers_hash,
         agent_data_hash,
+        synaptic_plasticity_generation,
         genome_loading,
         genome_state,
     ) = {
@@ -327,6 +332,7 @@ pub async fn get_health_check(
             Some(state_manager.get_cortical_mappings_hash()),
             Some(state_manager.get_classifiers_hash()),
             Some(state_manager.get_agent_data_hash()),
+            Some(state_manager.get_synaptic_plasticity_generation()),
             genome_loading,
             genome_state,
         )
@@ -364,6 +370,7 @@ pub async fn get_health_check(
         cortical_mappings_hash,
         classifiers_hash,
         agent_data_hash,
+        synaptic_plasticity_generation,
         brain_regions_root, // NEW: Root region ID for O(1) lookup
         fatigue,
     }))

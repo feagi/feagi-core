@@ -287,6 +287,14 @@ pub struct ClassifierInfo {
     pub fields: Vec<feagi_structures::genomic::classifiers::ClassifierField>,
     pub kernel_memory_id: String,
     pub class_memory_id: String,
+    #[serde(default)]
+    pub reward_training: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer_feedback_area_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pain_area_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pleasure_area_id: Option<String>,
     pub properties: HashMap<String, serde_json::Value>,
 }
 
@@ -305,6 +313,10 @@ impl From<feagi_structures::genomic::classifiers::Classifier> for ClassifierInfo
             fields: classifier.fields,
             kernel_memory_id: classifier.kernel_memory_id,
             class_memory_id: classifier.class_memory_id,
+            reward_training: classifier.reward_training,
+            answer_feedback_area_id: classifier.answer_feedback_area_id,
+            pain_area_id: classifier.pain_area_id,
+            pleasure_area_id: classifier.pleasure_area_id,
             properties: classifier.properties,
         }
     }

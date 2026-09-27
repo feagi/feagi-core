@@ -201,6 +201,14 @@ pub struct RawClassifier {
     pub field_area_id: Option<String>,
     pub kernel_memory_id: Option<String>,
     pub class_memory_id: Option<String>,
+    #[serde(default)]
+    pub reward_training: bool,
+    #[serde(default)]
+    pub answer_feedback_area_id: Option<String>,
+    #[serde(default)]
+    pub pain_area_id: Option<String>,
+    #[serde(default)]
+    pub pleasure_area_id: Option<String>,
     /// Previous singular twin record. Paired with `field_area_id` on load.
     pub scan_twin_id: Option<String>,
     pub properties: Option<HashMap<String, Value>>,
@@ -996,6 +1004,10 @@ impl GenomeParser {
                 fields,
                 kernel_memory_id,
                 class_memory_id,
+                reward_training: raw.reward_training,
+                answer_feedback_area_id: raw.answer_feedback_area_id.clone(),
+                pain_area_id: raw.pain_area_id.clone(),
+                pleasure_area_id: raw.pleasure_area_id.clone(),
                 properties: raw.properties.clone().unwrap_or_default(),
             });
         }

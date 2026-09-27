@@ -463,6 +463,16 @@ impl StateManager {
         self.hash_state.set_agent_data_hash(value)
     }
 
+    /// Generation of committed synaptic plasticity (weight changes and new learned synapses).
+    pub fn get_synaptic_plasticity_generation(&self) -> u64 {
+        self.hash_state.get_synaptic_plasticity_generation()
+    }
+
+    /// Advance the synaptic plasticity generation by one committed burst.
+    pub fn note_synaptic_plasticity_change(&self) {
+        self.hash_state.note_synaptic_plasticity_change()
+    }
+
     // ===== Agent Management =====
 
     /// Register a new agent

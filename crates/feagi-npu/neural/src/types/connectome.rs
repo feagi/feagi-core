@@ -61,6 +61,9 @@ pub struct SerializableLongTermMemoryNeuron {
     pub spatial_signature: Option<u64>,
     #[serde(default)]
     pub class_channels: Vec<u32>,
+    /// Associative weight of each bound class channel.
+    #[serde(default)]
+    pub class_channel_weights: Vec<(u32, f32)>,
 }
 
 /// Learned episodic replay frame for one long-term memory neuron.
@@ -1311,6 +1314,7 @@ mod tests {
             activation_count: 4,
             spatial_signature: None,
             class_channels: Vec::new(),
+            class_channel_weights: Vec::new(),
         }];
 
         let ltm_ids = HashSet::from([50_000_001]);

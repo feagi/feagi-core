@@ -392,6 +392,7 @@ mod tests {
                 activation_count: 3,
                 spatial_signature: None,
                 class_channels: Vec::new(),
+                class_channel_weights: Vec::new(),
             }],
             long_term_memory_replay_frames: vec![(
                 50_000_000,

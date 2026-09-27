@@ -103,6 +103,20 @@ pub struct Classifier {
     /// Owned internals. Deleting kernel or class memory deletes the classifier.
     pub kernel_memory_id: String,
     pub class_memory_id: String,
+    /// Per-scanning-instance pain and pleasure on the associative mapping.
+    /// Genomes saved before reward training existed stay off.
+    #[serde(default)]
+    pub reward_training: bool,
+    /// Correct-answer area. Scanner mode matches each detection twin.
+    /// Kernel mode matches the class area. Empty until the user selects one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer_feedback_area_id: Option<String>,
+    /// Hidden area whose firing is this classifier's pain signal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pain_area_id: Option<String>,
+    /// Hidden area whose firing is this classifier's pleasure signal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pleasure_area_id: Option<String>,
     #[serde(default)]
     pub properties: HashMap<String, serde_json::Value>,
 }
@@ -119,6 +133,16 @@ impl Classifier {
         for field in &self.fields {
             if !field.scan_twin_id.is_empty() {
                 owned.push(field.scan_twin_id.clone());
+            }
+        }
+        if let Some(pain_area_id) = &self.pain_area_id {
+            if !pain_area_id.is_empty() {
+                owned.push(pain_area_id.clone());
+            }
+        }
+        if let Some(pleasure_area_id) = &self.pleasure_area_id {
+            if !pleasure_area_id.is_empty() {
+                owned.push(pleasure_area_id.clone());
             }
         }
         owned
@@ -295,6 +319,9 @@ impl Classifier {
         if self.mask_area_id.as_deref() == Some(area_id) {
             self.mask_area_id = None;
         }
+        if self.answer_feedback_area_id.as_deref() == Some(area_id) {
+            self.answer_feedback_area_id = None;
+        }
         self.fields.retain(|field| field.field_area_id != area_id);
     }
 
@@ -396,6 +423,41 @@ pub fn validate_scanner_field(
     Ok(())
 }
 
+/// Answer feedback must match the classifier output.
+///
+/// Kernel mode compares the class area. Scanner mode compares each detection
+/// twin. With no twin yet, the mask width, height, and depth are that output.
+pub fn validate_answer_feedback_shape(
+    mode: ClassifierTrainingMode,
+    feedback: [u32; 3],
+    reference: [u32; 3],
+    output_shapes: &[[u32; 3]],
+) -> Result<(), String> {
+    if feedback[0] == 0 || feedback[1] == 0 || feedback[2] == 0 {
+        return Err("answer feedback dimensions must be greater than zero".to_string());
+    }
+    match mode {
+        ClassifierTrainingMode::Kernel => {
+            if feedback != reference {
+                return Err("answer feedback dimensions must match the class area".to_string());
+            }
+        }
+        ClassifierTrainingMode::Scanner => {
+            let shapes = if output_shapes.is_empty() {
+                std::slice::from_ref(&reference)
+            } else {
+                output_shapes
+            };
+            if shapes.iter().any(|shape| *shape != feedback) {
+                return Err(
+                    "answer feedback dimensions must match the detection output".to_string()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 fn required_area_id(area_id: String, field: &str) -> Result<String, String> {
     let trimmed = area_id.trim();
     if trimmed.is_empty() {
@@ -422,6 +484,10 @@ mod tests {
             fields: Vec::new(),
             kernel_memory_id: "kmem".to_string(),
             class_memory_id: "cmem".to_string(),
+            reward_training: false,
+            answer_feedback_area_id: None,
+            pain_area_id: None,
+            pleasure_area_id: None,
             properties: HashMap::new(),
         };
         classifier
@@ -559,6 +625,38 @@ mod tests {
         assert!(classifier.mask_area_id.is_none());
         assert!(classifier.kernel_size.is_none());
         assert_eq!(classifier.kernel_area_id.as_deref(), Some("kernel"));
+    }
+
+    #[test]
+    fn answer_feedback_matches_class_area_or_detection_output() {
+        assert!(validate_answer_feedback_shape(
+            ClassifierTrainingMode::Kernel,
+            [1, 1, 4],
+            [1, 1, 4],
+            &[],
+        )
+        .is_ok());
+        assert!(validate_answer_feedback_shape(
+            ClassifierTrainingMode::Kernel,
+            [8, 8, 4],
+            [1, 1, 4],
+            &[],
+        )
+        .is_err());
+        assert!(validate_answer_feedback_shape(
+            ClassifierTrainingMode::Scanner,
+            [16, 16, 4],
+            [16, 16, 4],
+            &[[16, 16, 4]],
+        )
+        .is_ok());
+        assert!(validate_answer_feedback_shape(
+            ClassifierTrainingMode::Scanner,
+            [16, 16, 4],
+            [16, 16, 4],
+            &[[16, 16, 4], [8, 8, 4]],
+        )
+        .is_err());
     }
 
     #[test]

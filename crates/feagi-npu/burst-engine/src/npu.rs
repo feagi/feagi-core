@@ -212,6 +212,9 @@ pub struct StdpMappingParams {
     /// Rejected in the BDU at parse time if not finite, `<= 0`, or non-finite/NaN. Omitted
     /// from JSON is treated as `1.0`.
     pub plasticity_eta: f32,
+    /// Classifier reward training commits pain and pleasure per scanning instance.
+    /// The generic end-of-burst R-STDP update does not also move these synapses.
+    pub instance_reward: bool,
 }
 
 impl Default for StdpMappingParams {
@@ -231,6 +234,7 @@ impl Default for StdpMappingParams {
             punishment_source_area: None,
             max_weight: f32::INFINITY,
             plasticity_eta: 1.0,
+            instance_reward: false,
         }
     }
 }
@@ -5380,6 +5384,8 @@ impl<
         if mapping_index.is_empty() && !has_bidirectional && !has_associative_memory_mapping {
             return Ok(());
         }
+        // @cursor:critical-path — one bump per burst that commits a weight or a learned synapse.
+        let mut synaptic_plasticity_committed = false;
 
         if has_bidirectional {
             let neuron_storage = self.neuron_storage.read().unwrap();
@@ -5580,7 +5586,7 @@ impl<
             let neuron_storage = self.neuron_storage.read().unwrap();
             let mut synapse_storage = self.synapse_storage.write().unwrap();
             for (key, params) in &mappings {
-                if matches!(params.plasticity_mode, PlasticityMode::Off) {
+                if matches!(params.plasticity_mode, PlasticityMode::Off) || params.instance_reward {
                     continue;
                 }
                 let Some(activity) = activity_sets.get(key) else {
@@ -5693,7 +5699,10 @@ impl<
                         } else {
                             (old + delta_w).max(0.0)
                         };
-                        synapse_storage.weights_mut()[syn_idx] = new_w;
+                        if new_w != old {
+                            synapse_storage.weights_mut()[syn_idx] = new_w;
+                            synaptic_plasticity_committed = true;
+                        }
                     }
                 }
             }
@@ -5706,6 +5715,9 @@ impl<
         // direction should require an explicit reverse mapping.
         let mut created_synapses = false;
         for (key @ (_src_area, dst_area), params) in &mappings {
+            if params.instance_reward {
+                continue;
+            }
             let allow_synapse_synthesis = params.bidirectional_stdp
                 || params.associative_memory_mapping
                 || associative_mapping_flags.get(key).copied().unwrap_or(false);
@@ -5840,6 +5852,7 @@ impl<
                         FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e))
                     })?;
                 created_synapses = true;
+                synaptic_plasticity_committed = true;
             }
         }
 
@@ -5850,6 +5863,13 @@ impl<
             drop(prop_engine);
             drop(synapse_storage);
             self.rebuild_stdp_mapping_index();
+        }
+
+        if synaptic_plasticity_committed {
+            let state = feagi_state_manager::StateManager::instance();
+            if let Some(manager) = state.try_read() {
+                manager.note_synaptic_plasticity_change();
+            };
         }
 
         Ok(())

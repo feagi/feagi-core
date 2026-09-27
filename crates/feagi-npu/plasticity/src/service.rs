@@ -19,6 +19,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
+use crate::classifier_reward::{scanning_instance_affect, ChannelAffect};
 use crate::episodic_scan::{
     class_channel_index, collect_active_scan_windows, mask_channels_in_window, should_skip_scan,
     spatial_signature_hash, ScanKernel,
@@ -189,6 +190,31 @@ pub struct ScannerMaskSource {
     pub mask_depth: u32,
 }
 
+/// Where the correct-answer area is read for one scanning instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnswerFeedbackLayout {
+    /// Every firing voxel is a class channel. Used when feedback matches the class area.
+    ClassVolume,
+    /// The class channel is Z at the window origin. Used when feedback matches the detection twin.
+    OutputColumn,
+}
+
+/// Reward-training settings for one classifier associative mapping.
+///
+/// Steps come from that mapping's shared plasticity constant, LTP multiplier,
+/// LTD multiplier, and plasticity eta. Each scanning instance applies them
+/// only to its own decision.
+#[derive(Debug, Clone)]
+pub struct ClassifierRewardConfig {
+    pub pain_area_idx: u32,
+    pub pleasure_area_idx: u32,
+    pub feedback_area_idx: Option<u32>,
+    pub feedback_layout: AnswerFeedbackLayout,
+    pub pleasure_step: f32,
+    pub pain_step: f32,
+    pub max_weight: f32,
+}
+
 /// Scan assembly attached to a kernel memory area.
 ///
 /// Absent unless a kernel area, class area, associative Mem1→Mem2 mapping,
@@ -206,6 +232,8 @@ pub struct MemoryScanConfig {
     pub sources: Vec<MemoryScanSource>,
     /// Present only in scanner training mode.
     pub scanner_mask: Option<ScannerMaskSource>,
+    /// Present only while classifier reward training is on.
+    pub reward: Option<ClassifierRewardConfig>,
 }
 
 /// Memory area configuration
@@ -1283,6 +1311,57 @@ impl PlasticityService {
         }
     }
 
+    /// Class channels in the correct-answer area for one scanning instance.
+    ///
+    /// `None` when that area is not connected. An empty vector means the area
+    /// was read and no class channel fired.
+    fn feedback_channels_for_window(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        reward: &ClassifierRewardConfig,
+        origin: (u32, u32, u32),
+        class_channel_count: u32,
+        class_area_width: u32,
+        class_area_height: u32,
+        current_timestep: u64,
+        temporal_depth: usize,
+    ) -> Option<Vec<u32>> {
+        let feedback_area_idx = reward.feedback_area_idx?;
+        let npu_lock = npu.lock().unwrap();
+        let window = npu_lock
+            .get_fire_ledger_dense_window_bitmaps(
+                feedback_area_idx,
+                current_timestep,
+                temporal_depth,
+            )
+            .ok()?;
+        let Some((_, newest)) = window.last() else {
+            return Some(Vec::new());
+        };
+        let mut channels = Vec::new();
+        for neuron_id in newest.iter() {
+            let Some((x, y, z)) = npu_lock.get_neuron_coordinates(neuron_id) else {
+                continue;
+            };
+            let channel = match reward.feedback_layout {
+                AnswerFeedbackLayout::OutputColumn => {
+                    if x != origin.0 || y != origin.1 {
+                        continue;
+                    }
+                    z
+                }
+                AnswerFeedbackLayout::ClassVolume => {
+                    class_channel_index(x, y, z, class_area_width, class_area_height)
+                }
+            };
+            if channel < class_channel_count {
+                channels.push(channel);
+            }
+        }
+        channels.sort_unstable();
+        channels.dedup();
+        Some(channels)
+    }
+
     fn run_episodic_scan(
         npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         array: &mut MemoryNeuronArray,
@@ -1338,15 +1417,81 @@ impl PlasticityService {
                     scan.min_window_activity,
                 );
                 let mut stamps: HashMap<(u32, u32, u32), ()> = HashMap::new();
+                let mut pain_this_source = false;
+                let mut pleasure_this_source = false;
                 for window in windows {
+                    let feedback = scan.reward.as_ref().and_then(|reward| {
+                        Self::feedback_channels_for_window(
+                            &npu,
+                            reward,
+                            window.origin,
+                            scan.class_channel_count,
+                            scan.class_area_width,
+                            scan.class_area_height,
+                            current_timestep,
+                            temporal_depth,
+                        )
+                    });
                     let matches =
                         array.find_ltm_by_spatial_signature(*kernel_area_idx, window.spatial_hash);
                     for neuron_idx in matches {
+                        if let Some(reward) = scan.reward.as_ref() {
+                            let decision = array.get_class_channels(neuron_idx);
+                            for channel in &decision {
+                                array.ensure_class_channel_weight(
+                                    neuron_idx,
+                                    *channel,
+                                    reward.pleasure_step,
+                                );
+                            }
+                            for update in scanning_instance_affect(&decision, feedback.as_deref()) {
+                                let delta = match update.affect {
+                                    ChannelAffect::Pleasure => reward.pleasure_step,
+                                    ChannelAffect::Pain => -reward.pain_step,
+                                };
+                                let initial = if update.bind {
+                                    0.0
+                                } else {
+                                    reward.pleasure_step
+                                };
+                                array.apply_class_channel_delta(
+                                    neuron_idx,
+                                    update.channel,
+                                    delta,
+                                    reward.max_weight,
+                                    initial,
+                                );
+                                match update.affect {
+                                    ChannelAffect::Pleasure => pleasure_this_source = true,
+                                    ChannelAffect::Pain => pain_this_source = true,
+                                }
+                            }
+                        }
                         for class_z in array.get_class_channels(neuron_idx) {
                             if class_z >= scan.class_channel_count {
                                 continue;
                             }
                             stamps.insert((window.origin.0, window.origin.1, class_z), ());
+                        }
+                    }
+                }
+                if let Some(reward) = scan.reward.as_ref() {
+                    if let Ok(npu_lock) = npu.lock() {
+                        if pain_this_source {
+                            npu_lock.schedule_replay_injection(
+                                current_timestep.saturating_add(1),
+                                reward.pain_area_idx,
+                                vec![(0, 0, 0)],
+                                None,
+                            );
+                        }
+                        if pleasure_this_source {
+                            npu_lock.schedule_replay_injection(
+                                current_timestep.saturating_add(1),
+                                reward.pleasure_area_idx,
+                                vec![(0, 0, 0)],
+                                None,
+                            );
                         }
                     }
                 }
@@ -1521,6 +1666,29 @@ impl PlasticityService {
                                 resolved,
                                 e
                             );
+                        }
+                    }
+                }
+                if let Some(reward) = &scan_cfg.reward {
+                    if let Some(feedback_area_idx) = reward.feedback_area_idx {
+                        let existing = existing_configs
+                            .iter()
+                            .find(|(idx, _)| *idx == feedback_area_idx)
+                            .map(|(_, w)| *w)
+                            .unwrap_or(0);
+                        let resolved = existing.max(desired);
+                        if resolved != existing {
+                            if let Err(e) =
+                                npu.configure_fire_ledger_window(feedback_area_idx, resolved)
+                            {
+                                tracing::warn!(
+                                    target: "plasticity",
+                                    "[PLASTICITY] Failed to configure FireLedger window for answer feedback {} (requested={}): {}",
+                                    feedback_area_idx,
+                                    resolved,
+                                    e
+                                );
+                            }
                         }
                     }
                 }
@@ -2355,6 +2523,7 @@ mod tests {
                 field_depth: 1,
             }],
             scanner_mask: None,
+            reward: None,
         };
         let mut areas = HashMap::new();
         areas.insert(
@@ -2520,6 +2689,7 @@ mod tests {
                 mask_height: 1,
                 mask_depth: 3,
             }),
+            reward: None,
         };
         assert!(service.configure_memory_scan(KERNEL_IDX, Some(scan)));
         let areas = service.memory_areas.lock().unwrap().clone();
@@ -2557,5 +2727,322 @@ mod tests {
             .any(|command| matches!(command, PlasticityCommand::InjectMemoryNeuronToFCL { .. })));
         drop(array);
         drop(areas);
+    }
+
+    /// An ambiguous decision weakens only that kernel neuron's class channels.
+    /// A single-channel decision, and a kernel that did not match, stay put.
+    #[test]
+    fn reward_training_pain_is_limited_to_the_ambiguous_decision() {
+        const FIELD_IDX: u32 = 10;
+        const KERNEL_IDX: u32 = 11;
+        const TWIN_IDX: u32 = 12;
+        const PAIN_IDX: u32 = 20;
+        const PLEASURE_IDX: u32 = 21;
+
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 64, 64, 8).unwrap(),
+            "classifier-reward-pain-npu",
+        ));
+        let _service = PlasticityService::new(PlasticityConfig::default(), cache, Arc::clone(&npu));
+        let (timestep, pain_neuron) = {
+            let mut guard = npu.lock().unwrap();
+            guard.register_cortical_area(FIELD_IDX, "Y2ZpZWxkMDE=".to_string());
+            guard.register_cortical_area(KERNEL_IDX, "bWttZW0wMDE=".to_string());
+            guard.register_cortical_area(TWIN_IDX, "Y3R3aW4wMDE=".to_string());
+            guard.register_cortical_area(PAIN_IDX, "Y3BhaW4wMDE=".to_string());
+            guard.register_cortical_area(PLEASURE_IDX, "Y3BsZWEwMDE=".to_string());
+            guard.configure_fire_ledger_window(FIELD_IDX, 1).unwrap();
+            let field_neuron = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    FIELD_IDX,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+            guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    TWIN_IDX,
+                    0,
+                    0,
+                    1,
+                )
+                .unwrap();
+            guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    TWIN_IDX,
+                    0,
+                    0,
+                    2,
+                )
+                .unwrap();
+            let pain_neuron = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    PAIN_IDX,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+            guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    PLEASURE_IDX,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+            guard.inject_sensory_with_potentials(&[(field_neuron, 2.0)]);
+            (guard.process_burst().unwrap().burst, pain_neuron)
+        };
+
+        let signature = super::spatial_signature_hash(&[vec![(0, 0, 0)]]);
+        let mut array = MemoryNeuronArray::new(16);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 100,
+            longterm_threshold: 100,
+            ..Default::default()
+        };
+        let ambiguous = array
+            .create_memory_neuron(0xA11, KERNEL_IDX, 0, &config)
+            .unwrap();
+        array.set_spatial_signature(ambiguous, signature);
+        array.bind_class_channel(ambiguous, 1);
+        array.bind_class_channel(ambiguous, 2);
+        let quiet = array
+            .create_memory_neuron(0xB22, KERNEL_IDX, 0, &config)
+            .unwrap();
+        array.set_spatial_signature(quiet, signature.wrapping_add(1));
+        array.bind_class_channel(quiet, 1);
+        assert_eq!(array.check_longterm_conversion(100), vec![ambiguous, quiet]);
+
+        let scan = MemoryScanConfig {
+            kernel: super::ScanKernel {
+                width: 1,
+                height: 1,
+                depth: 1,
+            },
+            min_window_activity: 1,
+            scan_skip_density: 1.0,
+            class_channel_count: 3,
+            class_area_width: 1,
+            class_area_height: 1,
+            class_memory_area_idx: 99,
+            sources: vec![MemoryScanSource {
+                field_area_idx: FIELD_IDX,
+                twin_area_idx: TWIN_IDX,
+                field_width: 1,
+                field_height: 1,
+                field_depth: 1,
+            }],
+            scanner_mask: None,
+            reward: Some(ClassifierRewardConfig {
+                pain_area_idx: PAIN_IDX,
+                pleasure_area_idx: PLEASURE_IDX,
+                feedback_area_idx: None,
+                feedback_layout: AnswerFeedbackLayout::OutputColumn,
+                pleasure_step: 1.0,
+                pain_step: 1.0,
+                max_weight: f32::INFINITY,
+            }),
+        };
+        let mut areas = HashMap::new();
+        areas.insert(
+            KERNEL_IDX,
+            MemoryAreaConfig {
+                temporal_depth: 1,
+                upstream_areas: vec![FIELD_IDX],
+                mp_learning_enabled: false,
+                scan: Some(scan),
+            },
+        );
+        PlasticityService::run_episodic_scan(&npu, &mut array, &areas, timestep);
+        assert!(array.get_class_channels(ambiguous).is_empty());
+        assert_eq!(array.get_class_channels(quiet), vec![1]);
+        let fired = npu.lock().unwrap().process_burst().unwrap();
+        assert!(
+            fired.fired_neurons.contains(&pain_neuron),
+            "ambiguous decision stimulates the classifier pain area"
+        );
+    }
+
+    /// A correct-answer column confirms one channel and pains the other.
+    /// The missed correct channel is bound under pleasure.
+    #[test]
+    fn reward_training_feedback_splits_pain_and_pleasure_on_one_instance() {
+        const FIELD_IDX: u32 = 10;
+        const KERNEL_IDX: u32 = 11;
+        const TWIN_IDX: u32 = 12;
+        const PAIN_IDX: u32 = 20;
+        const PLEASURE_IDX: u32 = 21;
+        const FEEDBACK_IDX: u32 = 22;
+
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 64, 64, 8).unwrap(),
+            "classifier-reward-feedback-npu",
+        ));
+        let _service = PlasticityService::new(PlasticityConfig::default(), cache, Arc::clone(&npu));
+        let timestep = {
+            let mut guard = npu.lock().unwrap();
+            guard.register_cortical_area(FIELD_IDX, "Y2ZpZWxkMDE=".to_string());
+            guard.register_cortical_area(KERNEL_IDX, "bWttZW0wMDE=".to_string());
+            guard.register_cortical_area(TWIN_IDX, "Y3R3aW4wMDE=".to_string());
+            guard.register_cortical_area(PAIN_IDX, "Y3BhaW4wMDE=".to_string());
+            guard.register_cortical_area(PLEASURE_IDX, "Y3BsZWEwMDE=".to_string());
+            guard.register_cortical_area(FEEDBACK_IDX, "Y2ZlZWQwMDE=".to_string());
+            guard.configure_fire_ledger_window(FIELD_IDX, 1).unwrap();
+            guard.configure_fire_ledger_window(FEEDBACK_IDX, 1).unwrap();
+            let field_neuron = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    FIELD_IDX,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+            let feedback_neuron = guard
+                .add_neuron(
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    u16::MAX,
+                    0,
+                    false,
+                    FEEDBACK_IDX,
+                    0,
+                    0,
+                    2,
+                )
+                .unwrap();
+            guard.inject_sensory_with_potentials(&[(field_neuron, 2.0), (feedback_neuron, 2.0)]);
+            let burst = guard.process_burst().unwrap();
+            assert!(burst.fired_neurons.contains(&feedback_neuron));
+            burst.burst
+        };
+
+        let signature = super::spatial_signature_hash(&[vec![(0, 0, 0)]]);
+        let mut array = MemoryNeuronArray::new(16);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 100,
+            longterm_threshold: 100,
+            ..Default::default()
+        };
+        let neuron_idx = array
+            .create_memory_neuron(0xC33, KERNEL_IDX, 0, &config)
+            .unwrap();
+        array.set_spatial_signature(neuron_idx, signature);
+        array.bind_class_channel(neuron_idx, 1);
+        assert_eq!(array.check_longterm_conversion(100), vec![neuron_idx]);
+
+        let scan = MemoryScanConfig {
+            kernel: super::ScanKernel {
+                width: 1,
+                height: 1,
+                depth: 1,
+            },
+            min_window_activity: 1,
+            scan_skip_density: 1.0,
+            class_channel_count: 3,
+            class_area_width: 1,
+            class_area_height: 1,
+            class_memory_area_idx: 99,
+            sources: vec![MemoryScanSource {
+                field_area_idx: FIELD_IDX,
+                twin_area_idx: TWIN_IDX,
+                field_width: 1,
+                field_height: 1,
+                field_depth: 1,
+            }],
+            scanner_mask: None,
+            reward: Some(ClassifierRewardConfig {
+                pain_area_idx: PAIN_IDX,
+                pleasure_area_idx: PLEASURE_IDX,
+                feedback_area_idx: Some(FEEDBACK_IDX),
+                feedback_layout: AnswerFeedbackLayout::OutputColumn,
+                pleasure_step: 1.0,
+                pain_step: 1.0,
+                max_weight: f32::INFINITY,
+            }),
+        };
+        let mut areas = HashMap::new();
+        areas.insert(
+            KERNEL_IDX,
+            MemoryAreaConfig {
+                temporal_depth: 1,
+                upstream_areas: vec![FIELD_IDX],
+                mp_learning_enabled: false,
+                scan: Some(scan),
+            },
+        );
+        PlasticityService::run_episodic_scan(&npu, &mut array, &areas, timestep);
+        assert_eq!(array.get_class_channels(neuron_idx), vec![2]);
+        assert_eq!(array.class_channel_weight(neuron_idx, 2), Some(1.0));
+        assert_eq!(array.class_channel_weight(neuron_idx, 1), None);
     }
 }

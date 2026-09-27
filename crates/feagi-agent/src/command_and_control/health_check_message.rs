@@ -64,6 +64,9 @@ pub struct HealthCheckResponse {
     /// Hash of agent data (ids, capabilities, connection properties)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_data_hash: Option<u64>,
+    /// Advances when synaptic plasticity commits a weight change or creates a synapse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synaptic_plasticity_generation: Option<u64>,
     /// Root brain region ID (UUID string) for O(1) root lookup
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,

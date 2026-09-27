@@ -17,6 +17,8 @@ pub struct HashState {
     cortical_mappings_hash: AtomicU64,
     classifiers_hash: AtomicU64,
     agent_data_hash: AtomicU64,
+    /// Increments only when synaptic plasticity commits a weight change or a new synapse.
+    synaptic_plasticity_generation: AtomicU64,
 }
 
 impl HashState {
@@ -94,6 +96,20 @@ impl HashState {
     pub fn set_agent_data_hash(&self, value: u64) {
         self.agent_data_hash.store(value, Ordering::Release);
     }
+
+    /// Generation of committed synaptic plasticity.
+    ///
+    /// Counts weight commits and plasticity-created synapses. Eligibility-trace
+    /// updates do not advance it, and an unchanged weight does not either.
+    pub fn get_synaptic_plasticity_generation(&self) -> u64 {
+        self.synaptic_plasticity_generation.load(Ordering::Acquire)
+    }
+
+    /// Record one burst in which synaptic plasticity changed connectome state.
+    pub fn note_synaptic_plasticity_change(&self) {
+        self.synaptic_plasticity_generation
+            .fetch_add(1, Ordering::Release);
+    }
 }
 
 #[cfg(test)]
@@ -106,5 +122,14 @@ mod tests {
         assert_eq!(state.get_classifiers_hash(), 0);
         state.set_classifiers_hash(42);
         assert_eq!(state.get_classifiers_hash(), 42);
+    }
+
+    #[test]
+    fn synaptic_plasticity_generation_advances_only_when_noted() {
+        let state = HashState::new();
+        assert_eq!(state.get_synaptic_plasticity_generation(), 0);
+        state.note_synaptic_plasticity_change();
+        state.note_synaptic_plasticity_change();
+        assert_eq!(state.get_synaptic_plasticity_generation(), 2);
     }
 }

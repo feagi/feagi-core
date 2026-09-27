@@ -597,6 +597,10 @@ mod tests {
                 }],
                 kernel_memory_id: "mkmem1".to_string(),
                 class_memory_id: "mcmem1".to_string(),
+                reward_training: false,
+                answer_feedback_area_id: None,
+                pain_area_id: None,
+                pleasure_area_id: None,
                 properties: HashMap::new(),
             },
         );

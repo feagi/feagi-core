@@ -683,6 +683,26 @@ impl ConnectomeManager {
             }
             Self::hash_str(&mut hasher, &classifier.kernel_memory_id);
             Self::hash_str(&mut hasher, &classifier.class_memory_id);
+            Self::hash_str(
+                &mut hasher,
+                if classifier.reward_training {
+                    "reward"
+                } else {
+                    "no-reward"
+                },
+            );
+            match &classifier.answer_feedback_area_id {
+                Some(area_id) => Self::hash_str(&mut hasher, area_id),
+                None => Self::hash_str(&mut hasher, "null"),
+            }
+            match &classifier.pain_area_id {
+                Some(area_id) => Self::hash_str(&mut hasher, area_id),
+                None => Self::hash_str(&mut hasher, "null"),
+            }
+            match &classifier.pleasure_area_id {
+                Some(area_id) => Self::hash_str(&mut hasher, area_id),
+                None => Self::hash_str(&mut hasher, "null"),
+            }
             Self::hash_properties_filtered(&mut hasher, &classifier.properties, &[]);
         }
         hasher.finish() & HASH_SAFE_MASK
@@ -3017,6 +3037,36 @@ impl ConnectomeManager {
                 }
             }
         }
+        kernel_mem.properties.insert(
+            "classifier_reward_training".to_string(),
+            serde_json::json!(classifier.reward_training),
+        );
+        if let Some(pain_area_id) = &classifier.pain_area_id {
+            kernel_mem.properties.insert(
+                "classifier_pain_area_id".to_string(),
+                serde_json::json!(pain_area_id),
+            );
+        } else {
+            kernel_mem.properties.remove("classifier_pain_area_id");
+        }
+        if let Some(pleasure_area_id) = &classifier.pleasure_area_id {
+            kernel_mem.properties.insert(
+                "classifier_pleasure_area_id".to_string(),
+                serde_json::json!(pleasure_area_id),
+            );
+        } else {
+            kernel_mem.properties.remove("classifier_pleasure_area_id");
+        }
+        if let Some(feedback_area_id) = &classifier.answer_feedback_area_id {
+            kernel_mem.properties.insert(
+                "classifier_answer_feedback_area_id".to_string(),
+                serde_json::json!(feedback_area_id),
+            );
+        } else {
+            kernel_mem
+                .properties
+                .remove("classifier_answer_feedback_area_id");
+        }
     }
 
     /// Assembly areas are created with burst on. A genome saved before that
@@ -3961,6 +4011,24 @@ impl ConnectomeManager {
             1.0
         };
 
+        let instance_reward = rule_obj
+            .get("classifier_instance_reward")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if instance_reward
+            && (!matches!(
+                plasticity_mode,
+                feagi_npu_burst_engine::npu::PlasticityMode::RStdp
+            ) || reward_source_area_id.is_none()
+                || punishment_source_area_id.is_none())
+        {
+            return Err(BduError::Internal(format!(
+                "classifier_instance_reward requires plasticity_mode='rstdp' plus \
+                 reward_source_area and punishment_source_area on mapping {} -> {}",
+                src_area_id, dst_area_id
+            )));
+        }
+
         // Validate R-STDP fields are absent when not in RStdp mode (catches genome typos early).
         if !matches!(
             plasticity_mode,
@@ -4055,6 +4123,7 @@ impl ConnectomeManager {
             punishment_source_area,
             max_weight,
             plasticity_eta,
+            instance_reward,
         };
 
         npu_lock
@@ -5988,6 +6057,12 @@ impl ConnectomeManager {
             class_memory_area_idx,
             sources,
             scanner_mask: None,
+            reward: self.classifier_reward_scan_config(
+                memory_area,
+                memory_id,
+                &class_mem_id,
+                feagi_npu_plasticity::AnswerFeedbackLayout::ClassVolume,
+            )?,
         })
     }
 
@@ -6072,7 +6147,103 @@ impl ConnectomeManager {
                 mask_height: mask_area.dimensions.height,
                 mask_depth: mask_area.dimensions.depth,
             }),
+            reward: self.classifier_reward_scan_config(
+                memory_area,
+                memory_id,
+                &class_mem_id,
+                feagi_npu_plasticity::AnswerFeedbackLayout::OutputColumn,
+            )?,
         })
+    }
+
+    /// `Some(None)` when reward training is off. `None` when it is on and its
+    /// areas or associative steps cannot be resolved.
+    #[cfg(feature = "plasticity")]
+    fn classifier_reward_scan_config(
+        &self,
+        memory_area: &CorticalArea,
+        memory_id: &CorticalID,
+        class_mem_id: &CorticalID,
+        feedback_layout: feagi_npu_plasticity::AnswerFeedbackLayout,
+    ) -> Option<Option<feagi_npu_plasticity::ClassifierRewardConfig>> {
+        let enabled = memory_area
+            .properties
+            .get("classifier_reward_training")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if !enabled {
+            return Some(None);
+        }
+        let pain_b64 = memory_area
+            .properties
+            .get("classifier_pain_area_id")
+            .and_then(|value| value.as_str())?;
+        let pleasure_b64 = memory_area
+            .properties
+            .get("classifier_pleasure_area_id")
+            .and_then(|value| value.as_str())?;
+        let pain_id = CorticalID::try_from_base_64(pain_b64).ok()?;
+        let pleasure_id = CorticalID::try_from_base_64(pleasure_b64).ok()?;
+        let pain_area_idx = *self.cortical_id_to_idx.get(&pain_id)?;
+        let pleasure_area_idx = *self.cortical_id_to_idx.get(&pleasure_id)?;
+        let feedback_area_idx = match memory_area
+            .properties
+            .get("classifier_answer_feedback_area_id")
+            .and_then(|value| value.as_str())
+        {
+            Some(feedback_b64) => {
+                let feedback_id = CorticalID::try_from_base_64(feedback_b64).ok()?;
+                Some(*self.cortical_id_to_idx.get(&feedback_id)?)
+            }
+            None => None,
+        };
+        let (pleasure_step, pain_step, max_weight) =
+            self.associative_reward_steps(memory_id, class_mem_id)?;
+        Some(Some(feagi_npu_plasticity::ClassifierRewardConfig {
+            pain_area_idx,
+            pleasure_area_idx,
+            feedback_area_idx,
+            feedback_layout,
+            pleasure_step,
+            pain_step,
+            max_weight,
+        }))
+    }
+
+    #[cfg(feature = "plasticity")]
+    fn associative_reward_steps(
+        &self,
+        memory_id: &CorticalID,
+        class_mem_id: &CorticalID,
+    ) -> Option<(f32, f32, f32)> {
+        let memory_area = self.cortical_areas.get(memory_id)?;
+        let mapping_dst = memory_area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|value| value.as_object())?;
+        let rules = Self::get_mapping_rules_for_destination(mapping_dst, class_mem_id)?;
+        let rule = rules.iter().find(|rule| {
+            rule.get("morphology_id").and_then(|value| value.as_str()) == Some("associative_memory")
+        })?;
+        let constant = rule
+            .get("plasticity_constant")
+            .and_then(|value| value.as_f64())? as f32;
+        let ltp = rule
+            .get("ltp_multiplier")
+            .and_then(|value| value.as_f64())? as f32;
+        let ltd = rule
+            .get("ltd_multiplier")
+            .and_then(|value| value.as_f64())? as f32;
+        let eta = rule
+            .get("plasticity_eta")
+            .and_then(|value| value.as_f64())
+            .unwrap_or(1.0) as f32;
+        let max_weight = rule
+            .get("max_weight")
+            .and_then(|value| value.as_f64())
+            .map(|value| value as f32)
+            .unwrap_or(f32::INFINITY);
+        Some((eta * constant * ltp, eta * constant * ltd, max_weight))
     }
 
     #[cfg(feature = "plasticity")]
@@ -9345,6 +9516,7 @@ mod tests {
                 activation_count: 5,
                 spatial_signature: None,
                 class_channels: Vec::new(),
+                class_channel_weights: Vec::new(),
             }])
             .expect("seeded long-term memory neuron");
             assert_eq!(
@@ -9535,6 +9707,10 @@ mod tests {
             fields: Vec::new(),
             kernel_memory_id: "mkmem1".to_string(),
             class_memory_id: "mcmem1".to_string(),
+            reward_training: false,
+            answer_feedback_area_id: None,
+            pain_area_id: None,
+            pleasure_area_id: None,
             properties: HashMap::new(),
         });
         manager.refresh_all_connectome_hashes();
@@ -11216,6 +11392,10 @@ mod tests {
             fields: Vec::new(),
             kernel_memory_id: "mkmem1".to_string(),
             class_memory_id: "mcmem1".to_string(),
+            reward_training: false,
+            answer_feedback_area_id: None,
+            pain_area_id: None,
+            pleasure_area_id: None,
             properties: HashMap::new(),
         };
         manager.upsert_classifier(classifier.clone());
@@ -11268,6 +11448,10 @@ mod tests {
             }],
             kernel_memory_id: "mkmem1".to_string(),
             class_memory_id: "mcmem1".to_string(),
+            reward_training: false,
+            answer_feedback_area_id: None,
+            pain_area_id: None,
+            pleasure_area_id: None,
             properties: HashMap::new(),
         });
         assert_eq!(manager.clear_classifier_inputs_for_area("cfield"), 1);
@@ -11628,6 +11812,10 @@ mod tests {
             }],
             kernel_memory_id: mem_id.as_base_64(),
             class_memory_id: "mcmem001".to_string(),
+            reward_training: false,
+            answer_feedback_area_id: None,
+            pain_area_id: None,
+            pleasure_area_id: None,
             properties: HashMap::new(),
         });
 
@@ -11746,6 +11934,10 @@ mod tests {
             }],
             kernel_memory_id: mem_id.as_base_64(),
             class_memory_id: "mcmem001".to_string(),
+            reward_training: false,
+            answer_feedback_area_id: None,
+            pain_area_id: None,
+            pleasure_area_id: None,
             properties: HashMap::new(),
         });
 
@@ -12055,6 +12247,10 @@ mod tests {
                 }],
                 kernel_memory_id: mem_id.as_base_64(),
                 class_memory_id: class_mem_id.as_base_64(),
+                reward_training: false,
+                answer_feedback_area_id: None,
+                pain_area_id: None,
+                pleasure_area_id: None,
                 properties: HashMap::new(),
             },
         );
@@ -12294,6 +12490,10 @@ mod tests {
                 }],
                 kernel_memory_id: mem_id.as_base_64(),
                 class_memory_id: class_mem_id.as_base_64(),
+                reward_training: false,
+                answer_feedback_area_id: None,
+                pain_area_id: None,
+                pleasure_area_id: None,
                 properties: HashMap::new(),
             },
         );

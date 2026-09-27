@@ -119,6 +119,7 @@ fn rstdp_params(
         punishment_source_area,
         max_weight: f32::INFINITY,
         plasticity_eta: 1.0,
+        instance_reward: false,
     }
 }
 

@@ -3349,6 +3349,7 @@ fn attach_long_term_memory_to_snapshot(
             activation_count: detail.activation_count,
             spatial_signature: detail.spatial_signature,
             class_channels: detail.class_channels,
+            class_channel_weights: detail.class_channel_weights,
         })
         .collect();
     snapshot.retain_regular_and_long_term_memory_synapses(&ltm_ids);
@@ -4124,6 +4125,7 @@ fn restore_long_term_memory_from_snapshot(
             activation_count: n.activation_count,
             spatial_signature: n.spatial_signature,
             class_channels: n.class_channels.clone(),
+            class_channel_weights: n.class_channel_weights.clone(),
         })
         .collect();
     let exec = executor
@@ -5968,6 +5970,10 @@ mod tests {
             }],
             kernel_memory_id: kernel_mem_id.as_base_64(),
             class_memory_id: class_mem_id.as_base_64(),
+            reward_training: false,
+            answer_feedback_area_id: None,
+            pain_area_id: None,
+            pleasure_area_id: None,
             properties: HashMap::new(),
         };
 
@@ -6547,6 +6553,7 @@ mod tests {
                     activation_count: 3,
                     spatial_signature: None,
                     class_channels: Vec::new(),
+                    class_channel_weights: Vec::new(),
                 }])
                 .map_err(crate::types::ServiceError::Backend)?;
             }
@@ -6892,6 +6899,7 @@ mod tests {
                         activation_count: 5,
                         spatial_signature: None,
                         class_channels: Vec::new(),
+                        class_channel_weights: Vec::new(),
                     },
                     MemoryNeuronDetail {
                         neuron_id: second_ltm_id,
@@ -6907,6 +6915,7 @@ mod tests {
                         activation_count: 4,
                         spatial_signature: None,
                         class_channels: Vec::new(),
+                        class_channel_weights: Vec::new(),
                     },
                 ])
                 .map_err(crate::types::ServiceError::Backend)?;
@@ -7392,6 +7401,7 @@ mod tests {
                     activation_count: 3,
                     spatial_signature: None,
                     class_channels: Vec::new(),
+                    class_channel_weights: Vec::new(),
                 },
             ],
             long_term_memory_replay_frames: Vec::new(),
@@ -7674,6 +7684,7 @@ mod tests {
                 activation_count: 1,
                 spatial_signature: None,
                 class_channels: Vec::new(),
+                class_channel_weights: Vec::new(),
             }],
             long_term_memory_replay_frames: if replay_frames.is_empty() {
                 Vec::new()
@@ -7835,6 +7846,7 @@ mod tests {
                 activation_count: 1,
                 spatial_signature: None,
                 class_channels: Vec::new(),
+                class_channel_weights: Vec::new(),
             }],
             long_term_memory_replay_frames: Vec::new(),
             lite_synapses: Vec::new(),
@@ -7916,6 +7928,7 @@ mod tests {
                 activation_count: 1,
                 spatial_signature: None,
                 class_channels: Vec::new(),
+                class_channel_weights: Vec::new(),
             }],
             long_term_memory_replay_frames: Vec::new(),
             lite_synapses: Vec::new(),

@@ -67,6 +67,9 @@ pub struct MemoryNeuronDetail {
     /// Class channels bound from the partner class memory area.
     #[serde(default)]
     pub class_channels: Vec<u32>,
+    /// Associative weight of each bound class channel. Absent weights are unset.
+    #[serde(default)]
+    pub class_channel_weights: Vec<(u32, f32)>,
 }
 
 /// Memory neuron array statistics
@@ -116,6 +119,8 @@ pub struct MemoryNeuronArray {
     // Scan sidecar: local occupancy hash and bound class channels.
     spatial_signature: HashMap<usize, u64>,
     class_channels: HashMap<usize, HashSet<u32>>,
+    /// Associative weight for each bound class channel while reward training is on.
+    class_channel_weights: HashMap<usize, HashMap<u32, f32>>,
     /// LTM-only index: (cortical_area_idx, spatial_signature) -> neuron indices.
     spatial_ltm_index: HashMap<(u32, u64), Vec<usize>>,
 
@@ -145,6 +150,7 @@ impl MemoryNeuronArray {
             area_neuron_indices: HashMap::new(),
             spatial_signature: HashMap::new(),
             class_channels: HashMap::new(),
+            class_channel_weights: HashMap::new(),
             spatial_ltm_index: HashMap::new(),
             id_manager: NeuronIdManager::new(),
         }
@@ -418,6 +424,16 @@ impl MemoryNeuronArray {
                     channels
                 })
                 .unwrap_or_default(),
+            class_channel_weights: self
+                .class_channel_weights
+                .get(&idx)
+                .map(|weights| {
+                    let mut pairs: Vec<(u32, f32)> =
+                        weights.iter().map(|(&c, &w)| (c, w)).collect();
+                    pairs.sort_unstable_by_key(|(channel, _)| *channel);
+                    pairs
+                })
+                .unwrap_or_default(),
         })
     }
 
@@ -500,6 +516,12 @@ impl MemoryNeuronArray {
             self.class_channels
                 .insert(neuron_idx, detail.class_channels.iter().copied().collect());
         }
+        if !detail.class_channel_weights.is_empty() {
+            self.class_channel_weights.insert(
+                neuron_idx,
+                detail.class_channel_weights.iter().copied().collect(),
+            );
+        }
         if detail.is_longterm_memory {
             self.index_spatial_ltm(neuron_idx);
         }
@@ -575,6 +597,80 @@ impl MemoryNeuronArray {
             .entry(neuron_idx)
             .or_default()
             .insert(class_channel);
+    }
+
+    /// Drop one class channel and its associative weight.
+    pub fn unbind_class_channel(&mut self, neuron_idx: usize, class_channel: u32) {
+        if let Some(channels) = self.class_channels.get_mut(&neuron_idx) {
+            channels.remove(&class_channel);
+            if channels.is_empty() {
+                self.class_channels.remove(&neuron_idx);
+            }
+        }
+        if let Some(weights) = self.class_channel_weights.get_mut(&neuron_idx) {
+            weights.remove(&class_channel);
+            if weights.is_empty() {
+                self.class_channel_weights.remove(&neuron_idx);
+            }
+        }
+    }
+
+    /// Record the starting associative weight the first time reward training sees a channel.
+    pub fn ensure_class_channel_weight(
+        &mut self,
+        neuron_idx: usize,
+        class_channel: u32,
+        initial: f32,
+    ) {
+        if initial <= 0.0 {
+            return;
+        }
+        self.class_channel_weights
+            .entry(neuron_idx)
+            .or_default()
+            .entry(class_channel)
+            .or_insert(initial);
+    }
+
+    /// Move one class-channel associative weight. A result at or below zero unbinds the channel.
+    ///
+    /// A channel that has no stored weight starts from `initial` before `delta` is applied.
+    pub fn apply_class_channel_delta(
+        &mut self,
+        neuron_idx: usize,
+        class_channel: u32,
+        delta: f32,
+        max_weight: f32,
+        initial: f32,
+    ) -> f32 {
+        let current = self
+            .class_channel_weights
+            .get(&neuron_idx)
+            .and_then(|weights| weights.get(&class_channel).copied())
+            .unwrap_or(initial);
+        let mut next = current + delta;
+        if next < 0.0 {
+            next = 0.0;
+        }
+        if max_weight.is_finite() {
+            next = next.min(max_weight);
+        }
+        if next <= 0.0 {
+            self.unbind_class_channel(neuron_idx, class_channel);
+            return 0.0;
+        }
+        self.bind_class_channel(neuron_idx, class_channel);
+        self.class_channel_weights
+            .entry(neuron_idx)
+            .or_default()
+            .insert(class_channel, next);
+        next
+    }
+
+    pub fn class_channel_weight(&self, neuron_idx: usize, class_channel: u32) -> Option<f32> {
+        self.class_channel_weights
+            .get(&neuron_idx)
+            .and_then(|weights| weights.get(&class_channel).copied())
     }
 
     pub fn get_class_channels(&self, neuron_idx: usize) -> Vec<u32> {
@@ -656,6 +752,7 @@ impl MemoryNeuronArray {
             self.remove_spatial_ltm_index(neuron_idx, spatial_signature);
         }
         self.class_channels.remove(&neuron_idx);
+        self.class_channel_weights.remove(&neuron_idx);
     }
 
     /// Get comprehensive statistics
@@ -822,6 +919,7 @@ impl MemoryNeuronArray {
         self.area_neuron_indices.clear();
         self.spatial_signature.clear();
         self.class_channels.clear();
+        self.class_channel_weights.clear();
         self.spatial_ltm_index.clear();
 
         self.next_available_index = 0;
@@ -1361,6 +1459,7 @@ mod tests {
             activation_count: 1,
             spatial_signature: None,
             class_channels: Vec::new(),
+            class_channel_weights: Vec::new(),
         }];
         let skipped = restored
             .restore_long_term_memory_neurons(&stm_only)

@@ -79,6 +79,7 @@ fn stdp_params(
         punishment_source_area: None,
         max_weight: f32::INFINITY,
         plasticity_eta: 1.0,
+        instance_reward: false,
     }
 }
 
