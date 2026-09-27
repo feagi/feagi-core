@@ -178,10 +178,11 @@ fn encoder_profile() -> EncoderBindingProfile {
         },
         image_width: None,
         image_height: None,
-        vision_layout: crate::binding::profile::VisionLayout::Simple,
+        vision_layout: feagi_trainer::binding::profile::VisionLayout::Simple,
         stream: None,
         teacher: None,
         segmentation_teacher: None,
+        learn_area_id: None,
         segmented_vision: None,
         cortical_name: None,
     }

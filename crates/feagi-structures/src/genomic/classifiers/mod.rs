@@ -117,6 +117,15 @@ pub struct Classifier {
     /// Hidden area whose firing is this classifier's pleasure signal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pleasure_area_id: Option<String>,
+    /// Bursts between a decision and the answer that grades it. Zero grades the same burst.
+    #[serde(default)]
+    pub answer_latency_bursts: u32,
+    /// When set, pain and pleasure run only on bursts this area fires.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub learn_area_id: Option<String>,
+    /// OPU that receives one surplus value per class channel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence_area_id: Option<String>,
     #[serde(default)]
     pub properties: HashMap<String, serde_json::Value>,
 }
@@ -322,6 +331,12 @@ impl Classifier {
         if self.answer_feedback_area_id.as_deref() == Some(area_id) {
             self.answer_feedback_area_id = None;
         }
+        if self.learn_area_id.as_deref() == Some(area_id) {
+            self.learn_area_id = None;
+        }
+        if self.confidence_area_id.as_deref() == Some(area_id) {
+            self.confidence_area_id = None;
+        }
         self.fields.retain(|field| field.field_area_id != area_id);
     }
 
@@ -423,6 +438,18 @@ pub fn validate_scanner_field(
     Ok(())
 }
 
+/// One class for the whole image: two axes are 1 and the remaining axis is the class count.
+pub fn is_whole_image_class_shape(feedback: [u32; 3], class_count: u32) -> bool {
+    if class_count == 0 {
+        return false;
+    }
+    let ones = feedback.iter().filter(|axis| **axis == 1).count();
+    let volume = u64::from(feedback[0])
+        .saturating_mul(u64::from(feedback[1]))
+        .saturating_mul(u64::from(feedback[2]));
+    ones >= 2 && volume == u64::from(class_count)
+}
+
 /// Answer feedback must match the classifier output.
 ///
 /// Kernel mode compares the class area. Scanner mode compares each detection
@@ -443,6 +470,14 @@ pub fn validate_answer_feedback_shape(
             }
         }
         ClassifierTrainingMode::Scanner => {
+            let class_count = if output_shapes.is_empty() {
+                reference[2]
+            } else {
+                output_shapes[0][2]
+            };
+            if is_whole_image_class_shape(feedback, class_count) {
+                return Ok(());
+            }
             let shapes = if output_shapes.is_empty() {
                 std::slice::from_ref(&reference)
             } else {
@@ -450,7 +485,8 @@ pub fn validate_answer_feedback_shape(
             };
             if shapes.iter().any(|shape| *shape != feedback) {
                 return Err(
-                    "answer feedback dimensions must match the detection output".to_string()
+                    "answer feedback dimensions must match the detection output or a whole-image class"
+                        .to_string(),
                 );
             }
         }
@@ -488,6 +524,9 @@ mod tests {
             answer_feedback_area_id: None,
             pain_area_id: None,
             pleasure_area_id: None,
+            answer_latency_bursts: 0,
+            learn_area_id: None,
+            confidence_area_id: None,
             properties: HashMap::new(),
         };
         classifier
@@ -657,6 +696,13 @@ mod tests {
             &[[16, 16, 4], [8, 8, 4]],
         )
         .is_err());
+        assert!(validate_answer_feedback_shape(
+            ClassifierTrainingMode::Scanner,
+            [10, 1, 1],
+            [16, 16, 10],
+            &[[16, 16, 10]],
+        )
+        .is_ok());
     }
 
     #[test]

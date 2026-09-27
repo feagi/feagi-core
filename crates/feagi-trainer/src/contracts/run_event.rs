@@ -70,6 +70,12 @@ pub enum RunEventKind {
         /// Operator-facing name of the pair just submitted (image file path tail).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         preview_name: Option<String>,
+        /// Class chosen from the decoder OPU for this sample.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        predicted_class: Option<u32>,
+        /// Per-class confidence read from that OPU. Empty when the sample was not scored.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        class_scores: Vec<f64>,
     },
     /// A metric snapshot — interim ([`MetricScope::Partial`]) or final
     /// ([`MetricScope::Aggregate`]). Values are deterministically ordered.
@@ -154,6 +160,8 @@ mod tests {
                 image_png_base64: None,
                 mask_png_base64: None,
                 preview_name: None,
+                predicted_class: Some(1),
+                class_scores: vec![0.2, 0.8],
             },
         );
         let json = serde_json::to_string(&event).expect("serialize");

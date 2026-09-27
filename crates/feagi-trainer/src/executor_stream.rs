@@ -180,6 +180,8 @@ where
                     image_png_base64: None,
                     mask_png_base64: None,
                     preview_name: None,
+                    predicted_class: None,
+                    class_scores: Vec::new(),
                 },
             ));
         }
@@ -198,6 +200,8 @@ where
                 image_png_base64: None,
                 mask_png_base64: None,
                 preview_name: None,
+                predicted_class: None,
+                class_scores: Vec::new(),
             },
         ));
     }
@@ -281,6 +285,8 @@ where
                     image_png_base64: None,
                     mask_png_base64: None,
                     preview_name: None,
+                    predicted_class: None,
+                    class_scores: Vec::new(),
                 },
             ));
             let Some(&class_id) = hold_by_tick.get(&tick) else {
@@ -329,6 +335,8 @@ where
                     image_png_base64: None,
                     mask_png_base64: None,
                     preview_name: None,
+                    predicted_class: None,
+                    class_scores: Vec::new(),
                 },
             ));
         }
@@ -534,6 +542,7 @@ mod tests {
             }),
             teacher: None,
             segmentation_teacher: None,
+            learn_area_id: None,
             segmented_vision: None,
         }
     }

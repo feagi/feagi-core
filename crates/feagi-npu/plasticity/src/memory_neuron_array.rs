@@ -121,6 +121,8 @@ pub struct MemoryNeuronArray {
     class_channels: HashMap<usize, HashSet<u32>>,
     /// Associative weight for each bound class channel while reward training is on.
     class_channel_weights: HashMap<usize, HashMap<u32, f32>>,
+    /// Decisions waiting for a later answer, and which pattern was already corrected.
+    presentation_ledger: crate::classifier_reward::PresentationLedger,
     /// LTM-only index: (cortical_area_idx, spatial_signature) -> neuron indices.
     spatial_ltm_index: HashMap<(u32, u64), Vec<usize>>,
 
@@ -151,6 +153,7 @@ impl MemoryNeuronArray {
             spatial_signature: HashMap::new(),
             class_channels: HashMap::new(),
             class_channel_weights: HashMap::new(),
+            presentation_ledger: crate::classifier_reward::PresentationLedger::default(),
             spatial_ltm_index: HashMap::new(),
             id_manager: NeuronIdManager::new(),
         }
@@ -667,6 +670,10 @@ impl MemoryNeuronArray {
         next
     }
 
+    pub fn presentation_ledger_mut(&mut self) -> &mut crate::classifier_reward::PresentationLedger {
+        &mut self.presentation_ledger
+    }
+
     pub fn class_channel_weight(&self, neuron_idx: usize, class_channel: u32) -> Option<f32> {
         self.class_channel_weights
             .get(&neuron_idx)
@@ -920,6 +927,7 @@ impl MemoryNeuronArray {
         self.spatial_signature.clear();
         self.class_channels.clear();
         self.class_channel_weights.clear();
+        self.presentation_ledger = crate::classifier_reward::PresentationLedger::default();
         self.spatial_ltm_index.clear();
 
         self.next_available_index = 0;

@@ -222,6 +222,9 @@ pub struct EncoderBindingProfile {
     /// Object-segmentation mask teacher (`iseg`). Required for image-folder segmentation.
     #[serde(default)]
     pub segmentation_teacher: Option<SegmentationTeacherBinding>,
+    /// Area stimulated on the train split only. Validation and test leave it quiet.
+    #[serde(default)]
+    pub learn_area_id: Option<String>,
 }
 
 /// How a decoder selector reads a FEAGI motor (OPU) area into a typed prediction.
@@ -296,6 +299,7 @@ mod tests {
             }),
             teacher: None,
             segmentation_teacher: None,
+            learn_area_id: None,
             segmented_vision: None,
         };
         let json = serde_json::to_string(&encoder).expect("json");

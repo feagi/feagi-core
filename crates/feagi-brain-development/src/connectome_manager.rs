@@ -703,6 +703,15 @@ impl ConnectomeManager {
                 Some(area_id) => Self::hash_str(&mut hasher, area_id),
                 None => Self::hash_str(&mut hasher, "null"),
             }
+            Self::hash_u32(&mut hasher, classifier.answer_latency_bursts);
+            match &classifier.learn_area_id {
+                Some(area_id) => Self::hash_str(&mut hasher, area_id),
+                None => Self::hash_str(&mut hasher, "null"),
+            }
+            match &classifier.confidence_area_id {
+                Some(area_id) => Self::hash_str(&mut hasher, area_id),
+                None => Self::hash_str(&mut hasher, "null"),
+            }
             Self::hash_properties_filtered(&mut hasher, &classifier.properties, &[]);
         }
         hasher.finish() & HASH_SAFE_MASK
@@ -3066,6 +3075,28 @@ impl ConnectomeManager {
             kernel_mem
                 .properties
                 .remove("classifier_answer_feedback_area_id");
+        }
+        kernel_mem.properties.insert(
+            "classifier_answer_latency_bursts".to_string(),
+            serde_json::json!(classifier.answer_latency_bursts),
+        );
+        if let Some(learn_area_id) = &classifier.learn_area_id {
+            kernel_mem.properties.insert(
+                "classifier_learn_area_id".to_string(),
+                serde_json::json!(learn_area_id),
+            );
+        } else {
+            kernel_mem.properties.remove("classifier_learn_area_id");
+        }
+        if let Some(confidence_area_id) = &classifier.confidence_area_id {
+            kernel_mem.properties.insert(
+                "classifier_confidence_area_id".to_string(),
+                serde_json::json!(confidence_area_id),
+            );
+        } else {
+            kernel_mem
+                .properties
+                .remove("classifier_confidence_area_id");
         }
     }
 
@@ -6061,6 +6092,7 @@ impl ConnectomeManager {
                 memory_area,
                 memory_id,
                 &class_mem_id,
+                class_channel_count,
                 feagi_npu_plasticity::AnswerFeedbackLayout::ClassVolume,
             )?,
         })
@@ -6151,6 +6183,7 @@ impl ConnectomeManager {
                 memory_area,
                 memory_id,
                 &class_mem_id,
+                class_channel_count,
                 feagi_npu_plasticity::AnswerFeedbackLayout::OutputColumn,
             )?,
         })
@@ -6164,8 +6197,10 @@ impl ConnectomeManager {
         memory_area: &CorticalArea,
         memory_id: &CorticalID,
         class_mem_id: &CorticalID,
+        class_channel_count: u32,
         feedback_layout: feagi_npu_plasticity::AnswerFeedbackLayout,
     ) -> Option<Option<feagi_npu_plasticity::ClassifierRewardConfig>> {
+        use crate::models::CorticalAreaExt;
         let enabled = memory_area
             .properties
             .get("classifier_reward_training")
@@ -6186,17 +6221,75 @@ impl ConnectomeManager {
         let pleasure_id = CorticalID::try_from_base_64(pleasure_b64).ok()?;
         let pain_area_idx = *self.cortical_id_to_idx.get(&pain_id)?;
         let pleasure_area_idx = *self.cortical_id_to_idx.get(&pleasure_id)?;
-        let feedback_area_idx = match memory_area
+        let (feedback_area_idx, feedback_width, feedback_height, feedback_layout) =
+            match memory_area
+                .properties
+                .get("classifier_answer_feedback_area_id")
+                .and_then(|value| value.as_str())
+            {
+                Some(feedback_b64) => {
+                    let feedback_id = CorticalID::try_from_base_64(feedback_b64).ok()?;
+                    let feedback_area = self.cortical_areas.get(&feedback_id)?;
+                    let width = feedback_area.dimensions.width;
+                    let height = feedback_area.dimensions.height;
+                    let depth = feedback_area.dimensions.depth;
+                    let layout = if matches!(
+                        feedback_layout,
+                        feagi_npu_plasticity::AnswerFeedbackLayout::OutputColumn
+                    )
+                        && feagi_structures::genomic::classifiers::is_whole_image_class_shape(
+                            [width, height, depth],
+                            class_channel_count,
+                        ) {
+                        feagi_npu_plasticity::AnswerFeedbackLayout::ImageClass
+                    } else {
+                        feedback_layout
+                    };
+                    (
+                        Some(*self.cortical_id_to_idx.get(&feedback_id)?),
+                        width,
+                        height,
+                        layout,
+                    )
+                }
+                None => (None, 0, 0, feedback_layout),
+            };
+        let learn_area_idx = match memory_area
             .properties
-            .get("classifier_answer_feedback_area_id")
+            .get("classifier_learn_area_id")
             .and_then(|value| value.as_str())
         {
-            Some(feedback_b64) => {
-                let feedback_id = CorticalID::try_from_base_64(feedback_b64).ok()?;
-                Some(*self.cortical_id_to_idx.get(&feedback_id)?)
+            Some(learn_b64) => {
+                let learn_id = CorticalID::try_from_base_64(learn_b64).ok()?;
+                Some(*self.cortical_id_to_idx.get(&learn_id)?)
             }
             None => None,
         };
+        let (confidence_area_idx, confidence_width, confidence_height, confidence_depth) =
+            match memory_area
+                .properties
+                .get("classifier_confidence_area_id")
+                .and_then(|value| value.as_str())
+            {
+                Some(confidence_b64) => {
+                    let confidence_id = CorticalID::try_from_base_64(confidence_b64).ok()?;
+                    let confidence_area = self.cortical_areas.get(&confidence_id)?;
+                    (
+                        Some(*self.cortical_id_to_idx.get(&confidence_id)?),
+                        confidence_area.dimensions.width,
+                        confidence_area.dimensions.height,
+                        confidence_area.dimensions.depth,
+                    )
+                }
+                None => (None, 0, 0, 0),
+            };
+        let answer_latency_bursts = memory_area
+            .properties
+            .get("classifier_answer_latency_bursts")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0) as u32;
+        let class_mem = self.cortical_areas.get(class_mem_id)?;
+        let firing_threshold = class_mem.firing_threshold();
         let (pleasure_step, pain_step, max_weight) =
             self.associative_reward_steps(memory_id, class_mem_id)?;
         Some(Some(feagi_npu_plasticity::ClassifierRewardConfig {
@@ -6204,6 +6297,15 @@ impl ConnectomeManager {
             pleasure_area_idx,
             feedback_area_idx,
             feedback_layout,
+            feedback_width,
+            feedback_height,
+            answer_latency_bursts,
+            learn_area_idx,
+            confidence_area_idx,
+            confidence_width,
+            confidence_height,
+            confidence_depth,
+            firing_threshold,
             pleasure_step,
             pain_step,
             max_weight,
@@ -9711,6 +9813,9 @@ mod tests {
             answer_feedback_area_id: None,
             pain_area_id: None,
             pleasure_area_id: None,
+            answer_latency_bursts: 0,
+            learn_area_id: None,
+            confidence_area_id: None,
             properties: HashMap::new(),
         });
         manager.refresh_all_connectome_hashes();
@@ -11396,6 +11501,9 @@ mod tests {
             answer_feedback_area_id: None,
             pain_area_id: None,
             pleasure_area_id: None,
+            answer_latency_bursts: 0,
+            learn_area_id: None,
+            confidence_area_id: None,
             properties: HashMap::new(),
         };
         manager.upsert_classifier(classifier.clone());
@@ -11452,6 +11560,9 @@ mod tests {
             answer_feedback_area_id: None,
             pain_area_id: None,
             pleasure_area_id: None,
+            answer_latency_bursts: 0,
+            learn_area_id: None,
+            confidence_area_id: None,
             properties: HashMap::new(),
         });
         assert_eq!(manager.clear_classifier_inputs_for_area("cfield"), 1);
@@ -11816,6 +11927,9 @@ mod tests {
             answer_feedback_area_id: None,
             pain_area_id: None,
             pleasure_area_id: None,
+            answer_latency_bursts: 0,
+            learn_area_id: None,
+            confidence_area_id: None,
             properties: HashMap::new(),
         });
 
@@ -11938,6 +12052,9 @@ mod tests {
             answer_feedback_area_id: None,
             pain_area_id: None,
             pleasure_area_id: None,
+            answer_latency_bursts: 0,
+            learn_area_id: None,
+            confidence_area_id: None,
             properties: HashMap::new(),
         });
 
@@ -12251,6 +12368,9 @@ mod tests {
                 answer_feedback_area_id: None,
                 pain_area_id: None,
                 pleasure_area_id: None,
+                answer_latency_bursts: 0,
+                learn_area_id: None,
+                confidence_area_id: None,
                 properties: HashMap::new(),
             },
         );
@@ -12494,6 +12614,9 @@ mod tests {
                 answer_feedback_area_id: None,
                 pain_area_id: None,
                 pleasure_area_id: None,
+                answer_latency_bursts: 0,
+                learn_area_id: None,
+                confidence_area_id: None,
                 properties: HashMap::new(),
             },
         );

@@ -44,7 +44,10 @@ pub mod stdp_core; // Platform-agnostic STDP (no_std compatible)
 // Re-export key types
 pub use executor::{AsyncPlasticityExecutor, PlasticityExecutor};
 // pub use lifecycle_manager::PlasticityLifecycleManager;  // DEPRECATED
-pub use classifier_reward::{scanning_instance_affect, ChannelAffect, ChannelUpdate};
+pub use classifier_reward::{
+    scanning_instance_affect, AnswerObservation, ChannelAffect, ChannelUpdate, PresentationLedger,
+    RecordedDecision,
+};
 pub use episodic_scan::{
     active_window_origins, class_channel_index, collect_active_scan_windows, should_skip_scan,
     spatial_signature_hash, window_relative_coords, ScanKernel, ScanWindow,

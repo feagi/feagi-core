@@ -295,6 +295,12 @@ pub struct ClassifierInfo {
     pub pain_area_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pleasure_area_id: Option<String>,
+    #[serde(default)]
+    pub answer_latency_bursts: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub learn_area_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence_area_id: Option<String>,
     pub properties: HashMap<String, serde_json::Value>,
 }
 
@@ -317,6 +323,9 @@ impl From<feagi_structures::genomic::classifiers::Classifier> for ClassifierInfo
             answer_feedback_area_id: classifier.answer_feedback_area_id,
             pain_area_id: classifier.pain_area_id,
             pleasure_area_id: classifier.pleasure_area_id,
+            answer_latency_bursts: classifier.answer_latency_bursts,
+            learn_area_id: classifier.learn_area_id,
+            confidence_area_id: classifier.confidence_area_id,
             properties: classifier.properties,
         }
     }

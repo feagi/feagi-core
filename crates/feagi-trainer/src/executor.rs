@@ -113,6 +113,14 @@ pub(crate) fn emit_no_detection_warning(
     ));
 }
 
+/// Class id and per-class confidence from one decoded sample, when the decoder emitted a class.
+fn prediction_confidence(record: &PredictionRecord) -> (Option<u32>, Vec<f64>) {
+    match &record.prediction {
+        TypedPrediction::Class { class_id, scores } => (Some(*class_id), scores.clone()),
+        _ => (None, Vec::new()),
+    }
+}
+
 /// Analog scalars submitted as graded P for the live trainer preview.
 pub(crate) fn analog_sent_values(sample: &IRSample) -> Vec<f64> {
     match &sample.payload {
@@ -361,6 +369,10 @@ where
 
         let (image_png_base64, mask_png_base64, preview_name) =
             segmentation_progress_preview(&sample, decoder_profile)?;
+        let (predicted_class, class_scores) = predictions
+            .last()
+            .map(prediction_confidence)
+            .unwrap_or((None, Vec::new()));
         events.emit(RunEvent::new(
             run_id.clone(),
             RunEventKind::Progress {
@@ -374,6 +386,8 @@ where
                 image_png_base64,
                 mask_png_base64,
                 preview_name,
+                predicted_class,
+                class_scores,
             },
         ));
 
@@ -784,6 +798,7 @@ mod tests {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
+            learn_area_id: None,
             segmented_vision: None,
             cortical_name: None,
         }

@@ -2326,6 +2326,9 @@ pub async fn post_classifier(
         answer_feedback_area_id: None,
         pain_area_id: None,
         pleasure_area_id: None,
+        answer_latency_bursts: 0,
+        learn_area_id: None,
+        confidence_area_id: None,
         properties: HashMap::new(),
     };
     let mask_for_burst = classifier.mask_area_id.clone();
@@ -2401,6 +2404,14 @@ pub struct UpdateClassifierRequest {
     /// Empty string clears the correct-answer area. Absent leaves it unchanged.
     #[serde(default)]
     pub answer_feedback_area_id: Option<String>,
+    #[serde(default)]
+    pub answer_latency_bursts: Option<u32>,
+    /// Empty string clears the learn line. Absent leaves it unchanged.
+    #[serde(default)]
+    pub learn_area_id: Option<String>,
+    /// Empty string clears the confidence OPU. Absent leaves it unchanged.
+    #[serde(default)]
+    pub confidence_area_id: Option<String>,
 }
 
 fn classifier_from_info(
@@ -2423,6 +2434,9 @@ fn classifier_from_info(
         answer_feedback_area_id: existing.answer_feedback_area_id,
         pain_area_id: existing.pain_area_id,
         pleasure_area_id: existing.pleasure_area_id,
+        answer_latency_bursts: existing.answer_latency_bursts,
+        learn_area_id: existing.learn_area_id,
+        confidence_area_id: existing.confidence_area_id,
         properties: existing.properties,
     }
 }
@@ -2864,6 +2878,44 @@ pub async fn update_classifier(
             )
             .map_err(ApiError::invalid_input)?;
             classifier.answer_feedback_area_id = Some(feedback_area_id.trim().to_string());
+        }
+    }
+    if let Some(latency) = request.answer_latency_bursts {
+        classifier.answer_latency_bursts = latency;
+    }
+    if let Some(learn_area_id) = request.learn_area_id.clone() {
+        if learn_area_id.trim().is_empty() {
+            classifier.learn_area_id = None;
+        } else {
+            state
+                .connectome_service
+                .get_cortical_area(learn_area_id.trim())
+                .await
+                .map_err(|e| ApiError::invalid_input(format!("learn_area_id not found: {}", e)))?;
+            classifier.learn_area_id = Some(learn_area_id.trim().to_string());
+        }
+    }
+    if let Some(confidence_area_id) = request.confidence_area_id.clone() {
+        if confidence_area_id.trim().is_empty() {
+            classifier.confidence_area_id = None;
+        } else {
+            let confidence_area = state
+                .connectome_service
+                .get_cortical_area(confidence_area_id.trim())
+                .await
+                .map_err(|e| {
+                    ApiError::invalid_input(format!("confidence_area_id not found: {}", e))
+                })?;
+            let dims = area_dimensions_u32(confidence_area.dimensions, "confidence")?;
+            if !feagi_structures::genomic::classifiers::is_whole_image_class_shape(
+                dims,
+                channel_count as u32,
+            ) {
+                return Err(ApiError::invalid_input(
+                    "confidence area must be one class channel on a single axis",
+                ));
+            }
+            classifier.confidence_area_id = Some(confidence_area_id.trim().to_string());
         }
     }
     if request.reward_training.is_some() {

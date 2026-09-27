@@ -19,7 +19,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
-use crate::classifier_reward::{scanning_instance_affect, ChannelAffect};
+use crate::classifier_reward::{
+    scanning_instance_affect, AnswerObservation, ChannelAffect, PresentationLedger,
+    RecordedDecision,
+};
 use crate::episodic_scan::{
     class_channel_index, collect_active_scan_windows, mask_channels_in_window, should_skip_scan,
     spatial_signature_hash, ScanKernel,
@@ -197,6 +200,8 @@ pub enum AnswerFeedbackLayout {
     ClassVolume,
     /// The class channel is Z at the window origin. Used when feedback matches the detection twin.
     OutputColumn,
+    /// One class for the whole image. Every window of this burst shares these channels.
+    ImageClass,
 }
 
 /// Reward-training settings for one classifier associative mapping.
@@ -210,6 +215,19 @@ pub struct ClassifierRewardConfig {
     pub pleasure_area_idx: u32,
     pub feedback_area_idx: Option<u32>,
     pub feedback_layout: AnswerFeedbackLayout,
+    pub feedback_width: u32,
+    pub feedback_height: u32,
+    /// Bursts between the decision and the answer that grades it. Zero grades the current burst.
+    pub answer_latency_bursts: u32,
+    /// When set, weight changes run only on bursts this area fires.
+    pub learn_area_idx: Option<u32>,
+    /// OPU that receives one surplus PSP per class channel.
+    pub confidence_area_idx: Option<u32>,
+    pub confidence_width: u32,
+    pub confidence_height: u32,
+    pub confidence_depth: u32,
+    /// Class-memory firing threshold. Surplus confidence is weight minus this value.
+    pub firing_threshold: f32,
     pub pleasure_step: f32,
     pub pain_step: f32,
     pub max_weight: f32,
@@ -1313,8 +1331,8 @@ impl PlasticityService {
 
     /// Class channels in the correct-answer area for one scanning instance.
     ///
-    /// `None` when that area is not connected. An empty vector means the area
-    /// was read and no class channel fired.
+    /// A connected area with no firing is [`AnswerObservation::Silent`]: the
+    /// gap before a label arrives is not pain.
     fn feedback_channels_for_window(
         npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         reward: &ClassifierRewardConfig,
@@ -1324,18 +1342,22 @@ impl PlasticityService {
         class_area_height: u32,
         current_timestep: u64,
         temporal_depth: usize,
-    ) -> Option<Vec<u32>> {
-        let feedback_area_idx = reward.feedback_area_idx?;
-        let npu_lock = npu.lock().unwrap();
-        let window = npu_lock
-            .get_fire_ledger_dense_window_bitmaps(
-                feedback_area_idx,
-                current_timestep,
-                temporal_depth,
-            )
-            .ok()?;
+    ) -> AnswerObservation {
+        let Some(feedback_area_idx) = reward.feedback_area_idx else {
+            return AnswerObservation::Absent;
+        };
+        let Ok(npu_lock) = npu.lock() else {
+            return AnswerObservation::Silent;
+        };
+        let Ok(window) = npu_lock.get_fire_ledger_dense_window_bitmaps(
+            feedback_area_idx,
+            current_timestep,
+            temporal_depth,
+        ) else {
+            return AnswerObservation::Silent;
+        };
         let Some((_, newest)) = window.last() else {
-            return Some(Vec::new());
+            return AnswerObservation::Silent;
         };
         let mut channels = Vec::new();
         for neuron_id in newest.iter() {
@@ -1352,6 +1374,9 @@ impl PlasticityService {
                 AnswerFeedbackLayout::ClassVolume => {
                     class_channel_index(x, y, z, class_area_width, class_area_height)
                 }
+                AnswerFeedbackLayout::ImageClass => {
+                    class_channel_index(x, y, z, reward.feedback_width, reward.feedback_height)
+                }
             };
             if channel < class_channel_count {
                 channels.push(channel);
@@ -1359,7 +1384,58 @@ impl PlasticityService {
         }
         channels.sort_unstable();
         channels.dedup();
-        Some(channels)
+        if channels.is_empty() {
+            AnswerObservation::Silent
+        } else {
+            AnswerObservation::Present(channels)
+        }
+    }
+
+    fn confidence_coord(
+        channel: u32,
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> Option<(u32, u32, u32)> {
+        if width > 1 && height == 1 && depth == 1 && channel < width {
+            return Some((channel, 0, 0));
+        }
+        if height > 1 && width == 1 && depth == 1 && channel < height {
+            return Some((0, channel, 0));
+        }
+        if depth > 1 && width == 1 && height == 1 && channel < depth {
+            return Some((0, 0, channel));
+        }
+        let plane = width.saturating_mul(height);
+        if plane == 0 || depth == 0 {
+            return None;
+        }
+        let volume = plane.saturating_mul(depth);
+        if channel >= volume {
+            return None;
+        }
+        let z = channel / plane;
+        let rest = channel % plane;
+        Some((rest % width, rest / width, z))
+    }
+
+    fn area_fired_this_burst(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        area_idx: u32,
+        current_timestep: u64,
+        temporal_depth: usize,
+    ) -> bool {
+        let Ok(npu_lock) = npu.lock() else {
+            return false;
+        };
+        let Ok(window) = npu_lock.get_fire_ledger_dense_window_bitmaps(
+            area_idx,
+            current_timestep,
+            temporal_depth,
+        ) else {
+            return false;
+        };
+        window.last().is_some_and(|(_, newest)| !newest.is_empty())
     }
 
     fn run_episodic_scan(
@@ -1416,11 +1492,30 @@ impl PlasticityService {
                     source.field_depth,
                     scan.min_window_activity,
                 );
+                if windows.is_empty() {
+                    if scan.reward.is_some() {
+                        array
+                            .presentation_ledger_mut()
+                            .expire_area(*kernel_area_idx);
+                    }
+                    continue;
+                }
+                let learn_open = scan.reward.as_ref().is_none_or(|reward| {
+                    reward.learn_area_idx.is_none_or(|learn_area_idx| {
+                        Self::area_fired_this_burst(
+                            &npu,
+                            learn_area_idx,
+                            current_timestep,
+                            temporal_depth,
+                        )
+                    })
+                });
                 let mut stamps: HashMap<(u32, u32, u32), ()> = HashMap::new();
+                let mut confidence: HashMap<u32, f32> = HashMap::new();
                 let mut pain_this_source = false;
                 let mut pleasure_this_source = false;
                 for window in windows {
-                    let feedback = scan.reward.as_ref().and_then(|reward| {
+                    let observation = scan.reward.as_ref().map(|reward| {
                         Self::feedback_channels_for_window(
                             &npu,
                             reward,
@@ -1436,34 +1531,88 @@ impl PlasticityService {
                         array.find_ltm_by_spatial_signature(*kernel_area_idx, window.spatial_hash);
                     for neuron_idx in matches {
                         if let Some(reward) = scan.reward.as_ref() {
-                            let decision = array.get_class_channels(neuron_idx);
-                            for channel in &decision {
-                                array.ensure_class_channel_weight(
+                            let current_channels = array.get_class_channels(neuron_idx);
+                            let spatial_hash = window.spatial_hash;
+                            array.presentation_ledger_mut().record(RecordedDecision {
+                                burst: current_timestep,
+                                area_idx: *kernel_area_idx,
+                                neuron_idx,
+                                origin: window.origin,
+                                spatial_hash,
+                                channels: current_channels.clone(),
+                            });
+                            array
+                                .presentation_ledger_mut()
+                                .prune(current_timestep, reward.answer_latency_bursts);
+                            let graded = if reward.answer_latency_bursts == 0 {
+                                Some(current_channels)
+                            } else {
+                                array.presentation_ledger_mut().channels_at(
+                                    current_timestep,
+                                    reward.answer_latency_bursts,
+                                    *kernel_area_idx,
                                     neuron_idx,
-                                    *channel,
-                                    reward.pleasure_step,
-                                );
-                            }
-                            for update in scanning_instance_affect(&decision, feedback.as_deref()) {
-                                let delta = match update.affect {
-                                    ChannelAffect::Pleasure => reward.pleasure_step,
-                                    ChannelAffect::Pain => -reward.pain_step,
-                                };
-                                let initial = if update.bind {
-                                    0.0
-                                } else {
-                                    reward.pleasure_step
-                                };
-                                array.apply_class_channel_delta(
-                                    neuron_idx,
-                                    update.channel,
-                                    delta,
-                                    reward.max_weight,
-                                    initial,
-                                );
-                                match update.affect {
-                                    ChannelAffect::Pleasure => pleasure_this_source = true,
-                                    ChannelAffect::Pain => pain_this_source = true,
+                                    window.origin,
+                                )
+                            };
+                            let skip = !learn_open
+                                || matches!(observation, Some(AnswerObservation::Silent))
+                                || graded.is_none()
+                                || array
+                                    .presentation_ledger_mut()
+                                    .already_corrected(*kernel_area_idx, spatial_hash);
+                            if !skip {
+                                if let Some(decision) = graded {
+                                    let feedback = match observation
+                                        .clone()
+                                        .unwrap_or(AnswerObservation::Absent)
+                                    {
+                                        AnswerObservation::Absent => None,
+                                        AnswerObservation::Silent => None,
+                                        AnswerObservation::Present(channels) => Some(channels),
+                                    };
+                                    if !matches!(observation, Some(AnswerObservation::Silent)) {
+                                        for channel in &decision {
+                                            array.ensure_class_channel_weight(
+                                                neuron_idx,
+                                                *channel,
+                                                reward.pleasure_step,
+                                            );
+                                        }
+                                        let updates = scanning_instance_affect(
+                                            &decision,
+                                            feedback.as_deref(),
+                                        );
+                                        if !updates.is_empty() {
+                                            for update in updates {
+                                                let delta = match update.affect {
+                                                    ChannelAffect::Pleasure => reward.pleasure_step,
+                                                    ChannelAffect::Pain => -reward.pain_step,
+                                                };
+                                                let initial = if update.bind {
+                                                    0.0
+                                                } else {
+                                                    reward.pleasure_step
+                                                };
+                                                array.apply_class_channel_delta(
+                                                    neuron_idx,
+                                                    update.channel,
+                                                    delta,
+                                                    reward.max_weight,
+                                                    initial,
+                                                );
+                                                match update.affect {
+                                                    ChannelAffect::Pleasure => {
+                                                        pleasure_this_source = true
+                                                    }
+                                                    ChannelAffect::Pain => pain_this_source = true,
+                                                }
+                                            }
+                                            array
+                                                .presentation_ledger_mut()
+                                                .mark_corrected(*kernel_area_idx, spatial_hash);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1472,6 +1621,51 @@ impl PlasticityService {
                                 continue;
                             }
                             stamps.insert((window.origin.0, window.origin.1, class_z), ());
+                            if let Some(reward) = scan.reward.as_ref() {
+                                if let Some(weight) =
+                                    array.class_channel_weight(neuron_idx, class_z)
+                                {
+                                    let surplus = weight - reward.firing_threshold;
+                                    if surplus > 0.0 {
+                                        let entry = confidence.entry(class_z).or_insert(0.0);
+                                        if surplus > *entry {
+                                            *entry = surplus;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Some(reward) = scan.reward.as_ref() {
+                    if let Some(confidence_area_idx) = reward.confidence_area_idx {
+                        if !confidence.is_empty() {
+                            let mut coords = Vec::new();
+                            let mut potentials = Vec::new();
+                            let mut channels: Vec<u32> = confidence.keys().copied().collect();
+                            channels.sort_unstable();
+                            for channel in channels {
+                                let Some(coord) = Self::confidence_coord(
+                                    channel,
+                                    reward.confidence_width,
+                                    reward.confidence_height,
+                                    reward.confidence_depth,
+                                ) else {
+                                    continue;
+                                };
+                                coords.push(coord);
+                                potentials.push(confidence[&channel]);
+                            }
+                            if !coords.is_empty() {
+                                if let Ok(npu_lock) = npu.lock() {
+                                    npu_lock.schedule_replay_injection(
+                                        current_timestep.saturating_add(1),
+                                        confidence_area_idx,
+                                        coords,
+                                        Some(potentials),
+                                    );
+                                }
+                            }
                         }
                     }
                 }
@@ -1670,21 +1864,22 @@ impl PlasticityService {
                     }
                 }
                 if let Some(reward) = &scan_cfg.reward {
-                    if let Some(feedback_area_idx) = reward.feedback_area_idx {
+                    for area_idx in [reward.feedback_area_idx, reward.learn_area_idx]
+                        .into_iter()
+                        .flatten()
+                    {
                         let existing = existing_configs
                             .iter()
-                            .find(|(idx, _)| *idx == feedback_area_idx)
+                            .find(|(idx, _)| *idx == area_idx)
                             .map(|(_, w)| *w)
                             .unwrap_or(0);
                         let resolved = existing.max(desired);
                         if resolved != existing {
-                            if let Err(e) =
-                                npu.configure_fire_ledger_window(feedback_area_idx, resolved)
-                            {
+                            if let Err(e) = npu.configure_fire_ledger_window(area_idx, resolved) {
                                 tracing::warn!(
                                     target: "plasticity",
-                                    "[PLASTICITY] Failed to configure FireLedger window for answer feedback {} (requested={}): {}",
-                                    feedback_area_idx,
+                                    "[PLASTICITY] Failed to configure FireLedger window for classifier reward area {} (requested={}): {}",
+                                    area_idx,
                                     resolved,
                                     e
                                 );
@@ -2892,6 +3087,15 @@ mod tests {
                 pleasure_area_idx: PLEASURE_IDX,
                 feedback_area_idx: None,
                 feedback_layout: AnswerFeedbackLayout::OutputColumn,
+                feedback_width: 1,
+                feedback_height: 1,
+                answer_latency_bursts: 0,
+                learn_area_idx: None,
+                confidence_area_idx: None,
+                confidence_width: 0,
+                confidence_height: 0,
+                confidence_depth: 0,
+                firing_threshold: 1.0,
                 pleasure_step: 1.0,
                 pain_step: 1.0,
                 max_weight: f32::INFINITY,
@@ -3025,6 +3229,15 @@ mod tests {
                 pleasure_area_idx: PLEASURE_IDX,
                 feedback_area_idx: Some(FEEDBACK_IDX),
                 feedback_layout: AnswerFeedbackLayout::OutputColumn,
+                feedback_width: 1,
+                feedback_height: 1,
+                answer_latency_bursts: 0,
+                learn_area_idx: None,
+                confidence_area_idx: None,
+                confidence_width: 0,
+                confidence_height: 0,
+                confidence_depth: 0,
+                firing_threshold: 1.0,
                 pleasure_step: 1.0,
                 pain_step: 1.0,
                 max_weight: f32::INFINITY,

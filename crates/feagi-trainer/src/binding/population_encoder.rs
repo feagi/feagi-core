@@ -290,6 +290,7 @@ mod tests {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
+            learn_area_id: None,
             segmented_vision: None,
         }
     }
@@ -343,6 +344,7 @@ mod tests {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
+            learn_area_id: None,
             segmented_vision: None,
         };
         let result = PopulationEncoder::new().encode_features(&[0.5], &profile);
@@ -415,6 +417,7 @@ mod tests {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
+            learn_area_id: None,
             segmented_vision: None,
         };
         let encoder = PopulationEncoder::new();

@@ -888,6 +888,9 @@ mod tests {
                 answer_feedback_area_id: None,
                 pain_area_id: None,
                 pleasure_area_id: None,
+                answer_latency_bursts: 0,
+                learn_area_id: None,
+                confidence_area_id: None,
                 properties: HashMap::new(),
             },
         );
