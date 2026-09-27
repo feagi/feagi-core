@@ -58,13 +58,17 @@ use crate::plugins::{MetricPackPlugin, MetricResult};
 /// Tuning knobs for one rollout that are not part of the immutable [`RunSpec`] provenance.
 ///
 /// `ticks_per_sample` is how many FEAGI bursts to advance between submitting a sample's
-/// sensory frame and collecting its motor frame. It is supplied by the caller (resolved from
-/// run/binding configuration) rather than hardcoded, so the same executor serves fast stubs
-/// and slower live brains.
+/// sensory frame and collecting its motor frame. `silence_bursts` is how many further bursts
+/// to advance with no new sensory frame before the next sample. Both are supplied by the
+/// caller (resolved from run/binding configuration) rather than hardcoded, so the same
+/// executor serves fast stubs and slower live brains.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecutorConfig {
     /// Number of bursts to step the runtime per sample (must be non-zero).
     pub ticks_per_sample: u32,
+    /// Bursts with no new sensory input after a sample, before the next one. Zero inserts none.
+    /// The last sample has no following gap.
+    pub silence_bursts: u32,
 }
 
 /// Warning text when FEAGI publishes no motor/OPU frame during a test/infer collect.
@@ -372,6 +376,16 @@ where
                 preview_name,
             },
         ));
+
+        // Gap before the next item. No sensory frame is submitted, so these bursts carry
+        // no new injection. Omitted after the last sample.
+        if config.silence_bursts > 0 && index + 1 < samples.visit_count() {
+            cancel.interrupt(format!(
+                "stopped after {} of {total_samples} samples",
+                index + 1
+            ))?;
+            runtime.step(config.silence_bursts)?;
+        }
     }
 
     let metric_result = evaluate_or_empty(metric_pack, &scored_predictions, &scored_targets)?;
@@ -790,6 +804,7 @@ mod tests {
     fn config() -> ExecutorConfig {
         ExecutorConfig {
             ticks_per_sample: 4,
+            silence_bursts: 0,
         }
     }
 
@@ -1012,6 +1027,56 @@ mod tests {
     }
 
     #[test]
+    fn silence_bursts_advance_between_samples_only() {
+        let samples = vec![
+            one_hot_sample(0, 0, 3),
+            one_hot_sample(1, 1, 3),
+            one_hot_sample(2, 2, 3),
+        ];
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut encoder = PassthroughEncoder;
+        let mut decoder = ArgmaxDecoder;
+        let reward = PainPleasureReward::new(0.8).unwrap();
+        let metric = ClassificationMetricPack::new();
+        let gap = ExecutorConfig {
+            ticks_per_sample: 4,
+            silence_bursts: 2,
+        };
+
+        run_rollout(
+            &RunId("run-gap".to_string()),
+            &samples,
+            &mut runtime,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &gap,
+        )
+        .expect("rollout");
+        // Three holds, and a gap only between samples (not after the last).
+        assert_eq!(runtime.burst_count(), 3 * 4 + 2 * 2);
+
+        let mut single = StubFeagiRuntime::identity();
+        run_rollout(
+            &RunId("run-gap-one".to_string()),
+            &[one_hot_sample(0, 0, 3)],
+            &mut single,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &gap,
+        )
+        .expect("single sample");
+        assert_eq!(single.burst_count(), 4);
+    }
+
+    #[test]
     fn test_split_silent_motor_warns_and_completes() {
         use crate::control::CollectingEventSink;
 
@@ -1205,6 +1270,7 @@ mod tests {
             &metric,
             &ExecutorConfig {
                 ticks_per_sample: 0,
+                silence_bursts: 0,
             },
         );
         assert!(matches!(result, Err(TrainerError::Config(_))));

@@ -52,6 +52,12 @@ where
             "ExecutorConfig.ticks_per_sample must be non-zero".to_string(),
         ));
     }
+    if config.silence_bursts > 0 {
+        return Err(TrainerError::Config(
+            "silence_bursts applies between discrete samples; stream presentation does not support a non-zero gap"
+                .to_string(),
+        ));
+    }
     let stream = encoder_profile.stream.as_ref().ok_or_else(|| {
         TrainerError::Config("stream rollout requires encoder_profile.stream".to_string())
     })?;
@@ -589,6 +595,7 @@ mod tests {
             &metric,
             &ExecutorConfig {
                 ticks_per_sample: 2,
+                silence_bursts: 0,
             },
             &mut sink,
             &CancelToken::new(),
@@ -599,6 +606,35 @@ mod tests {
         assert!(runtime.submitted_rewards().is_empty());
         assert!(outcome.predictions.is_empty());
         assert_eq!(outcome.summary.evaluated_samples, 0);
+    }
+
+    #[test]
+    fn stream_rejects_silence_bursts() {
+        let samples = vec![beat(1, vec![0.1])];
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut encoder = EchoTickEncoder;
+        let mut decoder = TailArgmax;
+        let reward = PainPleasureReward::new(0.5).unwrap();
+        let metric = ClassificationMetricPack::new();
+        let mut sink = NoopEventSink;
+        let result = run_stream_rollout_with_events(
+            &RunId("run-stream-gap".to_string()),
+            &samples,
+            &mut runtime,
+            &mut encoder,
+            &stream_profile(StreamMode::Train),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &ExecutorConfig {
+                ticks_per_sample: 1,
+                silence_bursts: 2,
+            },
+            &mut sink,
+            &CancelToken::new(),
+        );
+        assert!(matches!(result, Err(TrainerError::Config(_))));
     }
 
     #[test]
@@ -624,6 +660,7 @@ mod tests {
             &metric,
             &ExecutorConfig {
                 ticks_per_sample: 1,
+                silence_bursts: 0,
             },
             &mut sink,
             &CancelToken::new(),
@@ -703,6 +740,7 @@ mod tests {
             &metric,
             &ExecutorConfig {
                 ticks_per_sample: 1,
+                silence_bursts: 0,
             },
             &mut sink,
             &CancelToken::new(),
@@ -758,6 +796,7 @@ mod tests {
             &metric,
             &ExecutorConfig {
                 ticks_per_sample: 1,
+                silence_bursts: 0,
             },
             &mut sink,
             &CancelToken::new(),

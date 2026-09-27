@@ -228,6 +228,7 @@ fn rollout_for_seed(
         &metric,
         &ExecutorConfig {
             ticks_per_sample: 3,
+            silence_bursts: 0,
         },
     )?;
     Ok(outcome.summary.metrics)

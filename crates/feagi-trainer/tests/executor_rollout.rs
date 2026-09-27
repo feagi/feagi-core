@@ -226,6 +226,7 @@ fn full_pipeline_produces_summary_and_scorecard() {
         &metric,
         &ExecutorConfig {
             ticks_per_sample: 3,
+            silence_bursts: 0,
         },
     )
     .expect("rollout");

@@ -175,6 +175,7 @@ fn controller_runs_full_rollout_and_streams_lifecycle_events() {
                 &metric,
                 &ExecutorConfig {
                     ticks_per_sample: 2,
+                    silence_bursts: 0,
                 },
                 events,
                 cancel,
@@ -239,6 +240,7 @@ fn controller_surfaces_cancellation_as_failed() {
             &metric,
             &ExecutorConfig {
                 ticks_per_sample: 2,
+                silence_bursts: 0,
             },
             events,
             cancel,

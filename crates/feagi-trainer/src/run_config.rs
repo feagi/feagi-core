@@ -98,7 +98,7 @@ pub struct RunConfig {
     pub encoder_profile: EncoderBindingProfile,
     /// Resolved motor-side binding profile (source OPU area, class count, bins).
     pub decoder_profile: DecoderBindingProfile,
-    /// Per-run executor tuning (ticks per sample).
+    /// Per-run executor tuning (ticks per sample and silence bursts between samples).
     pub executor: ExecutorConfig,
     /// Trainer-injected affect magnitude in `[0.0, 1.0]`. Absent on labeled dataset runs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -878,6 +878,7 @@ mod tests {
             },
             executor: ExecutorConfig {
                 ticks_per_sample: 3,
+                silence_bursts: 0,
             },
             reward_magnitude: None,
             segmentation_iou_threshold: None,

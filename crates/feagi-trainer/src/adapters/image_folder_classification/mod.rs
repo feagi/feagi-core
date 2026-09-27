@@ -1,9 +1,15 @@
-//! Image-folder classification adapter.
+//! Image classification adapter.
 //!
-//! One dataset root holds `train`, `val`, and `test`, or MNIST IDX pairs in the root.
-//! Folder schemas are class subfolders or filenames ending in `_x_y_z`. IDX uses
-//! `train-*-idx*-ubyte` and `t10k-*-idx*-ubyte` (plain or `.gz`). The operator class map
-//! is shared. A label that is not on that map is an error. Class voxels are `(x, 0, 0)`.
+//! One dataset root holds `train`, `val`, and `test`, or a packed format in the root:
+//! MNIST IDX, CIFAR binary batches, SVHN MAT v5, or ILSVRC validation files.
+//! Folder schemas are class subfolders or filenames ending in `_x_y_z`.
+//! The operator class map is shared. A label that is not on that map is an error.
+//! Class voxels are `(x, 0, 0)`.
+
+mod cifar;
+mod ilsvrc2012;
+mod imagenet;
+mod svhn_mat;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
@@ -36,6 +42,30 @@ pub enum ImageClassificationSchema {
     FilenameXyz,
     /// MNIST-style IDX image and label files in the dataset root.
     IdxImages,
+    /// CIFAR-10 binary batches (`data_batch_*.bin`, `test_batch.bin`).
+    Cifar10Binary,
+    /// CIFAR-100 binary batches (`train.bin`, `test.bin`), fine labels.
+    Cifar100Binary,
+    /// ILSVRC train class folders plus a flat validation directory and ground truth.
+    ImageNet,
+    /// SVHN cropped digits (`train_32x32.mat`, `test_32x32.mat`).
+    SvhnMat,
+}
+
+/// Where one sample's pixels live.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PackedRecord {
+    /// A standalone image file at [`ClassifiedImage::path`].
+    File,
+    /// One grayscale frame inside an IDX image file.
+    Idx(IdxRecord),
+    /// One CIFAR-10 record inside a binary batch.
+    Cifar10 { record: u32 },
+    /// One CIFAR-100 record inside a binary batch. The fine label is used.
+    Cifar100 { record: u32 },
+    /// One SVHN frame inside an uncompressed MAT v5 file.
+    /// `data_offset` is the first byte of X's raw numeric payload.
+    Svhn { record: u32, data_offset: u64 },
 }
 
 /// One class label and its teacher voxel. `y` and `z` are 0 for the one-row standard.
@@ -65,8 +95,8 @@ pub struct ClassifiedImage {
     pub path: PathBuf,
     pub label: String,
     pub class_id: u32,
-    /// Record index inside an IDX image file. `None` is a standalone image file.
-    pub idx_record: Option<IdxRecord>,
+    /// Packed container record. [`PackedRecord::File`] is a standalone image file.
+    pub packed: PackedRecord,
 }
 
 /// One grayscale frame inside an IDX image file.
@@ -136,14 +166,38 @@ impl ImageFolderClassificationAdapter {
         index: usize,
         dataset_version_id: &DatasetVersionId,
     ) -> Result<IRSample, TrainerError> {
-        let png = match &image.idx_record {
-            Some(record) => load_idx_png(
+        let png = match &image.packed {
+            PackedRecord::File => {
+                load_resized_png(&image.path, self.config.feed_width, self.config.feed_height)?
+            }
+            PackedRecord::Idx(record) => load_idx_png(
                 &image.path,
                 record,
                 self.config.feed_width,
                 self.config.feed_height,
             )?,
-            None => load_resized_png(&image.path, self.config.feed_width, self.config.feed_height)?,
+            PackedRecord::Cifar10 { record } => cifar::load_cifar10_png(
+                &image.path,
+                *record,
+                self.config.feed_width,
+                self.config.feed_height,
+            )?,
+            PackedRecord::Cifar100 { record } => cifar::load_cifar100_png(
+                &image.path,
+                *record,
+                self.config.feed_width,
+                self.config.feed_height,
+            )?,
+            PackedRecord::Svhn {
+                record,
+                data_offset,
+            } => svhn_mat::load_svhn_png(
+                &image.path,
+                *record,
+                *data_offset,
+                self.config.feed_width,
+                self.config.feed_height,
+            )?,
         };
         Ok(IRSample {
             schema_version: IR_SCHEMA_VERSION,
@@ -168,19 +222,48 @@ impl ImageFolderClassificationAdapter {
 
     fn discover_images(&self, root: &Path) -> Result<Vec<ClassifiedImage>, TrainerError> {
         let class_count = Self::class_count(&self.config.class_map)?;
-        if self.config.image_schema == ImageClassificationSchema::IdxImages {
-            let idx_dir = resolve_idx_directory(root)?.ok_or_else(|| {
-                TrainerError::Parse(format!(
-                    "MNIST IDX files were not found under '{}'",
-                    root.display()
-                ))
-            })?;
-            return discover_idx_split(
-                &idx_dir,
-                &self.config.split,
-                &self.config.class_map,
-                class_count,
-            );
+        match self.config.image_schema {
+            ImageClassificationSchema::IdxImages => {
+                let idx_dir = resolve_idx_directory(root)?.ok_or_else(|| {
+                    TrainerError::Parse(format!(
+                        "MNIST IDX files were not found under '{}'",
+                        root.display()
+                    ))
+                })?;
+                return discover_idx_split(
+                    &idx_dir,
+                    &self.config.split,
+                    &self.config.class_map,
+                    class_count,
+                );
+            }
+            ImageClassificationSchema::Cifar10Binary
+            | ImageClassificationSchema::Cifar100Binary => {
+                return cifar::discover_split(
+                    root,
+                    &self.config.image_schema,
+                    &self.config.split,
+                    &self.config.class_map,
+                    class_count,
+                );
+            }
+            ImageClassificationSchema::SvhnMat => {
+                return svhn_mat::discover_split(
+                    root,
+                    &self.config.split,
+                    &self.config.class_map,
+                    class_count,
+                );
+            }
+            ImageClassificationSchema::ImageNet => {
+                return imagenet::discover_split(
+                    root,
+                    &self.config.split,
+                    &self.config.class_map,
+                    class_count,
+                );
+            }
+            ImageClassificationSchema::ClassFolders | ImageClassificationSchema::FilenameXyz => {}
         }
         let split_name = split_dir_name(&self.config.split)?;
         let split_dir = root.join(split_name);
@@ -198,9 +281,13 @@ impl ImageFolderClassificationAdapter {
             ImageClassificationSchema::FilenameXyz => {
                 filename_images(&split_dir, &entries, &self.config.class_map)?
             }
-            ImageClassificationSchema::IdxImages => {
+            ImageClassificationSchema::IdxImages
+            | ImageClassificationSchema::Cifar10Binary
+            | ImageClassificationSchema::Cifar100Binary
+            | ImageClassificationSchema::ImageNet
+            | ImageClassificationSchema::SvhnMat => {
                 return Err(TrainerError::Config(
-                    "IDX images are resolved before split folders".to_string(),
+                    "packed image formats are resolved before split folders".to_string(),
                 ));
             }
         };
@@ -330,6 +417,15 @@ pub fn scan_image_classification_root(
         };
         return Ok(idx);
     }
+    if let Some(cifar) = cifar::scan_if_present(root)? {
+        return Ok(cifar);
+    }
+    if let Some(svhn) = svhn_mat::scan_if_present(root)? {
+        return Ok(svhn);
+    }
+    if let Some(imagenet_scan) = imagenet::scan_if_flat_val(root)? {
+        return Ok(imagenet_scan);
+    }
     if root.join("validation").is_dir() {
         issues.push("folder 'validation' is not a split. Use 'val'.".to_string());
     }
@@ -341,7 +437,7 @@ pub fn scan_image_classification_root(
     }
     if present.is_empty() {
         issues.push(format!(
-            "no train, val, or test folder, and no MNIST IDX files. Expected train-images-idx3-ubyte and t10k-images-idx3-ubyte (plain or .gz) in this folder or in raw/. Found: {}",
+            "no train, val, or test folder, and no packed dataset files. Expected MNIST IDX, CIFAR batches, SVHN MAT files, or class folders. Found: {}",
             directory_file_names(root)?
         ));
         return Ok(ImageClassificationScan {
@@ -464,7 +560,7 @@ struct ImageSizeSet {
 }
 
 impl ImageSizeSet {
-    fn observe(&mut self, width: u32, height: u32, where_found: &str, issues: &mut Vec<String>) {
+    fn observe(&mut self, width: u32, height: u32) {
         if self.conflict {
             return;
         }
@@ -473,9 +569,6 @@ impl ImageSizeSet {
             Some((prior_width, prior_height)) if prior_width != width || prior_height != height => {
                 self.conflict = true;
                 self.size = None;
-                issues.push(format!(
-                    "images are {prior_width}x{prior_height} and {width}x{height} ({where_found}). Vision size is left empty."
-                ));
             }
             Some(_) => {}
         }
@@ -492,32 +585,37 @@ impl ImageSizeSet {
 fn observe_split_image_sizes(
     split_dir: &Path,
     sizes: &mut ImageSizeSet,
-    issues: &mut Vec<String>,
+    _issues: &mut Vec<String>,
 ) -> Result<(), String> {
+    let Some(path) = first_image(split_dir)? else {
+        return Ok(());
+    };
+    observe_file_size(&path, sizes)
+}
+
+/// One image is enough to suggest a feed size. Variable-size sets such as ImageNet
+/// leave the suggestion empty when two splits disagree, without reading every file.
+fn first_image(split_dir: &Path) -> Result<Option<PathBuf>, String> {
     let entries = list_dir(split_dir).map_err(|error| error.to_string())?;
     for path in entries {
         if path.is_dir() {
             let children = list_dir(&path).map_err(|error| error.to_string())?;
             for child in children {
                 if is_image_file(&child) {
-                    observe_file_size(&child, sizes, issues)?;
+                    return Ok(Some(child));
                 }
             }
         } else if is_image_file(&path) {
-            observe_file_size(&path, sizes, issues)?;
+            return Ok(Some(path));
         }
     }
-    Ok(())
+    Ok(None)
 }
 
-fn observe_file_size(
-    path: &Path,
-    sizes: &mut ImageSizeSet,
-    issues: &mut Vec<String>,
-) -> Result<(), String> {
+fn observe_file_size(path: &Path, sizes: &mut ImageSizeSet) -> Result<(), String> {
     let (width, height) = image::image_dimensions(path)
         .map_err(|error| format!("could not read the size of '{}': {error}", path.display()))?;
-    sizes.observe(width, height, &path.display().to_string(), issues);
+    sizes.observe(width, height);
     Ok(())
 }
 
@@ -636,7 +734,7 @@ fn class_folder_images(
                 path: child,
                 label: label.clone(),
                 class_id,
-                idx_record: None,
+                packed: PackedRecord::File,
             });
         }
     }
@@ -684,7 +782,7 @@ fn filename_images(
             path: path.clone(),
             label,
             class_id: x,
-            idx_record: None,
+            packed: PackedRecord::File,
         });
     }
     images.sort_by(|left, right| left.path.cmp(&right.path));
@@ -859,7 +957,7 @@ fn scan_idx_root(root: &Path) -> Result<Option<ImageClassificationScan>, Trainer
                 splits.push(role.split.to_string());
                 let label_bytes = read_idx_labels(&labels_path)?;
                 let header = read_idx_image_header(&images_path)?;
-                image_size.observe(header.cols, header.rows, role.split, &mut issues);
+                image_size.observe(header.cols, header.rows);
                 if header.count != label_bytes.len() as u32 {
                     issues.push(format!(
                         "IDX split '{}' image count {} does not match label count {}",
@@ -961,7 +1059,7 @@ fn discover_idx_split(
             path: images_path.clone(),
             label,
             class_id,
-            idx_record: Some(IdxRecord {
+            packed: PackedRecord::Idx(IdxRecord {
                 record: record as u32,
                 rows: header.rows,
                 cols: header.cols,
@@ -1008,6 +1106,30 @@ fn directory_has_idx(dir: &Path) -> Result<bool, TrainerError> {
 }
 
 /// IDX files live in the selected folder, or in torchvision's `raw` child, or in one child folder.
+pub(super) fn locate_single_child(
+    root: &Path,
+    present: impl Fn(&Path) -> Result<bool, TrainerError>,
+    what: &str,
+) -> Result<Option<PathBuf>, TrainerError> {
+    if present(root)? {
+        return Ok(Some(root.to_path_buf()));
+    }
+    let mut hits = Vec::new();
+    for child in list_dir(root)? {
+        if child.is_dir() && present(&child)? {
+            hits.push(child);
+        }
+    }
+    match hits.len() {
+        0 => Ok(None),
+        1 => Ok(hits.pop()),
+        _ => Err(TrainerError::Parse(format!(
+            "{what} files are in more than one folder under '{}'",
+            root.display()
+        ))),
+    }
+}
+
 fn resolve_idx_directory(root: &Path) -> Result<Option<PathBuf>, TrainerError> {
     if directory_has_idx(root)? {
         return Ok(Some(root.to_path_buf()));
@@ -1207,6 +1329,19 @@ fn read_u32(bytes: &[u8], offset: usize) -> u32 {
     ])
 }
 
+pub(super) fn resized_rgb_png(
+    rgb: image::RgbImage,
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, TrainerError> {
+    let resized = image::imageops::resize(&rgb, width, height, FilterType::Nearest);
+    let mut out = Vec::new();
+    image::DynamicImage::ImageRgb8(resized)
+        .write_to(&mut std::io::Cursor::new(&mut out), ImageFormat::Png)
+        .map_err(|error| TrainerError::Parse(format!("cannot encode resized png: {error}")))?;
+    Ok(out)
+}
+
 fn load_resized_png(path: &Path, width: u32, height: u32) -> Result<Vec<u8>, TrainerError> {
     let bytes = std::fs::read(path).map_err(|error| {
         TrainerError::Parse(format!("cannot read '{}': {error}", path.display()))
@@ -1228,7 +1363,7 @@ fn fingerprint_images(images: &[ClassifiedImage]) -> String {
         image.path.to_string_lossy().hash(&mut hasher);
         image.label.hash(&mut hasher);
         image.class_id.hash(&mut hasher);
-        image.idx_record.hash(&mut hasher);
+        image.packed.hash(&mut hasher);
     }
     format!("siphash64:{:016x}", hasher.finish())
 }

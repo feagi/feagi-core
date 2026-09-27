@@ -193,8 +193,9 @@ impl EncoderPlugin for ImageFrameEncoder {
                         "segmented vision source width and height must be at least 3".to_string(),
                     ));
                 }
-                let center = ImageXYResolution::new(segmented.center_width, segmented.center_height)
-                    .map_err(map_err)?;
+                let center =
+                    ImageXYResolution::new(segmented.center_width, segmented.center_height)
+                        .map_err(map_err)?;
                 let peripheral =
                     ImageXYResolution::new(segmented.peripheral_width, segmented.peripheral_height)
                         .map_err(map_err)?;
@@ -365,10 +366,11 @@ mod tests {
         let frame = encoder
             .encode(&sample(rgb_png(8, 8), None), &profile)
             .expect("encode");
-        let center = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-            FrameChangeHandling::Absolute,
-            CorticalUnitIndex::from(0u16),
-        )[4];
+        let center =
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                FrameChangeHandling::Absolute,
+                CorticalUnitIndex::from(0u16),
+            )[4];
         assert!(
             frame.get_neurons_of(&center).is_some(),
             "segmented vision must write the center tile"
