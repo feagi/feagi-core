@@ -3,7 +3,7 @@
 //! Population scheme: each `[0, 1]` feature fires one voxel at
 //! `(x = feature, y = 0, z = bin)` with P = 1.0. Value scheme writes each analog
 //! feature as graded P at `(x, 0, 0)` without clamping. ECG snapshot also holds
-//! the class on Misc B (unit from `encoder_profile.teacher`, `1 × C × 1`).
+//! the class on Misc B (unit from `encoder_profile.teacher`, `C × 1 × 1`, class on X).
 
 use feagi_sensorimotor::data_types::descriptors::MiscDataDimensions;
 use feagi_sensorimotor::data_types::MiscData;
@@ -72,6 +72,29 @@ impl PopulationEncoder {
         data.overwrite_neuron_data(&mut arrays, CorticalChannelIndex::from(0u32))
             .map_err(map_err)?;
         Ok(arrays)
+    }
+
+    /// One class spike at `(x = class_id, y = 0, z = 0)` on a `C × 1 × 1` volume.
+    pub fn class_teacher_voxels(
+        class_id: u32,
+        class_count: u32,
+    ) -> Result<NeuronVoxelXYZPArrays, TrainerError> {
+        if class_count == 0 {
+            return Err(TrainerError::Config(
+                "class teacher requires class_count > 0".to_string(),
+            ));
+        }
+        if class_id >= class_count {
+            return Err(TrainerError::Config(format!(
+                "class id {class_id} is outside teacher class_count {class_count}"
+            )));
+        }
+        Self::write_misc_volume(
+            class_count,
+            1,
+            1,
+            std::iter::once((class_id, 0u32, 0u32, 1.0_f32)),
+        )
     }
 
     /// Linear inverted Z: value 1.0 → z 0; value 0.0 → z bins-1.
@@ -220,12 +243,7 @@ impl EncoderPlugin for PopulationEncoder {
                     teacher.class_count
                 )));
             }
-            let teacher_arrays = Self::write_misc_volume(
-                1,
-                teacher.class_count,
-                1,
-                std::iter::once((0u32, class_id, 0u32, 1.0_f32)),
-            )?;
+            let teacher_arrays = Self::class_teacher_voxels(class_id, teacher.class_count)?;
             frame.insert(Self::misc_cortical_id(teacher.unit), teacher_arrays);
         }
         Ok(frame)
@@ -267,10 +285,12 @@ mod tests {
             },
             image_width: None,
             image_height: None,
+            vision_layout: crate::binding::profile::VisionLayout::Simple,
             cortical_name: None,
             stream: None,
             teacher: None,
             segmentation_teacher: None,
+            segmented_vision: None,
         }
     }
 
@@ -318,10 +338,12 @@ mod tests {
             },
             image_width: None,
             image_height: None,
+            vision_layout: crate::binding::profile::VisionLayout::Simple,
             cortical_name: None,
             stream: None,
             teacher: None,
             segmentation_teacher: None,
+            segmented_vision: None,
         };
         let result = PopulationEncoder::new().encode_features(&[0.5], &profile);
         assert!(result.is_err());
@@ -377,7 +399,7 @@ mod tests {
                 )
             })
             .collect();
-        assert_eq!(voxels, vec![(0, 2, 1.0)]);
+        assert_eq!(voxels, vec![(2, 0, 1.0)]);
     }
 
     #[test]
@@ -388,10 +410,12 @@ mod tests {
             scheme: EncodingScheme::Value,
             image_width: None,
             image_height: None,
+            vision_layout: crate::binding::profile::VisionLayout::Simple,
             cortical_name: None,
             stream: None,
             teacher: None,
             segmentation_teacher: None,
+            segmented_vision: None,
         };
         let encoder = PopulationEncoder::new();
         let frame = encoder

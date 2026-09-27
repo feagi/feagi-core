@@ -16,6 +16,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::adapters::{
+    ImageFolderClassificationAdapter, ImageFolderClassificationConfig,
     ImageFolderSegmentationAdapter, ImageFolderSegmentationConfig, TabularCsvAdapter,
     TabularCsvConfig, TimeSeriesPackageAdapter, TimeSeriesPackageConfig,
 };
@@ -56,6 +57,8 @@ pub enum DatasetAdapterConfig {
     Tabular(TabularCsvConfig),
     /// Image-folder semantic segmentation layout (`layout` discriminates this variant).
     ImageFolder(ImageFolderSegmentationConfig),
+    /// Image-folder classification layout (`image_schema` discriminates this variant).
+    ImageClassification(ImageFolderClassificationConfig),
     /// Annotated analog time series (`source_kind` discriminates this variant).
     TimeSeries(TimeSeriesPackageConfig),
 }
@@ -164,6 +167,51 @@ impl RunConfig {
                     &spec.binding.decoder.coder_id,
                     SUPPORTED_DECODER_CODER_ID,
                 )?;
+            }
+            ImageFolderClassificationAdapter::PLUGIN_ID => {
+                check(
+                    "metric pack",
+                    &spec.metric_pack.id.0,
+                    ClassificationMetricPack::PLUGIN_ID,
+                )?;
+                check(
+                    "reward policy",
+                    &spec.reward_policy.plugin.id.0,
+                    SUPPORTED_NONE_REWARD_ID,
+                )?;
+                if self.reward_magnitude.is_some() {
+                    return Err(TrainerError::Config(
+                        "labeled runs must not set reward_magnitude; trainer does not inject Pain/Pleasure"
+                            .to_string(),
+                    ));
+                }
+                check(
+                    "encoder coder",
+                    &spec.binding.encoder.coder_id,
+                    SUPPORTED_IMAGE_ENCODER_CODER_ID,
+                )?;
+                check(
+                    "decoder coder",
+                    &spec.binding.decoder.coder_id,
+                    SUPPORTED_MISC_CLASS_DECODER_CODER_ID,
+                )?;
+                let teacher = self.encoder_profile.teacher.as_ref().ok_or_else(|| {
+                    TrainerError::Config(
+                        "image classification requires encoder_profile.teacher".to_string(),
+                    )
+                })?;
+                teacher.validate()?;
+                if teacher.class_count != self.decoder_profile.class_count {
+                    return Err(TrainerError::Config(format!(
+                        "image classification teacher class_count {} does not match decoder class_count {}",
+                        teacher.class_count, self.decoder_profile.class_count
+                    )));
+                }
+                if self.segmentation_iou_threshold.is_some() {
+                    return Err(TrainerError::Config(
+                        "image classification must not set segmentation_iou_threshold".to_string(),
+                    ));
+                }
             }
             ImageFolderSegmentationAdapter::PLUGIN_ID => {
                 check(
@@ -341,6 +389,25 @@ impl RunConfig {
                 Ok((
                     manifest,
                     Self::order_memory_samples(samples, self.run_spec.sampler.seed),
+                ))
+            }
+            DatasetAdapterConfig::ImageClassification(config) => {
+                progress("Scanning classified images", None, None);
+                let adapter = ImageFolderClassificationAdapter::new(config.clone());
+                let (manifest, images) = adapter.index(source)?;
+                let report = adapter.validate(&manifest)?;
+                if !report.passed {
+                    return Err(TrainerError::Validation(format!(
+                        "dataset failed validation: {}",
+                        report.issues.join("; ")
+                    )));
+                }
+                progress("Ordering samples", None, None);
+                let order = SequentialSampler::new().plan(images.len(), self.run_spec.sampler.seed);
+                let version_id = manifest.dataset_version_id.clone();
+                Ok((
+                    manifest,
+                    PlannedSamples::from_image_classification(adapter, images, version_id, order)?,
                 ))
             }
             DatasetAdapterConfig::ImageFolder(config) => {
@@ -625,6 +692,26 @@ impl RunConfig {
                     )
                 }
             }
+            ImageFolderClassificationAdapter::PLUGIN_ID => {
+                let mut encoder = ImageFrameEncoder::new();
+                let mut decoder = MiscClassDecoder::new();
+                let reward = NoAffectReward;
+                let metric = ClassificationMetricPack::new();
+                run_rollout_with_events(
+                    &self.run_spec.run_id,
+                    samples,
+                    &mut runtime,
+                    &mut encoder,
+                    &self.encoder_profile,
+                    &mut decoder,
+                    &self.decoder_profile,
+                    &reward,
+                    &metric,
+                    &self.executor,
+                    events,
+                    cancel,
+                )
+            }
             ImageFolderSegmentationAdapter::PLUGIN_ID => {
                 let mut encoder = ImageFrameEncoder::new();
                 let mut decoder = SegmentationMaskDecoder::new();
@@ -773,9 +860,11 @@ mod tests {
                 },
                 image_width: None,
                 image_height: None,
+                vision_layout: crate::binding::profile::VisionLayout::Simple,
                 stream: None,
                 teacher: None,
                 segmentation_teacher: None,
+                segmented_vision: None,
                 cortical_name: None,
             },
             decoder_profile: DecoderBindingProfile {

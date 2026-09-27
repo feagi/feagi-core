@@ -23,7 +23,7 @@ pub enum StreamMode {
 /// Operator-set geometry for the streamed Misc A / Misc B pair.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamBinding {
-    /// Parallel beat slots along X. Must be >= 1.
+    /// Parallel beat slots along Y of the class teacher. Must be >= 1.
     pub parallel_width: u32,
     /// Sensory unit index for amplitude Misc A.
     pub amplitude_unit: u16,
@@ -38,7 +38,7 @@ pub struct StreamBinding {
     pub mode: StreamMode,
 }
 
-/// Snapshot class-teacher Misc B (one beat, class held on Y).
+/// Snapshot class-teacher Misc B (one sample, class held on X).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClassTeacherBinding {
     /// Sensory unit index for class-teacher Misc B.
@@ -48,7 +48,7 @@ pub struct ClassTeacherBinding {
     /// Operator-visible genome title applied when Trainer creates or renames Misc B.
     #[serde(default)]
     pub cortical_name: Option<String>,
-    /// Class neurons along Y. Must match decoder_profile.class_count.
+    /// Class neurons along X. Must match decoder_profile.class_count.
     pub class_count: u32,
 }
 
@@ -96,6 +96,60 @@ impl StreamBinding {
             return Err(TrainerError::Config(
                 "stream infer requires parallel_width = 1".to_string(),
             ));
+        }
+        Ok(())
+    }
+}
+
+/// How a photo is laid onto vision IPU areas.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum VisionLayout {
+    /// One RGB area, W×H×3.
+    #[default]
+    Simple,
+    /// Nine areas: a higher-resolution center and eight peripheral tiles.
+    Segmented,
+}
+
+/// Operator geometry for Segmented Vision. Absent means Simple Vision.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SegmentedVisionBinding {
+    pub center_width: u32,
+    pub center_height: u32,
+    pub peripheral_width: u32,
+    pub peripheral_height: u32,
+    /// Gaze center X in \[0, 1\].
+    pub gaze_eccentricity_x: f64,
+    /// Gaze center Y in \[0, 1\].
+    pub gaze_eccentricity_y: f64,
+    /// Fraction of the source frame held in the center tile, in \[0, 1\].
+    pub gaze_modulation: f64,
+}
+
+impl SegmentedVisionBinding {
+    /// Returns blocking configuration errors. Never repairs values.
+    pub fn validate(&self) -> Result<(), TrainerError> {
+        if self.center_width == 0 || self.center_height == 0 {
+            return Err(TrainerError::Config(
+                "segmented vision center width and height must be > 0".to_string(),
+            ));
+        }
+        if self.peripheral_width == 0 || self.peripheral_height == 0 {
+            return Err(TrainerError::Config(
+                "segmented vision peripheral width and height must be > 0".to_string(),
+            ));
+        }
+        for (name, value) in [
+            ("gaze_eccentricity_x", self.gaze_eccentricity_x),
+            ("gaze_eccentricity_y", self.gaze_eccentricity_y),
+            ("gaze_modulation", self.gaze_modulation),
+        ] {
+            if !(0.0..=1.0).contains(&value) {
+                return Err(TrainerError::Config(format!(
+                    "segmented vision {name} must be in [0, 1], got {value}"
+                )));
+            }
         }
         Ok(())
     }
@@ -153,6 +207,12 @@ pub struct EncoderBindingProfile {
     /// Vision feed height in pixels when using an image-frame encoder.
     #[serde(default)]
     pub image_height: Option<u32>,
+    /// Simple is one area. Segmented is the nine-tile fovea. Omitted means simple.
+    #[serde(default)]
+    pub vision_layout: VisionLayout,
+    /// Center, periphery, and gaze. Required when `vision_layout` is segmented.
+    #[serde(default)]
+    pub segmented_vision: Option<SegmentedVisionBinding>,
     /// Sample-by-sample dual-Misc presentation. `None` is the snapshot path.
     #[serde(default)]
     pub stream: Option<StreamBinding>,
@@ -225,6 +285,7 @@ mod tests {
             scheme: EncodingScheme::Value,
             image_width: None,
             image_height: None,
+            vision_layout: VisionLayout::Simple,
             stream: Some(StreamBinding {
                 parallel_width: 1,
                 amplitude_unit: 0,
@@ -235,6 +296,7 @@ mod tests {
             }),
             teacher: None,
             segmentation_teacher: None,
+            segmented_vision: None,
         };
         let json = serde_json::to_string(&encoder).expect("json");
         let parsed: EncoderBindingProfile = serde_json::from_str(&json).expect("parse");

@@ -50,12 +50,12 @@ fn run(args: &[String]) -> Result<(), Box<dyn Error>> {
             uri: config.dataset.path.clone(),
             bytes: std::fs::read(&config.dataset.path)?,
         },
-        DatasetAdapterConfig::ImageFolder(_) | DatasetAdapterConfig::TimeSeries(_) => {
-            DatasetSource {
-                uri: config.dataset.path.clone(),
-                bytes: Vec::new(),
-            }
-        }
+        DatasetAdapterConfig::ImageFolder(_)
+        | DatasetAdapterConfig::ImageClassification(_)
+        | DatasetAdapterConfig::TimeSeries(_) => DatasetSource {
+            uri: config.dataset.path.clone(),
+            bytes: Vec::new(),
+        },
     };
     let (manifest, samples) = config.plan(&source)?;
     eprintln!(

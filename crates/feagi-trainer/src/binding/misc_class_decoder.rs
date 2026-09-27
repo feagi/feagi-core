@@ -1,6 +1,7 @@
-//! Misc OPU class decoder: argmax over Y at each parallel X slot.
+//! Misc OPU class decoder: argmax over X. Parallel slots sit on Y.
 //!
-//! Reads FEAGI MiscData voxels. P at (x, y, 0) is the class-y activation for beat slot x.
+//! Reads FEAGI MiscData voxels. P at (x = class, y = slot, 0) is that class activation.
+//! One image is slot 0, so the class row is `C × 1 × 1`, the same axis as the class teacher.
 
 use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
@@ -45,12 +46,12 @@ impl MiscClassDecoder {
             return Ok(scores);
         };
         for neuron in neurons.iter() {
-            let x = neuron.neuron_voxel_coordinate.x;
-            let y = neuron.neuron_voxel_coordinate.y;
-            if x >= slot_count || y >= class_count {
+            let class = neuron.neuron_voxel_coordinate.x;
+            let slot = neuron.neuron_voxel_coordinate.y;
+            if class >= class_count || slot >= slot_count {
                 continue;
             }
-            scores[x as usize][y as usize] += f64::from(neuron.potential);
+            scores[slot as usize][class as usize] += f64::from(neuron.potential);
         }
         Ok(scores)
     }
@@ -128,10 +129,10 @@ mod tests {
     }
 
     #[test]
-    fn argmax_is_y_with_highest_p() {
+    fn argmax_is_x_with_highest_p() {
         let mut arrays = NeuronVoxelXYZPArrays::new();
-        arrays.push_raw(0, 1, 0, 0.2);
-        arrays.push_raw(0, 3, 0, 0.9);
+        arrays.push_raw(1, 0, 0, 0.2);
+        arrays.push_raw(3, 0, 0, 0.9);
         let mut motor = CorticalMappedXYZPNeuronVoxels::new();
         motor.insert(MiscClassDecoder::opu_id(), arrays);
         let mut decoder = MiscClassDecoder::new();

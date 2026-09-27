@@ -1373,6 +1373,10 @@ impl Neuroembryogenesis {
         genome: &RuntimeGenome,
     ) -> BduResult<()> {
         use feagi_structures::genomic::cortical_area::CorticalAreaType;
+        {
+            let mut manager = self.connectome_manager.write();
+            manager.purge_classifier_auto_twins()?;
+        }
         let mut repaired = 0usize;
 
         for (memory_id, memory_area) in genome.cortical_areas.iter() {
@@ -1450,6 +1454,9 @@ impl Neuroembryogenesis {
                 };
 
                 let mut manager = self.connectome_manager.write();
+                if manager.auto_memory_twin_forbidden(memory_id, Some(&dst_id)) {
+                    continue;
+                }
                 if let Err(e) = manager.ensure_memory_twin_area(memory_id, &upstream_id) {
                     warn!(
                         target: "feagi-bdu",

@@ -1,5 +1,8 @@
 //! Planned visits over a split: tables/ECG stay in memory; image folders keep paths until visit.
 
+use crate::adapters::image_folder_classification::{
+    ClassifiedImage, ImageFolderClassificationAdapter,
+};
 use crate::adapters::image_folder_segmentation::{ImageFolderSegmentationAdapter, ImageLabelPair};
 use crate::contracts::{DatasetVersionId, IRSample};
 use crate::error::TrainerError;
@@ -23,6 +26,12 @@ enum SampleStore {
     ImageFolder {
         adapter: Box<ImageFolderSegmentationAdapter>,
         pairs: Vec<ImageLabelPair>,
+        dataset_version_id: DatasetVersionId,
+        order: Vec<usize>,
+    },
+    ImageClassification {
+        adapter: Box<ImageFolderClassificationAdapter>,
+        images: Vec<ClassifiedImage>,
         dataset_version_id: DatasetVersionId,
         order: Vec<usize>,
     },
@@ -61,6 +70,31 @@ impl PlannedSamples {
         })
     }
 
+    /// Classified image paths plus visit order. Pixels are decoded in [`Self::load_visit`].
+    pub fn from_image_classification(
+        adapter: ImageFolderClassificationAdapter,
+        images: Vec<ClassifiedImage>,
+        dataset_version_id: DatasetVersionId,
+        order: Vec<usize>,
+    ) -> Result<Self, TrainerError> {
+        for (visit, source_index) in order.iter().enumerate() {
+            if *source_index >= images.len() {
+                return Err(TrainerError::Config(format!(
+                    "sampler visit {visit} indexes image {source_index} past {} images",
+                    images.len()
+                )));
+            }
+        }
+        Ok(Self {
+            store: SampleStore::ImageClassification {
+                adapter: Box::new(adapter),
+                images,
+                dataset_version_id,
+                order,
+            },
+        })
+    }
+
     /// Visit count scheduled for this plan.
     pub fn len(&self) -> usize {
         self.visit_count()
@@ -75,10 +109,12 @@ impl PlannedSamples {
     pub fn as_ordered_slice(&self) -> Result<&[IRSample], TrainerError> {
         match &self.store {
             SampleStore::Memory(samples) => Ok(samples),
-            SampleStore::ImageFolder { .. } => Err(TrainerError::Config(
-                "image-folder plans load one sample per visit and have no materialized slice"
-                    .to_string(),
-            )),
+            SampleStore::ImageFolder { .. } | SampleStore::ImageClassification { .. } => {
+                Err(TrainerError::Config(
+                    "image-folder plans load one sample per visit and have no materialized slice"
+                        .to_string(),
+                ))
+            }
         }
     }
 }
@@ -87,7 +123,8 @@ impl SampleVisit for PlannedSamples {
     fn visit_count(&self) -> usize {
         match &self.store {
             SampleStore::Memory(samples) => samples.len(),
-            SampleStore::ImageFolder { order, .. } => order.len(),
+            SampleStore::ImageFolder { order, .. }
+            | SampleStore::ImageClassification { order, .. } => order.len(),
         }
     }
 
@@ -112,6 +149,20 @@ impl SampleVisit for PlannedSamples {
                     ))
                 })?;
                 adapter.load_indexed_sample(&pairs[source_index], source_index, dataset_version_id)
+            }
+            SampleStore::ImageClassification {
+                adapter,
+                images,
+                dataset_version_id,
+                order,
+            } => {
+                let source_index = *order.get(index).ok_or_else(|| {
+                    TrainerError::Config(format!(
+                        "visit {index} is outside {} planned samples",
+                        order.len()
+                    ))
+                })?;
+                adapter.load_indexed_sample(&images[source_index], source_index, dataset_version_id)
             }
         }
     }

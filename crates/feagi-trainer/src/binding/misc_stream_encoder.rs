@@ -152,7 +152,7 @@ impl TickEncoder for MiscStreamEncoder {
         let teacher_cells = class_ids
             .iter()
             .enumerate()
-            .filter_map(|(x, class)| class.map(|class_id| (x as u32, class_id, 1.0_f32)));
+            .filter_map(|(slot, class)| class.map(|class_id| (class_id, slot as u32, 1.0_f32)));
         for class in class_ids.iter().flatten() {
             if *class >= class_count {
                 return Err(TrainerError::Config(format!(
@@ -160,7 +160,7 @@ impl TickEncoder for MiscStreamEncoder {
                 )));
             }
         }
-        let teacher_arrays = Self::write_area(width, class_count, teacher_cells)?;
+        let teacher_arrays = Self::write_area(class_count, width, teacher_cells)?;
 
         let mut frame = CorticalMappedXYZPNeuronVoxels::new();
         frame.insert(Self::misc_id(stream.amplitude_unit), amp_arrays);
@@ -181,6 +181,7 @@ mod tests {
             scheme: EncodingScheme::Value,
             image_width: None,
             image_height: None,
+            vision_layout: crate::binding::profile::VisionLayout::Simple,
             cortical_name: None,
             stream: Some(StreamBinding {
                 parallel_width: width,
@@ -192,11 +193,12 @@ mod tests {
             }),
             teacher: None,
             segmentation_teacher: None,
+            segmented_vision: None,
         }
     }
 
     #[test]
-    fn tick_writes_amplitude_on_x_and_class_on_y() {
+    fn tick_writes_amplitude_on_x_and_class_on_x() {
         let mut encoder = MiscStreamEncoder::new();
         let frame = encoder
             .encode_tick(&[0.25, 0.75], &[Some(2), Some(0)], &profile(2), 5)
@@ -223,8 +225,8 @@ mod tests {
             .iter()
             .map(|n| (n.neuron_voxel_coordinate.x, n.neuron_voxel_coordinate.y))
             .collect();
-        assert!(teacher_voxels.contains(&(0, 2)));
-        assert!(teacher_voxels.contains(&(1, 0)));
+        assert!(teacher_voxels.contains(&(2, 0)));
+        assert!(teacher_voxels.contains(&(0, 1)));
     }
 
     #[test]

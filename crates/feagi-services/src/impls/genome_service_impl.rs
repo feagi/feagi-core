@@ -702,27 +702,14 @@ impl GenomeService for GenomeServiceImpl {
             progress.synapses_created
         );
 
-        // CRITICAL: Sync auto-generated brain regions back to RuntimeGenome
-        // BDU may auto-generate brain regions if the genome didn't have any.
-        // We need to sync these back to current_genome so they're included when saving.
-        let brain_regions_from_bdu = {
+        // Connectome load drops illegal classifier auto twins and places legal
+        // twins in their non-root region. Write that hierarchy back so a later
+        // save does not resurrect the unloaded areas.
+        {
             let manager = self.connectome.read();
-            let hierarchy = manager.get_brain_region_hierarchy();
-            hierarchy.get_all_regions()
-        };
-
-        if !brain_regions_from_bdu.is_empty() {
             let mut current_genome_guard = self.current_genome.write();
             if let Some(ref mut genome) = *current_genome_guard {
-                // Only update if BDU has more regions (handles auto-generation case)
-                if brain_regions_from_bdu.len() > genome.brain_regions.len() {
-                    info!(
-                        target: "feagi-services",
-                        "Syncing {} auto-generated brain regions from BDU to RuntimeGenome",
-                        brain_regions_from_bdu.len()
-                    );
-                    genome.brain_regions = brain_regions_from_bdu;
-                }
+                sync_runtime_genome_from_connectome(genome, &manager);
             }
         }
 
@@ -1086,6 +1073,24 @@ impl GenomeService for GenomeServiceImpl {
                         serde_json::Value::String(root_id.clone()),
                     );
                 }
+            }
+
+            let joins_root = area
+                .properties
+                .get("parent_region_id")
+                .and_then(|value| value.as_str())
+                .is_some_and(|parent| root_region_id.as_deref() == Some(parent));
+            let root_reserved = !matches!(
+                area_type,
+                CorticalAreaType::Core(_)
+                    | CorticalAreaType::BrainInput(_)
+                    | CorticalAreaType::BrainOutput(_)
+            );
+            if joins_root && root_reserved {
+                return Err(ServiceError::InvalidInput(format!(
+                    "Cortical area {} cannot join root; root is reserved for core, IPU, and OPU areas",
+                    param.cortical_id
+                )));
             }
 
             areas_to_add.push(area);

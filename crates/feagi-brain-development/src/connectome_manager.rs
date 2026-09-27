@@ -924,8 +924,25 @@ impl ConnectomeManager {
         // Store area
         self.cortical_areas.insert(cortical_id, area);
 
-        // Update region membership (source of truth for region->areas listing)
+        // Update region membership (source of truth for region->areas listing).
+        // Root stays reserved for core, IPU, and OPU. Custom and memory areas that
+        // arrive with a root parent are rejected instead of being stored there.
         if let Some(region_id) = parent_region_id {
+            let joining_root = self.get_root_region_id().as_deref() == Some(region_id.as_str());
+            let blocked_from_root = joining_root
+                && self
+                    .cortical_areas
+                    .get(&cortical_id)
+                    .is_some_and(|stored| !Self::area_may_join_root(stored));
+            if blocked_from_root {
+                self.cortical_areas.remove(&cortical_id);
+                self.cortical_id_to_idx.remove(&cortical_id);
+                self.cortical_idx_to_id.remove(&cortical_idx);
+                return Err(BduError::InvalidArea(format!(
+                    "Cortical area {} cannot join root; root is reserved for core, IPU, and OPU areas",
+                    cortical_id.as_base_64()
+                )));
+            }
             let region = self
                 .brain_regions
                 .get_region_mut(&region_id)
@@ -1529,6 +1546,26 @@ impl ConnectomeManager {
         })
     }
 
+    /// False when `region_id` is root and the area is custom or memory.
+    pub fn may_place_area_in_region(&self, region_id: &str, cortical_id: &CorticalID) -> bool {
+        if self.get_root_region_id().as_deref() != Some(region_id) {
+            return true;
+        }
+        self.cortical_areas
+            .get(cortical_id)
+            .is_some_and(Self::area_may_join_root)
+    }
+
+    /// Root membership is only legal for core, IPU, and OPU areas.
+    fn area_may_join_root(area: &CorticalArea) -> bool {
+        matches!(
+            area.cortical_type,
+            CorticalAreaType::Core(_)
+                | CorticalAreaType::BrainInput(_)
+                | CorticalAreaType::BrainOutput(_)
+        )
+    }
+
     /// True when an area is a classifier assembly internal or the visible stamp.
     fn area_belongs_to_classifier_assembly(area: &CorticalArea) -> bool {
         if area
@@ -1886,6 +1923,180 @@ impl ConnectomeManager {
         })
     }
 
+    /// Region for a generated custom twin. Root is never a legal result.
+    ///
+    /// The twin joins the upstream area's region when that region is not root.
+    /// When the upstream area is core, IPU, or OPU in root, the twin joins the
+    /// memory area's non-root region. With no brain-region hierarchy loaded,
+    /// placement is skipped.
+    fn non_root_region_for_generated_twin(
+        &self,
+        upstream_area_id: &CorticalID,
+        memory_area_id: &CorticalID,
+    ) -> BduResult<Option<String>> {
+        if self.get_brain_region_ids().is_empty() {
+            return Ok(None);
+        }
+        let root_id = self.get_root_region_id();
+        let is_non_root = |region: &String| root_id.as_ref() != Some(region);
+        if let Some(region) = self
+            .get_parent_region_id_for_area(upstream_area_id)
+            .filter(|region| is_non_root(region))
+        {
+            return Ok(Some(region));
+        }
+        if let Some(region) = self
+            .get_parent_region_id_for_area(memory_area_id)
+            .filter(|region| is_non_root(region))
+        {
+            return Ok(Some(region));
+        }
+        Err(BduError::InvalidArea(format!(
+            "Generated twin of {} for memory {} cannot join root; root is reserved for core, IPU, and OPU areas",
+            upstream_area_id.as_base_64(),
+            memory_area_id.as_base_64()
+        )))
+    }
+
+    /// Drop root membership, then record the twin on its non-root region.
+    fn assign_generated_twin_region(
+        &mut self,
+        twin_id: &CorticalID,
+        upstream_area_id: &CorticalID,
+        memory_area_id: &CorticalID,
+    ) -> BduResult<()> {
+        if let Some(root_id) = self.get_root_region_id() {
+            if let Some(root) = self.get_brain_region_mut(&root_id) {
+                root.remove_area(twin_id);
+            }
+            if let Some(twin) = self.cortical_areas.get_mut(twin_id) {
+                if twin
+                    .properties
+                    .get("parent_region_id")
+                    .and_then(|value| value.as_str())
+                    == Some(root_id.as_str())
+                {
+                    twin.properties.remove("parent_region_id");
+                }
+            }
+        }
+
+        let Some(region_id) =
+            self.non_root_region_for_generated_twin(upstream_area_id, memory_area_id)?
+        else {
+            return Ok(());
+        };
+
+        let membership_ids: Vec<String> =
+            self.get_brain_region_ids().into_iter().cloned().collect();
+        for existing_id in membership_ids {
+            if existing_id == region_id {
+                continue;
+            }
+            if let Some(region) = self.get_brain_region_mut(&existing_id) {
+                region.remove_area(twin_id);
+            }
+        }
+        let region = self.get_brain_region_mut(&region_id).ok_or_else(|| {
+            BduError::InvalidArea(format!(
+                "Brain region {} missing while placing twin {}",
+                region_id,
+                twin_id.as_base_64()
+            ))
+        })?;
+        region.add_area(*twin_id);
+        if let Some(twin) = self.cortical_areas.get_mut(twin_id) {
+            twin.properties
+                .insert("parent_region_id".to_string(), serde_json::json!(region_id));
+        }
+        self.refresh_brain_regions_hash();
+        Ok(())
+    }
+
+    /// Delete replay twins that classifier kernel/class memory must not own.
+    ///
+    /// Detection stamps listed on the classifier, or marked `scan_twin`, stay.
+    /// Auto twins minted from the kernel or class `episodic_memory` edge do not.
+    pub(crate) fn purge_classifier_auto_twins(&mut self) -> BduResult<usize> {
+        let area_ids: Vec<CorticalID> = self.cortical_areas.keys().copied().collect();
+        let mut victims: Vec<(CorticalID, CorticalID, CorticalID)> = Vec::new();
+        for twin_id in area_ids {
+            let Some(twin) = self.cortical_areas.get(&twin_id) else {
+                continue;
+            };
+            let Some(memory_b64) = twin
+                .properties
+                .get("memory_twin_for")
+                .and_then(|value| value.as_str())
+            else {
+                continue;
+            };
+            let Some(upstream_b64) = twin
+                .properties
+                .get("memory_twin_of")
+                .and_then(|value| value.as_str())
+            else {
+                continue;
+            };
+            let Ok(memory_id) = CorticalID::try_from_base_64(memory_b64) else {
+                continue;
+            };
+            let Ok(upstream_id) = CorticalID::try_from_base_64(upstream_b64) else {
+                continue;
+            };
+            let Some(memory) = self.cortical_areas.get(&memory_id) else {
+                continue;
+            };
+            if !Self::area_belongs_to_classifier_assembly(memory) {
+                continue;
+            }
+            if self.twin_is_classifier_stamp(&twin_id) {
+                continue;
+            }
+            victims.push((memory_id, upstream_id, twin_id));
+        }
+
+        let mut removed = 0usize;
+        for (memory_id, upstream_id, twin_id) in victims {
+            self.set_memory_twin_mapping(&memory_id, &upstream_id, &twin_id);
+            if self
+                .teardown_owned_memory_twin_for_mapping(&memory_id, &upstream_id)?
+                .is_some()
+            {
+                removed += 1;
+            }
+        }
+        if removed > 0 {
+            info!(
+                target: "feagi-bdu",
+                "Removed {} classifier auto twin(s) that were not detection stamps",
+                removed
+            );
+        }
+        Ok(removed)
+    }
+
+    /// True when this memory area must not receive an auto replay twin.
+    ///
+    /// Classifier kernel and class memory keep their detection stamps. They do
+    /// not get a second twin from the kernel/class `episodic_memory` edge.
+    pub(crate) fn auto_memory_twin_forbidden(
+        &self,
+        memory_area_id: &CorticalID,
+        twin_id: Option<&CorticalID>,
+    ) -> bool {
+        let Some(memory) = self.cortical_areas.get(memory_area_id) else {
+            return false;
+        };
+        if !Self::area_belongs_to_classifier_assembly(memory) {
+            return false;
+        }
+        match twin_id {
+            Some(id) if self.twin_is_classifier_stamp(id) => false,
+            _ => true,
+        }
+    }
+
     /// Ensure a memory twin area exists for the given upstream and memory areas.
     pub fn ensure_memory_twin_area(
         &mut self,
@@ -1960,14 +2171,36 @@ impl ConnectomeManager {
             )));
         }
 
-        if let Some(existing) = memory_area
+        let memory_is_classifier = Self::area_belongs_to_classifier_assembly(memory_area);
+        let indexed_twin = memory_area
             .properties
             .get("memory_twin_areas")
             .and_then(|v| v.as_object())
             .and_then(|map| map.get(&upstream_area_id.as_base_64()))
             .and_then(|v| v.as_str())
-            .and_then(|s| CorticalID::try_from_base_64(s).ok())
-        {
+            .and_then(|s| CorticalID::try_from_base_64(s).ok());
+
+        if memory_is_classifier {
+            if let Some(existing) = indexed_twin {
+                if self.twin_is_classifier_stamp(&existing) {
+                    self.assign_generated_twin_region(&existing, upstream_area_id, memory_area_id)?;
+                    self.ensure_memory_replay_mapping(memory_area_id, &existing)?;
+                    register_replay_mapping(self, &existing)?;
+                    self.refresh_cortical_mappings_hash();
+                    return Ok(existing);
+                }
+                self.set_memory_twin_mapping(memory_area_id, upstream_area_id, &existing);
+                self.teardown_owned_memory_twin_for_mapping(memory_area_id, upstream_area_id)?;
+            }
+            return Err(BduError::InvalidArea(format!(
+                "Classifier memory {} does not auto-create a replay twin for {}",
+                memory_area_id.as_base_64(),
+                upstream_area_id.as_base_64()
+            )));
+        }
+
+        if let Some(existing) = indexed_twin {
+            self.assign_generated_twin_region(&existing, upstream_area_id, memory_area_id)?;
             self.ensure_memory_replay_mapping(memory_area_id, &existing)?;
             register_replay_mapping(self, &existing)?;
             self.refresh_cortical_mappings_hash();
@@ -2007,6 +2240,7 @@ impl ConnectomeManager {
                 }
             }
             self.set_memory_twin_mapping(memory_area_id, upstream_area_id, &twin_id);
+            self.assign_generated_twin_region(&twin_id, upstream_area_id, memory_area_id)?;
             self.ensure_memory_replay_mapping(memory_area_id, &twin_id)?;
             register_replay_mapping(self, &twin_id)?;
             self.refresh_cortical_mappings_hash();
@@ -2035,6 +2269,12 @@ impl ConnectomeManager {
         let _ = self.create_neurons_for_area(&twin_id);
 
         self.set_memory_twin_mapping(memory_area_id, upstream_area_id, &twin_id);
+        if let Err(error) =
+            self.assign_generated_twin_region(&twin_id, upstream_area_id, memory_area_id)
+        {
+            let _ = self.teardown_owned_memory_twin_for_mapping(memory_area_id, upstream_area_id);
+            return Err(error);
+        }
         self.ensure_memory_replay_mapping(memory_area_id, &twin_id)?;
         register_replay_mapping(self, &twin_id)?;
         self.refresh_cortical_mappings_hash();
@@ -2075,6 +2315,7 @@ impl ConnectomeManager {
             .and_then(|v| v.as_str())
             .and_then(|s| CorticalID::try_from_base_64(s).ok())
         {
+            self.assign_generated_twin_region(&existing, field_area_id, memory_area_id)?;
             self.refresh_cortical_mappings_hash();
             return Ok(existing);
         }
@@ -2082,6 +2323,7 @@ impl ConnectomeManager {
         let twin_id = self.build_scan_twin_id(memory_area_id, field_area_id)?;
         if self.cortical_areas.contains_key(&twin_id) {
             self.set_memory_twin_mapping(memory_area_id, field_area_id, &twin_id);
+            self.assign_generated_twin_region(&twin_id, field_area_id, memory_area_id)?;
             self.refresh_cortical_mappings_hash();
             return Ok(twin_id);
         }
@@ -2110,6 +2352,12 @@ impl ConnectomeManager {
         let _twin_idx = self.add_cortical_area(twin_area)?;
         let _ = self.create_neurons_for_area(&twin_id);
         self.set_memory_twin_mapping(memory_area_id, field_area_id, &twin_id);
+        if let Err(error) =
+            self.assign_generated_twin_region(&twin_id, field_area_id, memory_area_id)
+        {
+            let _ = self.teardown_owned_memory_twin_for_mapping(memory_area_id, field_area_id);
+            return Err(error);
+        }
         self.refresh_cortical_mappings_hash();
         Ok(twin_id)
     }
@@ -2215,6 +2463,8 @@ impl ConnectomeManager {
         let mut props = upstream_area.properties.clone();
         props.remove("cortical_mapping_dst");
         props.remove("upstream_cortical_areas");
+        // Region membership lives on the brain region, not this property bag.
+        // assign_generated_twin_region writes the non-root region after creation.
         props.remove("parent_region_id");
         props.insert("cortical_group".to_string(), serde_json::json!("CUSTOM"));
         props.insert("is_mem_type".to_string(), serde_json::json!(false));
@@ -2226,16 +2476,6 @@ impl ConnectomeManager {
             "memory_twin_for".to_string(),
             serde_json::json!(memory_area_id.as_base_64()),
         );
-        if let Some(parent_region_id) = upstream_area
-            .properties
-            .get("parent_region_id")
-            .and_then(|v| v.as_str())
-        {
-            props.insert(
-                "parent_region_id".to_string(),
-                serde_json::json!(parent_region_id),
-            );
-        }
         props
     }
 
@@ -5173,6 +5413,7 @@ impl ConnectomeManager {
     /// Existing twins are re-indexed in place. Synapses are not regenerated when
     /// a `memory_replay` mapping is already present.
     pub fn rebuild_memory_twin_mappings(&mut self) -> BduResult<usize> {
+        self.purge_classifier_auto_twins()?;
         let jobs = self.collect_memory_twin_rebuild_jobs()?;
         let mut restored = 0usize;
         for (memory_id, upstream_id, known_twin) in jobs {
@@ -5346,6 +5587,9 @@ impl ConnectomeManager {
                 if !Self::area_is_memory(memory_area) {
                     continue;
                 }
+                if Self::area_belongs_to_classifier_assembly(memory_area) {
+                    continue;
+                }
                 episodic_pairs.push((memory_id, *src_id));
             }
         }
@@ -5426,6 +5670,7 @@ impl ConnectomeManager {
         if !has_replay {
             self.ensure_memory_replay_mapping(memory_area_id, twin_id)?;
         }
+        self.assign_generated_twin_region(twin_id, upstream_area_id, memory_area_id)?;
         Ok(())
     }
 
@@ -10395,6 +10640,247 @@ mod tests {
     }
 
     #[test]
+    fn generated_memory_twin_joins_source_region_not_root() {
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+        let root_id = RegionID::new();
+        let child_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let child_key = child_id.to_string();
+        manager
+            .add_brain_region(
+                BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap(),
+                None,
+            )
+            .unwrap();
+        manager
+            .add_brain_region(
+                BrainRegion::new(
+                    child_id,
+                    "Color Detector".to_string(),
+                    RegionType::Undefined,
+                )
+                .unwrap(),
+                Some(root_key.clone()),
+            )
+            .unwrap();
+
+        let src_id = CorticalID::try_from_bytes(b"ckernel1").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmemclr1").unwrap();
+        let src_area = CorticalArea::new(
+            src_id,
+            0,
+            "Color Kernel".to_string(),
+            CorticalAreaDimensions::new(3, 3, 3).unwrap(),
+            (40, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let mem_area = CorticalArea::new(
+            mem_id,
+            0,
+            "Color Memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (52, 16, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        manager.add_cortical_area(src_area).unwrap();
+        manager.add_cortical_area(mem_area).unwrap();
+        manager
+            .get_brain_region_mut(&child_key)
+            .unwrap()
+            .add_area(src_id);
+        manager
+            .get_brain_region_mut(&child_key)
+            .unwrap()
+            .add_area(mem_id);
+
+        let twin_id = manager
+            .ensure_memory_twin_area(&mem_id, &src_id)
+            .expect("twin should be created inside the source region");
+        let twin = manager.get_cortical_area(&twin_id).unwrap();
+        assert_eq!(twin.name, "Color_Kernel_twin");
+        assert_eq!(twin.position.x, 44);
+        assert_eq!(
+            manager.get_parent_region_id_for_area(&twin_id).as_deref(),
+            Some(child_key.as_str())
+        );
+        assert!(
+            !manager
+                .get_brain_region(&root_key)
+                .unwrap()
+                .contains_area(&twin_id),
+            "generated twin must not be a root member"
+        );
+    }
+
+    #[test]
+    fn classifier_episodic_rebuild_purges_auto_twins_and_keeps_stamps() {
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+        let root_id = RegionID::new();
+        let child_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let child_key = child_id.to_string();
+        manager
+            .add_brain_region(
+                BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap(),
+                None,
+            )
+            .unwrap();
+        manager
+            .add_brain_region(
+                BrainRegion::new(
+                    child_id,
+                    "Color Detector".to_string(),
+                    RegionType::Undefined,
+                )
+                .unwrap(),
+                Some(root_key.clone()),
+            )
+            .unwrap();
+
+        let kernel_id = CorticalID::try_from_bytes(b"ckernel2").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mclfmem2").unwrap();
+        let field_id = CorticalID::try_from_bytes(b"cfield02").unwrap();
+        let mut kernel = CorticalArea::new(
+            kernel_id,
+            0,
+            "Color Kernel".to_string(),
+            CorticalAreaDimensions::new(3, 3, 3).unwrap(),
+            (40, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        kernel.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{ "morphology_id": "episodic_memory" }]
+            }),
+        );
+        let mut memory = CorticalArea::new(
+            mem_id,
+            0,
+            "Color Classifier_kernel_mem".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (52, 16, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        memory
+            .properties
+            .insert("classifier_assembly".to_string(), serde_json::json!(true));
+        memory.properties.insert(
+            "classifier_role".to_string(),
+            serde_json::json!("kernel_memory"),
+        );
+        let field = CorticalArea::new(
+            field_id,
+            0,
+            "Input Canvas".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (10, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let auto_twin_id = manager.build_memory_twin_id(&mem_id, &kernel_id).unwrap();
+        let mut auto_twin = CorticalArea::new(
+            auto_twin_id,
+            0,
+            "Color_Kernel_twin".to_string(),
+            CorticalAreaDimensions::new(3, 3, 3).unwrap(),
+            (44, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        auto_twin.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(kernel_id.as_base_64()),
+        );
+        auto_twin.properties.insert(
+            "memory_twin_for".to_string(),
+            serde_json::json!(mem_id.as_base_64()),
+        );
+        let stamp_id = CorticalID::try_from_bytes(b"cstamp02").unwrap();
+        let mut stamp = CorticalArea::new(
+            stamp_id,
+            0,
+            "Color Classifier_Input Canvas_twin".to_string(),
+            CorticalAreaDimensions::new(2, 2, 2).unwrap(),
+            (78, 14, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        stamp.properties.insert(
+            "classifier_role".to_string(),
+            serde_json::json!("scan_twin"),
+        );
+        stamp
+            .properties
+            .insert("scan_twin".to_string(), serde_json::json!(true));
+        stamp.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(field_id.as_base_64()),
+        );
+        stamp.properties.insert(
+            "memory_twin_for".to_string(),
+            serde_json::json!(mem_id.as_base_64()),
+        );
+        memory.properties.insert(
+            "memory_twin_areas".to_string(),
+            serde_json::json!({
+                kernel_id.as_base_64(): auto_twin_id.as_base_64(),
+                field_id.as_base_64(): stamp_id.as_base_64(),
+            }),
+        );
+
+        manager.add_cortical_area(kernel).unwrap();
+        manager.add_cortical_area(memory).unwrap();
+        manager.add_cortical_area(field).unwrap();
+        manager.add_cortical_area(auto_twin).unwrap();
+        manager.add_cortical_area(stamp).unwrap();
+        for area_id in [kernel_id, mem_id, field_id] {
+            manager
+                .get_brain_region_mut(&child_key)
+                .unwrap()
+                .add_area(area_id);
+        }
+
+        manager.rebuild_memory_twin_mappings().unwrap();
+
+        assert!(
+            manager.get_cortical_area(&auto_twin_id).is_none(),
+            "classifier kernel episodic edge must not keep an auto twin"
+        );
+        assert!(manager.get_cortical_area(&stamp_id).is_some());
+        assert_eq!(
+            manager.get_parent_region_id_for_area(&stamp_id).as_deref(),
+            Some(child_key.as_str())
+        );
+        assert!(!manager
+            .get_brain_region(&root_key)
+            .unwrap()
+            .contains_area(&stamp_id));
+        assert!(manager
+            .ensure_memory_twin_area(&mem_id, &kernel_id)
+            .is_err());
+        assert!(manager.get_cortical_area(&auto_twin_id).is_none());
+    }
+
+    #[test]
     fn test_associative_memory_between_memory_areas_creates_synapses() {
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
@@ -10814,8 +11300,10 @@ mod tests {
         let mut manager = ConnectomeManager::new_for_testing();
         let root_id = RegionID::new();
         let child_id = RegionID::new();
+        let other_id = RegionID::new();
         let root_key = root_id.to_string();
         let child_key = child_id.to_string();
+        let other_key = other_id.to_string();
         manager
             .add_brain_region(
                 BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap(),
@@ -10825,6 +11313,12 @@ mod tests {
         manager
             .add_brain_region(
                 BrainRegion::new(child_id, "Child".to_string(), RegionType::Undefined).unwrap(),
+                Some(root_key.clone()),
+            )
+            .unwrap();
+        manager
+            .add_brain_region(
+                BrainRegion::new(other_id, "Other".to_string(), RegionType::Undefined).unwrap(),
                 Some(root_key.clone()),
             )
             .unwrap();
@@ -10865,7 +11359,7 @@ mod tests {
         .unwrap();
         classifier_mem.properties.insert(
             "parent_region_id".to_string(),
-            serde_json::json!(root_key.clone()),
+            serde_json::json!(other_key.clone()),
         );
         classifier_mem
             .properties
@@ -10906,7 +11400,7 @@ mod tests {
         .unwrap();
         regular_mem.properties.insert(
             "parent_region_id".to_string(),
-            serde_json::json!(root_key.clone()),
+            serde_json::json!(other_key.clone()),
         );
 
         manager.add_cortical_area(field).unwrap();
@@ -10936,8 +11430,10 @@ mod tests {
         let mut manager = ConnectomeManager::new_for_testing();
         let root_id = RegionID::new();
         let child_id = RegionID::new();
+        let other_id = RegionID::new();
         let root_key = root_id.to_string();
         let child_key = child_id.to_string();
+        let other_key = other_id.to_string();
         manager
             .add_brain_region(
                 BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap(),
@@ -10947,6 +11443,12 @@ mod tests {
         manager
             .add_brain_region(
                 BrainRegion::new(child_id, "Child".to_string(), RegionType::Undefined).unwrap(),
+                Some(root_key.clone()),
+            )
+            .unwrap();
+        manager
+            .add_brain_region(
+                BrainRegion::new(other_id, "Other".to_string(), RegionType::Undefined).unwrap(),
                 Some(root_key.clone()),
             )
             .unwrap();
@@ -10993,7 +11495,7 @@ mod tests {
         .unwrap();
         dest.properties.insert(
             "parent_region_id".to_string(),
-            serde_json::json!(root_key.clone()),
+            serde_json::json!(other_key.clone()),
         );
 
         manager.add_cortical_area(twin).unwrap();
@@ -11001,14 +11503,14 @@ mod tests {
 
         let io = manager.recompute_brain_region_io_registry().unwrap();
         let child_outputs = &io.get(&child_key).expect("child region io").1;
-        let root_inputs = &io.get(&root_key).expect("root region io").0;
+        let other_inputs = &io.get(&other_key).expect("destination region io").0;
         assert!(
             child_outputs.contains(&twin_id.as_base_64()),
             "a detection twin must leave its circuit like any other area; got outputs {child_outputs:?}"
         );
         assert!(
-            root_inputs.contains(&dest_id.as_base_64()),
-            "the area a detection twin maps into must become a region input; got inputs {root_inputs:?}"
+            other_inputs.contains(&dest_id.as_base_64()),
+            "the area a detection twin maps into must become a region input; got inputs {other_inputs:?}"
         );
     }
 

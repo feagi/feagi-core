@@ -2238,6 +2238,7 @@ dependencies = [
  "feagi-sensorimotor",
  "feagi-serialization",
  "feagi-structures",
+ "flate2",
  "image",
  "serde",
  "serde_json",

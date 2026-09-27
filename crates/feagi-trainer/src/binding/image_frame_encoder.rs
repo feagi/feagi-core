@@ -10,9 +10,10 @@ use std::time::Instant;
 use feagi_sensorimotor::data_pipeline::PipelineStageProperties;
 use feagi_sensorimotor::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution,
+    SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
 use feagi_sensorimotor::data_types::processing::ImageFrameProcessor;
-use feagi_sensorimotor::data_types::ImageFrame;
+use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D};
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 use feagi_sensorimotor::ConnectorCache;
 use feagi_structures::genomic::cortical_area::descriptors::{
@@ -26,7 +27,8 @@ use feagi_structures::neuron_voxels::xyzp::{
 };
 
 use crate::binding::encoder::EncoderPlugin;
-use crate::binding::profile::EncoderBindingProfile;
+use crate::binding::population_encoder::PopulationEncoder;
+use crate::binding::profile::{EncoderBindingProfile, SegmentedVisionBinding, VisionLayout};
 use crate::contracts::common::{PluginId, PluginRef};
 use crate::contracts::ir_sample::{IRSample, Payload, TypedTarget};
 use crate::error::TrainerError;
@@ -105,6 +107,13 @@ impl ImageFrameEncoder {
     }
 }
 
+fn gaze_properties(binding: &SegmentedVisionBinding) -> Result<GazeProperties, TrainerError> {
+    let x = Percentage::new_from_0_1(binding.gaze_eccentricity_x as f32).map_err(map_err)?;
+    let y = Percentage::new_from_0_1(binding.gaze_eccentricity_y as f32).map_err(map_err)?;
+    let modulation = Percentage::new_from_0_1(binding.gaze_modulation as f32).map_err(map_err)?;
+    Ok(GazeProperties::new(Percentage2D::new(x, y), modulation))
+}
+
 fn map_err<E: std::fmt::Display>(e: E) -> TrainerError {
     TrainerError::Config(e.to_string())
 }
@@ -143,34 +152,111 @@ impl EncoderPlugin for ImageFrameEncoder {
         let cache = ConnectorCache::new();
         let unit = CorticalUnitIndex::from(VISION_SENSORY_UNIT);
         let mut sensor_cache = cache.get_sensor_cache();
-        sensor_cache
-            .vision_register(
-                unit,
-                CorticalChannelCount::new(profile.channels).map_err(map_err)?,
-                FrameChangeHandling::Absolute,
-                image_props,
-            )
-            .map_err(map_err)?;
-        sensor_cache
-            .vision_replace_all_stages(
-                unit,
-                CorticalChannelIndex::from(0u32),
-                vec![PipelineStageProperties::new_image_frame_processor(
-                    ImageFrameProcessor::new(image_props),
-                )],
-            )
-            .map_err(map_err)?;
-        sensor_cache
-            .vision_write(
-                unit,
-                CorticalChannelIndex::from(0u32),
-                WrappedIOData::ImageFrame(frame),
-            )
-            .map_err(map_err)?;
+        let channel_count = CorticalChannelCount::new(profile.channels).map_err(map_err)?;
+        match profile.vision_layout {
+            VisionLayout::Simple => {
+                sensor_cache
+                    .vision_register(
+                        unit,
+                        channel_count,
+                        FrameChangeHandling::Absolute,
+                        image_props,
+                    )
+                    .map_err(map_err)?;
+                sensor_cache
+                    .vision_replace_all_stages(
+                        unit,
+                        CorticalChannelIndex::from(0u32),
+                        vec![PipelineStageProperties::new_image_frame_processor(
+                            ImageFrameProcessor::new(image_props),
+                        )],
+                    )
+                    .map_err(map_err)?;
+                sensor_cache
+                    .vision_write(
+                        unit,
+                        CorticalChannelIndex::from(0u32),
+                        WrappedIOData::ImageFrame(frame),
+                    )
+                    .map_err(map_err)?;
+            }
+            VisionLayout::Segmented => {
+                let segmented = profile.segmented_vision.as_ref().ok_or_else(|| {
+                    TrainerError::Config(
+                        "segmented vision requires encoder_profile.segmented_vision".to_string(),
+                    )
+                })?;
+                segmented.validate()?;
+                let resolution = image_props.get_image_resolution();
+                if resolution.width < 3 || resolution.height < 3 {
+                    return Err(TrainerError::Config(
+                        "segmented vision source width and height must be at least 3".to_string(),
+                    ));
+                }
+                let center = ImageXYResolution::new(segmented.center_width, segmented.center_height)
+                    .map_err(map_err)?;
+                let peripheral =
+                    ImageXYResolution::new(segmented.peripheral_width, segmented.peripheral_height)
+                        .map_err(map_err)?;
+                let segmented_props = SegmentedImageFrameProperties::new(
+                    SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+                        center, peripheral,
+                    ),
+                    ColorChannelLayout::RGB,
+                    ColorChannelLayout::RGB,
+                    ColorSpace::Gamma,
+                );
+                sensor_cache
+                    .segmented_vision_register(
+                        unit,
+                        channel_count,
+                        FrameChangeHandling::Absolute,
+                        image_props,
+                        segmented_props,
+                        gaze_properties(segmented)?,
+                    )
+                    .map_err(map_err)?;
+                sensor_cache
+                    .segmented_vision_write(
+                        unit,
+                        CorticalChannelIndex::from(0u32),
+                        WrappedIOData::ImageFrame(frame),
+                    )
+                    .map_err(map_err)?;
+            }
+        }
         sensor_cache
             .encode_all_sensors_to_neurons(Instant::now())
             .map_err(map_err)?;
         let mut neurons = sensor_cache.get_neurons().clone();
+        if profile.teacher.is_some() && profile.segmentation_teacher.is_some() {
+            return Err(TrainerError::Config(
+                "image encoder cannot write a class teacher and an iseg mask teacher together"
+                    .to_string(),
+            ));
+        }
+        if let Some(teacher) = &profile.teacher {
+            teacher.validate()?;
+            let class_id = match &sample.target {
+                Some(TypedTarget::Class { class_id, .. }) => *class_id,
+                Some(other) => {
+                    return Err(TrainerError::Config(format!(
+                        "image class teacher requires a class target, got {other:?}"
+                    )))
+                }
+                None => {
+                    return Err(TrainerError::Config(
+                        "image class teacher requires a labeled class target".to_string(),
+                    ))
+                }
+            };
+            let teacher_arrays =
+                PopulationEncoder::class_teacher_voxels(class_id, teacher.class_count)?;
+            neurons.insert(
+                PopulationEncoder::misc_cortical_id(teacher.unit),
+                teacher_arrays,
+            );
+        }
         if let Some(teacher) = &profile.segmentation_teacher {
             teacher.validate()?;
             let Some(TypedTarget::SegmentationMask {
@@ -237,9 +323,11 @@ mod tests {
             },
             image_width: Some(width),
             image_height: Some(height),
+            vision_layout: crate::binding::profile::VisionLayout::Simple,
             stream: None,
             teacher: None,
             segmentation_teacher: None,
+            segmented_vision: None,
         }
     }
 
@@ -257,6 +345,34 @@ mod tests {
             timestamp: None,
             metadata: BTreeMap::new(),
         }
+    }
+
+    #[test]
+    fn segmented_vision_encode_writes_the_center_tile() {
+        use crate::binding::profile::{SegmentedVisionBinding, VisionLayout};
+        let mut profile = vision_profile(8, 8);
+        profile.vision_layout = VisionLayout::Segmented;
+        profile.segmented_vision = Some(SegmentedVisionBinding {
+            center_width: 4,
+            center_height: 4,
+            peripheral_width: 2,
+            peripheral_height: 2,
+            gaze_eccentricity_x: 0.5,
+            gaze_eccentricity_y: 0.5,
+            gaze_modulation: 0.5,
+        });
+        let mut encoder = ImageFrameEncoder::new();
+        let frame = encoder
+            .encode(&sample(rgb_png(8, 8), None), &profile)
+            .expect("encode");
+        let center = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+            FrameChangeHandling::Absolute,
+            CorticalUnitIndex::from(0u16),
+        )[4];
+        assert!(
+            frame.get_neurons_of(&center).is_some(),
+            "segmented vision must write the center tile"
+        );
     }
 
     #[test]

@@ -55,9 +55,11 @@ fn population_profile(channels: u32) -> EncoderBindingProfile {
         },
         image_width: None,
         image_height: None,
+        vision_layout: crate::binding::profile::VisionLayout::Simple,
         stream: None,
         teacher: None,
         segmentation_teacher: None,
+        segmented_vision: None,
         cortical_name: None,
     }
 }

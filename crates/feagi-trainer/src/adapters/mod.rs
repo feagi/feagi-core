@@ -1,10 +1,15 @@
 //! Built-in adapter implementations.
 
 pub mod class_keep;
+pub mod image_folder_classification;
 pub mod image_folder_segmentation;
 pub mod tabular_csv;
 pub mod time_series;
 
+pub use image_folder_classification::{
+    scan_image_classification_root, ClassVoxel, ImageClassificationScan, ImageClassificationSchema,
+    ImageFolderClassificationAdapter, ImageFolderClassificationConfig,
+};
 pub use image_folder_segmentation::{
     ImageFolderSegmentationAdapter, ImageFolderSegmentationConfig, ImageLabelPair,
     SegmentationDatasetLayout, SegmentationPreview, SegmentationPreviewFrame,

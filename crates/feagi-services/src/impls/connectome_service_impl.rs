@@ -146,6 +146,30 @@ fn merge_memory_area_properties(
     defaults
 }
 
+/// Classifier-owned custom and memory areas stay out of root.
+fn classifier_areas_allowed_in_region(
+    manager: &ConnectomeManager,
+    parent_region_id: &str,
+    owned_area_ids: Vec<String>,
+) -> Vec<CorticalID> {
+    let mut accepted = Vec::new();
+    for area_id in owned_area_ids {
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&area_id) else {
+            continue;
+        };
+        if manager.may_place_area_in_region(parent_region_id, &cortical_id) {
+            accepted.push(cortical_id);
+        } else {
+            warn!(
+                target: "feagi-services",
+                "Refusing to place classifier area {} in root; root is reserved for core, IPU, and OPU areas",
+                cortical_id.as_base_64()
+            );
+        }
+    }
+    accepted
+}
+
 fn frame_handling_label(frame: FrameChangeHandling) -> &'static str {
     match frame {
         FrameChangeHandling::Absolute => "Absolute",
@@ -754,11 +778,14 @@ impl ConnectomeServiceImpl {
         // must do the same or the saved assembly comes back as kernel memory only.
         manager.replace_classifiers(genome.classifiers.clone());
         for classifier in genome.classifiers.values() {
+            let accepted = classifier_areas_allowed_in_region(
+                &manager,
+                &classifier.parent_region_id,
+                classifier.owned_area_ids(),
+            );
             if let Some(region) = manager.get_brain_region_mut(&classifier.parent_region_id) {
-                for area_id in classifier.owned_area_ids() {
-                    if let Ok(cortical_id) = CorticalID::try_from_base_64(&area_id) {
-                        region.add_area(cortical_id);
-                    }
+                for cortical_id in accepted {
+                    region.add_area(cortical_id);
                 }
             }
         }
@@ -2885,24 +2912,38 @@ impl ConnectomeService for ConnectomeServiceImpl {
                                 .insert("cortical_mapping_dst".to_string(), mapping.clone());
                         }
                     }
+                    let root_region_id = manager.get_root_region_id();
                     for twin_id_str in twin_map.values().filter_map(|v| v.as_str()) {
                         let Ok(twin_id) = CorticalID::try_from_base_64(twin_id_str) else {
                             continue;
                         };
-                        if genome.cortical_areas.contains_key(&twin_id) {
-                            continue;
-                        }
                         if let Some(twin_area) = manager.get_cortical_area(&twin_id) {
                             genome.cortical_areas.insert(twin_id, twin_area.clone());
-                            if let Some(parent_region_id) = twin_area
-                                .properties
-                                .get("parent_region_id")
-                                .and_then(|v| v.as_str())
-                            {
-                                if let Some(region) = genome.brain_regions.get_mut(parent_region_id)
-                                {
-                                    region.add_area(twin_id);
+                        }
+                        let Some(parent_region_id) =
+                            manager.get_parent_region_id_for_area(&twin_id)
+                        else {
+                            continue;
+                        };
+                        if root_region_id.as_deref() == Some(parent_region_id.as_str()) {
+                            warn!(
+                                target: "feagi-services",
+                                "Refusing to record twin {} in root; root is reserved for core, IPU, and OPU areas",
+                                twin_id.as_base_64()
+                            );
+                            if let Some(root_id) = root_region_id.as_ref() {
+                                if let Some(root_region) = genome.brain_regions.get_mut(root_id) {
+                                    root_region.remove_area(&twin_id);
                                 }
+                            }
+                            continue;
+                        }
+                        if let Some(region) = genome.brain_regions.get_mut(&parent_region_id) {
+                            region.add_area(twin_id);
+                        }
+                        if let Some(root_id) = root_region_id.as_ref() {
+                            if let Some(root_region) = genome.brain_regions.get_mut(root_id) {
+                                root_region.remove_area(&twin_id);
                             }
                         }
                     }
@@ -2919,7 +2960,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         &self,
         classifier: feagi_structures::genomic::classifiers::Classifier,
     ) -> ServiceResult<()> {
-        let region_io = {
+        let (region_io, accepted_area_ids) = {
             let mut manager = self.connectome.write();
             if let Some(existing) = manager.get_classifier(&classifier.classifier_id).cloned() {
                 if existing.parent_region_id != classifier.parent_region_id {
@@ -2934,21 +2975,25 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     }
                 }
             }
+            let accepted_area_ids = classifier_areas_allowed_in_region(
+                &manager,
+                &classifier.parent_region_id,
+                classifier.owned_area_ids(),
+            );
             if let Some(region) = manager.get_brain_region_mut(&classifier.parent_region_id) {
-                for area_id in classifier.owned_area_ids() {
-                    if let Ok(cortical_id) = CorticalID::try_from_base_64(&area_id) {
-                        region.add_area(cortical_id);
-                    }
+                for cortical_id in &accepted_area_ids {
+                    region.add_area(*cortical_id);
                 }
             }
             manager.upsert_classifier(classifier.clone());
             manager.reconfigure_classifier_scan(&classifier.kernel_memory_id);
-            manager.recompute_brain_region_io_registry().map_err(|e| {
+            let region_io = manager.recompute_brain_region_io_registry().map_err(|e| {
                 ServiceError::Backend(format!(
                     "Failed to recompute region IO after classifier upsert: {}",
                     e
                 ))
-            })?
+            })?;
+            (region_io, accepted_area_ids)
         };
         if let Some(genome) = self.current_genome.write().as_mut() {
             if let Some(existing) = genome.classifiers.get(&classifier.classifier_id) {
@@ -2965,10 +3010,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
             }
             if let Some(region) = genome.brain_regions.get_mut(&classifier.parent_region_id) {
-                for area_id in classifier.owned_area_ids() {
-                    if let Ok(cortical_id) = CorticalID::try_from_base_64(&area_id) {
-                        region.add_area(cortical_id);
-                    }
+                for cortical_id in &accepted_area_ids {
+                    region.add_area(*cortical_id);
                 }
             }
             for (region_id, (inputs, outputs)) in region_io {
@@ -8164,7 +8207,10 @@ mod raw_io_unit_name_tests {
         );
         let vision_id = &vision[0];
         assert!(is_raw_io_unit_placeholder("iimg Unit 0", vision_id));
-        assert!(!is_raw_io_unit_placeholder("Simple Vision Unit 0", vision_id));
+        assert!(!is_raw_io_unit_placeholder(
+            "Simple Vision Unit 0",
+            vision_id
+        ));
         assert!(!is_raw_io_unit_placeholder("Left camera", vision_id));
         assert_eq!(
             derive_friendly_cortical_name(vision_id).as_deref(),

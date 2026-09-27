@@ -516,6 +516,7 @@ mod tests {
             scheme: EncodingScheme::Value,
             image_width: None,
             image_height: None,
+            vision_layout: crate::binding::profile::VisionLayout::Simple,
             cortical_name: None,
             stream: Some(StreamBinding {
                 parallel_width: 1,
@@ -527,6 +528,7 @@ mod tests {
             }),
             teacher: None,
             segmentation_teacher: None,
+            segmented_vision: None,
         }
     }
 

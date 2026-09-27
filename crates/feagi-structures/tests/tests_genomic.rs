@@ -1616,6 +1616,7 @@ mod test_motor_cortical_unit {
             .get(&0.into())
             .expect("Missing topology entry for area 0");
         assert_eq!(unit.channel_dimensions_default, [1, 1, 16]);
+        assert_eq!(unit.relative_position, [85, 0, -100]);
     }
 
     #[test]
@@ -1846,6 +1847,7 @@ mod test_sensory_cortical_unit {
                 .get(&0.into())
                 .expect("Missing topology entry for area 0");
             assert_eq!(unit.channel_dimensions_default, [1, 1, 16]);
+            assert_eq!(unit.relative_position, [70, 0, -100]);
         }
     }
 
