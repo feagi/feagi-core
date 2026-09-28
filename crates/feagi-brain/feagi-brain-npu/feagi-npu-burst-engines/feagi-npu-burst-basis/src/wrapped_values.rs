@@ -1,4 +1,4 @@
-use feagi_data::feagi_data_quantization::create_wrapped_quantized_unsigned_integer;
+use feagi_basis::prelude::*;
 
 /// The index of a burst engine relative to all that are loaded
 pub type EngineIndex = u16;

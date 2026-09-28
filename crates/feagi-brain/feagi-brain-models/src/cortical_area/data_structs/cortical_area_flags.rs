@@ -1,4 +1,4 @@
-use feagi_macros::bit_struct_builder;
+use feagi_basis::prelude::bit_struct_builder;
 
 bit_struct_builder! {
     u8,

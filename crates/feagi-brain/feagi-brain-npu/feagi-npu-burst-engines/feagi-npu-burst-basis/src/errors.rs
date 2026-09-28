@@ -1,4 +1,4 @@
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
+use feagi_basis::prelude::*;
 
 generate_feagi_error! {
     /// Burst engine related error

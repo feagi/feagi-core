@@ -23,6 +23,11 @@ create_wrapped_quantized_unsigned_integer!(
     pub CorticalAreaVoxelCount
 );
 
+create_wrapped_quantized_unsigned_integer!(
+    /// A generic count of neurons
+    pub VoxelCount
+);
+
 // No linear collection needed, right?
 
 //region Dimensional Collections

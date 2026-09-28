@@ -1,9 +1,8 @@
 use std::future::Future;
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_models::wrapped_indexes::BurstIndex;
-use feagi_npu_burst_core::burst_phases::RunBurstPhase;
-use feagi_npu_burst_core::errors::BurstEngineError;
-use feagi_npu_burst_core::npu_sealed::composable::ComposableBurstPhaseOutput;
+use feagi_basis::prelude::*;
+use feagi_npu_burst_basis::burst_phases::RunBurstPhase;
+use feagi_npu_burst_basis::errors::BurstEngineError;
+use feagi_npu_burst_basis::npu_sealed::composable::ComposableBurstPhaseOutput;
 use crate::burst_engine_package::EnclosedEngine;
 
 pub enum EnclosedComposableBurstEngine<FIQ: FeagiIndexQuantization> {

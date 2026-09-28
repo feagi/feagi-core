@@ -1,5 +1,4 @@
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-
+use feagi_basis::prelude::*;
 pub struct EmbassyDataInterfaceSet<FIQ: FeagiIndexQuantization>
 {
     _p: FIQ

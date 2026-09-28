@@ -10,8 +10,9 @@ pub mod request_response_traits;
 /// Common FEAGI imports for downstream crates.
 pub mod prelude {
     pub use crate::{
-        feagi_debug, feagi_error, feagi_error::FeagiError, feagi_error::FeagiErrorTrait, 
-        feagi_error::FeagiFail, feagi_error::FeagiFailImpossible,
-        feagi_error::FeagiFailTrait, feagi_info, feagi_warn, generate_feagi_error,
+        feagi_debug, feagi_info, feagi_warn, generate_feagi_error, // logging
+        feagi_error::FeagiFail, feagi_error::FeagiFailTrait, feagi_error::FeagiFailImpossible, // Feagi Fail
+        feagi_error::FeagiError, feagi_error::FeagiErrorTrait, // feagi error
     };
+    pub use feagi_macros_proc::bit_struct_builder;
 }

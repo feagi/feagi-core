@@ -1,5 +1,5 @@
+use feagi_basis::prelude::*;
 use crate::wrapped_values::EngineCorticalIndex;
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// An engine response variant where the engine needs some specific attention
 pub enum NonComposablePhaseNotification<FIQ: FeagiIndexQuantization> {

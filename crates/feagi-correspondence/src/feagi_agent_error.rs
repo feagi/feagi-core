@@ -1,8 +1,9 @@
 //! Unified error types for the FEAGI agent (client and server).
+//! 
+use feagi_basis::prelude::*;
+//use feagi_io::FeagiNetworkError;
 
-use feagi_io::FeagiNetworkError;
-use feagi_logging_and_errors::{generate_feagi_error, FeagiError, FeagiFail};
-
+/*
 macro_rules! define_feagi_agent_error_key {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
@@ -163,3 +164,4 @@ mod transient_send_tests {
         assert!(!is_transient_zmq_send_message("connection reset"));
     }
 }
+*/

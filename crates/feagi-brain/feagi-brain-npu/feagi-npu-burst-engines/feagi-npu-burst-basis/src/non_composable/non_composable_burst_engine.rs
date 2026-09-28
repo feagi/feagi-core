@@ -1,7 +1,6 @@
+use feagi_basis::prelude::*;
 use crate::burst_phases::RunBurstPhase;
 use crate::errors::BurstEngineError;
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization};
-use feagi_models::wrapped_indexes::BurstIndex;
 use crate::non_composable::non_composable_burst_phase_output::NonComposableBurstPhaseOutput;
 
 /// Defines a Burst Engine that can execute neuron dynamics

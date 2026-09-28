@@ -1,11 +1,9 @@
 //! This library contains the core shared types / traits used by burst engines, and the various
 //! burst engines themselves (feature gated)
 
-pub use feagi_npu_burst_core::errors; // Should be exposed outside the NPU
-pub use feagi_npu_burst_core::burst_phases; // Should be exposed outside the NPU
 
 pub mod npu_sealed {
-    pub use feagi_npu_burst_core::npu_sealed::*;
+    //pub use feagi_npu_burst_core::npu_sealed::*;
 
     pub use super::enclosed_non_composable_burst_engine::{EnclosedNonComposableBurstEngine, NonComposableEngineToEnclosedNonComposable};
     #[cfg(feature = "alloc")]

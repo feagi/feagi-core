@@ -20,6 +20,11 @@ create_wrapped_quantized_unsigned_integer!(
     pub CorticalAreaNeuronCount
 );
 
+create_wrapped_quantized_unsigned_integer!(
+    /// A generic count of neurons
+    pub NeuronCount
+);
+
 //region Linear Collections
 
 /// Membrane potentials of the neurons in one cortical area, in the backing store `Store`.
