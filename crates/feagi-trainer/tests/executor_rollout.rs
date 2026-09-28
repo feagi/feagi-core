@@ -110,6 +110,7 @@ fn adapter_config() -> TabularCsvConfig {
         split: Split::Test,
         split_id: SplitId("test".to_string()),
         class_keep_percents: std::collections::BTreeMap::new(),
+        max_samples: None,
     }
 }
 

@@ -2120,10 +2120,7 @@ impl ConnectomeManager {
         if !Self::area_belongs_to_classifier_assembly(memory) {
             return false;
         }
-        match twin_id {
-            Some(id) if self.twin_is_classifier_stamp(id) => false,
-            _ => true,
-        }
+        !matches!(twin_id, Some(id) if self.twin_is_classifier_stamp(id))
     }
 
     /// Ensure a memory twin area exists for the given upstream and memory areas.

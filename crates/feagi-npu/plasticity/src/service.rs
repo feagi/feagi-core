@@ -20,8 +20,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
 use crate::classifier_reward::{
-    scanning_instance_affect, AnswerObservation, ChannelAffect, PresentationLedger,
-    RecordedDecision,
+    scanning_instance_affect, AnswerObservation, ChannelAffect, RecordedDecision,
 };
 use crate::episodic_scan::{
     class_channel_index, collect_active_scan_windows, mask_channels_in_window, should_skip_scan,
@@ -1333,6 +1332,7 @@ impl PlasticityService {
     ///
     /// A connected area with no firing is [`AnswerObservation::Silent`]: the
     /// gap before a label arrives is not pain.
+    #[allow(clippy::too_many_arguments)]
     fn feedback_channels_for_window(
         npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         reward: &ClassifierRewardConfig,
@@ -1503,7 +1503,7 @@ impl PlasticityService {
                 let learn_open = scan.reward.as_ref().is_none_or(|reward| {
                     reward.learn_area_idx.is_none_or(|learn_area_idx| {
                         Self::area_fired_this_burst(
-                            &npu,
+                            npu,
                             learn_area_idx,
                             current_timestep,
                             temporal_depth,
@@ -1517,7 +1517,7 @@ impl PlasticityService {
                 for window in windows {
                     let observation = scan.reward.as_ref().map(|reward| {
                         Self::feedback_channels_for_window(
-                            &npu,
+                            npu,
                             reward,
                             window.origin,
                             scan.class_channel_count,
