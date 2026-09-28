@@ -11,3 +11,4 @@ pub use feagi_agent_error::{is_transient_zmq_send_message, is_transient_zmq_send
 pub use common::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiApiVersion};
 
  */
+mod request_response;
