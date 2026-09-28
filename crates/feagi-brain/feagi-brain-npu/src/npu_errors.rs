@@ -7,8 +7,7 @@ generate_feagi_error! {
         Impossible: FeagiFailImpossible,
     },
     sub_errors: {
-        EngineError: BurstEngineError,
-        ChannelSendError: ChannelSendingError,
+
     },
 }
 
@@ -27,7 +26,6 @@ generate_feagi_error! {
         Impossible: FeagiFailImpossible,
     },
     sub_errors: {
-        BurstEngine: BurstEngineError,
         BurstEngineWorker: BurstEngineWorkerError,
         BurstEngineWorkerPool: BurstEngineWorkerPoolError,
     },
