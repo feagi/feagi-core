@@ -147,10 +147,12 @@ impl TemplateStruct for RequestResponseContract {
         let path_parameters = self.path_parameters.expand_template();
         let request = self.request.expand_template();
         let response = self.response.expand_template();
+        let title = &self.title;
         let description = &self.description;
 
         quote! {
             #request_path: {
+                title: #title,
                 description: #description,
                 path_parameters: #path_parameters,
                 request: #request,

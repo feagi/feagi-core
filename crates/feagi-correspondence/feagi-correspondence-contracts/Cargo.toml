@@ -28,7 +28,9 @@ support_json = [
 ]
 
 # Structs describing requests to send to the feagi server, and their responses
-feagi-server-requests = []
+feagi-server-requests = [
+    "feagi-basis/feagi_server_requests"
+]
 
 
 [dependencies]

@@ -67,16 +67,18 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
         
         let request_enum_name = append_to_lit_str(
             &(&template.category_name), "RequestsEnum");
+        let request_enum_name = lit_str_to_ident(&request_enum_name).unwrap(); // TODO error handling
 
         let response_enum_name = append_to_lit_str(
             &(&template.category_name), "ResponsesEnum");
+        let response_enum_name = lit_str_to_ident(&response_enum_name).unwrap(); // TODO error handling
         
         let mut request_enum_tokens = proc_macro2::TokenStream::new();
         let mut response_enum_tokens = proc_macro2::TokenStream::new();
 
         for enum_variant in enum_variants {
 
-            let variant = &enum_variant.key_name;
+            let variant = lit_str_to_ident(&enum_variant.key_name).unwrap(); // TODO error handling
 
             if let Some(request) = &enum_variant.request_struct {
                 request_enum_tokens.extend(quote!{#variant(#request),

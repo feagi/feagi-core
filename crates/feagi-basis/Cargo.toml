@@ -42,7 +42,13 @@ channel_flume = [
     "flume"
 ]
 
+# Exposes the base request/response contract macros (structs + enums)
+feagi_server_requests = [
+    "feagi-basis-macros/__feagi_request_response_macros"
+]
+
 feagi_server_requests_rest = [
+    "feagi_server_requests",
     "feagi-basis-macros/feagi_server_request_rest"
 ]
 

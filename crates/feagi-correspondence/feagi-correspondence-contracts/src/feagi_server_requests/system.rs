@@ -2,6 +2,7 @@
 use feagi_basis::feagi_macros::request_responses::{generate_from_template_request_response_structs_and_enums, template_request_category};
 
 
+#[cfg(feature = "feagi-server-requests")]
 template_request_category! {
     exported_macro_name: feagi_server_requests_system,
     template: {
@@ -13,7 +14,7 @@ template_request_category! {
                 description: "Checks current status of the FEAGI server",
                 path_parameters: [],
                 request: [],
-                response: [],
+                response: ["is_healthy": bool, "the current health status"],
             }
         },
         create: {},
@@ -23,9 +24,9 @@ template_request_category! {
     }
 }
 
-/*
-generate_from_template_request_response_structs_and_enums! {
-    feagi_server_requests_system!()
-}
+#[cfg(feature = "feagi-server-requests")]
+feagi_server_requests_system!(generate_from_template_request_response_structs_and_enums);
 
- */
+
+
+
