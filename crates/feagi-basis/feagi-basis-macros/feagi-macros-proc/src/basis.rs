@@ -79,9 +79,6 @@ impl StructParameters {
         self_parms.extend_from_slice(other.0.as_slice());
         StructParameters(self_parms)
     }
-}
-
-impl StructParameters {
 
     /// Generate a basic struct source code output. Does not include comments or any metas
     ///
@@ -100,7 +97,7 @@ impl StructParameters {
 
         quote! {
             
-            #struct_name {
+            pub struct #struct_name {
                 #fields
             }
             
@@ -214,13 +211,13 @@ impl StructParameterField {
 
         let no_com = LitStr::new("", proc_macro2::Span::call_site());
 
-        let name = &self.parameter_name;
+        let name = lit_str_to_ident(&self.parameter_name).unwrap(); // TODO error handling
         let par_type = &self.parameter_type;
         let comment = self.description.clone().unwrap_or(no_com);
 
         quote!{
             #[doc = #comment]
-            #name : #par_type
+            pub #name : #par_type,
         }
     }
 }

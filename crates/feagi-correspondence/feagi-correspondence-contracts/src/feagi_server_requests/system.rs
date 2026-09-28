@@ -12,9 +12,13 @@ template_request_category! {
             "health_check": {
                 title: "HealthCheck",
                 description: "Checks current status of the FEAGI server",
-                path_parameters: [],
-                request: [],
-                response: ["is_healthy": bool, "the current health status"],
+                path_parameters: [
+                    "endpoint": String
+                ],
+                request: [
+                    "waffles": i32
+                ],
+                response: ["is_healthy": bool, "The current health status"],
             }
         },
         create: {},
@@ -28,5 +32,16 @@ template_request_category! {
 feagi_server_requests_system!(generate_from_template_request_response_structs_and_enums);
 
 
+fn test() {
+    let b: ReadResponseHealthCheck = ReadResponseHealthCheck {
+        is_healthy: false,
+    };
+    let a = SystemResponsesEnum::HealthCheck(b);
 
+    let d = ReadRequestHealthCheck {
+        waffles: 0,
+        endpoint: "".to_string(),
+    };
+    let c = SystemRequestsEnum::HealthCheck(d);
+}
 

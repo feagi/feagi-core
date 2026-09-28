@@ -22,6 +22,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
 
             let request_struct: Option<syn::Ident>;
             let response_struct: Option<syn::Ident>;
+            let struct_description = &read_request.description;
 
             let combo_struct_name = prepend_to_lit_str("ReadRequest", &read_request.title);
             let combo_struct_name = lit_str_to_ident(&combo_struct_name).unwrap(); // TODO error handling
@@ -30,6 +31,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
             if !combo_path_request_struct.is_empty() {
                 let combo_struct_tokens = combo_path_request_struct.generate_struct(&combo_struct_name);
                 output.extend(quote! {
+                    #[doc = #struct_description]
                     #[derive(Debug, Clone, serde::Serialize)]
                     #combo_struct_tokens
                 });
@@ -43,6 +45,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
                 let struct_name = lit_str_to_ident(&struct_name).unwrap(); // TODO error handling
                 let struct_tokens = read_request.response.generate_struct(&struct_name);
                 output.extend(quote! {
+                    #[doc = #struct_description]
                     #[derive(Debug, Clone, serde::Serialize)]
                     #struct_tokens
                 });
