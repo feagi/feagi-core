@@ -546,10 +546,13 @@ name = "feagi-basis"
 version = "0.1.1"
 dependencies = [
  "ahash",
+ "feagi-basis-collections",
+ "feagi-basis-data-serialization",
  "feagi-basis-genome",
  "feagi-basis-macros",
  "feagi-basis-neuron",
  "feagi-basis-quantization",
+ "feagi-basis-sensiomotor",
  "flume",
  "paste",
  "rayon",
@@ -648,10 +651,6 @@ dependencies = [
 
 [[package]]
 name = "feagi-basis-sensiomotor"
-version = "0.1.1"
-
-[[package]]
-name = "feagi-basis-templates"
 version = "0.1.1"
 
 [[package]]

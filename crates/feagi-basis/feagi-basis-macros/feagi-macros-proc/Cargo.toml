@@ -10,8 +10,9 @@ homepage.workspace = true
 description = "Proc Macros that are used throughout the FEAGI Core, and occasionally outside, notablly for logging / errors"
 
 [features]
-request_response_template_parsers = []
-request_response_ahkami_codegen = ["request_response_template_parsers"]
+
+request_response_base_macros = []
+request_response_ahkami_codegen = ["request_response_base_macros"]
 
 [lib]
 proc-macro = true

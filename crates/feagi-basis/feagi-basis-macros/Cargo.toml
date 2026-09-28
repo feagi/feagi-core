@@ -21,6 +21,10 @@ enable_defmt = [
     "defmt"
 ]
 
+feagi_server_request_rest = [
+    "feagi-macros-proc/request_response_ahkami_codegen"
+]
+
 [dependencies]
 
 # Sub Crates

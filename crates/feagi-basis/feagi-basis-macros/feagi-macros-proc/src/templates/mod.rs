@@ -1,6 +1,6 @@
 //! Parse a template DSL into token structs, validate it, and re-export that template as a
-//! reusable `macro_rules!`. Later generator proc macros (final consumers) can turn those
-//! structs into Rust source.
+//! reusable `macro_rules!`. Later generator proc macros can turn those
+//! structs into Rust source code.
 //!
 //! Parser macros validate the source-file template, then emit:
 //!
@@ -18,6 +18,8 @@
 //! cannot be placed inside another proc-macro invocation and be unwrapped automatically.
 
 
-#[cfg(feature = "request_response_template_parsers")]
-pub mod requests_responses;
 pub mod template_root;
+
+
+#[cfg(feature = "request_response_base_macros")]
+pub mod requests_responses;

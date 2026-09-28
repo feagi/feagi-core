@@ -42,13 +42,20 @@ channel_flume = [
     "flume"
 ]
 
+feagi_server_requests_rest = [
+    "feagi-basis-macros/feagi_server_request_rest"
+]
+
 
 [dependencies]
 # Sub Crates
 feagi-basis-macros = {path = "feagi-basis-macros" }
 feagi-basis-quantization = {path = "feagi-basis-quantization" }
+feagi-basis-collections = {path = "feagi-basis-collections"}
+feagi-basis-data-serialization = {path = "feagi-basis-data-serialization"}
 feagi-basis-neuron = {path = "feagi-basis-neuron" }
 feagi-basis-genome = {path = "feagi-basis-genome"}
+feagi-basis-sensiomotor = {path = "feagi-basis-sensiomotor"}
 
 # Root Crates
 # NONE! THIS CRATE MUST NOT DEPEND ON OTHER FEAGI ROOT CRATES

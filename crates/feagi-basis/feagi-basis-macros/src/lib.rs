@@ -7,6 +7,7 @@ pub mod feagi_error;
 pub mod feagi_logging;
 pub mod request_response_traits;
 
+
 /// Common FEAGI imports for downstream crates.
 pub mod prelude {
     pub use crate::{
@@ -15,4 +16,12 @@ pub mod prelude {
         feagi_error::FeagiError, feagi_error::FeagiErrorTrait, // feagi error
     };
     pub use feagi_macros_proc::bit_struct_builder;
+
+}
+
+pub mod request_responses {
+    pub use feagi_macros_proc::template_request_category;
+    
+    pub use feagi_macros_proc::generate_from_template_ohkami_rest_server;
+    
 }

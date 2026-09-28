@@ -10,6 +10,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for OhkamiServerGene
 
         let mut output = proc_macro2::TokenStream::new();
 
+        /*
         let category_name = template.category_name;
         let base_path = template.base_path;
 
@@ -39,7 +40,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for OhkamiServerGene
 
                     
                 }
-            )
+            );
 
 
 
@@ -84,5 +85,8 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for OhkamiServerGene
 
 
         }
+
+         */
+        output
     }
 }

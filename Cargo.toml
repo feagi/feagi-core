@@ -57,7 +57,6 @@ members = [
     "crates/feagi-basis",
     "crates/feagi-basis/feagi-basis-macros",
     "crates/feagi-basis/feagi-basis-macros/feagi-macros-proc",
-    "crates/feagi-basis/feagi-basis-templates",
     "crates/feagi-basis/feagi-basis-quantization",
     "crates/feagi-basis/feagi-basis-collections",
     "crates/feagi-basis/feagi-basis-genome",

@@ -29,6 +29,16 @@ pub fn ident_to_lit_str(ident: &syn::Ident) -> LitStr {
     LitStr::new(&ident.to_string(), ident.span())
 }
 
+pub fn prepend_to_lit_str(prefix: &str, given: &LitStr) -> LitStr {
+    let combined_value = format!("{}{}", prefix, given.value());
+    LitStr::new(&combined_value, given.span())
+}
+
+pub fn append_to_lit_str(given: &LitStr, postfix: &str) -> LitStr {
+    let combined_value = format!("{}{}", given.value(), postfix);
+    LitStr::new(&combined_value, given.span())
+}
+
 /// A template fragment that can be parsed from tokens and re-emitted as the same DSL.
 pub trait TemplateStruct: Parse {
     /// Export this template into a token stream that can be parsed again
@@ -63,6 +73,12 @@ impl StructParameters {
     pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+    
+    pub fn make_combination_with(&self, other: &StructParameters) -> StructParameters {
+        let mut self_parms = self.0.to_vec();
+        self_parms.extend_from_slice(other.0.as_slice());
+        StructParameters(self_parms)
+    }
 }
 
 impl StructParameters {
@@ -74,7 +90,7 @@ impl StructParameters {
     ///     field1: type1
     ///     ...
     /// }
-    pub fn generate_struct(&self, struct_name: syn::Ident) -> proc_macro2::TokenStream {
+    pub fn generate_struct(&self, struct_name: &syn::Ident) -> proc_macro2::TokenStream {
 
         let mut fields: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
 
@@ -83,9 +99,11 @@ impl StructParameters {
         }
 
         quote! {
+            
             #struct_name {
                 #fields
             }
+            
         }
     }
 }
@@ -130,6 +148,7 @@ impl Parse for StructParameters {
 }
 
 /// A field of a `StructBuilderParameters`, used to represent a members name, its type, and optional comment.
+#[derive(Clone)]
 pub struct StructParameterField {
     /// The string name of the parameter.
     /// This becomes the generated structs field member name so should be snake case
