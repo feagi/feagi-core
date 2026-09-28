@@ -33,7 +33,6 @@ workspace = true
 
 [dependencies]
 # FEAGI
-feagi-macros = {path = "crates/feagi-macros"}
 feagi-basis = {path = "crates/feagi-basis"}
 feagi-brain = {path = "crates/feagi-brain"}
 feagi-correspondence = {path = "crates/feagi-correspondence"}
@@ -56,8 +55,8 @@ feagi-agent = {path = "crates/feagi-agent"}
 resolver = "2"
 members = [
     "crates/feagi-basis",
-    "crates/feagi-basis/feagi-basis-error-logging",
-    "crates/feagi-basis/feagi-basis-error-logging/feagi-basis-error-logging-proc",
+    "crates/feagi-basis/feagi-basis-macros",
+    "crates/feagi-basis/feagi-basis-macros/feagi-macros-proc",
     "crates/feagi-basis/feagi-basis-templates",
     "crates/feagi-basis/feagi-basis-quantization",
     "crates/feagi-basis/feagi-basis-collections",
@@ -83,8 +82,6 @@ members = [
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest",
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest/feagi-rest-server",
     "crates/feagi-correspondence/feagi-correspondence-contracts",
-
-    "crates/feagi-macros"
 ]
 
 

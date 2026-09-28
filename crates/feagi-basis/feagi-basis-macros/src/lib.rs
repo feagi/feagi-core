@@ -5,11 +5,9 @@ compile_error!("features `enable_log_facade` and `enable_defmt` cannot be enable
 
 pub mod feagi_error;
 pub mod feagi_logging;
+pub mod request_response_traits;
 
-/// Common FEAGI error/logging imports for downstream crates.
-///
-/// Usage:
-/// `use feagi_basis_error_logging::prelude::*;`
+/// Common FEAGI imports for downstream crates.
 pub mod prelude {
     pub use crate::{
         feagi_debug, feagi_error, feagi_error::FeagiError, feagi_error::FeagiErrorTrait, 

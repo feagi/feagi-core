@@ -1,4 +1,4 @@
-use feagi_basis_error_logging::prelude::*;
+use feagi_basis_macros::prelude::*;
 
 #[derive(FeagiFail)]
 pub struct FeagiFailCorticalID {

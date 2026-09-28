@@ -28,7 +28,7 @@ rayon = [
 # Sub Crates
 
 # Sibling Crates
-feagi-basis-error-logging = {path = "../feagi-basis-error-logging"}
+feagi-basis-macros = {path = "../feagi-basis-macros" }
 feagi-basis-quantization = {path = "../feagi-basis-quantization" }
 feagi-basis-collections = {path = "../feagi-basis-collections"}
 

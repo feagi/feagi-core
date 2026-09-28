@@ -45,7 +45,7 @@ channel_flume = [
 
 [dependencies]
 # Sub Crates
-feagi-basis-error-logging = {path = "feagi-basis-error-logging"}
+feagi-basis-macros = {path = "feagi-basis-macros" }
 feagi-basis-quantization = {path = "feagi-basis-quantization" }
 feagi-basis-neuron = {path = "feagi-basis-neuron" }
 feagi-basis-genome = {path = "feagi-basis-genome"}

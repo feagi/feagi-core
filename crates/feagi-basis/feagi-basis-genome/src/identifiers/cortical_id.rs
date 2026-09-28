@@ -1,9 +1,11 @@
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 #[cfg(feature = "base64")]
 use base64::engine::general_purpose;
 #[cfg(feature = "base64")]
 use base64::Engine;
-use serde::{Deserialize, Serialize};
 use crate::identifiers::feagi_identifier_error::{FeagiFailCorticalID, FeagiGenomeIdenfitierError};
+use crate::identifiers::identifiers::{BrainGraphIdentifier, GenomeIdentifier, ImposterIdentifier};
 
 macro_rules! match_bytes_by_cortical_type {
     ($cortical_id_bytes: expr,
@@ -25,7 +27,9 @@ macro_rules! match_bytes_by_cortical_type {
     };
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+// TODO move directly to a wrapped u64 to help avoid  endian shenanigans
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CorticalID {
     pub(crate) bytes: [u8; CorticalID::CORTICAL_ID_LENGTH],
 }
@@ -152,3 +156,58 @@ impl CorticalID {
     //endregion
 
 }
+
+impl BrainGraphIdentifier for CorticalID {}
+
+impl Display for CorticalID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+impl FromStr for CorticalID {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!()
+    }
+}
+
+impl GenomeIdentifier for CorticalID {}
+
+/// Used to identify incoming cortical areas to be added and their relationship to each other, but
+/// the relationship to the destination to be determined
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct ImposterCorticalID(u64);
+
+impl ImposterCorticalID {
+    pub fn new(id: u64) -> Self {
+        ImposterCorticalID(id)
+    }
+}
+
+impl BrainGraphIdentifier for ImposterCorticalID {}
+
+impl Display for ImposterCorticalID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+impl FromStr for ImposterCorticalID {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!()
+    }
+}
+
+impl ImposterIdentifier for ImposterCorticalID { type Impostering = CorticalID; }
+
+
+pub enum MaybeCorticalID {
+    Genome(CorticalID),
+    Imposter(ImposterCorticalID),
+}
+
+

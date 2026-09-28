@@ -1,5 +1,5 @@
 [package]
-name = "feagi-basis-error-logging-proc"
+name = "feagi-macros-proc"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,6 +7,11 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+description = "Proc Macros that are used throughout the FEAGI Core, and occasionally outside, notablly for logging / errors"
+
+[features]
+request_response_template_parsers = []
+request_response_ahkami_codegen = ["request_response_template_parsers"]
 
 [lib]
 proc-macro = true

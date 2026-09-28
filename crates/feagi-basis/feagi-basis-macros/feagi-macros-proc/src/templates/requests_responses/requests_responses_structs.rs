@@ -2,7 +2,7 @@ use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use crate::basis::{parse_optional_comma, parse_property_colon_member, StructBuilderParameters, TemplateStruct};
+use crate::basis::{parse_optional_comma, parse_property_colon_member, StructParameters, TemplateStruct};
 
 mod kw {
 
@@ -106,11 +106,11 @@ pub struct RequestResponseContract {
     /// The Doc String to use for the generated structs
     pub description: LitStr,
     /// What Struct will be sent as path parameters
-    pub path_parameters: StructBuilderParameters,
+    pub path_parameters: StructParameters,
     /// General Request Payload
-    pub request: StructBuilderParameters,
+    pub request: StructParameters,
     /// Response Payload (assuming no error)
-    pub response: StructBuilderParameters,
+    pub response: StructParameters,
 }
 
 impl Parse for RequestResponseContract {
@@ -123,10 +123,10 @@ impl Parse for RequestResponseContract {
 
         let title = parse_property_colon_member::<kw::title, LitStr>(&members)?;
         let description = parse_property_colon_member::<kw::description, LitStr>(&members)?;
-        let path_parameters = parse_property_colon_member::<kw::path_parameters, StructBuilderParameters>(&members)?;
+        let path_parameters = parse_property_colon_member::<kw::path_parameters, StructParameters>(&members)?;
 
-        let request = parse_property_colon_member::<kw::request, StructBuilderParameters>(&members)?;
-        let response = parse_property_colon_member::<kw::response, StructBuilderParameters>(&members)?;
+        let request = parse_property_colon_member::<kw::request, StructParameters>(&members)?;
+        let response = parse_property_colon_member::<kw::response, StructParameters>(&members)?;
 
 
 

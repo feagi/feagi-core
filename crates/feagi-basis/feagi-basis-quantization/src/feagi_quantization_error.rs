@@ -1,4 +1,4 @@
-use feagi_basis_error_logging::prelude::*;
+use feagi_basis_macros::prelude::*;
 use crate::values::quantizable::FeagiDataValueQuantizationError;
 use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
 

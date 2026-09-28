@@ -3,7 +3,7 @@
 
 
 pub mod prelude {
-    pub use super::feagi_error::prelude::*;
+    pub use super::feagi_macros::prelude::*;
     pub use super::feagi_quantization::prelude::*;
     pub use super::feagi_genome::prelude::*;
     pub use super::feagi_neuron::prelude::*;
@@ -11,7 +11,7 @@ pub mod prelude {
     pub use super::burst_index::BurstIndex;
 }
 
-pub extern crate feagi_basis_error_logging as feagi_error;
+pub extern crate feagi_basis_macros as feagi_macros;
 
 pub extern crate feagi_basis_quantization as feagi_quantization;
 

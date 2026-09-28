@@ -546,8 +546,8 @@ name = "feagi-basis"
 version = "0.1.1"
 dependencies = [
  "ahash",
- "feagi-basis-error-logging",
  "feagi-basis-genome",
+ "feagi-basis-macros",
  "feagi-basis-neuron",
  "feagi-basis-quantization",
  "flume",
@@ -561,7 +561,7 @@ dependencies = [
 name = "feagi-basis-collections"
 version = "0.1.1"
 dependencies = [
- "feagi-basis-error-logging",
+ "feagi-basis-macros",
  "feagi-basis-quantization",
  "half",
  "heapless 0.9.3",
@@ -576,7 +576,7 @@ dependencies = [
 name = "feagi-basis-data-serialization"
 version = "0.1.1"
 dependencies = [
- "feagi-basis-error-logging",
+ "feagi-basis-macros",
  "feagi-basis-neuron",
  "feagi-basis-quantization",
  "heapless 0.9.3",
@@ -587,31 +587,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-basis-error-logging"
-version = "0.1.1"
-dependencies = [
- "defmt",
- "feagi-basis-error-logging-proc",
- "log",
-]
-
-[[package]]
-name = "feagi-basis-error-logging-proc"
-version = "0.1.1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.6",
-]
-
-[[package]]
 name = "feagi-basis-genome"
 version = "0.1.1"
 dependencies = [
  "ahash",
  "base64 0.23.1",
- "feagi-basis-error-logging",
  "feagi-basis-genome-proc",
+ "feagi-basis-macros",
  "feagi-basis-neuron",
  "feagi-basis-quantization",
  "paste",
@@ -631,11 +613,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-basis-macros"
+version = "0.1.1"
+dependencies = [
+ "defmt",
+ "feagi-macros-proc",
+ "log",
+]
+
+[[package]]
 name = "feagi-basis-neuron"
 version = "0.1.1"
 dependencies = [
  "feagi-basis-collections",
- "feagi-basis-error-logging",
+ "feagi-basis-macros",
  "feagi-basis-quantization",
  "half",
  "paste",
@@ -647,7 +638,7 @@ dependencies = [
 name = "feagi-basis-quantization"
 version = "0.1.1"
 dependencies = [
- "feagi-basis-error-logging",
+ "feagi-basis-macros",
  "half",
  "paste",
  "rayon",
@@ -681,7 +672,6 @@ name = "feagi-brain-models"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
- "feagi-macros",
  "half",
  "paste",
  "serde",
@@ -709,7 +699,6 @@ dependencies = [
  "feagi-basis",
  "feagi-brain",
  "feagi-correspondence",
- "feagi-macros",
  "feagi-server",
 ]
 
@@ -768,10 +757,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-macros"
+name = "feagi-macros-proc"
 version = "0.1.1"
 dependencies = [
- "heck",
  "proc-macro2",
  "quote",
  "syn 3.0.6",

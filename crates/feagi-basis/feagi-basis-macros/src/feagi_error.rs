@@ -1,4 +1,4 @@
-pub use feagi_basis_error_logging_proc::{FeagiError, FeagiFail};
+pub use feagi_macros_proc::{FeagiFail, FeagiError};
 
 /// Impossible error, this is an error that should not fundamentally be reachable, so something is
 /// wrong with the code if it is
@@ -82,3 +82,5 @@ pub trait FeagiFailTrait: core::fmt::Debug + core::fmt::Display + Sized + 'stati
 pub trait FeagiErrorTrait: core::error::Error + Sized + 'static {
     fn context(&self) -> &'static str;
 }
+
+// TODO improve error encoding to work with request responses better

@@ -1,5 +1,5 @@
 [package]
-name = "feagi-basis-error-logging"
+name = "feagi-basis-macros"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,7 +7,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Contains FEAGI error macro generator and logger facade to swap between `log` and `defmt` (or neither)"
+description = "Holds common Macros and dependent structs / traits, incluing FEAGI error macro generator and logger facade to swap between `log` and `defmt`"
 
 [features]
 
@@ -24,7 +24,7 @@ enable_defmt = [
 [dependencies]
 
 # Sub Crates
-feagi-basis-error-logging-proc = { path = "feagi-basis-error-logging-proc" }
+feagi-macros-proc = { path = "feagi-macros-proc" }
 
 # Sibling Crates
 # NONE! ALL OTHER SIBLING CRATES DEPEND ON THIS!

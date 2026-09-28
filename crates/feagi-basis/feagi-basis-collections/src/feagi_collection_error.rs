@@ -1,4 +1,4 @@
-use feagi_basis_error_logging::prelude::*;
+use feagi_basis_macros::prelude::*;
 
 generate_feagi_error! {
     /// Error related to a collection type within FEAGI

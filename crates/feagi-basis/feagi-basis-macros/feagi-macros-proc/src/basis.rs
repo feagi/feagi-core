@@ -51,21 +51,21 @@ pub trait GeneratorFromTemplate<T: TemplateStruct> {
 //region Struct Builder Parameters
 
 /// Represents all members (`StructBuilderParameterField`) to make a struct
-pub struct StructBuilderParameters(Vec<StructBuilderParameterField>);
+pub struct StructParameters(Vec<StructParameterField>);
 
-impl StructBuilderParameters {
-    pub(crate) fn fields(&self) -> &[StructBuilderParameterField] {
+impl StructParameters {
+    pub(crate) fn fields(&self) -> &[StructParameterField] {
         &self.0
     }
 
-    pub(crate) fn to_vec(self) -> Vec<StructBuilderParameterField> {self.0}
+    pub(crate) fn to_vec(self) -> Vec<StructParameterField> {self.0}
 
     pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 }
 
-impl StructBuilderParameters {
+impl StructParameters {
 
     /// Generate a basic struct source code output. Does not include comments or any metas
     ///
@@ -90,7 +90,7 @@ impl StructBuilderParameters {
     }
 }
 
-impl TemplateStruct for StructBuilderParameters {
+impl TemplateStruct for StructParameters {
     /// Re-emits this parameter list in contract DSL form (`[ ... ]`).
     fn expand_template(&self) -> proc_macro2::TokenStream {
         let fields = self.fields();
@@ -113,13 +113,13 @@ impl TemplateStruct for StructBuilderParameters {
         StructBuilderParameterField, ...
     ]
 */
-impl Parse for StructBuilderParameters {
+impl Parse for StructParameters {
     fn parse(fields_input: ParseStream) -> syn::Result<Self> {
         let field_input;
         bracketed!(field_input in fields_input);
         let mut fields = Vec::new();
         while !field_input.is_empty() {
-            fields.push(field_input.parse::<StructBuilderParameterField>()?);
+            fields.push(field_input.parse::<StructParameterField>()?);
             if field_input.is_empty() {
                 break;
             }
@@ -130,7 +130,7 @@ impl Parse for StructBuilderParameters {
 }
 
 /// A field of a `StructBuilderParameters`, used to represent a members name, its type, and optional comment.
-pub struct StructBuilderParameterField {
+pub struct StructParameterField {
     /// The string name of the parameter.
     /// This becomes the generated structs field member name so should be snake case
     pub parameter_name: LitStr,
@@ -144,7 +144,7 @@ pub struct StructBuilderParameterField {
     Parses the following:
     "parameter_name": ParameterType, "optional comment"
 */
-impl Parse for StructBuilderParameterField {
+impl Parse for StructParameterField {
     fn parse(input: ParseStream) -> syn::Result<Self> {
 
         let parameter_name: LitStr = input.parse()?;
@@ -170,7 +170,7 @@ impl Parse for StructBuilderParameterField {
     }
 }
 
-impl TemplateStruct for StructBuilderParameterField {
+impl TemplateStruct for StructParameterField {
     /// Re-emits a single struct-builder field entry inside `[ ... ]`.
     fn expand_template(&self) -> proc_macro2::TokenStream {
         let parameter_name = &self.parameter_name;
@@ -190,7 +190,7 @@ impl TemplateStruct for StructBuilderParameterField {
     }
 }
 
-impl StructBuilderParameterField {
+impl StructParameterField {
     pub fn to_tokens(&self) -> proc_macro2::TokenStream {
 
         let no_com = LitStr::new("", proc_macro2::Span::call_site());

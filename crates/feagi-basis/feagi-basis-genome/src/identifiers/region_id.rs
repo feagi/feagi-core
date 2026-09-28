@@ -1,6 +1,8 @@
 use core::fmt::{Display, Formatter};
+use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use crate::identifiers::identifiers::{BrainGraphIdentifier, GenomeIdentifier};
 
 /// Unique identifier for a brain region, based on UUID v7.
 ///
@@ -28,3 +30,18 @@ impl Display for RegionID {
         write!(f, "{}", self.uuid.to_string())
     }
 }
+
+impl BrainGraphIdentifier for RegionID {}
+
+impl FromStr for RegionID {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        todo!()
+    }
+}
+
+impl GenomeIdentifier for RegionID {}
+
+
+// NOTE: No need for an imposter brain region, UUIDs should be unique

@@ -36,7 +36,7 @@ expose_json = [
 # Sub Crates
 
 # Sibling Crates
-feagi-basis-error-logging = {path = "../feagi-basis-error-logging"}
+feagi-basis-macros = {path = "../feagi-basis-macros" }
 
 # Root Crates
 # NONE! NOTHING WITHIN BASIS CAN USE OTHER ROOT CRATES!
