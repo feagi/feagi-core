@@ -10,7 +10,9 @@
 
 //! Embedded runtime implementation for ESP32, RTOS, no_std platforms
 
-use crate::embedded_impl::{NeuronArray, SynapseArray, DEFAULT_MAX_NEURONS, DEFAULT_MAX_SYNAPSES};
+use crate::embedded_impl::{
+    NeuronArray, SynapseArray, EMBEDDED_NEURON_CAPACITY, EMBEDDED_SYNAPSE_CAPACITY,
+};
 use crate::traits::{NeuralValue, Result, Runtime, RuntimeError};
 
 /// Embedded runtime for ESP32, Arduino, STM32 (fixed-size, no_std)
@@ -31,8 +33,8 @@ impl Default for EmbeddedRuntime {
 }
 
 impl Runtime for EmbeddedRuntime {
-    type NeuronStorage<T: NeuralValue> = NeuronArray<T, DEFAULT_MAX_NEURONS>;
-    type SynapseStorage = SynapseArray<DEFAULT_MAX_SYNAPSES>;
+    type NeuronStorage<T: NeuralValue> = NeuronArray<T, EMBEDDED_NEURON_CAPACITY>;
+    type SynapseStorage = SynapseArray<EMBEDDED_SYNAPSE_CAPACITY>;
 
     fn create_neuron_storage<T: NeuralValue>(
         &self,
@@ -40,20 +42,20 @@ impl Runtime for EmbeddedRuntime {
     ) -> Result<Self::NeuronStorage<T>> {
         // Embedded uses const generics, capacity is compile-time
         // For now, use default const (will be improved with const generics in Phase 3)
-        if capacity > DEFAULT_MAX_NEURONS {
+        if capacity > EMBEDDED_NEURON_CAPACITY {
             return Err(RuntimeError::CapacityExceeded {
                 requested: capacity,
-                available: DEFAULT_MAX_NEURONS,
+                available: EMBEDDED_NEURON_CAPACITY,
             });
         }
         Ok(NeuronArray::new())
     }
 
     fn create_synapse_storage(&self, capacity: usize) -> Result<Self::SynapseStorage> {
-        if capacity > DEFAULT_MAX_SYNAPSES {
+        if capacity > EMBEDDED_SYNAPSE_CAPACITY {
             return Err(RuntimeError::CapacityExceeded {
                 requested: capacity,
-                available: DEFAULT_MAX_SYNAPSES,
+                available: EMBEDDED_SYNAPSE_CAPACITY,
             });
         }
         Ok(SynapseArray::new())
@@ -98,7 +100,14 @@ mod tests {
     #[test]
     fn test_create_neuron_storage_exceeds_limit() {
         let runtime = EmbeddedRuntime::new();
-        let result = runtime.create_neuron_storage::<f32>(DEFAULT_MAX_NEURONS + 1);
+        let result = runtime.create_neuron_storage::<f32>(EMBEDDED_NEURON_CAPACITY + 1);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_synapse_storage_within_limit() {
+        let runtime = EmbeddedRuntime::new();
+        let storage = runtime.create_synapse_storage(1).unwrap();
+        assert_eq!(storage.count, 0);
     }
 }

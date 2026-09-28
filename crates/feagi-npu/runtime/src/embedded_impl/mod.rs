@@ -7,10 +7,10 @@
 //!
 //! ## Features
 //! - ✅ `no_std` compatible
-//! - ✅ Fixed-size arrays (no heap allocation)
+//! - ✅ Fixed-capacity arrays (heap-backed so they are not placed on the thread stack)
 //! - ✅ Single-threaded execution
 //! - ✅ Deterministic performance
-//! - ✅ Fixed compile-time capacity (see [`DEFAULT_MAX_NEURONS`])
+//! - ✅ Compile-time storage of [`EMBEDDED_NEURON_CAPACITY`] neurons and [`EMBEDDED_SYNAPSE_CAPACITY`] synapses
 //!
 //! ## Targets
 //! - ESP32 (FreeRTOS or bare-metal)
@@ -26,11 +26,27 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-/// Default neuron capacity for [`EmbeddedRuntime`] (compile-time array size).
-pub const DEFAULT_MAX_NEURONS: usize = 1000;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 
-/// Default synapse capacity for [`EmbeddedRuntime`] (compile-time array size).
-pub const DEFAULT_MAX_SYNAPSES: usize = 5000;
+/// Compile-time neuron slots in [`EmbeddedRuntime`] storage.
+pub const EMBEDDED_NEURON_CAPACITY: usize = 10_000;
+
+/// Compile-time synapse slots in [`EmbeddedRuntime`] storage.
+pub const EMBEDDED_SYNAPSE_CAPACITY: usize = 50_000;
+
+/// Heap-allocate `[T; N]` filled with `value`.
+///
+/// `Vec` grows on the heap. Building `[T; N]` and moving it into `Box` would
+/// put the full array on the stack first.
+pub(crate) fn boxed_repeat<T: Copy, const N: usize>(value: T) -> Box<[T; N]> {
+    let mut values = Vec::with_capacity(N);
+    values.resize(N, value);
+    let slice = values.into_boxed_slice();
+    let raw = Box::into_raw(slice).cast::<[T; N]>();
+    // SAFETY: `values.len() == N`, and `[T; N]` is layout-compatible with `N` contiguous `T`s.
+    unsafe { Box::from_raw(raw) }
+}
 
 pub mod neuron_array;
 pub mod runtime;
@@ -56,8 +72,8 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
-            max_neurons: DEFAULT_MAX_NEURONS,
-            max_synapses: DEFAULT_MAX_SYNAPSES,
+            max_neurons: 1000,
+            max_synapses: 5000,
             burst_frequency: 100, // 100 Hz = 10ms per burst
         }
     }

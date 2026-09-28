@@ -5947,13 +5947,24 @@ mod tests {
             area
         };
 
+        let root_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let classifier_region_id = RegionID::new();
+        let region_key = classifier_region_id.to_string();
+        let root_region =
+            BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap();
+        let mut classifier_region_props = HashMap::new();
+        classifier_region_props.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(root_key.clone()),
+        );
         let region = BrainRegion::new(
-            RegionID::new(),
+            classifier_region_id,
             "Classifier".to_string(),
             RegionType::Undefined,
         )
-        .unwrap();
-        let region_key = region.region_id.to_string();
+        .unwrap()
+        .with_properties(classifier_region_props);
         let classifier = Classifier {
             classifier_id: "clf-import".to_string(),
             name: "Checker".to_string(),
@@ -5992,6 +6003,7 @@ mod tests {
             cortical_areas.insert(area.cortical_id, area);
         }
         let mut brain_regions = HashMap::new();
+        brain_regions.insert(root_key.clone(), root_region);
         brain_regions.insert(region_key.clone(), region);
         let mut classifiers = HashMap::new();
         classifiers.insert(classifier.classifier_id.clone(), classifier);
@@ -6002,7 +6014,7 @@ mod tests {
                 genome_description: "".to_string(),
                 version: "3.0".to_string(),
                 timestamp: 0.0,
-                brain_regions_root: Some(region_key.clone()),
+                brain_regions_root: Some(root_key.clone()),
             },
             cortical_areas,
             brain_regions,
@@ -6037,7 +6049,7 @@ mod tests {
             genome_json: Some(genome_json),
             memory_area_ids: vec![kernel_mem_id.as_base_64(), class_mem_id.as_base_64()],
             plastic_mappings: Vec::new(),
-            brain_region_ids: vec![region_key.clone()],
+            brain_region_ids: vec![root_key.clone(), region_key.clone()],
             long_term_memory_neurons: Vec::new(),
             long_term_memory_replay_frames: Vec::new(),
             lite_synapses: Vec::new(),

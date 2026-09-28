@@ -73,6 +73,9 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(feature = "embedded")]
+extern crate alloc;
+
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

@@ -439,7 +439,9 @@ pub fn write_test_record(
     n_signals: usize,
     annotations: &[(u64, u8)],
 ) -> Result<(), TrainerError> {
-    if !samples.len().is_multiple_of(n_signals) {
+    // `is_multiple_of` needs Rust 1.87. Workspace MSRV is 1.75.
+    #[allow(clippy::manual_is_multiple_of)]
+    if n_signals == 0 || samples.len() % n_signals != 0 {
         return Err(TrainerError::Config(
             "test sample count is not divisible by n_signals".to_string(),
         ));

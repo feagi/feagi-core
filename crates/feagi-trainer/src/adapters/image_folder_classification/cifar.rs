@@ -392,7 +392,9 @@ fn file_matches_stride(path: &Path, stride: usize) -> Result<bool, TrainerError>
         .metadata()
         .map_err(|error| TrainerError::Parse(format!("cannot stat '{}': {error}", path.display())))?
         .len() as usize;
-    Ok(length > 0 && length.is_multiple_of(stride))
+    // `is_multiple_of` needs Rust 1.87. Workspace MSRV is 1.75.
+    #[allow(clippy::manual_is_multiple_of)]
+    Ok(length > 0 && length % stride == 0)
 }
 
 fn existing_file(dir: &Path, name: &str) -> Vec<PathBuf> {
@@ -505,9 +507,13 @@ mod tests {
         let root = tempfile::tempdir().expect("temp");
         let path = root.path().join("data_batch_1.bin");
         let mut record = vec![3_u8];
-        record.extend(std::iter::repeat_n(9_u8, 1024));
-        record.extend(std::iter::repeat_n(8_u8, 1024));
-        record.extend(std::iter::repeat_n(7_u8, 1024));
+        // `repeat_n` needs Rust 1.82. Workspace MSRV is 1.75.
+        #[allow(clippy::manual_repeat_n)]
+        {
+            record.extend(std::iter::repeat(9_u8).take(1024));
+            record.extend(std::iter::repeat(8_u8).take(1024));
+            record.extend(std::iter::repeat(7_u8).take(1024));
+        }
         std::fs::write(&path, &record).expect("write");
         let scan = scan_if_present(root.path()).expect("scan").expect("cifar");
         assert_eq!(scan.schema, Some(ImageClassificationSchema::Cifar10Binary));

@@ -10,62 +10,64 @@
 
 //! Fixed-size synapse array for embedded systems
 //!
-//! Uses stack-allocated arrays for predictable memory usage.
+//! Uses fixed-capacity arrays. The buffers live on the heap so construction
+//! does not depend on the thread stack size.
 
 use crate::traits::{Result, RuntimeError, SynapseStorage};
 use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
 
 /// Fixed-size synapse array for embedded systems
 ///
-/// All data is stack-allocated with compile-time size limits.
-/// No heap allocations, perfect for `no_std` environments.
+/// Buffers are fixed-capacity and heap-allocated (`no_std` + `alloc`).
+/// Capacity is a compile-time limit. Construction does not use the thread stack
+/// for the synapse tables.
 pub struct SynapseArray<const N: usize> {
     /// Current number of synapses
     pub count: usize,
 
     /// Source neuron IDs
-    pub source_neurons: [u32; N],
+    pub source_neurons: alloc::boxed::Box<[u32; N]>,
 
     /// Target neuron IDs
-    pub target_neurons: [u32; N],
+    pub target_neurons: alloc::boxed::Box<[u32; N]>,
 
     /// Synaptic weights (`f32`)
-    pub weights: [f32; N],
+    pub weights: alloc::boxed::Box<[f32; N]>,
 
     /// Postsynaptic potentials (`f32`)
-    pub postsynaptic_potentials: [f32; N],
+    pub postsynaptic_potentials: alloc::boxed::Box<[f32; N]>,
 
     /// Synapse types (0=excitatory, 1=inhibitory)
-    pub types: [u8; N],
+    pub types: alloc::boxed::Box<[u8; N]>,
 
     /// Per-synapse packed edge flags
-    pub edge_flags: [u8; N],
+    pub edge_flags: alloc::boxed::Box<[u8; N]>,
 
     /// Per-synapse delay in whole bursts (`>= 1`).
-    pub delay_bursts: [u8; N],
+    pub delay_bursts: alloc::boxed::Box<[u8; N]>,
 
     /// Valid synapse mask
-    pub valid_mask: [bool; N],
+    pub valid_mask: alloc::boxed::Box<[bool; N]>,
 
     /// Per-synapse R-STDP eligibility traces (`f32`). Initialized to 0.0; reset on synapse
     /// creation. See `feagi_npu_runtime::SynapseStorage::eligibility_traces` for semantics.
-    pub eligibility_traces: [f32; N],
+    pub eligibility_traces: alloc::boxed::Box<[f32; N]>,
 }
 
 impl<const N: usize> SynapseArray<N> {
-    /// Create a new fixed-size synapse array
-    pub const fn new() -> Self {
+    /// Create a new fixed-capacity synapse array.
+    pub fn new() -> Self {
         Self {
             count: 0,
-            source_neurons: [0; N],
-            target_neurons: [0; N],
-            weights: [0.0; N],
-            postsynaptic_potentials: [0.0; N],
-            types: [0; N],
-            edge_flags: [0; N],
-            delay_bursts: [1; N],
-            valid_mask: [false; N],
-            eligibility_traces: [0.0; N],
+            source_neurons: crate::embedded_impl::boxed_repeat(0),
+            target_neurons: crate::embedded_impl::boxed_repeat(0),
+            weights: crate::embedded_impl::boxed_repeat(0.0),
+            postsynaptic_potentials: crate::embedded_impl::boxed_repeat(0.0),
+            types: crate::embedded_impl::boxed_repeat(0),
+            edge_flags: crate::embedded_impl::boxed_repeat(0),
+            delay_bursts: crate::embedded_impl::boxed_repeat(1),
+            valid_mask: crate::embedded_impl::boxed_repeat(false),
+            eligibility_traces: crate::embedded_impl::boxed_repeat(0.0),
         }
     }
 }
@@ -140,9 +142,13 @@ impl<const N: usize> SynapseArray<N> {
         }
     }
 
-    /// Get memory footprint in bytes
+    /// Bytes owned by one array, including the heap buffers.
     pub const fn memory_footprint() -> usize {
         core::mem::size_of::<Self>()
+            + N * (core::mem::size_of::<u32>() * 2
+                + core::mem::size_of::<f32>() * 3
+                + core::mem::size_of::<u8>() * 3
+                + core::mem::size_of::<bool>())
     }
 }
 

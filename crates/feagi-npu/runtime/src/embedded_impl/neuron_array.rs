@@ -10,7 +10,8 @@
 
 //! Fixed-size neuron array for embedded systems
 //!
-//! Uses stack-allocated arrays for predictable memory usage.
+//! Uses fixed-capacity arrays. The buffers live on the heap so construction
+//! does not depend on the thread stack size.
 
 use crate::traits::{NeuronStorage, Result, RuntimeError};
 use feagi_npu_neural::types::NeuralValue;
@@ -24,15 +25,16 @@ use alloc::vec::Vec;
 
 /// Fixed-size neuron array for embedded systems
 ///
-/// All data is stack-allocated with compile-time size limits.
-/// No heap allocations, perfect for `no_std` environments.
+/// Buffers are fixed-capacity and heap-allocated (`no_std` + `alloc`).
+/// Capacity is a compile-time limit. Construction does not use the thread stack
+/// for the neuron tables.
 /// Generic over `T: NeuralValue` to support multiple quantization levels.
 ///
 /// # Example
 /// ```
 /// use feagi_npu_runtime::embedded::NeuronArray;
 ///
-/// // 100-neuron array on the stack (~5 KB for f32)
+/// // 100-neuron array (~5 KB for f32, heap-backed)
 /// let mut neurons = NeuronArray::<f32, 100>::new();
 /// neurons.add_neuron_simple(1.0, 0.1, 5, 1.0);
 /// ```
@@ -41,86 +43,85 @@ pub struct NeuronArray<T: NeuralValue, const N: usize> {
     pub count: usize,
 
     /// Membrane potentials (quantized to T)
-    pub membrane_potentials: [T; N],
+    pub membrane_potentials: alloc::boxed::Box<[T; N]>,
 
     /// Leftover membrane charge below one stored level, in `[0, 1)`.
-    pub membrane_fractions: [f32; N],
+    pub membrane_fractions: alloc::boxed::Box<[f32; N]>,
 
     /// Firing thresholds (quantized to T) - minimum MP to fire
-    pub thresholds: [T; N],
+    pub thresholds: alloc::boxed::Box<[T; N]>,
 
     /// Leftover threshold below one stored level, in `[0, 1)`.
-    pub threshold_fractions: [f32; N],
+    pub threshold_fractions: alloc::boxed::Box<[f32; N]>,
 
     /// Firing threshold limits (quantized to T) - maximum MP to fire (0 = no limit)
-    pub threshold_limits: [T; N],
+    pub threshold_limits: alloc::boxed::Box<[T; N]>,
 
     /// Leak coefficients (kept as f32 for precision)
-    pub leak_coefficients: [f32; N],
+    pub leak_coefficients: alloc::boxed::Box<[f32; N]>,
 
     /// Resting potentials
-    pub resting_potentials: [T; N],
+    pub resting_potentials: alloc::boxed::Box<[T; N]>,
 
     /// Neuron types (0=excitatory, 1=inhibitory)
-    pub neuron_types: [i32; N],
+    pub neuron_types: alloc::boxed::Box<[i32; N]>,
 
     /// Refractory periods
-    pub refractory_periods: [u16; N],
+    pub refractory_periods: alloc::boxed::Box<[u16; N]>,
 
     /// Refractory countdowns (state)
-    pub refractory_countdowns: [u16; N],
+    pub refractory_countdowns: alloc::boxed::Box<[u16; N]>,
 
     /// Excitability factors
-    pub excitabilities: [f32; N],
+    pub excitabilities: alloc::boxed::Box<[f32; N]>,
 
     /// Consecutive fire counts
-    pub consecutive_fire_counts: [u16; N],
+    pub consecutive_fire_counts: alloc::boxed::Box<[u16; N]>,
 
     /// Consecutive fire limits
-    pub consecutive_fire_limits: [u16; N],
+    pub consecutive_fire_limits: alloc::boxed::Box<[u16; N]>,
 
     /// Snooze periods (extended refractory)
-    pub snooze_periods: [u16; N],
+    pub snooze_periods: alloc::boxed::Box<[u16; N]>,
 
     /// Membrane potential charge accumulation flags
-    pub mp_charge_accumulation: [bool; N],
+    pub mp_charge_accumulation: alloc::boxed::Box<[bool; N]>,
 
     /// Cortical area IDs
-    pub cortical_areas: [u32; N],
+    pub cortical_areas: alloc::boxed::Box<[u32; N]>,
 
     /// 3D coordinates (flat: [x0,y0,z0, x1,y1,z1, ...])
-    pub coordinates: [u32; N], // Will need N*3, simplified for now
+    pub coordinates: alloc::boxed::Box<[u32; N]>, // Will need N*3, simplified for now
 
     /// Valid mask
-    pub valid_mask: [bool; N],
+    pub valid_mask: alloc::boxed::Box<[bool; N]>,
 }
 
 impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
-    /// Create a new fixed-size neuron array
+    /// Create a new fixed-capacity neuron array.
     ///
-    /// All arrays are zero-initialized on the stack.
-    /// Note: Not const due to T::zero() trait method
+    /// Not const because `T::zero()` is a trait method and the buffers are allocated.
     pub fn new() -> Self {
         Self {
             count: 0,
-            membrane_potentials: [T::zero(); N],
-            membrane_fractions: [0.0; N],
-            thresholds: [T::from_f32(1.0); N],
-            threshold_fractions: [0.0; N],
-            threshold_limits: [T::max_value(); N], // MAX = no limit (SIMD-friendly encoding)
-            leak_coefficients: [0.1; N],
-            resting_potentials: [T::zero(); N],
-            neuron_types: [0; N],
-            refractory_periods: [0; N],
-            refractory_countdowns: [0; N],
-            excitabilities: [1.0; N],
-            consecutive_fire_counts: [0; N],
-            consecutive_fire_limits: [u16::MAX; N], // MAX = no limit (SIMD-friendly encoding)
-            snooze_periods: [0; N],
-            mp_charge_accumulation: [true; N],
-            cortical_areas: [0; N],
-            coordinates: [0; N],
-            valid_mask: [false; N],
+            membrane_potentials: crate::embedded_impl::boxed_repeat(T::zero()),
+            membrane_fractions: crate::embedded_impl::boxed_repeat(0.0),
+            thresholds: crate::embedded_impl::boxed_repeat(T::from_f32(1.0)),
+            threshold_fractions: crate::embedded_impl::boxed_repeat(0.0),
+            threshold_limits: crate::embedded_impl::boxed_repeat(T::max_value()),
+            leak_coefficients: crate::embedded_impl::boxed_repeat(0.1),
+            resting_potentials: crate::embedded_impl::boxed_repeat(T::zero()),
+            neuron_types: crate::embedded_impl::boxed_repeat(0),
+            refractory_periods: crate::embedded_impl::boxed_repeat(0),
+            refractory_countdowns: crate::embedded_impl::boxed_repeat(0),
+            excitabilities: crate::embedded_impl::boxed_repeat(1.0),
+            consecutive_fire_counts: crate::embedded_impl::boxed_repeat(0),
+            consecutive_fire_limits: crate::embedded_impl::boxed_repeat(u16::MAX),
+            snooze_periods: crate::embedded_impl::boxed_repeat(0),
+            mp_charge_accumulation: crate::embedded_impl::boxed_repeat(true),
+            cortical_areas: crate::embedded_impl::boxed_repeat(0),
+            coordinates: crate::embedded_impl::boxed_repeat(0),
+            valid_mask: crate::embedded_impl::boxed_repeat(false),
         }
     }
 }
@@ -220,9 +221,15 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
         fired_count
     }
 
-    /// Get memory footprint in bytes
+    /// Bytes owned by one array, including the heap buffers.
     pub const fn memory_footprint() -> usize {
         core::mem::size_of::<Self>()
+            + N * core::mem::size_of::<T>() * 4
+            + N * core::mem::size_of::<f32>() * 4
+            + N * core::mem::size_of::<i32>()
+            + N * core::mem::size_of::<u16>() * 5
+            + N * core::mem::size_of::<bool>() * 2
+            + N * core::mem::size_of::<u32>() * 2
     }
 }
 

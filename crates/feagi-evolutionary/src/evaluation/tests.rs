@@ -36,7 +36,7 @@ fn key() -> ComparabilityKey {
         },
         run_config_hash: hash('c'),
         genome_schema_version: 3,
-        feagi_core_version: "0.0.37".to_string(),
+        feagi_core_version: "0.0.36".to_string(),
         backend: BackendKind::Cpu,
     }
 }
