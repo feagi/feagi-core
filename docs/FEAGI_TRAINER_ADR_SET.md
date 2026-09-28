@@ -676,7 +676,7 @@ Three facts in the current system shape the design:
 
 **Fitness carries its repeat count.** Fitness records `n` and, when `n > 1`, the confidence interval from the N-seed repeat (ADR-012 `metric_stats`); each repeat is a fresh development, so the estimate includes developmental variance.
 
-**Comparability key.** Two evaluations are comparable only when all of these match: experiment, dataset asset id + version + content hash, evaluation protocol version, metric pack, reward policy, fitness split, fitness metric + objective, run-configuration hash (sample caps, class remap, encoder/decoder bindings, burst frequency), genome schema version, feagi-core version, and backend.
+**Comparability key.** Two evaluations are comparable only when all of these match: experiment, dataset asset id + version + content hash (adapters hash each split's own content, so the key's content hash is SHA-256 of the canonical `{split_id: dataset_content_hash}` map over every scored phase), evaluation protocol version, metric pack, reward policy, fitness split, fitness metric + objective, run-configuration hash (sample caps, class remap, encoder/decoder bindings, burst frequency), genome schema version, feagi-core version, and backend.
 
 **Snapshots are content-addressed and retained.** Genome snapshots are stored once per normalized content hash and kept until the operator deletes the history entry; they are independent of the checkpoint ring. The starting connectome is pinned only for runs the operator explicitly chooses to pin (exact reproduction/study); it is not stored per individual.
 
@@ -708,7 +708,8 @@ Trade-offs:
 
 - Contract: `feagi_evolutionary::evaluation::GenomeEvaluation` (schema version 1) with `validate()` enforcing lineage and fitness invariants.
 - Composer: content-addressed genome snapshot store, evaluation records, history query per comparability key, restore via the existing checkpoint revert.
-- Desktop: rebuild at protocol start, snapshot capture, scorecard attachment, optional connectome pin, history chart with study/revert.
+- Desktop (built): before phase 1 the runner snapshots the live genome to Composer, reloads the brain from the stored snapshot (`/v1/genome/upload`), and stamps the snapshot's detected genome schema version on every phase's run spec. Each protocol run mints a `protocolRunId` embedded in run and scorecard ids, so repeating a protocol in one session never overwrites earlier scorecards. After the last phase the backend assembles the `GenomeEvaluation` from the saved run configs and scorecard artifacts, validates it with the Rust contract, and stores it. The run-settings hash covers every protocol parameter except session, credentials, genome identity, and local dataset paths, and includes the burst frequency. The Results step shows the history per comparability key with revert (experiment genome + live brain when running), export (genome JSON for offline study), and delete.
+- Known gaps: the connectome pin is not built (needs a decision on where per-run connectome bytes live); trainer I/O areas created during the first phase are added after the snapshot, so a first run's snapshot can lack them; run config builders stamp a fixed `feagi_core_version`, so engine upgrades do not yet split history series.
 
 ---
 
