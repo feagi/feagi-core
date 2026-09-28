@@ -252,6 +252,21 @@ impl TemplateStruct for ParameterElementPath {
     }
 }
 
+impl ParameterElementPath {
+    /// Render this path as an Ohkami route fragment, using `:name` for parameters
+    /// (e.g. `info/{agent_id}` becomes `info/:agent_id`).
+    pub fn to_ohkami_path(&self) -> String {
+        self.0
+            .iter()
+            .map(|element| match element {
+                ParameterPathElement::Static(segment) => segment.value(),
+                ParameterPathElement::Parameter(segment) => format!(":{}", segment.value()),
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+}
+
 
 
 

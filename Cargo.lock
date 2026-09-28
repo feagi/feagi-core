@@ -822,6 +822,7 @@ dependencies = [
 name = "feagi-rest-server"
 version = "0.1.1"
 dependencies = [
+ "feagi-basis",
  "ohkami",
  "serde",
  "serde_json",

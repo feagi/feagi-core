@@ -25,12 +25,12 @@ alloc = [
 
 # Webserver under the Tokio async interface
 std_tokio = [
-    "std", "ohkami", "ohkami/rt_tokio"
+    "std", "ohkami", "ohkami/rt_tokio", "feagi-basis/feagi_server_requests_rest"
 ]
 
 # Webserver under the Smol async interface
 std_smol = [
-    "std", "smol", "ohkami", "ohkami/rt_smol"
+    "std", "smol", "ohkami", "ohkami/rt_smol", "feagi-basis/feagi_server_requests_rest"
 ]
 
 # TODO other async interfaces?
@@ -44,7 +44,8 @@ std_smol = [
 
 [dependencies]
 
-
+# Root Crates
+feagi-basis = { path = "../../../../feagi-basis", optional = true }
 
 # External crates
 serde = { workspace = true }
@@ -56,5 +57,9 @@ smol = {workspace = true, optional = true}
 
 [[test]]
 name = "manual_ohkami_server_test"
+required-features = ["std_smol"]
+
+[[test]]
+name = "run_manual_server"
 required-features = ["std_smol"]
 
