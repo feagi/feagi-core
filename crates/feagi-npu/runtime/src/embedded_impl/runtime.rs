@@ -10,7 +10,7 @@
 
 //! Embedded runtime implementation for ESP32, RTOS, no_std platforms
 
-use crate::embedded_impl::{NeuronArray, SynapseArray};
+use crate::embedded_impl::{NeuronArray, SynapseArray, DEFAULT_MAX_NEURONS, DEFAULT_MAX_SYNAPSES};
 use crate::traits::{NeuralValue, Result, Runtime, RuntimeError};
 
 /// Embedded runtime for ESP32, Arduino, STM32 (fixed-size, no_std)
@@ -31,8 +31,8 @@ impl Default for EmbeddedRuntime {
 }
 
 impl Runtime for EmbeddedRuntime {
-    type NeuronStorage<T: NeuralValue> = NeuronArray<T, 10000>; // Default const
-    type SynapseStorage = SynapseArray<50000>; // Default const
+    type NeuronStorage<T: NeuralValue> = NeuronArray<T, DEFAULT_MAX_NEURONS>;
+    type SynapseStorage = SynapseArray<DEFAULT_MAX_SYNAPSES>;
 
     fn create_neuron_storage<T: NeuralValue>(
         &self,
@@ -40,20 +40,20 @@ impl Runtime for EmbeddedRuntime {
     ) -> Result<Self::NeuronStorage<T>> {
         // Embedded uses const generics, capacity is compile-time
         // For now, use default const (will be improved with const generics in Phase 3)
-        if capacity > 10000 {
+        if capacity > DEFAULT_MAX_NEURONS {
             return Err(RuntimeError::CapacityExceeded {
                 requested: capacity,
-                available: 10000,
+                available: DEFAULT_MAX_NEURONS,
             });
         }
         Ok(NeuronArray::new())
     }
 
     fn create_synapse_storage(&self, capacity: usize) -> Result<Self::SynapseStorage> {
-        if capacity > 50000 {
+        if capacity > DEFAULT_MAX_SYNAPSES {
             return Err(RuntimeError::CapacityExceeded {
                 requested: capacity,
-                available: 50000,
+                available: DEFAULT_MAX_SYNAPSES,
             });
         }
         Ok(SynapseArray::new())
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn test_create_neuron_storage_exceeds_limit() {
         let runtime = EmbeddedRuntime::new();
-        let result = runtime.create_neuron_storage::<f32>(20000);
+        let result = runtime.create_neuron_storage::<f32>(DEFAULT_MAX_NEURONS + 1);
         assert!(result.is_err());
     }
 }

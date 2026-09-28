@@ -10,7 +10,7 @@
 //! - ✅ Fixed-size arrays (no heap allocation)
 //! - ✅ Single-threaded execution
 //! - ✅ Deterministic performance
-//! - ✅ < 1 KB stack usage
+//! - ✅ Fixed compile-time capacity (see [`DEFAULT_MAX_NEURONS`])
 //!
 //! ## Targets
 //! - ESP32 (FreeRTOS or bare-metal)
@@ -25,6 +25,12 @@
 
 #[cfg(feature = "std")]
 extern crate std;
+
+/// Default neuron capacity for [`EmbeddedRuntime`] (compile-time array size).
+pub const DEFAULT_MAX_NEURONS: usize = 1000;
+
+/// Default synapse capacity for [`EmbeddedRuntime`] (compile-time array size).
+pub const DEFAULT_MAX_SYNAPSES: usize = 5000;
 
 pub mod neuron_array;
 pub mod runtime;
@@ -50,8 +56,8 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
-            max_neurons: 1000,
-            max_synapses: 5000,
+            max_neurons: DEFAULT_MAX_NEURONS,
+            max_synapses: DEFAULT_MAX_SYNAPSES,
             burst_frequency: 100, // 100 Hz = 10ms per burst
         }
     }
