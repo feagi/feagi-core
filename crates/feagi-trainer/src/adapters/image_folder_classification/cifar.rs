@@ -357,6 +357,7 @@ fn scan_result(
             })
             .collect(),
         splits,
+        split_stats: Vec::new(),
         image_width: Some(WIDTH),
         image_height: Some(HEIGHT),
         issues,

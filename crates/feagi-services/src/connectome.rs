@@ -24,10 +24,21 @@
 //! ```
 
 use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use thiserror::Error;
+
+/// Metadata tag holding associative class-channel weights outside schema v1 bincode.
+const LTM_CLASS_CHANNEL_WEIGHTS_TAG: &str = "ltm_class_channel_weights_v1";
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ClassChannelWeightRecord {
+    neuron_id: u32,
+    weights: Vec<(u32, f32)>,
+}
 
 /// Connectome I/O errors
 #[derive(Error, Debug)]
@@ -122,6 +133,7 @@ fn write_connectome_to_writer<W: Write>(
 ) -> Result<()> {
     let mut export_snapshot = snapshot.clone();
     crate::brain_artifact::embed_manifest_for_current_export(&mut export_snapshot)?;
+    persist_class_channel_weights_for_schema_v1(&mut export_snapshot)?;
     let manifest = crate::brain_artifact::encoded_manifest(&export_snapshot)?;
     let manifest_bytes = manifest.as_bytes();
     let manifest_len = u32::try_from(manifest_bytes.len()).map_err(|_| {
@@ -270,8 +282,9 @@ fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnap
     };
 
     // Deserialize
-    let snapshot: ConnectomeSnapshot =
+    let mut snapshot: ConnectomeSnapshot =
         bincode::deserialize(&data).map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
+    restore_class_channel_weights_for_schema_v1(&mut snapshot)?;
 
     if let Some(envelope_manifest) = envelope_manifest {
         let snapshot_manifest = crate::brain_artifact::encoded_manifest(&snapshot)?;
@@ -297,6 +310,84 @@ pub(crate) fn calculate_checksum(data: &[u8]) -> u64 {
         hash = hash.wrapping_mul(FNV_PRIME);
     }
     hash
+}
+
+/// Keep associative class-channel weights out of the schema v1 neuron record.
+///
+/// Published connectome readers still use that positional layout. An extra
+/// field is read as the next neuron and fails with an invalid option tag.
+fn persist_class_channel_weights_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    let mut seen_ids = HashSet::new();
+    let mut records = Vec::new();
+    for neuron in &snapshot.long_term_memory_neurons {
+        if neuron.class_channel_weights.is_empty() {
+            continue;
+        }
+        if !seen_ids.insert(neuron.neuron_id) {
+            return Err(ConnectomeError::Serialization(format!(
+                "duplicate long-term memory neuron id {} in class channel weights",
+                neuron.neuron_id
+            )));
+        }
+        records.push(ClassChannelWeightRecord {
+            neuron_id: neuron.neuron_id,
+            weights: neuron.class_channel_weights.clone(),
+        });
+    }
+    if records.is_empty() {
+        snapshot.metadata.tags.remove(LTM_CLASS_CHANNEL_WEIGHTS_TAG);
+        return Ok(());
+    }
+    let encoded = serde_json::to_string(&records).map_err(|error| {
+        ConnectomeError::Serialization(format!(
+            "failed to encode long-term memory class channel weights: {error}"
+        ))
+    })?;
+    snapshot
+        .metadata
+        .tags
+        .insert(LTM_CLASS_CHANNEL_WEIGHTS_TAG.to_string(), encoded);
+    Ok(())
+}
+
+fn restore_class_channel_weights_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    let Some(encoded) = snapshot.metadata.tags.get(LTM_CLASS_CHANNEL_WEIGHTS_TAG) else {
+        return Ok(());
+    };
+    let records: Vec<ClassChannelWeightRecord> =
+        serde_json::from_str(encoded).map_err(|error| {
+            ConnectomeError::BrainArtifact(format!(
+                "long-term memory class channel weights tag is invalid: {error}"
+            ))
+        })?;
+    let mut by_id = std::collections::HashMap::new();
+    for record in records {
+        if record.weights.is_empty() {
+            return Err(ConnectomeError::BrainArtifact(format!(
+                "long-term memory neuron {} has an empty class channel weight record",
+                record.neuron_id
+            )));
+        }
+        if by_id.insert(record.neuron_id, record.weights).is_some() {
+            return Err(ConnectomeError::BrainArtifact(format!(
+                "duplicate class channel weight record for long-term memory neuron {}",
+                record.neuron_id
+            )));
+        }
+    }
+    for neuron in &mut snapshot.long_term_memory_neurons {
+        if let Some(weights) = by_id.remove(&neuron.neuron_id) {
+            neuron.class_channel_weights = weights;
+        }
+    }
+    if !by_id.is_empty() {
+        let mut missing: Vec<u32> = by_id.into_keys().collect();
+        missing.sort_unstable();
+        return Err(ConnectomeError::BrainArtifact(format!(
+            "class channel weights refer to unknown long-term memory neurons: {missing:?}"
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -481,5 +572,141 @@ mod tests {
 
         assert_eq!(calculate_checksum(data1), calculate_checksum(data2));
         assert_ne!(calculate_checksum(data1), calculate_checksum(data3));
+    }
+
+    /// Published schema v1 readers do not know `class_channel_weights`.
+    /// Neuron id 50_002_623 begins with byte 191, which those readers report
+    /// as an invalid option tag when the field is inserted into the record.
+    #[test]
+    fn class_channel_weights_round_trip_outside_schema_v1_layout() {
+        #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
+        struct SchemaV1LongTermMemoryNeuron {
+            neuron_id: u32,
+            cortical_area_idx: u32,
+            #[serde(default)]
+            cortical_id: Option<String>,
+            pattern_hash: Option<u64>,
+            is_longterm_memory: bool,
+            is_active: bool,
+            lifespan_current: u32,
+            lifespan_initial: u32,
+            lifespan_growth_rate: f32,
+            creation_burst: u64,
+            last_activation_burst: u64,
+            activation_count: u32,
+            #[serde(default)]
+            spatial_signature: Option<u64>,
+            #[serde(default)]
+            class_channels: Vec<u32>,
+        }
+
+        #[derive(Debug, serde::Deserialize)]
+        #[allow(dead_code)]
+        struct SchemaV1Snapshot {
+            version: u32,
+            neurons: SerializableNeuronArray,
+            synapses: SerializableSynapseArray,
+            cortical_area_names: ahash::AHashMap<u32, String>,
+            burst_count: u64,
+            power_amount: f32,
+            fire_ledger_window: usize,
+            metadata: ConnectomeMetadata,
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode,
+            genome_json: Option<String>,
+            memory_area_ids: Vec<String>,
+            plastic_mappings: Vec<(String, String)>,
+            brain_region_ids: Vec<String>,
+            long_term_memory_neurons: Vec<SchemaV1LongTermMemoryNeuron>,
+            long_term_memory_replay_frames: Vec<(u32, Vec<SerializableMemoryReplayFrame>)>,
+            lite_synapses: Vec<SerializableSemanticSynapse>,
+        }
+
+        let weights = vec![(4u32, 0.25f32), (9u32, 1.5f32)];
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: ahash::AHashMap::new(),
+            burst_count: 7,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: vec![
+                SerializableLongTermMemoryNeuron {
+                    neuron_id: 50_000_000,
+                    cortical_area_idx: 1,
+                    cortical_id: Some("bU1OSVNUXyA=".to_string()),
+                    pattern_hash: None,
+                    is_longterm_memory: true,
+                    is_active: true,
+                    lifespan_current: 10,
+                    lifespan_initial: 10,
+                    lifespan_growth_rate: 1.0,
+                    creation_burst: 1,
+                    last_activation_burst: 1,
+                    activation_count: 1,
+                    spatial_signature: None,
+                    class_channels: Vec::new(),
+                    class_channel_weights: Vec::new(),
+                },
+                SerializableLongTermMemoryNeuron {
+                    neuron_id: 50_002_623,
+                    cortical_area_idx: 2,
+                    cortical_id: Some("bU1OSVNUXx8=".to_string()),
+                    pattern_hash: Some(3),
+                    is_longterm_memory: true,
+                    is_active: true,
+                    lifespan_current: 10,
+                    lifespan_initial: 10,
+                    lifespan_growth_rate: 1.0,
+                    creation_burst: 1,
+                    last_activation_burst: 2,
+                    activation_count: 2,
+                    spatial_signature: None,
+                    class_channels: vec![4, 9],
+                    class_channel_weights: weights.clone(),
+                },
+            ],
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        };
+
+        let bytes = save_connectome_to_bytes(&snapshot).unwrap();
+        let loaded = load_connectome_from_bytes(&bytes).unwrap();
+        assert!(loaded
+            .metadata
+            .tags
+            .contains_key(LTM_CLASS_CHANNEL_WEIGHTS_TAG));
+        assert_eq!(
+            loaded.long_term_memory_neurons[0].class_channel_weights,
+            Vec::new()
+        );
+        assert_eq!(
+            loaded.long_term_memory_neurons[1].class_channel_weights,
+            weights
+        );
+        assert_eq!(loaded.long_term_memory_neurons[1].neuron_id, 50_002_623);
+
+        let mut export_snapshot = snapshot.clone();
+        persist_class_channel_weights_for_schema_v1(&mut export_snapshot).unwrap();
+        let body = bincode::serialize(&export_snapshot).unwrap();
+        let legacy: SchemaV1Snapshot = bincode::deserialize(&body).unwrap();
+        assert_eq!(legacy.long_term_memory_neurons.len(), 2);
+        assert_eq!(legacy.long_term_memory_neurons[0].neuron_id, 50_000_000);
+        assert_eq!(legacy.long_term_memory_neurons[1].neuron_id, 50_002_623);
+        assert_eq!(
+            legacy.long_term_memory_neurons[1].class_channels,
+            vec![4, 9]
+        );
+        assert!(legacy
+            .metadata
+            .tags
+            .contains_key(LTM_CLASS_CHANNEL_WEIGHTS_TAG));
     }
 }

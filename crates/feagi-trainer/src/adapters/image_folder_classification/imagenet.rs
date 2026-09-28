@@ -58,6 +58,7 @@ pub(super) fn scan_if_flat_val(
         schema: Some(ImageClassificationSchema::ImageNet),
         classes,
         splits: vec!["train".to_string(), "val".to_string()],
+        split_stats: Vec::new(),
         image_width,
         image_height,
         issues,

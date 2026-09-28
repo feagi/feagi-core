@@ -154,6 +154,7 @@ fn iris_scorecard() -> Scorecard {
         metric_stats: None,
         status: ScorecardStatus::SelfReported,
         visibility: ScorecardVisibility::Local,
+        skip: None,
         metadata: BTreeMap::new(),
     }
 }

@@ -597,7 +597,9 @@ impl RunConfig {
             PopulationEncoder, RemoteFeagiRuntime, RemoteRuntimeConfig, SegmentationMaskDecoder,
         };
         use crate::contracts::ExecutionMode;
-        use crate::executor::{assemble_scorecard, run_rollout_with_events};
+        use crate::executor::{
+            assemble_scorecard_with_skip, run_rollout_with_events, scorecard_skip_from_summary,
+        };
         use crate::executor_stream::run_stream_rollout_with_events;
         use std::time::Duration;
 
@@ -751,7 +753,12 @@ impl RunConfig {
 
         let provenance = self.scorecard_provenance(manifest);
         let scorecard_id = provenance.scorecard_id.clone();
-        let scorecard = assemble_scorecard(&self.run_spec, &outcome.summary.metrics, provenance);
+        let scorecard = assemble_scorecard_with_skip(
+            &self.run_spec,
+            &outcome.summary.metrics,
+            scorecard_skip_from_summary(&outcome.summary),
+            provenance,
+        );
 
         let mut summary = outcome.summary;
         summary.scorecard_id = Some(scorecard_id);
@@ -792,6 +799,7 @@ mod tests {
             split: Split::Test,
             split_id: SplitId("test".to_string()),
             class_keep_percents: std::collections::BTreeMap::new(),
+            max_samples: None,
         }
     }
 
@@ -964,6 +972,7 @@ mod tests {
             presentation: TimeSeriesPresentation::StreamTrain,
             amplitude_offset: 0.0,
             class_keep_percents: std::collections::BTreeMap::new(),
+            max_samples: None,
             dataset_unit_range: None,
         });
         config.encoder_profile.channels = 1;

@@ -87,6 +87,12 @@ pub struct ImageFolderClassificationConfig {
     pub feed_width: u32,
     pub feed_height: u32,
     pub class_map: Vec<ClassVoxel>,
+    /// Keep the first `floor(count * percent / 100)` samples per class. Empty keeps all.
+    #[serde(default)]
+    pub class_keep_percents: BTreeMap<String, u32>,
+    /// Cap after class keep. `None` uses every remaining sample in this split.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_samples: Option<u64>,
 }
 
 /// One indexed image. Pixels are loaded on visit.
@@ -107,6 +113,21 @@ pub struct IdxRecord {
     pub cols: u32,
 }
 
+/// One class label and how many samples carry it inside one split.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageClassCount {
+    pub label: String,
+    pub count: u64,
+}
+
+/// Measured sample totals for one split discovered during scan.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SplitSampleStats {
+    pub split: String,
+    pub sample_count: u64,
+    pub class_counts: Vec<ImageClassCount>,
+}
+
 /// Scan of a dataset root before the operator confirms the class map.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImageClassificationScan {
@@ -114,6 +135,9 @@ pub struct ImageClassificationScan {
     pub classes: Vec<ClassVoxel>,
     /// Split folders that exist: `train`, `val`, and/or `test`.
     pub splits: Vec<String>,
+    /// Per-split totals and class histograms when the scanner could measure them.
+    #[serde(default)]
+    pub split_stats: Vec<SplitSampleStats>,
     /// Pixel width shared by the images. Empty when the scan found no single size.
     #[serde(rename = "imageWidth")]
     pub image_width: Option<u32>,
@@ -157,6 +181,15 @@ impl ImageFolderClassificationAdapter {
     ) -> Result<(DatasetManifest, Vec<ClassifiedImage>), TrainerError> {
         let root = dataset_root(source)?;
         let images = self.discover_images(root)?;
+        let labels: Vec<String> = self
+            .config
+            .class_map
+            .iter()
+            .map(|row| row.label.clone())
+            .collect();
+        let images = apply_image_class_keep(images, &self.config.class_keep_percents, &labels)?;
+        let images =
+            crate::adapters::class_keep::apply_max_samples(images, self.config.max_samples)?;
         Ok((self.manifest(source, &images), images))
     }
 
@@ -444,6 +477,7 @@ pub fn scan_image_classification_root(
             schema: None,
             classes: Vec::new(),
             splits: Vec::new(),
+            split_stats: Vec::new(),
             image_width: None,
             image_height: None,
             issues,
@@ -484,13 +518,63 @@ pub fn scan_image_classification_root(
         }
     }
     let (image_width, image_height) = image_size.pair();
+    let mut split_stats = Vec::new();
+    for name in &present {
+        match class_folder_split_stats(&root.join(name)) {
+            Ok(stats) => split_stats.push(stats),
+            Err(message) => issues.push(format!("split '{name}': {message}")),
+        }
+    }
     Ok(ImageClassificationScan {
         schema: detected,
         classes,
         splits: present.iter().map(|name| (*name).to_string()).collect(),
+        split_stats,
         image_width,
         image_height,
         issues,
+    })
+}
+
+/// Counts class-folder images under one split directory.
+fn class_folder_split_stats(split_dir: &Path) -> Result<SplitSampleStats, String> {
+    let split = split_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("split")
+        .to_string();
+    let entries = list_dir(split_dir).map_err(|error| error.to_string())?;
+    let mut class_counts = Vec::new();
+    let mut sample_count = 0_u64;
+    for class_dir in entries {
+        if !class_dir.is_dir() {
+            continue;
+        }
+        let label = file_name_utf8(&class_dir)?;
+        let files = list_dir(&class_dir).map_err(|error| error.to_string())?;
+        let count = files
+            .iter()
+            .filter(|path| {
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| {
+                        let lower = ext.to_ascii_lowercase();
+                        IMAGE_EXTENSIONS.iter().any(|allowed| *allowed == lower)
+                    })
+                    .unwrap_or(false)
+            })
+            .count() as u64;
+        if count == 0 {
+            continue;
+        }
+        sample_count += count;
+        class_counts.push(ImageClassCount { label, count });
+    }
+    class_counts.sort_by(|left, right| left.label.cmp(&right.label));
+    Ok(SplitSampleStats {
+        split,
+        sample_count,
+        class_counts,
     })
 }
 
@@ -945,6 +1029,7 @@ fn scan_idx_root(root: &Path) -> Result<Option<ImageClassificationScan>, Trainer
     let mut any = false;
     let mut issues = Vec::new();
     let mut splits = Vec::new();
+    let mut split_stats = Vec::new();
     let mut image_size = ImageSizeSet::default();
     let mut per_split: BTreeMap<&str, Vec<ClassVoxel>> = BTreeMap::new();
     for role in IDX_ROLES {
@@ -967,6 +1052,7 @@ fn scan_idx_root(root: &Path) -> Result<Option<ImageClassificationScan>, Trainer
                     ));
                 }
                 per_split.insert(role.split, classes_from_idx_labels(&label_bytes));
+                split_stats.push(split_stats_from_idx_labels(role.split, &label_bytes));
             }
             (Some(_), None) => {
                 any = true;
@@ -999,6 +1085,7 @@ fn scan_idx_root(root: &Path) -> Result<Option<ImageClassificationScan>, Trainer
         schema: Some(ImageClassificationSchema::IdxImages),
         classes,
         splits,
+        split_stats,
         image_width,
         image_height,
         issues,
@@ -1076,18 +1163,89 @@ fn discover_idx_split(
 }
 
 fn classes_from_idx_labels(labels: &[u8]) -> Vec<ClassVoxel> {
-    let mut seen = BTreeSet::new();
-    for byte in labels {
-        seen.insert(*byte);
-    }
-    seen.into_iter()
-        .map(|byte| ClassVoxel {
-            label: byte.to_string(),
-            x: u32::from(byte),
-            y: 0,
-            z: 0,
+    class_counts_from_idx_labels(labels)
+        .into_iter()
+        .map(|entry| {
+            let digit: u32 = entry.label.parse().unwrap_or(0);
+            ClassVoxel {
+                label: entry.label,
+                x: digit,
+                y: 0,
+                z: 0,
+            }
         })
         .collect()
+}
+
+fn class_counts_from_idx_labels(labels: &[u8]) -> Vec<ImageClassCount> {
+    let mut totals: BTreeMap<u8, u64> = BTreeMap::new();
+    for byte in labels {
+        *totals.entry(*byte).or_insert(0) += 1;
+    }
+    totals
+        .into_iter()
+        .map(|(byte, count)| ImageClassCount {
+            label: byte.to_string(),
+            count,
+        })
+        .collect()
+}
+
+fn split_stats_from_idx_labels(split: &str, labels: &[u8]) -> SplitSampleStats {
+    let class_counts = class_counts_from_idx_labels(labels);
+    let sample_count = class_counts.iter().map(|entry| entry.count).sum();
+    SplitSampleStats {
+        split: split.to_string(),
+        sample_count,
+        class_counts,
+    }
+}
+
+/// Keeps the first `floor(count * percent / 100)` images per class label.
+fn apply_image_class_keep(
+    images: Vec<ClassifiedImage>,
+    percents: &BTreeMap<String, u32>,
+    class_labels: &[String],
+) -> Result<Vec<ClassifiedImage>, TrainerError> {
+    if percents.is_empty() {
+        return Ok(images);
+    }
+    crate::adapters::class_keep::validate_class_keep_percents(percents, class_labels)
+        .map_err(TrainerError::Config)?;
+    let mut totals: BTreeMap<String, u64> = BTreeMap::new();
+    for image in &images {
+        *totals.entry(image.label.clone()).or_insert(0) += 1;
+    }
+    let mut remaining: BTreeMap<String, u64> = BTreeMap::new();
+    for label in class_labels {
+        let total = totals.get(label).copied().unwrap_or(0);
+        let percent = percents.get(label).copied().unwrap_or(100);
+        remaining.insert(
+            label.clone(),
+            crate::adapters::class_keep::class_keep_count(total, percent)
+                .map_err(TrainerError::Config)?,
+        );
+    }
+    let mut kept = Vec::new();
+    for image in images {
+        let left = remaining.get_mut(&image.label).ok_or_else(|| {
+            TrainerError::Config(format!(
+                "class keep saw unlabeled class '{}' not in class_map",
+                image.label
+            ))
+        })?;
+        if *left == 0 {
+            continue;
+        }
+        *left -= 1;
+        kept.push(image);
+    }
+    if kept.is_empty() {
+        return Err(TrainerError::Parse(
+            "class keep percents removed every sample".to_string(),
+        ));
+    }
+    Ok(kept)
 }
 
 fn canonical_idx_name(name: &str) -> String {
@@ -1414,6 +1572,8 @@ mod tests {
             feed_width: 2,
             feed_height: 2,
             class_map,
+            class_keep_percents: BTreeMap::new(),
+            max_samples: None,
         });
         let samples = adapter
             .stream(
@@ -1472,6 +1632,15 @@ mod tests {
         assert_eq!(scan.image_width, Some(2));
         assert_eq!(scan.image_height, Some(2));
         assert!(scan.issues.is_empty());
+        assert_eq!(scan.split_stats.len(), 2);
+        assert_eq!(scan.split_stats[0].split, "train");
+        assert_eq!(scan.split_stats[0].sample_count, 2);
+        assert_eq!(scan.split_stats[1].split, "test");
+        assert_eq!(scan.split_stats[1].sample_count, 1);
+        let source = DatasetSource {
+            uri: root.path().to_string_lossy().into_owned(),
+            bytes: Vec::new(),
+        };
         let adapter = ImageFolderClassificationAdapter::new(ImageFolderClassificationConfig {
             dataset_name: "mnist".to_string(),
             image_schema: ImageClassificationSchema::IdxImages,
@@ -1479,16 +1648,12 @@ mod tests {
             split_id: SplitId("train".to_string()),
             feed_width: 2,
             feed_height: 2,
-            class_map: scan.classes,
+            class_map: scan.classes.clone(),
+            class_keep_percents: BTreeMap::new(),
+            max_samples: None,
         });
         let samples = adapter
-            .stream(
-                &DatasetSource {
-                    uri: root.path().to_string_lossy().into_owned(),
-                    bytes: Vec::new(),
-                },
-                &SplitId("train".to_string()),
-            )
+            .stream(&source, &SplitId("train".to_string()))
             .expect("stream");
         let ids: Vec<u32> = samples
             .iter()
@@ -1498,6 +1663,22 @@ mod tests {
             })
             .collect();
         assert_eq!(ids, vec![1, 0]);
+        let capped = ImageFolderClassificationAdapter::new(ImageFolderClassificationConfig {
+            dataset_name: "mnist".to_string(),
+            image_schema: ImageClassificationSchema::IdxImages,
+            split: Split::Train,
+            split_id: SplitId("train".to_string()),
+            feed_width: 2,
+            feed_height: 2,
+            class_map: scan.classes,
+            class_keep_percents: BTreeMap::new(),
+            max_samples: Some(1),
+        })
+        .index(&source)
+        .expect("capped index")
+        .1;
+        assert_eq!(capped.len(), 1);
+        assert_eq!(capped[0].label, "1");
     }
 
     #[test]

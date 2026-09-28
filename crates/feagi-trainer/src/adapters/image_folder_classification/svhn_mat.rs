@@ -98,6 +98,7 @@ pub(super) fn scan_if_present(
         schema: Some(ImageClassificationSchema::SvhnMat),
         classes,
         splits,
+        split_stats: Vec::new(),
         image_width: Some(WIDTH as u32),
         image_height: Some(HEIGHT as u32),
         issues,

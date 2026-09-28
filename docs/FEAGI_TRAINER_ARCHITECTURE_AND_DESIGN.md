@@ -286,6 +286,8 @@ Stores:
 
 Supports experiment comparison by run ID.
 
+Scorecard history across runs is recorded as `GenomeEvaluation` records (`feagi-evolutionary`, ADR-016): one per completed protocol, pinning the content hash of the genome evaluated, its scorecards, the comparability key, validation-split fitness, and lineage. The Trainer itself only produces scorecards; the host stores the evaluation record.
+
 ## 6. API and Contract Model
 
 ### 6.1 Primary Contracts
@@ -353,6 +355,7 @@ All contracts must include `schema_version`.
 2. Compare metrics and error slices.
 3. Inspect sample-level disagreements.
 4. Export benchmark summary.
+5. Graph fitness history for one comparability key (ADR-016): each point is a `GenomeEvaluation`; selecting a point opens its scorecards and offers study or revert of the genome snapshot it pins.
 
 ### 7.4 Desktop Trainer UI (feagi-desktop plugin)
 
@@ -365,8 +368,8 @@ The closed **FEAGI Trainer** app (`feagi-desktop`, route `/trainer`) is a second
 3. **Compatibility** — Trainer-authoritative preflight (`check_dataset_compatibility`); structural blocks vs advisory warnings (Experience Capture ADR-009 soft compatibility).
 4. **Brain bindings** — encoder/decoder **I/O types** the selected task should use to read/write data (not the current genome inventory). For ECG/tables this is Miscellaneous IPU / Count Output; for images, Simple Vision / Object Segmentation. On `start_trainer_run`, after the burst-engine probe, Trainer creates a missing area via `POST /v1/cortical_area/cortical_area`. Agent ZMQ registration does not create these areas. Reward magnitude and ticks/sample stay on this step; Advanced holds plugin ids and provenance fields.
 5. **Encoding scheme** — operator selects the neural encoding type (Appendix E: `population_single_spike`, `value`, `rate`, `temporal`) and, for ECG, the **presentation**. Snapshot is the existing one-frame-per-beat path: population spikes on Miscellaneous IPU unit 0 (`channels × 1 × bins`, P = 1.0 at the Z bin) and the class hold on Miscellaneous IPU unit 1 (`1 × C × 1`). Stream train sends each raw window sample as one burst onto Misc A (`N×1×1`, graded P) while Misc B (`N×5×1`, Y = N/L/R/A/V) holds the class. Train does **not** read the Misc OPU and does **not** inject Pain/Pleasure (genome-internal). Stream infer drives A only over the full record and scores the Misc OPU at each hold end when a motor frame arrives; a silent OPU is a `RunEvent` warning, not a failed run. Trainer creates A, B, and the Misc OPU; the operator wires the detection circuit. The same step shows suggested FEAGI cortical area titles (editable) and applies them on create. Rate/temporal stay registered but blocked. The same step sets the live FEAGI burst frequency (`PUT /v1/burst_engine/config`). Image tasks keep Cartesian vision layout.
-6. **Run** — phase-aware live view driven by `RunEvent` (progress, warnings, interim/aggregate metrics, cancel). Schema check is **Validating**; dataset index + FEAGI contact is **Starting**. Image-folder runs decode one image/mask pair per visit (bounded memory). After cancel, failure, or completion the operator can **Restart protocol** (requires a live experiment session).
-7. **Results** — per-phase Scorecards, primary benchmark on Test phase, provenance accordion, export affordances.
+6. **Run** — phase-aware live view driven by `RunEvent` (progress, warnings, interim/aggregate metrics, cancel, skip). Schema check is **Validating**; dataset index + FEAGI contact is **Starting**. Image-folder runs decode one image/mask pair per visit (bounded memory). **Skip to next phase** ends the current split after the in-flight sample/tick, scores samples already seen, stamps skip coverage on the phase Scorecard (`samples_planned` / `samples_done` / `evaluated_samples`), and starts the next protocol phase. Stop still aborts the whole protocol without scoring. After cancel, failure, or completion the operator can **Restart protocol** (requires a live experiment session).
+7. **Results** — per-phase Scorecards, primary benchmark on Test phase, provenance accordion, export affordances. The accordion states that a score is comparable only under the pinned dataset, brain, protocol, and body — or **none** when the genome is embodiment-agnostic. Live folder/CSV runs show the local path and do not invent catalog ids, content hashes, or a demo robot.
 
 **Experiment gating (browse vs run-ready):** the window **always opens** on the data-type tiles. A missing experiment session does not replace the wizard with a blocking page. Setup and dataset steps remain editable; the experiment CTA appears on the **Run** step (also reflected in the precondition strip). Validate, Start, and live binding probes stay disabled until a session exists. When the experiment stops while the Trainer is open, the UI degrades gracefully (cancel in-flight protocol, gray run actions, preserve draft config and completed scorecards). Runs and Scorecard upload require an authenticated experiment session (ADR-011/ADR-012).
 

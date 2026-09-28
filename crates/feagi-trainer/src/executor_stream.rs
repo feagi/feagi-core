@@ -12,15 +12,13 @@ use crate::binding::profile::{DecoderBindingProfile, EncoderBindingProfile, Stre
 use crate::binding::{FeagiRuntime, RewardPolicy};
 use crate::contracts::ir_sample::{HoldEnd, Payload};
 use crate::contracts::prediction_record::SCHEMA_VERSION as PREDICTION_RECORD_SCHEMA_VERSION;
-use crate::contracts::run_summary::SCHEMA_VERSION as RUN_SUMMARY_SCHEMA_VERSION;
 use crate::contracts::{
-    IRSample, MetricScope, PredictionRecord, RunEvent, RunEventKind, RunId, RunStatus, RunSummary,
-    TypedTarget,
+    IRSample, MetricScope, PredictionRecord, RunEvent, RunEventKind, RunId, TypedTarget,
 };
 use crate::control::{CancelToken, RunEventSink};
 use crate::error::TrainerError;
 use crate::executor::{
-    emit_no_detection_warning, evaluate_or_empty, ExecutorConfig, RolloutOutcome,
+    emit_no_detection_warning, evaluate_or_empty, rollout_summary, ExecutorConfig, RolloutOutcome,
 };
 use crate::plugins::MetricPackPlugin;
 
@@ -127,8 +125,11 @@ where
     let total_samples = samples.len() as u64;
     let mut done = 0u64;
 
-    for batch in samples.chunks(parallel_width as usize) {
+    'train: for batch in samples.chunks(parallel_width as usize) {
         cancel.interrupt(format!("stopped after {done} of {total_samples} samples"))?;
+        if cancel.is_skipped() {
+            break 'train;
+        }
         let series: Vec<&[f64]> = batch
             .iter()
             .map(time_series_samples)
@@ -154,6 +155,9 @@ where
 
         for tick in 0..length {
             cancel.interrupt(format!("stopped after {done} of {total_samples} samples"))?;
+            if cancel.is_skipped() {
+                break 'train;
+            }
             let amplitudes: Vec<f64> = series.iter().map(|values| values[tick]).collect();
             let frame = encoder.encode_tick(
                 &amplitudes,
@@ -209,11 +213,13 @@ where
     finish_rollout(
         run_id,
         total_samples,
+        done,
         Vec::new(),
         Vec::new(),
         Vec::new(),
         metric_pack,
         events,
+        cancel.is_skipped() && done < total_samples,
     )
 }
 
@@ -255,7 +261,7 @@ where
     }
     let mut done = 0u64;
 
-    for sample in samples {
+    'infer: for sample in samples {
         let series = time_series_samples(sample)?;
         let holds = infer_hold_ends(sample)?;
         let hold_by_tick: BTreeMap<usize, u32> = holds
@@ -264,6 +270,9 @@ where
             .collect();
         for (tick, amplitude) in series.iter().enumerate() {
             cancel.interrupt(format!("stopped after {done} of {total_holds} holds"))?;
+            if cancel.is_skipped() {
+                break 'infer;
+            }
             let frame = encoder.encode_tick(
                 &[*amplitude],
                 &[None],
@@ -345,43 +354,48 @@ where
     finish_rollout(
         run_id,
         total_holds,
+        done,
         predictions,
         scored_predictions,
         scored_targets,
         metric_pack,
         events,
+        cancel.is_skipped() && done < total_holds,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn finish_rollout<M: MetricPackPlugin>(
     run_id: &RunId,
     total_samples: u64,
+    processed_samples: u64,
     predictions: Vec<PredictionRecord>,
     scored_predictions: Vec<crate::contracts::TypedPrediction>,
     scored_targets: Vec<TypedTarget>,
     metric_pack: &M,
     events: &mut dyn RunEventSink,
+    skipped: bool,
 ) -> Result<RolloutOutcome, TrainerError> {
     let metric_result = evaluate_or_empty(metric_pack, &scored_predictions, &scored_targets)?;
     events.emit(RunEvent::new(
         run_id.clone(),
         RunEventKind::MetricUpdate {
             scope: MetricScope::Aggregate,
+            class_breakdown: crate::executor::class_breakdown_event(
+                &metric_result,
+                &scored_targets,
+            ),
             metrics: metric_result.metrics.clone(),
         },
     ));
-    let summary = RunSummary {
-        schema_version: RUN_SUMMARY_SCHEMA_VERSION,
-        run_id: run_id.clone(),
-        status: RunStatus::Completed,
+    let summary = rollout_summary(
+        run_id,
         total_samples,
-        evaluated_samples: scored_predictions.len() as u64,
-        metrics: metric_result.metrics.clone(),
-        started_at: None,
-        completed_at: None,
-        scorecard_id: None,
-        metadata: BTreeMap::new(),
-    };
+        processed_samples,
+        scored_predictions.len() as u64,
+        metric_result.metrics.clone(),
+        skipped,
+    );
     Ok(RolloutOutcome {
         summary,
         predictions,
@@ -828,5 +842,116 @@ mod tests {
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains(NO_DETECTION_RESULT_WARNING));
         assert!(warnings[0].contains("ep-silent"));
+    }
+
+    #[test]
+    fn infer_skip_after_first_tick_scores_holds_already_seen() {
+        use crate::control::CollectingEventSink;
+
+        struct SkipAfterFirstStep {
+            inner: StubFeagiRuntime,
+            cancel: CancelToken,
+            stepped: bool,
+        }
+
+        impl FeagiRuntime for SkipAfterFirstStep {
+            type SensoryFrame = Vec<f64>;
+            type MotorFrame = Vec<f64>;
+
+            fn submit_sensory(&mut self, frame: Self::SensoryFrame) -> Result<(), TrainerError> {
+                self.inner.submit_sensory(frame)
+            }
+
+            fn submit_reward(
+                &mut self,
+                signals: &[crate::binding::reward::RewardSignal],
+            ) -> Result<(), TrainerError> {
+                self.inner.submit_reward(signals)
+            }
+
+            fn step(&mut self, ticks: u32) -> Result<(), TrainerError> {
+                self.inner.step(ticks)?;
+                if !self.stepped {
+                    self.stepped = true;
+                    self.cancel.skip();
+                }
+                Ok(())
+            }
+
+            fn collect_motor(&mut self) -> Result<Option<Self::MotorFrame>, TrainerError> {
+                self.inner.collect_motor()
+            }
+        }
+
+        let sample = IRSample {
+            schema_version: crate::contracts::ir_sample::SCHEMA_VERSION,
+            sample_id: SampleId("ep-skip".to_string()),
+            dataset_version_id: DatasetVersionId("t@1".to_string()),
+            split: Split::Test,
+            modality: Modality::TimeSeries,
+            payload: Payload::TimeSeries {
+                sample_rate_hz: 360.0,
+                channel_ids: vec!["lead_0".to_string()],
+                samples: vec![0.1, 0.2, 0.3, 0.4],
+                hold_ends: Some(vec![
+                    HoldEnd {
+                        sample_index: 0,
+                        class_id: 0,
+                    },
+                    HoldEnd {
+                        sample_index: 2,
+                        class_id: 0,
+                    },
+                ]),
+            },
+            target: None,
+            output_type: OutputType::Class,
+            coordinate_frame: None,
+            timestamp: None,
+            metadata: BTreeMap::new(),
+        };
+        let cancel = CancelToken::new();
+        let mut runtime = SkipAfterFirstStep {
+            inner: StubFeagiRuntime::new(
+                |sensory| {
+                    let mut motor = vec![0.0, 0.0, 0.0];
+                    motor[0] = 1.0;
+                    let _ = sensory;
+                    motor
+                },
+                false,
+            ),
+            cancel: cancel.clone(),
+            stepped: false,
+        };
+        let mut encoder = EchoTickEncoder;
+        let mut decoder = TailArgmax;
+        let reward = PainPleasureReward::new(0.5).unwrap();
+        let metric = ClassificationMetricPack::new();
+        let mut sink = CollectingEventSink::default();
+        let outcome = run_stream_rollout_with_events(
+            &RunId("run-infer-skip".to_string()),
+            &[sample],
+            &mut runtime,
+            &mut encoder,
+            &stream_profile(StreamMode::Infer),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &ExecutorConfig {
+                ticks_per_sample: 1,
+                silence_bursts: 0,
+            },
+            &mut sink,
+            &cancel,
+        )
+        .expect("skip scores");
+        assert_eq!(outcome.summary.status, crate::contracts::RunStatus::Skipped);
+        assert_eq!(outcome.summary.total_samples, 2);
+        assert_eq!(outcome.summary.processed_samples, Some(1));
+        assert_eq!(outcome.summary.evaluated_samples, 1);
+        assert_eq!(outcome.predictions.len(), 1);
+        assert_eq!(runtime.inner.burst_count(), 1);
     }
 }

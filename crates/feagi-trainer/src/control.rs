@@ -10,7 +10,7 @@
 //! [`ClosureRunControl`] is the reference implementation: it wraps a host-supplied rollout closure
 //! (which performs the actual `submit -> step -> collect -> score` work and emits progress/metric
 //! events) and layers the run lifecycle on top — status transitions plus the `Running` /
-//! `ScorecardReady` / `Completed` / `Failed` lifecycle events. Keeping execution behind a closure
+//! `ScorecardReady` / `Completed` / `Skipped` / `Failed` lifecycle events. Keeping execution behind a closure
 //! makes the controller independent of which `FeagiRuntime` is used (stub, remote, embedded) and
 //! fully testable without a live backend.
 
@@ -24,6 +24,7 @@ use crate::error::TrainerError;
 #[derive(Debug)]
 struct CancelInner {
     cancelled: AtomicBool,
+    skipped: AtomicBool,
     paused: AtomicBool,
     park: Mutex<()>,
     cv: Condvar,
@@ -32,8 +33,10 @@ struct CancelInner {
 /// A cloneable, thread-safe cooperative-cancellation and pause handle for a run.
 ///
 /// The engine checks [`interrupt`](Self::interrupt) at safe points (e.g. between samples).
-/// A host calls [`cancel`](Self::cancel) to stop, or [`pause`](Self::pause) / [`resume`](Self::resume)
-/// to hold and continue. Both are cooperative — they never interrupt mid-step.
+/// A host calls [`cancel`](Self::cancel) to abort without scoring, [`skip`](Self::skip) to end
+/// the split after the current sample/tick and score what was seen, or
+/// [`pause`](Self::pause) / [`resume`](Self::resume) to hold and continue. All are cooperative
+/// — they never interrupt mid-step.
 #[derive(Debug, Clone)]
 pub struct CancelToken(Arc<CancelInner>);
 
@@ -48,6 +51,7 @@ impl CancelToken {
     pub fn new() -> Self {
         Self(Arc::new(CancelInner {
             cancelled: AtomicBool::new(false),
+            skipped: AtomicBool::new(false),
             paused: AtomicBool::new(false),
             park: Mutex::new(()),
             cv: Condvar::new(),
@@ -57,6 +61,15 @@ impl CancelToken {
     /// Requests cancellation. Idempotent and callable from any thread.
     pub fn cancel(&self) {
         self.0.cancelled.store(true, Ordering::SeqCst);
+        self.0.cv.notify_all();
+    }
+
+    /// Ends the current split after the in-flight sample/tick and scores samples already seen.
+    ///
+    /// Distinct from [`cancel`](Self::cancel): skip is a successful partial run, not an error.
+    /// Idempotent and callable from any thread. Cancel still wins if both are requested.
+    pub fn skip(&self) {
+        self.0.skipped.store(true, Ordering::SeqCst);
         self.0.cv.notify_all();
     }
 
@@ -78,19 +91,24 @@ impl CancelToken {
         self.0.cancelled.load(Ordering::SeqCst)
     }
 
+    /// Returns whether the host asked to end the split after the current sample/tick.
+    pub fn is_skipped(&self) -> bool {
+        self.0.skipped.load(Ordering::SeqCst)
+    }
+
     /// Returns whether the run is held at the next interrupt point.
     pub fn is_paused(&self) -> bool {
         self.0.paused.load(Ordering::SeqCst)
     }
 
-    /// Blocks while paused. Returns immediately when not paused or when cancelled.
+    /// Blocks while paused. Returns immediately when not paused, cancelled, or skipped.
     pub fn park_if_paused(&self) {
         let mut guard = self
             .0
             .park
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        while self.is_paused() && !self.is_cancelled() {
+        while self.is_paused() && !self.is_cancelled() && !self.is_skipped() {
             guard = self
                 .0
                 .cv
@@ -222,8 +240,21 @@ where
                         },
                     ));
                 }
-                events.emit(RunEvent::new(self.run_id.clone(), RunEventKind::Completed));
-                self.status = RunStatus::Completed;
+                if summary.status == RunStatus::Skipped {
+                    events.emit(RunEvent::new(
+                        self.run_id.clone(),
+                        RunEventKind::Skipped {
+                            samples_done: summary
+                                .processed_samples
+                                .unwrap_or(summary.evaluated_samples),
+                            samples_total: summary.total_samples,
+                        },
+                    ));
+                    self.status = RunStatus::Skipped;
+                } else {
+                    events.emit(RunEvent::new(self.run_id.clone(), RunEventKind::Completed));
+                    self.status = RunStatus::Completed;
+                }
                 Ok(summary)
             }
             Err(error) => {
@@ -253,6 +284,7 @@ mod tests {
             run_id: run_id.clone(),
             status: RunStatus::Completed,
             total_samples: 4,
+            processed_samples: None,
             evaluated_samples: 4,
             metrics: BTreeMap::new(),
             started_at: None,
@@ -326,6 +358,61 @@ mod tests {
         assert!(matches!(
             token.interrupt("stopped".to_string()),
             Err(TrainerError::Cancelled(_))
+        ));
+    }
+
+    #[test]
+    fn skip_token_round_trips_and_unblocks_pause() {
+        let token = CancelToken::new();
+        assert!(!token.is_skipped());
+        token.pause();
+        let waiter = token.clone();
+        let handle = std::thread::spawn(move || {
+            waiter.park_if_paused();
+            waiter.is_skipped() && !waiter.is_cancelled()
+        });
+        token.skip();
+        assert!(handle.join().expect("waiter"));
+        assert!(token.interrupt("after skip".to_string()).is_ok());
+    }
+
+    #[test]
+    fn cancel_wins_when_skip_is_also_requested() {
+        let token = CancelToken::new();
+        token.skip();
+        token.cancel();
+        assert!(matches!(
+            token.interrupt("stopped".to_string()),
+            Err(TrainerError::Cancelled(_))
+        ));
+    }
+
+    #[test]
+    fn skipped_run_emits_scorecard_then_skipped() {
+        let run_id = RunId("run-skip".to_string());
+        let mut control = ClosureRunControl::new(run_id.clone(), |_events, _cancel| {
+            let mut skipped = summary(&run_id, Some("sc-skip"));
+            skipped.status = RunStatus::Skipped;
+            skipped.processed_samples = Some(2);
+            skipped.evaluated_samples = 2;
+            skipped.total_samples = 8;
+            Ok(skipped)
+        });
+        let mut sink = CollectingEventSink::default();
+
+        let result = control.execute(&mut sink).expect("skip ok");
+        assert_eq!(result.status, RunStatus::Skipped);
+        assert_eq!(control.status(), RunStatus::Skipped);
+        assert!(matches!(
+            event_kinds(&sink).as_slice(),
+            [
+                RunEventKind::Running,
+                RunEventKind::ScorecardReady { .. },
+                RunEventKind::Skipped {
+                    samples_done: 2,
+                    samples_total: 8
+                }
+            ]
         ));
     }
 

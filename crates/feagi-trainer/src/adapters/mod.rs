@@ -7,8 +7,9 @@ pub mod tabular_csv;
 pub mod time_series;
 
 pub use image_folder_classification::{
-    scan_image_classification_root, ClassVoxel, ImageClassificationScan, ImageClassificationSchema,
-    ImageFolderClassificationAdapter, ImageFolderClassificationConfig,
+    scan_image_classification_root, ClassVoxel, ImageClassCount, ImageClassificationScan,
+    ImageClassificationSchema, ImageFolderClassificationAdapter, ImageFolderClassificationConfig,
+    SplitSampleStats,
 };
 pub use image_folder_segmentation::{
     ImageFolderSegmentationAdapter, ImageFolderSegmentationConfig, ImageLabelPair,

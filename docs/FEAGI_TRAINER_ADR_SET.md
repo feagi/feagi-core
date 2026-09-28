@@ -649,6 +649,69 @@ Trade-offs:
 
 ---
 
+## ADR-016: Scorecard History, Genome Evaluation Records, and Evolution Readiness
+
+### Status
+Accepted (2026-09-27)
+
+### Context
+
+Operators want a history of scorecards for one experiment and dataset, graphed over runs, where every point references the exact genome that produced it so the best result can be studied or reverted to. The same history must later feed evolutionary algorithms (selection, mutation, crossover) that improve a genome for an experiment.
+
+Three facts in the current system shape the design:
+
+- A desktop run executes against whatever brain is live in FEAGI; nothing rebuilds the brain before a protocol, so a score also reflects plasticity carried over from earlier runs.
+- Brain development uses an unseeded RNG (ADR-003), so reloading the same genome does not rebuild the same connectome.
+- The experiment genome document is overwritten by auto-save, and experiment checkpoints are a bounded ring (latest five, deduplicated), so neither can anchor long-lived history.
+
+### Decision
+
+**Unit of history is an individual, not a timeline.** Each completed protocol produces one `GenomeEvaluation` record: the content hash of the genome evaluated (the genotype), the protocol's scorecards, the comparability key, the fitness outcome, and lineage (origin, generation, parent genome hashes). Manually run genomes are generation 0 with no parents; a future evolutionary operator writes children with parents.
+
+**Inheritance is genome-only (Darwinian).** A child inherits its parent's genome, never its trained connectome. Learned connectome state is not part of lineage. Any future access by a genome to parents' trained data (for example a retrieval store) is a separate artifact, never copied into the genome or the lineage record.
+
+**Fresh development per protocol.** Before a scored protocol the brain is rebuilt from the genome under test, once at protocol start; train, validate, and test phases then run on that one brain. The genome snapshot is taken at that point, so the snapshot is exactly what was evaluated.
+
+**Fitness is the validation split.** Default fitness is the task template's primary metric (accuracy for classification) on the validation split. The test split is never used for selection, so it stays held out. Protocols without a validation phase, or whose validation phase was skipped or partial, are stored in history with no fitness value, are not plotted as fitness points, and are not eligible parents.
+
+**Fitness carries its repeat count.** Fitness records `n` and, when `n > 1`, the confidence interval from the N-seed repeat (ADR-012 `metric_stats`); each repeat is a fresh development, so the estimate includes developmental variance.
+
+**Comparability key.** Two evaluations are comparable only when all of these match: experiment, dataset asset id + version + content hash, evaluation protocol version, metric pack, reward policy, fitness split, fitness metric + objective, run-configuration hash (sample caps, class remap, encoder/decoder bindings, burst frequency), genome schema version, feagi-core version, and backend.
+
+**Snapshots are content-addressed and retained.** Genome snapshots are stored once per normalized content hash and kept until the operator deletes the history entry; they are independent of the checkpoint ring. The starting connectome is pinned only for runs the operator explicitly chooses to pin (exact reproduction/study); it is not stored per individual.
+
+**Placement.** The `GenomeEvaluation` contract lives in `feagi-evolutionary` (genotype + fitness + lineage belong together) and references Trainer scorecards by `ScorecardId`; `feagi-trainer` is unchanged. For feagi-desktop the host store is Composer only (authenticated experiment sessions, consistent with ADR-012). Headless/local stores are out of scope for the first version.
+
+### Consequences
+
+Positive:
+
+- A best result can be reverted to the exact genome evaluated; re-running it measures the same genotype.
+- The history is directly usable as an evolutionary population without migration.
+- Test-set scores remain an unbiased report of the selected genome.
+
+Trade-offs:
+
+- Rebuilding at protocol start adds development time to every scored protocol and resets the whole live brain, which also affects any embodiment controller attached to it.
+- Reverting a genome reproduces the genotype, not the identical connectome; exact reproduction requires an explicit connectome pin.
+- Runs without a validation phase contribute no fitness.
+
+### Alternatives Considered
+
+1. Timeline of one overwritten genome with scores attached (rejected: loses the genotype that produced each score; unusable as a population).
+2. Reuse the five-checkpoint ring as the snapshot store (rejected: parents and elites would be pruned).
+3. Select on the test split (rejected: the test set stops being held out after a few generations).
+4. Inherit trained connectomes (rejected: fitness would no longer measure the genome).
+5. Place the contract in `feagi-trainer` (rejected: lineage and fitness are genotype concerns; the Trainer stays an evaluator).
+
+### Implementation Notes
+
+- Contract: `feagi_evolutionary::evaluation::GenomeEvaluation` (schema version 1) with `validate()` enforcing lineage and fitness invariants.
+- Composer: content-addressed genome snapshot store, evaluation records, history query per comparability key, restore via the existing checkpoint revert.
+- Desktop: rebuild at protocol start, snapshot capture, scorecard attachment, optional connectome pin, history chart with study/revert.
+
+---
+
 ## ADR Approval Checklist
 
 Before implementation begins, confirm:

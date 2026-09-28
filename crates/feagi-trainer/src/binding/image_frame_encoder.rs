@@ -4,6 +4,8 @@
 //! [`ImageFrame`] into the sensory cache before encoding to neuron voxels. When
 //! `encoder_profile.segmentation_teacher` is set, also writes the sample mask onto the
 //! Object Segmentation Input IPU (`iseg`, W×H×C, Z = class). Ignore-label pixels are omitted.
+//! A class teacher (`encoder_profile.teacher`) is clamped on Train only; val/test write an
+//! empty teacher so the class IPU does not receive labels during evaluation.
 
 use std::time::Instant;
 
@@ -237,22 +239,8 @@ impl EncoderPlugin for ImageFrameEncoder {
             ));
         }
         if let Some(teacher) = &profile.teacher {
-            teacher.validate()?;
-            let class_id = match &sample.target {
-                Some(TypedTarget::Class { class_id, .. }) => *class_id,
-                Some(other) => {
-                    return Err(TrainerError::Config(format!(
-                        "image class teacher requires a class target, got {other:?}"
-                    )))
-                }
-                None => {
-                    return Err(TrainerError::Config(
-                        "image class teacher requires a labeled class target".to_string(),
-                    ))
-                }
-            };
             let teacher_arrays =
-                PopulationEncoder::class_teacher_voxels(class_id, teacher.class_count)?;
+                PopulationEncoder::encode_class_teacher(&sample.split, &sample.target, teacher)?;
             neurons.insert(
                 PopulationEncoder::misc_cortical_id(teacher.unit),
                 teacher_arrays,
@@ -303,7 +291,7 @@ impl EncoderPlugin for ImageFrameEncoder {
 mod tests {
     use super::*;
     use crate::binding::encoding_scheme::EncodingScheme;
-    use crate::binding::profile::SegmentationTeacherBinding;
+    use crate::binding::profile::{ClassTeacherBinding, SegmentationTeacherBinding};
     use crate::contracts::common::{DatasetVersionId, Modality, OutputType, SampleId, Split};
     use crate::contracts::ir_sample::SCHEMA_VERSION;
     use image::{ImageFormat, Rgb, RgbImage};
@@ -438,6 +426,72 @@ mod tests {
             .collect();
         voxels.sort_by_key(|v| (v.1, v.0, v.2));
         assert_eq!(voxels, vec![(0, 0, 0, 1.0), (1, 0, 2, 1.0), (1, 1, 1, 1.0)]);
+    }
+
+    fn class_sample(png: Vec<u8>, split: Split) -> IRSample {
+        IRSample {
+            schema_version: SCHEMA_VERSION,
+            sample_id: SampleId("s".to_string()),
+            dataset_version_id: DatasetVersionId("d".to_string()),
+            split,
+            modality: Modality::Image,
+            payload: Payload::Bytes(png),
+            target: Some(TypedTarget::Class {
+                class_id: 3,
+                label: None,
+            }),
+            output_type: OutputType::Class,
+            coordinate_frame: None,
+            timestamp: None,
+            metadata: BTreeMap::new(),
+        }
+    }
+
+    fn class_teacher_profile(width: u32, height: u32) -> EncoderBindingProfile {
+        let mut profile = vision_profile(width, height);
+        profile.teacher = Some(ClassTeacherBinding {
+            unit: 1,
+            cortical_area_id: "image_class_teacher".to_string(),
+            cortical_name: Some("Image Class Teacher IPU".to_string()),
+            class_count: 10,
+        });
+        profile
+    }
+
+    #[test]
+    fn class_teacher_on_train_writes_the_class_voxel() {
+        let profile = class_teacher_profile(2, 2);
+        let mut encoder = ImageFrameEncoder::new();
+        let frame = encoder
+            .encode(&class_sample(rgb_png(2, 2), Split::Train), &profile)
+            .expect("encode");
+        let teacher = frame
+            .get_neurons_of(&PopulationEncoder::misc_cortical_id(1))
+            .expect("teacher");
+        let voxels: Vec<_> = teacher
+            .iter()
+            .map(|n| {
+                (
+                    n.neuron_voxel_coordinate.x,
+                    n.neuron_voxel_coordinate.y,
+                    n.potential,
+                )
+            })
+            .collect();
+        assert_eq!(voxels, vec![(3, 0, 1.0)]);
+    }
+
+    #[test]
+    fn class_teacher_on_test_is_silent() {
+        let profile = class_teacher_profile(2, 2);
+        let mut encoder = ImageFrameEncoder::new();
+        let frame = encoder
+            .encode(&class_sample(rgb_png(2, 2), Split::Test), &profile)
+            .expect("encode");
+        let teacher = frame
+            .get_neurons_of(&PopulationEncoder::misc_cortical_id(1))
+            .expect("teacher");
+        assert_eq!(teacher.len(), 0);
     }
 
     #[test]

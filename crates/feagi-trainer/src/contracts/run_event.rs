@@ -20,6 +20,19 @@ use super::common::{RunId, ScorecardId};
 /// Wire/format version of the `RunEvent` contract.
 pub const SCHEMA_VERSION: u32 = 1;
 
+/// How many samples of one class were classified correctly.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassBreakdown {
+    /// Class id used by the decoder and the target.
+    pub class_id: u32,
+    /// Operator-facing class name. Digit labels are the digit text.
+    pub label: String,
+    /// Samples of this class whose prediction matched the target.
+    pub correct: u64,
+    /// Samples of this class in the scored set.
+    pub total: u64,
+}
+
 /// Whether a [`RunEventKind::MetricUpdate`] reports interim or final metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -84,6 +97,9 @@ pub enum RunEventKind {
         scope: MetricScope,
         /// Named metric values.
         metrics: BTreeMap<String, f64>,
+        /// Per-class correct counts. Empty for metric packs that are not classification.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        class_breakdown: Vec<ClassBreakdown>,
     },
     /// A `Scorecard` has been produced and persisted by the host.
     ScorecardReady {
@@ -92,6 +108,13 @@ pub enum RunEventKind {
     },
     /// The run finished successfully.
     Completed,
+    /// The operator ended the split after the current sample/tick.
+    Skipped {
+        /// Samples (or holds) submitted before the skip.
+        samples_done: u64,
+        /// Samples (or holds) planned for the split.
+        samples_total: u64,
+    },
     /// The run terminated with an error (includes cooperative cancellation).
     Failed {
         /// Human-readable failure description.
@@ -206,6 +229,7 @@ mod tests {
             RunEventKind::MetricUpdate {
                 scope: MetricScope::Aggregate,
                 metrics,
+                class_breakdown: Vec::new(),
             },
         );
         let failed = RunEvent::new(
@@ -219,6 +243,21 @@ mod tests {
             let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
             assert_eq!(event, restored);
         }
+    }
+
+    #[test]
+    fn skipped_event_round_trips() {
+        let event = RunEvent::new(
+            run_id(),
+            RunEventKind::Skipped {
+                samples_done: 12,
+                samples_total: 40,
+            },
+        );
+        let json = serde_json::to_string(&event).expect("serialize");
+        assert!(json.contains("\"type\":\"skipped\""));
+        let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(event, restored);
     }
 
     #[test]

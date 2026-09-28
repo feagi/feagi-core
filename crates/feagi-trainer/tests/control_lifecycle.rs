@@ -4,14 +4,16 @@
 //! This exercises the full ADR-011 seam a desktop/headless host uses: a host-supplied rollout
 //! closure runs a real rollout against a stub runtime (the only stubbed collaborator, per the
 //! project's mocking policy) and streams `Progress` / `MetricUpdate` events; the controller layers
-//! the run lifecycle (`Running` -> `ScorecardReady` -> `Completed`, or `Failed`) and manages
-//! status. Both the successful and cooperatively-cancelled paths are covered.
+//! the run lifecycle (`Running` -> `ScorecardReady` -> `Completed` / `Skipped`, or `Failed`) and
+//! manages status. Successful, skipped, and cooperatively-cancelled paths are covered.
 
 use std::collections::BTreeMap;
 
 use feagi_trainer::binding::encoding_scheme::{BinSpacing, EncodingScheme};
 use feagi_trainer::binding::profile::{DecoderBindingProfile, EncoderBindingProfile};
-use feagi_trainer::binding::{DecoderPlugin, EncoderPlugin, PainPleasureReward, StubFeagiRuntime};
+use feagi_trainer::binding::{
+    DecoderPlugin, EncoderPlugin, FeagiRuntime, PainPleasureReward, StubFeagiRuntime,
+};
 use feagi_trainer::contracts::common::{PluginId, Split};
 use feagi_trainer::contracts::ir_sample::Payload;
 use feagi_trainer::contracts::run_summary::SCHEMA_VERSION as RUN_SUMMARY_SCHEMA_VERSION;
@@ -266,4 +268,111 @@ fn controller_surfaces_cancellation_as_failed() {
     assert!(matches!(kinds.first(), Some(RunEventKind::Running)));
     assert!(matches!(kinds.last(), Some(RunEventKind::Failed { .. })));
     assert!(!kinds.iter().any(|k| matches!(k, RunEventKind::Completed)));
+}
+
+#[test]
+fn controller_skip_scores_seen_samples_and_emits_skipped() {
+    let run_id = RunId("run-ctrl-skip".to_string());
+    let scorecard_id = ScorecardId("sc-ctrl-skip".to_string());
+    let data = samples();
+
+    struct SkipAfterFirstStep {
+        inner: StubFeagiRuntime,
+        cancel: CancelToken,
+        stepped: bool,
+    }
+
+    impl FeagiRuntime for SkipAfterFirstStep {
+        type SensoryFrame = Vec<f64>;
+        type MotorFrame = Vec<f64>;
+
+        fn submit_sensory(&mut self, frame: Self::SensoryFrame) -> Result<(), TrainerError> {
+            self.inner.submit_sensory(frame)
+        }
+
+        fn submit_reward(
+            &mut self,
+            signals: &[feagi_trainer::binding::reward::RewardSignal],
+        ) -> Result<(), TrainerError> {
+            self.inner.submit_reward(signals)
+        }
+
+        fn step(&mut self, ticks: u32) -> Result<(), TrainerError> {
+            self.inner.step(ticks)?;
+            if !self.stepped {
+                self.stepped = true;
+                self.cancel.skip();
+            }
+            Ok(())
+        }
+
+        fn collect_motor(&mut self) -> Result<Option<Self::MotorFrame>, TrainerError> {
+            self.inner.collect_motor()
+        }
+    }
+
+    let rollout = {
+        let run_id = run_id.clone();
+        let scorecard_id = scorecard_id.clone();
+        move |events: &mut dyn RunEventSink,
+              cancel: &CancelToken|
+              -> Result<RunSummary, TrainerError> {
+            let mut runtime = SkipAfterFirstStep {
+                inner: StubFeagiRuntime::identity(),
+                cancel: cancel.clone(),
+                stepped: false,
+            };
+            let mut encoder = PassthroughEncoder;
+            let mut decoder = ArgmaxDecoder;
+            let reward = PainPleasureReward::new(0.9).unwrap();
+            let metric = ClassificationMetricPack::new();
+            let outcome = run_rollout_with_events(
+                &run_id,
+                &data,
+                &mut runtime,
+                &mut encoder,
+                &encoder_profile(),
+                &mut decoder,
+                &decoder_profile(),
+                &reward,
+                &metric,
+                &ExecutorConfig {
+                    ticks_per_sample: 2,
+                    silence_bursts: 0,
+                },
+                events,
+                cancel,
+            )?;
+            Ok(RunSummary {
+                scorecard_id: Some(scorecard_id.clone()),
+                ..outcome.summary
+            })
+        }
+    };
+
+    let mut control = ClosureRunControl::new(run_id, rollout);
+    let mut sink = CollectingEventSink::default();
+    let summary = control.execute(&mut sink).expect("skip ok");
+    assert_eq!(control.status(), RunStatus::Skipped);
+    assert_eq!(summary.status, RunStatus::Skipped);
+    assert_eq!(summary.processed_samples, Some(1));
+    assert_eq!(summary.evaluated_samples, 1);
+    assert_eq!(summary.total_samples, 3);
+    assert_eq!(summary.scorecard_id, Some(scorecard_id));
+    let kinds: Vec<&RunEventKind> = sink.events.iter().map(|e| &e.kind).collect();
+    assert!(matches!(kinds.first(), Some(RunEventKind::Running)));
+    assert!(matches!(
+        kinds.last(),
+        Some(RunEventKind::Skipped {
+            samples_done: 1,
+            samples_total: 3
+        })
+    ));
+    assert!(kinds
+        .iter()
+        .any(|k| matches!(k, RunEventKind::ScorecardReady { .. })));
+    assert!(!kinds.iter().any(|k| matches!(k, RunEventKind::Completed)));
+    assert!(!kinds
+        .iter()
+        .any(|k| matches!(k, RunEventKind::Failed { .. })));
 }

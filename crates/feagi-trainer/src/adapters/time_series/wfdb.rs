@@ -555,6 +555,7 @@ mod tests {
             presentation: crate::adapters::time_series::config::TimeSeriesPresentation::Snapshot,
             amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
+            max_samples: None,
             dataset_unit_range: None,
         }
     }

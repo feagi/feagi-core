@@ -3,7 +3,8 @@
 //! Population scheme: each `[0, 1]` feature fires one voxel at
 //! `(x = feature, y = 0, z = bin)` with P = 1.0. Value scheme writes each analog
 //! feature as graded P at `(x, 0, 0)` without clamping. ECG snapshot also holds
-//! the class on Misc B (unit from `encoder_profile.teacher`, `C × 1 × 1`, class on X).
+//! the class on Misc B (unit from `encoder_profile.teacher`, `C × 1 × 1`, class on X)
+//! during Train only. Val/test write a silent teacher so the class IPU stays empty.
 
 use feagi_sensorimotor::data_types::descriptors::MiscDataDimensions;
 use feagi_sensorimotor::data_types::MiscData;
@@ -18,8 +19,8 @@ use feagi_structures::neuron_voxels::xyzp::{
 
 use crate::binding::encoder::{EncoderPlugin, ObservationEncoder};
 use crate::binding::encoding_scheme::{BinSpacing, EncodingScheme};
-use crate::binding::profile::EncoderBindingProfile;
-use crate::contracts::common::{PluginId, PluginRef};
+use crate::binding::profile::{ClassTeacherBinding, EncoderBindingProfile};
+use crate::contracts::common::{PluginId, PluginRef, Split};
 use crate::contracts::ir_sample::{IRSample, Payload, TypedTarget};
 use crate::error::TrainerError;
 
@@ -95,6 +96,44 @@ impl PopulationEncoder {
             1,
             std::iter::once((class_id, 0u32, 0u32, 1.0_f32)),
         )
+    }
+
+    /// Empty `C × 1 × 1` teacher so FEAGI Absolute frame handling clears the last class.
+    pub fn silent_class_teacher_voxels(
+        class_count: u32,
+    ) -> Result<NeuronVoxelXYZPArrays, TrainerError> {
+        if class_count == 0 {
+            return Err(TrainerError::Config(
+                "class teacher requires class_count > 0".to_string(),
+            ));
+        }
+        Self::write_misc_volume(class_count, 1, 1, std::iter::empty())
+    }
+
+    /// Train clamps the labeled class. Val/test write a silent teacher; labels stay on the sample.
+    pub fn encode_class_teacher(
+        split: &Split,
+        target: &Option<TypedTarget>,
+        teacher: &ClassTeacherBinding,
+    ) -> Result<NeuronVoxelXYZPArrays, TrainerError> {
+        teacher.validate()?;
+        if !matches!(split, Split::Train) {
+            return Self::silent_class_teacher_voxels(teacher.class_count);
+        }
+        let class_id = match target {
+            Some(TypedTarget::Class { class_id, .. }) => *class_id,
+            Some(other) => {
+                return Err(TrainerError::Config(format!(
+                    "class teacher requires a class target, got {other:?}"
+                )))
+            }
+            None => {
+                return Err(TrainerError::Config(
+                    "class teacher requires a labeled class target".to_string(),
+                ))
+            }
+        };
+        Self::class_teacher_voxels(class_id, teacher.class_count)
     }
 
     /// Linear inverted Z: value 1.0 → z 0; value 0.0 → z bins-1.
@@ -223,27 +262,8 @@ impl EncoderPlugin for PopulationEncoder {
         };
         let mut frame = self.encode_features(features, profile)?;
         if let Some(teacher) = &profile.teacher {
-            teacher.validate()?;
-            let class_id = match &sample.target {
-                Some(TypedTarget::Class { class_id, .. }) => *class_id,
-                Some(other) => {
-                    return Err(TrainerError::Config(format!(
-                        "snapshot class teacher requires a class target, got {other:?}"
-                    )))
-                }
-                None => {
-                    return Err(TrainerError::Config(
-                        "snapshot class teacher requires a labeled class target".to_string(),
-                    ))
-                }
-            };
-            if class_id >= teacher.class_count {
-                return Err(TrainerError::Config(format!(
-                    "class id {class_id} is outside teacher class_count {}",
-                    teacher.class_count
-                )));
-            }
-            let teacher_arrays = Self::class_teacher_voxels(class_id, teacher.class_count)?;
+            let teacher_arrays =
+                Self::encode_class_teacher(&sample.split, &sample.target, teacher)?;
             frame.insert(Self::misc_cortical_id(teacher.unit), teacher_arrays);
         }
         Ok(frame)
@@ -402,6 +422,49 @@ mod tests {
             })
             .collect();
         assert_eq!(voxels, vec![(2, 0, 1.0)]);
+    }
+
+    #[test]
+    fn test_split_writes_silent_class_teacher() {
+        use crate::binding::profile::ClassTeacherBinding;
+        use crate::contracts::common::{DatasetVersionId, Modality, OutputType, SampleId, Split};
+        use crate::contracts::ir_sample::SCHEMA_VERSION;
+        use std::collections::BTreeMap;
+
+        let mut profile = profile(2, 1);
+        profile.teacher = Some(ClassTeacherBinding {
+            unit: 1,
+            cortical_area_id: "misc_input_teacher".to_string(),
+            cortical_name: Some("ECG Class Teacher IPU".to_string()),
+            class_count: 5,
+        });
+        let sample = IRSample {
+            schema_version: SCHEMA_VERSION,
+            sample_id: SampleId("s".to_string()),
+            dataset_version_id: DatasetVersionId("d".to_string()),
+            split: Split::Test,
+            modality: Modality::TimeSeries,
+            payload: Payload::TimeSeries {
+                sample_rate_hz: 360.0,
+                channel_ids: vec!["lead_0".to_string()],
+                samples: vec![1.0, 0.0],
+                hold_ends: None,
+            },
+            target: Some(TypedTarget::Class {
+                class_id: 2,
+                label: None,
+            }),
+            output_type: OutputType::Class,
+            coordinate_frame: None,
+            timestamp: None,
+            metadata: BTreeMap::new(),
+        };
+        let mut encoder = PopulationEncoder::new();
+        let frame = encoder.encode(&sample, &profile).expect("encode");
+        let teacher = frame
+            .get_neurons_of(&PopulationEncoder::misc_cortical_id(1))
+            .expect("teacher");
+        assert_eq!(teacher.len(), 0);
     }
 
     #[test]

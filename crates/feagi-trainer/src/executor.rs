@@ -45,8 +45,8 @@ use crate::contracts::scorecard::SCHEMA_VERSION as SCORECARD_SCHEMA_VERSION;
 use crate::contracts::TypedPrediction;
 use crate::contracts::{
     BackendFingerprint, ContentHash, DatasetAssetId, IRSample, PredictionRecord, RunId, RunSpec,
-    RunStatus, RunSummary, SampleId, Scorecard, ScorecardId, ScorecardStatus, ScorecardVisibility,
-    Split,
+    RunStatus, RunSummary, SampleId, Scorecard, ScorecardId, ScorecardSkip, ScorecardStatus,
+    ScorecardVisibility, Split,
 };
 use crate::contracts::{MetricScope, RunEvent, RunEventKind};
 use crate::control::{CancelToken, NoopEventSink, RunEventSink};
@@ -97,6 +97,17 @@ pub(crate) fn evaluate_or_empty<M: MetricPackPlugin>(
         return Ok(empty_metric_result());
     }
     metric_pack.evaluate(predictions, targets)
+}
+
+/// Per-class correct counts for a classification result. Other metric packs emit none.
+pub(crate) fn class_breakdown_event(
+    result: &MetricResult,
+    targets: &[crate::contracts::TypedTarget],
+) -> Vec<crate::contracts::ClassBreakdown> {
+    match &result.confusion {
+        Some(matrix) => crate::metrics::classification::class_breakdown_rows(matrix, targets),
+        None => Vec::new(),
+    }
 }
 
 /// Emits a non-fatal warning that no OPU detection frame arrived for `sample_id`.
@@ -294,7 +305,8 @@ where
 /// by the [`RunControl`](crate::control::RunControl) layer, not this function.
 ///
 /// Cancellation is checked at the top of each sample iteration; if requested the loop stops
-/// immediately with [`TrainerError::Cancelled`] and does not partially score.
+/// immediately with [`TrainerError::Cancelled`] and does not partially score. A skip request
+/// finishes the in-flight sample (or silence gap), then scores the samples already seen.
 ///
 /// # Errors
 /// Returns the first [`TrainerError`] raised by any stage, or [`TrainerError::Cancelled`] if a
@@ -333,9 +345,13 @@ where
     // Labeled detections that produced a motor frame (aligned by construction).
     let mut scored_predictions = Vec::new();
     let mut scored_targets = Vec::new();
+    let mut processed_samples = 0u64;
 
     for index in 0..samples.visit_count() {
         cancel.interrupt(format!("stopped after {index} of {total_samples} samples"))?;
+        if cancel.is_skipped() {
+            break;
+        }
         let sample = samples.load_visit(index)?;
 
         let frame = encoder.encode(&sample, encoder_profile)?;
@@ -393,11 +409,16 @@ where
 
         // Gap before the next item. No sensory frame is submitted, so these bursts carry
         // no new injection. Omitted after the last sample.
+        processed_samples += 1;
+
         if config.silence_bursts > 0 && index + 1 < samples.visit_count() {
             cancel.interrupt(format!(
                 "stopped after {} of {total_samples} samples",
                 index + 1
             ))?;
+            if cancel.is_skipped() {
+                break;
+            }
             runtime.step(config.silence_bursts)?;
         }
     }
@@ -408,22 +429,19 @@ where
         run_id.clone(),
         RunEventKind::MetricUpdate {
             scope: MetricScope::Aggregate,
+            class_breakdown: class_breakdown_event(&metric_result, &scored_targets),
             metrics: metric_result.metrics.clone(),
         },
     ));
 
-    let summary = RunSummary {
-        schema_version: RUN_SUMMARY_SCHEMA_VERSION,
-        run_id: run_id.clone(),
-        status: RunStatus::Completed,
+    let summary = rollout_summary(
+        run_id,
         total_samples,
-        evaluated_samples: scored_predictions.len() as u64,
-        metrics: metric_result.metrics.clone(),
-        started_at: None,
-        completed_at: None,
-        scorecard_id: None,
-        metadata: BTreeMap::new(),
-    };
+        processed_samples,
+        scored_predictions.len() as u64,
+        metric_result.metrics.clone(),
+        cancel.is_skipped() && processed_samples < total_samples,
+    );
 
     Ok(RolloutOutcome {
         summary,
@@ -444,7 +462,7 @@ pub fn assemble_scorecard(
     metrics: &BTreeMap<String, f64>,
     provenance: ScorecardProvenance,
 ) -> Scorecard {
-    assemble_scorecard_inner(run_spec, metrics, None, provenance)
+    assemble_scorecard_inner(run_spec, metrics, None, None, provenance)
 }
 
 /// Assembles a [`Scorecard`] for an N-seed repeated run.
@@ -459,7 +477,17 @@ pub fn assemble_scorecard_with_stats(
     metric_stats: BTreeMap<String, crate::contracts::MetricStat>,
     provenance: ScorecardProvenance,
 ) -> Scorecard {
-    assemble_scorecard_inner(run_spec, metrics, Some(metric_stats), provenance)
+    assemble_scorecard_inner(run_spec, metrics, Some(metric_stats), None, provenance)
+}
+
+/// Same as [`assemble_scorecard`] with skip facts when the operator ended the split early.
+pub fn assemble_scorecard_with_skip(
+    run_spec: &RunSpec,
+    metrics: &BTreeMap<String, f64>,
+    skip: Option<ScorecardSkip>,
+    provenance: ScorecardProvenance,
+) -> Scorecard {
+    assemble_scorecard_inner(run_spec, metrics, None, skip, provenance)
 }
 
 /// Shared pure mapping for both the single-run and repeated-run scorecard assemblers.
@@ -467,6 +495,7 @@ fn assemble_scorecard_inner(
     run_spec: &RunSpec,
     metrics: &BTreeMap<String, f64>,
     metric_stats: Option<BTreeMap<String, crate::contracts::MetricStat>>,
+    skip: Option<ScorecardSkip>,
     provenance: ScorecardProvenance,
 ) -> Scorecard {
     Scorecard {
@@ -486,8 +515,55 @@ fn assemble_scorecard_inner(
         metric_stats,
         status: provenance.status,
         visibility: provenance.visibility,
+        skip,
         metadata: BTreeMap::new(),
     }
+}
+
+/// Builds a terminal summary. `skipped` is true only when the operator ended the split early.
+pub(crate) fn rollout_summary(
+    run_id: &RunId,
+    total_samples: u64,
+    processed_samples: u64,
+    evaluated_samples: u64,
+    metrics: BTreeMap<String, f64>,
+    skipped: bool,
+) -> RunSummary {
+    RunSummary {
+        schema_version: RUN_SUMMARY_SCHEMA_VERSION,
+        run_id: run_id.clone(),
+        status: if skipped {
+            RunStatus::Skipped
+        } else {
+            RunStatus::Completed
+        },
+        total_samples,
+        processed_samples: if skipped {
+            Some(processed_samples)
+        } else {
+            None
+        },
+        evaluated_samples,
+        metrics,
+        started_at: None,
+        completed_at: None,
+        scorecard_id: None,
+        metadata: BTreeMap::new(),
+    }
+}
+
+/// Scorecard skip facts copied from a skipped [`RunSummary`].
+pub fn scorecard_skip_from_summary(summary: &RunSummary) -> Option<ScorecardSkip> {
+    if summary.status != RunStatus::Skipped {
+        return None;
+    }
+    Some(ScorecardSkip {
+        samples_planned: summary.total_samples,
+        samples_done: summary
+            .processed_samples
+            .unwrap_or(summary.evaluated_samples),
+        evaluated_samples: summary.evaluated_samples,
+    })
 }
 
 /// Tuning knobs for one closed-loop control rollout (plan Phase 1d).
@@ -663,6 +739,7 @@ where
         status: RunStatus::Completed,
         // For control runs a "sample" is an episode.
         total_samples: episodes.len() as u64,
+        processed_samples: None,
         evaluated_samples: episodes.len() as u64,
         metrics: metric_result.metrics.clone(),
         started_at: None,
@@ -1180,9 +1257,14 @@ mod tests {
         assert_eq!(progress, vec![1, 2, 3]);
 
         match sink.events.last().map(|e| &e.kind) {
-            Some(RunEventKind::MetricUpdate { scope, metrics }) => {
+            Some(RunEventKind::MetricUpdate {
+                scope,
+                metrics,
+                class_breakdown,
+            }) => {
                 assert_eq!(*scope, MetricScope::Aggregate);
                 assert!((metrics["accuracy"] - 1.0).abs() < 1e-12);
+                assert_eq!(class_breakdown.len(), 3);
             }
             other => panic!("expected trailing aggregate MetricUpdate, got {other:?}"),
         }
@@ -1226,6 +1308,91 @@ mod tests {
         // No samples were stepped or scored before the stop.
         assert_eq!(runtime.burst_count(), 0);
         assert!(sink.events.is_empty());
+    }
+
+    #[test]
+    fn rollout_with_events_scores_seen_samples_on_skip() {
+        use crate::control::CollectingEventSink;
+
+        struct SkipAfterFirstStep {
+            inner: StubFeagiRuntime,
+            cancel: CancelToken,
+            stepped: bool,
+        }
+
+        impl FeagiRuntime for SkipAfterFirstStep {
+            type SensoryFrame = Vec<f64>;
+            type MotorFrame = Vec<f64>;
+
+            fn submit_sensory(&mut self, frame: Self::SensoryFrame) -> Result<(), TrainerError> {
+                self.inner.submit_sensory(frame)
+            }
+
+            fn submit_reward(
+                &mut self,
+                signals: &[crate::binding::reward::RewardSignal],
+            ) -> Result<(), TrainerError> {
+                self.inner.submit_reward(signals)
+            }
+
+            fn step(&mut self, ticks: u32) -> Result<(), TrainerError> {
+                self.inner.step(ticks)?;
+                if !self.stepped {
+                    self.stepped = true;
+                    self.cancel.skip();
+                }
+                Ok(())
+            }
+
+            fn collect_motor(&mut self) -> Result<Option<Self::MotorFrame>, TrainerError> {
+                self.inner.collect_motor()
+            }
+        }
+
+        let samples = vec![
+            one_hot_sample(0, 0, 3),
+            one_hot_sample(1, 1, 3),
+            one_hot_sample(2, 2, 3),
+        ];
+        let cancel = CancelToken::new();
+        let mut runtime = SkipAfterFirstStep {
+            inner: StubFeagiRuntime::identity(),
+            cancel: cancel.clone(),
+            stepped: false,
+        };
+        let mut encoder = PassthroughEncoder;
+        let mut decoder = ArgmaxDecoder;
+        let reward = PainPleasureReward::new(0.8).unwrap();
+        let metric = ClassificationMetricPack::new();
+        let mut sink = CollectingEventSink::default();
+
+        let outcome = run_rollout_with_events(
+            &RunId("run-skip".to_string()),
+            &samples,
+            &mut runtime,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &config(),
+            &mut sink,
+            &cancel,
+        )
+        .expect("skip scores");
+
+        assert_eq!(outcome.summary.status, RunStatus::Skipped);
+        assert_eq!(outcome.summary.total_samples, 3);
+        assert_eq!(outcome.summary.processed_samples, Some(1));
+        assert_eq!(outcome.summary.evaluated_samples, 1);
+        assert_eq!(outcome.predictions.len(), 1);
+        assert!((outcome.metric_result.metrics["accuracy"] - 1.0).abs() < 1e-12);
+        assert_eq!(runtime.inner.burst_count(), 4);
+        let skip = scorecard_skip_from_summary(&outcome.summary).expect("skip facts");
+        assert_eq!(skip.samples_planned, 3);
+        assert_eq!(skip.samples_done, 1);
+        assert_eq!(skip.evaluated_samples, 1);
     }
 
     #[test]
@@ -1541,5 +1708,36 @@ mod tests {
         assert!((card.metrics["accuracy"] - 0.75).abs() < 1e-12);
         assert_eq!(card.status, ScorecardStatus::SelfReported);
         assert_eq!(card.visibility, ScorecardVisibility::Local);
+        assert_eq!(card.skip, None);
+    }
+
+    #[test]
+    fn assemble_scorecard_with_skip_stamps_skip_facts() {
+        let run_spec = iris_run_spec();
+        let mut metrics = BTreeMap::new();
+        metrics.insert("accuracy".to_string(), 0.5);
+        let provenance = ScorecardProvenance {
+            scorecard_id: ScorecardId("sc-skip".to_string()),
+            dataset_asset_id: DatasetAssetId("local:iris".to_string()),
+            dataset_version: "1.0.0".to_string(),
+            dataset_content_hash: ContentHash("sha256:abc".to_string()),
+            backend_fingerprint: BackendFingerprint {
+                backend: BackendKind::Cpu,
+                descriptor: "stub-cpu".to_string(),
+                quantization: None,
+                trainer_version: env!("CARGO_PKG_VERSION").to_string(),
+                feagi_core_version: "0.0.12".to_string(),
+            },
+            status: ScorecardStatus::SelfReported,
+            visibility: ScorecardVisibility::Local,
+        };
+        let skip = ScorecardSkip {
+            samples_planned: 30,
+            samples_done: 8,
+            evaluated_samples: 8,
+        };
+        let card =
+            assemble_scorecard_with_skip(&run_spec, &metrics, Some(skip.clone()), provenance);
+        assert_eq!(card.skip, Some(skip));
     }
 }

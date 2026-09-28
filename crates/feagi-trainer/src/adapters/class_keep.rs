@@ -88,6 +88,30 @@ pub fn apply_class_keep_percents(
     Ok(kept)
 }
 
+/// Keeps the first `max_samples` items in encounter order. `None` keeps all.
+pub fn apply_max_samples<T>(
+    samples: Vec<T>,
+    max_samples: Option<u64>,
+) -> Result<Vec<T>, TrainerError> {
+    let Some(max) = max_samples else {
+        return Ok(samples);
+    };
+    if max == 0 {
+        return Err(TrainerError::Config(
+            "max_samples must be greater than zero when set".to_string(),
+        ));
+    }
+    if samples.is_empty() {
+        return Err(TrainerError::Parse(
+            "max_samples cannot be applied to an empty sample list".to_string(),
+        ));
+    }
+    let keep = (max as usize).min(samples.len());
+    let mut kept = samples;
+    kept.truncate(keep);
+    Ok(kept)
+}
+
 fn class_label(sample: &IRSample) -> Result<String, TrainerError> {
     match &sample.target {
         Some(TypedTarget::Class {
@@ -183,5 +207,27 @@ mod tests {
             .map(|sample| class_label(sample).expect("label"))
             .collect();
         assert_eq!(labels, vec!["N", "V"]);
+    }
+
+    #[test]
+    fn max_samples_keeps_prefix() {
+        let samples = vec![sample("N", 0), sample("V", 1), sample("N", 0)];
+        let kept = apply_max_samples(samples, Some(2)).expect("cap");
+        assert_eq!(kept.len(), 2);
+        assert_eq!(class_label(&kept[0]).expect("label"), "N");
+        assert_eq!(class_label(&kept[1]).expect("label"), "V");
+    }
+
+    #[test]
+    fn max_samples_none_keeps_all() {
+        let samples = vec![sample("N", 0), sample("V", 1)];
+        let kept = apply_max_samples(samples.clone(), None).expect("all");
+        assert_eq!(kept.len(), 2);
+    }
+
+    #[test]
+    fn max_samples_zero_is_error() {
+        let err = apply_max_samples(vec![sample("N", 0)], Some(0)).expect_err("zero");
+        assert!(err.to_string().contains("greater than zero"));
     }
 }

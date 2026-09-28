@@ -62,7 +62,11 @@ pub struct SerializableLongTermMemoryNeuron {
     #[serde(default)]
     pub class_channels: Vec<u32>,
     /// Associative weight of each bound class channel.
-    #[serde(default)]
+    ///
+    /// Schema v1 bincode is positional and immutable. This field is omitted
+    /// from that layout. Connectome I/O stores non-empty weights in metadata
+    /// tag `ltm_class_channel_weights_v1`.
+    #[serde(skip)]
     pub class_channel_weights: Vec<(u32, f32)>,
 }
 

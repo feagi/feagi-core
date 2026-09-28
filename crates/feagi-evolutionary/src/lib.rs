@@ -32,6 +32,7 @@ feagi-evo (Genotype)        feagi-bdu (Phenotype)
 ## Modules
 
 - `genome` - Genome I/O and validation
+- `evaluation` - `GenomeEvaluation` records: fitness + genome-only lineage (ADR-016)
 - `evolution` - Evolution operators (future)
 - `fitness` - Fitness evaluation (future)
 - `population` - Population management (future)
@@ -49,6 +50,7 @@ pub mod converter_flat;
 pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
 pub mod cortical_type_parser;
+pub mod evaluation;
 pub mod genome;
 pub mod plasticity_detector;
 pub mod random;
@@ -66,6 +68,11 @@ pub use converter_flat::convert_flat_to_hierarchical;
 pub use converter_flat_full::convert_flat_to_hierarchical_full;
 pub use converter_hierarchical_to_flat::convert_hierarchical_to_flat;
 pub use cortical_type_parser::{parse_cortical_type, validate_cortical_type};
+pub use evaluation::{
+    ComparabilityKey, ConfidenceInterval, EvaluationError, EvaluationId, ExperimentId,
+    FitnessEstimate, FitnessObjective, FitnessOutcome, FitnessSpec, GenomeEvaluation, GenomeOrigin,
+    Lineage,
+};
 pub use genome::parser::string_to_cortical_id;
 pub use genome::{
     apply_genome_title_to_unique_top_circuit, decode_genome_artifact, encode_genome_artifact,

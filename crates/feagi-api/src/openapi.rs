@@ -117,6 +117,7 @@ use crate::{
         crate::endpoints::system::get_processes,
         crate::endpoints::system::get_unique_logs,
         crate::endpoints::system::get_log_tail,
+        crate::endpoints::system::get_last_failed_mutation,
         crate::endpoints::system::post_logs,
         crate::endpoints::system::get_beacon_subscribers,
         crate::endpoints::system::post_beacon_subscribe,
@@ -533,6 +534,8 @@ use crate::{
             crate::endpoints::system::HealthCheckResponse,
             crate::endpoints::system::LogTailResponse,
             crate::endpoints::system::LogTailRecord,
+            crate::endpoints::system::LastFailedMutation,
+            crate::endpoints::system::LastFailedMutationResponse,
 
             // Cortical Area
             crate::endpoints::cortical_area::CorticalAreaIdListResponse,

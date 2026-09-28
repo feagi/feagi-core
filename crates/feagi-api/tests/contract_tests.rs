@@ -319,6 +319,7 @@ fn build_test_state() -> ApiState {
         amalgamation_state: ApiState::init_amalgamation_state(),
         genome_transition_lock,
         genome_transition_in_progress,
+        last_failed_mutation: ApiState::init_last_failed_mutation(),
         #[cfg(feature = "feagi-agent")]
         agent_handler: Some(ApiState::init_agent_registration_handler()),
     }
@@ -3101,6 +3102,140 @@ async fn test_genome_validate_minimal() {
 // ============================================================================
 // ERROR FORMAT TESTS
 // ============================================================================
+
+/// Build a multipart/form-data body with field `file`.
+fn multipart_file_body(boundary: &str, file_name: &str, file_bytes: &[u8]) -> Vec<u8> {
+    let mut body = Vec::with_capacity(file_bytes.len() + 256);
+    body.extend_from_slice(
+        format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(file_bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    body
+}
+
+#[tokio::test]
+async fn test_connectome_upload_accepts_payload_larger_than_axum_default_body_limit() {
+    let app = create_test_server().await;
+    let boundary = "----FEAGIConnectomeBoundary";
+    let oversized = vec![0u8; (2 * 1024 * 1024) + 1];
+    let request = Request::builder()
+        .uri("/v1/connectome/upload")
+        .method("POST")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(multipart_file_body(
+            boundary,
+            "oversize.connectome",
+            &oversized,
+        )))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_text = String::from_utf8_lossy(&body_bytes);
+
+    assert_ne!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "multipart connectome upload must not fail while buffering the body: {body_text}"
+    );
+    assert!(
+        !body_text.contains("Invalid multipart upload"),
+        "Axum default 2 MiB limit must not reject connectome multipart: status={status} body={body_text}"
+    );
+}
+
+#[tokio::test]
+async fn test_genome_upload_file_accepts_payload_larger_than_axum_default_body_limit() {
+    let app = create_test_server().await;
+    let boundary = "----FEAGIGenomeBoundary";
+    let oversized = vec![b'{'; (2 * 1024 * 1024) + 1];
+    let request = Request::builder()
+        .uri("/v1/genome/upload/file")
+        .method("POST")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(multipart_file_body(
+            boundary,
+            "oversize.genome",
+            &oversized,
+        )))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_text = String::from_utf8_lossy(&body_bytes);
+
+    assert_ne!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "multipart genome upload must not fail while buffering the body: {body_text}"
+    );
+    assert!(
+        !body_text.contains("Invalid multipart upload"),
+        "Axum default 2 MiB limit must not reject genome multipart: status={status} body={body_text}"
+    );
+}
+
+#[tokio::test]
+async fn test_last_failed_mutation_records_failed_connectome_upload() {
+    let app = create_test_server().await;
+    let boundary = "----FEAGIConnectomeBoundary";
+    let payload = b"not-a-valid-connectome";
+    let upload = Request::builder()
+        .uri("/v1/connectome/upload")
+        .method("POST")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .header("content-length", payload.len().to_string())
+        .body(Body::from(multipart_file_body(
+            boundary,
+            "bad.connectome",
+            payload,
+        )))
+        .unwrap();
+
+    let upload_response = app.clone().oneshot(upload).await.unwrap();
+    assert!(
+        upload_response.status().as_u16() >= 400,
+        "invalid connectome must fail so last_failed_mutation has a record"
+    );
+
+    let (status, body) = request_json(app, "GET", "/v1/system/last_failed_mutation", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let mutation = body
+        .get("mutation")
+        .expect("mutation field required")
+        .as_object()
+        .expect("mutation object expected after failed upload");
+    assert_eq!(mutation["method"], "POST");
+    assert_eq!(mutation["path"], "/v1/connectome/upload");
+    assert!(mutation["status"].as_u64().unwrap() >= 400);
+    assert!(
+        mutation
+            .get("content_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .contains("multipart/form-data"),
+        "content_type should capture multipart upload: {mutation:?}"
+    );
+}
 
 #[tokio::test]
 async fn test_error_format_consistency() {

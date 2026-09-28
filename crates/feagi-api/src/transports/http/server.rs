@@ -8,7 +8,7 @@
 
 use axum::{
     body::Body,
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::{Method, Request, StatusCode},
     middleware::{self, Next},
     response::{Html, IntoResponse, Json, Redirect, Response},
@@ -16,10 +16,11 @@ use axum::{
     Router,
 };
 use http_body_util::BodyExt;
+use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
@@ -77,6 +78,11 @@ pub struct ApiState {
     pub genome_transition_lock: Arc<tokio::sync::Mutex<()>>,
     /// Indicates whether a prioritized genome transition is currently in progress.
     pub genome_transition_in_progress: Arc<AtomicBool>,
+    /// Most recent failed mutating HTTP request (POST/PUT/PATCH/DELETE with status >= 400).
+    ///
+    /// Surfaced by `GET /v1/system/last_failed_mutation` so agents can diagnose
+    /// upload/body-limit failures without scraping process logs.
+    pub last_failed_mutation: Arc<Mutex<Option<crate::endpoints::system::LastFailedMutation>>>,
     /// Agent handler for device registrations and transport management
     #[cfg(feature = "feagi-agent")]
     pub agent_handler: Option<Arc<std::sync::Mutex<feagi_agent::server::FeagiAgentHandler>>>,
@@ -198,6 +204,12 @@ impl ApiState {
         )
     }
 
+    /// Empty slot for the last failed mutating API request.
+    pub fn init_last_failed_mutation(
+    ) -> Arc<Mutex<Option<crate::endpoints::system::LastFailedMutation>>> {
+        Arc::new(Mutex::new(None))
+    }
+
     /// Resolve the base directory for default on-disk API writes (e.g. genome save without `file_path`).
     ///
     /// - If `[system].data_dir` is set (including via **`FEAGI_DATA_DIR`**), returns that path as-is.
@@ -272,8 +284,12 @@ pub fn create_http_server(state: ApiState) -> Router {
 
         // Add middleware
         .layer(middleware::from_fn_with_state(
-            middleware_state,
+            middleware_state.clone(),
             reject_during_genome_transition,
+        ))
+        .layer(middleware::from_fn_with_state(
+            middleware_state,
+            record_failed_mutations,
         ))
         .layer(middleware::from_fn(log_request_response_bodies))
         .layer(create_cors_layer())
@@ -469,6 +485,10 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/system/processes", get(system::get_processes))
         .route("/system/unique_logs", get(system::get_unique_logs))
         .route("/system/log_tail", get(system::get_log_tail))
+        .route(
+            "/system/last_failed_mutation",
+            get(system::get_last_failed_mutation),
+        )
         .route("/system/logs", axum::routing::post(system::post_logs))
         .route(
             "/system/beacon/subscribers",
@@ -911,17 +931,22 @@ fn create_v1_router() -> Router<ApiState> {
             "/connectome/directory",
             get(connectome::get_connectome_directory),
         )
+        // Connectome artifacts routinely exceed Axum's default 2 MiB body
+        // limit. Leave size policy to connectome validation, not HTTP framing.
         .route(
             "/connectome/upload",
-            axum::routing::post(connectome::post_upload_connectome),
+            axum::routing::post(connectome::post_upload_connectome)
+                .layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/connectome/validate",
-            axum::routing::post(connectome::post_validate_connectome),
+            axum::routing::post(connectome::post_validate_connectome)
+                .layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/connectome/migrate",
-            axum::routing::post(connectome::post_migrate_connectome),
+            axum::routing::post(connectome::post_migrate_connectome)
+                .layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/connectome/upload-saved",
@@ -1065,7 +1090,10 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/genome/timestamp", get(genome::get_timestamp))
         .route("/genome/save", axum::routing::post(genome::post_save))
         .route("/genome/load", axum::routing::post(genome::post_load))
-        .route("/genome/upload", axum::routing::post(genome::post_upload))
+        .route(
+            "/genome/upload",
+            axum::routing::post(genome::post_upload).layer(DefaultBodyLimit::disable()),
+        )
         .route("/genome/download", get(genome::get_download))
         .route("/genome/properties", get(genome::get_properties))
         .route(
@@ -1103,23 +1131,27 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route(
             "/genome/amalgamation_by_payload",
-            axum::routing::post(genome::post_amalgamation_by_payload),
+            axum::routing::post(genome::post_amalgamation_by_payload)
+                .layer(DefaultBodyLimit::disable()),
         )
+        // Genome multipart / large JSON uploads exceed Axum's default 2 MiB body
+        // limit. Size policy stays with genome validation, not HTTP framing.
         .route(
             "/genome/amalgamation_by_upload",
-            axum::routing::post(genome::post_amalgamation_by_upload),
+            axum::routing::post(genome::post_amalgamation_by_upload)
+                .layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/genome/append-file",
-            axum::routing::post(genome::post_append_file),
+            axum::routing::post(genome::post_append_file).layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/genome/upload/file",
-            axum::routing::post(genome::post_upload_file),
+            axum::routing::post(genome::post_upload_file).layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/genome/upload/file/edit",
-            axum::routing::post(genome::post_upload_file_edit),
+            axum::routing::post(genome::post_upload_file_edit).layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/genome/upload/string",
@@ -1327,6 +1359,112 @@ fn create_cors_layer() -> CorsLayer {
         .allow_headers(Any)
 }
 
+/// Maximum characters retained from a failed mutation response body.
+const FAILED_MUTATION_ERROR_PREVIEW_CHARS: usize = 500;
+
+/// Paths that must never overwrite the last-failed-mutation slot.
+fn is_failed_mutation_excluded_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/v1/system/last_failed_mutation"
+            | "/v1/system/health_check"
+            | "/v1/system/readiness_check"
+            | "/v1/system/log_tail"
+    )
+}
+
+/// Extract a compact error string from a JSON API error body when present.
+fn error_message_from_response_body(bytes: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let message = value
+        .get("message")
+        .and_then(|v| v.as_str())
+        .or_else(|| value.get("error").and_then(|v| v.as_str()))?;
+    let trimmed = message.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let preview: String = trimmed
+        .chars()
+        .take(FAILED_MUTATION_ERROR_PREVIEW_CHARS)
+        .collect();
+    Some(preview)
+}
+
+/// Record the most recent failed mutating HTTP request for agent diagnostics.
+async fn record_failed_mutations(
+    State(state): State<ApiState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let method = request.method().clone();
+    let path = request.uri().path().to_string();
+    let content_type = request
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.to_string());
+    let content_length = request
+        .headers()
+        .get(axum::http::header::CONTENT_LENGTH)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
+
+    let response = next.run(request).await;
+
+    let is_mutation = matches!(
+        method,
+        Method::POST | Method::PUT | Method::PATCH | Method::DELETE
+    );
+    if !is_mutation || response.status().as_u16() < 400 || is_failed_mutation_excluded_path(&path) {
+        return response;
+    }
+
+    let status = response.status().as_u16();
+    let (parts, body) = response.into_parts();
+    let body_bytes = match body.collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => {
+            return Response::from_parts(parts, Body::empty());
+        }
+    };
+    let error_message = error_message_from_response_body(&body_bytes);
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0);
+
+    *state.last_failed_mutation.lock() = Some(crate::endpoints::system::LastFailedMutation {
+        method: method.as_str().to_string(),
+        path,
+        status,
+        content_type,
+        content_length,
+        error_message,
+        timestamp_ms,
+    });
+
+    Response::from_parts(parts, Body::from(body_bytes))
+}
+
+/// True when the request is a `multipart/form-data` upload.
+///
+/// Artifact endpoints (connectome/genome files) must keep the original body
+/// stream. Buffering them here duplicates large payloads and can hide the
+/// real upload size from later extractors.
+fn is_multipart_form_request(parts: &axum::http::request::Parts) -> bool {
+    parts
+        .headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|content_type| content_type.split(';').next())
+        .is_some_and(|media_type| {
+            media_type
+                .trim()
+                .eq_ignore_ascii_case("multipart/form-data")
+        })
+}
+
 /// Middleware to log request and response bodies for debugging
 async fn log_request_response_bodies(
     request: Request<Body>,
@@ -1336,30 +1474,26 @@ async fn log_request_response_bodies(
 
     // Only log bodies for POST/PUT/PATCH/DELETE requests
     let should_log_request = matches!(parts.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE");
+    let pass_through_body = !should_log_request || is_multipart_form_request(&parts);
 
-    let body_bytes = if should_log_request {
-        // Collect body bytes
+    let request = if pass_through_body {
+        Request::from_parts(parts, body)
+    } else {
         match body.collect().await {
             Ok(collected) => {
                 let bytes = collected.to_bytes();
-                // Log request body if it's JSON
                 if let Ok(body_str) = String::from_utf8(bytes.to_vec()) {
                     if !body_str.is_empty() {
                         tracing::trace!(target: "feagi-api", "Request body: {}", body_str);
                     }
                 }
-                bytes
+                Request::from_parts(parts, Body::from(bytes))
             }
             Err(_) => {
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
-    } else {
-        axum::body::Bytes::new()
     };
-
-    // Reconstruct request with original body
-    let request = Request::from_parts(parts, Body::from(body_bytes));
 
     // Call the next handler
     let response = next.run(request).await;

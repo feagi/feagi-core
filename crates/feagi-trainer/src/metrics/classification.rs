@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use crate::contracts::common::{PluginId, PluginRef};
-use crate::contracts::{TypedPrediction, TypedTarget};
+use crate::contracts::{ClassBreakdown, TypedPrediction, TypedTarget};
 use crate::error::TrainerError;
 use crate::plugins::{ClassMetrics, ConfusionMatrix, MetricPackPlugin, MetricResult};
 
@@ -42,6 +42,50 @@ impl ClassificationMetricPack {
             ))),
         }
     }
+}
+
+/// Per-class correct counts for the results view.
+///
+/// A class is included only when at least one scored target used it. The label is the first
+/// target label recorded for that class id. When a target has no label, the class id text is used.
+pub fn class_breakdown_rows(
+    matrix: &ConfusionMatrix,
+    targets: &[TypedTarget],
+) -> Vec<ClassBreakdown> {
+    let mut labels: BTreeMap<u32, String> = BTreeMap::new();
+    for target in targets {
+        if let TypedTarget::Class {
+            class_id,
+            label: Some(label),
+        } = target
+        {
+            if label.is_empty() {
+                continue;
+            }
+            labels.entry(*class_id).or_insert_with(|| label.clone());
+        }
+    }
+    matrix
+        .class_ids
+        .iter()
+        .enumerate()
+        .filter_map(|(index, class_id)| {
+            let total: u64 = matrix.counts[index].iter().sum();
+            if total == 0 {
+                return None;
+            }
+            let correct = matrix.counts[index][index];
+            Some(ClassBreakdown {
+                class_id: *class_id,
+                label: labels
+                    .get(class_id)
+                    .cloned()
+                    .unwrap_or_else(|| class_id.to_string()),
+                correct,
+                total,
+            })
+        })
+        .collect()
 }
 
 impl MetricPackPlugin for ClassificationMetricPack {
@@ -199,6 +243,37 @@ mod tests {
         // row 1 (true=1): pred 0 -> 0, pred 1 -> 1
         assert_eq!(cm.counts[1], vec![0, 1]);
         assert!((result.metrics["accuracy"] - 2.0 / 3.0).abs() < 1e-12);
+        let rows = class_breakdown_rows(&cm, &targets);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].label, "0");
+        assert_eq!(rows[0].correct, 1);
+        assert_eq!(rows[0].total, 2);
+        assert_eq!(rows[1].label, "1");
+        assert_eq!(rows[1].correct, 1);
+        assert_eq!(rows[1].total, 1);
+    }
+
+    #[test]
+    fn class_breakdown_uses_target_labels() {
+        let pack = ClassificationMetricPack::new();
+        let preds = vec![class_pred(0), class_pred(3)];
+        let targets = vec![
+            TypedTarget::Class {
+                class_id: 0,
+                label: Some("cat".to_string()),
+            },
+            TypedTarget::Class {
+                class_id: 3,
+                label: Some("dog".to_string()),
+            },
+        ];
+        let result = pack.evaluate(&preds, &targets).expect("evaluate");
+        let rows = class_breakdown_rows(result.confusion.as_ref().expect("confusion"), &targets);
+        assert_eq!(rows[0].label, "cat");
+        assert_eq!(rows[0].correct, 1);
+        assert_eq!(rows[0].total, 1);
+        assert_eq!(rows[1].class_id, 3);
+        assert_eq!(rows[1].label, "dog");
     }
 
     #[test]

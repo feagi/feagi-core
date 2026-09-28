@@ -24,6 +24,8 @@ pub enum RunStatus {
     Running,
     /// Finished successfully.
     Completed,
+    /// Operator ended the split after the current sample/tick; remaining samples were not run.
+    Skipped,
     /// Terminated with an error.
     Failed,
 }
@@ -39,6 +41,9 @@ pub struct RunSummary {
     pub status: RunStatus,
     /// Total samples planned for the run.
     pub total_samples: u64,
+    /// Samples submitted to FEAGI. Present only when the run was skipped before the plan finished.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub processed_samples: Option<u64>,
     /// Samples actually evaluated.
     pub evaluated_samples: u64,
     /// Aggregate metric values (deterministically ordered).
@@ -65,6 +70,7 @@ mod tests {
             run_id: RunId("run-0001".to_string()),
             status: RunStatus::Completed,
             total_samples: 30,
+            processed_samples: None,
             evaluated_samples: 30,
             metrics,
             started_at: Some(1_000),
@@ -83,6 +89,27 @@ mod tests {
     fn json_round_trip_preserves_summary() {
         let value = summary();
         let json = serde_json::to_string(&value).expect("serialize");
+        let restored: RunSummary = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(value, restored);
+    }
+
+    #[test]
+    fn processed_samples_is_omitted_when_absent() {
+        let json = serde_json::to_string(&summary()).expect("serialize");
+        assert!(!json.contains("processed_samples"));
+        let restored: RunSummary = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.processed_samples, None);
+    }
+
+    #[test]
+    fn skipped_status_round_trips_with_processed_count() {
+        let mut value = summary();
+        value.status = RunStatus::Skipped;
+        value.processed_samples = Some(12);
+        value.evaluated_samples = 10;
+        let json = serde_json::to_string(&value).expect("serialize");
+        assert!(json.contains("\"skipped\""));
+        assert!(json.contains("\"processed_samples\":12"));
         let restored: RunSummary = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(value, restored);
     }

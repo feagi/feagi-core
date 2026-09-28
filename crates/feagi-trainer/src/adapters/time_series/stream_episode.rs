@@ -222,6 +222,7 @@ mod tests {
             presentation: TimeSeriesPresentation::StreamInfer,
             amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
+            max_samples: None,
             dataset_unit_range: None,
         }
     }

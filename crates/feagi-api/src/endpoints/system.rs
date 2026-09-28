@@ -793,6 +793,54 @@ pub struct LogTailResponse {
     pub returned: usize,
 }
 
+/// Compact record of the most recent failed mutating HTTP request.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct LastFailedMutation {
+    /// HTTP method (`POST`, `PUT`, `PATCH`, or `DELETE`).
+    pub method: String,
+    /// Request path (for example `/v1/connectome/upload`).
+    pub path: String,
+    /// HTTP status code (>= 400).
+    pub status: u16,
+    /// Request `Content-Type` header when present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
+    /// Request `Content-Length` header when present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_length: Option<u64>,
+    /// Truncated API error message from the response body when parseable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+    /// Unix timestamp in milliseconds when the failure was recorded.
+    pub timestamp_ms: i64,
+}
+
+/// Response for `GET /v1/system/last_failed_mutation`.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct LastFailedMutationResponse {
+    /// Most recent failed mutation, or `null` when none have been recorded.
+    pub mutation: Option<LastFailedMutation>,
+}
+
+/// Return the most recent failed mutating API request for this FEAGI process.
+///
+/// Agents use this after an upload/load failure while health remains healthy:
+/// body-limit and multipart parse errors leave no useful signal in health_check.
+#[utoipa::path(
+    get,
+    path = "/v1/system/last_failed_mutation",
+    tag = "system",
+    responses(
+        (status = 200, description = "Last failed mutation or null", body = LastFailedMutationResponse)
+    )
+)]
+pub async fn get_last_failed_mutation(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<LastFailedMutationResponse>> {
+    let mutation = state.last_failed_mutation.lock().clone();
+    Ok(Json(LastFailedMutationResponse { mutation }))
+}
+
 /// Get a tail of recent log messages from FEAGI's in-process tracing ring buffer.
 ///
 /// Filters (all optional, AND'd together):

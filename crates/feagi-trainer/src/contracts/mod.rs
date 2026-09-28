@@ -30,9 +30,11 @@ pub use evaluation_spec::EvaluationSpec;
 pub use ir_sample::{CoordinateFrame, HoldEnd, IRSample, Payload, TypedTarget};
 pub use metric_stats::MetricStat;
 pub use prediction_record::{PredictionRecord, TypedPrediction};
-pub use run_event::{MetricScope, RunEvent, RunEventKind};
+pub use run_event::{ClassBreakdown, MetricScope, RunEvent, RunEventKind};
 pub use run_spec::{
     CoderBinding, ExecutionMode, PinnedBinding, RewardPolicyBinding, RunSpec, SamplerBinding,
 };
 pub use run_summary::{RunStatus, RunSummary};
-pub use scorecard::{BackendFingerprint, Scorecard, ScorecardStatus, ScorecardVisibility};
+pub use scorecard::{
+    BackendFingerprint, Scorecard, ScorecardSkip, ScorecardStatus, ScorecardVisibility,
+};

@@ -41,6 +41,17 @@ pub enum ScorecardStatus {
     Verified,
 }
 
+/// How much of the planned split was actually run when the operator skipped the rest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScorecardSkip {
+    /// Samples (or holds) the split planned to run.
+    pub samples_planned: u64,
+    /// Samples (or holds) submitted to FEAGI before the skip.
+    pub samples_done: u64,
+    /// Labeled detections that entered the metric pack.
+    pub evaluated_samples: u64,
+}
+
 /// Publication state of a scorecard (ADR-012).
 ///
 /// Scorecards are generated and stored locally by default. Publishing is a distinct,
@@ -120,6 +131,9 @@ pub struct Scorecard {
     pub status: ScorecardStatus,
     /// Publication state (Trainer emits `Local`; desktop/Composer may publish).
     pub visibility: ScorecardVisibility,
+    /// Present when the operator ended the split before every planned sample ran.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip: Option<ScorecardSkip>,
     /// Free-form, deterministically ordered metadata.
     pub metadata: MetadataMap,
 }
@@ -158,6 +172,7 @@ mod tests {
             metric_stats: None,
             status: ScorecardStatus::SelfReported,
             visibility: ScorecardVisibility::Local,
+            skip: None,
             metadata: BTreeMap::new(),
         }
     }
@@ -224,6 +239,29 @@ mod tests {
         card.metric_stats = Some(stats);
         let json = serde_json::to_string(&card).expect("serialize");
         assert!(json.contains("metric_stats"));
+        let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(card, restored);
+    }
+
+    #[test]
+    fn skip_is_omitted_when_absent() {
+        let card = iris_scorecard();
+        let json = serde_json::to_string(&card).expect("serialize");
+        assert!(!json.contains("\"skip\""));
+        let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.skip, None);
+    }
+
+    #[test]
+    fn skip_round_trips_when_present() {
+        let mut card = iris_scorecard();
+        card.skip = Some(ScorecardSkip {
+            samples_planned: 100,
+            samples_done: 12,
+            evaluated_samples: 12,
+        });
+        let json = serde_json::to_string(&card).expect("serialize");
+        assert!(json.contains("\"skip\""));
         let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(card, restored);
     }
