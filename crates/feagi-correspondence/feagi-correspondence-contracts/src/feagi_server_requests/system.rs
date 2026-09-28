@@ -8,6 +8,7 @@ template_request_category! {
     template: {
         category_name: "System",
         base_path: "system",
+        category_description: "FEAGI Server System Level Statuses",
         read: {
             "health_check": {
                 title: "HealthCheck",
@@ -18,7 +19,9 @@ template_request_category! {
                 request: [
                     "waffles": i32
                 ],
-                response: ["is_healthy": bool, "The current health status"],
+                response: [
+                    "is_healthy": bool, "The current health status"
+                ],
             }
         },
         create: {},
