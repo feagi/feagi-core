@@ -1,4 +1,5 @@
-use feagi_basis::feagi_macros::request_responses::template_request_category;
+#[cfg(feature = "feagi-server-requests")]
+use feagi_basis::feagi_macros::request_responses::{generate_from_template_request_response_structs_and_enums, template_request_category};
 
 
 template_request_category! {
@@ -21,3 +22,10 @@ template_request_category! {
         patch: {}
     }
 }
+
+/*
+generate_from_template_request_response_structs_and_enums! {
+    feagi_server_requests_system!()
+}
+
+ */

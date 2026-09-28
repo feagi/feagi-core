@@ -27,6 +27,9 @@ support_json = [
     "serde_json"
 ]
 
+# Structs describing requests to send to the feagi server, and their responses
+feagi-server-requests = []
+
 
 [dependencies]
 

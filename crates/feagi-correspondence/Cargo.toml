@@ -26,13 +26,18 @@ alloc = [
     "serde/alloc", "serde/derive", "serde_json/alloc",
 ]
 
+feagi-server-requests-rest = [
+    "feagi-correspondence-contracts/feagi-server-requests"
+]
+
 # Platform targets
 
 [dependencies]
 # Sub Crates
+feagi-correspondence-contracts = {path = "feagi-correspondence-contracts"}
 feagi-correspondence-serialization = {path = "feagi-correspondence-serialization"}
 feagi-correspondence-io = {path = "feagi-correspondence-io"}
-#feagi-correspondence-contracts = {path = "feagi-correspondence-contracts"}
+
 
 # Root Crates
 feagi-basis = {path = "../feagi-basis"}

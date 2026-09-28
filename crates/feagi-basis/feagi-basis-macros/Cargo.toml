@@ -21,9 +21,13 @@ enable_defmt = [
     "defmt"
 ]
 
+
 feagi_server_request_rest = [
+    "__feagi_request_response_macros",
     "feagi-macros-proc/request_response_ahkami_codegen"
 ]
+
+__feagi_request_response_macros = []
 
 [dependencies]
 

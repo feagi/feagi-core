@@ -1,4 +1,6 @@
 
 pub mod server;
 pub mod common;
-pub mod feagi_requests;
+
+#[cfg(feature = "feagi-server-requests")]
+pub mod feagi_server_requests;

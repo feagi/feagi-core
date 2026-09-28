@@ -19,9 +19,12 @@ pub mod prelude {
 
 }
 
+#[cfg(feature = "__feagi_request_response_macros")]
 pub mod request_responses {
     pub use feagi_macros_proc::template_request_category;
-    
+    pub use feagi_macros_proc::generate_from_template_request_response_structs_and_enums;
+
+    #[cfg(feature = "feagi_server_request_rest")]
     pub use feagi_macros_proc::generate_from_template_ohkami_rest_server;
     
 }

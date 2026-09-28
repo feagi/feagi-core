@@ -28,6 +28,42 @@ workspace = true
 
 [features]
 
+default = [
+    "std",
+]
+
+# Default setup for a computer running a Feagi Brain Server
+default_usecase_server_std = [
+    "std",
+    "feagi-brain-server",
+    "feagi-server-requests-rest"
+]
+
+
+
+std = [
+    "alloc",
+    "serde/std", "serde_json/std",
+]
+
+alloc = [
+    "serde_json",
+    "serde/alloc", "serde/derive", "serde_json/alloc",
+]
+
+# Functionality for FEAGI to run as a brain server
+feagi-brain-server = [
+
+]
+
+
+feagi-server-requests-rest = [
+    "feagi-brain-server",
+    "feagi-basis/feagi_server_requests_rest",
+    "feagi-correspondence/feagi-server-requests-rest"
+
+]
+
 # TODO
 
 
@@ -39,6 +75,11 @@ feagi-correspondence = {path = "crates/feagi-correspondence"}
 feagi-server = {path = "crates/feagi-server"}
 feagi-agent = {path = "crates/feagi-agent"}
 
+# External (always)
+serde = {workspace = true, default-features = false}
+
+# External (sometimes)
+serde_json = {workspace = true, optional = true, default-features = false}
 
 [dev-dependencies]
 
