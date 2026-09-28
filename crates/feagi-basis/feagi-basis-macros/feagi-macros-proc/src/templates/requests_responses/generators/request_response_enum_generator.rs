@@ -4,6 +4,7 @@ use crate::basis::{append_to_lit_str, lit_str_to_ident, prepend_to_lit_str, Gene
 use crate::templates::requests_responses::requests_responses_structs::{RequestResponseContract, TemplateRequestResponseCategory};
 
 
+
 pub struct EnumRequestResponseGenerator;
 
 impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestResponseGenerator {
@@ -15,6 +16,8 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
             response_struct: Option<syn::Ident>,
         };
 
+        
+        
         /// builds the structs and enum variants for the given request / responses (if relevant)
         fn process_template_types(category_name: &'static str,
                                   categories: &Vec<RequestResponseContract>,
@@ -24,7 +27,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
 
                 let request_struct: Option<syn::Ident>;
                 let response_struct: Option<syn::Ident>;
-                let struct_description = &category_request.description;
+                let category_description = &category_request.description;
 
                 let prefix_name = format!("{}{}", category_name, "Request");
                 let combo_struct_name = prepend_to_lit_str(prefix_name.as_str(), &category_request.title);
@@ -32,9 +35,9 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
                 let combo_path_request_struct = category_request.request
                     .make_combination_with(&category_request.path_parameters);
                 if !combo_path_request_struct.is_empty() {
-                    let combo_struct_tokens = combo_path_request_struct.generate_struct(&combo_struct_name);
+                    let combo_struct_tokens = combo_path_request_struct.generate_pub_struct(&combo_struct_name);
                     adding_stream.extend(quote! {
-                    #[doc = #struct_description]
+                    #[doc = #category_description]
                     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
                     #combo_struct_tokens
                 });
@@ -47,9 +50,9 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
                     let prefix_name = format!("{}{}", category_name, "Response");
                     let struct_name = prepend_to_lit_str(prefix_name.as_str(), &category_request.title);
                     let struct_name = lit_str_to_ident(&struct_name).unwrap(); // TODO error handling
-                    let struct_tokens = category_request.response.generate_struct(&struct_name);
+                    let struct_tokens = category_request.response.generate_pub_struct(&struct_name);
                     adding_stream.extend(quote! {
-                    #[doc = #struct_description]
+                    #[doc = #category_description]
                     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
                     #struct_tokens
                 });

@@ -82,12 +82,12 @@ impl StructParameters {
 
     /// Generate a basic struct source code output. Does not include comments or any metas
     ///
-    /// $struct_name {
+    /// pub $struct_name {
     ///     #[doc = $doc1]
     ///     field1: type1
     ///     ...
     /// }
-    pub fn generate_struct(&self, struct_name: &syn::Ident) -> proc_macro2::TokenStream {
+    pub fn generate_pub_struct(&self, struct_name: &syn::Ident) -> proc_macro2::TokenStream {
 
         let mut fields: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
 
@@ -98,6 +98,30 @@ impl StructParameters {
         quote! {
             
             pub struct #struct_name {
+                #fields
+            }
+            
+        }
+    }
+
+    /// Generate a basic struct source code output. Does not include comments or any metas
+    ///
+    /// $struct_name {
+    ///     #[doc = $doc1]
+    ///     field1: type1
+    ///     ...
+    /// }
+    pub fn generate_priv_struct(&self, struct_name: &syn::Ident) -> proc_macro2::TokenStream {
+
+        let mut fields: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
+
+        for field in &self.0 {
+            fields.extend(field.to_tokens());
+        }
+
+        quote! {
+            
+            struct #struct_name {
                 #fields
             }
             
