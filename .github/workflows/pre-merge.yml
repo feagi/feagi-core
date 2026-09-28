@@ -291,8 +291,8 @@ jobs:
         CRATE_ORDER=(
           feagi-observability feagi-structures feagi-config feagi-npu-neural
           feagi-npu-runtime feagi-serialization feagi-state-manager
-          feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary
-          feagi-brain-development feagi-dataset-contracts feagi-sensorimotor
+          feagi-npu-burst-engine feagi-npu-plasticity feagi-dataset-contracts
+          feagi-evolutionary feagi-brain-development feagi-sensorimotor
           feagi-services feagi-io feagi-agent feagi-trainer feagi-api feagi-hal feagi
         )
 

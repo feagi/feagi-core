@@ -154,7 +154,7 @@ jobs:
             echo "Failed to read [workspace.package] version from Cargo.toml"
             exit 1
           fi
-          CHANGED_CRATES="feagi-observability feagi-structures feagi-config feagi-npu-neural feagi-npu-runtime feagi-serialization feagi-state-manager feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary feagi-brain-development feagi-dataset-contracts feagi-sensorimotor feagi-services feagi-io feagi-agent feagi-trainer feagi-api feagi-hal feagi"
+          CHANGED_CRATES="feagi-observability feagi-structures feagi-config feagi-npu-neural feagi-npu-runtime feagi-serialization feagi-state-manager feagi-npu-burst-engine feagi-npu-plasticity feagi-dataset-contracts feagi-evolutionary feagi-brain-development feagi-sensorimotor feagi-services feagi-io feagi-agent feagi-trainer feagi-api feagi-hal feagi"
           echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "changed_crates=$CHANGED_CRATES" >> "$GITHUB_OUTPUT"
           echo "Publishing exact workspace version: $CURRENT (no sync, no bump)"
@@ -577,6 +577,12 @@ jobs:
         run: |
           chmod +x scripts/publish-crates-smart.sh
           ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-dataset-contracts
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-dataset-contracts
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
       - name: Publish feagi-evolutionary
         env:
           PUBLISH_SINGLE_CRATE: feagi-evolutionary
@@ -586,12 +592,6 @@ jobs:
       - name: Publish feagi-brain-development
         env:
           PUBLISH_SINGLE_CRATE: feagi-brain-development
-        run: |
-          chmod +x scripts/publish-crates-smart.sh
-          ./scripts/publish-crates-smart.sh
-      - name: Publish feagi-dataset-contracts
-        env:
-          PUBLISH_SINGLE_CRATE: feagi-dataset-contracts
         run: |
           chmod +x scripts/publish-crates-smart.sh
           ./scripts/publish-crates-smart.sh

@@ -49,10 +49,10 @@ CRATES=(
     "crates/feagi-npu/burst-engine"
     "crates/feagi-npu/plasticity"
     
-    # Layer 7: Evolutionary and development
+    # Layer 7: Dataset contracts, then evolutionary and development
+    "crates/feagi-dataset-contracts"
     "crates/feagi-evolutionary"
     "crates/feagi-brain-development"
-    "crates/feagi-dataset-contracts"
     
     # Layer 8: I/O Layer
     "crates/feagi-io"

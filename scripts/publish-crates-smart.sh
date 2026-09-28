@@ -92,9 +92,9 @@ CRATE_ORDER=(
     "feagi-state-manager"
     "feagi-npu-burst-engine"
     "feagi-npu-plasticity"
+    "feagi-dataset-contracts"
     "feagi-evolutionary"
     "feagi-brain-development"
-    "feagi-dataset-contracts"
     "feagi-sensorimotor"
     "feagi-services"
     "feagi-io"
@@ -204,9 +204,10 @@ should_publish_crate() {
 
 # ============================================================================
 # Validate all crates that will be published (cargo package) before any publish.
-# Uses crates.io resolution (no [patch.crates-io]) so validation matches the
-# tarball verification performed by `cargo package` / `cargo publish`.
-# Surfaces ALL packaging failures at once instead of failing mid-flow.
+# --no-verify: sibling crates at this version are not on crates.io yet.
+# `cargo package` without it resolves `=version` path deps from the index and
+# fails before the dependency-ordered publish can upload them.
+# The per-crate publish step still packages with verification after deps exist.
 # ============================================================================
 
 validate_all_packages() {
@@ -255,7 +256,7 @@ validate_all_packages() {
             cd "$crate_path"
         fi
         set +e
-        pkg_output="$(cargo package --allow-dirty --quiet 2>&1)"
+        pkg_output="$(cargo package --allow-dirty --no-verify --quiet 2>&1)"
         pkg_rc=$?
         set -e
         cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
