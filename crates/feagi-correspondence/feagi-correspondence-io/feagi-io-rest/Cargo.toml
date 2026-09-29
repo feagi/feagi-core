@@ -25,6 +25,8 @@ alloc = [
 
 [dependencies]
 
+# Sibling Crates
+feagi-io-basis = {path = "../feagi-io-basis"}
 
 
 # External crates

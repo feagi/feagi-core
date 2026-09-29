@@ -4,3 +4,4 @@
 pub mod errors;
 pub mod data_channel_pair;
 pub mod data_cycler;
+pub mod multi_request_channel;

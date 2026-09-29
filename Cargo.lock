@@ -550,6 +550,7 @@ dependencies = [
  "feagi-basis-quantization",
  "feagi-basis-sensiomotor",
  "flume",
+ "heapless 0.9.3",
  "paste",
  "rayon",
  "serde",
@@ -749,6 +750,7 @@ version = "0.1.1"
 name = "feagi-io-rest"
 version = "0.1.1"
 dependencies = [
+ "feagi-io-basis",
  "serde",
  "serde_json",
 ]

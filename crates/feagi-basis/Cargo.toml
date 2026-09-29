@@ -70,10 +70,11 @@ feagi-basis-sensiomotor = {path = "feagi-basis-sensiomotor"}
 paste = { workspace = true }
 ahash = { workspace = true}
 serde = { workspace = true}
+heapless = {workspace = true}
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 flume = {workspace = true, optional = true}
-# TODO Heapless Channel?
+
 
 [lints]
 workspace = true

@@ -1,41 +1,28 @@
+use ohkami::prelude::*;
+use ohkami::openapi;
 
+//region OpenAPI generation
+
+const SWAGGER_HTML: &str = include_str!("../../swagger_site/feagi-server.html");
+const SWAGGER_CSS: &[u8] = include_bytes!("../../swagger_site/swagger-ui.css");
+const SWAGGER_JS: &[u8] = include_bytes!("../../swagger_site/swagger-ui-bundle.js");
+
+
+
+
+
+
+// Import modules here that the async functions live within
+
+
+
+/*
 use ohkami::prelude::*;
 use ohkami::openapi;
 use feagi_basis::feagi_macros::request_responses::{
     generate_from_template_ohkami_rest_server,
     template_request_category,
 };
-
-// The `System` category contract. This is the single source the generator consumes.
-template_request_category! {
-    exported_macro_name: feagi_server_requests_system,
-    template: {
-        category_name: "System",
-        base_path: "system",
-        category_description: "System level endpoints for the FEAGI server",
-        async_functions_module: system_handlers,
-        read: {
-            "health_check": {
-                title: "HealthCheck",
-                description: "Checks current status of the FEAGI server",
-                path_parameters: [],
-                request: [],
-                response: ["status": String, "the current health status"],
-            },
-            "health_check2": {
-                title: "HealthCheck2",
-                description: "Checks current status of thdfgdfgdfge FEAGI server 2",
-                path_parameters: [],
-                request: [],
-                response: ["is_healthy": bool, "whether the FEAGI server is healthy"],
-            },
-        },
-        create: {},
-        edit: {},
-        delete: {},
-        patch: {}
-    }
-}
 
 // Ohkami structs, async handlers, and `create_system_ohkami()`.
 feagi_server_requests_system!(generate_from_template_ohkami_rest_server);
@@ -72,3 +59,6 @@ pub fn create_ohkami_server() -> Ohkami {
 pub fn generate_openapi_document(file_path: impl AsRef<std::path::Path>) {
     create_ohkami_server().generate_to(file_path, rest_openapi_metadata());
 }
+
+
+ */
