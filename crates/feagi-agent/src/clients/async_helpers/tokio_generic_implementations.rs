@@ -72,6 +72,30 @@ fn is_transient_zmq_publish_would_block(err: &FeagiNetworkError) -> bool {
     )
 }
 
+/// Consecutive sensory frames dropped because the transport stayed busy.
+///
+/// A peer that is gone (e.g. FEAGI restarted) keeps the socket busy on every
+/// publish, so logging each drop floods the log. The streak is logged when it
+/// starts and once more, with its length, when a publish gets through.
+#[derive(Debug, Default)]
+struct BusyDropStreak {
+    dropped: u64,
+}
+
+impl BusyDropStreak {
+    /// Count one drop. Returns true for the first drop of a streak.
+    fn record_drop(&mut self) -> bool {
+        self.dropped = self.dropped.saturating_add(1);
+        self.dropped == 1
+    }
+
+    /// End the streak. Returns its length when frames had been dropped.
+    fn record_publish(&mut self) -> Option<u64> {
+        let dropped = std::mem::take(&mut self.dropped);
+        (dropped > 0).then_some(dropped)
+    }
+}
+
 /// Bounded retry for ZMQ `DONTWAIT` / `EAGAIN` using [`TokioDriverConfig`] timing only.
 fn publish_sensor_payload_with_transient_retry(
     pusher: &mut dyn FeagiClientPusher,
@@ -100,11 +124,6 @@ fn publish_sensor_payload_with_transient_retry(
         }
     }
     if saw_would_block {
-        tracing::debug!(
-            target: "feagi_agent",
-            max_attempts,
-            "Sensory publish: transport busy after retries; frame dropped"
-        );
         return Ok(false);
     }
     Err(FeagiAgentError::Other(
@@ -144,6 +163,7 @@ pub struct TokioEmbodimentAgent {
     min_sensory_send_interval: Option<Duration>,
     last_sensor_payload_sent_at: Option<Instant>,
     capped_sensory_frame_count: u64,
+    busy_drop_streak: BusyDropStreak,
 }
 
 impl TokioEmbodimentAgent {
@@ -176,6 +196,7 @@ impl TokioEmbodimentAgent {
             min_sensory_send_interval: None,
             last_sensor_payload_sent_at: None,
             capped_sensory_frame_count: 0,
+            busy_drop_streak: BusyDropStreak::default(),
         }
     }
 
@@ -388,8 +409,21 @@ impl TokioEmbodimentAgent {
             publish_sensor_payload_with_transient_retry(pusher.as_mut(), payload, &self.driver)?;
         if sent {
             self.last_sensor_payload_sent_at = Some(now);
+            if let Some(dropped) = self.busy_drop_streak.record_publish() {
+                tracing::debug!(
+                    target: "feagi_agent",
+                    dropped,
+                    "Sensory publish: transport accepting again after dropping frames"
+                );
+            }
             Ok(SensoryPublishResult::Published)
         } else {
+            if self.busy_drop_streak.record_drop() {
+                tracing::debug!(
+                    target: "feagi_agent",
+                    "Sensory publish: transport busy after retries; dropping frames until it recovers"
+                );
+            }
             Ok(SensoryPublishResult::DroppedTransientBackpressure)
         }
     }
@@ -917,7 +951,7 @@ impl TokioEmbodimentAgent {
 
 #[cfg(test)]
 mod tests {
-    use super::transport_error_detail;
+    use super::{transport_error_detail, BusyDropStreak};
     use std::error::Error;
     use std::fmt;
 
@@ -953,5 +987,19 @@ mod tests {
         let detail = transport_error_detail(&err);
         assert!(detail.contains("error sending request"));
         assert!(detail.contains("operation timed out"), "detail={detail}");
+    }
+
+    #[test]
+    fn busy_drop_streak_reports_only_its_start_and_its_length() {
+        let mut streak = BusyDropStreak::default();
+        assert_eq!(streak.record_publish(), None);
+        assert!(streak.record_drop());
+        assert!(!streak.record_drop());
+        assert!(!streak.record_drop());
+        assert_eq!(streak.record_publish(), Some(3));
+        assert_eq!(streak.record_publish(), None);
+        // A new streak logs its start again.
+        assert!(streak.record_drop());
+        assert_eq!(streak.record_publish(), Some(1));
     }
 }

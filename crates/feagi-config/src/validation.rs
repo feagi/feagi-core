@@ -262,6 +262,14 @@ fn validate_value_ranges(config: &FeagiConfig, errors: &mut Vec<ConfigValidation
         });
     }
 
+    // Ordered audio ingest needs room for at least one frame per stream
+    if config.burst_engine.sequential_ingest_max_frames == 0 {
+        errors.push(ConfigValidationError::InvalidValue {
+            field: "burst_engine.sequential_ingest_max_frames".to_string(),
+            reason: "must be at least 1".to_string(),
+        });
+    }
+
     // Burst engine mode must be "inference" or "design"
     if config.burst_engine.mode != "inference" && config.burst_engine.mode != "design" {
         errors.push(ConfigValidationError::InvalidValue {
@@ -390,6 +398,18 @@ mod tests {
                 }
                 other => panic!("{bad} should be rejected, got {other:?}"),
             }
+        }
+    }
+
+    #[test]
+    fn test_sequential_ingest_depth_must_be_at_least_one() {
+        let mut config = FeagiConfig::default();
+        config.burst_engine.sequential_ingest_max_frames = 0;
+        match validate_config(&config) {
+            Err(ConfigError::ValidationError(msg)) => {
+                assert!(msg.contains("burst_engine.sequential_ingest_max_frames"))
+            }
+            other => panic!("0 should be rejected, got {other:?}"),
         }
     }
 

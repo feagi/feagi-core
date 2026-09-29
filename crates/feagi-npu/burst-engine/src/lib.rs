@@ -104,8 +104,9 @@ pub mod parameter_update_queue;
 pub mod rate_modulated_leak;
 pub mod runtime_taps;
 pub mod sensory; // Rust sensory injection system
-                 // Disabled - uses DynamicNPU
-                 // pub mod sleep; // Sleep manager for energy efficiency and memory optimization
+pub mod sequential_ingest;
+// Disabled - uses DynamicNPU
+// pub mod sleep; // Sleep manager for energy efficiency and memory optimization
 pub mod sparse_memory_lif;
 pub mod synaptic_arrival_schedule;
 pub mod synaptic_propagation;

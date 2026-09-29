@@ -135,6 +135,9 @@ pub struct BurstLoopRunner {
     pub sensory_manager: Arc<Mutex<AgentManager>>,
     /// Transport-agnostic sensory intake (feagi-io); fed by any transport, consumed by burst loop
     pub sensory_intake: Option<Arc<Mutex<dyn SensoryIntake>>>,
+    /// Queue depth for ordered sensory areas (audio input). `None` until configured;
+    /// without it ordered areas use newest-wins like every other area.
+    sequential_ingest_max_frames: Option<usize>,
     /// Visualization SHM writer (optional, None if not configured)
     pub viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
     /// Motor SHM writer (optional, None if not configured)
@@ -377,6 +380,7 @@ impl BurstLoopRunner {
             thread_handle: None,
             sensory_manager: Arc::new(Mutex::new(sensory_manager)),
             sensory_intake: None, // Can be set later via set_sensory_intake()
+            sequential_ingest_max_frames: None, // Set from config via set_sequential_ingest_max_frames()
             cached_cortical_id_mappings: Arc::new(Mutex::new(ahash::AHashMap::new())),
             last_cortical_id_refresh: Arc::new(Mutex::new(0)),
             cached_visualization_granularities: Arc::new(Mutex::new(ahash::AHashMap::new())),
@@ -462,6 +466,23 @@ impl BurstLoopRunner {
     pub fn set_sensory_intake(&mut self, intake: Arc<Mutex<dyn SensoryIntake>>) {
         self.sensory_intake = Some(intake);
         info!("[BURST-RUNNER] Sensory intake attached");
+    }
+
+    /// Enable ordered ingest for audio input areas with a queue of `max_frames` per stream.
+    ///
+    /// Takes effect the next time the burst loop starts.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `max_frames` is 0.
+    pub fn set_sequential_ingest_max_frames(&mut self, max_frames: usize) -> Result<(), String> {
+        crate::sequential_ingest::SequentialIngest::new(max_frames)?;
+        self.sequential_ingest_max_frames = Some(max_frames);
+        info!(
+            "[BURST-RUNNER] Ordered ingest for audio input: up to {} queued frames per stream",
+            max_frames
+        );
+        Ok(())
     }
 
     /// Register an agent's motor subscriptions
@@ -661,6 +682,10 @@ impl BurstLoopRunner {
         let last_cortical_id_refresh = self.last_cortical_id_refresh.clone();
         let cached_visualization_granularities = self.cached_visualization_granularities.clone();
         let sensory_intake = self.sensory_intake.clone();
+        let sequential_ingest = self
+            .sequential_ingest_max_frames
+            .map(crate::sequential_ingest::SequentialIngest::new)
+            .transpose()?;
 
         self.thread_handle = Some(
             thread::Builder::new()
@@ -689,6 +714,7 @@ impl BurstLoopRunner {
                         last_cortical_id_refresh,
                         cached_visualization_granularities,
                         sensory_intake,
+                        sequential_ingest,
                     );
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
@@ -1458,6 +1484,7 @@ fn burst_loop(
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
     cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>, // Cached cortical_idx -> visualization_granularity
     sensory_intake: Option<Arc<Mutex<dyn SensoryIntake>>>, // Transport-agnostic (feagi-io)
+    mut sequential_ingest: Option<crate::sequential_ingest::SequentialIngest>,
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -1541,6 +1568,7 @@ fn burst_loop(
         let mut sensory_xyzp_batches: Vec<SensoryXyzpDecoded> = Vec::new();
         let mut dropped_stale_payloads: usize = 0;
         let mut collapsed_payloads: usize = 0;
+        let mut sequential_queue_dropped: usize = 0;
         let burst_max_sensory_age = if current_frequency_hz > 0.0 {
             Duration::from_secs_f64(1.0 / current_frequency_hz)
         } else {
@@ -1551,6 +1579,39 @@ fn burst_loop(
                 let mut drained_payloads: Vec<SensoryIngressPayload> = Vec::new();
                 while let Ok(Some(payload)) = guard.poll_sensory_data() {
                     drained_payloads.push(payload);
+                }
+
+                // Ordered sources (they have sent audio input before): decode every payload
+                // in arrival order so no audio frame is collapsed away. Their other areas
+                // keep newest-wins through `ordered_remainders`.
+                let mut ordered_remainders: ahash::AHashMap<String, SensoryXyzpDecoded> =
+                    ahash::AHashMap::new();
+                if let Some(ingest) = sequential_ingest.as_mut() {
+                    let (ordered, others): (Vec<_>, Vec<_>) =
+                        drained_payloads.into_iter().partition(|payload| {
+                            ingest.carries_ordered_areas(payload.source_id.as_deref())
+                        });
+                    drained_payloads = others;
+                    for payload in ordered {
+                        match decode_sensory_bytes(&payload.bytes) {
+                            Ok(mut decoded) => {
+                                sequential_queue_dropped = sequential_queue_dropped.saturating_add(
+                                    ingest.absorb(payload.source_id.as_deref(), &mut decoded),
+                                );
+                                if !decoded.is_empty() {
+                                    ordered_remainders
+                                        .insert(payload.source_id.unwrap_or_default(), decoded);
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "[SENSORY-DECODE] Failed to decode {} bytes: {}",
+                                    payload.bytes.len(),
+                                    e
+                                );
+                            }
+                        }
+                    }
                 }
 
                 let (selected_payloads, dropped_count, collapsed_count) =
@@ -1564,10 +1625,17 @@ fn burst_loop(
 
                 for payload in selected_payloads {
                     match decode_sensory_bytes(&payload.bytes) {
-                        Ok(decoded) if !decoded.is_empty() => {
-                            sensory_xyzp_batches.push(decoded);
+                        Ok(mut decoded) => {
+                            // A source's first audio payload also registers it as ordered.
+                            if let Some(ingest) = sequential_ingest.as_mut() {
+                                sequential_queue_dropped = sequential_queue_dropped.saturating_add(
+                                    ingest.absorb(payload.source_id.as_deref(), &mut decoded),
+                                );
+                            }
+                            if !decoded.is_empty() {
+                                sensory_xyzp_batches.push(decoded);
+                            }
                         }
-                        Ok(_) => {}
                         Err(e) => {
                             warn!(
                                 "[SENSORY-DECODE] Failed to decode {} bytes: {}",
@@ -1577,7 +1645,21 @@ fn burst_loop(
                         }
                     }
                 }
+                sensory_xyzp_batches.extend(ordered_remainders.into_values());
             }
+        }
+        // One frame per ordered (source, area) stream this burst, oldest first.
+        if let Some(ingest) = sequential_ingest.as_mut() {
+            let ordered_frames = ingest.next_burst();
+            if !ordered_frames.is_empty() {
+                sensory_xyzp_batches.push(ordered_frames);
+            }
+        }
+        if sequential_queue_dropped > 0 && burst_num % 120 == 0 {
+            warn!(
+                "[SENSORY-INGEST] Ordered audio queue full: dropped {} oldest frame(s)",
+                sequential_queue_dropped
+            );
         }
         if dropped_stale_payloads > 0 && burst_num % 120 == 0 {
             warn!(

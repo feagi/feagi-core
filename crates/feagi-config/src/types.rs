@@ -555,6 +555,12 @@ pub struct BurstEngineConfig {
     pub memory_area_multiplier: f64,
     pub enable_preallocation: bool,
     pub enable_capacity_warnings: bool,
+    /// Frames queued per audio input stream (`iaud`) before the oldest is dropped.
+    ///
+    /// Audio input is ingested in order, one frame per burst, instead of newest-wins.
+    /// The queue absorbs two frames landing in one burst. Latency grows by one burst
+    /// per queued frame, so keep it small.
+    pub sequential_ingest_max_frames: usize,
     pub sleep: BurstEngineSleepConfig,
 }
 
@@ -567,6 +573,7 @@ impl Default for BurstEngineConfig {
             memory_area_multiplier: 2.0,
             enable_preallocation: true,
             enable_capacity_warnings: true,
+            sequential_ingest_max_frames: 10,
             sleep: BurstEngineSleepConfig::default(),
         }
     }
