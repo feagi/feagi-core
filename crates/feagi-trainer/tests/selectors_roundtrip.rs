@@ -129,7 +129,6 @@ fn roundtrip_decode_single(value: f64) -> f64 {
         bins: BINS,
         mask_width: None,
         mask_height: None,
-        mask_depth: None,
         cortical_name: None,
     };
     match decoder.decode(motor, &profile).expect("decode") {
@@ -212,7 +211,6 @@ fn decoder_argmaxes_strongest_class_channel() {
         bins: BINS,
         mask_width: None,
         mask_height: None,
-        mask_depth: None,
         cortical_name: None,
     };
     let prediction = decoder.decode(motor, &profile).expect("decode");

@@ -34,6 +34,21 @@ The FEAGI binding selectors (`EncoderPlugin` / `DecoderPlugin`), `RewardPolicy`,
 execution land next, behind a Trainer-owned runtime abstraction (remote/ZMQ path first,
 embedded `feagi-npu` later once the NPU/quantization refactor stabilizes).
 
+## Segmentation I/O
+
+Image segmentation is circuit-agnostic. The trainer writes and reads two one-layer areas;
+whatever the genome wires between them (for example a scanner classifier whose twin maps
+1:1 to the OPU with `mp_driven_psp`) is the brain's business.
+
+- Teacher (`iseg`, `W×H×1`): each labeled pixel's potential is
+  `(class_id + 1) / class_count`; ignore-label pixels are not written.
+- Output (`oseg`, `W×H×1`, Misc): the decoder turns each pixel's potential back into a class
+  id. A silent pixel is reported as `UNPREDICTED_PIXEL` (declared as the prediction's
+  `unpredicted_label`) and scores as a miss for its target class, never as a phantom class.
+- `class_count` must be `1..=255` so class ids stay below `UNPREDICTED_PIXEL`.
+
+Encoding and decoding live in `feagi_structures::neuron_voxels::class_potential`.
+
 ## Contract versioning
 
 Contracts are versioned on two independent axes:

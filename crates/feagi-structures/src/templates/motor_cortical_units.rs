@@ -99,7 +99,7 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
-                #[doc = "Object semantic segmentation output (bitplane class encoding)"]
+                #[doc = "Object semantic segmentation output. One Z layer: X/Y encode the pixel and the potential is (class_id + 1) / class_count."]
                 ObjectSegmentation => {
                     friendly_name: "Object Segmentation",
                     accepted_wrapped_io_data_type: MiscData,
@@ -110,7 +110,7 @@ macro_rules! motor_cortical_units {
                     },
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-200, 0, 0], channel_dimensions_default: [32, 32, 8], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-200, 0, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1])
                     }
                 },
 

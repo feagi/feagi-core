@@ -32,9 +32,10 @@ pub fn class_channel_index(x: u32, y: u32, z: u32, width: u32, height: u32) -> u
     x + y * width + z * width * height
 }
 
-/// Class channels whose Z fires anywhere inside the kernel's XY footprint.
+/// Classes labeled anywhere inside the kernel's XY footprint.
 ///
-/// Mask Z is the class channel. The kernel does not slide through mask depth.
+/// `fired` holds `(x, y, class_id)` decoded from the single-layer mask's potentials.
+/// Class ids at or above `mask_depth` (the class count) are ignored.
 pub fn mask_channels_in_window(
     fired: &[(u32, u32, u32)],
     origin_x: u32,

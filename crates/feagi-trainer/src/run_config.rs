@@ -882,7 +882,6 @@ mod tests {
                 bins: 1,
                 mask_width: None,
                 mask_height: None,
-                mask_depth: None,
                 cortical_name: None,
             },
             executor: ExecutorConfig {

@@ -1191,70 +1191,34 @@ pub async fn post_cortical_area(
         // `area.properties` for non-Memory area types (see GenomeServiceImpl::create_cortical_areas),
         // so these must be set here rather than via the (unused-for-IPU/OPU) typed
         // firing_threshold_increment/limit fields below.
-        //
-        // DepthMap ("dpt") encodes a normalized [0.0, 1.0] scalar per pixel across
-        // `dimensions.2` quantized Z-layers (see SensoryCorticalUnit::DepthMap and
-        // VideoController::to_depth_map). Its firing threshold must track the *actual*
-        // configured depth resolution rather than a fixed template constant, otherwise a
-        // `depth_bins` value that differs from the template default silently breaks the
-        // depth-to-threshold quantization (a given depth would fail to reach the threshold of
-        // its own Z-layer, or overshoot it). Other IPU types fall back to their static
-        // template defaults.
         if let Some(sensory_unit) = resolved_sensory_unit {
-            if sensory_unit == SensoryCorticalUnit::DepthMap {
-                // MiscData values produced for DepthMap are normalized to [0.0, 1.0]
-                // (see MiscData::new_from_image_frame / VideoController::to_depth_map).
-                const DEPTH_MAP_VALUE_RANGE: f64 = 1.0;
-                let z_layers = dimensions.2.max(1) as f64;
-                let firing_threshold_increment_z = DEPTH_MAP_VALUE_RANGE / z_layers;
+            if let Some(default_firing_threshold) = sensory_unit.get_default_firing_threshold() {
                 properties.insert(
                     "firing_threshold".to_string(),
-                    serde_json::json!(f64::EPSILON),
+                    serde_json::json!(default_firing_threshold),
                 );
+            }
+            if let Some(default_increment) = sensory_unit.get_default_firing_threshold_increment() {
                 properties.insert(
                     "firing_threshold_increment_x".to_string(),
-                    serde_json::json!(0.0),
+                    serde_json::json!(default_increment[0]),
                 );
                 properties.insert(
                     "firing_threshold_increment_y".to_string(),
-                    serde_json::json!(0.0),
+                    serde_json::json!(default_increment[1]),
                 );
                 properties.insert(
                     "firing_threshold_increment_z".to_string(),
-                    serde_json::json!(firing_threshold_increment_z),
+                    serde_json::json!(default_increment[2]),
                 );
-            } else {
-                if let Some(default_firing_threshold) = sensory_unit.get_default_firing_threshold()
-                {
-                    properties.insert(
-                        "firing_threshold".to_string(),
-                        serde_json::json!(default_firing_threshold),
-                    );
-                }
-                if let Some(default_increment) =
-                    sensory_unit.get_default_firing_threshold_increment()
-                {
-                    properties.insert(
-                        "firing_threshold_increment_x".to_string(),
-                        serde_json::json!(default_increment[0]),
-                    );
-                    properties.insert(
-                        "firing_threshold_increment_y".to_string(),
-                        serde_json::json!(default_increment[1]),
-                    );
-                    properties.insert(
-                        "firing_threshold_increment_z".to_string(),
-                        serde_json::json!(default_increment[2]),
-                    );
-                }
-                if let Some(default_mp_charge_accumulation) =
-                    sensory_unit.get_default_mp_charge_accumulation()
-                {
-                    properties.insert(
-                        "mp_charge_accumulation".to_string(),
-                        serde_json::json!(default_mp_charge_accumulation),
-                    );
-                }
+            }
+            if let Some(default_mp_charge_accumulation) =
+                sensory_unit.get_default_mp_charge_accumulation()
+            {
+                properties.insert(
+                    "mp_charge_accumulation".to_string(),
+                    serde_json::json!(default_mp_charge_accumulation),
+                );
             }
         }
 
@@ -1765,15 +1729,9 @@ fn classifier_twin_position(
     )
 }
 
-fn classifier_twin_dimensions_for_channels(
-    field_dimensions: (usize, usize, usize),
-    channel_count: usize,
-) -> (usize, usize, usize) {
-    (
-        field_dimensions.0.max(1),
-        field_dimensions.1.max(1),
-        channel_count.max(1),
-    )
+/// Detection twins are one layer over their field; each pixel's potential is the class.
+fn classifier_twin_dimensions(field_dimensions: (usize, usize, usize)) -> (usize, usize, usize) {
+    (field_dimensions.0.max(1), field_dimensions.1.max(1), 1)
 }
 
 fn classifier_scan_twin_params(
@@ -1798,6 +1756,8 @@ fn classifier_scan_twin_params(
     properties.insert("scan_twin".to_string(), serde_json::json!(true));
     properties.insert("burst_engine_active".to_string(), serde_json::json!(true));
     properties.insert("is_mem_type".to_string(), serde_json::json!(false));
+    // The twin's potential is the class; downstream mappings forward that value.
+    properties.insert("mp_driven_psp".to_string(), serde_json::json!(true));
     properties.insert(
         "memory_twin_of".to_string(),
         serde_json::json!(field_area_id),
@@ -2043,6 +2003,34 @@ fn parse_requested_kernel_size(value: Option<&serde_json::Value>) -> ApiResult<[
     Ok(size)
 }
 
+fn parse_requested_class_count(value: Option<&serde_json::Value>) -> ApiResult<u32> {
+    let count = value
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| ApiError::invalid_input("class_count required for scanner mode"))?;
+    let count = u32::try_from(count)
+        .map_err(|_| ApiError::invalid_input("class_count does not fit a 32-bit size"))?;
+    feagi_structures::neuron_voxels::class_potential::validate_class_count(count)
+        .map_err(|e| ApiError::invalid_input(e.to_string()))?;
+    Ok(count)
+}
+
+/// Scanner masks carry the class as potential on one layer.
+fn reject_multi_layer_mask(dimensions: (usize, usize, usize)) -> ApiResult<()> {
+    if dimensions.0 == 0 || dimensions.1 == 0 || dimensions.2 != 1 {
+        return Err(ApiError::invalid_input(
+            "mask must be W x H x 1; class ids are carried as potential",
+        ));
+    }
+    Ok(())
+}
+
+fn reject_kernel_class_area_shape(dimensions: (usize, usize, usize)) -> ApiResult<[u32; 3]> {
+    let shape = area_dimensions_u32(dimensions, "class area")?;
+    feagi_structures::genomic::classifiers::validate_kernel_class_area_shape(shape)
+        .map_err(ApiError::invalid_input)?;
+    Ok(shape)
+}
+
 fn area_dimensions_u32(dimensions: (usize, usize, usize), label: &str) -> ApiResult<[u32; 3]> {
     let convert = |axis: usize| -> ApiResult<u32> {
         u32::try_from(axis).map_err(|_| {
@@ -2096,59 +2084,58 @@ pub async fn post_classifier(
         .ok_or_else(|| ApiError::invalid_input("coordinates_3d must be [x, y, z]"))?;
 
     let connectome_service = state.connectome_service.as_ref();
-    let (kernel_area_id, class_area_id, mask_area_id, kernel_size) = match training_mode {
-        feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel => {
-            let kernel_area_id =
-                kernel_area_id.ok_or_else(|| ApiError::invalid_input("kernel_area_id required"))?;
-            let class_area_id =
-                class_area_id.ok_or_else(|| ApiError::invalid_input("class_area_id required"))?;
-            let class_area = connectome_service
-                .get_cortical_area(class_area_id)
-                .await
-                .map_err(|e| ApiError::invalid_input(format!("class_area_id not found: {}", e)))?;
-            if class_area.dimensions.0 == 0
-                || class_area.dimensions.1 == 0
-                || class_area.dimensions.2 == 0
-            {
-                return Err(ApiError::invalid_input(
-                    "class_area_id has zero volume; field twins cannot be sized",
-                ));
+    let (kernel_area_id, class_area_id, mask_area_id, kernel_size, class_count) =
+        match training_mode {
+            feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel => {
+                let kernel_area_id = kernel_area_id
+                    .ok_or_else(|| ApiError::invalid_input("kernel_area_id required"))?;
+                let class_area_id = class_area_id
+                    .ok_or_else(|| ApiError::invalid_input("class_area_id required"))?;
+                let class_area = connectome_service
+                    .get_cortical_area(class_area_id)
+                    .await
+                    .map_err(|e| {
+                        ApiError::invalid_input(format!("class_area_id not found: {}", e))
+                    })?;
+                reject_kernel_class_area_shape(class_area.dimensions)?;
+                connectome_service
+                    .get_cortical_area(kernel_area_id)
+                    .await
+                    .map_err(|e| {
+                        ApiError::invalid_input(format!("kernel_area_id not found: {}", e))
+                    })?;
+                (
+                    Some(kernel_area_id.to_string()),
+                    Some(class_area_id.to_string()),
+                    None,
+                    None,
+                    None,
+                )
             }
-            connectome_service
-                .get_cortical_area(kernel_area_id)
-                .await
-                .map_err(|e| ApiError::invalid_input(format!("kernel_area_id not found: {}", e)))?;
-            (
-                Some(kernel_area_id.to_string()),
-                Some(class_area_id.to_string()),
-                None,
-                None,
-            )
-        }
-        feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner => {
-            let mask_area_id =
-                mask_area_id.ok_or_else(|| ApiError::invalid_input("mask_area_id required"))?;
-            let kernel_size = parse_requested_kernel_size(request.get("kernel_size"))?;
-            let mask_area = connectome_service
-                .get_cortical_area(mask_area_id)
-                .await
-                .map_err(|e| ApiError::invalid_input(format!("mask_area_id not found: {}", e)))?;
-            if let Some(reason) = classifier_field_source_rejected(&mask_area) {
-                return Err(ApiError::invalid_input(reason));
+            feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner => {
+                let mask_area_id =
+                    mask_area_id.ok_or_else(|| ApiError::invalid_input("mask_area_id required"))?;
+                let kernel_size = parse_requested_kernel_size(request.get("kernel_size"))?;
+                let class_count = parse_requested_class_count(request.get("class_count"))?;
+                let mask_area = connectome_service
+                    .get_cortical_area(mask_area_id)
+                    .await
+                    .map_err(|e| {
+                        ApiError::invalid_input(format!("mask_area_id not found: {}", e))
+                    })?;
+                if let Some(reason) = classifier_field_source_rejected(&mask_area) {
+                    return Err(ApiError::invalid_input(reason));
+                }
+                reject_multi_layer_mask(mask_area.dimensions)?;
+                (
+                    None,
+                    None,
+                    Some(mask_area_id.to_string()),
+                    Some(kernel_size),
+                    Some(class_count),
+                )
             }
-            if mask_area.dimensions.2 == 0 {
-                return Err(ApiError::invalid_input(
-                    "mask depth must be greater than zero",
-                ));
-            }
-            (
-                None,
-                None,
-                Some(mask_area_id.to_string()),
-                Some(kernel_size),
-            )
-        }
-    };
+        };
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -2207,6 +2194,12 @@ pub async fn post_classifier(
         kernel_mem_props.insert(
             "classifier_kernel_size".to_string(),
             serde_json::json!(kernel_size),
+        );
+    }
+    if let Some(class_count) = class_count {
+        kernel_mem_props.insert(
+            "classifier_class_count".to_string(),
+            serde_json::json!(class_count),
         );
     }
     kernel_mem_props.insert(
@@ -2318,6 +2311,7 @@ pub async fn post_classifier(
         kernel_area_id,
         class_area_id,
         mask_area_id,
+        class_count,
         kernel_size,
         fields: Vec::new(),
         kernel_memory_id: kernel_mem_id.clone(),
@@ -2399,6 +2393,9 @@ pub struct UpdateClassifierRequest {
     pub class_area_id: Option<String>,
     pub mask_area_id: Option<String>,
     pub kernel_size: Option<[u32; 3]>,
+    /// Scanner-mode class count. Absent keeps the current count.
+    #[serde(default)]
+    pub class_count: Option<u32>,
     #[serde(default)]
     pub reward_training: Option<bool>,
     /// Empty string clears the correct-answer area. Absent leaves it unchanged.
@@ -2426,6 +2423,7 @@ fn classifier_from_info(
         kernel_area_id: existing.kernel_area_id,
         class_area_id: existing.class_area_id,
         mask_area_id: existing.mask_area_id,
+        class_count: existing.class_count,
         kernel_size: existing.kernel_size,
         fields: existing.fields,
         kernel_memory_id: existing.kernel_memory_id,
@@ -2495,7 +2493,6 @@ async fn remap_classifier_input(
 async fn answer_feedback_reference(
     state: &ApiState,
     classifier: &feagi_structures::genomic::classifiers::Classifier,
-    channel_count: usize,
 ) -> ApiResult<([u32; 3], Vec<[u32; 3]>)> {
     match classifier.training_mode {
         feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel => {
@@ -2536,8 +2533,7 @@ async fn answer_feedback_reference(
                             field.field_area_id, e
                         ))
                     })?;
-                let twin =
-                    classifier_twin_dimensions_for_channels(field_area.dimensions, channel_count);
+                let twin = classifier_twin_dimensions(field_area.dimensions);
                 output_shapes.push(area_dimensions_u32(twin, "detection output")?);
             }
             Ok((reference, output_shapes))
@@ -2694,50 +2690,60 @@ pub async fn update_classifier(
             .map_err(ApiError::invalid_input)?,
         None => classifier.training_mode,
     };
-    let (kernel_area_id, class_area_id, mask_area_id, kernel_size) = match training_mode {
-        feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel => {
-            let kernel = request.kernel_area_id.clone().or_else(|| {
-                if previous.training_mode
-                    == feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel
-                {
-                    previous.kernel_area_id.clone()
-                } else {
-                    None
-                }
-            });
-            let class = request.class_area_id.clone().or_else(|| {
-                if previous.training_mode
-                    == feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel
-                {
-                    previous.class_area_id.clone()
-                } else {
-                    None
-                }
-            });
-            (kernel, class, None, None)
-        }
-        feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner => {
-            let mask = request.mask_area_id.clone().or_else(|| {
-                if previous.training_mode
-                    == feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner
-                {
-                    previous.mask_area_id.clone()
-                } else {
-                    None
-                }
-            });
-            let size = request.kernel_size.or_else(|| {
-                if previous.training_mode
-                    == feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner
-                {
-                    previous.kernel_size
-                } else {
-                    None
-                }
-            });
-            (None, None, mask, size)
-        }
-    };
+    let (kernel_area_id, class_area_id, mask_area_id, kernel_size, class_count) =
+        match training_mode {
+            feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel => {
+                let kernel = request.kernel_area_id.clone().or_else(|| {
+                    if previous.training_mode
+                        == feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel
+                    {
+                        previous.kernel_area_id.clone()
+                    } else {
+                        None
+                    }
+                });
+                let class = request.class_area_id.clone().or_else(|| {
+                    if previous.training_mode
+                        == feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel
+                    {
+                        previous.class_area_id.clone()
+                    } else {
+                        None
+                    }
+                });
+                (kernel, class, None, None, None)
+            }
+            feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner => {
+                let mask = request.mask_area_id.clone().or_else(|| {
+                    if previous.training_mode
+                        == feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner
+                    {
+                        previous.mask_area_id.clone()
+                    } else {
+                        None
+                    }
+                });
+                let size = request.kernel_size.or_else(|| {
+                    if previous.training_mode
+                        == feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner
+                    {
+                        previous.kernel_size
+                    } else {
+                        None
+                    }
+                });
+                let count = request.class_count.or_else(|| {
+                    if previous.training_mode
+                        == feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner
+                    {
+                        previous.class_count
+                    } else {
+                        None
+                    }
+                });
+                (None, None, mask, size, count)
+            }
+        };
     let drop_learned_patterns = classifier
         .apply_training_inputs(
             training_mode,
@@ -2745,6 +2751,7 @@ pub async fn update_classifier(
             class_area_id,
             mask_area_id,
             kernel_size,
+            class_count,
         )
         .map_err(ApiError::invalid_input)?;
 
@@ -2768,11 +2775,7 @@ pub async fn update_classifier(
                 .get_cortical_area(kernel_area_id)
                 .await
                 .map_err(|e| ApiError::invalid_input(format!("kernel_area_id not found: {}", e)))?;
-            class_area
-                .dimensions
-                .0
-                .saturating_mul(class_area.dimensions.1)
-                .saturating_mul(class_area.dimensions.2)
+            reject_kernel_class_area_shape(class_area.dimensions)?[2] as usize
         }
         feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner => {
             let mask_area_id = classifier
@@ -2790,6 +2793,7 @@ pub async fn update_classifier(
             if let Some(reason) = classifier_field_source_rejected(&mask_area) {
                 return Err(ApiError::invalid_input(reason));
             }
+            reject_multi_layer_mask(mask_area.dimensions)?;
             let mask_dims = area_dimensions_u32(mask_area.dimensions, "mask")?;
             for field in &classifier.fields {
                 let field_area = state
@@ -2810,7 +2814,10 @@ pub async fn update_classifier(
                 )
                 .map_err(ApiError::invalid_input)?;
             }
-            mask_area.dimensions.2
+            classifier
+                .class_count
+                .ok_or_else(|| ApiError::invalid_input("class_count required"))?
+                as usize
         }
     };
     if channel_count == 0 {
@@ -2868,13 +2875,13 @@ pub async fn update_classifier(
                 return Err(ApiError::invalid_input(reason));
             }
             let feedback_dims = area_dimensions_u32(feedback_area.dimensions, "answer feedback")?;
-            let (reference, output_shapes) =
-                answer_feedback_reference(&state, &classifier, channel_count).await?;
+            let (reference, output_shapes) = answer_feedback_reference(&state, &classifier).await?;
             feagi_structures::genomic::classifiers::validate_answer_feedback_shape(
                 classifier.training_mode,
                 feedback_dims,
                 reference,
                 &output_shapes,
+                channel_count as u32,
             )
             .map_err(ApiError::invalid_input)?;
             classifier.answer_feedback_area_id = Some(feedback_area_id.trim().to_string());
@@ -2946,8 +2953,7 @@ pub async fn update_classifier(
                     field.field_area_id, e
                 ))
             })?;
-        let twin_dimensions =
-            classifier_twin_dimensions_for_channels(field_area.dimensions, channel_count);
+        let twin_dimensions = classifier_twin_dimensions(field_area.dimensions);
         let mut twin_changes = HashMap::new();
         twin_changes.insert(
             "cortical_name".to_string(),
@@ -3157,11 +3163,7 @@ pub async fn post_classifier_field(
                 .get_cortical_area(&class_area_id)
                 .await
                 .map_err(|e| ApiError::invalid_input(format!("class_area_id not found: {}", e)))?;
-            class_area
-                .dimensions
-                .0
-                .saturating_mul(class_area.dimensions.1)
-                .saturating_mul(class_area.dimensions.2)
+            reject_kernel_class_area_shape(class_area.dimensions)?[2] as usize
         }
         feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner => {
             let mask_area_id = classifier.mask_area_id.clone().ok_or_else(|| {
@@ -3183,7 +3185,9 @@ pub async fn post_classifier_field(
                 mask_dims,
             )
             .map_err(ApiError::invalid_input)?;
-            mask_area.dimensions.2
+            classifier.class_count.ok_or_else(|| {
+                ApiError::invalid_input("class_count required before a field mapping")
+            })? as usize
         }
     };
     if channel_count == 0 {
@@ -3203,12 +3207,10 @@ pub async fn post_classifier_field(
                     bound.field_area_id, e
                 ))
             })?;
-        let bound_dimensions =
-            classifier_twin_dimensions_for_channels(bound_area.dimensions, channel_count);
+        let bound_dimensions = classifier_twin_dimensions(bound_area.dimensions);
         x_offset += bound_dimensions.0.max(1) as i32;
     }
-    let twin_dimensions =
-        classifier_twin_dimensions_for_channels(field_area.dimensions, channel_count);
+    let twin_dimensions = classifier_twin_dimensions(field_area.dimensions);
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -4316,7 +4318,7 @@ pub async fn get_ipu_types(
         } else if snake_name == "segmented_vision" {
             vec![32, 32, 1] // Segmented vision segments are smaller
         } else if snake_name == "depth_map" {
-            vec![64, 64, 64] // Depth map uses XY topology plus depth bins on Z
+            vec![64, 64, 1] // Depth map: XY topology, normalized depth as potential
         } else {
             vec![1, 1, 1] // Most sensors are scalar (1x1x1)
         };
@@ -4722,12 +4724,43 @@ mod classifier_mapping_rule_tests {
     }
 
     #[test]
-    fn classifier_scan_twin_dimensions_use_field_xy_and_channel_count() {
-        use super::classifier_twin_dimensions_for_channels;
-        assert_eq!(
-            classifier_twin_dimensions_for_channels((12, 8, 4), 6),
-            (12, 8, 6)
+    fn classifier_scan_twin_is_one_layer_over_the_field() {
+        use super::classifier_twin_dimensions;
+        assert_eq!(classifier_twin_dimensions((12, 8, 4)), (12, 8, 1));
+    }
+
+    #[test]
+    fn classifier_scan_twin_forwards_its_class_potential() {
+        use super::classifier_scan_twin_params;
+        let params = classifier_scan_twin_params(
+            "twin0001".to_string(),
+            "demo_twin".to_string(),
+            (12, 8, 1),
+            (0, 0, 0),
+            "region",
+            "field",
+            "kmem",
         );
+        assert_eq!(
+            params
+                .properties
+                .as_ref()
+                .and_then(|properties| properties.get("mp_driven_psp")),
+            Some(&serde_json::json!(true))
+        );
+    }
+
+    #[test]
+    fn scanner_class_count_and_mask_shape_are_validated() {
+        use super::{parse_requested_class_count, reject_multi_layer_mask};
+        assert_eq!(
+            parse_requested_class_count(Some(&serde_json::json!(19))).unwrap(),
+            19
+        );
+        assert!(parse_requested_class_count(None).is_err());
+        assert!(parse_requested_class_count(Some(&serde_json::json!(0))).is_err());
+        assert!(reject_multi_layer_mask((256, 128, 1)).is_ok());
+        assert!(reject_multi_layer_mask((256, 128, 19)).is_err());
     }
 
     #[test]

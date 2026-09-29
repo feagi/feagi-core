@@ -170,37 +170,36 @@ macro_rules! sensor_cortical_units {
 
 
 
-                #[doc = "Depth map input where X/Y encode sensor canvas topology and Z encodes quantized depth bins."]
+                #[doc = "Depth map input. One Z layer: X/Y encode sensor canvas topology and the potential is normalized depth in (0, 1]. Zero means no return."]
                 DepthMap => {
                     friendly_name: "Depth Map",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"dpt",
                     number_cortical_areas: 1,
-                    default_firing_threshold: 0.01,
-                    default_firing_threshold_increment: [0.0, 0.0, 0.01],
+                    default_firing_threshold: 0.0001,
                     default_mp_charge_accumulation: false,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-140, 30, 0], channel_dimensions_default: [64, 64, 64], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-140, 30, 0], channel_dimensions_default: [64, 64, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1])
                     }
                 },
 
-                #[doc = "Object semantic-segmentation labels where X/Y encode the source pixel and Z encodes the stable class ID. PSP magnitude encodes confidence."]
+                #[doc = "Object semantic-segmentation labels. One Z layer: X/Y encode the source pixel and the potential is (class_id + 1) / class_count. Zero means unlabeled."]
                 ObjectSegmentationInput => {
                     friendly_name: "Object Segmentation",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"seg",
                     number_cortical_areas: 1,
-                    default_firing_threshold: 0.01,
+                    default_firing_threshold: 0.0001,
                     default_mp_charge_accumulation: false,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-170, 0, 0], channel_dimensions_default: [32, 32, 8], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-170, 0, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1])
                     }
                 },
 

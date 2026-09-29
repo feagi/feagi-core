@@ -155,7 +155,9 @@ impl SegmentedVisionBinding {
     }
 }
 
-/// Mask teacher IPU for image segmentation (`iseg`, W×H×C, Z = class).
+/// Mask teacher IPU for image segmentation (`iseg`, W×H×1).
+///
+/// Each labeled pixel carries potential `(class_id + 1) / class_count`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SegmentationTeacherBinding {
     /// Provenance id for the iseg area (genome-owned circuit still maps it).
@@ -167,8 +169,8 @@ pub struct SegmentationTeacherBinding {
     pub mask_width: u32,
     /// Mask height in pixels. Must match the sample `SegmentationMask`.
     pub mask_height: u32,
-    /// Surviving class count along Z. Pixel class ids must be `< mask_depth`.
-    pub mask_depth: u32,
+    /// Surviving class count. Pixel class ids must be `< class_count`.
+    pub class_count: u32,
 }
 
 impl SegmentationTeacherBinding {
@@ -179,14 +181,24 @@ impl SegmentationTeacherBinding {
                 "segmentation teacher cortical_area_id must be non-empty".to_string(),
             ));
         }
-        if self.mask_width == 0 || self.mask_height == 0 || self.mask_depth == 0 {
+        if self.mask_width == 0 || self.mask_height == 0 {
             return Err(TrainerError::Config(
-                "segmentation teacher mask_width, mask_height, and mask_depth must be > 0"
-                    .to_string(),
+                "segmentation teacher mask_width and mask_height must be > 0".to_string(),
             ));
         }
-        Ok(())
+        validate_segmentation_class_count(self.class_count)
     }
+}
+
+/// Segmentation class ids are `u8` labels below the decoder's unpredicted label.
+pub fn validate_segmentation_class_count(class_count: u32) -> Result<(), TrainerError> {
+    if class_count == 0 || class_count > u32::from(crate::contracts::UNPREDICTED_PIXEL) {
+        return Err(TrainerError::Config(format!(
+            "segmentation class_count must be in 1..={}, got {class_count}",
+            crate::contracts::UNPREDICTED_PIXEL
+        )));
+    }
+    Ok(())
 }
 
 /// How an encoder selector maps sample features onto a FEAGI sensory (IPU) area.
@@ -241,14 +253,12 @@ pub struct DecoderBindingProfile {
     /// channel's activation. Must match the pinned genome's OPU area depth.
     pub bins: u32,
     /// Segmentation mask width when using a misc-data object-segmentation decoder.
+    /// The OPU is `mask_width × mask_height × 1`; `class_count` decodes each pixel's potential.
     #[serde(default)]
     pub mask_width: Option<u32>,
     /// Segmentation mask height when using a misc-data object-segmentation decoder.
     #[serde(default)]
     pub mask_height: Option<u32>,
-    /// Segmentation class depth (Z dimension) when using a misc-data decoder.
-    #[serde(default)]
-    pub mask_depth: Option<u32>,
 }
 
 #[cfg(test)]

@@ -14,6 +14,7 @@ Each field binding is one Classifier mapping: an interconnect area scanning
 the shared kernel memory, with its own detection twin.
 */
 
+use crate::neuron_voxels::class_potential::validate_class_count;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -89,11 +90,16 @@ pub struct Classifier {
     /// Referenced inputs. Cleared when that area is deleted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kernel_area_id: Option<String>,
+    /// Kernel-mode class input. Must be `1×1×n`: each depth voxel is one class channel.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class_area_id: Option<String>,
-    /// Scanner-mode label volume. Width and height match each mapped field. Depth is the class count.
+    /// Scanner-mode label plane, `W×H×1`. Width and height match each mapped field.
+    /// Each pixel's potential is `(class_id + 1) / class_count`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mask_area_id: Option<String>,
+    /// Scanner-mode class count. Decodes mask potentials and encodes detection twins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class_count: Option<u32>,
     /// Scanner-mode kernel `[x, y, z]`. Z must equal each mapped field's depth.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kernel_size: Option<[u32; 3]>,
@@ -214,9 +220,11 @@ impl Classifier {
         class_area_id: Option<String>,
         mask_area_id: Option<String>,
         kernel_size: Option<[u32; 3]>,
+        class_count: Option<u32>,
     ) -> Result<bool, String> {
         let previous_mode = self.training_mode;
         let previous_size = self.kernel_size;
+        let previous_class_count = self.class_count;
         match mode {
             ClassifierTrainingMode::Kernel => {
                 let kernel = kernel_area_id.ok_or_else(|| "kernel_area_id required".to_string())?;
@@ -225,20 +233,25 @@ impl Classifier {
                 self.class_area_id = Some(required_area_id(class, "class_area_id")?);
                 self.mask_area_id = None;
                 self.kernel_size = None;
+                self.class_count = None;
             }
             ClassifierTrainingMode::Scanner => {
                 let mask = mask_area_id.ok_or_else(|| "mask_area_id required".to_string())?;
                 let size = kernel_size.ok_or_else(|| "kernel_size required".to_string())?;
+                let count = class_count.ok_or_else(|| "class_count required".to_string())?;
                 validate_kernel_size(size)?;
+                validate_class_count(count).map_err(|e| e.to_string())?;
                 self.mask_area_id = Some(required_area_id(mask, "mask_area_id")?);
                 self.kernel_size = Some(size);
+                self.class_count = Some(count);
                 self.kernel_area_id = None;
                 self.class_area_id = None;
             }
         }
         self.training_mode = mode;
         Ok(previous_mode != mode
-            || (mode == ClassifierTrainingMode::Scanner && previous_size != self.kernel_size))
+            || (mode == ClassifierTrainingMode::Scanner
+                && (previous_size != self.kernel_size || previous_class_count != self.class_count)))
     }
 
     /// Apply classifier-level edit. Does not replace owned internals or field bindings.
@@ -405,6 +418,16 @@ impl Classifier {
     }
 }
 
+/// Kernel-mode class input. Width and height are 1 so depth index `z` is twin class `z`.
+pub fn validate_kernel_class_area_shape(dimensions: [u32; 3]) -> Result<(), String> {
+    if dimensions[0] != 1 || dimensions[1] != 1 || dimensions[2] == 0 {
+        return Err(
+            "class area must be 1x1xn so each depth voxel maps to one detection class".to_string(),
+        );
+    }
+    Ok(())
+}
+
 /// Every kernel axis must be at least one voxel.
 pub fn validate_kernel_size(size: [u32; 3]) -> Result<(), String> {
     if size[0] == 0 || size[1] == 0 || size[2] == 0 {
@@ -413,7 +436,12 @@ pub fn validate_kernel_size(size: [u32; 3]) -> Result<(), String> {
     Ok(())
 }
 
-/// Scanner kernel Z matches the image depth, and the mask shares the image's width and height.
+/// Every detection twin is one layer over its field: `field_w × field_h × 1`.
+pub fn detection_twin_shape(field: [u32; 3]) -> [u32; 3] {
+    [field[0], field[1], 1]
+}
+
+/// Scanner kernel Z matches the image depth. The mask is one layer with the image's width and height.
 pub fn validate_scanner_field(
     kernel_size: [u32; 3],
     field: [u32; 3],
@@ -423,8 +451,8 @@ pub fn validate_scanner_field(
     if field[0] == 0 || field[1] == 0 || field[2] == 0 {
         return Err("field dimensions must be greater than zero".to_string());
     }
-    if mask[2] == 0 {
-        return Err("mask depth must be greater than zero".to_string());
+    if mask[2] != 1 {
+        return Err("mask must be one layer deep; class ids are carried as potential".to_string());
     }
     if kernel_size[0] > field[0] || kernel_size[1] > field[1] {
         return Err("kernel_size does not fit the field".to_string());
@@ -453,12 +481,14 @@ pub fn is_whole_image_class_shape(feedback: [u32; 3], class_count: u32) -> bool 
 /// Answer feedback must match the classifier output.
 ///
 /// Kernel mode compares the class area. Scanner mode compares each detection
-/// twin. With no twin yet, the mask width, height, and depth are that output.
+/// twin (`W×H×1`, class as potential) or accepts a whole-image class of
+/// `class_count` channels. With no twin yet, the mask is that output.
 pub fn validate_answer_feedback_shape(
     mode: ClassifierTrainingMode,
     feedback: [u32; 3],
     reference: [u32; 3],
     output_shapes: &[[u32; 3]],
+    class_count: u32,
 ) -> Result<(), String> {
     if feedback[0] == 0 || feedback[1] == 0 || feedback[2] == 0 {
         return Err("answer feedback dimensions must be greater than zero".to_string());
@@ -470,11 +500,6 @@ pub fn validate_answer_feedback_shape(
             }
         }
         ClassifierTrainingMode::Scanner => {
-            let class_count = if output_shapes.is_empty() {
-                reference[2]
-            } else {
-                output_shapes[0][2]
-            };
             if is_whole_image_class_shape(feedback, class_count) {
                 return Ok(());
             }
@@ -516,6 +541,7 @@ mod tests {
             kernel_area_id: Some("kernel".to_string()),
             class_area_id: Some("class".to_string()),
             mask_area_id: None,
+            class_count: None,
             kernel_size: None,
             fields: Vec::new(),
             kernel_memory_id: "kmem".to_string(),
@@ -619,6 +645,7 @@ mod tests {
                 None,
                 Some("mask".to_string()),
                 Some([8, 8, 3]),
+                Some(19),
             )
             .expect("scanner inputs");
         assert!(changed);
@@ -627,6 +654,7 @@ mod tests {
         assert!(classifier.class_area_id.is_none());
         assert_eq!(classifier.mask_area_id.as_deref(), Some("mask"));
         assert_eq!(classifier.kernel_size, Some([8, 8, 3]));
+        assert_eq!(classifier.class_count, Some(19));
         assert!(classifier.references_input("mask"));
         let same = classifier
             .apply_training_inputs(
@@ -635,9 +663,39 @@ mod tests {
                 None,
                 Some("mask".to_string()),
                 Some([8, 8, 3]),
+                Some(19),
             )
             .expect("same scanner geometry");
         assert!(!same);
+        let recounted = classifier
+            .apply_training_inputs(
+                ClassifierTrainingMode::Scanner,
+                None,
+                None,
+                Some("mask".to_string()),
+                Some([8, 8, 3]),
+                Some(6),
+            )
+            .expect("new class count");
+        assert!(recounted, "a new class count changes what learned ids mean");
+    }
+
+    #[test]
+    fn scanner_mode_requires_a_valid_class_count() {
+        let mut classifier = sample();
+        for bad in [None, Some(0)] {
+            assert!(classifier
+                .apply_training_inputs(
+                    ClassifierTrainingMode::Scanner,
+                    None,
+                    None,
+                    Some("mask".to_string()),
+                    Some([8, 8, 3]),
+                    bad,
+                )
+                .is_err());
+        }
+        assert_eq!(classifier.training_mode, ClassifierTrainingMode::Kernel);
     }
 
     #[test]
@@ -650,6 +708,7 @@ mod tests {
                 None,
                 Some("mask".to_string()),
                 Some([2, 2, 1]),
+                Some(4),
             )
             .expect("scanner");
         classifier
@@ -659,11 +718,18 @@ mod tests {
                 Some("class".to_string()),
                 None,
                 None,
+                None,
             )
             .expect("kernel");
         assert!(classifier.mask_area_id.is_none());
         assert!(classifier.kernel_size.is_none());
+        assert!(classifier.class_count.is_none());
         assert_eq!(classifier.kernel_area_id.as_deref(), Some("kernel"));
+    }
+
+    #[test]
+    fn detection_twin_is_one_layer_over_the_field() {
+        assert_eq!(detection_twin_shape([256, 128, 3]), [256, 128, 1]);
     }
 
     #[test]
@@ -673,6 +739,7 @@ mod tests {
             [1, 1, 4],
             [1, 1, 4],
             &[],
+            4,
         )
         .is_ok());
         assert!(validate_answer_feedback_shape(
@@ -680,35 +747,62 @@ mod tests {
             [8, 8, 4],
             [1, 1, 4],
             &[],
+            4,
         )
         .is_err());
         assert!(validate_answer_feedback_shape(
             ClassifierTrainingMode::Scanner,
-            [16, 16, 4],
-            [16, 16, 4],
-            &[[16, 16, 4]],
+            [16, 16, 1],
+            [16, 16, 1],
+            &[[16, 16, 1]],
+            4,
         )
         .is_ok());
         assert!(validate_answer_feedback_shape(
             ClassifierTrainingMode::Scanner,
-            [16, 16, 4],
-            [16, 16, 4],
-            &[[16, 16, 4], [8, 8, 4]],
+            [16, 16, 1],
+            [16, 16, 1],
+            &[[16, 16, 1], [8, 8, 1]],
+            4,
         )
         .is_err());
+        assert!(
+            validate_answer_feedback_shape(
+                ClassifierTrainingMode::Scanner,
+                [16, 16, 4],
+                [16, 16, 1],
+                &[[16, 16, 1]],
+                4,
+            )
+            .is_err(),
+            "a one-hot class volume no longer matches a potential-coded twin"
+        );
         assert!(validate_answer_feedback_shape(
             ClassifierTrainingMode::Scanner,
             [10, 1, 1],
-            [16, 16, 10],
-            &[[16, 16, 10]],
+            [16, 16, 1],
+            &[[16, 16, 1]],
+            10,
         )
         .is_ok());
     }
 
     #[test]
+    fn kernel_class_area_must_be_one_by_one_by_n() {
+        assert!(validate_kernel_class_area_shape([1, 1, 4]).is_ok());
+        assert!(validate_kernel_class_area_shape([2, 7, 4]).is_err());
+        assert!(validate_kernel_class_area_shape([4, 1, 1]).is_err());
+        assert!(validate_kernel_class_area_shape([1, 1, 0]).is_err());
+    }
+
+    #[test]
     fn scanner_field_must_match_mask_and_kernel_depth() {
-        assert!(validate_scanner_field([8, 8, 3], [256, 128, 3], [256, 128, 10]).is_ok());
-        assert!(validate_scanner_field([8, 8, 1], [256, 128, 3], [256, 128, 10]).is_err());
-        assert!(validate_scanner_field([8, 8, 3], [256, 128, 3], [200, 128, 10]).is_err());
+        assert!(validate_scanner_field([8, 8, 3], [256, 128, 3], [256, 128, 1]).is_ok());
+        assert!(validate_scanner_field([8, 8, 1], [256, 128, 3], [256, 128, 1]).is_err());
+        assert!(validate_scanner_field([8, 8, 3], [256, 128, 3], [200, 128, 1]).is_err());
+        assert!(
+            validate_scanner_field([8, 8, 3], [256, 128, 3], [256, 128, 10]).is_err(),
+            "one-hot class masks are replaced by the single-layer potential mask"
+        );
     }
 }

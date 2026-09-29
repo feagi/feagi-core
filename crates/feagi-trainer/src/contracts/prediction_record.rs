@@ -13,6 +13,10 @@ use super::ir_sample::TypedTarget;
 /// Wire/format version of the `PredictionRecord` contract.
 pub const SCHEMA_VERSION: u32 = 1;
 
+/// Label the segmentation decoder writes for a pixel the brain left silent and declares
+/// as `unpredicted_label`. Segmentation class ids stay below it.
+pub const UNPREDICTED_PIXEL: u8 = u8::MAX;
+
 /// A typed prediction, selected by `OutputType`.
 ///
 /// Mirrors `TypedTarget` but carries prediction-specific detail (e.g. per-class scores).
@@ -38,6 +42,9 @@ pub enum TypedPrediction {
         height: u32,
         /// Per-pixel predicted class ids aligned to `(x, y)` row-major order.
         labels: Vec<u8>,
+        /// Label marking pixels the model left silent. Scored as a miss, never as a class.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        unpredicted_label: Option<u8>,
     },
     /// Scalar regression prediction.
     Scalar(f64),

@@ -2096,9 +2096,19 @@ mod count_output_registration_tests {
         let motor = MotorCorticalUnit::ObjectSegmentation;
         let topo = motor.get_unit_default_topology();
         let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"MiscData": {"width": 128u32, "height": 96u32, "depth": 1u32}});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (128, 96, 1));
+    }
+
+    #[test]
+    fn object_segmentation_is_one_layer_even_for_a_class_depth_decoder() {
+        let motor = MotorCorticalUnit::ObjectSegmentation;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
         let dec = json!({"MiscData": {"width": 128u32, "height": 96u32, "depth": 12u32}});
         let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
-        assert_eq!((w, h, d), (128, 96, 12));
+        assert_eq!((w, h, d), (128, 96, 1));
     }
 
     #[test]
@@ -2108,7 +2118,7 @@ mod count_output_registration_tests {
         let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
         let dec = json!({"MiscData": {"width": 9999u32, "height": 9999u32, "depth": 9999u32}});
         let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
-        assert_eq!((w, h, d), (4096, 4096, 1024));
+        assert_eq!((w, h, d), (4096, 4096, 1));
     }
 
     fn audio_spectrum_block(bin_count: u32, phase_steps: u32) -> serde_json::Value {
@@ -2152,7 +2162,7 @@ mod count_output_registration_tests {
         let topo = motor.get_unit_default_topology();
         let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
         let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, None);
-        assert_eq!((w, h, d), (32, 32, 8));
+        assert_eq!((w, h, d), (32, 32, 1));
     }
 
     #[test]

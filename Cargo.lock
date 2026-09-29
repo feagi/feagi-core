@@ -2088,6 +2088,7 @@ dependencies = [
  "feagi-npu-neural",
  "feagi-npu-runtime",
  "feagi-state-manager",
+ "feagi-structures",
  "parking_lot",
  "rayon",
  "roaring",

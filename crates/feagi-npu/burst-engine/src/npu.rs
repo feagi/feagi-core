@@ -470,6 +470,9 @@ pub(crate) enum ReplayPotentialMode {
     ForceFire,
     /// MP-aware replay: inject stored per-coordinate potentials through LIF.
     PerCoordinate(Vec<f32>),
+    /// Force-fire each coord with exactly its potential, bypassing LIF/threshold.
+    /// The fire queue, fire ledger, and `mp_driven_psp` all see that exact value.
+    ForceFireWithPotentials(Vec<f32>),
 }
 
 impl<
@@ -2070,6 +2073,36 @@ impl<
             });
     }
 
+    /// Queue coords that fire on `target_burst` with exactly `potentials[i]`.
+    ///
+    /// Used for value-coded maps (e.g. classifier detection twins) where the potential
+    /// is the payload and must not be reshaped by threshold, leak, or accumulation.
+    pub fn schedule_valued_force_fire(
+        &self,
+        target_burst: u64,
+        area_idx: u32,
+        coords: Vec<(u32, u32, u32)>,
+        potentials: Vec<f32>,
+    ) -> Result<()> {
+        if coords.len() != potentials.len() {
+            return Err(FeagiError::RuntimeError(format!(
+                "valued force-fire needs one potential per coord ({} coords, {} potentials)",
+                coords.len(),
+                potentials.len()
+            )));
+        }
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures
+            .pending_replay_injections
+            .push(ReplayInjection {
+                target_burst,
+                twin_area_idx: area_idx,
+                coords,
+                potentials: ReplayPotentialMode::ForceFireWithPotentials(potentials),
+            });
+        Ok(())
+    }
+
     /// Remove the replay target owned by one memory/upstream cortical-area pair.
     ///
     /// Returns `true` when a runtime replay route was present.
@@ -2234,6 +2267,16 @@ impl<
                             if let Some(idx) = opt_idx {
                                 let mp = mps.get(i).copied().unwrap_or(1.0);
                                 staged.push((NeuronId(idx as u32), mp));
+                                total_replay_candidates += 1;
+                            }
+                        }
+                    }
+                    ReplayPotentialMode::ForceFireWithPotentials(mps) => {
+                        for (opt_idx, mp) in neuron_ids.into_iter().zip(mps.iter()) {
+                            if let Some(idx) = opt_idx {
+                                fire_structures
+                                    .pending_authoritative_fq
+                                    .push((NeuronId(idx as u32), *mp));
                                 total_replay_candidates += 1;
                             }
                         }
@@ -6726,6 +6769,62 @@ mod tests {
             window.is_empty() || window.iter().all(|(_, bm)| !bm.contains(neuron.0)),
             "Expected overdue replay injection to be dropped"
         );
+    }
+
+    #[test]
+    fn test_valued_force_fire_records_exact_potential_past_threshold() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.configure_fire_ledger_window(3, 1).unwrap();
+        npu.enable_fire_ledger_mp_archival(3).unwrap();
+
+        // Threshold 100 and leak 0.5 would both distort a LIF injection of 0.7.
+        let neuron = npu
+            .add_neuron(
+                100.0,
+                f32::MAX,
+                0.5,
+                0.0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                false,
+                3,
+                2,
+                1,
+                0,
+            )
+            .unwrap();
+        let potential = 14.0 / 19.0;
+        npu.schedule_valued_force_fire(1, 3, vec![(2, 1, 0)], vec![potential])
+            .unwrap();
+
+        let burst = npu.process_burst().unwrap();
+        assert!(burst.fired_neurons.contains(&neuron));
+        let window = npu
+            .get_fire_ledger_dense_window_mp(3, burst.burst, 1)
+            .unwrap();
+        let recorded = window
+            .last()
+            .and_then(|(_, mps)| mps.get(&neuron.0).copied())
+            .expect("valued force-fire must be archived with its potential");
+        assert_eq!(recorded, potential);
+    }
+
+    #[test]
+    fn test_valued_force_fire_rejects_mismatched_potentials() {
+        let npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        assert!(npu
+            .schedule_valued_force_fire(1, 3, vec![(0, 0, 0), (1, 0, 0)], vec![0.5])
+            .is_err());
     }
 
     #[test]

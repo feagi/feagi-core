@@ -35,6 +35,9 @@ use crate::pattern_detector::{BatchPatternDetector, PatternConfig};
 use crate::stdp::STDPConfig;
 use ahash::AHashSet;
 use feagi_npu_neural::types::NeuronId;
+use feagi_structures::neuron_voxels::class_potential::{
+    decode_class_potential, encode_class_potential,
+};
 use serde::{Deserialize, Serialize};
 
 /// Default burst gap between repeated MP-unavailable warnings.
@@ -183,13 +186,14 @@ pub struct MemoryScanSource {
     pub field_depth: u32,
 }
 
-/// Mask sampled in XY during scanner training. Depth is the class-channel count.
+/// Single-layer mask sampled in XY during scanner training.
+///
+/// Each labeled pixel fires once with potential `(class_id + 1) / class_channel_count`.
 #[derive(Debug, Clone)]
 pub struct ScannerMaskSource {
     pub mask_area_idx: u32,
     pub mask_width: u32,
     pub mask_height: u32,
-    pub mask_depth: u32,
 }
 
 /// Where the correct-answer area is read for one scanning instance.
@@ -197,7 +201,7 @@ pub struct ScannerMaskSource {
 pub enum AnswerFeedbackLayout {
     /// Every firing voxel is a class channel. Used when feedback matches the class area.
     ClassVolume,
-    /// The class channel is Z at the window origin. Used when feedback matches the detection twin.
+    /// The class is the potential at the window origin. Used when feedback matches the detection twin.
     OutputColumn,
     /// One class for the whole image. Every window of this burst shares these channels.
     ImageClass,
@@ -237,6 +241,8 @@ pub struct ClassifierRewardConfig {
 /// Absent unless a kernel area, class area, associative Mem1→Mem2 mapping,
 /// and at least one `episodic_scan` source are all present. Scanner mode
 /// replaces the kernel and class areas with `kernel` size and `scanner_mask`.
+/// Detection twins are single-layer: each detected pixel fires once with
+/// potential `(class_id + 1) / class_channel_count`.
 #[derive(Debug, Clone)]
 pub struct MemoryScanConfig {
     pub kernel: ScanKernel,
@@ -1211,7 +1217,10 @@ impl PlasticityService {
             let Some(mask) = scan.scanner_mask.as_ref() else {
                 continue;
             };
-            if scan.kernel.voxel_count() == 0 || scan.sources.is_empty() || mask.mask_depth == 0 {
+            if scan.kernel.voxel_count() == 0
+                || scan.sources.is_empty()
+                || scan.class_channel_count == 0
+            {
                 continue;
             }
             let temporal_depth = kernel_cfg.temporal_depth.max(1) as usize;
@@ -1219,25 +1228,14 @@ impl PlasticityService {
                 .get(kernel_area_idx)
                 .copied()
                 .unwrap_or_default();
-            let mask_newest = {
-                let npu_lock = npu.lock().unwrap();
-                let window = match npu_lock.get_fire_ledger_dense_window_bitmaps(
-                    mask.mask_area_idx,
-                    current_timestep,
-                    temporal_depth,
-                ) {
-                    Ok(w) => w,
-                    Err(_) => continue,
-                };
-                let Some((_, newest)) = window.last() else {
-                    continue;
-                };
-                let mut coords: Vec<(u32, u32, u32)> = newest
-                    .iter()
-                    .filter_map(|neuron_id| npu_lock.get_neuron_coordinates(neuron_id))
-                    .collect();
-                coords.sort_unstable();
-                coords
+            let Some(mask_newest) = Self::newest_mask_classes(
+                npu,
+                mask.mask_area_idx,
+                scan.class_channel_count,
+                current_timestep,
+                temporal_depth,
+            ) else {
+                continue;
             };
             if mask_newest.is_empty() {
                 continue;
@@ -1279,7 +1277,7 @@ impl PlasticityService {
                         window.origin.1,
                         scan.kernel.width,
                         scan.kernel.height,
-                        mask.mask_depth,
+                        scan.class_channel_count,
                     );
                     if channels.is_empty() {
                         continue;
@@ -1346,6 +1344,28 @@ impl PlasticityService {
         let Some(feedback_area_idx) = reward.feedback_area_idx else {
             return AnswerObservation::Absent;
         };
+        if reward.feedback_layout == AnswerFeedbackLayout::OutputColumn {
+            let classes = Self::newest_mask_classes(
+                npu,
+                feedback_area_idx,
+                class_channel_count,
+                current_timestep,
+                temporal_depth,
+            )
+            .unwrap_or_default();
+            let mut channels: Vec<u32> = classes
+                .into_iter()
+                .filter(|(x, y, _)| *x == origin.0 && *y == origin.1)
+                .map(|(_, _, class_id)| class_id)
+                .collect();
+            channels.sort_unstable();
+            channels.dedup();
+            return if channels.is_empty() {
+                AnswerObservation::Silent
+            } else {
+                AnswerObservation::Present(channels)
+            };
+        }
         let Ok(npu_lock) = npu.lock() else {
             return AnswerObservation::Silent;
         };
@@ -1365,12 +1385,7 @@ impl PlasticityService {
                 continue;
             };
             let channel = match reward.feedback_layout {
-                AnswerFeedbackLayout::OutputColumn => {
-                    if x != origin.0 || y != origin.1 {
-                        continue;
-                    }
-                    z
-                }
+                AnswerFeedbackLayout::OutputColumn => continue,
                 AnswerFeedbackLayout::ClassVolume => {
                     class_channel_index(x, y, z, class_area_width, class_area_height)
                 }
@@ -1389,6 +1404,74 @@ impl PlasticityService {
         } else {
             AnswerObservation::Present(channels)
         }
+    }
+
+    /// `(x, y, class_id)` for every voxel of a single-layer class map that fired on the newest burst.
+    ///
+    /// The class is decoded from the firing-time potential. Voxels whose potential names
+    /// no class are dropped. `None` when the area's fire ledger or MP window is unavailable.
+    fn newest_mask_classes(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        area_idx: u32,
+        class_count: u32,
+        current_timestep: u64,
+        temporal_depth: usize,
+    ) -> Option<Vec<(u32, u32, u32)>> {
+        let npu_lock = npu.lock().ok()?;
+        let window = npu_lock
+            .get_fire_ledger_dense_window_mp(area_idx, current_timestep, temporal_depth)
+            .ok()?;
+        let (_, newest) = window.last()?;
+        let mut classes: Vec<(u32, u32, u32)> = newest
+            .iter()
+            .filter_map(|(neuron_id, potential)| {
+                let (x, y, _) = npu_lock.get_neuron_coordinates(*neuron_id)?;
+                let class_id = decode_class_potential(*potential, class_count)?;
+                Some((x, y, class_id))
+            })
+            .collect();
+        classes.sort_unstable();
+        Some(classes)
+    }
+
+    /// One class per detected pixel, and the potential that encodes it.
+    ///
+    /// Votes are summed per class; the highest total wins and ties go to the lower class id,
+    /// so overlapping windows write each pixel exactly once.
+    fn detection_twin_writes(
+        votes: &HashMap<(u32, u32), HashMap<u32, f32>>,
+        class_count: u32,
+    ) -> (Vec<(u32, u32, u32)>, Vec<f32>) {
+        let mut pixels: Vec<&(u32, u32)> = votes.keys().collect();
+        pixels.sort_unstable();
+        let mut coords = Vec::with_capacity(pixels.len());
+        let mut potentials = Vec::with_capacity(pixels.len());
+        for pixel in pixels {
+            let winner =
+                votes[pixel]
+                    .iter()
+                    .fold(
+                        None,
+                        |best: Option<(u32, f32)>, (class_id, score)| match best {
+                            Some((best_id, best_score))
+                                if best_score > *score
+                                    || (best_score == *score && best_id < *class_id) =>
+                            {
+                                Some((best_id, best_score))
+                            }
+                            _ => Some((*class_id, *score)),
+                        },
+                    );
+            let Some((class_id, _)) = winner else {
+                continue;
+            };
+            let Ok(potential) = encode_class_potential(class_id, class_count) else {
+                continue;
+            };
+            coords.push((pixel.0, pixel.1, 0));
+            potentials.push(potential);
+        }
+        (coords, potentials)
     }
 
     fn confidence_coord(
@@ -1510,7 +1593,7 @@ impl PlasticityService {
                         )
                     })
                 });
-                let mut stamps: HashMap<(u32, u32, u32), ()> = HashMap::new();
+                let mut votes: HashMap<(u32, u32), HashMap<u32, f32>> = HashMap::new();
                 let mut confidence: HashMap<u32, f32> = HashMap::new();
                 let mut pain_this_source = false;
                 let mut pleasure_this_source = false;
@@ -1620,7 +1703,14 @@ impl PlasticityService {
                             if class_z >= scan.class_channel_count {
                                 continue;
                             }
-                            stamps.insert((window.origin.0, window.origin.1, class_z), ());
+                            let vote = array
+                                .class_channel_weight(neuron_idx, class_z)
+                                .unwrap_or(1.0);
+                            *votes
+                                .entry((window.origin.0, window.origin.1))
+                                .or_default()
+                                .entry(class_z)
+                                .or_insert(0.0) += vote;
                             if let Some(reward) = scan.reward.as_ref() {
                                 if let Some(weight) =
                                     array.class_channel_weight(neuron_idx, class_z)
@@ -1689,18 +1779,28 @@ impl PlasticityService {
                         }
                     }
                 }
-                if stamps.is_empty() {
+                if votes.is_empty() {
                     continue;
                 }
-                let mut coords: Vec<(u32, u32, u32)> = stamps.into_keys().collect();
-                coords.sort_unstable();
+                let (coords, potentials) =
+                    Self::detection_twin_writes(&votes, scan.class_channel_count);
+                if coords.is_empty() {
+                    continue;
+                }
                 if let Ok(npu_lock) = npu.lock() {
-                    npu_lock.schedule_replay_injection(
+                    if let Err(error) = npu_lock.schedule_valued_force_fire(
                         current_timestep.saturating_add(1),
                         source.twin_area_idx,
                         coords,
-                        None,
-                    );
+                        potentials,
+                    ) {
+                        tracing::warn!(
+                            target: "plasticity",
+                            "[PLASTICITY] Detection twin {} write rejected: {}",
+                            source.twin_area_idx,
+                            error
+                        );
+                    }
                 }
             }
         }
@@ -1886,6 +1986,18 @@ impl PlasticityService {
                             }
                         }
                     }
+                    if reward.feedback_layout == AnswerFeedbackLayout::OutputColumn {
+                        if let Some(feedback_area_idx) = reward.feedback_area_idx {
+                            if let Err(e) = npu.enable_fire_ledger_mp_archival(feedback_area_idx) {
+                                tracing::warn!(
+                                    target: "plasticity",
+                                    "[PLASTICITY] Failed to enable MP archival for classifier answer area {}: {}",
+                                    feedback_area_idx,
+                                    e
+                                );
+                            }
+                        }
+                    }
                 }
                 if let Some(mask) = &scan_cfg.scanner_mask {
                     let existing = existing_configs
@@ -1906,6 +2018,14 @@ impl PlasticityService {
                                 e
                             );
                         }
+                    }
+                    if let Err(e) = npu.enable_fire_ledger_mp_archival(mask.mask_area_idx) {
+                        tracing::warn!(
+                            target: "plasticity",
+                            "[PLASTICITY] Failed to enable MP archival for scan mask {}: {}",
+                            mask.mask_area_idx,
+                            e
+                        );
                     }
                 }
             }
@@ -2597,8 +2717,8 @@ mod tests {
         );
     }
 
-    /// A trained spatial match is stamped onto that field's twin at the bound
-    /// class channel. A different signature does not light the twin.
+    /// A trained spatial match fires that field's twin pixel with the class as its
+    /// potential. A different signature does not light the twin.
     #[test]
     fn episodic_scan_injects_match_into_bound_twin_only() {
         use std::collections::HashMap;
@@ -2606,7 +2726,8 @@ mod tests {
         const FIELD_IDX: u32 = 10;
         const KERNEL_IDX: u32 = 11;
         const TWIN_IDX: u32 = 12;
-        const CLASS_CHANNEL: u32 = 2;
+        const CLASS_CHANNEL: u32 = 1;
+        const CLASS_COUNT: u32 = 3;
 
         let cache = create_memory_stats_cache();
         let npu = Arc::new(TracingMutex::new(
@@ -2621,6 +2742,8 @@ mod tests {
             guard.register_cortical_area(KERNEL_IDX, "bWttZW0wMDE=".to_string());
             guard.register_cortical_area(TWIN_IDX, "Y3R3aW4wMDE=".to_string());
             guard.configure_fire_ledger_window(FIELD_IDX, 1).unwrap();
+            guard.configure_fire_ledger_window(TWIN_IDX, 1).unwrap();
+            guard.enable_fire_ledger_mp_archival(TWIN_IDX).unwrap();
             let field_neuron = guard
                 .add_neuron(
                     1.0,
@@ -2639,6 +2762,7 @@ mod tests {
                     0,
                 )
                 .unwrap();
+            // The old one-hot location of the class. Single-layer twins never write it.
             let twin_decoy = guard
                 .add_neuron(
                     1.0,
@@ -2654,12 +2778,13 @@ mod tests {
                     TWIN_IDX,
                     0,
                     0,
-                    0,
+                    CLASS_CHANNEL,
                 )
                 .unwrap();
+            // Threshold far above the class potential: the write must bypass LIF.
             let twin_match = guard
                 .add_neuron(
-                    1.0,
+                    50.0,
                     f32::MAX,
                     0.0,
                     0.0,
@@ -2672,7 +2797,7 @@ mod tests {
                     TWIN_IDX,
                     0,
                     0,
-                    CLASS_CHANNEL,
+                    0,
                 )
                 .unwrap();
             guard.inject_sensory_with_potentials(&[(field_neuron, 2.0)]);
@@ -2706,7 +2831,7 @@ mod tests {
             },
             min_window_activity: 1,
             scan_skip_density: 1.0,
-            class_channel_count: 3,
+            class_channel_count: CLASS_COUNT,
             class_area_width: 1,
             class_area_height: 1,
             class_memory_area_idx: 99,
@@ -2734,11 +2859,24 @@ mod tests {
         let matched = npu.lock().unwrap().process_burst().unwrap();
         assert!(
             matched.fired_neurons.contains(&twin_match),
-            "the matching class channel on the bound twin must fire"
+            "the matched pixel on the bound twin must fire"
         );
         assert!(
             !matched.fired_neurons.contains(&twin_decoy),
-            "a voxel that is not the matched class channel must stay quiet"
+            "the twin is one layer; no one-hot class voxel is written"
+        );
+        let recorded = npu
+            .lock()
+            .unwrap()
+            .get_fire_ledger_dense_window_mp(TWIN_IDX, matched.burst, 1)
+            .unwrap()
+            .last()
+            .and_then(|(_, mps)| mps.get(&twin_match.0).copied())
+            .expect("twin pixel potential is archived");
+        assert_eq!(
+            decode_class_potential(recorded, CLASS_COUNT),
+            Some(CLASS_CHANNEL),
+            "the twin potential carries the matched class"
         );
         assert!(
             !matched.fired_neurons.contains(&field_neuron),
@@ -2766,7 +2904,8 @@ mod tests {
         const FIELD_IDX: u32 = 10;
         const KERNEL_IDX: u32 = 11;
         const MASK_IDX: u32 = 13;
-        const CLASS_CHANNEL: u32 = 2;
+        const CLASS_CHANNEL: u32 = 1;
+        const CLASS_COUNT: u32 = 3;
 
         let cache = create_memory_stats_cache();
         let npu = Arc::new(TracingMutex::new(
@@ -2794,6 +2933,7 @@ mod tests {
             guard.register_cortical_area(MASK_IDX, "Y21hc2swMDE=".to_string());
             guard.configure_fire_ledger_window(FIELD_IDX, 1).unwrap();
             guard.configure_fire_ledger_window(MASK_IDX, 1).unwrap();
+            guard.enable_fire_ledger_mp_archival(MASK_IDX).unwrap();
             let labeled_neuron = guard
                 .add_neuron(
                     1.0,
@@ -2830,9 +2970,10 @@ mod tests {
                     0,
                 )
                 .unwrap();
+            // Single-layer mask pixel: the class rides on the potential.
             let mask_neuron = guard
                 .add_neuron(
-                    1.0,
+                    0.0001,
                     f32::MAX,
                     0.0,
                     0.0,
@@ -2845,13 +2986,14 @@ mod tests {
                     MASK_IDX,
                     0,
                     0,
-                    CLASS_CHANNEL,
+                    0,
                 )
                 .unwrap();
+            let class_potential = encode_class_potential(CLASS_CHANNEL, CLASS_COUNT).unwrap();
             guard.inject_sensory_with_potentials(&[
                 (labeled_neuron, 2.0),
                 (unlabeled_neuron, 2.0),
-                (mask_neuron, 2.0),
+                (mask_neuron, class_potential),
             ]);
             let burst = guard.process_burst().unwrap();
             assert!(burst.fired_neurons.contains(&labeled_neuron));
@@ -2867,7 +3009,7 @@ mod tests {
             },
             min_window_activity: 1,
             scan_skip_density: 0.0,
-            class_channel_count: 3,
+            class_channel_count: CLASS_COUNT,
             class_area_width: 1,
             class_area_height: 1,
             class_memory_area_idx: 99,
@@ -2882,7 +3024,6 @@ mod tests {
                 mask_area_idx: MASK_IDX,
                 mask_width: 2,
                 mask_height: 1,
-                mask_depth: 3,
             }),
             reward: None,
         };
@@ -3121,6 +3262,26 @@ mod tests {
         );
     }
 
+    /// Overlapping windows that disagree on a pixel write it once, with the
+    /// strongest class. Ties go to the lower class id.
+    #[test]
+    fn detection_twin_writes_one_winner_per_pixel() {
+        let mut votes: HashMap<(u32, u32), HashMap<u32, f32>> = HashMap::new();
+        votes.entry((0, 0)).or_default().insert(4, 1.0);
+        votes.entry((0, 0)).or_default().insert(7, 2.5);
+        votes.entry((3, 1)).or_default().insert(5, 1.0);
+        votes.entry((3, 1)).or_default().insert(2, 1.0);
+        let (coords, potentials) = PlasticityService::detection_twin_writes(&votes, 19);
+        assert_eq!(coords, vec![(0, 0, 0), (3, 1, 0)]);
+        assert_eq!(
+            potentials
+                .iter()
+                .map(|p| decode_class_potential(*p, 19))
+                .collect::<Vec<_>>(),
+            vec![Some(7), Some(2)]
+        );
+    }
+
     /// A correct-answer column confirms one channel and pains the other.
     /// The missed correct channel is bound under pleasure.
     #[test]
@@ -3148,6 +3309,7 @@ mod tests {
             guard.register_cortical_area(FEEDBACK_IDX, "Y2ZlZWQwMDE=".to_string());
             guard.configure_fire_ledger_window(FIELD_IDX, 1).unwrap();
             guard.configure_fire_ledger_window(FEEDBACK_IDX, 1).unwrap();
+            guard.enable_fire_ledger_mp_archival(FEEDBACK_IDX).unwrap();
             let field_neuron = guard
                 .add_neuron(
                     1.0,
@@ -3166,9 +3328,10 @@ mod tests {
                     0,
                 )
                 .unwrap();
+            // Twin-shaped answer: one layer, class 2 of 3 carried as potential.
             let feedback_neuron = guard
                 .add_neuron(
-                    1.0,
+                    0.0001,
                     f32::MAX,
                     0.0,
                     0.0,
@@ -3181,10 +3344,11 @@ mod tests {
                     FEEDBACK_IDX,
                     0,
                     0,
-                    2,
+                    0,
                 )
                 .unwrap();
-            guard.inject_sensory_with_potentials(&[(field_neuron, 2.0), (feedback_neuron, 2.0)]);
+            let answer = encode_class_potential(2, 3).unwrap();
+            guard.inject_sensory_with_potentials(&[(field_neuron, 2.0), (feedback_neuron, answer)]);
             let burst = guard.process_burst().unwrap();
             assert!(burst.fired_neurons.contains(&feedback_neuron));
             burst.burst

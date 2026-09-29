@@ -847,7 +847,7 @@ fn sample_depth_map_device_registrations() -> Value {
                     {
                         "dimension_x": 64,
                         "dimension_y": 64,
-                        "dimension_z": 64
+                        "dimension_z": 1
                     }
                 ]
             ]
@@ -1786,14 +1786,15 @@ async fn test_auto_create_sets_depth_map_threshold_defaults() {
         .expect("Expected depth map area to be auto-created");
 
     assert_eq!(
-        depth_area.firing_threshold, 0.01,
-        "Expected depth map auto-created area firing_threshold=0.01"
+        depth_area.firing_threshold, 0.0001,
+        "Expected depth map auto-created area firing_threshold=0.0001"
     );
     assert_eq!(
         depth_area.firing_threshold_increment,
-        [0.0, 0.0, 0.01],
-        "Expected depth map firing threshold increment [0.0, 0.0, 0.01]"
+        [0.0, 0.0, 0.0],
+        "Depth map is one layer; depth rides on potential, not on graded Z thresholds"
     );
+    assert_eq!(depth_area.dimensions.2, 1, "Depth map is one layer deep");
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -1873,13 +1874,12 @@ async fn test_auto_create_migrates_existing_depth_map_legacy_thresholds() {
         .expect("Expected depth map area to exist after auto-create reconciliation");
 
     assert_eq!(
-        depth_area.firing_threshold, 0.01,
-        "Expected legacy depth map threshold to migrate to 0.01"
+        depth_area.firing_threshold, 0.0001,
+        "Expected legacy depth map threshold to migrate to 0.0001"
     );
     assert_eq!(
-        depth_area.firing_threshold_increment,
-        [0.0, 0.0, 0.01],
-        "Expected legacy depth map threshold increment to migrate to [0.0, 0.0, 0.01]"
+        depth_area.dimensions.2, 1,
+        "Expected legacy binned depth map to be resized to one layer"
     );
 }
 
@@ -1960,13 +1960,8 @@ async fn test_auto_create_migrates_depth_map_threshold_from_legacy_35() {
         .expect("Expected depth map area to exist after auto-create reconciliation");
 
     assert_eq!(
-        depth_area.firing_threshold, 0.01,
-        "Expected legacy 35.0 depth map threshold to migrate to 0.01"
-    );
-    assert_eq!(
-        depth_area.firing_threshold_increment,
-        [0.0, 0.0, 0.01],
-        "Expected legacy depth map threshold increment to migrate to [0.0, 0.0, 0.01]"
+        depth_area.firing_threshold, 0.0001,
+        "Expected legacy 35.0 depth map threshold to migrate to 0.0001"
     );
 }
 

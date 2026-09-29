@@ -5,8 +5,8 @@ use crate::contracts::{TypedPrediction, TypedTarget};
 use crate::error::TrainerError;
 use crate::plugins::{MetricPackPlugin, MetricResult};
 
-/// Dense mask dimensions and label slice extracted from a prediction.
-type SegmentationMaskParts<'a> = (u32, u32, &'a [u8]);
+/// Dense mask dimensions, label slice, and silent-pixel label extracted from a prediction.
+type SegmentationMaskParts<'a> = (u32, u32, &'a [u8], Option<u8>);
 
 /// Dense mask dimensions, label slice, and optional ignore label from a target.
 type SegmentationTargetParts<'a> = (u32, u32, &'a [u8], Option<u8>);
@@ -30,7 +30,8 @@ impl SegmentationMetricPack {
                 width,
                 height,
                 labels,
-            } => Ok((*width, *height, labels.as_slice())),
+                unpredicted_label,
+            } => Ok((*width, *height, labels.as_slice(), *unpredicted_label)),
             other => Err(TrainerError::Evaluation(format!(
                 "segmentation pack requires SegmentationMask predictions, got {other:?}"
             ))),
@@ -85,7 +86,7 @@ impl MetricPackPlugin for SegmentationMetricPack {
         let mut false_negative = vec![0_u64; 256];
 
         for (prediction, target) in predictions.iter().zip(targets.iter()) {
-            let (pw, ph, pred) = Self::extract_mask(prediction)?;
+            let (pw, ph, pred, unpredicted_label) = Self::extract_mask(prediction)?;
             let (tw, th, actual, ignore_label) = Self::extract_target(target)?;
             if pw != tw || ph != th || pred.len() != actual.len() {
                 return Err(TrainerError::Evaluation(format!(
@@ -97,7 +98,9 @@ impl MetricPackPlugin for SegmentationMetricPack {
                     continue;
                 }
                 total += 1;
-                if p == t {
+                if unpredicted_label == Some(*p) {
+                    false_negative[*t as usize] += 1;
+                } else if p == t {
                     correct += 1;
                     true_positive[*p as usize] += 1;
                 } else {
@@ -148,12 +151,14 @@ impl MetricPackPlugin for SegmentationMetricPack {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contracts::UNPREDICTED_PIXEL;
 
     fn mask(labels: &[u8]) -> TypedPrediction {
         TypedPrediction::SegmentationMask {
             width: 2,
             height: 2,
             labels: labels.to_vec(),
+            unpredicted_label: None,
         }
     }
 
@@ -184,5 +189,22 @@ mod tests {
             .evaluate(&[mask(&[0, 0, 0, 0])], &[target(&[0, 1, 0, 0])])
             .expect("evaluate");
         assert_eq!(result.metrics["pixel_accuracy"], 0.75);
+    }
+
+    #[test]
+    fn silent_pixels_are_misses_not_a_phantom_class() {
+        let pack = SegmentationMetricPack::new();
+        let prediction = TypedPrediction::SegmentationMask {
+            width: 2,
+            height: 2,
+            labels: vec![0, UNPREDICTED_PIXEL, 1, 1],
+            unpredicted_label: Some(UNPREDICTED_PIXEL),
+        };
+        let result = pack
+            .evaluate(&[prediction], &[target(&[0, 0, 1, 1])])
+            .expect("evaluate");
+        assert_eq!(result.metrics["pixel_accuracy"], 0.75);
+        // class 0: tp 1, fn 1 -> 0.5. class 1: tp 2 -> 1.0. No IoU entry for the silent label.
+        assert_eq!(result.metrics["mean_iou"], 0.75);
     }
 }

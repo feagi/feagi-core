@@ -274,7 +274,7 @@ let response = zmq::handle_api_control_request(
 
 For RGBD sensors, register two sensory units in `device_registrations`:
 - `Vision` for RGB frames
-- `DepthMap` for quantized depth volumes (`x/y` topology, `z` depth bins)
+- `DepthMap` for depth planes (`x/y` topology, one layer; each pixel's potential is normalized depth in `(0, 1]`, 0 = no return)
 
 Use the same `cortical_unit_index` and `bundle_id` so FEAGI and BV can treat both streams as one camera rig.
 

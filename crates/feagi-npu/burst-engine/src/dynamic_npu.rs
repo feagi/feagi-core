@@ -1175,6 +1175,24 @@ where
         }
     }
 
+    /// Queue coords that fire on `target_burst` with exactly the given potentials.
+    pub fn schedule_valued_force_fire(
+        &self,
+        target_burst: u64,
+        area_idx: u32,
+        coords: Vec<(u32, u32, u32)>,
+        potentials: Vec<f32>,
+    ) -> Result<()> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.schedule_valued_force_fire(target_burst, area_idx, coords, potentials)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.schedule_valued_force_fire(target_burst, area_idx, coords, potentials)
+            }
+        }
+    }
+
     /// Remove the replay target owned by one memory/upstream cortical-area pair.
     ///
     /// Returns `true` when a runtime replay route was present.

@@ -2307,13 +2307,15 @@ impl ConnectomeManager {
         Ok(twin_id)
     }
 
-    /// Class-map twin for `episodic_scan`: field_x × field_y × C, no `memory_replay`.
+    /// Class-map twin for `episodic_scan`: field_x × field_y × 1, no `memory_replay`.
+    ///
+    /// Each detected pixel fires with potential `(class_id + 1) / class_count`.
     pub fn ensure_scan_twin_area(
         &mut self,
         memory_area_id: &CorticalID,
         field_area_id: &CorticalID,
     ) -> BduResult<CorticalID> {
-        let class_channel_count = self.classifier_class_channel_count(memory_area_id)?;
+        self.classifier_class_channel_count(memory_area_id)?;
         let memory_area = self.cortical_areas.get(memory_area_id).ok_or_else(|| {
             BduError::InvalidArea(format!(
                 "Memory area {} not found",
@@ -2357,12 +2359,14 @@ impl ConnectomeManager {
         let twin_name = format!("{}_scan_twin", field_area.name.replace(' ', "_"));
         let twin_type = CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire);
         let twin_position = self.build_memory_twin_position(memory_area, field_area);
-        let twin_dims = CorticalAreaDimensions::new(
-            field_area.dimensions.width,
-            field_area.dimensions.height,
-            class_channel_count,
-        )
-        .map_err(|e| BduError::Internal(format!("Invalid scan twin dimensions: {}", e)))?;
+        let [twin_width, twin_height, twin_depth] =
+            feagi_structures::genomic::classifiers::detection_twin_shape([
+                field_area.dimensions.width,
+                field_area.dimensions.height,
+                field_area.dimensions.depth,
+            ]);
+        let twin_dims = CorticalAreaDimensions::new(twin_width, twin_height, twin_depth)
+            .map_err(|e| BduError::Internal(format!("Invalid scan twin dimensions: {}", e)))?;
         let mut twin_area =
             CorticalArea::new(twin_id, 0, twin_name, twin_dims, twin_position, twin_type)?;
         twin_area.properties = self.build_memory_twin_properties(
@@ -2374,6 +2378,9 @@ impl ConnectomeManager {
         twin_area
             .properties
             .insert("scan_twin".to_string(), serde_json::json!(true));
+        twin_area
+            .properties
+            .insert("mp_driven_psp".to_string(), serde_json::json!(true));
 
         let _twin_idx = self.add_cortical_area(twin_area)?;
         let _ = self.create_neurons_for_area(&twin_id);
@@ -2417,18 +2424,21 @@ impl ConnectomeManager {
                 class_cortical_id.as_base_64()
             ))
         })?;
-        let count = class_area
-            .dimensions
-            .width
-            .saturating_mul(class_area.dimensions.height)
-            .saturating_mul(class_area.dimensions.depth);
-        if count == 0 {
-            return Err(BduError::InvalidArea(format!(
-                "Classifier class area {} has zero volume",
-                class_cortical_id.as_base_64()
-            )));
-        }
-        Ok(count)
+        let shape = [
+            class_area.dimensions.width,
+            class_area.dimensions.height,
+            class_area.dimensions.depth,
+        ];
+        feagi_structures::genomic::classifiers::validate_kernel_class_area_shape(shape).map_err(
+            |reason| {
+                BduError::InvalidArea(format!(
+                    "Classifier class area {}: {}",
+                    class_cortical_id.as_base_64(),
+                    reason
+                ))
+            },
+        )?;
+        Ok(shape[2])
     }
 
     fn build_scan_twin_id(
@@ -2927,6 +2937,9 @@ impl ConnectomeManager {
                 twin_area
                     .properties
                     .insert("scan_twin".to_string(), serde_json::json!(true));
+                twin_area
+                    .properties
+                    .insert("mp_driven_psp".to_string(), serde_json::json!(true));
                 twin_area.properties.insert(
                     "memory_twin_of".to_string(),
                     serde_json::json!(field.field_area_id),
@@ -3005,6 +3018,7 @@ impl ConnectomeManager {
             ClassifierTrainingMode::Kernel => {
                 kernel_mem.properties.remove("classifier_mask_area_id");
                 kernel_mem.properties.remove("classifier_kernel_size");
+                kernel_mem.properties.remove("classifier_class_count");
                 if let Some(kernel_area_id) = &classifier.kernel_area_id {
                     kernel_mem.properties.insert(
                         "classifier_kernel_area_id".to_string(),
@@ -3040,6 +3054,14 @@ impl ConnectomeManager {
                     );
                 } else {
                     kernel_mem.properties.remove("classifier_kernel_size");
+                }
+                if let Some(class_count) = classifier.class_count {
+                    kernel_mem.properties.insert(
+                        "classifier_class_count".to_string(),
+                        serde_json::json!(class_count),
+                    );
+                } else {
+                    kernel_mem.properties.remove("classifier_class_count");
                 }
             }
         }
@@ -6037,14 +6059,21 @@ impl ConnectomeManager {
         let kernel_area = self.cortical_areas.get(&kernel_id)?;
         let class_area = self.cortical_areas.get(&class_id)?;
         let class_memory_area_idx = *self.cortical_id_to_idx.get(&class_mem_id)?;
-        let class_channel_count = class_area
-            .dimensions
-            .width
-            .saturating_mul(class_area.dimensions.height)
-            .saturating_mul(class_area.dimensions.depth);
-        if class_channel_count == 0 {
+        let class_shape = [
+            class_area.dimensions.width,
+            class_area.dimensions.height,
+            class_area.dimensions.depth,
+        ];
+        if feagi_structures::genomic::classifiers::validate_kernel_class_area_shape(class_shape)
+            .is_err()
+        {
+            warn!(
+                "Kernel class area {} must be 1x1xn; classifier scan is not configured",
+                class_id.as_base_64()
+            );
             return None;
         }
+        let class_channel_count = class_shape[2];
         let scan_fields = self.get_episodic_scan_upstream_cortical_areas(memory_id);
         if scan_fields.is_empty() {
             return None;
@@ -6131,8 +6160,21 @@ impl ConnectomeManager {
         }
         let mask_area = self.cortical_areas.get(&mask_id)?;
         let class_memory_area_idx = *self.cortical_id_to_idx.get(&class_mem_id)?;
-        let class_channel_count = mask_area.dimensions.depth;
-        if class_channel_count == 0 {
+        let class_channel_count = memory_area
+            .properties
+            .get("classifier_class_count")
+            .and_then(|value| value.as_u64())
+            .and_then(|value| u32::try_from(value).ok())?;
+        if feagi_structures::neuron_voxels::class_potential::validate_class_count(
+            class_channel_count,
+        )
+        .is_err()
+            || mask_area.dimensions.depth != 1
+        {
+            warn!(
+                "Scanner mask {} must be one layer with a valid class count; classifier scan is not configured",
+                mask_id.as_base_64()
+            );
             return None;
         }
         let scan_fields = self.get_episodic_scan_upstream_cortical_areas(memory_id);
@@ -6174,7 +6216,6 @@ impl ConnectomeManager {
                 mask_area_idx: *self.cortical_id_to_idx.get(&mask_id)?,
                 mask_width: mask_area.dimensions.width,
                 mask_height: mask_area.dimensions.height,
-                mask_depth: mask_area.dimensions.depth,
             }),
             reward: self.classifier_reward_scan_config(
                 memory_area,
@@ -9802,6 +9843,7 @@ mod tests {
             kernel_area_id: None,
             class_area_id: None,
             mask_area_id: None,
+            class_count: None,
             kernel_size: None,
             fields: Vec::new(),
             kernel_memory_id: "mkmem1".to_string(),
@@ -11252,7 +11294,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scan_twin_uses_field_xy_and_class_count() {
+    fn test_scan_twin_is_one_layer_over_field_xy_and_forwards_its_potential() {
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
@@ -11340,13 +11382,24 @@ mod tests {
         let twin_area = manager.get_cortical_area(&twin_id).unwrap();
         assert_eq!(twin_area.dimensions.width, 8);
         assert_eq!(twin_area.dimensions.height, 6);
-        assert_eq!(twin_area.dimensions.depth, 5);
+        assert_eq!(
+            twin_area.dimensions.depth, 1,
+            "the class rides on potential; the twin is never class-deep"
+        );
         assert_eq!(
             twin_area
                 .properties
                 .get("scan_twin")
                 .and_then(|v| v.as_bool()),
             Some(true)
+        );
+        assert_eq!(
+            twin_area
+                .properties
+                .get("mp_driven_psp")
+                .and_then(|v| v.as_bool()),
+            Some(true),
+            "downstream mappings must receive the class value, not a flat PSP"
         );
         let has_replay = memory_area
             .properties
@@ -11360,6 +11413,76 @@ mod tests {
         assert!(
             !episodic_upstreams.contains(&field_idx),
             "scan source must not enter episodic hash upstreams"
+        );
+    }
+
+    #[test]
+    fn test_scan_twin_rejects_class_area_that_is_not_one_by_one_by_n() {
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+            MemoryCorticalType,
+        };
+        use std::sync::Arc;
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu);
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+
+        let field_id = CorticalID::try_from_bytes(b"cfld0002").unwrap();
+        let class_id = CorticalID::try_from_bytes(b"ccls0002").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmem0003").unwrap();
+        let field_area = CorticalArea::new(
+            field_id,
+            0,
+            "Field".to_string(),
+            CorticalAreaDimensions::new(8, 6, 4).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        let class_area = CorticalArea::new(
+            class_id,
+            0,
+            "Class".to_string(),
+            CorticalAreaDimensions::new(2, 7, 4).unwrap(),
+            (20, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        let mut mem_area = CorticalArea::new(
+            mem_id,
+            0,
+            "KernelMem".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (40, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem_area
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem_area.properties.insert(
+            "classifier_class_area_id".to_string(),
+            serde_json::json!(class_id.as_base_64()),
+        );
+        manager.add_cortical_area(field_area).unwrap();
+        manager.add_cortical_area(class_area).unwrap();
+        manager.add_cortical_area(mem_area).unwrap();
+
+        let error = manager
+            .ensure_scan_twin_area(&mem_id, &field_id)
+            .expect_err("2x7x4 class area must not size a scan twin");
+        assert!(
+            error.to_string().contains("1x1xn"),
+            "unexpected error: {error}"
         );
     }
 
@@ -11490,6 +11613,7 @@ mod tests {
             kernel_area_id: None,
             class_area_id: None,
             mask_area_id: None,
+            class_count: None,
             kernel_size: None,
             fields: Vec::new(),
             kernel_memory_id: "mkmem1".to_string(),
@@ -11546,6 +11670,7 @@ mod tests {
             kernel_area_id: Some("ckern1".to_string()),
             class_area_id: Some("ccls01".to_string()),
             mask_area_id: None,
+            class_count: None,
             kernel_size: None,
             fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
                 field_area_id: "cfield".to_string(),
@@ -11913,6 +12038,7 @@ mod tests {
             kernel_area_id: Some("ckern001".to_string()),
             class_area_id: Some("ccls0001".to_string()),
             mask_area_id: None,
+            class_count: None,
             kernel_size: None,
             fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
                 field_area_id: "cfield01".to_string(),
@@ -12038,6 +12164,7 @@ mod tests {
             kernel_area_id: Some("ckern001".to_string()),
             class_area_id: Some("ccls0001".to_string()),
             mask_area_id: None,
+            class_count: None,
             kernel_size: None,
             fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
                 field_area_id: field_id.as_base_64(),
@@ -12354,6 +12481,7 @@ mod tests {
                 kernel_area_id: Some(kernel_id.as_base_64()),
                 class_area_id: Some(class_id.as_base_64()),
                 mask_area_id: None,
+                class_count: None,
                 kernel_size: None,
                 fields: vec![ClassifierField {
                     field_area_id: field_id.as_base_64(),
@@ -12545,7 +12673,7 @@ mod tests {
                 }]
             }),
         );
-        let mask = custom(mask_id, "mask", (4, 3, 10));
+        let mask = custom(mask_id, "mask", (4, 3, 1));
         let mut kernel_mem = memory(mem_id, "kernel_mem");
         kernel_mem.properties.insert(
             "cortical_mapping_dst".to_string(),
@@ -12558,7 +12686,7 @@ mod tests {
             }),
         );
         let class_mem = memory(class_mem_id, "class_mem");
-        let mut twin = custom(twin_id, "twin", (4, 3, 10));
+        let mut twin = custom(twin_id, "twin", (4, 3, 1));
         twin.properties.insert(
             "memory_twin_of".to_string(),
             serde_json::json!(field_id.as_base_64()),
@@ -12600,6 +12728,7 @@ mod tests {
                 kernel_area_id: None,
                 class_area_id: None,
                 mask_area_id: Some(mask_id.as_base_64()),
+                class_count: Some(10),
                 kernel_size: Some([2, 2, 3]),
                 fields: vec![ClassifierField {
                     field_area_id: field_id.as_base_64(),
@@ -12638,6 +12767,7 @@ mod tests {
             Some(mask_id.as_base_64().as_str())
         );
         assert_eq!(loaded_classifier.kernel_size, Some([2, 2, 3]));
+        assert_eq!(loaded_classifier.class_count, Some(10));
         assert!(loaded_classifier.kernel_area_id.is_none());
         assert!(loaded_classifier.class_area_id.is_none());
 
@@ -12700,7 +12830,7 @@ mod tests {
             mask_source.mask_area_idx,
             manager.get_cortical_idx(&mask_id).unwrap()
         );
-        assert_eq!(mask_source.mask_depth, 10);
+        assert_eq!((mask_source.mask_width, mask_source.mask_height), (4, 3));
         assert_eq!(scan.sources.len(), 1);
         assert_eq!(
             scan.sources[0].field_area_idx,

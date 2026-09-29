@@ -162,12 +162,13 @@ fn segmentation_progress_preview(
     else {
         return Ok((None, None, None));
     };
-    let depth = decoder_profile.mask_depth.ok_or_else(|| {
-        TrainerError::Config(
-            "segmentation progress preview requires decoder_profile.mask_depth".to_string(),
-        )
-    })?;
-    let mask_png = colorize_mask_png(labels, *width, *height, depth, *ignore_label)?;
+    let mask_png = colorize_mask_png(
+        labels,
+        *width,
+        *height,
+        decoder_profile.class_count,
+        *ignore_label,
+    )?;
     Ok((
         Some(base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
@@ -888,7 +889,6 @@ mod tests {
             bins: 1,
             mask_width: None,
             mask_height: None,
-            mask_depth: None,
             cortical_name: None,
         }
     }
@@ -945,7 +945,7 @@ mod tests {
             )]),
         };
         let mut profile = decoder_profile();
-        profile.mask_depth = Some(2);
+        profile.class_count = 2;
         let (image, mask, name) =
             segmentation_progress_preview(&sample, &profile).expect("preview");
         assert_eq!(

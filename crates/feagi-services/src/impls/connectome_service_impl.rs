@@ -5974,6 +5974,7 @@ mod tests {
             kernel_area_id: Some(kernel_id.as_base_64()),
             class_area_id: Some(class_id.as_base_64()),
             mask_area_id: None,
+            class_count: None,
             kernel_size: None,
             fields: vec![ClassifierField {
                 field_area_id: field_id.as_base_64(),

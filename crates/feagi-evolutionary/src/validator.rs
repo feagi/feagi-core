@@ -877,6 +877,7 @@ mod tests {
                 kernel_area_id: None,
                 class_area_id: None,
                 mask_area_id: None,
+                class_count: None,
                 kernel_size: None,
                 fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
                     field_area_id: "cfield".to_string(),

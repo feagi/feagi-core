@@ -1582,7 +1582,8 @@ mod test_motor_cortical_unit {
         let unit = topology
             .get(&0.into())
             .expect("Missing topology entry for area 0");
-        assert_eq!(unit.channel_dimensions_default, [32, 32, 8]);
+        assert_eq!(unit.channel_dimensions_default, [32, 32, 1]);
+        assert_eq!(unit.channel_dimensions_max, [4096, 4096, 1]);
     }
 
     #[test]
@@ -1776,16 +1777,16 @@ mod test_sensory_cortical_unit {
             let unit = topology
                 .get(&0.into())
                 .expect("Missing topology entry for DepthMap area 0");
-            assert_eq!(unit.channel_dimensions_default, [64, 64, 64]);
+            assert_eq!(unit.channel_dimensions_default, [64, 64, 1]);
             assert_eq!(unit.channel_dimensions_min, [1, 1, 1]);
-            assert_eq!(unit.channel_dimensions_max, [4096, 4096, 1024]);
+            assert_eq!(unit.channel_dimensions_max, [4096, 4096, 1]);
             assert_eq!(
                 SensoryCorticalUnit::DepthMap.get_default_firing_threshold(),
-                Some(0.01)
+                Some(0.0001)
             );
             assert_eq!(
                 SensoryCorticalUnit::DepthMap.get_default_firing_threshold_increment(),
-                Some([0.0, 0.0, 0.01])
+                None
             );
         }
 
@@ -1810,9 +1811,13 @@ mod test_sensory_cortical_unit {
             let unit = topology
                 .get(&0.into())
                 .expect("Missing topology entry for ObjectSegmentationInput area 0");
-            assert_eq!(unit.channel_dimensions_default, [32, 32, 8]);
+            assert_eq!(unit.channel_dimensions_default, [32, 32, 1]);
             assert_eq!(unit.channel_dimensions_min, [1, 1, 1]);
-            assert_eq!(unit.channel_dimensions_max, [4096, 4096, 1024]);
+            assert_eq!(unit.channel_dimensions_max, [4096, 4096, 1]);
+            assert_eq!(
+                SensoryCorticalUnit::ObjectSegmentationInput.get_default_firing_threshold(),
+                Some(0.0001)
+            );
         }
 
         #[test]

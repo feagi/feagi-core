@@ -3,7 +3,8 @@
 //! Selects FEAGI's Cartesian-plane vision coder (`Vision` template) and writes a resized RGB
 //! [`ImageFrame`] into the sensory cache before encoding to neuron voxels. When
 //! `encoder_profile.segmentation_teacher` is set, also writes the sample mask onto the
-//! Object Segmentation Input IPU (`iseg`, W×H×C, Z = class). Ignore-label pixels are omitted.
+//! Object Segmentation Input IPU (`iseg`, W×H×1). Each labeled pixel's potential is
+//! `(class_id + 1) / class_count`. Ignore-label pixels are omitted.
 //! A class teacher (`encoder_profile.teacher`) is clamped on Train only; val/test write an
 //! empty teacher so the class IPU does not receive labels during evaluation.
 
@@ -24,6 +25,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::SensoryCorticalUnit;
+use feagi_structures::neuron_voxels::class_potential::encode_class_potential;
 use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
 };
@@ -72,11 +74,12 @@ impl ImageFrameEncoder {
             .map_err(map_err)
     }
 
-    /// One voxel per kept pixel at `(x, y, class)` with P = 1.0. Ignore pixels are omitted.
+    /// One voxel per kept pixel at `(x, y, 0)` whose potential encodes the class.
+    /// Ignore pixels are omitted.
     fn write_iseg_mask(
         width: u32,
         height: u32,
-        depth: u32,
+        class_count: u32,
         labels: &[u8],
         ignore_label: Option<u8>,
     ) -> Result<NeuronVoxelXYZPArrays, TrainerError> {
@@ -96,13 +99,14 @@ impl ImageFrameEncoder {
                 if ignore_label == Some(label) {
                     continue;
                 }
-                let class_z = u32::from(label);
-                if class_z >= depth {
+                let class_id = u32::from(label);
+                if class_id >= class_count {
                     return Err(TrainerError::Config(format!(
-                        "iseg class {label} is outside mask depth {depth}"
+                        "iseg class {label} is outside class count {class_count}"
                     )));
                 }
-                arrays.push_raw(x, y, class_z, 1.0);
+                let potential = encode_class_potential(class_id, class_count).map_err(map_err)?;
+                arrays.push_raw(x, y, 0, potential);
             }
         }
         Ok(arrays)
@@ -277,7 +281,7 @@ impl EncoderPlugin for ImageFrameEncoder {
             let arrays = Self::write_iseg_mask(
                 teacher.mask_width,
                 teacher.mask_height,
-                teacher.mask_depth,
+                teacher.class_count,
                 labels,
                 *ignore_label,
             )?;
@@ -397,7 +401,7 @@ mod tests {
             cortical_name: Some("Image Segmentation Input IPU".to_string()),
             mask_width: 2,
             mask_height: 2,
-            mask_depth: 3,
+            class_count: 3,
         });
         let target = TypedTarget::SegmentationMask {
             width: 2,
@@ -425,7 +429,37 @@ mod tests {
             })
             .collect();
         voxels.sort_by_key(|v| (v.1, v.0, v.2));
-        assert_eq!(voxels, vec![(0, 0, 0, 1.0), (1, 0, 2, 1.0), (1, 1, 1, 1.0)]);
+        assert_eq!(
+            voxels,
+            vec![
+                (0, 0, 0, 1.0 / 3.0),
+                (1, 0, 0, 3.0 / 3.0),
+                (1, 1, 0, 2.0 / 3.0)
+            ],
+            "one layer; each pixel's potential is (class + 1) / class_count"
+        );
+    }
+
+    #[test]
+    fn segmentation_teacher_rejects_class_outside_count() {
+        let mut profile = vision_profile(2, 1);
+        profile.segmentation_teacher = Some(SegmentationTeacherBinding {
+            cortical_area_id: "object_segmentation_input".to_string(),
+            cortical_name: None,
+            mask_width: 2,
+            mask_height: 1,
+            class_count: 2,
+        });
+        let target = TypedTarget::SegmentationMask {
+            width: 2,
+            height: 1,
+            labels: vec![0, 2],
+            ignore_label: None,
+        };
+        let err = ImageFrameEncoder::new()
+            .encode(&sample(rgb_png(2, 1), Some(target)), &profile)
+            .expect_err("class 2 of 2");
+        assert!(err.to_string().contains("class count"), "{err}");
     }
 
     fn class_sample(png: Vec<u8>, split: Split) -> IRSample {
@@ -502,7 +536,7 @@ mod tests {
             cortical_name: None,
             mask_width: 2,
             mask_height: 2,
-            mask_depth: 2,
+            class_count: 2,
         });
         let mut encoder = ImageFrameEncoder::new();
         let err = encoder

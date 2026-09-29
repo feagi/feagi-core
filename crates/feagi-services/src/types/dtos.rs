@@ -283,6 +283,9 @@ pub struct ClassifierInfo {
     pub kernel_area_id: Option<String>,
     pub class_area_id: Option<String>,
     pub mask_area_id: Option<String>,
+    /// Scanner-mode class count (mask and twin potentials encode `(class_id + 1) / class_count`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class_count: Option<u32>,
     pub kernel_size: Option<[u32; 3]>,
     pub fields: Vec<feagi_structures::genomic::classifiers::ClassifierField>,
     pub kernel_memory_id: String,
@@ -315,6 +318,7 @@ impl From<feagi_structures::genomic::classifiers::Classifier> for ClassifierInfo
             kernel_area_id: classifier.kernel_area_id,
             class_area_id: classifier.class_area_id,
             mask_area_id: classifier.mask_area_id,
+            class_count: classifier.class_count,
             kernel_size: classifier.kernel_size,
             fields: classifier.fields,
             kernel_memory_id: classifier.kernel_memory_id,
