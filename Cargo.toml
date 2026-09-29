@@ -72,8 +72,7 @@ feagi-server-requests-rest = [
 feagi-basis = {path = "crates/feagi-basis"}
 feagi-brain = {path = "crates/feagi-brain"}
 feagi-correspondence = {path = "crates/feagi-correspondence"}
-feagi-server = {path = "crates/feagi-server"}
-feagi-agent = {path = "crates/feagi-agent"}
+feagi-runtime = {path = "crates/feagi-runtime"}
 
 # External (always)
 serde = {workspace = true, default-features = false}
@@ -122,6 +121,8 @@ members = [
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest",
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest/feagi-rest-server",
     "crates/feagi-correspondence/feagi-correspondence-contracts",
+
+    "crates/feagi-runtime"
 ]
 
 

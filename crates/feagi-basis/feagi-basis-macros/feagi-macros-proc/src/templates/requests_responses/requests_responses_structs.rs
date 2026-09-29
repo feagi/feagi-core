@@ -1,5 +1,7 @@
+use std::fmt::format;
+use heck::ToSnakeCase;
 use proc_macro2::{Ident, Span};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use crate::basis::{parse_optional_comma, parse_property_colon_member, StructParameters, TemplateStruct};
@@ -9,6 +11,7 @@ mod kw {
     syn::custom_keyword!(category_name);
     syn::custom_keyword!(base_path);
     syn::custom_keyword!(category_description);
+    syn::custom_keyword!(async_functions_module);
     syn::custom_keyword!(read);
     syn::custom_keyword!(create);
     syn::custom_keyword!(edit);
@@ -26,8 +29,12 @@ mod kw {
 
 pub struct TemplateRequestResponseCategory {
     pub category_name: LitStr,
+    /// Any additional path to this request that is appended to all defined
     pub base_path: LitStr,
+    /// Comment Description of this category
     pub category_description: LitStr,
+    /// What module the async functions for this category are located in
+    pub async_functions_module: Ident,
     pub read: Vec<RequestResponseContract>,
     pub create: Vec<RequestResponseContract>,
     pub edit: Vec<RequestResponseContract>,
@@ -57,6 +64,7 @@ impl Parse for TemplateRequestResponseCategory {
         let category_name: LitStr = parse_property_colon_member::<kw::category_name, LitStr>(&input)?;
         let base_path: LitStr = parse_property_colon_member::<kw::base_path, LitStr>(&input)?;
         let category_description: LitStr = parse_property_colon_member::<kw::category_description, LitStr>(&input)?;
+        let async_functions_module: Ident = parse_property_colon_member::<kw::async_functions_module, Ident>(&input)?;
 
         let read = parse_category::<kw::read, RequestResponseContract>(&input)?;
         let create = parse_category::<kw::create, RequestResponseContract>(&input)?;
@@ -68,6 +76,7 @@ impl Parse for TemplateRequestResponseCategory {
             category_name,
             base_path,
             category_description,
+            async_functions_module,
             read,
             create,
             edit,
@@ -177,6 +186,14 @@ impl RequestResponseContract {
                 #(#entries,)*
             },
         }
+    }
+
+    /// given the category this is in, parse the name of the async function that will be called
+    pub fn get_async_function_name(&self, category: &LitStr) -> Ident {
+        use heck::ToSnakeCase;
+        let path_name = self.title.value();
+        let path_name = path_name.to_snake_case();
+        format_ident!("{}_{}", category.value(), path_name)
     }
 }
 

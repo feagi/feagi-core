@@ -1,5 +1,5 @@
 [package]
-name = "feagi-server"
+name = "feagi-runtime"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Systems for allowing a server to interact with FEAGI agents (clients)"
+description = "Root library for holding common patterns of feagi runtimes / executables"
 
 [dependencies]
 

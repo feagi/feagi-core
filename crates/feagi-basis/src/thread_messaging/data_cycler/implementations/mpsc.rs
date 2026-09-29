@@ -1,7 +1,7 @@
 use core::time::Duration;
 
-use crate::thread_messaging::data_channel::{DataChannelPair, DataReceiver, DataTransmitter};
-use crate::thread_messaging::data_channel::implementations::mpsc::{
+use crate::thread_messaging::data_channel_pair::{DataChannelPair, DataReceiver, DataTransmitter};
+use crate::thread_messaging::data_channel_pair::implementations::mpsc::{
     MpscChannelPair, MpscReceiver, MpscTransmitter,
 };
 use crate::thread_messaging::data_cycler::DataCycleEndpoint;

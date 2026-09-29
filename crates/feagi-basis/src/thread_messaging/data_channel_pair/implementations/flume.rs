@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use core::time::Duration;
 use flume::{TryRecvError, TrySendError};
-use crate::thread_messaging::data_channel::{DataChannelPair, DataReceiver, DataTransmitter};
+use crate::thread_messaging::data_channel_pair::{DataChannelPair, DataReceiver, DataTransmitter};
 use crate::thread_messaging::errors::{ChannelReceivingError, ChannelSendingError, FeagiFailChannelReceiveEtc, FeagiFailChannelReceiveTimeout, FeagiFailChannelSendEtc, FeagiFailChannelSendFull, FeagiFailChannelSendTimeout};
 
 pub struct FlumeChannelPair<T: Send>(PhantomData<T>);

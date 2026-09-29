@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Defines how server and agents should communicate to each other"
+description = "Defines how server and agents should communicate to each other via tempaltes"
 
 [features]
 

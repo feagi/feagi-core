@@ -1,6 +1,6 @@
 use std::time::Duration;
-use crate::thread_messaging::data_channel::{DataChannelPair, DataReceiver, DataTransmitter};
-use crate::thread_messaging::data_channel::implementations::flume::{FlumeChannelPair, FlumeReceiver, FlumeTransmitter};
+use crate::thread_messaging::data_channel_pair::{DataChannelPair, DataReceiver, DataTransmitter};
+use crate::thread_messaging::data_channel_pair::implementations::flume::{FlumeChannelPair, FlumeReceiver, FlumeTransmitter};
 use crate::thread_messaging::data_cycler::DataCycleEndpoint;
 use crate::thread_messaging::errors::{ChannelReceivingError, ChannelSendingError};
 
