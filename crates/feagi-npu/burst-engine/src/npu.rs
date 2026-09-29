@@ -2692,21 +2692,25 @@ impl<
 
             // Check if neuron already exists at this ID
             // CRITICAL: Check count() (actual initialized size), not just capacity()
-            let needs_creation = if neuron_idx < neuron_storage.count() {
-                // Neuron storage has been initialized up to this index - check if neuron exists and is valid
-                let is_valid = neuron_storage
+            let at_deterministic_id = neuron_idx < neuron_storage.count()
+                && neuron_storage
                     .valid_mask()
                     .get(neuron_idx)
                     .copied()
-                    .unwrap_or(false);
-                let belongs_to_area =
-                    neuron_storage.cortical_areas().get(neuron_idx).copied() == Some(area_id);
-                // If neuron doesn't exist or doesn't belong to this area, needs creation
-                !is_valid || !belongs_to_area
-            } else {
-                // Neuron storage hasn't been initialized up to this index yet - needs creation
-                true
-            };
+                    .unwrap_or(false)
+                && neuron_storage.cortical_areas().get(neuron_idx).copied() == Some(area_id);
+            // Re-registration runs on every cortical ID sync. A core area whose neuron sits
+            // elsewhere (e.g. restored from a connectome) already has it; creating another
+            // would add a neuron on every sync.
+            // Scan directly: `get_neurons_in_cortical_area` caches its answer, and caching the
+            // empty result before the neuron is added would leave the area looking empty.
+            let needs_creation = !at_deterministic_id
+                && !neuron_storage
+                    .valid_mask()
+                    .iter()
+                    .zip(neuron_storage.cortical_areas())
+                    .take(neuron_storage.count())
+                    .any(|(valid, area)| *valid && *area == area_id);
             drop(neuron_storage);
 
             if area_id == 1 && !needs_creation {

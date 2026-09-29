@@ -645,6 +645,36 @@ macro_rules! motor_unit_functions {
 
         motor_unit_functions!(@generate_similar_functions $motor_unit, PoseEstimationData);
     };
+
+    // Arm for AudioSpectrumFrame
+    (@generate_functions
+        $motor_unit:ident,
+        AudioSpectrumFrame
+    ) => {
+        ::paste::paste! {
+            pub fn [<$motor_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                audio_properties: AudioSpectrumProperties,
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, unit)[0];
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = AudioSpectrumNeuronVoxelXYZPDecoder::new_box(cortical_id, audio_properties, number_channels)?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
+                let initial_val: WrappedIOData = WrappedIOType::AudioSpectrumFrame(Some(audio_properties)).create_blank_data_of_type()?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, AudioSpectrumFrame);
+    };
 }
 
 /// A single decoded motor value, flattened to one scalar per axis/channel.

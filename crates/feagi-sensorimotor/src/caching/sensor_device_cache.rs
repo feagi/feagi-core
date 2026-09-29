@@ -5,6 +5,7 @@ use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
+use crate::data_types::{AudioSpectrumFrame, AudioSpectrumProperties};
 // Several of these symbols are referenced only from inside the
 // `sensor_unit_functions!` macro after `@generate_similar_functions`
 // expansion; the compiler sees them as required only when at least one
@@ -589,6 +590,36 @@ macro_rules! sensor_unit_functions {
         }
 
         sensor_unit_functions!(@generate_similar_functions $sensory_unit, ImageFrame);
+    };
+
+    // Arm for WrappedIOType::AudioSpectrumFrame
+    (@generate_functions
+        $sensory_unit:ident,
+        AudioSpectrumFrame
+    ) => {
+        ::paste::paste! {
+            pub fn [<$sensory_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                audio_properties: AudioSpectrumProperties,
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, unit)[0];
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = AudioSpectrumNeuronVoxelXYZPEncoder::new_box(cortical_id, audio_properties, number_channels)?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
+                let initial_val: WrappedIOData = WrappedIOType::AudioSpectrumFrame(Some(audio_properties)).create_blank_data_of_type()?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        sensor_unit_functions!(@generate_similar_functions $sensory_unit, AudioSpectrumFrame);
     };
 }
 

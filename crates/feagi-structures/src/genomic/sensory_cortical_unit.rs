@@ -376,6 +376,9 @@ impl SensoryCorticalUnit {
                     group_index,
                 )[0]
             }
+            SensoryCorticalUnit::AudioInput => {
+                Self::get_cortical_ids_array_for_audio_input_with_parameters(fh, group_index)[0]
+            }
         }
     }
 }

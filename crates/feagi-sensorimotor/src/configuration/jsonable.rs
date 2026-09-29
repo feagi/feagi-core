@@ -5,21 +5,22 @@ use crate::data_types::descriptors::{
     SpatialPointerProperties,
 };
 use crate::data_types::{
-    GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
-    Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
-    SignedPercentage3D, SignedPercentage4D,
+    AudioSpectrumFrame, AudioSpectrumProperties, GazeProperties, ImageFilteringSettings,
+    ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D,
+    SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D,
+    SignedPercentage4D,
 };
 use crate::feedbacks::FeedbackRegistrar;
 use crate::neuron_voxel_coding::xyzp::decoders::{
-    AngularPointerNeuronVoxelXYZPDecoder, GazePropertiesNeuronVoxelXYZPDecoder,
-    ImageFilteringSettingsNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder,
-    PercentageNeuronVoxelXYZPDecoder, PoseEstimationNeuronVoxelXYZPDecoder,
-    SpatialPointerNeuronVoxelXYZPDecoder,
+    AngularPointerNeuronVoxelXYZPDecoder, AudioSpectrumNeuronVoxelXYZPDecoder,
+    GazePropertiesNeuronVoxelXYZPDecoder, ImageFilteringSettingsNeuronVoxelXYZPDecoder,
+    MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder,
+    PoseEstimationNeuronVoxelXYZPDecoder, SpatialPointerNeuronVoxelXYZPDecoder,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::{
-    BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder,
-    MiscDataNeuronVoxelXYZPEncoder, PercentageNeuronVoxelXYZPEncoder,
-    SegmentedImageFrameNeuronVoxelXYZPEncoder,
+    AudioSpectrumNeuronVoxelXYZPEncoder, BooleanNeuronVoxelXYZPEncoder,
+    CartesianPlaneNeuronVoxelXYZPEncoder, MiscDataNeuronVoxelXYZPEncoder,
+    PercentageNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder,
 };
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::WrappedIOData;
@@ -211,6 +212,7 @@ pub enum JSONEncoderProperties {
         PercentageChannelDimensionality,
     ),
     SegmentedImageFrame(SegmentedImageFrameProperties),
+    AudioSpectrum(AudioSpectrumProperties),
 }
 
 impl JSONEncoderProperties {
@@ -290,6 +292,18 @@ impl JSONEncoderProperties {
                     number_channels,
                 )
             }
+            JSONEncoderProperties::AudioSpectrum(audio_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for AudioSpectrum!".to_string(),
+                    ));
+                }
+                AudioSpectrumNeuronVoxelXYZPEncoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *audio_properties,
+                    number_channels,
+                )
+            }
         }
     }
 
@@ -354,6 +368,9 @@ impl JSONEncoderProperties {
                     )?,
                 ))
             }
+            JSONEncoderProperties::AudioSpectrum(audio_properties) => Ok(
+                WrappedIOData::AudioSpectrumFrame(AudioSpectrumFrame::new(audio_properties)?),
+            ),
         }
     }
 }
@@ -385,6 +402,7 @@ pub enum JSONDecoderProperties {
     SpatialPointer(SpatialPointerProperties),
     AngularPointer(AngularPointerProperties),
     PoseEstimation(PoseEstimationProperties),
+    AudioSpectrum(AudioSpectrumProperties),
 }
 
 impl JSONDecoderProperties {
@@ -550,6 +568,18 @@ impl JSONDecoderProperties {
                     number_channels,
                 )
             }
+            JSONDecoderProperties::AudioSpectrum(audio_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for AudioSpectrum!".to_string(),
+                    ));
+                }
+                AudioSpectrumNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *audio_properties,
+                    number_channels,
+                )
+            }
         }
     }
 
@@ -667,6 +697,9 @@ impl JSONDecoderProperties {
             }
             JSONDecoderProperties::AngularPointer(_pointer_properties) => Ok(
                 WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero()),
+            ),
+            JSONDecoderProperties::AudioSpectrum(audio_properties) => Ok(
+                WrappedIOData::AudioSpectrumFrame(AudioSpectrumFrame::new(audio_properties)?),
             ),
         }
     }

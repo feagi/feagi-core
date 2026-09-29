@@ -70,8 +70,16 @@ fn per_channel_motor_dimensions_for_registration(
         && motor_unit != MotorCorticalUnit::SpatialPointer
         && motor_unit != MotorCorticalUnit::AngularPointer
         && motor_unit != MotorCorticalUnit::PositionalServo
+        && motor_unit != MotorCorticalUnit::AudioOutput
     {
         return (default_w, default_h, default_d);
+    }
+    // AudioOutput: bin_count x phase_steps x 1 from the decoder's AudioSpectrum block.
+    if motor_unit == MotorCorticalUnit::AudioOutput {
+        return decoder_properties
+            .and_then(extract_audio_spectrum_dimensions)
+            .map(|dims| clamp_to_unit_topology(dims, unit_topology))
+            .unwrap_or((default_w, default_h, default_d));
     }
     if motor_unit == MotorCorticalUnit::CountOutput {
         let z_min = unit_topology.channel_dimensions_min[2].max(1);
@@ -701,6 +709,31 @@ fn extract_segmented_vision_dimensions(
     Some((width, height, channels))
 }
 
+/// Audio spectrum areas are `bin_count x phase_steps x 1` from the registered
+/// `{"AudioSpectrum": {...}}` properties (encoder or decoder).
+fn extract_audio_spectrum_dimensions(coder_properties: &Value) -> Option<(usize, usize, usize)> {
+    let payload = encoder_variant_payload(coder_properties, "AudioSpectrum")?;
+    let columns = as_nonzero_usize(payload.get("bin_count"))?;
+    let phase_steps = as_nonzero_usize(payload.get("phase_steps"))?;
+    Some((columns, phase_steps, 1))
+}
+
+fn clamp_to_unit_topology(
+    dims: (usize, usize, usize),
+    unit_topology: &UnitTopology,
+) -> (usize, usize, usize) {
+    let clamp_axis = |value: usize, axis: usize| {
+        let min = unit_topology.channel_dimensions_min[axis].max(1) as usize;
+        let max = unit_topology.channel_dimensions_max[axis].max(1) as usize;
+        value.clamp(min, max)
+    };
+    (
+        clamp_axis(dims.0, 0),
+        clamp_axis(dims.1, 1),
+        clamp_axis(dims.2, 2),
+    )
+}
+
 fn extract_misc_dimensions(encoder_properties: &Value) -> Option<(usize, usize, usize)> {
     let payload = encoder_variant_payload(encoder_properties, "MiscData")?;
     let width = as_nonzero_usize(payload.get("width"))?;
@@ -754,6 +787,7 @@ fn resolve_sensory_dimensions_from_encoder_properties(
     };
     extract_cartesian_plane_dimensions(encoder_properties)
         .or_else(|| extract_segmented_vision_dimensions(encoder_properties, sub_unit_index))
+        .or_else(|| extract_audio_spectrum_dimensions(encoder_properties))
         .or_else(|| extract_misc_dimensions(encoder_properties))
         .or_else(|| {
             extract_percentage_depth(encoder_properties)
@@ -2077,6 +2111,41 @@ mod count_output_registration_tests {
         assert_eq!((w, h, d), (4096, 4096, 1024));
     }
 
+    fn audio_spectrum_block(bin_count: u32, phase_steps: u32) -> serde_json::Value {
+        json!({"AudioSpectrum": {
+            "bin_count": bin_count,
+            "phase_steps": phase_steps,
+            "sample_rate_hz": 16000u32,
+            "window_size": 1024u32,
+            "hop_size": 512u32,
+            "spacing": "Linear",
+            "min_frequency_hz": 0u32,
+            "max_frequency_hz": 8000u32,
+            "magnitude_floor_db": -80i32,
+            "magnitude_ceiling_db": 0i32
+        }})
+    }
+
+    #[test]
+    fn audio_output_uses_registered_columns_and_phase_steps() {
+        let motor = MotorCorticalUnit::AudioOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = audio_spectrum_block(1025, 32);
+        let dims = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!(dims, (1025, 32, 1));
+    }
+
+    #[test]
+    fn audio_output_clamps_to_template_bounds() {
+        let motor = MotorCorticalUnit::AudioOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = audio_spectrum_block(9999, 9999);
+        let dims = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!(dims, (4097, 256, 1));
+    }
+
     #[test]
     fn object_segmentation_falls_back_to_template_when_no_misc_data_decoder() {
         let motor = MotorCorticalUnit::ObjectSegmentation;
@@ -2233,6 +2302,25 @@ mod sensory_dimension_extraction_tests {
         apply_grouped_scalar_encoder_width, resolve_sensory_dimensions_from_encoder_properties,
     };
     use serde_json::json;
+
+    #[test]
+    fn audio_input_area_follows_encoder_columns_and_phase_steps() {
+        let encoder = json!({"AudioSpectrum": {
+            "bin_count": 513u32,
+            "phase_steps": 16u32,
+            "sample_rate_hz": 16000u32,
+            "window_size": 1024u32,
+            "hop_size": 512u32,
+            "spacing": "Linear",
+            "min_frequency_hz": 0u32,
+            "max_frequency_hz": 8000u32,
+            "magnitude_floor_db": -80i32,
+            "magnitude_ceiling_db": 0i32
+        }});
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (1, 1, 1));
+        assert_eq!(resolved, (513, 16, 1));
+    }
 
     #[test]
     fn resolve_sensory_dimensions_reads_misc_data_encoder_dimensions() {

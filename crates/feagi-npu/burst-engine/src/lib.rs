@@ -98,6 +98,7 @@ pub mod tracing_mutex;
 // Neuron models moved to feagi-neural::models (Phase 2b)
 pub mod dynamic_npu;
 pub mod npu;
+pub mod output_rate_gate;
 pub mod parameter_update_queue;
 /// Intrinsic firing-rate homeostasis via LIF `leak_coefficient` (opt-in areas only; see `neural/docs/rate_modulated_leak.md`).
 pub mod rate_modulated_leak;

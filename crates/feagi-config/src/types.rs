@@ -132,6 +132,13 @@ pub struct AgentConfig {
     pub advertised_host: String,
     /// Enable auto-creation of missing IPU/OPU cortical areas during agent registration
     pub auto_create_missing_cortical_areas: bool,
+    /// Period of the agent handler polling loop, in milliseconds.
+    ///
+    /// The loop moves sensory packets from the transports into the burst engine's
+    /// intake queue and stamps their arrival time. It must run well faster than the
+    /// burst rate: at a period near one burst, two packets from the same agent land
+    /// in one burst and the burst engine keeps only the newest.
+    pub polling_interval_ms: f64,
 }
 
 impl Default for AgentConfig {
@@ -143,6 +150,7 @@ impl Default for AgentConfig {
             bind_host: "127.0.0.1".to_string(),
             advertised_host: "127.0.0.1".to_string(),
             auto_create_missing_cortical_areas: true,
+            polling_interval_ms: 1.0,
         }
     }
 }

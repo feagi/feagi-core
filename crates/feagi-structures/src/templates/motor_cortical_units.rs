@@ -192,6 +192,22 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Audio spectrum output. X is the frequency column, Y is the quantized phase step, and membrane potential is the column magnitude. When several phase rows fire in one column, the highest potential wins. Stereo uses a second unit index."]
+                AudioOutput => {
+                    friendly_name: "Audio Output",
+                    accepted_wrapped_io_data_type: AudioSpectrumFrame,
+                    cortical_id_unit_reference: *b"aud",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        // 513x16x1 default: linear 1024-sample window with 16 phase steps.
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-240, -60, -20], channel_dimensions_default: [513, 16, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4097, 256, 1])
+                    }
+                },
+
             }
         }
     };

@@ -315,6 +315,9 @@ impl MotorCorticalUnit {
                     group_index,
                 )[0]
             }
+            MotorCorticalUnit::AudioOutput => {
+                Self::get_cortical_ids_array_for_audio_output_with_parameters(fh, group_index)[0]
+            }
         }
     }
 }

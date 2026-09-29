@@ -149,8 +149,8 @@ pub struct BurstLoopRunner {
     motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
     /// Per-agent motor output rates (Hz)
     motor_output_rates_hz: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
-    /// Per-agent motor output last publish timestamps
-    motor_last_publish_time: Arc<ParkingLotRwLock<ahash::AHashMap<String, Instant>>>,
+    /// Per-agent motor output credit in bursts (see `output_rate_gate`)
+    motor_publish_credit: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
     /// Visualization subscriptions (agent IDs)
     visualization_subscriptions: Arc<ParkingLotRwLock<ahash::AHashSet<String>>>,
     /// Per-agent visualization output rates (Hz)
@@ -386,7 +386,7 @@ impl BurstLoopRunner {
             motor_publisher: motor_publisher_trait, // Trait object for motor (NO PYTHON CALLBACKS!)
             motor_subscriptions: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
             motor_output_rates_hz: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
-            motor_last_publish_time: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
+            motor_publish_credit: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
             visualization_subscriptions: Arc::new(ParkingLotRwLock::new(ahash::AHashSet::new())),
             visualization_output_rates_hz: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
             visualization_last_publish_time: Arc::new(
@@ -510,7 +510,7 @@ impl BurstLoopRunner {
         self.motor_output_rates_hz
             .write()
             .insert(agent_id.clone(), rate_hz);
-        self.motor_last_publish_time.write().remove(&agent_id);
+        self.motor_publish_credit.write().remove(&agent_id);
 
         info!(
             "[BURST-RUNNER] Registered motor subscriptions for agent '{}' at {:.2}Hz: {:?}",
@@ -525,7 +525,7 @@ impl BurstLoopRunner {
     pub fn unregister_motor_subscriptions(&self, agent_id: &str) {
         if self.motor_subscriptions.write().remove(agent_id).is_some() {
             self.motor_output_rates_hz.write().remove(agent_id);
-            self.motor_last_publish_time.write().remove(agent_id);
+            self.motor_publish_credit.write().remove(agent_id);
             info!(
                 "[BURST-RUNNER] Removed motor subscriptions for agent '{}'",
                 agent_id
@@ -542,7 +542,7 @@ impl BurstLoopRunner {
             count
         };
         self.motor_output_rates_hz.write().clear();
-        self.motor_last_publish_time.write().clear();
+        self.motor_publish_credit.write().clear();
         info!(
             "[BURST-RUNNER] Removed all motor subscriptions (count={})",
             removed
@@ -648,7 +648,7 @@ impl BurstLoopRunner {
         let motor_publisher = self.motor_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
         let motor_subs = self.motor_subscriptions.clone();
         let motor_rates = self.motor_output_rates_hz.clone();
-        let motor_last_publish = self.motor_last_publish_time.clone();
+        let motor_publish_credit = self.motor_publish_credit.clone();
         let viz_subs = self.visualization_subscriptions.clone();
         let viz_rates = self.visualization_output_rates_hz.clone();
         let viz_last_publish = self.visualization_last_publish_time.clone();
@@ -676,7 +676,7 @@ impl BurstLoopRunner {
                         motor_publisher,
                         motor_subs,
                         motor_rates,
-                        motor_last_publish,
+                        motor_publish_credit,
                         viz_subs,
                         viz_rates,
                         viz_last_publish,
@@ -1445,7 +1445,7 @@ fn burst_loop(
     motor_publisher: Option<Arc<dyn MotorPublisher>>, // Trait object for motor (NO PYTHON CALLBACKS!)
     motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
     motor_output_rates_hz: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
-    motor_last_publish_time: Arc<ParkingLotRwLock<ahash::AHashMap<String, Instant>>>,
+    motor_publish_credit: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
     visualization_subscriptions: Arc<ParkingLotRwLock<ahash::AHashSet<String>>>,
     visualization_output_rates_hz: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
     visualization_last_publish_time: Arc<ParkingLotRwLock<ahash::AHashMap<String, Instant>>>,
@@ -2948,7 +2948,6 @@ fn burst_loop(
 
                     // Generate motor output for each subscribed agent
                     // Note: We clone motor_snapshot for each agent (acceptable overhead for typical 1-2 agents)
-                    let now = Instant::now();
                     let burst_hz = *frequency_hz.lock().unwrap();
 
                     for (agent_id, subscribed_cortical_ids) in subscriptions.iter() {
@@ -2958,22 +2957,30 @@ fn burst_loop(
                             .copied()
                             .unwrap_or(burst_hz);
 
-                        if rate_hz <= 0.0 {
+                        // Gate on burst count: wall-clock gating dropped bursts that finished
+                        // a little faster than the previous one when rate == burst rate.
+                        let Some(credit) = crate::output_rate_gate::accrue_output_credit(
+                            motor_publish_credit.read().get(agent_id).copied(),
+                            rate_hz,
+                            burst_hz,
+                        ) else {
                             warn!(
                                 "[BURST-LOOP] 🎮 MOTOR: Skipping agent '{}' due to invalid rate {}Hz",
                                 agent_id, rate_hz
                             );
                             continue;
+                        };
+                        if !crate::output_rate_gate::is_output_due(credit) {
+                            motor_publish_credit
+                                .write()
+                                .insert(agent_id.clone(), credit);
+                            continue;
                         }
-
-                        let interval = Duration::from_secs_f64(1.0 / rate_hz);
-                        if let Some(last_sent) =
-                            motor_last_publish_time.read().get(agent_id).copied()
-                        {
-                            if now.duration_since(last_sent) < interval {
-                                continue;
-                            }
-                        }
+                        // Due: hold one credit until the publish below succeeds.
+                        motor_publish_credit.write().insert(
+                            agent_id.clone(),
+                            crate::output_rate_gate::remaining_output_credit(credit, false),
+                        );
 
                         debug!(
                             "[BURST-LOOP] 🎮 MOTOR: Encoding for agent '{}' with filter: {:?}",
@@ -3071,9 +3078,12 @@ fn burst_loop(
 
                                 if published {
                                     missing_motor_agent_logged.remove(agent_id);
-                                    motor_last_publish_time
-                                        .write()
-                                        .insert(agent_id.clone(), now);
+                                    motor_publish_credit.write().insert(
+                                        agent_id.clone(),
+                                        crate::output_rate_gate::remaining_output_credit(
+                                            credit, true,
+                                        ),
+                                    );
                                 }
 
                                 tap_published = published;

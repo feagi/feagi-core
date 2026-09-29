@@ -254,6 +254,14 @@ fn validate_value_ranges(config: &FeagiConfig, errors: &mut Vec<ConfigValidation
         });
     }
 
+    // Agent polling period must be a positive, finite number of milliseconds
+    if !config.agent.polling_interval_ms.is_finite() || config.agent.polling_interval_ms <= 0.0 {
+        errors.push(ConfigValidationError::InvalidValue {
+            field: "agent.polling_interval_ms".to_string(),
+            reason: "must be a positive number of milliseconds".to_string(),
+        });
+    }
+
     // Burst engine mode must be "inference" or "design"
     if config.burst_engine.mode != "inference" && config.burst_engine.mode != "design" {
         errors.push(ConfigValidationError::InvalidValue {
@@ -368,6 +376,20 @@ mod tests {
         if let Err(ConfigError::ValidationError(msg)) = result {
             assert!(msg.contains("gpu_memory_fraction"));
             assert!(msg.contains("0.0 and 1.0"));
+        }
+    }
+
+    #[test]
+    fn test_agent_polling_interval_must_be_positive_and_finite() {
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            let mut config = FeagiConfig::default();
+            config.agent.polling_interval_ms = bad;
+            match validate_config(&config) {
+                Err(ConfigError::ValidationError(msg)) => {
+                    assert!(msg.contains("agent.polling_interval_ms"), "{bad}: {msg}")
+                }
+                other => panic!("{bad} should be rejected, got {other:?}"),
+            }
         }
     }
 
