@@ -91,6 +91,7 @@ impl TemplateStruct for TemplateRequestResponseCategory {
         let category_name = &self.category_name;
         let base_path = &self.base_path;
         let category_description = &self.category_description;
+        let async_functions_module = &self.async_functions_module;
         let read = RequestResponseContract::expand_verb_bucket("read", &self.read);
         let create = RequestResponseContract::expand_verb_bucket("create", &self.create);
         let edit = RequestResponseContract::expand_verb_bucket("edit", &self.edit);
@@ -101,6 +102,7 @@ impl TemplateStruct for TemplateRequestResponseCategory {
             category_name: #category_name,
             base_path: #base_path,
             category_description: #category_description,
+            async_functions_module: #async_functions_module,
             #read
             #create
             #edit
@@ -189,17 +191,40 @@ impl RequestResponseContract {
     }
 
     /// given the category this is in, parse the name of the async function that will be called
-    pub fn get_async_function_name(&self, category: &LitStr) -> Ident {
+    pub fn get_async_function_name(&self, category: CategoryType) -> Ident {
         use heck::ToSnakeCase;
-        let path_name = self.title.value();
-        let path_name = path_name.to_snake_case();
-        format_ident!("{}_{}", category.value(), path_name)
+        // Both parts are snake_cased so the generated function name stays idiomatic
+        // (e.g. category `Read` + title `HealthCheck` -> `read_health_check`).
+        let category_name = category.as_ident().to_string().to_snake_case();
+        let path_name = self.title.value().to_snake_case();
+        format_ident!("{}_{}", category_name, path_name)
     }
 }
 
 
 
+//region Structs
 
+#[derive(Clone, Copy)]
+pub enum CategoryType {
+    Read,
+    Create,
+    Edit,
+    Delete,
+    Patch
+}
+
+impl CategoryType {
+    pub fn as_ident(&self) -> Ident {
+        match &self {
+            CategoryType::Read => format_ident!("Read"),
+            CategoryType::Create => format_ident!("Create"),
+            CategoryType::Edit => format_ident!("Edit"),
+            CategoryType::Delete => format_ident!("Delete"),
+            CategoryType::Patch => format_ident!("Patch"),
+        }
+    }
+}
 
 /// The root path, doesnt have any variance
 pub struct RootPath(Vec<syn::LitStr>);
@@ -270,17 +295,10 @@ impl TemplateStruct for ParameterElementPath {
 }
 
 impl ParameterElementPath {
-    /// Render this path as an Ohkami route fragment, using `:name` for parameters
-    /// (e.g. `info/{agent_id}` becomes `info/:agent_id`).
-    pub fn to_ohkami_path(&self) -> String {
-        self.0
-            .iter()
-            .map(|element| match element {
-                ParameterPathElement::Static(segment) => segment.value(),
-                ParameterPathElement::Parameter(segment) => format!(":{}", segment.value()),
-            })
-            .collect::<Vec<_>>()
-            .join("/")
+    /// Borrow the ordered path elements so callers can render them for whatever
+    /// framework/routing syntax they target (kept generic; no framework specifics here).
+    pub fn elements(&self) -> &[ParameterPathElement] {
+        &self.0
     }
 }
 
@@ -343,7 +361,7 @@ impl ParameterPathElement {
 }
 
 
-
+//endregion
 
 //endregion
 

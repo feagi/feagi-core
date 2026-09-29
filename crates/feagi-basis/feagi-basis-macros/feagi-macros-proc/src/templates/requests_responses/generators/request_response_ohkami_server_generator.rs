@@ -1,125 +1,15 @@
+use heck::ToSnakeCase;
 use quote::{format_ident, quote};
 use syn::LitStr;
-use crate::basis::{append_to_lit_str, lit_str_to_ident, prepend_to_lit_str, GeneratorFromTemplate, StructParameters};
-use crate::templates::requests_responses::requests_responses_structs::{RequestResponseContract, TemplateRequestResponseCategory};
+use crate::basis::{lit_str_to_ident, GeneratorFromTemplate, StructParameters};
+use crate::templates::requests_responses::requests_responses_structs::{
+    CategoryType, ParameterElementPath, ParameterPathElement, RequestResponseContract,
+    TemplateRequestResponseCategory,
+};
 
-/// Generates the Ohkami-facing (web server specific) code for a request/response
-/// category:
-/// - The incoming / outgoing structs (distinct path / query|body / response structs).
-/// - `From` conversions bridging them to the shared category structs.
-/// - One async Ohkami handler per endpoint that decodes the request, builds the
-///   shared request enum, calls a hand-written dispatch function, then maps the
-///   returned response enum back to an Ohkami response.
-/// - A routing builder `create_<category>_ohkami()` wiring every endpoint.
-///
-/// The dispatch function is intentionally NOT generated: the generated handlers await
-/// `handle_<category>` (named after the category title), which the developer implements
-/// by hand with the signature
-/// `async fn handle_<category>(<Category>RequestsEnum) -> <Category>ResponsesEnum`.
-///
-/// Parsing itself flows through serde (all FEAGI field types are serde-capable), so the
-/// generated `From` impls are plain field-moves. This generator is expected to be
-/// invoked in the same module as `EnumRequestResponseGenerator`, so the shared structs
-/// and enums it references are local (also keeping the `From` impls clear of the orphan
-/// rule).
 pub struct OhkamiServerGenerator;
 
-/// Per-bucket naming information.
-///
-/// The shared struct prefixes MUST match the identifiers emitted by
-/// `EnumRequestResponseGenerator` (`{core_category}Request` / `{core_category}Response`),
-/// since the generated code references those structs / enums by name.
-struct BucketNaming {
-    /// Core category name used by `EnumRequestResponseGenerator` (e.g. "Read", "Create").
-    core_category: &'static str,
-    /// HTTP method this bucket maps to; prefixes the Ohkami struct names (e.g. "GET").
-    http_method: &'static str,
-    /// Role of the `request` parameter set for this method. GET carries it as query
-    /// parameters, the body-bearing methods carry it as a JSON body. This affects the
-    /// generated struct name and which Ohkami extractor the handler uses.
-    request_role: &'static str,
-}
-
-impl BucketNaming {
-    /// Whether this method carries its request set as query parameters (GET) rather
-    /// than a JSON body.
-    fn uses_query(&self) -> bool {
-        self.http_method == "GET"
-    }
-}
-
-/// Shared identifiers for the category, referenced by every generated handler.
-struct CategoryContext {
-    /// `<Category>RequestsEnum`.
-    request_enum: syn::Ident,
-    /// `<Category>ResponsesEnum`.
-    response_enum: syn::Ident,
-    /// Hand-written dispatch function, `handle_<category>`.
-    dispatch_fn: syn::Ident,
-    /// True when the category has exactly one endpoint, so response matches are
-    /// exhaustive without a catch-all arm.
-    single_variant: bool,
-}
-
-/// Direction of a struct relative to the server. This decides which serde derive the
-/// generated Ohkami struct needs (`Deserialize` for parsing incoming data, `Serialize`
-/// for emitting outgoing data).
-#[derive(Clone, Copy)]
-enum DataDirection {
-    /// Parsed from an incoming request (path parameters, query parameters, or body).
-    Incoming,
-    /// Serialized into an outgoing response.
-    Outgoing,
-}
-
 impl OhkamiServerGenerator {
-    /// Convert a PascalCase title into snake_case for identifier generation.
-    fn to_snake_case(input: &str) -> String {
-        let mut output = String::new();
-        for (index, character) in input.chars().enumerate() {
-            if character.is_uppercase() {
-                if index != 0 {
-                    output.push('_');
-                }
-                output.extend(character.to_lowercase());
-            } else {
-                output.push(character);
-            }
-        }
-        output
-    }
-
-    /// Build a struct identifier from a prefix and a contract title.
-    fn struct_ident(prefix: &str, title: &LitStr) -> syn::Ident {
-        let name = prepend_to_lit_str(prefix, title);
-        lit_str_to_ident(&name).unwrap() // TODO error handling
-    }
-
-    /// Emit a single Ohkami-facing struct for the given parameter set.
-    fn emit_rest_struct(
-        parameters: &StructParameters,
-        struct_name: &syn::Ident,
-        description: &LitStr,
-        direction: DataDirection,
-        output: &mut proc_macro2::TokenStream,
-    ) {
-        let struct_tokens = parameters.generate_priv_struct(struct_name);
-
-        // Ohkami relies on serde for (de)serialization and on `openapi::Schema` for
-        // OpenAPI document generation. The serde direction is fixed by the data flow;
-        // the Schema derive is required in both directions.
-        let serde_derive = match direction {
-            DataDirection::Incoming => quote! { serde::Deserialize },
-            DataDirection::Outgoing => quote! { serde::Serialize },
-        };
-
-        output.extend(quote! {
-            #[doc = #description]
-            #[derive(Debug, Clone, #serde_derive, openapi::Schema)]
-            #struct_tokens
-        });
-    }
-
     /// Produce `field: #source.field,` initializers for every field in `parameters`.
     fn field_initializers(parameters: &StructParameters, source: &syn::Ident) -> proc_macro2::TokenStream {
         let mut initializers = proc_macro2::TokenStream::new();
@@ -130,241 +20,221 @@ impl OhkamiServerGenerator {
         initializers
     }
 
-    /// Emit the `From` impls merging Ohkami structs into the shared request struct and
-    /// mapping the shared response struct to the Ohkami response struct.
-    fn emit_conversions(
-        contract: &RequestResponseContract,
-        path_struct: &syn::Ident,
-        request_struct: &syn::Ident,
-        response_struct: &syn::Ident,
-        core_request_struct: &syn::Ident,
-        core_response_struct: &syn::Ident,
-        path_present: bool,
-        request_present: bool,
-        response_present: bool,
-        output: &mut proc_macro2::TokenStream,
-    ) {
-        // Incoming merge: the shared request struct only exists when at least one of
-        // path/request has fields (mirroring `EnumRequestResponseGenerator`).
-        match (path_present, request_present) {
-            (false, false) => {}
-            (true, false) => {
-                let path_inits = Self::field_initializers(&contract.path_parameters, &format_ident!("value"));
-                output.extend(quote! {
-                    impl From<#path_struct> for #core_request_struct {
-                        fn from(value: #path_struct) -> Self {
-                            Self { #path_inits }
-                        }
-                    }
-                });
-            }
-            (false, true) => {
-                let request_inits = Self::field_initializers(&contract.request, &format_ident!("value"));
-                output.extend(quote! {
-                    impl From<#request_struct> for #core_request_struct {
-                        fn from(value: #request_struct) -> Self {
-                            Self { #request_inits }
-                        }
-                    }
-                });
-            }
-            (true, true) => {
-                let path_inits = Self::field_initializers(&contract.path_parameters, &format_ident!("path"));
-                let request_inits = Self::field_initializers(&contract.request, &format_ident!("request"));
-                output.extend(quote! {
-                    impl From<(#path_struct, #request_struct)> for #core_request_struct {
-                        fn from((path, request): (#path_struct, #request_struct)) -> Self {
-                            Self {
-                                #request_inits
-                                #path_inits
-                            }
-                        }
-                    }
-                });
-            }
-        }
+    /// Build the `/base_path/rendered_path` route string, using `:name` for path
+    /// parameters (Ohkami routing syntax).
+    fn route_path(base_path: &str, path: &ParameterElementPath) -> String {
+        let fragment = path
+            .elements()
+            .iter()
+            .map(|element| match element {
+                ParameterPathElement::Static(segment) => segment.value(),
+                ParameterPathElement::Parameter(segment) => format!(":{}", segment.value()),
+            })
+            .collect::<Vec<_>>()
+            .join("/");
 
-        // Outgoing (one-to-one): shared response struct -> Ohkami response struct.
-        if response_present {
-            let response_inits = Self::field_initializers(&contract.response, &format_ident!("value"));
-            output.extend(quote! {
-                impl From<#core_response_struct> for #response_struct {
-                    fn from(value: #core_response_struct) -> Self {
-                        Self { #response_inits }
-                    }
-                }
-            });
+        if fragment.is_empty() {
+            format!("/{}", base_path)
+        } else {
+            format!("/{}/{}", base_path, fragment)
         }
     }
 
-    /// Emit the async Ohkami handler that decodes the request, builds the request enum,
-    /// calls the dispatch function, and maps the response enum back to an Ohkami response.
-    fn emit_handler(
-        naming: &BucketNaming,
-        contract: &RequestResponseContract,
-        ctx: &CategoryContext,
-        handler_ident: &syn::Ident,
-        path_struct: &syn::Ident,
-        request_struct: &syn::Ident,
-        response_struct: &syn::Ident,
-        core_request_struct: &syn::Ident,
-        path_present: bool,
-        request_present: bool,
-        response_present: bool,
+    /// Whether `ty` is the primitive `bool` (bare or path-qualified, e.g.
+    /// `std::primitive::bool`).
+    fn is_bool_type(ty: &syn::Type) -> bool {
+        if let syn::Type::Path(type_path) = ty {
+            if type_path.qself.is_none() {
+                if let Some(segment) = type_path.path.segments.last() {
+                    return segment.ident == "bool" && segment.arguments.is_empty();
+                }
+            }
+        }
+        false
+    }
+
+    /// Emit a `pub struct` deriving `openapi::Schema` + `#[openapi(component)]` and the
+    /// given serde trait (`serde::Serialize` for responses, `serde::Deserialize` for
+    /// incoming data).
+    ///
+    /// `bool` fields are special-cased: ohkami 0.24.9 has no `Schema for bool`, so the
+    /// field is routed through `openapi::bool()` via an `#[openapi(schema_with = ...)]`
+    /// wrapper. `schema_with` otherwise drops the field's doc description, so the wrapper
+    /// re-attaches it. Note the resulting OpenAPI type is ohkami's non-standard `"bool"`
+    /// (should be `"boolean"`); this is an accepted, non-blocking limitation of the crate.
+    /// TODO We should review this deeper, and hand create a PR for ohkami if this really is the
+    /// case as I am still skeptical
+    fn emit_component_struct(
+        struct_name: &syn::Ident,
+        parameters: &StructParameters,
+        description: &LitStr,
+        serde_trait: proc_macro2::TokenStream,
         output: &mut proc_macro2::TokenStream,
     ) {
-        let title = lit_str_to_ident(&contract.title).unwrap(); // TODO error handling
-        let description = &contract.description;
-        let request_enum = &ctx.request_enum;
-        let response_enum = &ctx.response_enum;
-        let dispatch_fn = &ctx.dispatch_fn;
+        let empty_doc = LitStr::new("", proc_macro2::Span::call_site());
+        let mut fields = proc_macro2::TokenStream::new();
 
-        // The request-set extractor differs by method: query for GET, JSON body otherwise.
-        let request_extractor = if naming.uses_query() {
-            quote! { ohkami::claw::Query(request): ohkami::claw::Query<#request_struct> }
-        } else {
-            quote! { ohkami::claw::Json(request): ohkami::claw::Json<#request_struct> }
-        };
+        for field in parameters.fields() {
+            let field_ident = lit_str_to_ident(&field.parameter_name).unwrap(); // TODO error handling
+            let field_type = &field.parameter_type;
+            let field_doc = field.description.as_ref().unwrap_or(&empty_doc);
 
-        // Handler extractors and the resulting request-enum expression.
-        let (extractors, request_expr) = match (path_present, request_present) {
-            (false, false) => (
-                quote! {},
-                quote! { #request_enum::#title() },
-            ),
-            (true, false) => (
-                quote! { ohkami::claw::Path(path): ohkami::claw::Path<#path_struct> },
-                quote! { #request_enum::#title(#core_request_struct::from(path)) },
-            ),
-            (false, true) => (
-                request_extractor,
-                quote! { #request_enum::#title(#core_request_struct::from(request)) },
-            ),
-            (true, true) => (
-                quote! { ohkami::claw::Path(path): ohkami::claw::Path<#path_struct>, #request_extractor },
-                quote! { #request_enum::#title(#core_request_struct::from((path, request))) },
-            ),
-        };
-
-        // Catch-all arm is only needed (and only valid) when the enum has >1 variant.
-        let catch_all = if ctx.single_variant {
-            quote! {}
-        } else {
-            quote! { _ => ::core::unreachable!("dispatch returned an unexpected variant for this endpoint"), }
-        };
-
-        let (return_type, dispatch_expr) = if response_present {
-            (
-                quote! { ohkami::claw::Json<#response_struct> },
-                quote! {
-                    match #dispatch_fn(request).await {
-                        #response_enum::#title(payload) => ohkami::claw::Json(#response_struct::from(payload)),
-                        #catch_all
+            if Self::is_bool_type(field_type) {
+                let wrapper_ident = format_ident!(
+                    "{}_{}_bool_schema",
+                    struct_name.to_string().to_snake_case(),
+                    field_ident
+                );
+                let wrapper_path = LitStr::new(&wrapper_ident.to_string(), proc_macro2::Span::call_site());
+                let description_call = match &field.description {
+                    Some(doc) => quote! { .description(#doc) },
+                    None => quote! {},
+                };
+                output.extend(quote! {
+                    fn #wrapper_ident() -> impl ::core::convert::Into<ohkami::openapi::schema::SchemaRef> {
+                        ohkami::openapi::bool() #description_call
                     }
-                },
-            )
-        } else {
-            // No response body: acknowledge with 204. (Not exercised by current templates.)
-            (
-                quote! { ohkami::claw::status::NoContent },
-                quote! {
-                    match #dispatch_fn(request).await {
-                        #response_enum::#title() => ohkami::claw::status::NoContent,
-                        #catch_all
-                    }
-                },
-            )
-        };
+                });
+                fields.extend(quote! {
+                    #[doc = #field_doc]
+                    #[openapi(schema_with = #wrapper_path)]
+                    pub #field_ident: #field_type,
+                });
+            } else {
+                fields.extend(quote! {
+                    #[doc = #field_doc]
+                    pub #field_ident: #field_type,
+                });
+            }
+        }
 
         output.extend(quote! {
             #[doc = #description]
-            async fn #handler_ident(#extractors) -> #return_type {
-                let request = #request_expr;
-                #dispatch_expr
+            #[derive(Debug, Clone, #serde_trait, openapi::Schema)]
+            #[openapi(component)]
+            pub struct #struct_name {
+                #fields
             }
         });
     }
 
-    /// Generate all code for a single endpoint (structs, conversions, handler, route).
+    /// Generate all code for a single endpoint (structs, handler, route).
     fn generate_endpoint(
-        naming: &BucketNaming,
+        category: CategoryType,
+        http_method: &str,
         contract: &RequestResponseContract,
-        base_path: &LitStr,
-        ctx: &CategoryContext,
+        base_path: &str,
+        module: &syn::Ident,
         routes: &mut Vec<proc_macro2::TokenStream>,
         output: &mut proc_macro2::TokenStream,
     ) {
-        let title = &contract.title;
+        let category_ident = category.as_ident();
+        let title_ident = lit_str_to_ident(&contract.title).unwrap(); // TODO error handling
         let description = &contract.description;
 
-        // Ohkami-facing struct identifiers.
-        let path_struct = Self::struct_ident(&format!("{}PathParameter", naming.http_method), title);
-        let request_struct = Self::struct_ident(&format!("{}{}", naming.http_method, naming.request_role), title);
-        let response_struct = Self::struct_ident(&format!("{}Response", naming.http_method), title);
-
-        // Shared/core struct identifiers (produced by the enum generator).
-        let core_request_struct = Self::struct_ident(&format!("{}Request", naming.core_category), title);
-        let core_response_struct = Self::struct_ident(&format!("{}Response", naming.core_category), title);
+        // Structs the hand-written async function consumes / produces.
+        let request_struct = format_ident!("{}{}Request", category_ident, title_ident);
+        let response_struct = format_ident!("{}{}Response", category_ident, title_ident);
+        // The dedicated async function this endpoint calls (under `module`).
+        let function_name = contract.get_async_function_name(category);
 
         let path_present = !contract.path_parameters.is_empty();
         let request_present = !contract.request.is_empty();
-        let response_present = !contract.response.is_empty();
+        let uses_query = http_method == "GET";
 
-        // --- Structs ---
-        if path_present {
-            Self::emit_rest_struct(&contract.path_parameters, &path_struct, description, DataDirection::Incoming, output);
-        }
-        if request_present {
-            Self::emit_rest_struct(&contract.request, &request_struct, description, DataDirection::Incoming, output);
-        }
-        if response_present {
-            Self::emit_rest_struct(&contract.response, &response_struct, description, DataDirection::Outgoing, output);
-        }
-
-        // --- Conversions (From impls) ---
-        Self::emit_conversions(
-            contract,
-            &path_struct,
-            &request_struct,
+        // --- Response struct: returned by the async function, sent back as JSON. ---
+        // `#[openapi(component)]` registers the schema as a named component so Swagger
+        // lists it (with its doc descriptions) and references it by `$ref`.
+        Self::emit_component_struct(
             &response_struct,
-            &core_request_struct,
-            &core_response_struct,
-            path_present,
-            request_present,
-            response_present,
+            &contract.response,
+            description,
+            quote! { serde::Serialize },
             output,
         );
 
-        // --- Handler ---
+        // Request struct: passed to the async function (path + request merged)
+        let merged_request = contract.request.make_combination_with(&contract.path_parameters);
+        Self::emit_component_struct(
+            &request_struct,
+            &merged_request,
+            description,
+            quote! { serde::Deserialize },
+            output,
+        );
+
+        // Handler: decode inputs, bind `request`, call the async function
+        let (extractors, build_request) = match (path_present, request_present) {
+            (false, false) => (
+                quote! {},
+                quote! { let request = #request_struct {}; },
+            ),
+            (true, false) => (
+                quote! { ohkami::claw::Path(request): ohkami::claw::Path<#request_struct> },
+                quote! {},
+            ),
+            (false, true) if uses_query => (
+                quote! { ohkami::claw::Query(request): ohkami::claw::Query<#request_struct> },
+                quote! {},
+            ),
+            (false, true) => (
+                quote! { ohkami::claw::Json(request): ohkami::claw::Json<#request_struct> },
+                quote! {},
+            ),
+            (true, true) => {
+                let path_struct = format_ident!("{}{}PathParameters", category_ident, title_ident);
+                let body_role = if uses_query { "Query" } else { "Body" };
+                let body_struct = format_ident!("{}{}{}", category_ident, title_ident, body_role);
+
+                Self::emit_component_struct(
+                    &path_struct,
+                    &contract.path_parameters,
+                    description,
+                    quote! { serde::Deserialize },
+                    output,
+                );
+                Self::emit_component_struct(
+                    &body_struct,
+                    &contract.request,
+                    description,
+                    quote! { serde::Deserialize },
+                    output,
+                );
+
+                let body_extractor = if uses_query {
+                    quote! { ohkami::claw::Query(body): ohkami::claw::Query<#body_struct> }
+                } else {
+                    quote! { ohkami::claw::Json(body): ohkami::claw::Json<#body_struct> }
+                };
+                let path_inits = Self::field_initializers(&contract.path_parameters, &format_ident!("path"));
+                let body_inits = Self::field_initializers(&contract.request, &format_ident!("body"));
+
+                (
+                    quote! { ohkami::claw::Path(path): ohkami::claw::Path<#path_struct>, #body_extractor },
+                    quote! { let request = #request_struct { #body_inits #path_inits }; },
+                )
+            }
+        };
+
         let handler_ident = format_ident!(
             "{}_{}",
-            naming.http_method.to_lowercase(),
-            Self::to_snake_case(&title.value())
-        );
-        Self::emit_handler(
-            naming,
-            contract,
-            ctx,
-            &handler_ident,
-            &path_struct,
-            &request_struct,
-            &response_struct,
-            &core_request_struct,
-            path_present,
-            request_present,
-            response_present,
-            output,
+            http_method.to_lowercase(),
+            contract.title.value().to_snake_case()
         );
 
+        output.extend(quote! {
+            #[doc = #description]
+            async fn #handler_ident(#extractors) -> ohkami::claw::Json<#response_struct> {
+                #build_request
+                let response = #module::#function_name(request).await;
+                ohkami::claw::Json(response)
+            }
+        });
+
         // --- Route ---
-        let method_ident = syn::Ident::new(naming.http_method, proc_macro2::Span::call_site());
-        let path_fragment = contract.request_path.to_ohkami_path();
-        let route_path = if path_fragment.is_empty() {
-            format!("/{}", base_path.value())
-        } else {
-            format!("/{}/{}", base_path.value(), path_fragment)
-        };
-        let route_lit = LitStr::new(&route_path, proc_macro2::Span::call_site());
+        let method_ident = syn::Ident::new(http_method, proc_macro2::Span::call_site());
+        let route = Self::route_path(base_path, &contract.request_path);
+        let route_lit = LitStr::new(&route, proc_macro2::Span::call_site());
         routes.push(quote! { #route_lit.#method_ident(#handler_ident), });
     }
 }
@@ -374,50 +244,28 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for OhkamiServerGene
         let mut output = proc_macro2::TokenStream::new();
         let mut routes: Vec<proc_macro2::TokenStream> = Vec::new();
 
-        // Shared identifiers referenced by all generated handlers.
-        let request_enum = {
-            let name = append_to_lit_str(&template.category_name, "RequestsEnum");
-            lit_str_to_ident(&name).unwrap() // TODO error handling
-        };
-        let response_enum = {
-            let name = append_to_lit_str(&template.category_name, "ResponsesEnum");
-            lit_str_to_ident(&name).unwrap() // TODO error handling
-        };
-        let category_snake = Self::to_snake_case(&template.category_name.value());
-        let dispatch_fn = format_ident!("handle_{}", category_snake);
-
-        let total_endpoints = template.read.len()
-            + template.create.len()
-            + template.edit.len()
-            + template.delete.len()
-            + template.patch.len();
-
-        let ctx = CategoryContext {
-            request_enum,
-            response_enum,
-            dispatch_fn,
-            single_variant: total_endpoints == 1,
-        };
+        // Module holding the hand-written async functions, imported at the call site.
+        let module = &template.async_functions_module;
+        let base_path = template.base_path.value();
 
         // GET carries its request set as query parameters; the body-bearing methods
-        // carry it as a JSON body. Each bucket's contracts are otherwise handled
-        // identically.
-        let buckets: [(BucketNaming, &Vec<RequestResponseContract>); 5] = [
-            (BucketNaming { core_category: "Read",   http_method: "GET",    request_role: "QueryParameter" }, &template.read),
-            (BucketNaming { core_category: "Create", http_method: "POST",   request_role: "Body" },           &template.create),
-            (BucketNaming { core_category: "Edit",   http_method: "PUT",    request_role: "Body" },           &template.edit),
-            (BucketNaming { core_category: "Delete", http_method: "DELETE", request_role: "Body" },           &template.delete),
-            (BucketNaming { core_category: "Patch",  http_method: "PATCH",  request_role: "Body" },           &template.patch),
+        // carry it as a JSON body. Otherwise every bucket is handled identically.
+        let buckets: [(CategoryType, &str, &Vec<RequestResponseContract>); 5] = [
+            (CategoryType::Read,   "GET",    &template.read),
+            (CategoryType::Create, "POST",   &template.create),
+            (CategoryType::Edit,   "PUT",    &template.edit),
+            (CategoryType::Delete, "DELETE", &template.delete),
+            (CategoryType::Patch,  "PATCH",  &template.patch),
         ];
 
-        for (naming, contracts) in &buckets {
+        for (category, http_method, contracts) in buckets {
             for contract in contracts.iter() {
-                Self::generate_endpoint(naming, contract, &template.base_path, &ctx, &mut routes, &mut output);
+                Self::generate_endpoint(category, http_method, contract, &base_path, module, &mut routes, &mut output);
             }
         }
 
         // Routing builder assembling every endpoint of this category.
-        let builder_ident = format_ident!("create_{}_ohkami", category_snake);
+        let builder_ident = format_ident!("create_{}_ohkami", template.category_name.value().to_snake_case());
         output.extend(quote! {
             pub fn #builder_ident() -> ohkami::Ohkami {
                 ohkami::Ohkami::new(( #(#routes)* ))
