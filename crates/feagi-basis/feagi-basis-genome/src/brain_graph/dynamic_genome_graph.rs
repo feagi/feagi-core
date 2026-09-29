@@ -3,6 +3,7 @@ use crate::identifiers::cortical_id::CorticalID;
 use crate::identifiers::mapping_id::CorticalMappingID;
 use crate::identifiers::region_id::RegionID;
 
+/*
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct RunningGenomeGraph<FIQ: FeagiIndexQuantization> {
     cortical_areas: ahash::AHashMap<CorticalID, ()>,
@@ -11,3 +12,6 @@ pub struct RunningGenomeGraph<FIQ: FeagiIndexQuantization> {
 }
 
 
+
+
+ */

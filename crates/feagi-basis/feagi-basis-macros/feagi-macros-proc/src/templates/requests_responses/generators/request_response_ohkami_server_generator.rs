@@ -222,8 +222,13 @@ impl OhkamiServerGenerator {
             contract.title.value().to_snake_case()
         );
 
+        // `#[openapi::operation]` sets the operation's summary/description in the OpenAPI
+        // document (the handler rustdoc becomes the description; `summary` is set here).
         output.extend(quote! {
             #[doc = #description]
+            #[ohkami::openapi::operation({
+                summary: #description,
+            })]
             async fn #handler_ident(#extractors) -> ohkami::claw::Json<#response_struct> {
                 #build_request
                 let response = #module::#function_name(request).await;
@@ -263,12 +268,26 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for OhkamiServerGene
                 Self::generate_endpoint(category, http_method, contract, &base_path, module, &mut routes, &mut output);
             }
         }
+        
+        let category_name = &template.category_name;
+        let tag_fang_ident = format_ident!("{}CategoryTag", template.category_name.value());
 
         // Routing builder assembling every endpoint of this category.
         let builder_ident = format_ident!("create_{}_ohkami", template.category_name.value().to_snake_case());
         output.extend(quote! {
+            #[derive(Clone)]
+            struct #tag_fang_ident;
+            impl ohkami::fang::FangAction for #tag_fang_ident {
+                fn openapi_map_operation(
+                    &self,
+                    operation: ohkami::openapi::Operation,
+                ) -> ohkami::openapi::Operation {
+                    operation.with_tag(#category_name)
+                }
+            }
+
             pub fn #builder_ident() -> ohkami::Ohkami {
-                ohkami::Ohkami::new(( #(#routes)* ))
+                ohkami::Ohkami::new(( #tag_fang_ident, #(#routes)* ))
             }
         });
 
