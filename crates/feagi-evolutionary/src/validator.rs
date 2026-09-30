@@ -283,6 +283,38 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
                 cortical_id_display
             ));
         }
+
+        validate_memory_mp_encoding(&area.properties, &cortical_id_display, result);
+    }
+}
+
+/// Validate MP encoding settings of a memory area.
+///
+/// Change modes need at least two frames; shallower windows are disabled at
+/// registration, so they are reported here as a warning rather than an error.
+fn validate_memory_mp_encoding(
+    properties: &std::collections::HashMap<String, Value>,
+    cortical_id_display: &str,
+    result: &mut ValidationResult,
+) {
+    let Some(mem_props) = crate::extract_memory_properties(properties) else {
+        return;
+    };
+    if let Err(e) = crate::validate_memory_mp_properties(properties) {
+        result.add_error(format!(
+            "Memory area '{}' has invalid MP encoding: {}",
+            cortical_id_display, e
+        ));
+        return;
+    }
+    if mem_props.mp_change_mode != crate::MpChangeMode::None && mem_props.temporal_depth < 2 {
+        result.add_warning(format!(
+            "Memory area '{}' uses {}='{}' with temporal_depth={}; change encoding needs temporal_depth >= 2 and will be disabled",
+            cortical_id_display,
+            crate::MP_CHANGE_MODE_KEY,
+            mem_props.mp_change_mode.as_str(),
+            mem_props.temporal_depth
+        ));
     }
 }
 

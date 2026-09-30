@@ -50,7 +50,7 @@ fn test_end_to_end_pattern_detection_and_memory_creation() {
     let idx = neuron_idx.unwrap();
 
     // Verify pattern can be found
-    let found_idx = memory_array.find_neuron_by_pattern(&pattern.pattern_hash);
+    let found_idx = memory_array.find_neuron_by_pattern(100, &pattern.pattern_hash);
     assert_eq!(found_idx, Some(idx));
 
     // Verify stats show active neuron
@@ -246,8 +246,14 @@ fn test_plasticity_service_basic_workflow() {
     let service = PlasticityService::new(config, cache, npu);
 
     // Register a memory area
-    let success =
-        service.register_memory_area(100, "mem_00".to_string(), 3, vec![1, 2], None, false);
+    let success = service.register_memory_area(
+        100,
+        "mem_00".to_string(),
+        3,
+        vec![1, 2],
+        None,
+        feagi_npu_plasticity::MemoryMpMode::PatternOnly,
+    );
     assert!(success);
 
     // Notify of a burst
@@ -284,7 +290,7 @@ fn test_register_memory_area_configures_fire_ledger() {
         temporal_depth,
         vec![upstream_idx],
         None,
-        false,
+        feagi_npu_plasticity::MemoryMpMode::PatternOnly,
     );
 
     let npu_guard = npu.lock().unwrap();

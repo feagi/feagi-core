@@ -1325,13 +1325,26 @@ impl Neuroembryogenesis {
                                     max_reactivations: 1000,
                                 };
 
+                                let mp_mode =
+                                    match crate::memory_mp_mode(&area.properties, &mem_props) {
+                                        Ok(mode) => mode,
+                                        Err(e) => {
+                                            error!(
+                                                target: "feagi-bdu",
+                                                "Memory area {} not registered: {}",
+                                                area_id.as_base_64(),
+                                                e
+                                            );
+                                            continue;
+                                        }
+                                    };
                                 exec.register_memory_area(
                                     area.cortical_idx,
                                     area_id.as_base_64(),
                                     mem_props.temporal_depth,
                                     upstream_areas.clone(),
                                     Some(lifecycle_config),
-                                    mem_props.mp_learning_enabled,
+                                    mp_mode,
                                 );
                                 manager.configure_memory_scan_on_executor(&*exec, area_id);
 

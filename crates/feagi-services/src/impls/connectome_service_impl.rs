@@ -136,6 +136,15 @@ fn merge_memory_area_properties(
         .entry("scan_skip_density".to_string())
         .or_insert(Value::from(memory_defaults.scan_skip_density));
     defaults
+        .entry(feagi_evolutionary::MP_CHANGE_MODE_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.mp_change_mode.as_str()));
+    defaults
+        .entry(feagi_evolutionary::MP_DELTA_QUANTIZATION_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.mp_delta_quantization));
+    defaults
+        .entry(feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.mp_ratio_quantization));
+    defaults
         .entry("psp_uniform_distribution".to_string())
         .or_insert(Value::from(true));
 
@@ -1598,6 +1607,11 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .unwrap_or_else(|| area.longterm_mem_threshold()),
             temporal_depth: memory_props.as_ref().map(|p| p.temporal_depth.max(1)),
             mp_learning_enabled: memory_props.as_ref().map(|p| p.mp_learning_enabled),
+            mp_change_mode: memory_props
+                .as_ref()
+                .map(|p| p.mp_change_mode.as_str().to_string()),
+            mp_delta_quantization: memory_props.as_ref().map(|p| p.mp_delta_quantization),
+            mp_ratio_quantization: memory_props.as_ref().map(|p| p.mp_ratio_quantization),
             properties: filtered_properties,
             // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
             cortical_subtype,
@@ -6553,7 +6567,7 @@ mod tests {
                     1,
                     vec![src_idx],
                     None,
-                    false,
+                    feagi_npu_plasticity::MemoryMpMode::PatternOnly,
                 );
                 exec.restore_long_term_memory_neurons(&[MemoryNeuronDetail {
                     neuron_id: ltm_id,
@@ -6898,7 +6912,7 @@ mod tests {
                     1,
                     vec![src_idx],
                     None,
-                    false,
+                    feagi_npu_plasticity::MemoryMpMode::PatternOnly,
                 );
                 exec.restore_long_term_memory_neurons(&[
                     MemoryNeuronDetail {
@@ -7072,7 +7086,7 @@ mod tests {
                 1,
                 vec![998],
                 None,
-                false,
+                feagi_npu_plasticity::MemoryMpMode::PatternOnly,
             );
         }
         let target_service =

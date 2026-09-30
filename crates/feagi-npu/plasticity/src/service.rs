@@ -31,6 +31,7 @@ use crate::memory_neuron_array::{
     MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig,
 };
 use crate::memory_stats_cache::{self, MemoryStatsCache};
+use crate::mp_change_encoder::{ChangeStep, MemoryMpMode, MpChangeEncoding};
 use crate::pattern_detector::{BatchPatternDetector, PatternConfig};
 use crate::stdp::STDPConfig;
 use ahash::AHashSet;
@@ -171,7 +172,7 @@ pub struct ReplayFrame {
     pub upstream_area_idx: u32,
     pub coords: Vec<(u32, u32, u32)>,
     /// Per-coordinate membrane potential at encoding time.
-    /// Present only when mp_learning_enabled=true for the memory area.
+    /// Present only when the memory area uses `MemoryMpMode::MpLearning`.
     /// Length matches `coords` when present.
     pub membrane_potentials: Option<Vec<f32>>,
 }
@@ -264,7 +265,7 @@ pub struct MemoryScanConfig {
 pub struct MemoryAreaConfig {
     pub temporal_depth: u32,
     pub upstream_areas: Vec<u32>,
-    pub mp_learning_enabled: bool,
+    pub mp_mode: MemoryMpMode,
     pub scan: Option<MemoryScanConfig>,
 }
 
@@ -274,6 +275,9 @@ pub struct MemoryCorticalAreaRuntimeInfo {
     pub short_term_neuron_count: usize,
     pub long_term_neuron_count: usize,
     pub upstream_pattern_cache_size: usize,
+    /// Mode the plasticity layer actually runs (after depth < 2 auto-disable);
+    /// `None` when the area is not registered.
+    pub effective_mp_mode: Option<String>,
 }
 
 impl MemoryCorticalAreaRuntimeInfo {
@@ -690,8 +694,8 @@ impl PlasticityService {
                                 }
                             }
 
-                            // Fetch MP windows if mp_learning_enabled
-                            let mp_data = if area_config.mp_learning_enabled {
+                            // Fetch MP windows for MP learning and change encoding
+                            let mp_data = if area_config.mp_mode.requires_mp_archival() {
                                 let mut mp_wins: Vec<PerAreaMpWindow> = Vec::new();
                                 for &upstream_idx in &upstream_sorted {
                                     match npu_lock.get_fire_ledger_dense_window_mp(
@@ -779,14 +783,38 @@ impl PlasticityService {
             let detector =
                 pattern_detector.get_detector(*memory_area_idx, area_config.temporal_depth);
 
-            if let Some(pattern) = detector.detect_pattern(
-                *memory_area_idx,
-                &area_config.upstream_areas,
-                current_timestep,
-                timestep_bitmaps,
-                Some(area_config.temporal_depth),
-            ) {
-                let replay_frames = Self::build_replay_frames(npu, &windows, mp_windows.as_deref());
+            let change_encoding = area_config.mp_mode.change_encoding();
+            let detected = match change_encoding {
+                Some(encoding) => Self::encode_change_steps(
+                    &encoding,
+                    area_config.upstream_areas.len(),
+                    mp_windows.as_deref(),
+                )
+                .and_then(|steps| {
+                    detector.detect_change_pattern(
+                        *memory_area_idx,
+                        &area_config.upstream_areas,
+                        &encoding,
+                        &steps,
+                        Some(area_config.temporal_depth),
+                    )
+                }),
+                None => detector.detect_pattern(
+                    *memory_area_idx,
+                    &area_config.upstream_areas,
+                    current_timestep,
+                    timestep_bitmaps,
+                    Some(area_config.temporal_depth),
+                ),
+            };
+
+            if let Some(pattern) = detected {
+                // Change-encoded memories have no absolute MPs to reconstruct, so they never replay.
+                let replay_frames = if change_encoding.is_some() {
+                    Vec::new()
+                } else {
+                    Self::build_replay_frames(npu, &windows, mp_windows.as_deref())
+                };
                 tracing::debug!(
                     target: "plasticity",
                     "[PLASTICITY] Burst {} pattern detected area={} hash={} upstream={} replay_frames={}",
@@ -802,7 +830,7 @@ impl PlasticityService {
 
                 // Check if pattern already has a memory neuron
                 if let Some(existing_neuron_idx) =
-                    array.find_neuron_by_pattern(&pattern.pattern_hash)
+                    array.find_neuron_by_pattern(*memory_area_idx, &pattern.pattern_hash)
                 {
                     // Reactivate existing neuron
                     if array.reactivate_memory_neuron(existing_neuron_idx, current_timestep) {
@@ -813,7 +841,8 @@ impl PlasticityService {
                         let neuron_id = array.get_neuron_id(existing_neuron_idx).unwrap();
 
                         // EMA averaging of membrane potentials on reactivation
-                        let final_replay_frames = if area_config.mp_learning_enabled {
+                        let final_replay_frames = if area_config.mp_mode == MemoryMpMode::MpLearning
+                        {
                             Self::average_replay_frame_mps(npu, neuron_id, &replay_frames)
                         } else {
                             replay_frames.clone()
@@ -827,7 +856,7 @@ impl PlasticityService {
                             membrane_potential: 0.0,
                         });
 
-                        if final_replay_frames.is_empty() {
+                        if final_replay_frames.is_empty() && change_encoding.is_none() {
                             tracing::warn!(
                                 target: "plasticity",
                                 "[PLASTICITY] Burst {} reactivation area={} neuron_id={} has empty replay frames",
@@ -913,7 +942,7 @@ impl PlasticityService {
                             membrane_potential: 0.0,
                         });
 
-                        if replay_frames.is_empty() {
+                        if replay_frames.is_empty() && change_encoding.is_none() {
                             tracing::warn!(
                                 target: "plasticity",
                                 "[PLASTICITY] Burst {} new memory neuron area={} neuron_id={} has empty replay frames",
@@ -1007,6 +1036,44 @@ impl PlasticityService {
                 s.plasticity_commands_dropped += cmd_count;
             }
         }
+    }
+
+    /// Encode dense upstream MP windows into D-1 change steps.
+    ///
+    /// Steps run oldest to newest; within a step, upstream areas keep the sorted
+    /// order `mp_windows` was fetched in. Returns `None` when any upstream MP
+    /// window is missing or the windows are misaligned, since a partial window
+    /// would hash to a different pattern than the full one.
+    fn encode_change_steps(
+        encoding: &MpChangeEncoding,
+        upstream_count: usize,
+        mp_windows: Option<&[PerAreaMpWindow]>,
+    ) -> Option<Vec<ChangeStep>> {
+        let windows = mp_windows?;
+        if windows.len() != upstream_count || windows.is_empty() {
+            tracing::trace!(
+                target: "plasticity",
+                "[PLASTICITY] Change encoding skipped: {} of {} upstream MP windows available",
+                windows.len(),
+                upstream_count
+            );
+            return None;
+        }
+        let frame_count = windows[0].1.len();
+        if windows.iter().any(|(_, w)| w.len() != frame_count) {
+            tracing::warn!(
+                target: "plasticity",
+                "[PLASTICITY] Change encoding skipped: misaligned upstream MP windows"
+            );
+            return None;
+        }
+        let mut steps = Vec::with_capacity(frame_count.saturating_sub(1) * windows.len());
+        for frame_i in 1..frame_count {
+            for (_, window) in windows {
+                steps.push(encoding.encode_step(&window[frame_i - 1].1, &window[frame_i].1));
+            }
+        }
+        Some(steps)
     }
 
     /// Build replay frames from dense upstream windows for pattern reconstruction.
@@ -1814,8 +1881,11 @@ impl PlasticityService {
         temporal_depth: u32,
         upstream_areas: Vec<u32>,
         lifecycle_config: Option<MemoryNeuronLifecycleConfig>,
-        mp_learning_enabled: bool,
+        mp_mode: MemoryMpMode,
     ) -> bool {
+        let Some(mp_mode) = Self::resolve_mp_mode(area_idx, temporal_depth, mp_mode) else {
+            return false;
+        };
         let upstream_len = upstream_areas.len();
         let upstream_clone = upstream_areas.clone();
         let mut areas = self.memory_areas.lock().unwrap();
@@ -1825,7 +1895,7 @@ impl PlasticityService {
             MemoryAreaConfig {
                 temporal_depth,
                 upstream_areas,
-                mp_learning_enabled,
+                mp_mode,
                 scan: existing_scan,
             },
         );
@@ -1884,8 +1954,8 @@ impl PlasticityService {
                 }
             }
 
-            // Enable MP archival on upstream areas when mp_learning_enabled is true
-            if mp_learning_enabled {
+            // Enable MP archival on upstream areas for MP learning and change encoding
+            if mp_mode.requires_mp_archival() {
                 let upstream_for_mp = areas
                     .get(&area_idx)
                     .map(|c| c.upstream_areas.clone())
@@ -1903,7 +1973,8 @@ impl PlasticityService {
                 }
                 tracing::info!(
                     target: "plasticity",
-                    "[PLASTICITY] MP learning enabled for memory area {} - upstream MP archival active",
+                    "[PLASTICITY] MP mode {:?} for memory area {} - upstream MP archival active",
+                    mp_mode,
                     area_idx
                 );
             }
@@ -1927,6 +1998,49 @@ impl PlasticityService {
         );
 
         true
+    }
+
+    /// Resolve the MP mode a memory area actually runs with.
+    ///
+    /// Change encoding needs two frames, so windows shallower than 2 run as
+    /// `PatternOnly`. Invalid quantization returns `None` and the area is not
+    /// registered.
+    fn resolve_mp_mode(
+        area_idx: u32,
+        temporal_depth: u32,
+        mp_mode: MemoryMpMode,
+    ) -> Option<MemoryMpMode> {
+        let Some(encoding) = mp_mode.change_encoding() else {
+            return Some(mp_mode);
+        };
+        if let Err(e) = encoding.validate() {
+            tracing::error!(
+                target: "plasticity",
+                "[PLASTICITY] Memory area {} not registered: {}",
+                area_idx,
+                e
+            );
+            return None;
+        }
+        if temporal_depth < 2 {
+            tracing::warn!(
+                target: "plasticity",
+                "[PLASTICITY] Memory area {} change encoding disabled: temporal_depth={} (needs >= 2)",
+                area_idx,
+                temporal_depth
+            );
+            return Some(MemoryMpMode::PatternOnly);
+        }
+        Some(mp_mode)
+    }
+
+    /// MP mode a registered memory area runs with, after depth and validation checks.
+    pub fn memory_area_mp_mode(&self, area_idx: u32) -> Option<MemoryMpMode> {
+        self.memory_areas
+            .lock()
+            .unwrap()
+            .get(&area_idx)
+            .map(|cfg| cfg.mp_mode)
     }
 
     /// Attach or replace scan configuration for a registered kernel memory area.
@@ -2359,6 +2473,9 @@ impl PlasticityService {
         &self,
         cortical_idx: u32,
     ) -> MemoryCorticalAreaRuntimeInfo {
+        let effective_mp_mode = self
+            .memory_area_mp_mode(cortical_idx)
+            .map(|mode| mode.as_str().to_string());
         let array = self.memory_neuron_array.lock().unwrap();
         let upstream_pattern_cache_size = self
             .pattern_detector
@@ -2367,6 +2484,7 @@ impl PlasticityService {
             short_term_neuron_count: array.count_short_term_in_area(cortical_idx),
             long_term_neuron_count: array.count_long_term_in_area(cortical_idx),
             upstream_pattern_cache_size,
+            effective_mp_mode,
         }
     }
 
@@ -2467,8 +2585,14 @@ mod tests {
         ));
         let service = PlasticityService::new(config, cache, npu);
 
-        let result =
-            service.register_memory_area(100, "mem_00".to_string(), 3, vec![1, 2], None, false);
+        let result = service.register_memory_area(
+            100,
+            "mem_00".to_string(),
+            3,
+            vec![1, 2],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
         assert!(result);
 
         let areas = service.memory_areas.lock().unwrap();
@@ -2484,7 +2608,14 @@ mod tests {
             "plasticity-registration-reset-test-npu",
         ));
         let service = PlasticityService::new(config, cache, npu);
-        service.register_memory_area(16, "stale-memory".to_string(), 1, vec![9], None, false);
+        service.register_memory_area(
+            16,
+            "stale-memory".to_string(),
+            1,
+            vec![9],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
         service.pattern_detector.get_detector(16, 1);
         service.enqueue_commands_for_test(vec![PlasticityCommand::ResetMemoryNeuronsInArea {
             cortical_idx: 16,
@@ -2513,8 +2644,22 @@ mod tests {
             "plasticity-unregister-area-test-npu",
         ));
         let service = PlasticityService::new(config, cache, npu);
-        service.register_memory_area(23, "deleted-memory".to_string(), 1, vec![16], None, false);
-        service.register_memory_area(35, "live-memory".to_string(), 1, vec![16], None, false);
+        service.register_memory_area(
+            23,
+            "deleted-memory".to_string(),
+            1,
+            vec![16],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
+        service.register_memory_area(
+            35,
+            "live-memory".to_string(),
+            1,
+            vec![16],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
         service.pattern_detector.get_detector(23, 1);
         {
             let mut array = service.memory_neuron_array.lock().unwrap();
@@ -2561,7 +2706,14 @@ mod tests {
             "plasticity-memory-state-reset-test-npu",
         ));
         let service = PlasticityService::new(config, cache, npu);
-        service.register_memory_area(8, "mem_reset".to_string(), 1, vec![7], None, false);
+        service.register_memory_area(
+            8,
+            "mem_reset".to_string(),
+            1,
+            vec![7],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
         {
             let mut array = service.memory_neuron_array.lock().unwrap();
             let lifecycle = MemoryNeuronLifecycleConfig::default();
@@ -2608,7 +2760,14 @@ mod tests {
             "plasticity-test-npu",
         ));
         let service = PlasticityService::new(config, cache, npu);
-        service.register_memory_area(100, "mem_ltm_test".to_string(), 1, vec![1], None, false);
+        service.register_memory_area(
+            100,
+            "mem_ltm_test".to_string(),
+            1,
+            vec![1],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
 
         {
             let mut array = service.memory_neuron_array.lock().unwrap();
@@ -2627,6 +2786,36 @@ mod tests {
         assert_eq!(runtime.short_term_neuron_count, 0);
         assert_eq!(runtime.long_term_neuron_count, 2);
         assert_eq!(runtime.active_memory_neuron_count(), 2);
+        assert_eq!(runtime.effective_mp_mode.as_deref(), Some("pattern_only"));
+        assert_eq!(
+            service
+                .memory_cortical_area_runtime_info(999)
+                .effective_mp_mode,
+            None
+        );
+    }
+
+    #[test]
+    fn test_runtime_info_reports_change_mode_disabled_at_depth_one() {
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-test-npu",
+        ));
+        let service = PlasticityService::new(
+            PlasticityConfig::default(),
+            create_memory_stats_cache(),
+            npu,
+        );
+        let diff = MemoryMpMode::Change(MpChangeEncoding::Differential { quantization: 1.0 });
+        assert!(service.register_memory_area(100, "d1".into(), 1, vec![1], None, diff));
+        assert!(service.register_memory_area(101, "d2".into(), 2, vec![1], None, diff));
+        let effective = |idx| {
+            service
+                .memory_cortical_area_runtime_info(idx)
+                .effective_mp_mode
+        };
+        assert_eq!(effective(100).as_deref(), Some("pattern_only"));
+        assert_eq!(effective(101).as_deref(), Some("mp_differential"));
     }
 
     #[test]
@@ -2639,7 +2828,14 @@ mod tests {
         ));
         let service = PlasticityService::new(config, cache.clone(), npu);
         let area_name = "mem_reset_test";
-        service.register_memory_area(100, area_name.to_string(), 1, vec![1], None, false);
+        service.register_memory_area(
+            100,
+            area_name.to_string(),
+            1,
+            vec![1],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
 
         memory_stats_cache::on_neuron_created(&cache, area_name);
         memory_stats_cache::on_neuron_created(&cache, area_name);
@@ -2689,7 +2885,7 @@ mod tests {
             1,
             vec![1],
             Some(zeroed),
-            false,
+            MemoryMpMode::PatternOnly,
         ));
 
         let lifecycle = service
@@ -2851,7 +3047,7 @@ mod tests {
             MemoryAreaConfig {
                 temporal_depth: 1,
                 upstream_areas: vec![FIELD_IDX],
-                mp_learning_enabled: false,
+                mp_mode: MemoryMpMode::PatternOnly,
                 scan: Some(scan),
             },
         );
@@ -2924,7 +3120,7 @@ mod tests {
             1,
             vec![FIELD_IDX],
             Some(lifecycle),
-            false,
+            MemoryMpMode::PatternOnly,
         ));
 
         let (_labeled_neuron, _unlabeled_neuron, timestep) = {
@@ -3050,7 +3246,7 @@ mod tests {
             "only the masked window is a training sample"
         );
         let learned = array
-            .find_neuron_by_pattern(&expected_hash)
+            .find_neuron_by_pattern(KERNEL_IDX, &expected_hash)
             .expect("the labeled window is stored under its spatial hash");
         assert_eq!(array.get_cortical_area_id(learned), Some(KERNEL_IDX));
         assert_eq!(array.get_class_channels(learned), vec![CLASS_CHANNEL]);
@@ -3248,7 +3444,7 @@ mod tests {
             MemoryAreaConfig {
                 temporal_depth: 1,
                 upstream_areas: vec![FIELD_IDX],
-                mp_learning_enabled: false,
+                mp_mode: MemoryMpMode::PatternOnly,
                 scan: Some(scan),
             },
         );
@@ -3413,7 +3609,7 @@ mod tests {
             MemoryAreaConfig {
                 temporal_depth: 1,
                 upstream_areas: vec![FIELD_IDX],
-                mp_learning_enabled: false,
+                mp_mode: MemoryMpMode::PatternOnly,
                 scan: Some(scan),
             },
         );

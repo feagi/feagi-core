@@ -149,6 +149,9 @@ pub struct RawCorticalArea {
     pub init_lifespan: Option<u32>,
     pub temporal_depth: Option<u32>,
     pub mp_learning_enabled: Option<bool>,
+    pub mp_change_mode: Option<String>,
+    pub mp_delta_quantization: Option<f32>,
+    pub mp_ratio_quantization: Option<f32>,
     pub min_window_activity: Option<u32>,
     pub scan_skip_density: Option<f32>,
     pub consecutive_fire_cnt_max: Option<u32>,
@@ -679,6 +682,18 @@ impl GenomeParser {
             if let Some(v) = raw_area.mp_learning_enabled {
                 area.properties
                     .insert("mp_learning_enabled".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = &raw_area.mp_change_mode {
+                area.properties
+                    .insert("mp_change_mode".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.mp_delta_quantization {
+                area.properties
+                    .insert("mp_delta_quantization".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.mp_ratio_quantization {
+                area.properties
+                    .insert("mp_ratio_quantization".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.min_window_activity {
                 area.properties

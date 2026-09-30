@@ -90,7 +90,8 @@ pub struct MemoryReplayFrame {
 pub struct MemoryAreaConfig {
     pub temporal_depth: u32,
     pub upstream_areas: Vec<u32>,
-    pub mp_learning_enabled: bool,
+    /// PatternOnly | MpLearning | Change(MpChangeEncoding) -- see Section 13.
+    pub mp_mode: MemoryMpMode,
 }
 ```
 
@@ -241,9 +242,11 @@ pub fn register_memory_area(
     temporal_depth: u32,
     upstream_areas: Vec<u32>,
     lifecycle_config: Option<MemoryNeuronLifecycleConfig>,
-    mp_learning_enabled: bool,
+    mp_mode: MemoryMpMode,
 ) -> bool
 ```
+
+Callers resolve `mp_mode` from genome properties with `feagi_brain_development::memory_mp_mode()`, which re-validates the MP settings. An invalid configuration is logged and the area is not registered.
 
 ### 6.5 FireLedger Configuration
 
@@ -275,6 +278,8 @@ Add `mp_learning_enabled: bool` to the runtime memory parameters response.
 ---
 
 ## 8. Brain Visualizer (BV) Changes
+
+> The MP Learning checkbox described here is superseded by the single MP Encoding dropdown in Section 13.4.
 
 ### 8.1 `CorticalPropertyMemoryParameters.gd`
 
@@ -368,8 +373,53 @@ No `neuron_` prefix needed -- this is a memory-area-level behavior toggle, not a
 
 ---
 
-## 13. Revision History
+## 13. Change-Based MP Encoding (`mp_change_mode`)
+
+MP learning (Sections 2-12) stores absolute potentials for replay. Change-based encoding instead makes **pattern identity** depend on how upstream MPs change across the temporal window, regardless of absolute level. Example (differential, depth 2): 2 -> 4 and 7 -> 9 activate the same memory neuron.
+
+### 13.1 Properties
+
+| Property | Flat key suffix | Type | Default | Meaning |
+|----------|-----------------|------|---------|---------|
+| `mp_change_mode` | `mpchg-t` | string | `none` | `none`, `mp_differential`, `mp_ratio` |
+| `mp_delta_quantization` | `mpdlq-f` | float | `1.0` | Differential bucket width (MP units) |
+| `mp_ratio_quantization` | `mprtq-f` | float | `20.0` | Ratio bucket width (percent, compounding) |
+
+The keys are additive and optional (no schema bump). `mp_change_mode != none` and `mp_learning_enabled = true` are mutually exclusive; the BV exposes a single dropdown (none / MP learning / MP differential / MP ratio). Quantization must be finite and > 0.
+
+Validation (`validate_memory_mp_properties`) runs in the genome validator, in the genome service update path (rejects with `InvalidInput`), and again at registration.
+
+### 13.2 Encoding
+
+For a window of D frames, only the D-1 step transitions are hashed (the first frame's absolute values are not). Per neuron per step, with `prior`/`current` being fire-time MPs from the FireLedger MP archive:
+
+- **Differential**: `bucket = round((current - prior) / q)`. A neuron missing from a frame counts as MP 0; neurons absent from both frames are excluded.
+- **Ratio**: `bucket = round(ln(current / prior) / ln(1 + q/100))`. Only positive -> positive steps count; steps involving 0, a missing neuron, or a negative value are ignored. At q = 20%, doubling = +4 and halving = -4 buckets.
+
+Rounding is nearest. `ln`/`round` use `libm` in f64 for platform-deterministic results. Each step is a sorted list of `(neuron_id, bucket)`; empty steps are hashed as empty (their position matters). If every step is empty, no memory neuron forms.
+
+The hash (xxh64, seed 0) is prefixed with a mode tag byte (1 = differential, 2 = ratio) so differential, ratio, and pattern-only encodings occupy separate hash inputs. Implementation: `feagi-npu/plasticity/src/mp_change_encoder.rs`.
+
+`MemoryNeuronArray` keys memory neurons by `(memory_area_idx, pattern_hash)`. Memory areas with identical upstream wiring compute the same hash for the same input, but each area owns an independent neuron (own ID, lifecycle, synapses, LTM conversion), so an associative mapping from one area never fires on another area's detection.
+
+### 13.3 Runtime behavior
+
+- **Replay disabled**: change-mode memory neurons carry no replay frames (a change cannot be reconstructed into absolute twin activity). Neurons still form, fire, age, and convert to LTM, so they can be composed with other memory areas in larger circuits.
+- **No MP averaging**: the EMA path (Section 2.2) applies only to `MpLearning`.
+- **Temporal depth < 2**: no step exists; registration logs a warning and the area runs as `PatternOnly`. The genome validator reports a warning for the same case.
+- **FireLedger**: MP archival is enabled for upstream areas of change-mode memory areas (`MemoryMpMode::requires_mp_archival`).
+
+### 13.4 Reporting and clients
+
+- **API**: `GET /v1/cortical_area/memory` returns the configured keys under `memory_parameters` and the runtime mode as top-level `effective_mp_mode` (`pattern_only`, `mp_learning`, `mp_differential`, `mp_ratio`; `null` if the area is not registered). The two differ when a change mode was auto-disabled.
+- **BV**: one MP Encoding dropdown (None / MP Learning / MP Differential / MP Ratio) replaces the MP Learning checkbox in Advanced Cortical Properties and the create-memory dialog. A selection always writes both `mp_learning_enabled` and `mp_change_mode`. Only the quantization for the selected change mode is shown. Mapping lives in `CorticalPropertyMemoryParameters.gd`.
+- **feagi-mcp**: `get_memory_area_runtime_config` returns an `mp_encoding` block (configured vs. effective mode, `auto_disabled`, `replay_enabled`, active quantization).
+
+---
+
+## 14. Revision History
 
 | Date | Notes |
 |------|-------|
 | 2026-05-26 | Initial design. Mode toggle + EMA averaging (alpha=0.5) for MP-aware episodic memory encoding and replay. |
+| 2026-09-29 | Added change-based encoding (`mp_change_mode`: differential and compounding ratio), runtime `MemoryMpMode`, replay disabled in change modes. `effective_mp_mode` in the memory API, BV MP Encoding dropdown, MCP `mp_encoding` report. Memory neurons keyed per memory area (fixes shared-upstream areas sharing one neuron). |

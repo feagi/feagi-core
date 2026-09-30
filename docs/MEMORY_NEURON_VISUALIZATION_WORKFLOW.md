@@ -232,8 +232,9 @@ pub fn create_memory_neuron(
     // Allocate slot in memory neuron array
     let idx = self.find_free_slot()?;
     
-    // Store pattern hash and metadata
-    self.pattern_hash_to_index.insert(pattern_hash, idx);
+    // Store pattern hash and metadata, scoped to the memory area so areas sharing
+    // an upstream pattern keep independent neurons
+    self.pattern_hash_to_index.insert((memory_area_idx, pattern_hash), idx);
     self.index_to_pattern_hash.insert(idx, pattern_hash);
     
     // Set lifecycle parameters

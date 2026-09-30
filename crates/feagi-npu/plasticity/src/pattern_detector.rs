@@ -19,6 +19,7 @@
 //! - Cross-platform determinism (x86, ARM, RISC-V)
 //! - Collision resistance suitable for FEAGI's scale (2^64 hash space)
 
+use crate::mp_change_encoder::{ChangeStep, MpChangeEncoding};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use xxhash_rust::xxh64::xxh64;
@@ -138,21 +139,73 @@ impl PatternDetector {
 
         // Create deterministic pattern hash
         let pattern_hash = self.create_pattern_hash(&timestep_bitmaps);
+        let timestep_neuron_counts: Vec<usize> =
+            timestep_bitmaps.iter().map(|set| set.len()).collect();
 
-        // Check cache first
+        Some(self.resolve_pattern(
+            pattern_hash,
+            area_temporal_depth,
+            upstream_areas,
+            timestep_neuron_counts,
+            total_activity,
+        ))
+    }
+
+    /// Detect a change-based pattern from an encoded MP window.
+    ///
+    /// `steps` hold D-1 steps, each flattened by upstream area in sorted order.
+    /// Returns `None` when no neuron took part in any step, so windows without
+    /// qualifying changes never form a memory neuron.
+    pub fn detect_change_pattern(
+        &self,
+        memory_area_idx: u32,
+        upstream_areas: &[u32],
+        encoding: &MpChangeEncoding,
+        steps: &[ChangeStep],
+        temporal_depth: Option<u32>,
+    ) -> Option<TemporalPattern> {
+        if upstream_areas.is_empty() {
+            return None;
+        }
+        let area_temporal_depth =
+            temporal_depth.unwrap_or_else(|| self.get_area_temporal_depth(memory_area_idx));
+
+        let total_activity: usize = steps.iter().map(|s| s.len()).sum();
+        if total_activity == 0 || total_activity < self.config.min_activity_threshold {
+            let mut stats = self.stats.lock().unwrap();
+            stats.empty_patterns += 1;
+            return None;
+        }
+
+        let pattern_hash = encoding.pattern_hash(steps);
+        let step_neuron_counts: Vec<usize> = steps.iter().map(|s| s.len()).collect();
+        Some(self.resolve_pattern(
+            pattern_hash,
+            area_temporal_depth,
+            upstream_areas,
+            step_neuron_counts,
+            total_activity,
+        ))
+    }
+
+    /// Return the cached pattern for `pattern_hash`, or create and cache it.
+    fn resolve_pattern(
+        &self,
+        pattern_hash: u64,
+        area_temporal_depth: u32,
+        upstream_areas: &[u32],
+        timestep_neuron_counts: Vec<usize>,
+        total_activity: usize,
+    ) -> TemporalPattern {
         {
             let cache = self.pattern_cache.lock().unwrap();
             if let Some(pattern) = cache.get(&pattern_hash) {
                 self.update_cache_access(pattern_hash);
                 let mut stats = self.stats.lock().unwrap();
                 stats.cache_hits += 1;
-                return Some(pattern.clone());
+                return pattern.clone();
             }
         }
-
-        // Create new pattern
-        let timestep_neuron_counts: Vec<usize> =
-            timestep_bitmaps.iter().map(|set| set.len()).collect();
 
         let mut sorted_upstream = upstream_areas.to_vec();
         sorted_upstream.sort_unstable();
@@ -172,7 +225,7 @@ impl PatternDetector {
         stats.patterns_detected += 1;
         stats.cache_misses += 1;
 
-        Some(pattern)
+        pattern
     }
 
     /// Create deterministic xxHash64 from bitmap sequence
@@ -609,6 +662,46 @@ mod tests {
         assert_eq!(stats.patterns_detected, 0);
         assert_eq!(stats.cache_hits, 0);
         assert_eq!(stats.cache_misses, 0);
+    }
+
+    #[test]
+    fn test_change_pattern_detection_and_cache() {
+        let detector = PatternDetector::new(PatternConfig::default());
+        let encoding = MpChangeEncoding::Differential { quantization: 1.0 };
+        let steps = vec![vec![(1u32, 2i64), (4, -1)], Vec::new()];
+
+        let first = detector
+            .detect_change_pattern(100, &[2, 1], &encoding, &steps, Some(3))
+            .expect("pattern");
+        assert_eq!(first.temporal_depth, 3);
+        assert_eq!(first.total_activity, 2);
+        assert_eq!(first.timestep_neuron_counts, vec![2, 0]);
+        assert_eq!(first.upstream_areas, vec![1, 2]);
+        assert_eq!(first.pattern_hash, encoding.pattern_hash(&steps));
+
+        let second = detector
+            .detect_change_pattern(100, &[1, 2], &encoding, &steps, Some(3))
+            .expect("pattern");
+        assert_eq!(first.pattern_hash, second.pattern_hash);
+        let stats = detector.get_stats();
+        assert_eq!(stats.cache_misses, 1);
+        assert_eq!(stats.cache_hits, 1);
+    }
+
+    #[test]
+    fn test_change_pattern_all_empty_steps_forms_nothing() {
+        let detector = PatternDetector::new(PatternConfig::default());
+        let encoding = MpChangeEncoding::Ratio {
+            quantization_percent: 20.0,
+        };
+        let steps: Vec<ChangeStep> = vec![Vec::new(), Vec::new()];
+        assert!(detector
+            .detect_change_pattern(100, &[1], &encoding, &steps, Some(3))
+            .is_none());
+        assert!(detector
+            .detect_change_pattern(100, &[], &encoding, &[vec![(1, 1)]], Some(3))
+            .is_none());
+        assert_eq!(detector.get_stats().empty_patterns, 1);
     }
 
     #[test]

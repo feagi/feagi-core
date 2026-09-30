@@ -101,6 +101,15 @@ fn merge_memory_area_properties(
         .entry("scan_skip_density".to_string())
         .or_insert(Value::from(memory_defaults.scan_skip_density));
     defaults
+        .entry(feagi_evolutionary::MP_CHANGE_MODE_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.mp_change_mode.as_str()));
+    defaults
+        .entry(feagi_evolutionary::MP_DELTA_QUANTIZATION_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.mp_delta_quantization));
+    defaults
+        .entry(feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.mp_ratio_quantization));
+    defaults
         .entry("psp_uniform_distribution".to_string())
         .or_insert(Value::from(true));
 
@@ -109,6 +118,36 @@ fn merge_memory_area_properties(
         defaults.extend(extra_props.clone());
     }
     defaults
+}
+
+/// Reject an update whose MP encoding keys would leave the area invalid.
+///
+/// Merges only the MP encoding keys of `changes` over the current values so
+/// that combinations (e.g. enabling MP learning while a change mode is set)
+/// are checked, not just individual values.
+fn validate_mp_encoding_update(
+    current: &HashMap<String, Value>,
+    changes: &HashMap<String, Value>,
+) -> ServiceResult<()> {
+    const MP_KEYS: [&str; 4] = [
+        feagi_evolutionary::MP_LEARNING_ENABLED_KEY,
+        feagi_evolutionary::MP_CHANGE_MODE_KEY,
+        feagi_evolutionary::MP_DELTA_QUANTIZATION_KEY,
+        feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY,
+    ];
+    if !changes.keys().any(|k| MP_KEYS.contains(&k.as_str())) {
+        return Ok(());
+    }
+    let merged: HashMap<String, Value> = MP_KEYS
+        .iter()
+        .filter_map(|key| {
+            changes
+                .get(*key)
+                .or_else(|| current.get(*key))
+                .map(|v| (key.to_string(), v.clone()))
+        })
+        .collect();
+    feagi_evolutionary::validate_memory_mp_properties(&merged).map_err(ServiceError::InvalidInput)
 }
 
 fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
@@ -1325,12 +1364,16 @@ impl GenomeServiceImpl {
         // Get cortical index for NPU updates
         let cortical_idx = {
             let manager = self.connectome.read();
-            manager
+            let idx = manager
                 .get_cortical_idx(&cortical_id_typed)
                 .ok_or_else(|| ServiceError::NotFound {
                     resource: "CorticalArea".to_string(),
                     id: cortical_id.to_string(),
-                })?
+                })?;
+            if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
+                validate_mp_encoding_update(&area.properties, &changes)?;
+            }
+            idx
         };
 
         // Queue parameter updates for burst loop to consume (non-blocking!)
@@ -1699,6 +1742,10 @@ impl GenomeServiceImpl {
                                 );
                             }
                         }
+                        // Validated up front by validate_mp_encoding_update.
+                        "mp_change_mode" | "mp_delta_quantization" | "mp_ratio_quantization" => {
+                            area.properties.insert(key.clone(), value.clone());
+                        }
 
                         // Membrane potential / runtime flags
                         "mp_charge_accumulation" | "neuron_mp_charge_accumulation" => {
@@ -2018,6 +2065,10 @@ impl GenomeServiceImpl {
                                     serde_json::json!(v),
                                 );
                             }
+                        }
+                        // Validated up front by validate_mp_encoding_update.
+                        "mp_change_mode" | "mp_delta_quantization" | "mp_ratio_quantization" => {
+                            area.properties.insert(key.clone(), value.clone());
                         }
                         "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
                             // Converter expects separate x, y, z properties, not an array
@@ -2395,6 +2446,9 @@ impl GenomeServiceImpl {
                         | "neuron_longterm_mem_threshold"
                         | "temporal_depth"
                         | "mp_learning_enabled"
+                        | "mp_change_mode"
+                        | "mp_delta_quantization"
+                        | "mp_ratio_quantization"
                 )
             });
 
@@ -2405,6 +2459,8 @@ impl GenomeServiceImpl {
                 let mut manager = self.connectome.write();
                 if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
                     if let Some(mem_props) = extract_memory_properties(&area.properties) {
+                        let mp_mode =
+                            feagi_brain_development::memory_mp_mode(&area.properties, &mem_props);
                         // Ensure upstream tracking is consistent with current mappings before re-registering.
                         let _ = manager
                             .refresh_upstream_cortical_areas_from_mappings(&cortical_id_typed);
@@ -2461,14 +2517,22 @@ impl GenomeServiceImpl {
                                     max_reactivations: 1000,
                                 };
 
-                                exec.register_memory_area(
-                                    cortical_idx,
-                                    cortical_id.to_string(),
-                                    mem_props.temporal_depth,
-                                    upstream_areas,
-                                    Some(lifecycle_config),
-                                    mem_props.mp_learning_enabled,
-                                );
+                                match mp_mode {
+                                    Ok(mp_mode) => exec.register_memory_area(
+                                        cortical_idx,
+                                        cortical_id.to_string(),
+                                        mem_props.temporal_depth,
+                                        upstream_areas,
+                                        Some(lifecycle_config),
+                                        mp_mode,
+                                    ),
+                                    Err(e) => warn!(
+                                        target: "feagi-services",
+                                        "[GENOME-UPDATE] Memory area {} not re-registered: {}",
+                                        cortical_id,
+                                        e
+                                    ),
+                                }
                             } else {
                                 warn!(target: "feagi-services", "[GENOME-UPDATE] Failed to lock PlasticityExecutor for memory-area update");
                             }
@@ -4318,6 +4382,16 @@ impl GenomeServiceImpl {
                     use feagi_evolutionary::extract_memory_properties;
                     extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
                 },
+                mp_change_mode: feagi_evolutionary::extract_memory_properties(&area.properties)
+                    .map(|p| p.mp_change_mode.as_str().to_string()),
+                mp_delta_quantization: feagi_evolutionary::extract_memory_properties(
+                    &area.properties,
+                )
+                .map(|p| p.mp_delta_quantization),
+                mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(
+                    &area.properties,
+                )
+                .map(|p| p.mp_ratio_quantization),
                 properties: HashMap::new(),
                 cortical_subtype,
                 encoding_type,
@@ -4516,6 +4590,12 @@ impl GenomeServiceImpl {
                 use feagi_evolutionary::extract_memory_properties;
                 extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
             },
+            mp_change_mode: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_change_mode.as_str().to_string()),
+            mp_delta_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_delta_quantization),
+            mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_ratio_quantization),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
@@ -4715,6 +4795,12 @@ impl GenomeServiceImpl {
                 use feagi_evolutionary::extract_memory_properties;
                 extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
             },
+            mp_change_mode: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_change_mode.as_str().to_string()),
+            mp_delta_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_delta_quantization),
+            mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_ratio_quantization),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,

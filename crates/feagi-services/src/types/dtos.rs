@@ -136,6 +136,22 @@ pub struct CorticalAreaInfo {
         skip_serializing_if = "Option::is_none"
     )]
     pub mp_learning_enabled: Option<bool>,
+    /// Change-based MP encoding ("none", "mp_differential", "mp_ratio").
+    /// Omitted for non-memory areas.
+    #[serde(rename = "mp_change_mode", skip_serializing_if = "Option::is_none")]
+    pub mp_change_mode: Option<String>,
+    /// Differential rounding step in MP units. Omitted for non-memory areas.
+    #[serde(
+        rename = "mp_delta_quantization",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mp_delta_quantization: Option<f32>,
+    /// Ratio rounding step in percent per compounding bucket. Omitted for non-memory areas.
+    #[serde(
+        rename = "mp_ratio_quantization",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mp_ratio_quantization: Option<f32>,
     pub properties: HashMap<String, serde_json::Value>,
 
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)

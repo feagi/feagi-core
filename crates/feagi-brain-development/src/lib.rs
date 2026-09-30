@@ -37,6 +37,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod connectivity;
 pub mod connectome_manager;
 pub mod cortical_type_utils;
+#[cfg(feature = "plasticity")]
+pub mod memory_mp_mode;
 pub mod neuroembryogenesis;
 pub mod region_io_designation;
 mod rng;
@@ -80,6 +82,9 @@ pub use connectome_manager::{BrainRegionIoRegistry, ConnectomeConfig, Connectome
 
 // Re-export neuroembryogenesis
 pub use neuroembryogenesis::{DevelopmentProgress, DevelopmentStage, Neuroembryogenesis};
+
+#[cfg(feature = "plasticity")]
+pub use memory_mp_mode::memory_mp_mode;
 
 // Re-export cortical type utilities (Phase 3)
 pub use cortical_type_utils::{

@@ -34,6 +34,7 @@ pub mod executor; // Abstraction layer for different execution models
 pub(crate) mod log_rate_limiter;
 pub mod memory_neuron_array;
 pub mod memory_stats_cache;
+pub mod mp_change_encoder;
 pub mod neuron_id_manager;
 pub mod pattern_detector;
 pub mod service;
@@ -59,6 +60,7 @@ pub use memory_stats_cache::{
     create_memory_stats_cache, get_area_stats, get_stats_snapshot, init_memory_area,
     on_neuron_created, on_neuron_deleted, remove_memory_area, MemoryAreaStats, MemoryStatsCache,
 };
+pub use mp_change_encoder::{ChangeStep, MemoryMpMode, MpChangeEncoding, MpFrame};
 pub use neuron_id_manager::{
     AllocationStats, NeuronIdManager, NeuronType, MEMORY_NEURON_ID_MAX, MEMORY_NEURON_ID_START,
 };

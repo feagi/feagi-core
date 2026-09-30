@@ -3792,15 +3792,25 @@ impl ConnectomeManager {
                                 max_reactivations: 1000,
                             };
 
-                            exec.register_memory_area(
-                                dst_area.cortical_idx,
-                                dst_area_id.as_base_64(),
-                                mem_props.temporal_depth,
-                                upstream_areas.clone(),
-                                Some(lifecycle_config),
-                                mem_props.mp_learning_enabled,
-                            );
-                            self.configure_memory_scan_on_executor(&*exec, dst_area_id);
+                            match crate::memory_mp_mode(&dst_area.properties, &mem_props) {
+                                Ok(mp_mode) => {
+                                    exec.register_memory_area(
+                                        dst_area.cortical_idx,
+                                        dst_area_id.as_base_64(),
+                                        mem_props.temporal_depth,
+                                        upstream_areas.clone(),
+                                        Some(lifecycle_config),
+                                        mp_mode,
+                                    );
+                                    self.configure_memory_scan_on_executor(&*exec, dst_area_id);
+                                }
+                                Err(e) => error!(
+                                    target: "feagi-bdu",
+                                    "Memory area {} not registered: {}",
+                                    dst_area_id.as_base_64(),
+                                    e
+                                ),
+                            }
                         } else {
                             warn!(target: "feagi-bdu", "Failed to lock PlasticityExecutor");
                         }
@@ -5981,6 +5991,18 @@ impl ConnectomeManager {
                 longterm_threshold: mem_props.longterm_threshold,
                 max_reactivations: 1000,
             };
+            let mp_mode = match crate::memory_mp_mode(&area.properties, &mem_props) {
+                Ok(mode) => mode,
+                Err(e) => {
+                    error!(
+                        target: "feagi-bdu",
+                        "Memory area {} not registered: {}",
+                        area_name,
+                        e
+                    );
+                    continue;
+                }
+            };
             let exec = executor.lock().map_err(|_| {
                 BduError::Internal(
                     "Failed to lock PlasticityExecutor for memory-area rebind".to_string(),
@@ -5992,7 +6014,7 @@ impl ConnectomeManager {
                 mem_props.temporal_depth,
                 upstream_areas,
                 Some(lifecycle_config),
-                mem_props.mp_learning_enabled,
+                mp_mode,
             );
             self.configure_memory_scan_on_executor(&*exec, &memory_id);
         }
@@ -9640,7 +9662,7 @@ mod tests {
                 1,
                 vec![7],
                 None,
-                false,
+                feagi_npu_plasticity::MemoryMpMode::PatternOnly,
             );
             exec.restore_long_term_memory_neurons(&[MemoryNeuronDetail {
                 neuron_id: 50_000_003,
@@ -9742,7 +9764,7 @@ mod tests {
                 1,
                 vec![7],
                 None,
-                false,
+                feagi_npu_plasticity::MemoryMpMode::PatternOnly,
             );
         }
 

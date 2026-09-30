@@ -143,6 +143,12 @@ pub struct MemoryCorticalAreaParamsResponse {
     pub lifespan_growth_rate: f32,
     pub init_lifespan: u32,
     pub mp_learning_enabled: bool,
+    /// Change-based MP encoding: "none", "mp_differential", or "mp_ratio".
+    pub mp_change_mode: String,
+    /// Differential rounding step in MP units.
+    pub mp_delta_quantization: f32,
+    /// Ratio rounding step in percent per compounding bucket.
+    pub mp_ratio_quantization: f32,
     pub min_window_activity: u32,
     pub scan_skip_density: f32,
 }
@@ -156,6 +162,10 @@ pub struct MemoryCorticalAreaResponse {
     pub short_term_neuron_count: usize,
     pub long_term_neuron_count: usize,
     pub memory_parameters: MemoryCorticalAreaParamsResponse,
+    /// Mode the plasticity layer actually runs: "pattern_only", "mp_learning",
+    /// "mp_differential", or "mp_ratio". Differs from `memory_parameters` when a change
+    /// mode was auto-disabled (temporal_depth < 2). `None` if the area is not registered.
+    pub effective_mp_mode: Option<String>,
     /// Upstream cortical indices that feed pattern detection for this memory area.
     pub upstream_cortical_area_indices: Vec<u32>,
     pub upstream_cortical_area_count: usize,
@@ -4257,9 +4267,13 @@ pub async fn get_memory_cortical_area(
             lifespan_growth_rate: mem_props.lifespan_growth_rate,
             init_lifespan: mem_props.init_lifespan,
             mp_learning_enabled: mem_props.mp_learning_enabled,
+            mp_change_mode: mem_props.mp_change_mode.as_str().to_string(),
+            mp_delta_quantization: mem_props.mp_delta_quantization,
+            mp_ratio_quantization: mem_props.mp_ratio_quantization,
             min_window_activity: mem_props.min_window_activity,
             scan_skip_density: mem_props.scan_skip_density,
         },
+        effective_mp_mode: runtime.effective_mp_mode,
         upstream_cortical_area_indices,
         upstream_cortical_area_count,
         upstream_pattern_cache_size: runtime.upstream_pattern_cache_size,

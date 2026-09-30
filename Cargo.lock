@@ -2089,6 +2089,7 @@ dependencies = [
  "feagi-npu-runtime",
  "feagi-state-manager",
  "feagi-structures",
+ "libm",
  "parking_lot",
  "rayon",
  "roaring",

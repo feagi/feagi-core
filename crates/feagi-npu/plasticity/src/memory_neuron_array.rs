@@ -105,8 +105,10 @@ pub struct MemoryNeuronArray {
     last_activation_burst: Vec<u64>,
     activation_count: Vec<u32>,
 
-    // Pattern association (xxHash64 for fast, deterministic pattern identification)
-    pattern_hash_to_index: HashMap<u64, usize>,
+    // Pattern association (xxHash64 for fast, deterministic pattern identification).
+    // Keyed by (cortical_area_id, hash): memory areas fed the same upstream pattern
+    // compute the same hash but each owns an independent neuron.
+    pattern_hash_to_index: HashMap<(u32, u64), usize>,
     index_to_pattern_hash: HashMap<usize, u64>,
 
     // Index management
@@ -167,8 +169,11 @@ impl MemoryNeuronArray {
         current_burst: u64,
         config: &MemoryNeuronLifecycleConfig,
     ) -> Option<usize> {
-        // Check if pattern already exists
-        if let Some(&existing_idx) = self.pattern_hash_to_index.get(&pattern_hash) {
+        // Check if pattern already exists in this area
+        if let Some(&existing_idx) = self
+            .pattern_hash_to_index
+            .get(&(cortical_area_id, pattern_hash))
+        {
             if self.is_active[existing_idx] {
                 // Reactivate existing neuron instead
                 return self.reactivate_memory_neuron_internal(existing_idx, current_burst);
@@ -198,7 +203,8 @@ impl MemoryNeuronArray {
         self.activation_count[neuron_idx] = 1;
 
         // Register pattern association
-        self.pattern_hash_to_index.insert(pattern_hash, neuron_idx);
+        self.pattern_hash_to_index
+            .insert((cortical_area_id, pattern_hash), neuron_idx);
         self.index_to_pattern_hash.insert(neuron_idx, pattern_hash);
 
         // Add to area tracking
@@ -509,7 +515,8 @@ impl MemoryNeuronArray {
         self.activation_count[neuron_idx] = detail.activation_count;
 
         if let Some(pattern_hash) = detail.pattern_hash {
-            self.pattern_hash_to_index.insert(pattern_hash, neuron_idx);
+            self.pattern_hash_to_index
+                .insert((detail.cortical_area_idx, pattern_hash), neuron_idx);
             self.index_to_pattern_hash.insert(neuron_idx, pattern_hash);
         }
         if let Some(spatial_signature) = detail.spatial_signature {
@@ -537,10 +544,14 @@ impl MemoryNeuronArray {
         Ok(neuron_idx)
     }
 
-    /// Find neuron index by pattern hash
-    pub fn find_neuron_by_pattern(&self, pattern_hash: &u64) -> Option<usize> {
+    /// Find the active neuron a memory area holds for a pattern hash
+    pub fn find_neuron_by_pattern(
+        &self,
+        cortical_area_id: u32,
+        pattern_hash: &u64,
+    ) -> Option<usize> {
         self.pattern_hash_to_index
-            .get(pattern_hash)
+            .get(&(cortical_area_id, *pattern_hash))
             .copied()
             .filter(|&idx| self.is_valid_index(idx) && self.is_active[idx])
     }
@@ -804,7 +815,7 @@ impl MemoryNeuronArray {
             std::mem::size_of::<f32>() +       // float32 array
             std::mem::size_of::<u64>() * 2 +   // uint64 arrays
             std::mem::size_of::<bool>() * 2    // bool arrays
-        ) + self.pattern_hash_to_index.len() * (8 + 8)  // Pattern hash mappings (u64 + usize)
+        ) + self.pattern_hash_to_index.len() * (4 + 8 + 8)  // Pattern mappings ((u32, u64) + usize)
           + self.area_neuron_indices.len() * 64; // Area tracking overhead
 
         MemoryNeuronStats {
@@ -848,14 +859,15 @@ impl MemoryNeuronArray {
         let neuron_id = self.neuron_ids[neuron_idx];
         self.id_manager.deallocate_memory_neuron_id(neuron_id);
 
+        let area_id = self.cortical_area_ids[neuron_idx];
+
         // Remove pattern association
         if let Some(pattern_hash) = self.index_to_pattern_hash.remove(&neuron_idx) {
-            self.pattern_hash_to_index.remove(&pattern_hash);
+            self.pattern_hash_to_index.remove(&(area_id, pattern_hash));
         }
         self.clear_scan_sidecars(neuron_idx);
 
         // Remove from area tracking
-        let area_id = self.cortical_area_ids[neuron_idx];
         if let Some(indices) = self.area_neuron_indices.get_mut(&area_id) {
             indices.remove(&neuron_idx);
         }
@@ -889,7 +901,8 @@ impl MemoryNeuronArray {
 
             // Remove pattern mapping
             if let Some(pattern_hash) = self.index_to_pattern_hash.remove(&neuron_idx) {
-                self.pattern_hash_to_index.remove(&pattern_hash);
+                self.pattern_hash_to_index
+                    .remove(&(cortical_area_id, pattern_hash));
             }
             self.clear_scan_sidecars(neuron_idx);
 
@@ -1064,7 +1077,7 @@ mod tests {
         assert!(!array.is_active[idx]);
 
         // Pattern should no longer be findable
-        let found = array.find_neuron_by_pattern(&pattern_hash);
+        let found = array.find_neuron_by_pattern(100, &pattern_hash);
         assert!(found.is_none());
     }
 
@@ -1191,12 +1204,12 @@ mod tests {
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
 
-        let found = array.find_neuron_by_pattern(&pattern_hash);
+        let found = array.find_neuron_by_pattern(100, &pattern_hash);
         assert_eq!(found, Some(idx));
 
         // Different pattern should not be found
         let pattern_hash2 = 0x0202020202020202u64;
-        let found2 = array.find_neuron_by_pattern(&pattern_hash2);
+        let found2 = array.find_neuron_by_pattern(100, &pattern_hash2);
         assert_eq!(found2, None);
     }
 
@@ -1338,11 +1351,38 @@ mod tests {
         assert_eq!(array.get_active_neurons_by_area(6).len(), 1);
 
         // Verify pattern hashes are cleared for area 5
-        assert!(!array.pattern_hash_to_index.contains_key(&pattern1));
-        assert!(!array.pattern_hash_to_index.contains_key(&pattern2));
+        assert!(!array.pattern_hash_to_index.contains_key(&(5, pattern1)));
+        assert!(!array.pattern_hash_to_index.contains_key(&(5, pattern2)));
 
         // Verify area 6 pattern still exists
-        assert!(array.pattern_hash_to_index.contains_key(&pattern3));
+        assert!(array.pattern_hash_to_index.contains_key(&(6, pattern3)));
+    }
+
+    #[test]
+    fn test_same_pattern_in_two_areas_gets_independent_neurons() {
+        let mut array = MemoryNeuronArray::new(16);
+        let config = MemoryNeuronLifecycleConfig::default();
+        let hash = 0xABCDu64;
+
+        let a = array.create_memory_neuron(hash, 100, 0, &config).unwrap();
+        let b = array.create_memory_neuron(hash, 101, 0, &config).unwrap();
+        assert_ne!(a, b, "each area owns its own neuron for a shared pattern");
+        assert_ne!(array.get_neuron_id(a), array.get_neuron_id(b));
+        assert_eq!(array.get_cortical_area_id(a), Some(100));
+        assert_eq!(array.get_cortical_area_id(b), Some(101));
+        assert_eq!(array.find_neuron_by_pattern(100, &hash), Some(a));
+        assert_eq!(array.find_neuron_by_pattern(101, &hash), Some(b));
+        assert_eq!(array.find_neuron_by_pattern(102, &hash), None);
+
+        // Seeing the pattern again in area 100 reactivates only area 100's neuron.
+        assert_eq!(array.create_memory_neuron(hash, 100, 1, &config), Some(a));
+        assert_eq!(array.get_activation_count(a), Some(2));
+        assert_eq!(array.get_activation_count(b), Some(1));
+
+        // Resetting one area leaves the other's neuron and mapping intact.
+        assert_eq!(array.reset_cortical_area(100), 1);
+        assert_eq!(array.find_neuron_by_pattern(100, &hash), None);
+        assert_eq!(array.find_neuron_by_pattern(101, &hash), Some(b));
     }
 
     #[test]
