@@ -4,8 +4,6 @@ use heck::{ToSnakeCase, AsSnakeCase};
 use crate::basis::{append_to_lit_str, lit_str_to_ident, prepend_to_lit_str, GeneratorFromTemplate};
 use crate::templates::requests_responses::requests_responses_structs::{RequestResponseContract, TemplateRequestResponseCategory};
 
-
-
 pub struct EnumRequestResponseGenerator;
 
 impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestResponseGenerator {
@@ -97,9 +95,32 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
         let mut request_enum_tokens = proc_macro2::TokenStream::new();
         let mut response_enum_tokens = proc_macro2::TokenStream::new();
 
+        // First variant overall, and the first variant whose tuple is empty.
+        // `has_member` is true when that first variant carries a struct to default.
+        let mut first_request_variant: Option<(syn::Ident, bool)> = None;
+        let mut first_request_memberless: Option<syn::Ident> = None;
+        let mut first_response_variant: Option<(syn::Ident, bool)> = None;
+        let mut first_response_memberless: Option<syn::Ident> = None;
+
         for enum_variant in enum_variants {
 
             let variant = lit_str_to_ident(&enum_variant.key_name).unwrap(); // TODO error handling
+
+            let request_has_member = enum_variant.request_struct.is_some();
+            if first_request_variant.is_none() {
+                first_request_variant = Some((variant.clone(), request_has_member));
+            }
+            if !request_has_member && first_request_memberless.is_none() {
+                first_request_memberless = Some(variant.clone());
+            }
+
+            let response_has_member = enum_variant.response_struct.is_some();
+            if first_response_variant.is_none() {
+                first_response_variant = Some((variant.clone(), response_has_member));
+            }
+            if !response_has_member && first_response_memberless.is_none() {
+                first_response_memberless = Some(variant.clone());
+            }
 
             if let Some(request) = &enum_variant.request_struct {
                 request_enum_tokens.extend(quote!{#variant(#request),
@@ -132,9 +153,19 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
             }
         });
 
-        // Due to requirements with thingbuf, these enums need to implement Default
-        // TODO implement default where the default for the enums are the first variant (if it has structs as members, call default to init them)
-
+        // thingbuf::recycling::DefaultRecycle requires Default. Prefer the first
+        // variant with no members. If every variant has a member, use the first
+        // variant and init that member with Default.
+        output.extend(enum_default_impl(
+            &request_enum_name,
+            first_request_memberless.as_ref(),
+            first_request_variant.as_ref().map(|(variant, has_member)| (variant, *has_member)),
+        ));
+        output.extend(enum_default_impl(
+            &response_enum_name,
+            first_response_memberless.as_ref(),
+            first_response_variant.as_ref().map(|(variant, has_member)| (variant, *has_member)),
+        ));
 
         // since the enums now implement Default and Clone, we can use thingbuf::recycling::DefaultRecycle
 
@@ -158,5 +189,33 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
 
         output
 
+    }
+}
+
+/// Builds `impl Default` for a generated request or response enum.
+fn enum_default_impl(
+    enum_name: &syn::Ident,
+    first_memberless_variant: Option<&syn::Ident>,
+    first_variant: Option<(&syn::Ident, bool)>,
+) -> proc_macro2::TokenStream {
+    let Some((variant, initialize_member)) = first_memberless_variant
+        .map(|variant| (variant, false))
+        .or_else(|| first_variant.map(|(variant, has_member)| (variant, has_member)))
+    else {
+        return proc_macro2::TokenStream::new();
+    };
+
+    let constructor = if initialize_member {
+        quote! { Self::#variant(Default::default()) }
+    } else {
+        quote! { Self::#variant() }
+    };
+
+    quote! {
+        impl Default for #enum_name {
+            fn default() -> Self {
+                #constructor
+            }
+        }
     }
 }
