@@ -268,7 +268,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for OhkamiServerGene
                 Self::generate_endpoint(category, http_method, contract, &base_path, module, &mut routes, &mut output);
             }
         }
-        
+
         let category_name = &template.category_name;
         let tag_fang_ident = format_ident!("{}CategoryTag", template.category_name.value());
 
