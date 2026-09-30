@@ -721,6 +721,7 @@ dependencies = [
  "paste",
  "serde",
  "serde_json",
+ "thingbuf",
 ]
 
 [[package]]

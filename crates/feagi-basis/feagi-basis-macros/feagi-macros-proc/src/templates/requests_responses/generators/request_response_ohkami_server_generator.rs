@@ -250,7 +250,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for OhkamiServerGene
         let mut routes: Vec<proc_macro2::TokenStream> = Vec::new();
 
         // Module holding the hand-written async functions, imported at the call site.
-        let module = &template.async_functions_module;
+        //let module = &template.async_functions_module;
         let base_path = template.base_path.value();
 
         // GET carries its request set as query parameters; the body-bearing methods
@@ -265,7 +265,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for OhkamiServerGene
 
         for (category, http_method, contracts) in buckets {
             for contract in contracts.iter() {
-                Self::generate_endpoint(category, http_method, contract, &base_path, module, &mut routes, &mut output);
+                //Self::generate_endpoint(category, http_method, contract, &base_path, module, &mut routes, &mut output);
             }
         }
 

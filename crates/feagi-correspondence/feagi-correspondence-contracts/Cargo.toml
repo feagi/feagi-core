@@ -43,4 +43,5 @@ feagi-basis = {path = "../../feagi-basis"}
 paste = { workspace = true }
 ahash = { workspace = true}
 serde = { workspace = true}
+thingbuf = {workspace = true, features = ["std", "static"]} # TODO fix me
 serde_json = { workspace = true, optional = true, features = ["alloc"]}

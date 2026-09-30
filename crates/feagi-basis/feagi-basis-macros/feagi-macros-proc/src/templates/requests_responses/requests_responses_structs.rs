@@ -5,12 +5,14 @@ use quote::{format_ident, quote};
 use syn::{braced, LitStr, Token};
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use crate::basis::{parse_optional_comma, parse_property_colon_member, StructParameters, TemplateStruct};
+use crate::templates::requests_responses::requests_responses_structs::kw::feagi_error_type;
 
 mod kw {
 
     syn::custom_keyword!(category_name);
     syn::custom_keyword!(base_path);
     syn::custom_keyword!(category_description);
+    syn::custom_keyword!(feagi_error_type);
     syn::custom_keyword!(read);
     syn::custom_keyword!(create);
     syn::custom_keyword!(edit);
@@ -32,7 +34,8 @@ pub struct TemplateRequestResponseCategory {
     pub base_path: LitStr,
     /// Comment Description of this category
     pub category_description: LitStr,
-    /// How many request items can be in the pool before it runs out for a given IO system
+    /// What type of error to use (FeagiError)
+    pub feagi_error_type: syn::Type,
     pub read: Vec<RequestResponseContract>,
     pub create: Vec<RequestResponseContract>,
     pub edit: Vec<RequestResponseContract>,
@@ -62,6 +65,7 @@ impl Parse for TemplateRequestResponseCategory {
         let category_name: LitStr = parse_property_colon_member::<kw::category_name, LitStr>(&input)?;
         let base_path: LitStr = parse_property_colon_member::<kw::base_path, LitStr>(&input)?;
         let category_description: LitStr = parse_property_colon_member::<kw::category_description, LitStr>(&input)?;
+        let feagi_error_type: syn::Type = parse_property_colon_member::<kw::feagi_error_type, syn::Type>(&input)?;
 
         let read = parse_category::<kw::read, RequestResponseContract>(&input)?;
         let create = parse_category::<kw::create, RequestResponseContract>(&input)?;
@@ -73,6 +77,7 @@ impl Parse for TemplateRequestResponseCategory {
             category_name,
             base_path,
             category_description,
+            feagi_error_type,
             read,
             create,
             edit,
@@ -87,6 +92,7 @@ impl TemplateStruct for TemplateRequestResponseCategory {
         let category_name = &self.category_name;
         let base_path = &self.base_path;
         let category_description = &self.category_description;
+        let feagi_error_type = &self.feagi_error_type;
         let read = RequestResponseContract::expand_verb_bucket("read", &self.read);
         let create = RequestResponseContract::expand_verb_bucket("create", &self.create);
         let edit = RequestResponseContract::expand_verb_bucket("edit", &self.edit);
@@ -97,6 +103,7 @@ impl TemplateStruct for TemplateRequestResponseCategory {
             category_name: #category_name,
             base_path: #base_path,
             category_description: #category_description,
+            feagi_error_type: #feagi_error_type,
             #read
             #create
             #edit

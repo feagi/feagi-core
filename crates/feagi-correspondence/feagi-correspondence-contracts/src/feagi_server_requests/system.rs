@@ -7,7 +7,6 @@ template_request_category! {
         category_name: "System",
         base_path: "system",
         category_description: "FEAGI Server System Level Statuses",
-        async_functions_module: system,
         read: {
             "health_check": {
                 title: "HealthCheck",
