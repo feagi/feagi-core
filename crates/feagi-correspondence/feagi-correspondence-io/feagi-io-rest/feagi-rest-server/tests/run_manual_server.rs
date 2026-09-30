@@ -55,6 +55,7 @@ async fn redirect_swagger() -> Response {
 }
 //endregion
 
+
 /// Runs the server (API + Swagger UI) until Ctrl+C. Ignored by default crate test runs.
 #[test]
 #[ignore = "manual: runs a live server and blocks until Ctrl+C"]

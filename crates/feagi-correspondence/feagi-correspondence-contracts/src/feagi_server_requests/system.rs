@@ -1,5 +1,7 @@
 use feagi_basis::feagi_macros::request_responses::{generate_from_template_request_response_structs_and_enums, template_request_category};
-use feagi_basis::thread_messaging::multi_request_channel::alloc_requester_processor::create_requester_and_responder;
+use feagi_basis::prelude::{generate_feagi_error, FeagiFail, FeagiErrorTrait, FeagiFailTrait, FeagiError};
+use feagi_basis::thread_messaging::multi_request_channel::alloc_requester_processor::{create_requester_and_responder, RequestResponder, PooledOneshotRequester};
+
 
 template_request_category! {
     exported_macro_name: feagi_server_requests_system,
@@ -7,6 +9,7 @@ template_request_category! {
         category_name: "System",
         base_path: "system",
         category_description: "FEAGI Server System Level Statuses",
+        feagi_error_type: FeagiRequestReceiveSystemError,
         read: {
             "health_check": {
                 title: "HealthCheck",
@@ -39,4 +42,26 @@ template_request_category! {
 }
 
 feagi_server_requests_system!(generate_from_template_request_response_structs_and_enums);
+
+generate_feagi_error! {
+    FeagiRequestReceiveSystemError,
+    keys: {
+        Etc: FeagiFailEtc,
+    },
+    sub_errors: {
+
+    },
+}
+
+/// A Genric error type. Anything using this should be updated with more specific errors
+#[derive(FeagiFail)]
+pub struct FeagiFailEtc {
+    context: &'static str,
+}
+
+impl Default for FeagiRequestReceiveSystemError {
+    fn default() -> Self {
+        Self::Etc(FeagiFailEtc::new("Default"))
+    }
+}
 

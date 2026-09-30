@@ -9,7 +9,7 @@ template_request_category! {
         category_name: "Agent",
         base_path: "agent",
         category_description: "Endpoint for handling Agent Registration and heartbeat",
-        feagi_error_type: generate_feagi_error,
+        feagi_error_type: FeagiRequestReceiveAgentError,
         read: {
             "list": {
                 title: "List",

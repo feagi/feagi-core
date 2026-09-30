@@ -4,8 +4,6 @@ use thingbuf::mpsc::errors::TryRecvError;
 use crate::blocking_pool::BlockingPool;
 use crate::thread_messaging::errors::{ChannelError, FeagiFailChannelClosed, FeagiFailPoolEmpty};
 
-use thingbuf::recycling::DefaultRecycle;
-
 pub fn create_requester_and_responder<Req, Res, ResRec, ReqRec, ResErr, const REQUEST_POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool>
 (request_queue_length: usize, request_recycler: ReqRec, response_recycler: ResRec)
     -> (
@@ -195,5 +193,49 @@ where
                 Ok(())
             }
         }
+    }
+}
+
+/// Slot policy for the pooled request queue and the oneshot response channels
+#[derive(Copy, Clone, Debug, Default)]
+pub struct RequestResponseRecycle;
+
+impl RequestResponseRecycle {
+    /// Returns a recycler that can fill both the request queue and the oneshot responses
+    pub const fn new() -> Self {
+        Self
+    }
+}
+
+impl<Res, ResErr> thingbuf::Recycle<Result<Res, ResErr>> for RequestResponseRecycle
+where
+    Res: Default,
+{
+    /// Returns `Ok` holding the default response.
+    fn new_element(&self) -> Result<Res, ResErr> {
+        Ok(Res::default())
+    }
+
+    /// Leaves the stored result in place.
+    fn recycle(&self, _element: &mut Result<Res, ResErr>) {}
+}
+
+impl<Req, Res, ResErr> thingbuf::Recycle<(Req, Sender<Result<Res, ResErr>, RequestResponseRecycle>)>
+    for RequestResponseRecycle
+where
+    Req: Default,
+    Res: Default,
+{
+    /// Returns a default request paired with a Sender
+    fn new_element(&self) -> (Req, Sender<Result<Res, ResErr>, RequestResponseRecycle>) {
+        let (sender, _receiver) = thingbuf::mpsc::with_recycle(1, *self);
+        (Req::default(), sender)
+    }
+
+    /// Leaves the stored request and sender in place
+    fn recycle(
+        &self,
+        _element: &mut (Req, Sender<Result<Res, ResErr>, RequestResponseRecycle>),
+    ) {
     }
 }

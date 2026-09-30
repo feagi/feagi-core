@@ -167,22 +167,26 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
             first_response_variant.as_ref().map(|(variant, has_member)| (variant, *has_member)),
         ));
 
-        // since the enums now implement Default and Clone, we can use thingbuf::recycling::DefaultRecycle
+        // RequestResponseRecycle builds Result and Sender slots. The enum Default
+        // impls supply the values those slots start from.
 
 
         // create the requester / responder creator function
         let category_name_snake = &template.category_name.value().to_snake_case();
         let req_res_func_name = format_ident!("{}_{}", "create_requester_responder_", category_name_snake);
         let root_error_type = &template.feagi_error_type;
+        let recycle = quote! {
+            ::feagi_basis::thread_messaging::multi_request_channel::alloc_requester_processor::RequestResponseRecycle
+        }; // TODO hacky
 
         output.extend(quote! {
 
             pub fn #req_res_func_name <const REQUEST_POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool>(request_queue_length: usize)
             -> (
-                    PooledOneshotRequester<#request_enum_name, #response_enum_name, ::thingbuf::recycling::DefaultRecycle, ::thingbuf::recycling::DefaultRecycle, #root_error_type, REQUEST_POOL_SIZE, ALLOW_BEYOND_POOL>,
-                    RequestResponder<#request_enum_name, #response_enum_name, ::thingbuf::recycling::DefaultRecycle, ::thingbuf::recycling::DefaultRecycle, #root_error_type>
+                    PooledOneshotRequester<#request_enum_name, #response_enum_name, #recycle, #recycle, #root_error_type, REQUEST_POOL_SIZE, ALLOW_BEYOND_POOL>,
+                    RequestResponder<#request_enum_name, #response_enum_name, #recycle, #recycle, #root_error_type>
             ) {
-                create_requester_and_responder(request_queue_length, ::thingbuf::recycling::DefaultRecycle::new(), ::thingbuf::recycling::DefaultRecycle::new())
+                create_requester_and_responder(request_queue_length, <#recycle>::new(), <#recycle>::new())
             }
         });
 
