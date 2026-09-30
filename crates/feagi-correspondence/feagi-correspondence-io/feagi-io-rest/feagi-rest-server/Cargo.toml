@@ -47,9 +47,14 @@ std_smol = [
 # Root Crates
 feagi-basis = { path = "../../../../feagi-basis", optional = true }
 
+# Sibling Crates
+feagi-io-basis = {path = "../../feagi-io-basis"}
+feagi-correspondence-contracts = {path = "../../../feagi-correspondence-contracts"}
+
 # External crates
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
+thingbuf = {workspace = true, features = ["std"]} # TODO fix Features
 ohkami = {workspace = true, optional = true, features = ["openapi"]}
 smol = {workspace = true, optional = true}
 

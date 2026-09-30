@@ -826,10 +826,13 @@ name = "feagi-rest-server"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
+ "feagi-correspondence-contracts",
+ "feagi-io-basis",
  "ohkami",
  "serde",
  "serde_json",
  "smol",
+ "thingbuf",
 ]
 
 [[package]]
