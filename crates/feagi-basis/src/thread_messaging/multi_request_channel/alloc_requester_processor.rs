@@ -4,11 +4,13 @@ use thingbuf::mpsc::errors::TryRecvError;
 use crate::blocking_pool::BlockingPool;
 use crate::thread_messaging::errors::{ChannelError, FeagiFailChannelClosed, FeagiFailPoolEmpty};
 
-pub fn create_requester_and_processor<Req, Res, ResRec, ReqRec, ResErr, const REQUEST_POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool>
+use thingbuf::recycling::DefaultRecycle;
+
+pub fn create_requester_and_responder<Req, Res, ResRec, ReqRec, ResErr, const REQUEST_POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool>
 (request_queue_length: usize, request_recycler: ReqRec, response_recycler: ResRec)
     -> (
-    PooledOneshotRequester<Req, Res, ResRec, ReqRec, ResErr, REQUEST_POOL_SIZE, ALLOW_BEYOND_POOL>,
-    RequestProcessor<Req, Res, ResRec, ReqRec, ResErr>
+        PooledOneshotRequester<Req, Res, ResRec, ReqRec, ResErr, REQUEST_POOL_SIZE, ALLOW_BEYOND_POOL>,
+        RequestResponder<Req, Res, ResRec, ReqRec, ResErr>
     )
 where
     Req: Send,
@@ -19,8 +21,9 @@ where
 {
     let requester_pair = thingbuf::mpsc::with_recycle(request_queue_length, request_recycler);
     let requester = PooledOneshotRequester::new(requester_pair.0, response_recycler);
-    let processor = RequestProcessor::new(requester_pair.1);
+    let processor = RequestResponder::new(requester_pair.1);
     (requester, processor)
+
 }
 
 
@@ -126,7 +129,7 @@ where
 /// Allows processing of multiple incoming datas and sending responses via oneshots in an MPSC
 /// pattern. Call 'loop_process_incoming_requests' in a  loop to poll for incoming requests,
 /// process them, and then return the result
-pub struct RequestProcessor<Req, Res, ResRec, ReqRec, ResErr>
+pub struct RequestResponder<Req, Res, ResRec, ReqRec, ResErr>
 where
     Req: Send,
     Res: Send,
@@ -139,7 +142,7 @@ where
 }
 
 
-impl<Req, Res, ResRec, ReqRec, ResErr> RequestProcessor<Req, Res, ResRec, ReqRec, ResErr>
+impl<Req, Res, ResRec, ReqRec, ResErr> RequestResponder<Req, Res, ResRec, ReqRec, ResErr>
 where
     Req: Send,
     Res: Send,
@@ -161,6 +164,8 @@ where
     }
      */
 
+    /// To be called in a loop. If there is incoming data, it will call the given processor async
+    /// function on it to generate a response. Otherwise, it will just return immediately
     pub async fn loop_process_incoming_requests<ProcessorFunc>(&self, processor_func: ProcessorFunc) -> Result<(), ChannelError>
     where
         ProcessorFunc: AsyncFn(Req) -> Result<Res, ResErr>

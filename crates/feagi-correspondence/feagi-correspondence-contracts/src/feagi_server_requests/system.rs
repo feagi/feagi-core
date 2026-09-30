@@ -1,8 +1,6 @@
-#[cfg(feature = "feagi-server-requests")]
 use feagi_basis::feagi_macros::request_responses::{generate_from_template_request_response_structs_and_enums, template_request_category};
+use feagi_basis::thread_messaging::multi_request_channel::alloc_requester_processor::create_requester_and_responder;
 
-
-#[cfg(feature = "feagi-server-requests")]
 template_request_category! {
     exported_macro_name: feagi_server_requests_system,
     template: {
@@ -41,6 +39,5 @@ template_request_category! {
     }
 }
 
-#[cfg(feature = "feagi-server-requests")]
 feagi_server_requests_system!(generate_from_template_request_response_structs_and_enums);
 

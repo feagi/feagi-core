@@ -1,5 +1,6 @@
 use quote::{format_ident, quote};
 use syn::{LitStr, Type};
+use heck::{ToSnakeCase, AsSnakeCase};
 use crate::basis::{append_to_lit_str, lit_str_to_ident, prepend_to_lit_str, GeneratorFromTemplate};
 use crate::templates::requests_responses::requests_responses_structs::{RequestResponseContract, TemplateRequestResponseCategory};
 
@@ -16,8 +17,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
             response_struct: Option<syn::Ident>,
         };
 
-        
-        
+
         /// builds the structs and enum variants for the given request / responses (if relevant)
         fn process_template_types(category_name: &'static str,
                                   categories: &Vec<RequestResponseContract>,
@@ -31,14 +31,14 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
 
                 let prefix_name = format!("{}{}", category_name, "Request");
                 let combo_struct_name = prepend_to_lit_str(prefix_name.as_str(), &category_request.title);
-                let combo_struct_name = lit_str_to_ident(&combo_struct_name).unwrap(); // TODO error handling
+                let combo_struct_name = lit_str_to_ident(&combo_struct_name).unwrap();
                 let combo_path_request_struct = category_request.request
                     .make_combination_with(&category_request.path_parameters);
                 if !combo_path_request_struct.is_empty() {
                     let combo_struct_tokens = combo_path_request_struct.generate_pub_struct(&combo_struct_name);
                     adding_stream.extend(quote! {
                     #[doc = #category_description]
-                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+                    #[derive(Debug, Clone, Default, ::serde::Serialize, ::serde::Deserialize)]
                     #combo_struct_tokens
                 });
                     request_struct = Some(combo_struct_name);
@@ -49,11 +49,11 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
                 if !category_request.response.is_empty() {
                     let prefix_name = format!("{}{}", category_name, "Response");
                     let struct_name = prepend_to_lit_str(prefix_name.as_str(), &category_request.title);
-                    let struct_name = lit_str_to_ident(&struct_name).unwrap(); // TODO error handling
+                    let struct_name = lit_str_to_ident(&struct_name).unwrap();
                     let struct_tokens = category_request.response.generate_pub_struct(&struct_name);
                     adding_stream.extend(quote! {
                     #[doc = #category_description]
-                    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+                    #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
                     #struct_tokens
                 });
                     response_struct = Some(struct_name);
@@ -88,11 +88,11 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
         
         let request_enum_name = append_to_lit_str(
             &(&template.category_name), "RequestsEnum");
-        let request_enum_name = lit_str_to_ident(&request_enum_name).unwrap(); // TODO error handling
+        let request_enum_name = lit_str_to_ident(&request_enum_name).unwrap();
 
         let response_enum_name = append_to_lit_str(
             &(&template.category_name), "ResponsesEnum");
-        let response_enum_name = lit_str_to_ident(&response_enum_name).unwrap(); // TODO error handling
+        let response_enum_name = lit_str_to_ident(&response_enum_name).unwrap(); 
         
         let mut request_enum_tokens = proc_macro2::TokenStream::new();
         let mut response_enum_tokens = proc_macro2::TokenStream::new();
@@ -116,9 +116,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
             }
 
         };
-
         let category_description = &template.category_description;
-
         output.extend(quote! {
 
             #[doc = #category_description]
@@ -133,7 +131,30 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
                 #response_enum_tokens
             }
         });
+        
+        // Due to requirements with thingbuf, these enums need to implement Default
+        // TODO implement default where the default for the enums are the first variant (if it has structs as members, call default to init them)
+        
 
+        // since the enums now implement Default and Clone, we can use thingbuf::recycling::DefaultRecycle
+        
+        
+        // create the requester / responder creator function
+        let category_name_snake = &template.category_name.value().to_snake_case();
+        let req_res_func_name = format_ident!("{}_{}", "create_requester_responder_", category_name_snake);
+        
+        output.extend(quote! {
+            
+            pub fn #req_res_func_name <const REQUEST_POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool>(request_queue_length: usize)
+            -> (
+                    PooledOneshotRequester<#request_enum_name, #response_enum_name, ::thingbuf::recycling::DefaultRecycle, ::thingbuf::recycling::DefaultRecycle, (), REQUEST_POOL_SIZE, ALLOW_BEYOND_POOL>,
+                    RequestResponder<#request_enum_name, #response_enum_name, ::thingbuf::recycling::DefaultRecycle, ::thingbuf::recycling::DefaultRecycle, ()>
+            ) {
+                create_requester_and_responder(request_queue_length, ::thingbuf::recycling::DefaultRecycle::new(), ::thingbuf::recycling::DefaultRecycle::new())
+            }
+        });
+        
+        
         output
 
     }

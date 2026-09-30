@@ -11,7 +11,8 @@ mod kw {
     syn::custom_keyword!(category_name);
     syn::custom_keyword!(base_path);
     syn::custom_keyword!(category_description);
-    syn::custom_keyword!(async_functions_module);
+    syn::custom_keyword!(request_pool_size);
+    syn::custom_keyword!(allow_std_to_overextend_pool);
     syn::custom_keyword!(read);
     syn::custom_keyword!(create);
     syn::custom_keyword!(edit);
@@ -33,8 +34,9 @@ pub struct TemplateRequestResponseCategory {
     pub base_path: LitStr,
     /// Comment Description of this category
     pub category_description: LitStr,
-    /// What module the async functions for this category are located in
-    pub async_functions_module: Ident,
+    /// How many request items can be in the pool before it runs out for a given IO system
+    pub request_pool_size: syn::LitInt,
+    pub allow_std_to_overextend_pool: syn::LitBool,
     pub read: Vec<RequestResponseContract>,
     pub create: Vec<RequestResponseContract>,
     pub edit: Vec<RequestResponseContract>,
@@ -64,7 +66,8 @@ impl Parse for TemplateRequestResponseCategory {
         let category_name: LitStr = parse_property_colon_member::<kw::category_name, LitStr>(&input)?;
         let base_path: LitStr = parse_property_colon_member::<kw::base_path, LitStr>(&input)?;
         let category_description: LitStr = parse_property_colon_member::<kw::category_description, LitStr>(&input)?;
-        let async_functions_module: Ident = parse_property_colon_member::<kw::async_functions_module, Ident>(&input)?;
+        let request_pool_size: syn::LitInt = parse_property_colon_member::<kw::request_pool_size, syn::LitInt>(&input)?;
+        let allow_std_to_overextend_pool: syn::LitBool = parse_property_colon_member::<kw::allow_std_to_overextend_pool, syn::LitBool>(&input)?;
 
         let read = parse_category::<kw::read, RequestResponseContract>(&input)?;
         let create = parse_category::<kw::create, RequestResponseContract>(&input)?;
@@ -76,7 +79,8 @@ impl Parse for TemplateRequestResponseCategory {
             category_name,
             base_path,
             category_description,
-            async_functions_module,
+            request_pool_size,
+            allow_std_to_overextend_pool,
             read,
             create,
             edit,
@@ -91,7 +95,8 @@ impl TemplateStruct for TemplateRequestResponseCategory {
         let category_name = &self.category_name;
         let base_path = &self.base_path;
         let category_description = &self.category_description;
-        let async_functions_module = &self.async_functions_module;
+        let request_pool_size = &self.request_pool_size;
+        let allow_std_to_overextend_pool = &self.allow_std_to_overextend_pool;
         let read = RequestResponseContract::expand_verb_bucket("read", &self.read);
         let create = RequestResponseContract::expand_verb_bucket("create", &self.create);
         let edit = RequestResponseContract::expand_verb_bucket("edit", &self.edit);
@@ -102,7 +107,8 @@ impl TemplateStruct for TemplateRequestResponseCategory {
             category_name: #category_name,
             base_path: #base_path,
             category_description: #category_description,
-            async_functions_module: #async_functions_module,
+            request_pool_size: #request_pool_size,
+            allow_std_to_overextend_pool: #allow_std_to_overextend_pool,
             #read
             #create
             #edit
