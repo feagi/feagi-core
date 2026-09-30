@@ -2,7 +2,7 @@ use std::error::Error;
 use thingbuf::mpsc::{Receiver, Sender};
 use thingbuf::mpsc::errors::TryRecvError;
 use crate::blocking_pool::BlockingPool;
-use crate::thread_messaging::errors::{ChannelError, FeagiFailChannelClosed, FeagiFailPoolEmpty, FeagiFailPoolFull};
+use crate::thread_messaging::errors::{ChannelError, FeagiFailChannelClosed, FeagiFailPoolEmpty};
 
 pub fn create_requester_and_processor<Req, Res, ResRec, ReqRec, ResErr, const REQUEST_POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool>
 (request_queue_length: usize, request_recycler: ReqRec, response_recycler: ResRec)

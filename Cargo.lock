@@ -746,6 +746,9 @@ dependencies = [
 [[package]]
 name = "feagi-io-basis"
 version = "0.1.1"
+dependencies = [
+ "thingbuf",
+]
 
 [[package]]
 name = "feagi-io-rest"

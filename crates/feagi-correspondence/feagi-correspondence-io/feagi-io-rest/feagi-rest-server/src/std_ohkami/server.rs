@@ -1,6 +1,7 @@
 use ohkami::prelude::*;
 use ohkami::openapi;
 
+
 //region OpenAPI generation
 
 const SWAGGER_HTML: &str = include_str!("../../swagger_site/feagi-server.html");
@@ -8,11 +9,23 @@ const SWAGGER_CSS: &[u8] = include_bytes!("../../swagger_site/swagger-ui.css");
 const SWAGGER_JS: &[u8] = include_bytes!("../../swagger_site/swagger-ui-bundle.js");
 
 
+//endregion
+
+pub struct OhkamiServerConfig {
+    address: core::net::SocketAddrV4,
+    request_categories: ()
+}
+
+impl OhkamiServerConfig {
+
+    pub fn new(address: core::net::SocketAddrV4, request_categories: ()) -> Self {
+        // NOTE: Ohkami does not support local Unix sockets. Not sure why you would use this there anyways though
+        
+    }
+
+}
 
 
-
-
-// Import modules here that the async functions live within
 
 
 

@@ -10,4 +10,20 @@ homepage.workspace = true
 documentation.workspace = true
 description = "Shared Structs and Traits between feagi-correspondence-io subcrates"
 
+[features]
+
+std = [
+    "alloc",
+    "thingbuf/std"
+]
+
+alloc = [
+    "thingbuf/alloc"
+]
+
+
 [dependencies]
+
+
+# External Crates
+thingbuf = {workspace = true, features = ["static", "std"]}

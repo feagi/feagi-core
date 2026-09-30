@@ -1,3 +1,3 @@
 #[cfg(feature = "alloc")]
-pub mod alloc_req_res;
+pub mod alloc_requester_processor;
 
