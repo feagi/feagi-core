@@ -561,7 +561,10 @@ mod tests {
         }
         let latency = (encode.window_size - encode.hop_size) as usize;
         let snr = reconstruction_snr_db(&input, &output, latency);
-        assert!(snr < 6.0, "mismatched floor should wreck the level, got {snr:.1} dB");
+        assert!(
+            snr < 6.0,
+            "mismatched floor should wreck the level, got {snr:.1} dB"
+        );
     }
 
     #[test]
