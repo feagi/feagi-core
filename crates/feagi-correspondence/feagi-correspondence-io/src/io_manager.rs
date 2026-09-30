@@ -31,7 +31,7 @@ impl IOManager {
 
     }
 
-    
+
     pub fn stop_all_servers(&mut self) {
         if let Some(rest) = &mut self.rest_server {
             rest.stop_server()
