@@ -71,6 +71,7 @@ paste = { workspace = true }
 ahash = { workspace = true}
 serde = { workspace = true}
 heapless = {workspace = true}
+thingbuf = {workspace = true, features = ["alloc", "std", "static"]} # TODO review features
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 flume = {workspace = true, optional = true}
