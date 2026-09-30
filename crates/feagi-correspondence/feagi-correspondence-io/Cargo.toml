@@ -25,6 +25,8 @@ alloc = [
 
 [dependencies]
 # Sub Crates
+feagi-io-basis = {path = "feagi-io-basis"}
+feagi-io-rest = {path = "feagi-io-rest"}
 
 # Sibling Crates
 

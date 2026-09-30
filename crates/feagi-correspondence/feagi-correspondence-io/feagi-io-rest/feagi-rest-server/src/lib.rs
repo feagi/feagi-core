@@ -1,2 +1,3 @@
+
 #[cfg(feature = "ohkami")]
-mod std_ohkami;
+pub mod std_ohkami;

@@ -729,6 +729,8 @@ name = "feagi-correspondence-io"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
+ "feagi-io-basis",
+ "feagi-io-rest",
  "serde",
  "serde_json",
 ]
@@ -756,6 +758,7 @@ name = "feagi-io-rest"
 version = "0.1.1"
 dependencies = [
  "feagi-io-basis",
+ "feagi-rest-server",
  "serde",
  "serde_json",
 ]
