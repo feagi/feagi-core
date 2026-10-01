@@ -31,12 +31,12 @@ impl OhkamiFeagiServerEndpointConfig {
 }
 
 impl FeagiServerEndpointConfig for OhkamiFeagiServerEndpointConfig {
-    type RequestModules = thingbuf::mpsc::Sender<Result<SystemResponsesEnum, FeagiRequestReceiveSystemError>>;
-    type DataExchangeModules = (); // No data exchange supported by rest
+    type RequestEndpointSenderSet = thingbuf::mpsc::Sender<Result<SystemResponsesEnum, FeagiRequestReceiveSystemError>>;
+    type DataExchangeSet = (); // No data exchange supported by rest
 
     fn launch_server_thread(self, command_channel: Receiver<FeagiServerEndpointCommand>) -> JoinHandle<()> {
 
-        fn ohkami_server(address: SocketAddrV4, requests: Self::RequestModules, command_channel: Receiver<FeagiServerEndpointCommand>) -> () {
+        fn ohkami_server(address: SocketAddrV4, requests: Self::RequestEndpointSenderSet, command_channel: Receiver<FeagiServerEndpointCommand>) -> () {
             let ohkami_server = Ohkami::new((
                 "/swagger-ui".GET(redirect_swagger),
                 "/swagger-ui/feagi-server.html".GET(swagger_html),
@@ -66,9 +66,9 @@ impl FeagiServerEndpointConfig for OhkamiFeagiServerEndpointConfig {
 
 //region OpenAPI generation and Swagger
 
-const SWAGGER_HTML: &str = include_str!("../../swagger_site/feagi-server.html");
-const SWAGGER_CSS: &[u8] = include_bytes!("../../swagger_site/swagger-ui.css");
-const SWAGGER_JS: &[u8] = include_bytes!("../../swagger_site/swagger-ui-bundle.js");
+const SWAGGER_HTML: &str = include_str!("../../../feagi-rest-basis/swagger_site/feagi-server.html");
+const SWAGGER_CSS: &[u8] = include_bytes!("../../../feagi-rest-basis/swagger_site/swagger-ui.css");
+const SWAGGER_JS: &[u8] = include_bytes!("../../../feagi-rest-basis/swagger_site/swagger-ui-bundle.js");
 
 fn rest_openapi_metadata() -> openapi::OpenAPI<'static> {
     openapi::OpenAPI {
@@ -108,4 +108,3 @@ async fn redirect_swagger() -> Response {
 
 //endregion
 
- 

@@ -642,6 +642,7 @@ dependencies = [
 name = "feagi-io-rest"
 version = "0.1.1"
 dependencies = [
+ "feagi-rest-basis",
  "feagi-rest-server-std",
 ]
 
@@ -705,6 +706,10 @@ dependencies = [
  "rayon",
  "serde",
 ]
+
+[[package]]
+name = "feagi-rest-basis"
+version = "0.1.1"
 
 [[package]]
 name = "feagi-rest-server-std"

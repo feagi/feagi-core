@@ -3,11 +3,11 @@
 // TODO we need to prox through here to handle permissions and security (rbac?)
 
 use core::net::SocketAddrV4;
-use feagi_io_basis::std_impl::feagi_server_endpoint::FeagiServerEndpointThreadHandle;
+use feagi_io_basis::feagi_server_endpoint_and_config::FeagiServerEndpoint;
 
 
 pub struct IOManager {
-    rest_server: Option<FeagiServerEndpointThreadHandle>
+    rest_server: Option<FeagiServerEndpoint>
 }
 
 impl IOManager {
@@ -23,7 +23,7 @@ impl IOManager {
         let mut rest_config = OhkamiFeagiServerEndpointConfig::new(request_endpoints);
         rest_config.set_specific_socket(socket);
 
-        let rest_server = FeagiServerEndpointThreadHandle::launch_new_server(rest_config);
+        let rest_server = FeagiServerEndpoint::launch_new_server(rest_config);
 
         Self {
             rest_server: Some(rest_server)

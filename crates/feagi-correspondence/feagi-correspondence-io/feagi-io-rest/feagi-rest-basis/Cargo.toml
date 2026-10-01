@@ -1,0 +1,15 @@
+[package]
+name = "feagi-rest-basis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Runs the web server for FEAGI Server endpoint control using Ohkami"
+
+# TODO logic for generating OpenAPI and swagger docs
+
+[dependencies]

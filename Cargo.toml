@@ -94,8 +94,10 @@ serde_json = {workspace = true, optional = true, default-features = false}
 [workspace]
 resolver = "2"
 members = [
+    #TODO A new macro resource crate (not a macro crate itself)
+
     "crates/feagi-basis",
-    "crates/feagi-basis/feagi-basis-macros",
+    "crates/feagi-basis/feagi-basis-macros", # TODO move me. Again
     "crates/feagi-basis/feagi-basis-macros/feagi-macros-proc",
     "crates/feagi-basis/feagi-basis-quantization",
     "crates/feagi-basis/feagi-basis-collections",
@@ -105,6 +107,8 @@ members = [
     "crates/feagi-basis/feagi-basis-data-serialization",
     "crates/feagi-basis/feagi-basis-sensiomotor",
 
+    # TODO make feagi-data again
+
     "crates/feagi-brain",
     "crates/feagi-brain/feagi-brain-models",
     "crates/feagi-brain/feagi-brain-npu",
@@ -113,12 +117,13 @@ members = [
     "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon",
     "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
 
-    "crates/feagi-correspondence",
-    "crates/feagi-correspondence/feagi-correspondence-serialization",
+    "crates/feagi-correspondence", # TODO Desolve me with feagi-correspondence-io
+    "crates/feagi-correspondence/feagi-correspondence-serialization", # TODO Delete / move me
     "crates/feagi-correspondence/feagi-correspondence-io",
-    "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-api",
+    "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-api", # TODO delete me
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-basis",
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest",
+    "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest/feagi-rest-basis",
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest/feagi-rest-server-std",
 
     "crates/feagi-runtime"
