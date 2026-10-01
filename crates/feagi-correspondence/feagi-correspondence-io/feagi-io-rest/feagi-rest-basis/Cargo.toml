@@ -37,6 +37,6 @@ feagi-basis = {path = "../../../../feagi-basis"}
 
 # External Crates
 paste = {workspace = true}
-serde = {workspace = true}
+serde = {workspace = true, features = ["derive"]}
 serde_json = {workspace = true}
 thingbuf = {workspace = true, features = ["static"]}
