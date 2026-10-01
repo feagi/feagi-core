@@ -49,7 +49,6 @@ feagi-basis = { path = "../../../../feagi-basis", optional = true }
 
 # Sibling Crates
 feagi-io-basis = {path = "../../feagi-io-basis"}
-feagi-correspondence-contracts = {path = "../../../feagi-correspondence-contracts"}
 
 # External crates
 serde = { workspace = true }
@@ -59,12 +58,3 @@ ohkami = {workspace = true, optional = true, features = ["openapi"]}
 smol = {workspace = true, optional = true}
 
 [dev-dependencies]
-
-[[test]]
-name = "manual_ohkami_server_test"
-required-features = ["std_smol"]
-
-[[test]]
-name = "run_manual_server"
-required-features = ["std_smol"]
-

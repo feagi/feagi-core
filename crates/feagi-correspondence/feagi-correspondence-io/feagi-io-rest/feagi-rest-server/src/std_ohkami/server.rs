@@ -5,11 +5,12 @@ use std::thread::JoinHandle;
 use ohkami::claw::content::Html;
 use ohkami::openapi;
 use thingbuf::mpsc::Receiver;
-use feagi_correspondence_contracts::feagi_server_requests::system::{FeagiRequestReceiveSystemError, SystemResponsesEnum};
 use feagi_io_basis::config::{FeagiServerEndpointCommand, FeagiServerEndpointConfig};
 
 const DEFAULT_WEB_SERVER_ADDRESS: SocketAddrV4 = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8081);
 
+
+/*
 pub struct OhkamiFeagiServerEndpointConfig {
     address: SocketAddrV4,
     requests: Self::RequestModules
@@ -107,3 +108,5 @@ async fn redirect_swagger() -> Response {
 }
 
 //endregion
+
+ */

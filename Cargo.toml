@@ -120,7 +120,6 @@ members = [
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-basis",
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest",
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-rest/feagi-rest-server",
-    "crates/feagi-correspondence/feagi-correspondence-contracts",
 
     "crates/feagi-runtime"
 ]

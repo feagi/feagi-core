@@ -26,4 +26,5 @@ alloc = [
 
 
 # External Crates
+paste = {workspace = true}
 thingbuf = {workspace = true, features = ["static", "std"]}

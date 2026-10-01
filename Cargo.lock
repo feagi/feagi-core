@@ -705,23 +705,10 @@ name = "feagi-correspondence"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
- "feagi-correspondence-contracts",
  "feagi-correspondence-io",
  "feagi-correspondence-serialization",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "feagi-correspondence-contracts"
-version = "0.1.1"
-dependencies = [
- "ahash",
- "feagi-basis",
- "paste",
- "serde",
- "serde_json",
- "thingbuf",
 ]
 
 [[package]]
@@ -750,6 +737,7 @@ dependencies = [
 name = "feagi-io-basis"
 version = "0.1.1"
 dependencies = [
+ "paste",
  "thingbuf",
 ]
 
@@ -829,7 +817,6 @@ name = "feagi-rest-server"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
- "feagi-correspondence-contracts",
  "feagi-io-basis",
  "ohkami",
  "serde",
