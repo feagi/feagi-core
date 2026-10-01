@@ -1,0 +1,36 @@
+[package]
+name = "feagi-rest-server-std"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Runs the web server for FEAGI Server endpoint control using Ohkami"
+
+[features]
+# subcrates should not have default in order to avoid confusion
+
+# No STD or Alloc feature, this crate requires STD!
+
+[dependencies]
+
+# Root Crates
+feagi-basis = { path = "../../../../feagi-basis"}
+
+# Sibling Crates
+feagi-io-basis = {path = "../../feagi-io-basis", features = ["std","contract_feagi_server_requests"]}
+
+# External crates
+serde = { workspace = true, features = ["std", "derive"] }
+ohkami = {workspace = true, features = ["openapi"]} # TODO move away from the openapi generator here
+serde_json = { workspace = true, features = ["std"] } # Not optional, used for conversion
+thingbuf = {workspace = true, features = ["static", "std"]}
+
+## Enables use of the smol async runtime as a backend
+smol = {workspace = true, optional = true} # Controlled from parent
+
+# TODO other async interfaces?
+

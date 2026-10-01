@@ -17,6 +17,8 @@ pub trait FeagiServerEndpointConfig {
         self,
         command_channel: thingbuf::mpsc::Receiver<FeagiServerEndpointCommand>
     ) -> std::thread::JoinHandle<()>;
+    
+    // TODO launch server "thread" for embassy
 }
 
 

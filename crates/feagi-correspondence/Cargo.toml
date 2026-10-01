@@ -14,27 +14,34 @@ description = "Root library for describing and executing communication between t
 
 default = [
     "std",
+
+    "serde_json"
 ]
 
 std = [
     "alloc",
+    "feagi-correspondence-io/std",
     "serde/std", "serde_json/std",
 ]
 
 alloc = [
-    "serde_json",
     "serde/alloc", "serde/derive", "serde_json/alloc",
 ]
 
-feagi-server-requests-rest = [
+serde_json = [
+    "dep:serde_json"
+]
 
+
+feagi-server-requests-rest = [
+    "serde_json"
 ]
 
 # Platform targets
 
 [dependencies]
 # Sub Crates
-feagi-correspondence-serialization = {path = "feagi-correspondence-serialization"}
+#feagi-correspondence-serialization = {path = "feagi-correspondence-serialization"}
 feagi-correspondence-io = {path = "feagi-correspondence-io"}
 
 
@@ -42,5 +49,5 @@ feagi-correspondence-io = {path = "feagi-correspondence-io"}
 feagi-basis = {path = "../feagi-basis"}
 
 # External crates
-serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, optional = true, features = [] }

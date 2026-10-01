@@ -11,6 +11,4 @@ pub extern crate feagi_brain;
 
 pub extern crate feagi_correspondence;
 
-pub extern crate feagi_server;
-
-pub extern crate feagi_agent;
+pub extern crate feagi_runtime;

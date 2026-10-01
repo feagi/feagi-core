@@ -14,17 +14,25 @@ description = "Shared Structs and Traits between feagi-correspondence-io subcrat
 
 std = [
     "alloc",
-    "thingbuf/std"
+    "feagi-basis/std",
+    "serde/std", "thingbuf/std",
 ]
 
 alloc = [
-    "thingbuf/alloc"
+    "feagi-basis/alloc",
+    "serde/alloc", "thingbuf/alloc",
 ]
 
+# Support contracts at all
+contract_feagi_server_requests = []
 
 [dependencies]
 
 
+# Root Crates
+feagi-basis = {path = "../../../feagi-basis"}
+
 # External Crates
 paste = {workspace = true}
-thingbuf = {workspace = true, features = ["static", "std"]}
+serde = { workspace = true, features = ["derive"] }
+thingbuf = {workspace = true, features = ["static"]}

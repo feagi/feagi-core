@@ -1,4 +1,4 @@
-use crate::config::{FeagiServerEndpointCommand, FeagiServerEndpointConfig};
+use crate::configurations::{FeagiServerEndpointCommand, FeagiServerEndpointConfig};
 
 /// Holds the actual server system on a std thread
 pub struct FeagiServerEndpointThreadHandle {

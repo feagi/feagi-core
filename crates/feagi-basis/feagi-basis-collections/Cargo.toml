@@ -24,9 +24,6 @@ alloc = [
     "half/alloc", "serde/alloc", "serde_json/alloc", "heapless/alloc"
 ]
 
-expose_heapless = [
-    "heapless"
-]
 
 expose_rayon = [
     "std",
@@ -47,10 +44,11 @@ feagi-basis-quantization = {path = "../feagi-basis-quantization"}
 paste = { workspace = true }
 half = {workspace = true, default-features = false, features = ["serde"]}
 serde = { workspace = true, default-features = false, features = ["derive"]}
-serde_json = { workspace = true, optional = true, default-features = false}
+heapless = {workspace = true, default-features = false, features = ["serde"]}
 serde_arrays ={workspace = true}
+serde_json = { workspace = true, optional = true, default-features = false}
+
 rayon = {workspace = true, optional = true, default-features = false}
-heapless = {workspace = true, optional = true, default-features = false, features = ["serde"]}
 
 [dev-dependencies]
 feagi-basis-quantization = { path = "../feagi-basis-quantization" }

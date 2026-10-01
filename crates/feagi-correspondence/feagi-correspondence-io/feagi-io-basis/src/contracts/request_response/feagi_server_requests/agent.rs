@@ -4,7 +4,6 @@ use feagi_basis::prelude::{generate_feagi_error, FeagiFail, FeagiErrorTrait, Fea
 use feagi_basis::thread_messaging::multi_request_channel::alloc_requester_processor::{create_requester_and_responder, RequestResponder, PooledOneshotRequester};
 
 
-
 template_request_category! {
     exported_macro_name: feagi_server_requests_agent,
     template: {
@@ -19,7 +18,7 @@ template_request_category! {
                 path_parameters: [],
                 request: [],
                 response: [
-                    "agents": String, "All Agents",
+                    "agents": String, "List of all agents connected",
                 ],
             }
         },
@@ -56,4 +55,3 @@ impl Default for FeagiRequestReceiveAgentError {
         Self::Etc(FeagiFailEtc::new("Default"))
     }
 }
-

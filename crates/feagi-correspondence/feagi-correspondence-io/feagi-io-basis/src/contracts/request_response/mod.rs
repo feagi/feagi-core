@@ -1,4 +1,6 @@
-#[cfg(feature = "feagi-server-requests")]
-/// Requests to be made to a FEAGI brain server, and responses back
-pub mod feagi_server_requests;
+
+/// Traits and Macros for bundling a set of requests together
 pub mod request_response_set;
+
+#[cfg(feature = "contract_feagi_server_requests")]
+pub mod feagi_server_requests;

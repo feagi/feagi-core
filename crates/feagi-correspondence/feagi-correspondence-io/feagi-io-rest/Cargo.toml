@@ -8,30 +8,51 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Allows Request / Response communication over HTTP Rest"
+description = "Allows Request / Response communication over HTTP Rest for servers and clients."
+
 
 [features]
 # subcrates should not have default in order to avoid confusion
 
 std = [
     "alloc",
-    "serde/std", "serde_json/std",
 ]
 
-alloc = [
-    "serde_json",
-    "serde/alloc", "serde/derive", "serde_json/alloc",
+alloc = []
+
+############ Endpoint Types ############
+
+# NOTE: The Implementation of the routing is arguably cursed. Both implementations are enabled. However, this crate
+# in its lib.rs file uses the combination of this and the std feature to only expose the correct crate
+
+# Enables a webserver
+feagi-rest-server = [
+    "dep:feagi-rest-server-std",
+    #"dep:feagi-rest-server-no-std"
 ]
+
+# Enables generation of OpenAPI Docs and the swagger page on the server
+feagi-rest-openapi-swagger = [  # TODO does nothing right now
+    "feagi-rest-server"
+]
+
+feagi-rest-client = [] # TODO add clients
+
+############ Async Runtimes ############
+
+smol = [
+    "std",
+    "feagi-rest-server-std/smol"
+]
+
+# TODO more asyncs
 
 [dependencies]
 
+# NOTE: This crate does very little itself, hence its sparse requirements
+
 # Child Crates
-feagi-rest-server = {path = "feagi-rest-server"}
+# TODO basis, Maybe with the OpenAPI / Swag generation there?
+feagi-rest-server-std = {path = "feagi-rest-server-std", optional = true}
+#feagi-rest-server-no-std = {path = "feagi-rest-server-no-std", optional = true} TODO
 
-# Sibling Crates
-feagi-io-basis = {path = "../feagi-io-basis"}
-
-
-# External crates
-serde = { workspace = true }
-serde_json = { workspace = true, optional = true }

@@ -15,18 +15,41 @@ description = "Defines the interfaces to exchange data by FEAGI agents and serve
 
 std = [
     "alloc",
+    "feagi-io-basis/std", "feagi-io-rest/std",
+    "feagi-basis/std",
     "serde/std", "serde_json/std",
 ]
 
 alloc = [
     "serde_json",
-    "serde/alloc", "serde/derive", "serde_json/alloc",
+    "feagi-io-basis/alloc", "feagi-io-rest/alloc",
+    "feagi-basis/alloc",
+    "serde/alloc", "serde_json/alloc",
+]
+
+############ Endpoint Types ############
+
+# HTTP Server Support
+rest-server = [
+    "dep:feagi-io-rest"
+]
+
+# Adds the swagger page to the HTTP Server
+rest-server-swagger = [ # TODO does nothing right now
+    "rest-server"
+]
+
+############ Async Runtimes ############
+
+# Allow the use of the smol runtime
+smol = [
+    "feagi-io-rest/smol"
 ]
 
 [dependencies]
 # Sub Crates
 feagi-io-basis = {path = "feagi-io-basis"}
-feagi-io-rest = {path = "feagi-io-rest"}
+feagi-io-rest = {path = "feagi-io-rest", optional = true}
 
 # Sibling Crates
 
@@ -34,5 +57,5 @@ feagi-io-rest = {path = "feagi-io-rest"}
 feagi-basis = {path = "../../feagi-basis"}
 
 # External crates
-serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, optional = true, features = [] }

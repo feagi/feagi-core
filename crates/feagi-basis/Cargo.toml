@@ -14,28 +14,40 @@ description = "Base data structures and methods used throughout FEAGI"
 
 default = [
     "std",
-    "use-rayon",
-    "channel_flume"
+    "serde_json",
+    "channel_flume" # TODO scrap
 ]
-
-# Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
-use-rayon = [
-    "rayon",
-    "std",
-]
-
 
 std = [
     "alloc",
-    "serde/std", "serde_json/std", "ahash/std",
-    "feagi-basis-quantization/std", "feagi-basis-neuron/std", "feagi-basis-genome/std"
+    "serde/std", "serde_json/std", "ahash/std", "thingbuf/std",
+    "feagi-basis-quantization/std", "feagi-basis-collections/std", "feagi-basis-data-serialization/std",
+    "feagi-basis-neuron/std", "feagi-basis-genome/std"
 ]
 
 alloc = [
-    "serde_json",
-    "serde/alloc", "serde/derive", "serde_json/alloc", "ahash/serde",
-    "feagi-basis-quantization/alloc", "feagi-basis-neuron/alloc", "feagi-basis-genome/alloc"
+    "serde/alloc", "serde/derive", "serde_json/alloc", "thingbuf/alloc",
+    "feagi-basis-quantization/alloc", "feagi-basis-collections/alloc", "feagi-basis-data-serialization/alloc",
+    "feagi-basis-neuron/alloc", "feagi-basis-genome/alloc"
 ]
+
+# Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
+rayon = [
+    "dep:rayon",
+    "feagi-basis-collections/rayon",
+    "std",
+]
+
+# Support for serializing and deserializng JSON via serde
+serde_json = [
+    "dep:serde_json",
+    "feagi-basis-collections/serde_json",
+    "ahash/serde"
+]
+
+
+
+# TODO all the features below here should be scrapped (either being removed, or just moved)
 
 channel_flume = [
     "std",
@@ -71,7 +83,7 @@ paste = { workspace = true }
 ahash = { workspace = true}
 serde = { workspace = true}
 heapless = {workspace = true}
-thingbuf = {workspace = true, features = ["alloc", "std", "static"]} # TODO review features
+thingbuf = {workspace = true, features = ["static"]} # TODO review features
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 flume = {workspace = true, optional = true}

@@ -1,5 +1,7 @@
 
 #[macro_export]
+/// Given a list of categories of requests, outputs structs and a function for generating them, for 
+/// a bundle of Senders / Receivers meant to handle passing requests and responses
 macro_rules! create_request_response_sender_receiver_sets {
     (
         $base_name:ident: {
@@ -16,14 +18,21 @@ macro_rules! create_request_response_sender_receiver_sets {
                     pub $category_base_name: PooledOneshotRequester< [<$category_base_name:pascal RequestsEnum>], [<$category_base_name:pascal ResponsesEnum>], RequestResponseRecycle, RequestResponseRecycle, [< FeagiRequestReceive $category_base_name:pascal Error>], $request_pool_size, $allow_beyond_pool_allocation >,
                 )+
             }
+            
+            impl RequestResponseEndpointSenderSet for [<$base_name:pascal SenderSet>] {}
 
+            
 
             pub struct [<$base_name:pascal ReceiverSet>] {
                 $(
                     pub $category_base_name: RequestResponder< [<$category_base_name:pascal RequestsEnum>], [<$category_base_name:pascal ResponsesEnum>], RequestResponseRecycle, RequestResponseRecycle, [< FeagiRequestReceive $category_base_name:pascal Error>]>,
                 )+
             }
+            
+            impl RequestResponseEndpointReceiverSet for [<$base_name:pascal ReceiverSet>] {}
 
+            
+            
             pub fn [<create_request_response_endpoint_set_ $base_name:snake>] -> ([<$base_name:pascal SenderSet>], [<$base_name:pascal ReceiverSet>]) {
                 $(
                     let ([<$category_base_name _requester>], [<$category_base_name _responder>]) = [<create_requester_responder_ $category_base_name>]<$request_pool_size, $allow_beyond_pool_allocation>($incoming_request_queue_length);
