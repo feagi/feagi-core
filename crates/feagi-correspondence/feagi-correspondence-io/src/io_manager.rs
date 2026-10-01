@@ -3,10 +3,11 @@
 // TODO we need to prox through here to handle permissions and security (rbac?)
 
 use core::net::SocketAddrV4;
-use feagi_io_basis::feagi_server_endpoint_and_config::FeagiServerEndpoint;
+use feagi_io_basis::feagi_server_endpoint_and_config::{FeagiServerEndpoint, FeagiServerEndpointLauncher};
 
 
 pub struct IOManager {
+    #[cfg(feature = "rest-server")]
     rest_server: Option<FeagiServerEndpoint>
 }
 
@@ -18,24 +19,38 @@ impl IOManager {
         }
     }
 
-    pub fn start_web_server(request_endpoints: (), socket: SocketAddrV4) -> Self {
+    #[cfg(feature = "rest-server")]
+    pub fn start_web_server(&mut self, requests: (), socket: SocketAddrV4) {
 
-        let mut rest_config = OhkamiFeagiServerEndpointConfig::new(request_endpoints);
-        rest_config.set_specific_socket(socket);
+        use feagi_io_rest::feagi_rest_basis::rest_feagi_server_endpoint_config::RestFeagiServerEndpointConfig;
 
-        let rest_server = FeagiServerEndpoint::launch_new_server(rest_config);
 
-        Self {
-            rest_server: Some(rest_server)
-        }
+        let config = RestFeagiServerEndpointConfig::new(socket, requests);
 
+        let running_server_endpoint = {
+            #[cfg(feature = "std")]
+            {
+                use feagi_io_rest::feagi_rest_server_std::OhkamiServerEndpointLauncher;
+                OhkamiServerEndpointLauncher::launch_server_endpoint(config)?
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                todo!()
+            }
+        };
+        self.rest_server = Some(running_server_endpoint)
     }
 
+    pub async fn stop_all_servers(&mut self) {
 
-    pub fn stop_all_servers(&mut self) {
-        if let Some(rest) = &mut self.rest_server {
-            rest.stop_server()
+        #[cfg(feature = "rest-server")]
+        {
+            let maybe_server = self.rest_server.take();
+            if let Some(server) = maybe_server {
+                server.stop_server().await
+            }
         }
+
     }
 
 

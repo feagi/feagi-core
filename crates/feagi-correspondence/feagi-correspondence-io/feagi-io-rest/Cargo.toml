@@ -12,18 +12,20 @@ description = "Allows Request / Response communication over HTTP Rest for server
 
 
 [features]
-# subcrates should not have default in order to avoid confusion
+
+# NOTE: The Implementation of the routing is arguably cursed. All implementations are enabled here. However, this crate
+# in its lib.rs file uses the combination of features to extern the correct crate only
 
 std = [
     "alloc",
+    "dep:feagi-rest-server-std"
 ]
 
 alloc = []
 
 ############ Endpoint Types ############
 
-# NOTE: The Implementation of the routing is arguably cursed. Both implementations are enabled. However, this crate
-# in its lib.rs file uses the combination of this and the std feature to only expose the correct crate
+
 
 # Enables a webserver
 feagi-rest-server = [
@@ -50,10 +52,9 @@ smol = [
 
 [dependencies]
 
-# NOTE: This crate does very little itself, hence its sparse requirements
-
 # Child Crates
 feagi-rest-basis = {path = "feagi-rest-basis"} # TODO move OpenAPI / Swag generation here?
 feagi-rest-server-std = {path = "feagi-rest-server-std", optional = true}
 #feagi-rest-server-no-std = {path = "feagi-rest-server-no-std", optional = true} TODO
 
+# NOTE: This crate does very little itself, hence its sparse requirements
