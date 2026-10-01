@@ -66,9 +66,7 @@ impl FeagiServerEndpointConfig for OhkamiFeagiServerEndpointConfig {
 
 //region OpenAPI generation and Swagger
 
-const SWAGGER_HTML: &str = include_str!("../../../feagi-rest-basis/swagger_site/feagi-server.html");
-const SWAGGER_CSS: &[u8] = include_bytes!("../../../feagi-rest-basis/swagger_site/swagger-ui.css");
-const SWAGGER_JS: &[u8] = include_bytes!("../../../feagi-rest-basis/swagger_site/swagger-ui-bundle.js");
+
 
 fn rest_openapi_metadata() -> openapi::OpenAPI<'static> {
     openapi::OpenAPI {

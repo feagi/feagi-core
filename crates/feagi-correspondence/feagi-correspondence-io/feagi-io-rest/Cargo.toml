@@ -32,8 +32,9 @@ feagi-rest-server = [
 ]
 
 # Enables generation of OpenAPI Docs and the swagger page on the server
-feagi-rest-openapi-swagger = [  # TODO does nothing right now
-    "feagi-rest-server"
+feagi-rest-openapi-swagger = [
+    "feagi-rest-server",
+    "feagi-rest-basis/open_api_and_swagger"
 ]
 
 feagi-rest-client = [] # TODO add clients

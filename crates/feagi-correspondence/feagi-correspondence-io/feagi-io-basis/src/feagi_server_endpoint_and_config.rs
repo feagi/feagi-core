@@ -1,3 +1,5 @@
+use core::net::SocketAddrV4;
+use feagi_basis::prelude::*;
 use crate::contracts::request_response::request_response_set::RequestResponseEndpointSenderSet;
 
 
@@ -5,34 +7,37 @@ use crate::contracts::request_response::request_response_set::RequestResponseEnd
 /// For holding the configuration (such as address, port, etc) for a specific server endpoint,
 /// which then can be consumed to launch the server as an event loop on a thread
 pub trait FeagiServerEndpointConfig: Sized {
-    type ServerStartError;
-    // These types are unrestrained as they may be of type or of empty "()" (for disabling)
     /// Struct passing in channels for making requests
     type RequestEndpointSenderSet: RequestResponseEndpointSenderSet;
     /// Struct for passing in channels for high rate data transfer
     type DataExchangeSet; // TODO
-    
+}
+
+/// Consumes a FeagiServerEndpointConfig to lauch a server
+pub trait FeagiServerEndpointLauncher<Config: FeagiServerEndpointConfig> {
     #[cfg(feature = "std")]
-    /// Consumes itself to launch an event loop server that runs on another thread
+    /// Consumes the config to launch an event loop server that runs on another thread
     fn launch_server_thread(
-        self,
-        command_channel: thingbuf::mpsc::Receiver<FeagiServerEndpointCommand>
-    ) -> Result<std::thread::JoinHandle<()>, Self::ServerStartError>;
+        config: Config,
+        command_channel: thingbuf::mpsc::Receiver<FeagiServerEndpointCommand>,
+    ) -> Result<std::thread::JoinHandle<()>, FeagiFailStartRestServerEtc>;
 
     #[cfg(feature = "std")]
-    /// Consumes itself to launch the `FeagiServerEndpointThreadHandle` directly
-    fn launch_server_endpoint(self) -> Result<FeagiServerEndpoint, Self::ServerStartError> {
+    /// Consumes the config to launch the `FeagiServerEndpointThreadHandle` directly
+    fn launch_server_endpoint(config: Config) -> Result<FeagiServerEndpoint, FeagiFailStartRestServerEtc> {
         let (command, comply) = thingbuf::mpsc::channel(1);
-        let running_handle = self.launch_server_thread(comply)?;
+        let running_handle = Self::launch_server_thread(config, comply)?;
         Ok(FeagiServerEndpoint {
             running_handle,
             command_channel: command
         })
-        
     }
 
     // TODO launch server "thread" for embassy
 }
+
+
+
 
 
 /// Holds the actual server endpoint on a std thread
@@ -66,3 +71,28 @@ pub enum FeagiServerEndpointCommand {
     StopServer
 }
 
+//region Server Start Error
+
+#[derive(FeagiFail)]
+pub struct FeagiFailStartRestServerEtc {
+    context: &'static str,
+}
+
+#[derive(FeagiFail)]
+pub struct FeagiFailStartRestServerCannotBind {
+    context: &'static str,
+    failed_to_bind: SocketAddrV4
+}
+
+generate_feagi_error! {
+    FeagiRestServerStartError,
+    keys: {
+        Etc: FeagiFailStartRestServerEtc,
+        CannotBind: FeagiFailStartRestServerCannotBind,
+    },
+    sub_errors: {
+
+    },
+}
+
+//endregion
