@@ -1,3 +1,5 @@
+pub mod request_set;
+
 use core::net::SocketAddrV4;
 use std::thread::JoinHandle;
 use thingbuf::mpsc::Receiver;
@@ -86,7 +88,6 @@ for OhkamiServerEndpointLauncher
         launch_specific_server(ohkami_server, socket)
     }
 }
-
 
 #[cfg(feature = "feagi-rest-openapi-swagger")]
 mod open_api_swagger {
