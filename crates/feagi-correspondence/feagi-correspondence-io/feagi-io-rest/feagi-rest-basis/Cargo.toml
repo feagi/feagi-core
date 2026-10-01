@@ -17,17 +17,15 @@ description = "Shared logic and config structs for REST servers and clients"
 std = [
     "alloc",
     "feagi-basis/std", "feagi-io-basis/std",
-    "thingbuf/std",
+    "thingbuf/std", "serde/std", "serde_json/std"
 ]
 
 alloc = [
     "feagi-basis/alloc", "feagi-io-basis/alloc",
-    "thingbuf/alloc",
+    "thingbuf/alloc", "serde/alloc", "serde_json/alloc"
 ]
 
 open_api_and_swagger = [] # TODO
-
-
 
 [dependencies]
 
@@ -39,4 +37,6 @@ feagi-basis = {path = "../../../../feagi-basis"}
 
 # External Crates
 paste = {workspace = true}
+serde = {workspace = true}
+serde_json = {workspace = true}
 thingbuf = {workspace = true, features = ["static"]}

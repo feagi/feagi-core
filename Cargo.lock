@@ -812,6 +812,8 @@ dependencies = [
  "feagi-basis",
  "feagi-io-basis",
  "paste",
+ "serde",
+ "serde_json",
  "thingbuf",
 ]
 
