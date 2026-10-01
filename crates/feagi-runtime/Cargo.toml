@@ -10,7 +10,18 @@ homepage.workspace = true
 documentation.workspace = true
 description = "Root library for holding common patterns of feagi runtimes / executables"
 
+[features]
+
+
+
 [dependencies]
+
+# FEAGI Root Crates
+feagi-basis = {path = "../feagi-basis"}
+feagi-brain = {path = "../feagi-brain"}
+feagi-correspondence = {path = "../feagi-correspondence"}
+
+
 
 [lints]
 workspace = true

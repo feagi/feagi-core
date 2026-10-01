@@ -10,9 +10,6 @@ pub struct IOManager {
     rest_server: Option<FeagiServerEndpointThreadHandle>
 }
 
-/*
-
-
 impl IOManager {
 
     pub fn new() -> Self {
@@ -44,4 +41,3 @@ impl IOManager {
 
 }
 
- */
