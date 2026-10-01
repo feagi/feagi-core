@@ -15,12 +15,25 @@ description = "Runs the web server for FEAGI Server endpoint control using Ohkam
 
 # No STD or Alloc feature, this crate requires STD!
 
+feagi-rest-openapi-swagger = [
+    "feagi-rest-basis/open_api_and_swagger"
+]
+
+############ Async Runtimes ############
+
+smol = [
+    "dep:smol",
+    "ohkami/rt_smol"
+]
+
+
 [dependencies]
 
 # Root Crates
 feagi-basis = { path = "../../../../feagi-basis"}
 
 # Sibling Crates
+feagi-rest-basis = {path = "../feagi-rest-basis", features = ["std"]}
 feagi-io-basis = {path = "../../feagi-io-basis", features = ["std","contract_feagi_server_requests"]}
 
 # External crates

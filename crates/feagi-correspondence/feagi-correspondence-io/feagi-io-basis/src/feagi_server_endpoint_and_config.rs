@@ -20,11 +20,11 @@ pub trait FeagiServerEndpointLauncher<Config: FeagiServerEndpointConfig> {
     fn launch_server_thread(
         config: Config,
         command_channel: thingbuf::mpsc::Receiver<FeagiServerEndpointCommand>,
-    ) -> Result<std::thread::JoinHandle<()>, FeagiFailStartRestServerEtc>;
+    ) -> Result<std::thread::JoinHandle<()>, FeagiRestServerStartError>;
 
     #[cfg(feature = "std")]
     /// Consumes the config to launch the `FeagiServerEndpointThreadHandle` directly
-    fn launch_server_endpoint(config: Config) -> Result<FeagiServerEndpoint, FeagiFailStartRestServerEtc> {
+    fn launch_server_endpoint(config: Config) -> Result<FeagiServerEndpoint, FeagiRestServerStartError> {
         let (command, comply) = thingbuf::mpsc::channel(1);
         let running_handle = Self::launch_server_thread(config, comply)?;
         Ok(FeagiServerEndpoint {
