@@ -38,7 +38,7 @@ feagi-io-basis = {path = "../../feagi-io-basis", features = ["std","contract_fea
 
 # External crates
 serde = { workspace = true, features = ["std", "derive"] }
-ohkami = {workspace = true, features = ["openapi"]} # TODO move away from the openapi generator here
+ohkami = {workspace = true}
 serde_json = { workspace = true, features = ["std"] } # Not optional, used for conversion
 thingbuf = {workspace = true, features = ["static", "std"]}
 

@@ -1275,7 +1275,6 @@ dependencies = [
  "mime_guess",
  "ohkami_lib",
  "ohkami_macros",
- "ohkami_openapi",
  "serde",
  "serde_json",
  "sha2",
@@ -1303,17 +1302,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "ohkami_openapi"
-version = "0.24.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cb8feeddd9da01da495b79f70b756e4d59c10671c6057da447ea0eb3f3b5e9f"
-dependencies = [
- "serde",
- "serde_json",
- "uuid",
 ]
 
 [[package]]

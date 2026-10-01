@@ -1,8 +1,14 @@
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+
+const FEAGI_INFO: Info = Info {
+    title: "FEAGI",
+    version: "0.0.0", // TODO package var?
+    description: "Feagi Server Swagger API Docs",
+};
 const OPENAPI_VERSION: &str = "3.0.3";
-const DEFAULT_INFO_VERSION: &str = "0.0.0";
+
 
 //region OpenApiDocument
 
@@ -23,14 +29,10 @@ pub struct OpenApiDocument {
 impl OpenApiDocument {
 
     /// Creates an empty document
-    pub fn new(title: impl Into<String>) -> Self {
+    pub fn new() -> Self {
         Self {
             openapi: OPENAPI_VERSION,
-            info: Info {
-                title: title.into(),
-                version: DEFAULT_INFO_VERSION.to_string(),
-                description: None,
-            },
+            info: FEAGI_INFO,
             tags: Vec::new(),
             paths: BTreeMap::new(),
             components: None,
@@ -169,10 +171,9 @@ impl OpenApiDocument {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Info {
-    pub title: String,
-    pub version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    pub title: &'static str,
+    pub version: &'static str,
+    pub description: &'static str,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]

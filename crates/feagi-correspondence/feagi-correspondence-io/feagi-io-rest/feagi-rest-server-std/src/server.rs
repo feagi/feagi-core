@@ -1,11 +1,12 @@
 use core::net::SocketAddrV4;
+use std::sync::OnceLock;
 use std::thread::JoinHandle;
 use thingbuf::mpsc::Receiver;
 use ohkami::prelude::*;
-use ohkami::claw::content::Html;
-use ohkami::{openapi, Ohkami};
+use ohkami::{Ohkami};
 use feagi_io_basis::feagi_server_endpoint_and_config::{FeagiFailStartRestServerEtc, FeagiRestServerStartError, FeagiServerEndpointCommand, FeagiServerEndpointLauncher};
 use feagi_io_basis::contracts::request_response::request_response_set::RequestResponseEndpointSenderSet;
+use feagi_rest_basis::open_api::OpenApiDocument;
 use feagi_rest_basis::rest_feagi_server_endpoint_config::RestFeagiServerEndpointConfig;
 
 
@@ -20,25 +21,50 @@ for OhkamiServerEndpointLauncher
         command_channel: Receiver<FeagiServerEndpointCommand>)
         -> Result<JoinHandle<()>, FeagiRestServerStartError> {
 
-
-
         let socket = config.get_address();
         let requests = config.unwrap_requester();
+
+        // TODO check if socket is grabbable?
+
+
+        #[cfg(feature = "feagi-rest-openapi-swagger")]
+        async fn open_api_json() -> Response {
+            static OPEN_API_BYTES: OnceLock<Vec<u8>> = OnceLock::new();
+
+            Response::OK()
+                .with_payload(
+                    "application/json",
+                    OPEN_API_BYTES.get_or_init(|| {
+
+                        let mut api_doc = OpenApiDocument::new();
+
+                        // TODO macros here expand to add properties to api_doc
+
+                        api_doc
+                            .to_json()
+                            .unwrap()
+                            .as_bytes()
+                            .to_vec()
+                    }
+                )
+            )
+        }
 
         let ohkami_server = Ohkami::new((
 
             #[cfg(feature = "feagi-rest-openapi-swagger")]
-            "/swagger-ui".GET(redirect_swagger),
+            "/swagger-ui".GET(open_api_swagger::redirect_swagger),
             #[cfg(feature = "feagi-rest-openapi-swagger")]
-            "/swagger-ui/feagi-server.html".GET(swagger_html),
+            "/swagger-ui/feagi-server.html".GET(open_api_swagger::swagger_html),
             #[cfg(feature = "feagi-rest-openapi-swagger")]
-            "/swagger-ui/swagger-ui.css".GET(swagger_css),
+            "/swagger-ui/swagger-ui.css".GET(open_api_swagger::swagger_css),
             #[cfg(feature = "feagi-rest-openapi-swagger")]
-            "/swagger-ui/swagger-ui-bundle.js".GET(swagger_js),
+            "/swagger-ui/swagger-ui-bundle.js".GET(open_api_swagger::swagger_js),
             #[cfg(feature = "feagi-rest-openapi-swagger")]
-            "/api-docs/openapi.json".GET(openapi_json),
+            "/api-docs/openapi.json".GET(open_api_json),
 
             // TODO macro adds other paths here, compiles the data down to a request, sends it to the corresponding Self::RequestModules endpoint
+
         ));
 
         #[cfg(not(any(feature = "smol")))]
@@ -68,43 +94,27 @@ for OhkamiServerEndpointLauncher
 }
 
 
-
+#[cfg(feature = "feagi-rest-openapi-swagger")]
 mod open_api_swagger {
     use ohkami::claw::content::Html;
-    use ohkami::{openapi, Response};
+    use ohkami::{Response};
+    use feagi_rest_basis::swagger::{SWAGGER_HTML, SWAGGER_CSS, SWAGGER_JS};
 
-    fn openapi_json_bytes() -> &'static [u8] {
-        static SPEC: OnceLock<Vec<u8>> = OnceLock::new();
-        SPEC.get_or_init(|| create_ohkami_server().__openapi_document_bytes__(rest_openapi_metadata()))
-    }
-
-
-    async fn swagger_html() -> Html<&'static str> {
+    pub async fn swagger_html() -> Html<&'static str> {
         Html(SWAGGER_HTML)
     }
 
-    async fn swagger_css() -> Response {
+    pub async fn swagger_css() -> Response {
         Response::OK().with_payload("text/css; charset=UTF-8", SWAGGER_CSS)
     }
 
-    async fn swagger_js() -> Response {
+    pub async fn swagger_js() -> Response {
         Response::OK().with_payload("application/javascript; charset=UTF-8", SWAGGER_JS)
     }
 
-    async fn openapi_json() -> Response {
-        Response::OK().with_payload("application/json", openapi_json_bytes())
-    }
 
-    async fn redirect_swagger() -> Response {
+    pub async fn redirect_swagger() -> Response {
         Response::Found().with_headers(|h| h.location("/swagger-ui/feagi-server.html"))
-    }
-
-    fn rest_openapi_metadata() -> openapi::OpenAPI<'static> {
-        openapi::OpenAPI {
-            title: "FEAGI REST Server",
-            version: env!("CARGO_PKG_VERSION"),
-            servers: &[],
-        }
     }
 }
 
