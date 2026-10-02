@@ -346,6 +346,11 @@ impl BatchPatternDetector {
         }
     }
 
+    /// Drop the cached detector for one memory area so the next pattern is learned fresh.
+    pub fn forget_area(&self, memory_area_idx: u32) {
+        self.detectors.lock().unwrap().remove(&memory_area_idx);
+    }
+
     /// Get or create detector for memory area
     pub fn get_detector(&self, memory_area_idx: u32, temporal_depth: u32) -> PatternDetector {
         let mut detectors = self.detectors.lock().unwrap();

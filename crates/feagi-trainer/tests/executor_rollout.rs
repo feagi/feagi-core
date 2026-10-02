@@ -111,6 +111,7 @@ fn adapter_config() -> TabularCsvConfig {
         split_id: SplitId("test".to_string()),
         class_keep_percents: std::collections::BTreeMap::new(),
         max_samples: None,
+        sample_draw_seed: None,
     }
 }
 
@@ -210,7 +211,6 @@ fn full_pipeline_produces_summary_and_scorecard() {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
-            learn_area_id: None,
             segmented_vision: None,
             cortical_name: None,
         },
@@ -258,6 +258,7 @@ fn full_pipeline_produces_summary_and_scorecard() {
             },
             status: ScorecardStatus::SelfReported,
             visibility: ScorecardVisibility::Local,
+            sample_draw_seed: None,
         },
     );
 

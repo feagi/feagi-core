@@ -247,9 +247,9 @@ fn wnid_classes(train: &Path) -> Result<Vec<ClassVoxel>, TrainerError> {
         .enumerate()
         .map(|(index, label)| ClassVoxel {
             label,
-            x: index as u32,
+            x: 0,
             y: 0,
-            z: 0,
+            z: index as u32,
         })
         .collect())
 }

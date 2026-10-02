@@ -241,6 +241,8 @@ pub struct ScorecardProvenance {
     pub status: ScorecardStatus,
     /// Publication state to stamp (Trainer always emits `Local`).
     pub visibility: ScorecardVisibility,
+    /// Seed of the random subset the capped split was drawn with (from the adapter config).
+    pub sample_draw_seed: Option<u64>,
 }
 
 /// Drives one closed-loop rollout over `samples` (already in sampler order) and returns the
@@ -517,6 +519,8 @@ fn assemble_scorecard_inner(
         status: provenance.status,
         visibility: provenance.visibility,
         skip,
+        elapsed_ms: None,
+        sample_draw_seed: provenance.sample_draw_seed,
         metadata: BTreeMap::new(),
     }
 }
@@ -876,7 +880,6 @@ mod tests {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
-            learn_area_id: None,
             segmented_vision: None,
             cortical_name: None,
         }
@@ -1692,9 +1695,11 @@ mod tests {
             },
             status: ScorecardStatus::SelfReported,
             visibility: ScorecardVisibility::Local,
+            sample_draw_seed: Some(77),
         };
 
         let card = assemble_scorecard(&run_spec, &metrics, provenance);
+        assert_eq!(card.sample_draw_seed, Some(77));
 
         assert_eq!(card.connectome_hash, run_spec.connectome_hash);
         assert_eq!(card.genome_version_id, run_spec.genome_version_id);
@@ -1730,6 +1735,7 @@ mod tests {
             },
             status: ScorecardStatus::SelfReported,
             visibility: ScorecardVisibility::Local,
+            sample_draw_seed: None,
         };
         let skip = ScorecardSkip {
             samples_planned: 30,

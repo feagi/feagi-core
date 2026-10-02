@@ -134,6 +134,19 @@ pub struct Scorecard {
     /// Present when the operator ended the split before every planned sample ran.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skip: Option<ScorecardSkip>,
+    /// Wall-clock duration of this phase, in milliseconds.
+    ///
+    /// Stamped by the host after the rollout returns. It is a measurement of one execution,
+    /// not part of the verification identity: a re-run can match the metrics with a different
+    /// duration. Absent on scorecards produced before this field existed (ADR-006).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elapsed_ms: Option<u64>,
+    /// Seed of the random subset a capped split was scored on.
+    ///
+    /// Absent when the split ran whole or kept its first samples. Re-running with this seed and
+    /// the same cap scores the same samples (ADR-003).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_draw_seed: Option<u64>,
     /// Free-form, deterministically ordered metadata.
     pub metadata: MetadataMap,
 }
@@ -173,6 +186,8 @@ mod tests {
             status: ScorecardStatus::SelfReported,
             visibility: ScorecardVisibility::Local,
             skip: None,
+            elapsed_ms: None,
+            sample_draw_seed: None,
             metadata: BTreeMap::new(),
         }
     }
@@ -241,6 +256,36 @@ mod tests {
         assert!(json.contains("metric_stats"));
         let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(card, restored);
+    }
+
+    #[test]
+    fn sample_draw_seed_is_omitted_when_absent_and_round_trips_when_present() {
+        let card = iris_scorecard();
+        assert!(!serde_json::to_string(&card)
+            .expect("serialize")
+            .contains("sample_draw_seed"));
+        let mut drawn = card;
+        drawn.sample_draw_seed = Some(4_000_000_007);
+        let json = serde_json::to_string(&drawn).expect("serialize");
+        assert!(json.contains("\"sample_draw_seed\":4000000007"));
+        let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.sample_draw_seed, Some(4_000_000_007));
+    }
+
+    #[test]
+    fn elapsed_ms_is_omitted_when_absent_and_round_trips_when_present() {
+        let card = iris_scorecard();
+        let json = serde_json::to_string(&card).expect("serialize");
+        assert!(!json.contains("elapsed_ms"));
+        let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.elapsed_ms, None);
+
+        let mut timed = card;
+        timed.elapsed_ms = Some(12_500);
+        let timed_json = serde_json::to_string(&timed).expect("serialize");
+        assert!(timed_json.contains("\"elapsed_ms\":12500"));
+        let restored: Scorecard = serde_json::from_str(&timed_json).expect("deserialize");
+        assert_eq!(restored.elapsed_ms, Some(12_500));
     }
 
     #[test]

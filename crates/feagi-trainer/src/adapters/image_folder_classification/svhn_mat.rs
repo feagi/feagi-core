@@ -89,9 +89,9 @@ pub(super) fn scan_if_present(
     let classes = (0..10)
         .map(|index| ClassVoxel {
             label: index.to_string(),
-            x: index,
+            x: 0,
             y: 0,
-            z: 0,
+            z: index,
         })
         .collect();
     Ok(Some(ImageClassificationScan {

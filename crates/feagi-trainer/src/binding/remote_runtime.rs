@@ -86,6 +86,8 @@ pub struct RemoteFeagiRuntime {
     send_buffer: FeagiByteContainer,
     recv_buffer: FeagiByteContainer,
     motor_buffer: CorticalMappedXYZPNeuronVoxels,
+    /// Last submitted sensory frame; re-published every burst of the next `step`, then dropped.
+    held_sensory: Option<CorticalMappedXYZPNeuronVoxels>,
     increment: u16,
     burst_period: Duration,
     motor_poll_interval: Duration,
@@ -106,6 +108,26 @@ fn affect_cortical_id(channel: AffectChannel) -> CorticalID {
         AffectChannel::Hope => CoreCorticalType::Hope,
     };
     core.to_cortical_id()
+}
+
+/// Waits `ticks` burst periods, re-publishing `held` at the start of every burst after the
+/// first (the first burst's copy was published by `submit_sensory`). With no held frame the
+/// step only waits.
+fn present_held_frame<F>(
+    held: Option<&F>,
+    ticks: u32,
+    mut publish: impl FnMut(&F) -> Result<(), TrainerError>,
+    mut wait_one_burst: impl FnMut(),
+) -> Result<(), TrainerError> {
+    for tick in 0..ticks {
+        if tick > 0 {
+            if let Some(frame) = held {
+                publish(frame)?;
+            }
+        }
+        wait_one_burst();
+    }
+    Ok(())
 }
 
 impl RemoteFeagiRuntime {
@@ -189,6 +211,7 @@ impl RemoteFeagiRuntime {
             send_buffer: FeagiByteContainer::new_empty(),
             recv_buffer: FeagiByteContainer::new_empty(),
             motor_buffer: CorticalMappedXYZPNeuronVoxels::new(),
+            held_sensory: None,
             increment: 0,
             burst_period: config.burst_period,
             motor_poll_interval: config.motor_poll_interval,
@@ -240,7 +263,9 @@ impl FeagiRuntime for RemoteFeagiRuntime {
     type MotorFrame = CorticalMappedXYZPNeuronVoxels;
 
     fn submit_sensory(&mut self, frame: Self::SensoryFrame) -> Result<(), TrainerError> {
-        self.publish_neurons(&frame)
+        self.publish_neurons(&frame)?;
+        self.held_sensory = Some(frame);
+        Ok(())
     }
 
     fn submit_reward(&mut self, signals: &[RewardSignal]) -> Result<(), TrainerError> {
@@ -265,10 +290,18 @@ impl FeagiRuntime for RemoteFeagiRuntime {
 
     fn step(&mut self, ticks: u32) -> Result<(), TrainerError> {
         // Keep the session alive, then give the free-running brain a wall-clock integration
-        // window proportional to the requested ticks (Option A).
+        // window proportional to the requested ticks (Option A). FEAGI consumes a sensory frame
+        // in one burst, so the submitted frame is re-published every burst of this step; a
+        // following step (silence gap) publishes nothing.
         self.command_agent.send_heartbeat().map_err(rt)?;
-        sleep(self.burst_period * ticks);
-        Ok(())
+        let held = self.held_sensory.take();
+        let burst_period = self.burst_period;
+        present_held_frame(
+            held.as_ref(),
+            ticks,
+            |frame| self.publish_neurons(frame),
+            || sleep(burst_period),
+        )
     }
 
     fn collect_motor(&mut self) -> Result<Option<Self::MotorFrame>, TrainerError> {
@@ -319,5 +352,60 @@ impl FeagiRuntime for RemoteFeagiRuntime {
             return Ok(None);
         }
         Ok(Some(self.motor_buffer.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Runs one step and returns the ordered event log: `P` = publish, `W` = wait one burst.
+    fn events(held: Option<&u8>, ticks: u32) -> String {
+        let log = std::cell::RefCell::new(String::new());
+        present_held_frame(
+            held,
+            ticks,
+            |_| {
+                log.borrow_mut().push('P');
+                Ok(())
+            },
+            || log.borrow_mut().push('W'),
+        )
+        .unwrap();
+        log.into_inner()
+    }
+
+    #[test]
+    fn held_frame_is_present_on_every_burst_of_the_step() {
+        // submit_sensory covers burst 1; the step re-publishes before bursts 2..=ticks.
+        assert_eq!(events(Some(&1), 4), "WPWPWPW");
+    }
+
+    #[test]
+    fn single_tick_step_publishes_nothing_extra() {
+        assert_eq!(events(Some(&1), 1), "W");
+    }
+
+    #[test]
+    fn silence_step_without_held_frame_only_waits() {
+        assert_eq!(events(None, 3), "WWW");
+    }
+
+    #[test]
+    fn zero_ticks_does_nothing() {
+        assert_eq!(events(Some(&1), 0), "");
+    }
+
+    #[test]
+    fn publish_error_stops_the_step() {
+        let mut waits = 0;
+        let result = present_held_frame(
+            Some(&1u8),
+            5,
+            |_| Err(TrainerError::Runtime("socket closed".to_string())),
+            || waits += 1,
+        );
+        assert!(result.is_err());
+        assert_eq!(waits, 1);
     }
 }

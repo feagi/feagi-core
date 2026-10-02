@@ -134,6 +134,9 @@ pub struct TimeSeriesPackageConfig {
     /// Cap after class keep. `None` uses every remaining window.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_samples: Option<u64>,
+    /// With `max_samples`, keep a seeded random subset instead of the first windows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_draw_seed: Option<u64>,
     /// Filled at ingest for `MinMaxDataset`. Not part of the run JSON.
     #[serde(skip)]
     pub dataset_unit_range: Option<(f64, f64)>,
@@ -268,6 +271,7 @@ mod tests {
             amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
             max_samples: None,
+            sample_draw_seed: None,
             dataset_unit_range: None,
         }
     }

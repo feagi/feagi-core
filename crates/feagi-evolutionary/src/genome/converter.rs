@@ -79,7 +79,7 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         &parsed.physiology,
     )?;
 
-    Ok(RuntimeGenome {
+    let mut genome = RuntimeGenome {
         metadata,
         cortical_areas,
         brain_regions,
@@ -88,7 +88,9 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         physiology,
         signatures,
         stats,
-    })
+    };
+    genome.apply_classifier_required_mappings();
+    Ok(genome)
 }
 
 /// Parse neuron morphologies into MorphologyRegistry

@@ -3,7 +3,7 @@
 //! Population scheme: each `[0, 1]` feature fires one voxel at
 //! `(x = feature, y = 0, z = bin)` with P = 1.0. Value scheme writes each analog
 //! feature as graded P at `(x, 0, 0)` without clamping. ECG snapshot also holds
-//! the class on Misc B (unit from `encoder_profile.teacher`, `C × 1 × 1`, class on X)
+//! the class on Misc B (unit from `encoder_profile.teacher`, `1 × 1 × C`, class on Z)
 //! during Train only. Val/test write a silent teacher so the class IPU stays empty.
 
 use feagi_sensorimotor::data_types::descriptors::MiscDataDimensions;
@@ -75,7 +75,7 @@ impl PopulationEncoder {
         Ok(arrays)
     }
 
-    /// One class spike at `(x = class_id, y = 0, z = 0)` on a `C × 1 × 1` volume.
+    /// One class spike at `(0, 0, z = class_id)` on a `1 × 1 × C` volume.
     pub fn class_teacher_voxels(
         class_id: u32,
         class_count: u32,
@@ -91,14 +91,14 @@ impl PopulationEncoder {
             )));
         }
         Self::write_misc_volume(
+            1,
+            1,
             class_count,
-            1,
-            1,
-            std::iter::once((class_id, 0u32, 0u32, 1.0_f32)),
+            std::iter::once((0u32, 0u32, class_id, 1.0_f32)),
         )
     }
 
-    /// Empty `C × 1 × 1` teacher so FEAGI Absolute frame handling clears the last class.
+    /// Empty `1 × 1 × C` teacher so FEAGI Absolute frame handling clears the last class.
     pub fn silent_class_teacher_voxels(
         class_count: u32,
     ) -> Result<NeuronVoxelXYZPArrays, TrainerError> {
@@ -107,7 +107,7 @@ impl PopulationEncoder {
                 "class teacher requires class_count > 0".to_string(),
             ));
         }
-        Self::write_misc_volume(class_count, 1, 1, std::iter::empty())
+        Self::write_misc_volume(1, 1, class_count, std::iter::empty())
     }
 
     /// Train clamps the labeled class. Val/test write a silent teacher; labels stay on the sample.
@@ -310,7 +310,6 @@ mod tests {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
-            learn_area_id: None,
             segmented_vision: None,
         }
     }
@@ -364,7 +363,6 @@ mod tests {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
-            learn_area_id: None,
             segmented_vision: None,
         };
         let result = PopulationEncoder::new().encode_features(&[0.5], &profile);
@@ -417,11 +415,12 @@ mod tests {
                 (
                     n.neuron_voxel_coordinate.x,
                     n.neuron_voxel_coordinate.y,
+                    n.neuron_voxel_coordinate.z,
                     n.potential,
                 )
             })
             .collect();
-        assert_eq!(voxels, vec![(2, 0, 1.0)]);
+        assert_eq!(voxels, vec![(0, 0, 2, 1.0)]);
     }
 
     #[test]
@@ -480,7 +479,6 @@ mod tests {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
-            learn_area_id: None,
             segmented_vision: None,
         };
         let encoder = PopulationEncoder::new();

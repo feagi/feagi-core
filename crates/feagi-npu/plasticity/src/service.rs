@@ -35,7 +35,6 @@ use crate::mp_change_encoder::{ChangeStep, MemoryMpMode, MpChangeEncoding};
 use crate::pattern_detector::{BatchPatternDetector, PatternConfig};
 use crate::stdp::STDPConfig;
 use ahash::AHashSet;
-use feagi_npu_neural::types::NeuronId;
 use feagi_structures::neuron_voxels::class_potential::{
     decode_class_potential, encode_class_potential,
 };
@@ -546,36 +545,7 @@ impl PlasticityService {
             }
         }
 
-        // Step 2: Age all memory neurons (non-long-term only)
-        let died_neurons = array.age_memory_neurons(current_timestep);
-        if !died_neurons.is_empty() {
-            let mut s = stats.lock().unwrap();
-            s.memory_neurons_aged += died_neurons.len();
-            drop(s);
-
-            // Update memory stats cache for deleted neurons (group by area)
-            let area_names_map = memory_area_names.lock().unwrap();
-            let mut area_death_counts: HashMap<u32, usize> = HashMap::new();
-
-            for died_idx in died_neurons {
-                if let Some(area_idx) = array.get_cortical_area_id(died_idx) {
-                    *area_death_counts.entry(area_idx).or_insert(0) += 1;
-                }
-            }
-
-            for (area_idx, count) in area_death_counts {
-                if let Some(area_name) = area_names_map.get(&area_idx) {
-                    for _ in 0..count {
-                        memory_stats_cache::on_neuron_deleted(memory_stats_cache, area_name);
-                    }
-                }
-            }
-
-            // Update memory utilization in state manager after deletions
-            Self::update_memory_utilization_in_state_manager(&array, config);
-        }
-
-        // Step 3: Detect patterns for all memory areas
+        // Step 2: Detect patterns for all memory areas
         // Query CPU-resident FireLedger for upstream area firing history
         for (memory_area_idx, area_config) in memory_areas_snapshot.iter() {
             tracing::trace!(
@@ -681,15 +651,35 @@ impl PlasticityService {
                         if !aligned {
                             (Vec::new(), Vec::new(), None)
                         } else {
+                            // The newest frame must be the neurons that actually fired on this
+                            // burst. A ledger frame can still hold an older pattern after the
+                            // upstream area has gone silent, which reactivates memory neurons
+                            // that have no live source.
+                            let newest_frame = reference_timesteps.len().saturating_sub(1);
+                            let mut live_newest: HashMap<u32, Vec<u32>> = HashMap::new();
+                            for &upstream_area_idx in &upstream_sorted {
+                                if let Some(ids) = npu_lock.fired_neuron_ids_if_queue_timestep(
+                                    upstream_area_idx,
+                                    current_timestep,
+                                ) {
+                                    live_newest.insert(upstream_area_idx, ids);
+                                }
+                            }
                             // Flatten as: for each timestep (oldest->newest), for each upstream area (sorted),
                             // append that area's fired-neuron set at that timestep.
                             let mut out: Vec<HashSet<u32>> = Vec::with_capacity(
                                 reference_timesteps.len() * upstream_sorted.len(),
                             );
                             for frame_i in 0..reference_timesteps.len() {
-                                for (_area_idx, w) in &windows {
+                                for (area_idx, w) in &windows {
                                     let (_t, bitmap) = &w[frame_i];
-                                    let neuron_set: HashSet<u32> = bitmap.iter().collect();
+                                    let live_ids = if frame_i == newest_frame {
+                                        live_newest.get(area_idx).map(Vec::as_slice)
+                                    } else {
+                                        None
+                                    };
+                                    let neuron_set =
+                                        Self::pattern_bitmap_for_frame(bitmap.iter(), live_ids);
                                     out.push(neuron_set);
                                 }
                             }
@@ -1023,6 +1013,36 @@ impl PlasticityService {
         );
         Self::run_episodic_scan(npu, &mut array, &memory_areas_snapshot, current_timestep);
 
+        // Step 3: Age short-term neurons. Runs after every create and reactivate so a
+        // neuron matched this burst is not aged out before it can be matched.
+        let died_neurons = array.age_memory_neurons(current_timestep);
+        if !died_neurons.is_empty() {
+            let mut s = stats.lock().unwrap();
+            s.memory_neurons_aged += died_neurons.len();
+            drop(s);
+
+            // Update memory stats cache for deleted neurons (group by area)
+            let area_names_map = memory_area_names.lock().unwrap();
+            let mut area_death_counts: HashMap<u32, usize> = HashMap::new();
+
+            for died_idx in died_neurons {
+                if let Some(area_idx) = array.get_cortical_area_id(died_idx) {
+                    *area_death_counts.entry(area_idx).or_insert(0) += 1;
+                }
+            }
+
+            for (area_idx, count) in area_death_counts {
+                if let Some(area_name) = area_names_map.get(&area_idx) {
+                    for _ in 0..count {
+                        memory_stats_cache::on_neuron_deleted(memory_stats_cache, area_name);
+                    }
+                }
+            }
+
+            // Update memory utilization in state manager after deletions
+            Self::update_memory_utilization_in_state_manager(&array, config);
+        }
+
         // Enqueue commands
         if !commands.is_empty() {
             let cmd_count = commands.len();
@@ -1035,6 +1055,22 @@ impl PlasticityService {
             } else {
                 s.plasticity_commands_dropped += cmd_count;
             }
+        }
+    }
+
+    /// Neuron set hashed for one upstream frame.
+    ///
+    /// `live_ids` is the fire queue for this burst. When it is present, it replaces the
+    /// ledger bitmap so a stale ledger pattern cannot recall a memory neuron after its
+    /// upstream area has stopped firing. `None` keeps the ledger frame because the queue
+    /// belongs to a different burst.
+    fn pattern_bitmap_for_frame(
+        ledger_ids: impl IntoIterator<Item = u32>,
+        live_ids: Option<&[u32]>,
+    ) -> HashSet<u32> {
+        match live_ids {
+            Some(live) => live.iter().copied().collect(),
+            None => ledger_ids.into_iter().collect(),
         }
     }
 
@@ -1227,7 +1263,7 @@ impl PlasticityService {
         out
     }
 
-    /// Snapshot class-memory encode hits onto kernel-memory LTM neurons.
+    /// Bind class-memory encode hits onto the kernel-memory neurons encoded in the same burst.
     fn bind_classifier_class_channels(
         array: &mut MemoryNeuronArray,
         memory_areas: &HashMap<u32, MemoryAreaConfig>,
@@ -1255,7 +1291,13 @@ impl PlasticityService {
             if scan.scanner_mask.is_some() {
                 continue;
             }
-            for neuron_idx in array.active_ltm_indices_in_area(*kernel_area_idx) {
+            // Only kernel patterns encoded with this label learn it; binding every stored
+            // pattern would give all of them every class and make recall a tie.
+            let co_encoded = encoded_this_burst
+                .iter()
+                .filter(|(area_idx, _, _)| area_idx == kernel_area_idx)
+                .map(|(_, neuron_idx, _)| *neuron_idx);
+            for neuron_idx in co_encoded {
                 for channel in &class_hits {
                     array.bind_class_channel(neuron_idx, *channel);
                 }
@@ -1499,6 +1541,38 @@ impl PlasticityService {
             .collect();
         classes.sort_unstable();
         Some(classes)
+    }
+
+    /// Spike written on the winning depth of a kernel-mode class output.
+    const KERNEL_CLASS_OUTPUT_POTENTIAL: f32 = 1.0;
+
+    /// Kernel mode reports one class for the whole field at depth `z`.
+    fn kernel_class_output_coord(
+        votes: &HashMap<(u32, u32), HashMap<u32, f32>>,
+        class_count: u32,
+    ) -> Option<(u32, u32, u32)> {
+        let mut totals: HashMap<u32, f32> = HashMap::new();
+        for pixel in votes.values() {
+            for (class_id, score) in pixel {
+                if *class_id >= class_count {
+                    continue;
+                }
+                *totals.entry(*class_id).or_insert(0.0) += *score;
+            }
+        }
+        let winner =
+            totals.iter().fold(
+                None,
+                |best: Option<(u32, f32)>, (class_id, score)| match best {
+                    Some((best_id, best_score))
+                        if best_score > *score || (best_score == *score && best_id < *class_id) =>
+                    {
+                        Some((best_id, best_score))
+                    }
+                    _ => Some((*class_id, *score)),
+                },
+            )?;
+        Some((0, 0, winner.0))
     }
 
     /// One class per detected pixel, and the potential that encodes it.
@@ -1849,8 +1923,14 @@ impl PlasticityService {
                 if votes.is_empty() {
                     continue;
                 }
-                let (coords, potentials) =
-                    Self::detection_twin_writes(&votes, scan.class_channel_count);
+                let (coords, potentials) = if scan.scanner_mask.is_none() {
+                    match Self::kernel_class_output_coord(&votes, scan.class_channel_count) {
+                        Some(coord) => (vec![coord], vec![Self::KERNEL_CLASS_OUTPUT_POTENTIAL]),
+                        None => continue,
+                    }
+                } else {
+                    Self::detection_twin_writes(&votes, scan.class_channel_count)
+                };
                 if coords.is_empty() {
                     continue;
                 }
@@ -2424,27 +2504,25 @@ impl PlasticityService {
             cortical_idx
         );
 
-        // Delete all synapses from/to these memory neurons
-        if !memory_neuron_ids.is_empty() {
+        // Delete associative and ordinary synapses on these memory neurons and on any
+        // storage neurons that live in the same cortical area (LTM bridge twins).
+        {
             let mut npu_lock = self.npu.lock().unwrap();
-            let scrub_ids: AHashSet<u32> = memory_neuron_ids.iter().copied().collect();
-            npu_lock.scrub_synaptic_arrival_schedule_for_neuron_targets(&scrub_ids);
-            for &neuron_id in &memory_neuron_ids {
-                // Delete outgoing synapses
-                let outgoing = npu_lock.get_outgoing_synapses(neuron_id);
-                for (target_id, _, _, _) in outgoing {
-                    npu_lock.remove_synapse(NeuronId(neuron_id), NeuronId(target_id));
-                }
-
-                // Delete incoming synapses
-                let incoming = npu_lock.get_incoming_synapses(neuron_id);
-                for (source_id, _, _, _) in incoming {
-                    npu_lock.remove_synapse(NeuronId(source_id), NeuronId(neuron_id));
-                }
+            let mut synapse_endpoints = memory_neuron_ids.clone();
+            synapse_endpoints.extend(npu_lock.get_neurons_in_cortical_area(cortical_idx));
+            if !synapse_endpoints.is_empty() {
+                let scrub_ids: AHashSet<u32> = synapse_endpoints.iter().copied().collect();
+                npu_lock.scrub_synaptic_arrival_schedule_for_neuron_targets(&scrub_ids);
+                npu_lock.remove_synapses_touching_neuron_ids(&synapse_endpoints);
+            }
+            if !memory_neuron_ids.is_empty() {
+                npu_lock.clear_memory_replay_frames(&memory_neuron_ids);
+                npu_lock.clear_sparse_memory_associative_state(&memory_neuron_ids);
             }
         }
+        self.pattern_detector.forget_area(cortical_idx);
 
-        // Delete the memory neurons themselves
+        // Delete the memory neurons themselves so the next pattern allocates a new one.
         let reset_count = array.reset_cortical_area(cortical_idx);
         drop(array);
 
@@ -2550,6 +2628,23 @@ mod tests {
     use feagi_npu_burst_engine::TracingMutex;
     use feagi_npu_runtime::StdRuntime;
     use std::sync::Arc;
+
+    #[test]
+    fn silent_upstream_does_not_keep_a_stale_ledger_pattern() {
+        let stale_ledger = [11_u32, 12, 13];
+        let live_fires: &[u32] = &[];
+        let bitmap = PlasticityService::pattern_bitmap_for_frame(stale_ledger, Some(live_fires));
+        assert!(
+            bitmap.is_empty(),
+            "a quiet upstream burst must not hash the leftover ledger pattern"
+        );
+
+        let still_firing = PlasticityService::pattern_bitmap_for_frame([87], Some(&[87]));
+        assert_eq!(still_firing, HashSet::from([87]));
+
+        let late_reader = PlasticityService::pattern_bitmap_for_frame(stale_ledger, None);
+        assert_eq!(late_reader, HashSet::from([11, 12, 13]));
+    }
 
     #[test]
     fn test_plasticity_service_creation() {
@@ -2851,8 +2946,37 @@ mod tests {
             }
         }
 
+        let memory_neuron_id = {
+            let array = service.memory_neuron_array.lock().unwrap();
+            array.get_active_neurons_by_area(100)[0]
+        };
+        {
+            let mut npu = service.npu.lock().unwrap();
+            npu.add_synapse(
+                feagi_npu_neural::types::NeuronId(7),
+                feagi_npu_neural::types::NeuronId(memory_neuron_id),
+                feagi_npu_neural::types::SynapticWeight(900.0),
+                feagi_npu_neural::types::SynapticPsp(500.0),
+                feagi_npu_neural::types::SynapseType::Excitatory,
+                feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+                1,
+            )
+            .expect("associative synapse");
+            npu.rebuild_synapse_index();
+            assert_eq!(npu.get_incoming_synapses(memory_neuron_id).len(), 1);
+        }
+
         let reset_count = service.reset_memory_neurons_in_area(100);
         assert_eq!(reset_count, 3);
+        assert!(
+            service
+                .npu
+                .lock()
+                .unwrap()
+                .get_incoming_synapses(memory_neuron_id)
+                .is_empty(),
+            "reset must delete associative synapses onto the memory neuron"
+        );
 
         let runtime = service.memory_cortical_area_runtime_info(100);
         assert_eq!(runtime.active_memory_neuron_count(), 0);
@@ -2913,8 +3037,8 @@ mod tests {
         );
     }
 
-    /// A trained spatial match fires that field's twin pixel with the class as its
-    /// potential. A different signature does not light the twin.
+    /// A kernel-mode match fires depth `z` of the class output. A different
+    /// signature does not light it.
     #[test]
     fn episodic_scan_injects_match_into_bound_twin_only() {
         use std::collections::HashMap;
@@ -3054,25 +3178,12 @@ mod tests {
         PlasticityService::run_episodic_scan(&npu, &mut array, &areas, timestep);
         let matched = npu.lock().unwrap().process_burst().unwrap();
         assert!(
-            matched.fired_neurons.contains(&twin_match),
-            "the matched pixel on the bound twin must fire"
+            matched.fired_neurons.contains(&twin_decoy),
+            "kernel mode fires the class depth, matching the class input"
         );
         assert!(
-            !matched.fired_neurons.contains(&twin_decoy),
-            "the twin is one layer; no one-hot class voxel is written"
-        );
-        let recorded = npu
-            .lock()
-            .unwrap()
-            .get_fire_ledger_dense_window_mp(TWIN_IDX, matched.burst, 1)
-            .unwrap()
-            .last()
-            .and_then(|(_, mps)| mps.get(&twin_match.0).copied())
-            .expect("twin pixel potential is archived");
-        assert_eq!(
-            decode_class_potential(recorded, CLASS_COUNT),
-            Some(CLASS_CHANNEL),
-            "the twin potential carries the matched class"
+            !matched.fired_neurons.contains(&twin_match),
+            "kernel mode does not stamp a potential on z 0"
         );
         assert!(
             !matched.fired_neurons.contains(&field_neuron),
@@ -3090,6 +3201,77 @@ mod tests {
         assert!(
             !missed.fired_neurons.contains(&twin_match),
             "a signature that does not match long-term memory must not light the twin"
+        );
+    }
+
+    /// A class label binds only to kernel patterns encoded in the same burst, so earlier
+    /// patterns keep their own labels and recall does not tie across every class.
+    #[test]
+    fn class_label_binds_only_to_co_encoded_kernel_patterns() {
+        const KERNEL_IDX: u32 = 11;
+        const CLASS_MEM_IDX: u32 = 12;
+        const CLASS_COUNT: u32 = 10;
+
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 100,
+            longterm_threshold: 100,
+            ..Default::default()
+        };
+        let mut array = MemoryNeuronArray::new(16);
+        let earlier = array
+            .create_memory_neuron(0xA, KERNEL_IDX, 0, &config)
+            .unwrap();
+        let current = array
+            .create_memory_neuron(0xB, KERNEL_IDX, 1, &config)
+            .unwrap();
+        let class_neuron = array
+            .create_memory_neuron(0xC, CLASS_MEM_IDX, 1, &config)
+            .unwrap();
+        assert_eq!(array.check_longterm_conversion(100).len(), 3);
+        array.bind_class_channel(earlier, 3);
+
+        let mut areas = HashMap::new();
+        areas.insert(
+            KERNEL_IDX,
+            MemoryAreaConfig {
+                temporal_depth: 1,
+                upstream_areas: vec![],
+                mp_mode: MemoryMpMode::PatternOnly,
+                scan: Some(MemoryScanConfig {
+                    kernel: super::ScanKernel {
+                        width: 1,
+                        height: 1,
+                        depth: 1,
+                    },
+                    min_window_activity: 1,
+                    scan_skip_density: 1.0,
+                    class_channel_count: CLASS_COUNT,
+                    class_area_width: 1,
+                    class_area_height: 1,
+                    class_memory_area_idx: CLASS_MEM_IDX,
+                    sources: vec![],
+                    scanner_mask: None,
+                    reward: None,
+                }),
+            },
+        );
+        let label_seven = ReplayFrame {
+            offset: 0,
+            upstream_area_idx: 0,
+            coords: vec![(0, 0, 7)],
+            membrane_potentials: None,
+        };
+        let encoded = vec![
+            (KERNEL_IDX, current, Vec::new()),
+            (CLASS_MEM_IDX, class_neuron, vec![label_seven]),
+        ];
+        PlasticityService::bind_classifier_class_channels(&mut array, &areas, &encoded);
+
+        assert_eq!(array.get_class_channels(current), vec![7]);
+        assert_eq!(
+            array.get_class_channels(earlier),
+            vec![3],
+            "a pattern not encoded this burst must keep only its own label"
         );
     }
 

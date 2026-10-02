@@ -493,7 +493,24 @@ impl RunConfig {
             },
             status: ScorecardStatus::SelfReported,
             visibility: ScorecardVisibility::Local,
+            sample_draw_seed: self.sample_draw_seed(),
         }
+    }
+
+    /// Seed of the capped split's random subset. `None` when the split is uncapped, keeps its
+    /// first samples, or the adapter has no cap (segmentation).
+    pub fn sample_draw_seed(&self) -> Option<u64> {
+        let (max_samples, seed) = match &self.dataset.adapter {
+            DatasetAdapterConfig::Tabular(config) => (config.max_samples, config.sample_draw_seed),
+            DatasetAdapterConfig::ImageClassification(config) => {
+                (config.max_samples, config.sample_draw_seed)
+            }
+            DatasetAdapterConfig::TimeSeries(config) => {
+                (config.max_samples, config.sample_draw_seed)
+            }
+            DatasetAdapterConfig::ImageFolder(_) => (None, None),
+        };
+        max_samples.and(seed)
     }
 }
 
@@ -800,6 +817,7 @@ mod tests {
             split_id: SplitId("test".to_string()),
             class_keep_percents: std::collections::BTreeMap::new(),
             max_samples: None,
+            sample_draw_seed: None,
         }
     }
 
@@ -872,7 +890,6 @@ mod tests {
                 stream: None,
                 teacher: None,
                 segmentation_teacher: None,
-                learn_area_id: None,
                 segmented_vision: None,
                 cortical_name: None,
             },
@@ -972,6 +989,7 @@ mod tests {
             amplitude_offset: 0.0,
             class_keep_percents: std::collections::BTreeMap::new(),
             max_samples: None,
+            sample_draw_seed: None,
             dataset_unit_range: None,
         });
         config.encoder_profile.channels = 1;
@@ -1104,6 +1122,32 @@ mod tests {
         assert_eq!(provenance.backend_fingerprint.descriptor, "stub-cpu");
         assert_eq!(provenance.status, ScorecardStatus::SelfReported);
         assert_eq!(provenance.visibility, ScorecardVisibility::Local);
+        assert_eq!(provenance.sample_draw_seed, None);
+    }
+
+    #[test]
+    fn sample_draw_seed_is_recorded_only_for_a_capped_split() {
+        let mut config = run_config();
+        let DatasetAdapterConfig::Tabular(tabular) = &mut config.dataset.adapter else {
+            panic!("fixture is tabular");
+        };
+        tabular.sample_draw_seed = Some(9);
+        assert_eq!(config.sample_draw_seed(), None, "uncapped split ran whole");
+
+        let DatasetAdapterConfig::Tabular(tabular) = &mut config.dataset.adapter else {
+            panic!("fixture is tabular");
+        };
+        tabular.max_samples = Some(2);
+        assert_eq!(config.sample_draw_seed(), Some(9));
+        let source = DatasetSource {
+            uri: "mem://one_hot.csv".to_string(),
+            bytes: CSV.as_bytes().to_vec(),
+        };
+        let (manifest, _) = config.plan(&source).expect("plan");
+        assert_eq!(
+            config.scorecard_provenance(&manifest).sample_draw_seed,
+            Some(9)
+        );
     }
 
     // The full streaming path needs a live FEAGI (covered by tests/remote_runtime_live.rs). These

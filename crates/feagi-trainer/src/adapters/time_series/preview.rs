@@ -301,6 +301,7 @@ mod tests {
             amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
             max_samples: None,
+            sample_draw_seed: None,
             dataset_unit_range: None,
         }
     }

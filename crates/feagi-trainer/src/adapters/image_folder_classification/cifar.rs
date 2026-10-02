@@ -351,9 +351,9 @@ fn scan_result(
             .enumerate()
             .map(|(index, label)| ClassVoxel {
                 label: (*label).to_string(),
-                x: index as u32,
+                x: 0,
                 y: 0,
-                z: 0,
+                z: index as u32,
             })
             .collect(),
         splits,

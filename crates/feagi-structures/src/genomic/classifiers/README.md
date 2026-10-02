@@ -17,15 +17,24 @@ Scanner mode stores an explicit `class_count` (required; `1..=9999`). The scanne
 `field_w × field_h × 1`; each labeled pixel's potential is `(class_id + 1) / class_count`
 and zero means unlabeled.
 
-Every detection twin is `field_w × field_h × 1` in both modes (`detection_twin_shape`).
-The classifier writes each detected pixel once, with the winning class (highest summed vote,
-ties to the lower id) as its exact potential, using a force-fire that bypasses threshold and
-leak. Twins are created with `mp_driven_psp` on, so a 1:1 mapping from a twin (weight 1,
-uniform PSP, target threshold at or below `1 / class_count`, no leak or accumulation) hands
-the class value to an OPU unchanged. Encode and decode through
-`neuron_voxels::class_potential`.
+The class output is named `{classifier name} class output`. A second field includes
+that field's name.
 
-A genome that needs one neuron per class downstream expands the twin itself: a mapping into
-a `W×H×C` area whose firing threshold increments along Z.
+Kernel mode writes one class for the whole field. The field must match the kernel
+area, and the output is `1×1×n`, the same shape as the class input. Depth `z` fires
+for class `z`. `mp_driven_psp` stays off.
+
+Scanner mode writes a location map. The output is `field_w × field_h × 1`
+(`detection_twin_shape`). Each detected pixel fires once, with the winning class
+(highest summed vote, ties to the lower id) as its exact potential. `mp_driven_psp`
+is on, so a 1:1 mapping from that output (weight 1, uniform PSP, target threshold at
+or below `1 / class_count`, no leak or accumulation) hands the class value to an OPU
+unchanged. Encode and decode through `neuron_voxels::class_potential`.
 
 Neuroembryogenesis loads this map onto the connectome. Area delete and mapping edits update the record and the mappings it requires.
+
+The record is authoritative for its own edges (`Classifier::required_mappings`). When the
+kernel area is also a field, its edge into kernel memory carries two rules: `episodic_memory`
+(encode) and `episodic_scan` (scan). Classifier endpoints add or remove one rule without
+dropping the other, and genome load adds any required rule a saved mapping list lacks. Rules
+are built by `classifier_mapping_rule`.

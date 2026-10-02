@@ -1,7 +1,7 @@
 //! Graded-P Misc encoder for streamed amplitude (A) and class teacher (B).
 //!
 //! Uses FEAGI's MiscData coder: each non-zero cell is a voxel at (x, y, z) with P = value.
-//! Amplitude area is `N×1×1`. Teacher area is `N×C×1` with one class neuron held at P = 1.0.
+//! Amplitude area is `N×1×bins`. Teacher area is `1×N×C`: slot on Y, class on Z, P = 1.0.
 
 use feagi_sensorimotor::data_types::descriptors::MiscDataDimensions;
 use feagi_sensorimotor::data_types::MiscData;
@@ -39,21 +39,21 @@ impl MiscStreamEncoder {
     }
 
     fn write_area(
-        width: u32,
         height: u32,
+        depth: u32,
         cells: impl Iterator<Item = (u32, u32, f32)>,
     ) -> Result<NeuronVoxelXYZPArrays, TrainerError> {
-        let dims = MiscDataDimensions::new(width, height, 1).map_err(map_err)?;
+        let dims = MiscDataDimensions::new(1, height, depth).map_err(map_err)?;
         let mut data = MiscData::new(&dims).map_err(map_err)?;
         {
             let grid = data.get_internal_data_mut();
-            for (x, y, value) in cells {
-                if x >= width || y >= height {
+            for (slot, class, value) in cells {
+                if slot >= height || class >= depth {
                     return Err(TrainerError::Config(format!(
-                        "misc stream voxel ({x},{y}) is outside {width}x{height}x1"
+                        "misc stream voxel (0,{slot},{class}) is outside 1x{height}x{depth}"
                     )));
                 }
-                grid[(x as usize, y as usize, 0)] = value;
+                grid[(0, slot as usize, class as usize)] = value;
             }
         }
         let mut arrays = NeuronVoxelXYZPArrays::new();
@@ -152,7 +152,7 @@ impl TickEncoder for MiscStreamEncoder {
         let teacher_cells = class_ids
             .iter()
             .enumerate()
-            .filter_map(|(slot, class)| class.map(|class_id| (class_id, slot as u32, 1.0_f32)));
+            .filter_map(|(slot, class)| class.map(|class_id| (slot as u32, class_id, 1.0_f32)));
         for class in class_ids.iter().flatten() {
             if *class >= class_count {
                 return Err(TrainerError::Config(format!(
@@ -160,7 +160,7 @@ impl TickEncoder for MiscStreamEncoder {
                 )));
             }
         }
-        let teacher_arrays = Self::write_area(class_count, width, teacher_cells)?;
+        let teacher_arrays = Self::write_area(width, class_count, teacher_cells)?;
 
         let mut frame = CorticalMappedXYZPNeuronVoxels::new();
         frame.insert(Self::misc_id(stream.amplitude_unit), amp_arrays);
@@ -193,13 +193,12 @@ mod tests {
             }),
             teacher: None,
             segmentation_teacher: None,
-            learn_area_id: None,
             segmented_vision: None,
         }
     }
 
     #[test]
-    fn tick_writes_amplitude_on_x_and_class_on_x() {
+    fn tick_writes_amplitude_on_x_and_class_on_z() {
         let mut encoder = MiscStreamEncoder::new();
         let frame = encoder
             .encode_tick(&[0.25, 0.75], &[Some(2), Some(0)], &profile(2), 5)
@@ -224,10 +223,16 @@ mod tests {
         assert!(amp_voxels.contains(&(1, 0, 0.75)));
         let teacher_voxels: Vec<_> = teacher
             .iter()
-            .map(|n| (n.neuron_voxel_coordinate.x, n.neuron_voxel_coordinate.y))
+            .map(|n| {
+                (
+                    n.neuron_voxel_coordinate.x,
+                    n.neuron_voxel_coordinate.y,
+                    n.neuron_voxel_coordinate.z,
+                )
+            })
             .collect();
-        assert!(teacher_voxels.contains(&(2, 0)));
-        assert!(teacher_voxels.contains(&(0, 1)));
+        assert!(teacher_voxels.contains(&(0, 0, 2)));
+        assert!(teacher_voxels.contains(&(0, 1, 0)));
     }
 
     #[test]

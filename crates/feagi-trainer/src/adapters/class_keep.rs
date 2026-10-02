@@ -88,10 +88,14 @@ pub fn apply_class_keep_percents(
     Ok(kept)
 }
 
-/// Keeps the first `max_samples` items in encounter order. `None` keeps all.
+/// Caps `samples` at `max_samples`. `None` keeps all.
+///
+/// Without `draw_seed` the first `max_samples` items in encounter order are kept. With it, a
+/// seeded uniform subset is kept, still in encounter order (see [`super::sample_draw`]).
 pub fn apply_max_samples<T>(
     samples: Vec<T>,
     max_samples: Option<u64>,
+    draw_seed: Option<u64>,
 ) -> Result<Vec<T>, TrainerError> {
     let Some(max) = max_samples else {
         return Ok(samples);
@@ -107,9 +111,25 @@ pub fn apply_max_samples<T>(
         ));
     }
     let keep = (max as usize).min(samples.len());
-    let mut kept = samples;
-    kept.truncate(keep);
-    Ok(kept)
+    let Some(seed) = draw_seed else {
+        let mut kept = samples;
+        kept.truncate(keep);
+        return Ok(kept);
+    };
+    let drawn = super::sample_draw::draw_indices(samples.len(), keep, seed);
+    let mut next = drawn.iter().peekable();
+    Ok(samples
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, sample)| {
+            if next.peek() == Some(&&index) {
+                next.next();
+                Some(sample)
+            } else {
+                None
+            }
+        })
+        .collect())
 }
 
 fn class_label(sample: &IRSample) -> Result<String, TrainerError> {
@@ -212,7 +232,7 @@ mod tests {
     #[test]
     fn max_samples_keeps_prefix() {
         let samples = vec![sample("N", 0), sample("V", 1), sample("N", 0)];
-        let kept = apply_max_samples(samples, Some(2)).expect("cap");
+        let kept = apply_max_samples(samples, Some(2), None).expect("cap");
         assert_eq!(kept.len(), 2);
         assert_eq!(class_label(&kept[0]).expect("label"), "N");
         assert_eq!(class_label(&kept[1]).expect("label"), "V");
@@ -221,13 +241,30 @@ mod tests {
     #[test]
     fn max_samples_none_keeps_all() {
         let samples = vec![sample("N", 0), sample("V", 1)];
-        let kept = apply_max_samples(samples.clone(), None).expect("all");
+        let kept = apply_max_samples(samples.clone(), None, Some(3)).expect("all");
         assert_eq!(kept.len(), 2);
     }
 
     #[test]
     fn max_samples_zero_is_error() {
-        let err = apply_max_samples(vec![sample("N", 0)], Some(0)).expect_err("zero");
+        let err = apply_max_samples(vec![sample("N", 0)], Some(0), None).expect_err("zero");
         assert!(err.to_string().contains("greater than zero"));
+    }
+
+    #[test]
+    fn seeded_cap_keeps_the_drawn_subset_in_encounter_order() {
+        let items: Vec<usize> = (0..100).collect();
+        let kept = apply_max_samples(items, Some(10), Some(5)).expect("cap");
+        assert_eq!(kept, super::super::sample_draw::draw_indices(100, 10, 5));
+    }
+
+    #[test]
+    fn seeded_cap_varies_with_the_seed_and_repeats_with_it() {
+        let items: Vec<usize> = (0..100).collect();
+        let first = apply_max_samples(items.clone(), Some(10), Some(1)).expect("cap");
+        let again = apply_max_samples(items.clone(), Some(10), Some(1)).expect("cap");
+        let other = apply_max_samples(items, Some(10), Some(2)).expect("cap");
+        assert_eq!(first, again);
+        assert_ne!(first, other);
     }
 }

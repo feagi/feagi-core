@@ -48,6 +48,9 @@ pub struct TabularCsvConfig {
     /// Cap after class keep. `None` uses every remaining row.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_samples: Option<u64>,
+    /// With `max_samples`, keep a seeded random subset instead of the first rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_draw_seed: Option<u64>,
 }
 
 /// Adapter that converts a single-split tabular CSV source into `IRSample`s.
@@ -179,7 +182,11 @@ impl TabularCsvAdapter {
             &self.config.class_keep_percents,
             &self.config.class_labels,
         )?;
-        crate::adapters::class_keep::apply_max_samples(samples, self.config.max_samples)
+        crate::adapters::class_keep::apply_max_samples(
+            samples,
+            self.config.max_samples,
+            self.config.sample_draw_seed,
+        )
     }
 }
 
@@ -295,6 +302,7 @@ mod tests {
             split_id: SplitId("train".to_string()),
             class_keep_percents: BTreeMap::new(),
             max_samples: None,
+            sample_draw_seed: None,
         }
     }
 

@@ -123,7 +123,6 @@ fn encoder_profile() -> EncoderBindingProfile {
         stream: None,
         teacher: None,
         segmentation_teacher: None,
-        learn_area_id: None,
         segmented_vision: None,
         cortical_name: None,
     }

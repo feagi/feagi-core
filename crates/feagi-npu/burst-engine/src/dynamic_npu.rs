@@ -690,6 +690,18 @@ where
         }
     }
 
+    pub fn remove_synapses_touching_neuron_ids(&mut self, neuron_ids: &[u32]) -> usize {
+        dispatch_mut!(self, remove_synapses_touching_neuron_ids(neuron_ids))
+    }
+
+    pub fn clear_memory_replay_frames(&mut self, neuron_ids: &[u32]) {
+        dispatch_mut!(self, clear_memory_replay_frames(neuron_ids));
+    }
+
+    pub fn clear_sparse_memory_associative_state(&mut self, neuron_ids: &[u32]) {
+        dispatch_mut!(self, clear_sparse_memory_associative_state(neuron_ids));
+    }
+
     pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
         dispatch_mut!(self, remove_synapse(source, target))
     }
@@ -1318,6 +1330,22 @@ where
             }
             DynamicNPUGeneric::INT8(npu) => {
                 npu.set_memory_associative_lif_params(cortical_idx, params)
+            }
+        }
+    }
+
+    /// See [`crate::npu::RustNPU::fired_neuron_ids_if_queue_timestep`].
+    pub fn fired_neuron_ids_if_queue_timestep(
+        &self,
+        cortical_idx: u32,
+        timestep: u64,
+    ) -> Option<Vec<u32>> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.fired_neuron_ids_if_queue_timestep(cortical_idx, timestep)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.fired_neuron_ids_if_queue_timestep(cortical_idx, timestep)
             }
         }
     }

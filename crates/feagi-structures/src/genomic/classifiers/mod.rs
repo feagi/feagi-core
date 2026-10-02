@@ -11,7 +11,7 @@ referenced input areas so neuroembryogenesis and area/mapping edits stay
 aligned.
 
 Each field binding is one Classifier mapping: an interconnect area scanning
-the shared kernel memory, with its own detection twin.
+the shared kernel memory, with its own class output.
 */
 
 use crate::neuron_voxels::class_potential::validate_class_count;
@@ -436,9 +436,64 @@ pub fn validate_kernel_size(size: [u32; 3]) -> Result<(), String> {
     Ok(())
 }
 
-/// Every detection twin is one layer over its field: `field_w × field_h × 1`.
+/// Scanner class output: one layer over the field, class carried as potential.
 pub fn detection_twin_shape(field: [u32; 3]) -> [u32; 3] {
     [field[0], field[1], 1]
+}
+
+/// Kernel mode compares the whole field to the kernel. The field must be that size.
+pub fn validate_kernel_field(kernel: [u32; 3], field: [u32; 3]) -> Result<(), String> {
+    if kernel[0] == 0 || kernel[1] == 0 || kernel[2] == 0 {
+        return Err("kernel area dimensions must be greater than zero".to_string());
+    }
+    if kernel != field {
+        return Err(format!(
+            "kernel mode field must match the kernel area ({}x{}x{}); got {}x{}x{}",
+            kernel[0], kernel[1], kernel[2], field[0], field[1], field[2]
+        ));
+    }
+    Ok(())
+}
+
+/// Class output geometry for one training mode.
+///
+/// Kernel mode is `1×1×class_count`, the same shape as the class input.
+/// Scanner mode is `field_w × field_h × 1`.
+pub fn class_output_shape(
+    mode: ClassifierTrainingMode,
+    field: [u32; 3],
+    class_count: u32,
+) -> Result<[u32; 3], String> {
+    match mode {
+        ClassifierTrainingMode::Kernel => {
+            validate_class_count(class_count).map_err(|error| error.to_string())?;
+            Ok([1, 1, class_count])
+        }
+        ClassifierTrainingMode::Scanner => {
+            if field[0] == 0 || field[1] == 0 {
+                return Err("scanner class output needs a field width and height".to_string());
+            }
+            Ok(detection_twin_shape(field))
+        }
+    }
+}
+
+/// Scanner outputs forward the class potential. Kernel outputs fire depth `z`.
+pub fn class_output_forwards_potential(mode: ClassifierTrainingMode) -> bool {
+    matches!(mode, ClassifierTrainingMode::Scanner)
+}
+
+/// Visible name of one class output. A second field includes that field's name.
+pub fn class_output_area_name(
+    classifier_name: &str,
+    field_name: &str,
+    output_count: usize,
+) -> String {
+    if output_count <= 1 {
+        format!("{classifier_name} class output")
+    } else {
+        format!("{classifier_name} {field_name} class output")
+    }
 }
 
 /// Scanner kernel Z matches the image depth. The mask is one layer with the image's width and height.
@@ -517,6 +572,24 @@ pub fn validate_answer_feedback_shape(
         }
     }
     Ok(())
+}
+
+/// Mapping rule written for one classifier-owned edge.
+///
+/// Only `associative_memory` is plastic; its window is the kernel memory's temporal depth.
+pub fn classifier_mapping_rule(morphology_id: &str, associative_window: u32) -> serde_json::Value {
+    let is_associative = morphology_id == CLASSIFIER_ASSOCIATIVE_MORPHOLOGY;
+    let plasticity_value = if is_associative { 1 } else { 0 };
+    serde_json::json!({
+        "morphology_id": morphology_id,
+        "morphology_scalar": [1, 1, 1],
+        "postSynapticCurrent_multiplier": 1,
+        "plasticity_flag": is_associative,
+        "plasticity_constant": plasticity_value,
+        "ltp_multiplier": plasticity_value,
+        "ltd_multiplier": plasticity_value,
+        "plasticity_window": if is_associative { associative_window } else { 0 },
+    })
 }
 
 fn required_area_id(area_id: String, field: &str) -> Result<String, String> {
@@ -730,6 +803,34 @@ mod tests {
     #[test]
     fn detection_twin_is_one_layer_over_the_field() {
         assert_eq!(detection_twin_shape([256, 128, 3]), [256, 128, 1]);
+    }
+
+    #[test]
+    fn class_output_shape_follows_training_mode() {
+        assert_eq!(
+            class_output_shape(ClassifierTrainingMode::Kernel, [13, 13, 3], 10).unwrap(),
+            [1, 1, 10]
+        );
+        assert_eq!(
+            class_output_shape(ClassifierTrainingMode::Scanner, [13, 13, 3], 10).unwrap(),
+            [13, 13, 1]
+        );
+        assert!(validate_kernel_field([13, 13, 3], [13, 13, 3]).is_ok());
+        assert!(validate_kernel_field([13, 13, 3], [28, 28, 3]).is_err());
+        assert_eq!(
+            class_output_area_name("MNIST classifier", "MNIST kernel", 1),
+            "MNIST classifier class output"
+        );
+        assert_eq!(
+            class_output_area_name("MNIST classifier", "MNIST kernel", 2),
+            "MNIST classifier MNIST kernel class output"
+        );
+        assert!(!class_output_forwards_potential(
+            ClassifierTrainingMode::Kernel
+        ));
+        assert!(class_output_forwards_potential(
+            ClassifierTrainingMode::Scanner
+        ));
     }
 
     #[test]

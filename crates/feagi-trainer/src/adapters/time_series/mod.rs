@@ -154,7 +154,11 @@ impl TimeSeriesPackageAdapter {
             &self.config.class_keep_percents,
             &self.config.class_labels,
         )?;
-        crate::adapters::class_keep::apply_max_samples(samples, self.config.max_samples)
+        crate::adapters::class_keep::apply_max_samples(
+            samples,
+            self.config.max_samples,
+            self.config.sample_draw_seed,
+        )
     }
 }
 
@@ -271,6 +275,7 @@ mod tests {
             amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
             max_samples: None,
+            sample_draw_seed: None,
             dataset_unit_range: None,
         }
     }
@@ -387,6 +392,7 @@ mod tests {
             amplitude_offset: 0.0,
             class_keep_percents: BTreeMap::new(),
             max_samples: None,
+            sample_draw_seed: None,
             dataset_unit_range: None,
         };
         let adapter = TimeSeriesPackageAdapter::new(config);

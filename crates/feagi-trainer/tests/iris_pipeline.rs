@@ -33,6 +33,7 @@ fn config() -> TabularCsvConfig {
         split_id: SplitId("train".to_string()),
         class_keep_percents: std::collections::BTreeMap::new(),
         max_samples: None,
+        sample_draw_seed: None,
     }
 }
 

@@ -475,6 +475,28 @@ pub(crate) enum ReplayPotentialMode {
     ForceFireWithPotentials(Vec<f32>),
 }
 
+/// Potentials written onto the twin when a memory neuron fires.
+///
+/// Stored per-coordinate values stay the MP-learning replay. Pattern-only replay
+/// force-fires unless the memory area has `mp_driven_psp`, in which case every
+/// replayed coordinate carries that neuron's firing membrane potential.
+fn replay_potentials_for_frame(
+    frame: &MemoryReplayFrame,
+    firing_membrane_potential: f32,
+    mp_driven_psp: bool,
+) -> ReplayPotentialMode {
+    if mp_driven_psp && frame.membrane_potentials.is_none() {
+        return ReplayPotentialMode::ForceFireWithPotentials(vec![
+            firing_membrane_potential;
+            frame.coords.len()
+        ]);
+    }
+    match &frame.membrane_potentials {
+        Some(mps) => ReplayPotentialMode::PerCoordinate(mps.clone()),
+        None => ReplayPotentialMode::ForceFire,
+    }
+}
+
 impl<
         R: Runtime,
         T: NeuralValue,
@@ -1420,6 +1442,56 @@ impl<
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e)))
     }
 
+    /// Invalidate every synapse whose source or target is in `neuron_ids`, then rebuild the index.
+    ///
+    /// Memory-neuron ids sit outside neuron storage, so this scans synapse endpoints directly
+    /// instead of a dense mark array indexed by storage slot.
+    pub fn remove_synapses_touching_neuron_ids(&mut self, neuron_ids: &[u32]) -> usize {
+        if neuron_ids.is_empty() {
+            return 0;
+        }
+        let mut removed = 0usize;
+        {
+            let mut synapse_storage = self.synapse_storage.write().unwrap();
+            for &neuron_id in neuron_ids {
+                removed += synapse_storage
+                    .remove_synapses_touching_neuron(neuron_id)
+                    .unwrap_or(0);
+            }
+        }
+        if removed > 0 {
+            self.rebuild_synapse_index();
+        }
+        removed
+    }
+
+    /// Drop stored replay frames for memory neurons that are being reset.
+    pub fn clear_memory_replay_frames(&mut self, neuron_ids: &[u32]) {
+        if neuron_ids.is_empty() {
+            return;
+        }
+        let mut replay_frames = self.memory_replay_frames.write().unwrap();
+        for neuron_id in neuron_ids {
+            replay_frames.remove(neuron_id);
+        }
+    }
+
+    /// Drop sparse associative LIF charge for memory neurons that are being reset.
+    pub fn clear_sparse_memory_associative_state(&mut self, neuron_ids: &[u32]) {
+        if neuron_ids.is_empty() {
+            return;
+        }
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        for neuron_id in neuron_ids {
+            fire_structures
+                .sparse_memory_associative_lif
+                .remove(neuron_id);
+            fire_structures
+                .memory_associative_fcl_input
+                .remove(neuron_id);
+        }
+    }
+
     /// Remove a synapse by source and target
     ///
     /// Remove a synapse by source and target
@@ -2123,6 +2195,7 @@ impl<
         fire_queue: &FireQueue,
         burst_count: u64,
         fire_structures: &mut FireStructures,
+        propagation_engine: &SynapticPropagationEngine,
     ) {
         if fire_queue.is_empty() {
             return;
@@ -2155,16 +2228,19 @@ impl<
                         );
                         continue;
                     };
+                    let mp_driven = self
+                        .area_emits_firing_membrane_potential(*cortical_idx, propagation_engine);
                     fire_structures
                         .pending_replay_injections
                         .push(ReplayInjection {
                             target_burst: burst_count + frame.offset as u64 + 1,
                             twin_area_idx: target.twin_area_idx,
                             coords: frame.coords.clone(),
-                            potentials: match &frame.membrane_potentials {
-                                Some(mps) => ReplayPotentialMode::PerCoordinate(mps.clone()),
-                                None => ReplayPotentialMode::ForceFire,
-                            },
+                            potentials: replay_potentials_for_frame(
+                                frame,
+                                neuron.membrane_potential,
+                                mp_driven,
+                            ),
                         });
                     scheduled += 1;
                 }
@@ -2508,6 +2584,7 @@ impl<
             &dynamics_result.fire_queue,
             burst_count,
             &mut fire_structures,
+            &propagation_engine,
         );
 
         // PSP from fires at `burst_count` arrives at `burst_count + delay_bursts` (see synaptic delay docs).
@@ -2936,6 +3013,25 @@ impl<
             return None;
         }
         Some(neuron_storage.neuron_types()[idx])
+    }
+
+    /// True when this cortical index emits its firing membrane potential as PSP.
+    fn area_emits_firing_membrane_potential(
+        &self,
+        cortical_idx: u32,
+        propagation_engine: &SynapticPropagationEngine,
+    ) -> bool {
+        let Some(name) = self.get_cortical_area_name(cortical_idx) else {
+            return false;
+        };
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&name) else {
+            return false;
+        };
+        propagation_engine
+            .area_mp_driven_psp
+            .get(&cortical_id)
+            .copied()
+            .unwrap_or(false)
     }
 
     /// Synaptic propagation: PSP scales with source neuron MP when enabled for this cortical area.
@@ -6193,6 +6289,28 @@ impl<
         B: crate::backend::ComputeBackend<T, R::NeuronStorage<T>, R::SynapseStorage>,
     > RustNPU<R, T, B>
 {
+    /// Neuron ids that fired in `cortical_idx` on the burst currently in the fire queue.
+    ///
+    /// `Some` means the queue timestep is `timestep`, including an empty list when that
+    /// area did not fire. `None` means the queue is for a different burst, so the caller
+    /// must keep the ledger frame.
+    pub fn fired_neuron_ids_if_queue_timestep(
+        &self,
+        cortical_idx: u32,
+        timestep: u64,
+    ) -> Option<Vec<u32>> {
+        let fire_structures = self.fire_structures.lock().unwrap();
+        if fire_structures.current_fire_queue.timestep != timestep {
+            return None;
+        }
+        let ids = fire_structures
+            .current_fire_queue
+            .get_area_neurons(cortical_idx)
+            .map(|neurons| neurons.iter().map(|neuron| neuron.neuron_id.0).collect())
+            .unwrap_or_default();
+        Some(ids)
+    }
+
     /// Get a dense, burst-aligned window of firing history as RoaringBitmaps.
     ///
     /// Returns exactly `depth` frames covering `[end_timestep - depth + 1 .. end_timestep]`.

@@ -35,6 +35,10 @@ pub trait FeagiRuntime {
     type MotorFrame;
 
     /// Submits an encoded sensory frame for the next burst(s).
+    ///
+    /// The frame is presented on every burst of the following [`step`](Self::step), so a
+    /// sample is held for `ticks` bursts. Later steps without a new submit carry no sensory
+    /// input (silence gaps).
     fn submit_sensory(&mut self, frame: Self::SensoryFrame) -> Result<(), TrainerError>;
 
     /// Injects affect-channel reward stimulation (Pain/Pleasure/Fear/Hope) for the next

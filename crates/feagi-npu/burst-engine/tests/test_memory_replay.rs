@@ -234,3 +234,63 @@ fn test_memory_replay_force_fires_high_threshold_twin_without_mp() {
         "Expected pattern-only replay to force-fire all stored twin coords"
     );
 }
+
+/// `mp_driven_psp` on the memory area writes the memory neuron's firing
+/// potential onto each replayed twin coordinate.
+#[test]
+fn test_mp_driven_memory_replay_stamps_firing_potential_on_twin() {
+    let mut npu = create_npu();
+
+    npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+    let memory_area_idx = 26u32;
+    let upstream_area_idx = 36u32;
+    let twin_area_idx = 37u32;
+
+    let memory_id = CorticalID::try_from_bytes(b"mmem0004").unwrap();
+    let upstream_id = CorticalID::try_from_bytes(b"csrc0007").unwrap();
+    let twin_id = CorticalID::try_from_bytes(b"csrc0008").unwrap();
+
+    npu.register_cortical_area(memory_area_idx, memory_id.as_base_64());
+    npu.register_cortical_area(upstream_area_idx, upstream_id.as_base_64());
+    npu.register_cortical_area(twin_area_idx, twin_id.as_base_64());
+    npu.set_mp_driven_psp_flag(memory_id, true);
+
+    npu.configure_fire_ledger_window(twin_area_idx, 1)
+        .expect("Failed to configure fire ledger window");
+
+    let _twin_a = add_neuron_at(&mut npu, twin_area_idx, 0, 0, 0);
+    let _twin_b = add_neuron_at(&mut npu, twin_area_idx, 1, 0, 0);
+
+    let memory_neuron_id = 50_000_030u32;
+    let firing_potential = 42.5f32;
+    npu.register_dynamic_neuron_mapping(memory_neuron_id, memory_id);
+    npu.register_memory_twin_mapping(memory_area_idx, upstream_area_idx, twin_area_idx, 1.0);
+    npu.register_memory_replay_frames(
+        memory_neuron_id,
+        vec![MemoryReplayFrame {
+            offset: 0,
+            upstream_area_idx,
+            coords: vec![(0, 0, 0), (1, 0, 0)],
+            membrane_potentials: None,
+        }],
+    );
+
+    npu.inject_memory_neuron_to_fcl(memory_neuron_id, memory_area_idx, firing_potential);
+    npu.process_burst().expect("Burst failed");
+    npu.process_burst().expect("Burst failed");
+
+    let queue = npu.get_current_fire_queue();
+    let twin_fires = queue
+        .get(&twin_area_idx)
+        .expect("twin area missing from fire queue");
+    let potentials = &twin_fires.4;
+    assert_eq!(potentials.len(), 2, "both replay coordinates should fire");
+    assert!(
+        potentials
+            .iter()
+            .all(|potential| (*potential - firing_potential).abs() < f32::EPSILON),
+        "twin potentials {potentials:?} should equal the memory neuron firing potential {firing_potential}"
+    );
+}

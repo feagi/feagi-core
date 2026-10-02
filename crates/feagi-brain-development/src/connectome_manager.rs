@@ -2307,15 +2307,27 @@ impl ConnectomeManager {
         Ok(twin_id)
     }
 
-    /// Class-map twin for `episodic_scan`: field_x × field_y × 1, no `memory_replay`.
+    /// Class output for `episodic_scan`, with no `memory_replay`.
     ///
-    /// Each detected pixel fires with potential `(class_id + 1) / class_count`.
+    /// Kernel mode is `1×1×n` and fires depth `z`. Scanner mode is
+    /// `field_w × field_h × 1` and carries the class as potential.
     pub fn ensure_scan_twin_area(
         &mut self,
         memory_area_id: &CorticalID,
         field_area_id: &CorticalID,
     ) -> BduResult<CorticalID> {
-        self.classifier_class_channel_count(memory_area_id)?;
+        let training_mode = self
+            .cortical_areas
+            .get(memory_area_id)
+            .and_then(|area| area.properties.get("classifier_training_mode"))
+            .and_then(|value| value.as_str())
+            .unwrap_or("kernel")
+            .to_string();
+        let kernel_class_count = if training_mode == "scanner" {
+            None
+        } else {
+            Some(self.classifier_class_channel_count(memory_area_id)?)
+        };
         let memory_area = self.cortical_areas.get(memory_area_id).ok_or_else(|| {
             BduError::InvalidArea(format!(
                 "Memory area {} not found",
@@ -2359,12 +2371,24 @@ impl ConnectomeManager {
         let twin_name = format!("{}_scan_twin", field_area.name.replace(' ', "_"));
         let twin_type = CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire);
         let twin_position = self.build_memory_twin_position(memory_area, field_area);
-        let [twin_width, twin_height, twin_depth] =
-            feagi_structures::genomic::classifiers::detection_twin_shape([
-                field_area.dimensions.width,
-                field_area.dimensions.height,
-                field_area.dimensions.depth,
-            ]);
+        let (twin_width, twin_height, twin_depth, forwards_potential) =
+            if training_mode == "scanner" {
+                let [width, height, depth] =
+                    feagi_structures::genomic::classifiers::detection_twin_shape([
+                        field_area.dimensions.width,
+                        field_area.dimensions.height,
+                        field_area.dimensions.depth,
+                    ]);
+                (width, height, depth, true)
+            } else {
+                let class_count = kernel_class_count.ok_or_else(|| {
+                    BduError::InvalidArea(format!(
+                        "Memory area {} has no kernel class count; scan twin cannot be sized",
+                        memory_area_id.as_base_64()
+                    ))
+                })?;
+                (1, 1, class_count, false)
+            };
         let twin_dims = CorticalAreaDimensions::new(twin_width, twin_height, twin_depth)
             .map_err(|e| BduError::Internal(format!("Invalid scan twin dimensions: {}", e)))?;
         let mut twin_area =
@@ -2378,9 +2402,10 @@ impl ConnectomeManager {
         twin_area
             .properties
             .insert("scan_twin".to_string(), serde_json::json!(true));
-        twin_area
-            .properties
-            .insert("mp_driven_psp".to_string(), serde_json::json!(true));
+        twin_area.properties.insert(
+            "mp_driven_psp".to_string(),
+            serde_json::json!(forwards_potential),
+        );
 
         let _twin_idx = self.add_cortical_area(twin_area)?;
         let _ = self.create_neurons_for_area(&twin_id);
@@ -11316,7 +11341,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scan_twin_is_one_layer_over_field_xy_and_forwards_its_potential() {
+    fn test_kernel_scan_twin_matches_the_class_input() {
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
@@ -11402,11 +11427,11 @@ mod tests {
             .expect("Missing scan twin entry");
         let twin_id = CorticalID::try_from_base_64(twin_id_str).unwrap();
         let twin_area = manager.get_cortical_area(&twin_id).unwrap();
-        assert_eq!(twin_area.dimensions.width, 8);
-        assert_eq!(twin_area.dimensions.height, 6);
+        assert_eq!(twin_area.dimensions.width, 1);
+        assert_eq!(twin_area.dimensions.height, 1);
         assert_eq!(
-            twin_area.dimensions.depth, 1,
-            "the class rides on potential; the twin is never class-deep"
+            twin_area.dimensions.depth, 5,
+            "kernel mode output matches the 1x1xn class input"
         );
         assert_eq!(
             twin_area
@@ -11420,8 +11445,8 @@ mod tests {
                 .properties
                 .get("mp_driven_psp")
                 .and_then(|v| v.as_bool()),
-            Some(true),
-            "downstream mappings must receive the class value, not a flat PSP"
+            Some(false),
+            "kernel mode reports the class as depth z"
         );
         let has_replay = memory_area
             .properties

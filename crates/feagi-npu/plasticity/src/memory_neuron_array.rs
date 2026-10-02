@@ -246,8 +246,11 @@ impl MemoryNeuronArray {
         Some(neuron_idx)
     }
 
-    /// Age all active memory neurons (vectorized operation)
-    pub fn age_memory_neurons(&mut self, _current_burst: u64) -> Vec<usize> {
+    /// Age short-term memory neurons that were not created or reactivated in `current_burst`.
+    ///
+    /// A neuron matched this burst keeps its full lifespan, so `init_lifespan` is the
+    /// number of later bursts it survives unseen and each repeat adds the growth rate.
+    pub fn age_memory_neurons(&mut self, current_burst: u64) -> Vec<usize> {
         let n = self.next_available_index;
         if n == 0 {
             return Vec::new();
@@ -257,7 +260,11 @@ impl MemoryNeuronArray {
 
         // Age eligible neurons
         for i in 0..n {
-            if self.is_active[i] && !self.is_longterm_memory[i] && self.lifespan_current[i] > 0 {
+            if self.is_active[i]
+                && !self.is_longterm_memory[i]
+                && self.lifespan_current[i] > 0
+                && self.last_activation_burst[i] != current_burst
+            {
                 self.lifespan_current[i] -= 1;
 
                 // Check if neuron died
@@ -892,26 +899,19 @@ impl MemoryNeuronArray {
         let mut reset_count = 0;
 
         for neuron_idx in indices_to_reset {
-            if !self.is_valid_index(neuron_idx) {
+            if !self.is_valid_index(neuron_idx) || !self.is_active[neuron_idx] {
                 continue;
             }
 
-            // Deactivate neuron
             self.is_active[neuron_idx] = false;
-
-            // Remove pattern mapping
-            if let Some(pattern_hash) = self.index_to_pattern_hash.remove(&neuron_idx) {
-                self.pattern_hash_to_index
-                    .remove(&(cortical_area_id, pattern_hash));
-            }
-            self.clear_scan_sidecars(neuron_idx);
-
-            // Clear properties (optional but clean)
+            self.is_longterm_memory[neuron_idx] = false;
             self.lifespan_current[neuron_idx] = 0;
+            self.lifespan_initial[neuron_idx] = 0;
+            self.lifespan_growth_rate[neuron_idx] = 0.0;
             self.activation_count[neuron_idx] = 0;
-
-            // Mark as reusable
-            self.reusable_indices.insert(neuron_idx);
+            self.creation_burst[neuron_idx] = 0;
+            self.last_activation_burst[neuron_idx] = 0;
+            self.cleanup_dead_neuron_internal(neuron_idx);
 
             reset_count += 1;
         }
@@ -1079,6 +1079,77 @@ mod tests {
         // Pattern should no longer be findable
         let found = array.find_neuron_by_pattern(100, &pattern_hash);
         assert!(found.is_none());
+    }
+
+    #[test]
+    fn neuron_matched_this_burst_is_not_aged() {
+        let mut array = MemoryNeuronArray::new(16);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 1,
+            ..Default::default()
+        };
+        let idx = array.create_memory_neuron(7, 100, 5, &config).unwrap();
+
+        assert!(array.age_memory_neurons(5).is_empty());
+        assert_eq!(array.lifespan_current[idx], 1);
+
+        assert_eq!(array.age_memory_neurons(6), vec![idx]);
+    }
+
+    /// Per-burst order used by the plasticity service: promote, match, then age.
+    fn run_burst(
+        array: &mut MemoryNeuronArray,
+        configs: &HashMap<u32, MemoryNeuronLifecycleConfig>,
+        burst: u64,
+        pattern_seen: bool,
+    ) -> Vec<usize> {
+        let config = configs[&100];
+        let converted = array.check_longterm_conversion_by_area(configs, config.longterm_threshold);
+        if pattern_seen {
+            array.create_memory_neuron(42, 100, burst, &config);
+        }
+        array.age_memory_neurons(burst);
+        converted
+    }
+
+    #[test]
+    fn lifespan_one_growth_one_reaches_ltm_when_pattern_repeats() {
+        let mut array = MemoryNeuronArray::new(16);
+        let configs = HashMap::from([(
+            100u32,
+            MemoryNeuronLifecycleConfig {
+                initial_lifespan: 1,
+                lifespan_growth_rate: 1.0,
+                longterm_threshold: 3,
+                max_reactivations: 1000,
+            },
+        )]);
+
+        for burst in 0..3 {
+            assert!(run_burst(&mut array, &configs, burst, true).is_empty());
+        }
+        let converted = run_burst(&mut array, &configs, 3, true);
+        assert_eq!(converted.len(), 1);
+        assert!(array.is_longterm_memory[converted[0]]);
+    }
+
+    #[test]
+    fn lifespan_one_pattern_seen_once_dies_after_one_unseen_burst() {
+        let mut array = MemoryNeuronArray::new(16);
+        let configs = HashMap::from([(
+            100u32,
+            MemoryNeuronLifecycleConfig {
+                initial_lifespan: 1,
+                lifespan_growth_rate: 1.0,
+                longterm_threshold: 3,
+                max_reactivations: 1000,
+            },
+        )]);
+
+        run_burst(&mut array, &configs, 0, true);
+        assert!(array.find_neuron_by_pattern(100, &42).is_some());
+        run_burst(&mut array, &configs, 1, false);
+        assert!(array.find_neuron_by_pattern(100, &42).is_none());
     }
 
     #[test]

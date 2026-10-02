@@ -250,14 +250,6 @@ impl EncoderPlugin for ImageFrameEncoder {
                 teacher_arrays,
             );
         }
-        if let Some(learn_area_id) = &profile.learn_area_id {
-            if matches!(sample.split, crate::contracts::Split::Train) {
-                let cortical_id = CorticalID::try_from_base_64(learn_area_id).map_err(map_err)?;
-                let mut learn = NeuronVoxelXYZPArrays::new();
-                learn.push_raw(0, 0, 0, 1.0);
-                neurons.insert(cortical_id, learn);
-            }
-        }
         if let Some(teacher) = &profile.segmentation_teacher {
             teacher.validate()?;
             let Some(TypedTarget::SegmentationMask {
@@ -328,7 +320,6 @@ mod tests {
             stream: None,
             teacher: None,
             segmentation_teacher: None,
-            learn_area_id: None,
             segmented_vision: None,
         }
     }
@@ -508,11 +499,12 @@ mod tests {
                 (
                     n.neuron_voxel_coordinate.x,
                     n.neuron_voxel_coordinate.y,
+                    n.neuron_voxel_coordinate.z,
                     n.potential,
                 )
             })
             .collect();
-        assert_eq!(voxels, vec![(3, 0, 1.0)]);
+        assert_eq!(voxels, vec![(0, 0, 3, 1.0)]);
     }
 
     #[test]

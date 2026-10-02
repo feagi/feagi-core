@@ -3,6 +3,7 @@
 pub mod class_keep;
 pub mod image_folder_classification;
 pub mod image_folder_segmentation;
+pub mod sample_draw;
 pub mod tabular_csv;
 pub mod time_series;
 

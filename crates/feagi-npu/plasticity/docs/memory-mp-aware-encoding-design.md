@@ -170,11 +170,20 @@ Since coordinates are guaranteed identical (same hash = same fired neuron set = 
 When building `ReplayInjection`:
 
 ```rust
-let potential_mode = match &frame.membrane_potentials {
-    Some(mps) => ReplayPotentialMode::PerCoordinate(mps.clone()),
-    None => ReplayPotentialMode::ForceFire,
+let potential_mode = if memory_area_mp_driven_psp && frame.membrane_potentials.is_none() {
+    ReplayPotentialMode::ForceFireWithPotentials(vec![firing_membrane_potential; frame.coords.len()])
+} else {
+    match &frame.membrane_potentials {
+        Some(mps) => ReplayPotentialMode::PerCoordinate(mps.clone()),
+        None => ReplayPotentialMode::ForceFire,
+    }
 };
 ```
+
+Pattern-only replay force-fires the stored coordinates. When the memory area has
+`mp_driven_psp` on, those coordinates are force-fired at the memory neuron's
+firing membrane potential instead, so associative charge summed onto that neuron
+appears on the twin. Stored per-coordinate potentials (MP learning) are unchanged.
 
 ### 5.2 Twin Area Injection
 

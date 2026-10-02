@@ -68,7 +68,7 @@ pub enum PackedRecord {
     Svhn { record: u32, data_offset: u64 },
 }
 
-/// One class label and its teacher voxel. `y` and `z` are 0 for the one-row standard.
+/// One class label and its teacher voxel. `x` and `y` are 0. Class is depth `z`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClassVoxel {
     pub label: String,
@@ -93,6 +93,9 @@ pub struct ImageFolderClassificationConfig {
     /// Cap after class keep. `None` uses every remaining sample in this split.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_samples: Option<u64>,
+    /// With `max_samples`, keep a seeded random subset instead of the first samples.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_draw_seed: Option<u64>,
 }
 
 /// One indexed image. Pixels are loaded on visit.
@@ -156,7 +159,13 @@ pub struct ImageFolderClassificationAdapter {
 impl ImageFolderClassificationAdapter {
     pub const PLUGIN_ID: &'static str = "image_folder_classification";
 
-    pub fn new(config: ImageFolderClassificationConfig) -> Self {
+    pub fn new(mut config: ImageFolderClassificationConfig) -> Self {
+        for row in &mut config.class_map {
+            if row.y == 0 && row.z == 0 && row.x > 0 {
+                row.z = row.x;
+                row.x = 0;
+            }
+        }
         Self { config }
     }
 
@@ -164,13 +173,13 @@ impl ImageFolderClassificationAdapter {
         &self.config
     }
 
-    /// Teacher width. Every class `x` is in `0..class_count`.
+    /// Teacher depth. Every class `z` is in `0..class_count`.
     pub fn class_count(class_map: &[ClassVoxel]) -> Result<u32, TrainerError> {
         validate_class_map(class_map)?;
-        let max_x = class_map.iter().map(|row| row.x).max().ok_or_else(|| {
+        let max_z = class_map.iter().map(|row| row.z).max().ok_or_else(|| {
             TrainerError::Config("image classification class_map is empty".to_string())
         })?;
-        max_x.checked_add(1).ok_or_else(|| {
+        max_z.checked_add(1).ok_or_else(|| {
             TrainerError::Config("image classification class index overflows u32".to_string())
         })
     }
@@ -181,6 +190,8 @@ impl ImageFolderClassificationAdapter {
     ) -> Result<(DatasetManifest, Vec<ClassifiedImage>), TrainerError> {
         let root = dataset_root(source)?;
         let images = self.discover_images(root)?;
+        // Dataset identity is the split on disk; class keep and the cap are run settings.
+        let fingerprint = fingerprint_images(&images);
         let labels: Vec<String> = self
             .config
             .class_map
@@ -188,9 +199,12 @@ impl ImageFolderClassificationAdapter {
             .map(|row| row.label.clone())
             .collect();
         let images = apply_image_class_keep(images, &self.config.class_keep_percents, &labels)?;
-        let images =
-            crate::adapters::class_keep::apply_max_samples(images, self.config.max_samples)?;
-        Ok((self.manifest(source, &images), images))
+        let images = crate::adapters::class_keep::apply_max_samples(
+            images,
+            self.config.max_samples,
+            self.config.sample_draw_seed,
+        )?;
+        Ok((self.manifest(source, &images, fingerprint), images))
     }
 
     pub fn load_indexed_sample(
@@ -340,8 +354,12 @@ impl ImageFolderClassificationAdapter {
         Ok(images)
     }
 
-    fn manifest(&self, source: &DatasetSource, images: &[ClassifiedImage]) -> DatasetManifest {
-        let fingerprint = fingerprint_images(images);
+    fn manifest(
+        &self,
+        source: &DatasetSource,
+        images: &[ClassifiedImage],
+        fingerprint: String,
+    ) -> DatasetManifest {
         let class_count = Self::class_count(&self.config.class_map).unwrap_or(0);
         DatasetManifest {
             schema_version: MANIFEST_SCHEMA_VERSION,
@@ -609,9 +627,9 @@ fn suggest_classes(
     }
     let mut by_label: BTreeMap<String, ClassVoxel> = BTreeMap::new();
     for row in source {
-        if row.y != 0 || row.z != 0 {
+        if row.x != 0 || row.y != 0 {
             issues.push(format!(
-                "label '{}' voxel ({}, {}, {}) leaves the one-row class standard",
+                "label '{}' voxel ({}, {}, {}) leaves the 1x1xC class standard",
                 row.label, row.x, row.y, row.z
             ));
         }
@@ -624,13 +642,13 @@ fn suggest_classes(
         }
     }
     let mut classes: Vec<ClassVoxel> = by_label.into_values().collect();
-    classes.sort_by(|left, right| left.x.cmp(&right.x).then(left.label.cmp(&right.label)));
-    let mut seen_x = BTreeSet::new();
+    classes.sort_by(|left, right| left.z.cmp(&right.z).then(left.label.cmp(&right.label)));
+    let mut seen_z = BTreeSet::new();
     for row in &classes {
-        if !seen_x.insert(row.x) {
+        if !seen_z.insert(row.z) {
             issues.push(format!(
-                "class voxel x {} is used by more than one label",
-                row.x
+                "class voxel z {} is used by more than one label",
+                row.z
             ));
         }
     }
@@ -757,9 +775,9 @@ fn class_folder_suggestion(
         .enumerate()
         .map(|(index, label)| ClassVoxel {
             label,
-            x: index as u32,
+            x: 0,
             y: 0,
-            z: 0,
+            z: index as u32,
         })
         .collect();
     Ok((ImageClassificationSchema::ClassFolders, classes))
@@ -865,7 +883,7 @@ fn filename_images(
         images.push(ClassifiedImage {
             path: path.clone(),
             label,
-            class_id: x,
+            class_id: z,
             packed: PackedRecord::File,
         });
     }
@@ -877,7 +895,7 @@ fn class_id_for_label(label: &str, class_map: &[ClassVoxel]) -> Result<u32, Trai
     class_map
         .iter()
         .find(|row| row.label == label)
-        .map(|row| row.x)
+        .map(|row| row.z)
         .ok_or_else(|| TrainerError::Parse(format!("label '{label}' is not in the class map")))
 }
 
@@ -888,17 +906,17 @@ fn validate_class_map(class_map: &[ClassVoxel]) -> Result<(), TrainerError> {
         ));
     }
     let mut labels = BTreeSet::new();
-    let mut xs = BTreeSet::new();
+    let mut zs = BTreeSet::new();
     for row in class_map {
         if row.label.trim().is_empty() {
             return Err(TrainerError::Config(
                 "image classification class label is empty".to_string(),
             ));
         }
-        if row.y != 0 || row.z != 0 {
+        if row.x != 0 || row.y != 0 {
             return Err(TrainerError::Config(format!(
-                "label '{}' must use voxel ({}, 0, 0)",
-                row.label, row.x
+                "label '{}' must use voxel (0, 0, {})",
+                row.label, row.z
             )));
         }
         if !labels.insert(row.label.clone()) {
@@ -907,10 +925,10 @@ fn validate_class_map(class_map: &[ClassVoxel]) -> Result<(), TrainerError> {
                 row.label
             )));
         }
-        if !xs.insert(row.x) {
+        if !zs.insert(row.z) {
             return Err(TrainerError::Config(format!(
-                "duplicate class voxel x {}",
-                row.x
+                "duplicate class voxel z {}",
+                row.z
             )));
         }
     }
@@ -1169,9 +1187,9 @@ fn classes_from_idx_labels(labels: &[u8]) -> Vec<ClassVoxel> {
             let digit: u32 = entry.label.parse().unwrap_or(0);
             ClassVoxel {
                 label: entry.label,
-                x: digit,
+                x: 0,
                 y: 0,
-                z: 0,
+                z: digit,
             }
         })
         .collect()
@@ -1553,6 +1571,42 @@ mod tests {
     }
 
     #[test]
+    fn class_index_stored_on_x_is_placed_on_z() {
+        let adapter = ImageFolderClassificationAdapter::new(ImageFolderClassificationConfig {
+            dataset_name: "digits".to_string(),
+            image_schema: ImageClassificationSchema::IdxImages,
+            split: Split::Train,
+            split_id: SplitId("train".to_string()),
+            feed_width: 28,
+            feed_height: 28,
+            class_map: vec![
+                ClassVoxel {
+                    label: "0".to_string(),
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                },
+                ClassVoxel {
+                    label: "1".to_string(),
+                    x: 1,
+                    y: 0,
+                    z: 0,
+                },
+            ],
+            class_keep_percents: std::collections::BTreeMap::new(),
+            max_samples: None,
+            sample_draw_seed: None,
+        });
+        let map = &adapter.config().class_map;
+        assert_eq!(map[1].x, 0);
+        assert_eq!(map[1].z, 1);
+        assert_eq!(
+            ImageFolderClassificationAdapter::class_count(map).expect("count"),
+            2
+        );
+    }
+
+    #[test]
     fn class_folders_stream_one_class_per_image() {
         let root = tempfile::tempdir().expect("temp");
         let red = root.path().join("train").join("red");
@@ -1560,9 +1614,9 @@ mod tests {
         write_jpeg(&red.join("a.jpg"));
         let class_map = vec![ClassVoxel {
             label: "red".to_string(),
-            x: 1,
+            x: 0,
             y: 0,
-            z: 0,
+            z: 1,
         }];
         let adapter = ImageFolderClassificationAdapter::new(ImageFolderClassificationConfig {
             dataset_name: "colors".to_string(),
@@ -1574,6 +1628,7 @@ mod tests {
             class_map,
             class_keep_percents: BTreeMap::new(),
             max_samples: None,
+            sample_draw_seed: None,
         });
         let samples = adapter
             .stream(
@@ -1651,6 +1706,7 @@ mod tests {
             class_map: scan.classes.clone(),
             class_keep_percents: BTreeMap::new(),
             max_samples: None,
+            sample_draw_seed: None,
         });
         let samples = adapter
             .stream(&source, &SplitId("train".to_string()))
@@ -1670,15 +1726,41 @@ mod tests {
             split_id: SplitId("train".to_string()),
             feed_width: 2,
             feed_height: 2,
-            class_map: scan.classes,
+            class_map: scan.classes.clone(),
             class_keep_percents: BTreeMap::new(),
             max_samples: Some(1),
+            sample_draw_seed: None,
         })
         .index(&source)
         .expect("capped index")
         .1;
         assert_eq!(capped.len(), 1);
         assert_eq!(capped[0].label, "1");
+
+        // A seeded cap draws different images per seed; the dataset hash stays the split's.
+        let full_hash = adapter.index(&source).expect("full index").0.content_hash;
+        let mut drawn_labels = std::collections::BTreeSet::new();
+        for seed in 0..32 {
+            let (manifest, images) =
+                ImageFolderClassificationAdapter::new(ImageFolderClassificationConfig {
+                    dataset_name: "mnist".to_string(),
+                    image_schema: ImageClassificationSchema::IdxImages,
+                    split: Split::Train,
+                    split_id: SplitId("train".to_string()),
+                    feed_width: 2,
+                    feed_height: 2,
+                    class_map: scan.classes.clone(),
+                    class_keep_percents: BTreeMap::new(),
+                    max_samples: Some(1),
+                    sample_draw_seed: Some(seed),
+                })
+                .index(&source)
+                .expect("drawn index");
+            assert_eq!(images.len(), 1);
+            assert_eq!(manifest.content_hash, full_hash);
+            drawn_labels.insert(images[0].label.clone());
+        }
+        assert_eq!(drawn_labels.len(), 2, "both images are drawn across seeds");
     }
 
     #[test]
@@ -1701,7 +1783,7 @@ mod tests {
         let scan = scan_image_classification_root(root.path()).expect("scan");
         assert_eq!(scan.splits, vec!["train".to_string()]);
         assert_eq!(scan.classes[0].label, "7");
-        assert_eq!(scan.classes[0].x, 7);
+        assert_eq!(scan.classes[0].z, 7);
     }
 
     #[test]
@@ -1717,7 +1799,7 @@ mod tests {
         );
         let scan = scan_image_classification_root(root.path()).expect("scan");
         assert_eq!(scan.schema, Some(ImageClassificationSchema::IdxImages));
-        assert_eq!(scan.classes[0].x, 4);
+        assert_eq!(scan.classes[0].z, 4);
         assert!(scan.issues.is_empty());
     }
 }

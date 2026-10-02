@@ -3915,6 +3915,49 @@ fn collect_long_term_memory_neurons(
         .map_err(ServiceError::Backend)
 }
 
+/// Map a saved replay-frame area onto one of the memory area's live episodic sources.
+///
+/// Lite import rebuilds the genome, so numeric cortical indexes from the file are not
+/// the live indexes. A frame is accepted when its index is already a configured source,
+/// or when its cortical id (or the snapshot name for that index) resolves to one.
+/// A memory area with a single episodic source accepts a stale index against that source:
+/// the coordinates are rehashed there instead of failing the upload.
+#[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+fn resolve_replay_upstream_index(
+    frame_upstream_idx: u32,
+    upstream_cortical_id: Option<&str>,
+    snapshot_area_name: Option<&str>,
+    cortical_id_to_live_idx: &HashMap<String, u32>,
+    configured_upstream: &[u32],
+) -> ServiceResult<u32> {
+    if configured_upstream
+        .binary_search(&frame_upstream_idx)
+        .is_ok()
+    {
+        return Ok(frame_upstream_idx);
+    }
+    for candidate in [upstream_cortical_id, snapshot_area_name]
+        .into_iter()
+        .flatten()
+    {
+        if let Some(&live_idx) = cortical_id_to_live_idx.get(candidate) {
+            if configured_upstream.binary_search(&live_idx).is_ok() {
+                return Ok(live_idx);
+            }
+        }
+    }
+    if let [only_upstream] = configured_upstream {
+        warn!(
+            "Replay upstream area {} is not an episodic source; rehashing against the only configured source {}",
+            frame_upstream_idx, only_upstream
+        );
+        return Ok(*only_upstream);
+    }
+    Err(ServiceError::InvalidInput(format!(
+        "replay upstream area {frame_upstream_idx} is not configured"
+    )))
+}
+
 #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
 fn rehash_lite_long_term_memory_patterns(
     connectome: &RwLock<ConnectomeManager>,
@@ -3932,8 +3975,28 @@ fn rehash_lite_long_term_memory_patterns(
     type NeuronsByVoxel = HashMap<VoxelCoordinate, Vec<u32>>;
     type NeuronsByAreaAndVoxel = HashMap<u32, NeuronsByVoxel>;
 
-    let plans = {
+    let (plans, cortical_id_to_live_idx) = {
         let manager = connectome.read();
+        let mut cortical_id_to_live_idx = HashMap::new();
+        for name in snapshot.cortical_area_names.values() {
+            if let Ok(id) = CorticalID::try_from_base_64(name) {
+                if let Some(idx) = manager.get_cortical_idx(&id) {
+                    cortical_id_to_live_idx.insert(name.clone(), idx);
+                }
+            }
+        }
+        for (_, frames) in &snapshot.long_term_memory_replay_frames {
+            for frame in frames {
+                let Some(id_b64) = frame.upstream_cortical_id.as_ref() else {
+                    continue;
+                };
+                if let Ok(id) = CorticalID::try_from_base_64(id_b64) {
+                    if let Some(idx) = manager.get_cortical_idx(&id) {
+                        cortical_id_to_live_idx.insert(id_b64.clone(), idx);
+                    }
+                }
+            }
+        }
         let mut plans = Vec::new();
         for neuron in &snapshot.long_term_memory_neurons {
             if !neuron.is_longterm_memory || !neuron.is_active {
@@ -3978,7 +4041,7 @@ fn rehash_lite_long_term_memory_patterns(
                 upstream_areas,
             });
         }
-        plans
+        (plans, cortical_id_to_live_idx)
     };
     if plans.is_empty() {
         return Ok(());
@@ -4016,10 +4079,11 @@ fn rehash_lite_long_term_memory_patterns(
         neurons_by_area_and_voxel.insert(upstream_area_idx, neurons_by_voxel);
     }
 
+    let snapshot_area_names = snapshot.cortical_area_names.clone();
     for plan in plans {
         let frames = snapshot
             .long_term_memory_replay_frames
-            .iter()
+            .iter_mut()
             .find_map(|(neuron_id, frames)| (*neuron_id == plan.neuron_id).then_some(frames))
             .ok_or_else(|| {
                 ServiceError::InvalidInput(format!(
@@ -4031,7 +4095,25 @@ fn rehash_lite_long_term_memory_patterns(
         let mut timestep_bitmaps =
             vec![HashSet::new(); plan.temporal_depth as usize * upstream_count];
 
-        for frame in frames {
+        for frame in frames.iter_mut() {
+            let saved_upstream_idx = frame.upstream_area_idx;
+            let snapshot_area_name = snapshot_area_names
+                .get(&saved_upstream_idx)
+                .map(String::as_str);
+            let resolved_upstream = resolve_replay_upstream_index(
+                saved_upstream_idx,
+                frame.upstream_cortical_id.as_deref(),
+                snapshot_area_name,
+                &cortical_id_to_live_idx,
+                &plan.upstream_areas,
+            )
+            .map_err(|error| {
+                ServiceError::InvalidInput(format!(
+                    "Cannot rehash LTM neuron {}: {error}",
+                    plan.neuron_id
+                ))
+            })?;
+            frame.upstream_area_idx = resolved_upstream;
             let upstream_position = plan
                 .upstream_areas
                 .binary_search(&frame.upstream_area_idx)
@@ -7806,6 +7888,49 @@ mod tests {
         );
 
         super::validate_exported_long_term_memory(&connectome, &snapshot, true)
+    }
+
+    #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
+    #[test]
+    fn stale_replay_upstream_index_resolves_to_the_only_episodic_source() {
+        let (connectome, src_id, _mem_id) = memory_export_fixture();
+        let src_idx = connectome
+            .read()
+            .get_cortical_idx(&src_id)
+            .expect("source idx");
+        let configured = [src_idx];
+        let mut id_to_idx = HashMap::new();
+        id_to_idx.insert(src_id.as_base_64(), src_idx);
+
+        let resolved =
+            super::resolve_replay_upstream_index(14, None, None, &id_to_idx, &configured)
+                .expect("a single episodic source accepts a stale replay index");
+        assert_eq!(resolved, src_idx);
+
+        let by_id = super::resolve_replay_upstream_index(
+            14,
+            Some(&src_id.as_base_64()),
+            None,
+            &id_to_idx,
+            &configured,
+        )
+        .expect("cortical id resolves onto the live source");
+        assert_eq!(by_id, src_idx);
+
+        let already_live =
+            super::resolve_replay_upstream_index(src_idx, None, None, &id_to_idx, &configured)
+                .expect("live index stays put");
+        assert_eq!(already_live, src_idx);
+
+        let err = super::resolve_replay_upstream_index(
+            14,
+            None,
+            None,
+            &id_to_idx,
+            &[src_idx, src_idx + 1],
+        )
+        .expect_err("multiple sources cannot accept an unknown replay index");
+        assert!(format!("{err}").contains("not configured"));
     }
 
     #[cfg(all(feature = "connectome-io", feature = "plasticity"))]
