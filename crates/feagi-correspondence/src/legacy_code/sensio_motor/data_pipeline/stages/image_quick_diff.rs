@@ -4,6 +4,8 @@ use crate::legacy_code::sensio_motor::data_pipeline::PipelineStageProperties;
 use crate::legacy_code::sensio_motor::data_types::descriptors::ImageFrameProperties;
 use crate::legacy_code::sensio_motor::data_types::{ImageFrame, Percentage};
 use crate::legacy_code::sensio_motor::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use ndarray::{Array3, Zip};
+use rayon::prelude::*;
 use std::any::Any;
 use std::fmt::Display;
 use std::ops::RangeInclusive;

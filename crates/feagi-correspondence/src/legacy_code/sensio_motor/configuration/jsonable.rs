@@ -25,7 +25,8 @@ use crate::legacy_code::sensio_motor::wrapped_io_data::WrappedIOData;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use feagi_basis::feagi_genome::identifiers::cortical_id::CorticalID;
-use feagi_basis::FeagiBasisError;
+use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};
+use crate::legacy_code::misc::CorticalUnitIndex;
 
 fn feagi_data_etc_error(message: String) -> FeagiBasisError {
     let context: &'static str = Box::leak(message.into_boxed_str());

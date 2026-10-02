@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_basis::{FeagiFailDataEtc, FeagiBasisError};
 use crate::legacy_code::feagi_byte_container::FeagiByteContainer;
+use crate::legacy_code::misc::CorticalUnitIndex;
 use crate::legacy_code::sensio_motor::configuration::jsonable::JSONInputOutputDefinition;
 use crate::legacy_code::sensio_motor::{CorticalMappedXYZPNeuronVoxels, FeagiSignalIndex};
 use crate::legacy_code::sensio_motor::data_pipeline::per_channel_stream_caches::MotorCorticalUnitCache;
@@ -12,11 +13,30 @@ use crate::legacy_code::sensio_motor::data_types::descriptors::{CorticalChannelC
 use crate::legacy_code::sensio_motor::data_types::Percentage;
 use crate::legacy_code::sensio_motor::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::legacy_code::sensio_motor::wrapped_io_data::WrappedIOData;
+use crate::motor_cortical_units;
 
 fn feagi_data_etc_error(message: String) -> FeagiBasisError {
     let context: &'static str = Box::leak(message.into_boxed_str());
     FeagiFailDataEtc::new(context).into()
 }
+
+//region old units
+
+
+// Helper macro to handle optional allowed_frame_change_handling
+#[macro_export]
+macro_rules! get_allowed_frame_change_handling_impl { // TODO delete this!
+    () => {
+        None
+    };
+    ($($allowed:ident),+) => {
+        Some(&[$(FrameChangeHandling::$allowed),+] as &'static [FrameChangeHandling])
+    };
+}
+
+
+
+//endregion
 
 macro_rules! motor_unit_functions {
     (
@@ -190,8 +210,8 @@ macro_rules! motor_unit_functions {
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
-                eccentricity_z_neuron_resolution: NeuronDepth,
-                modulation_z_neuron_resolution: NeuronDepth,
+                eccentricity_dimensions: CorticalChannelDimensions,
+                modulation_dimensions: CorticalChannelDimensions,
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiBasisError>
             {
@@ -203,14 +223,15 @@ macro_rules! motor_unit_functions {
                     "percentage_neuron_positioning": percentage_neuron_positioning
                 }).as_object().unwrap().clone();
 
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = GazePropertiesNeuronVoxelXYZPDecoder::new_box(
-                    eccentricity_cortical_id,
-                    modularity_cortical_id,
-                    eccentricity_z_neuron_resolution,
-                    modulation_z_neuron_resolution,
-                    number_channels,
-                    percentage_neuron_positioning,
-                )?;
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> =
+                    GazePropertiesNeuronVoxelXYZPDecoder::new_box(
+                        eccentricity_cortical_id,
+                        modularity_cortical_id,
+                        eccentricity_dimensions,
+                        modulation_dimensions,
+                        number_channels,
+                        percentage_neuron_positioning,
+                    )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::GazeProperties(GazeProperties::create_default_centered());
                 self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
@@ -264,8 +285,8 @@ macro_rules! motor_unit_functions {
                         )?
                     }
                     _ => {
-                        return Err(feagi_data_etc_error(
-                            "Expected at least one cortical_area ID for Percentage motor unit".to_string()
+                        return Err(FeagiBasisError::InternalError(
+                            "Expected at least one cortical ID for Percentage motor unit".to_string()
                         ));
                     }
                 };
@@ -362,8 +383,7 @@ macro_rules! motor_unit_functions {
                         "width": pointer_properties.width,
                         "height": pointer_properties.height,
                         "depth": pointer_properties.depth,
-                        "window_ms": pointer_properties.window_ms,
-                        "max_axis_velocity": pointer_properties.max_axis_velocity
+                        "window_ms": pointer_properties.window_ms
                     }
                 }).as_object().unwrap().clone();
 
@@ -384,6 +404,50 @@ macro_rules! motor_unit_functions {
 
         motor_unit_functions!(@generate_similar_functions $motor_unit, Percentage3D);
         motor_unit_functions!(@generate_spatial_pointer_signed_read $motor_unit);
+    };
+
+    // Arm for AngularPointer: both Absolute and Incremental emit SignedPercentage3D.
+    (@generate_functions
+        $motor_unit:ident,
+        AngularPointer3D
+    ) => {
+        ::paste::paste! {
+            pub fn [<$motor_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                percentage_neuron_positioning: PercentageNeuronPositioning,
+                pointer_properties: AngularPointerProperties,
+                ) -> Result<(), FeagiBasisError>
+            {
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    unit
+                )[0];
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> =
+                    AngularPointerNeuronVoxelXYZPDecoder::new_box(cortical_id, pointer_properties, number_channels)?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning,
+                    "AngularPointer": {
+                        "width": pointer_properties.width,
+                        "height": pointer_properties.height,
+                        "depth": pointer_properties.depth,
+                        "window_ms": pointer_properties.window_ms
+                    }
+                }).as_object().unwrap().clone();
+
+                let initial_val: WrappedIOData =
+                    WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero());
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, SignedPercentage3D);
     };
 
     // Bespoke signed read accessors for SpatialPointer (Incremental mode emits
@@ -535,9 +599,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiBasisError>
             {
-                let brightness_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let contrast_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[1];
-                let diff_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[2];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
 
                 let io_props: serde_json::Map<String, serde_json::Value> = json!({
                     "frame_change_handling": frame_change_handling,
@@ -545,11 +607,7 @@ macro_rules! motor_unit_functions {
                 }).as_object().unwrap().clone();
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = ImageFilteringSettingsNeuronVoxelXYZPDecoder::new_box(
-                    brightness_cortical_id,
-                    contrast_cortical_id,
-                    diff_cortical_id,
-                    z_neuron_resolution,
-                    z_neuron_resolution,
+                    cortical_id,
                     z_neuron_resolution,
                     number_channels,
                     percentage_neuron_positioning)?;
@@ -737,7 +795,7 @@ impl MotorDeviceCache {
         motor_stream_caches.verify_channel_exists(cortical_channel_index)
     }
 
-    feagi_genomic_context::motor_cortical_units!(motor_unit_functions);
+    motor_cortical_units!(motor_unit_functions);
 
     //region Data IO
 

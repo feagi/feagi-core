@@ -1,11 +1,10 @@
-use crate::internal_prelude::*;
-use crate::legacy_code::configuration::jsonable::JSONDecoderProperties;
-use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
+use crate::legacy_code::sensio_motor::internal_prelude::*;
+use crate::legacy_code::sensio_motor::configuration::jsonable::JSONDecoderProperties;
+use crate::legacy_code::sensio_motor::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::legacy_code::sensio_motor::data_types::descriptors::PoseEstimationProperties;
 use crate::legacy_code::sensio_motor::data_types::{JointPosition, PoseEstimationData};
-use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
-use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_genomic_context::cortical_area::CorticalID;
+use crate::legacy_code::sensio_motor::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
+use crate::legacy_code::sensio_motor::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use std::time::Instant;
 
 /// Maximum distance (in normalized [0,1] units) between two activated neurons

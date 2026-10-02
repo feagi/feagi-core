@@ -14,6 +14,7 @@ use super::ImageFrame;
 
 use ndarray::Array3;
 use rayon::prelude::*;
+use crate::legacy_code::sensio_motor::internal_prelude::CorticalChannelIndex;
 use crate::legacy_code::sensio_motor::NeuronVoxelXYZPSparseVectors;
 
 /// A frame divided into nine segments with different resolutions for peripheral vision simulation.

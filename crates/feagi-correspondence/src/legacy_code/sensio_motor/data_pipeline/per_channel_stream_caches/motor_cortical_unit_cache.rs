@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use std::time::Instant;
 use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};
 use crate::legacy_code::sensio_motor::configuration::jsonable::{JSONDecoderProperties, JSONDeviceGrouping, JSONUnitDefinition};

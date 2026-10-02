@@ -1,16 +1,15 @@
-use crate::internal_prelude::*;
-use crate::legacy_code::configuration::jsonable::JSONEncoderProperties;
-use crate::data_pipeline::per_channel_stream_caches::{
+use crate::legacy_code::sensio_motor::internal_prelude::*;
+use crate::legacy_code::sensio_motor::configuration::jsonable::JSONEncoderProperties;
+use crate::legacy_code::sensio_motor::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
 };
-use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
-use crate::wrapped_io_data::WrappedIOType;
-use feagi_genomic_context::cortical_area::CorticalID;
+use crate::legacy_code::sensio_motor::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
+use crate::legacy_code::sensio_motor::wrapped_io_data::WrappedIOType;
 use rayon::prelude::*;
 use std::time::Instant;
 
 
-use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};
+use feagi_basis::FeagiFailDataEtc;
 
 fn feagi_data_etc_error(message: String) -> FeagiBasisError {
     let context: &'static str = Box::leak(message.into_boxed_str());

@@ -1,0 +1,197 @@
+#[macro_export]
+macro_rules! motor_cortical_units {
+    ($callback:ident) => {
+        $callback! {
+            MotorCorticalUnit {
+
+                #[doc = "Free spinning motor."]
+                RotaryMotor => {
+                    friendly_name: "Rotary Motor",
+                    accepted_wrapped_io_data_type: SignedPercentage, // This property determines what type of registration funciton will be generated
+                    cortical_id_unit_reference: *b"mot",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [-20, 0, -10], channel_dimensions_default: [1, 1, 9], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                    }
+                },
+
+                #[doc = "Servo Position, defined by min / max distances. Uses unsigned Percentage (0-100%). Area 2 is a dedicated per-channel speed limit."]
+                PositionalServo => {
+                    friendly_name: "Positional Servo",
+                    accepted_wrapped_io_data_type: Percentage,
+                    cortical_id_unit_reference: *b"pse",
+                    number_cortical_areas: 3,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-20, 0, -10], channel_dimensions_default: [1, 1, 20], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]),
+                        1 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Incremental, percentage_neuron_positioning), relative_position: [-40, 0, -10], channel_dimensions_default: [2, 1, 20], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024]),
+                        2 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-60, 0, -10], channel_dimensions_default: [1, 1, 20], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                    }
+                },
+
+                #[doc = "Gaze control, where the first 2 numbers are the XY center, and the last number is the relative size"]
+                Gaze => {
+                    friendly_name: "Gaze Control",
+                    accepted_wrapped_io_data_type: GazeProperties,
+                    cortical_id_unit_reference: *b"gaz",
+                    number_cortical_areas: 2,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [10, 0, -10], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1]), // Eccentricity
+                        1 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]) // Modularity
+                    }
+                },
+
+
+                #[doc = "Miscellaneous output that does not fit existing templates."]
+                MiscData => {
+                    friendly_name: "Miscellaneous Output",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"mis",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [300, 0, -30], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
+                    }
+                },
+
+                #[doc = "Text output (English) - token stream encoded as absolute fractional bitplanes along Z (z=0 is MSB)."]
+                TextEnglishOutput => {
+                    friendly_name: "Text Output (English)",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"ten",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        // 1x1x16 default: one token per FEAGI tick, encoded into 16 bitplanes (supports GPT-2 vocab via token_id+1 offset).
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [85, 0, -100], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
+                    }
+                },
+
+                #[doc = "Count output - unsigned percentage encoding (linear, absolute)."]
+                CountOutput => {
+                    friendly_name: "Count Output",
+                    accepted_wrapped_io_data_type: Percentage,
+                    cortical_id_unit_reference: *b"cnt",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [175, 0, -30], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                    }
+                },
+
+                #[doc = "Object semantic segmentation output. One Z layer: X/Y encode the pixel and the potential is (class_id + 1) / class_count."]
+                ObjectSegmentation => {
+                    friendly_name: "Object Segmentation",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"seg",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-200, 0, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1])
+                    }
+                },
+
+                #[doc = "Visual thoughts output - RGB image generation from brain activity"]
+                SimpleVisionOutput => {
+                    friendly_name: "Simple Vision",
+                    accepted_wrapped_io_data_type: ImageFrame,
+                    cortical_id_unit_reference: *b"img",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::CartesianPlane(frame_change_handling), relative_position: [-240, 60, -20], channel_dimensions_default: [128, 128, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
+                    }
+                },
+
+                #[doc = "Pose estimation output - XY plane encodes joint location, Z depth encodes joint ID. PSP magnitude encodes confidence."]
+                PoseEstimation => {
+                    friendly_name: "Pose Estimation",
+                    accepted_wrapped_io_data_type: PoseEstimationData,
+                    cortical_id_unit_reference: *b"pos",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        pose_schema: PoseSchema,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::PoseEstimation(frame_change_handling, pose_schema), relative_position: [-200, 60, 0], channel_dimensions_default: [64, 64, 17], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 256])
+                    }
+                },
+
+                #[doc = "One area whose X columns are the sliders: diff, brightness, contrast. Absolute is 3 wide. Incremental is 6 wide (increase, decrease per slider). Z is the value, with Z 0 at the top of the range."]
+                DynamicImageProcessing => {
+                    friendly_name: "Image Enhancements",
+                    accepted_wrapped_io_data_type: ImageFilteringSettings,
+                    cortical_id_unit_reference: *b"ifs",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute, Incremental],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [6, 1, 1024])
+                    }
+                },
+
+                #[doc = "Spatial pointer output - Absolute is 3×1×depth at (130, 0, -10). Incremental is 6×1×depth; registration places it at (145, 0, -10)."]
+                SpatialPointer => {
+                    friendly_name: "Spatial Pointer",
+                    accepted_wrapped_io_data_type: SpatialPointer3D,
+                    cortical_id_unit_reference: *b"ptr",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute, Incremental],
+                    cortical_area_properties: {
+                        0 => ($crate::genomic::cortical_area::io_cortical_area_configuration_flag::spatial_pointer_io_flag(frame_change_handling, percentage_neuron_positioning), relative_position: [130, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [6, 1, 1024])
+                    }
+                },
+
+                #[doc = "Angular pointer output - yaw/pitch/roll. Absolute is signed 3×1×depth at (175, 0, -10). Incremental is 6×1×depth; registration places it at (190, 0, -10)."]
+                AngularPointer => {
+                    friendly_name: "Angular Pointer",
+                    accepted_wrapped_io_data_type: AngularPointer3D,
+                    cortical_id_unit_reference: *b"ang",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute, Incremental],
+                    cortical_area_properties: {
+                        0 => ($crate::genomic::cortical_area::io_cortical_area_configuration_flag::angular_pointer_io_flag(frame_change_handling, percentage_neuron_positioning), relative_position: [175, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [6, 1, 1024])
+                    }
+                },
+            }
+        }
+    };
+}

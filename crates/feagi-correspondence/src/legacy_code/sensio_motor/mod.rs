@@ -14,6 +14,8 @@ pub mod feedbacks;
 pub mod single_voxel_decode;
 pub mod wrapped_io_data;
 pub mod data;
+pub mod prev_motor_cortical_unit_template;
+pub mod prev_sensor_cortical_unit_template;
 
 pub use connector_cache::ConnectorCache;
 pub use feagi_signal::{FeagiSignal, FeagiSignalIndex};

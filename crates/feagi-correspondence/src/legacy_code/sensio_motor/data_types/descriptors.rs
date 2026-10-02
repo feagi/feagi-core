@@ -986,3 +986,142 @@ impl Display for SpatialPointerProperties {
 }
 
 //endregion
+
+
+
+//region Angular Pointer
+
+/// Absolute AngularPointer width: one cortical X column per yaw/pitch/roll axis.
+pub const ANGULAR_POINTER_CHANNEL_WIDTH: u32 = 3;
+/// Incremental AngularPointer width: two cortical X columns per YPR axis
+/// (even = positive, odd = negative), matching SpatialPointer incremental.
+pub const ANGULAR_POINTER_INCREMENTAL_CHANNEL_WIDTH: u32 = 6;
+/// Fixed per-channel height for AngularPointer (percentage decoders use Y=0 only).
+pub const ANGULAR_POINTER_CHANNEL_HEIGHT: u32 = 1;
+
+/// Properties describing an AngularPointer cortical area (yaw / pitch / roll).
+///
+/// Absolute areas are `3×1×depth` and decode a signed attitude
+/// (`SignedPercentage3D`, each axis in `[-1, 1]`, `0` = center). Incremental
+/// areas are `6×1×depth` (yaw+/yaw−, pitch+/pitch−, roll+/roll−) and decode a
+/// signed rate vector. Height is always 1; only `depth` is a free parameter.
+///
+/// Incremental registration also carries `window_ms` for controller look-ahead.
+/// The Rust decoder does not consume it.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AngularPointerProperties {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+    #[serde(default)]
+    pub window_ms: Option<u32>,
+}
+
+impl AngularPointerProperties {
+    /// Creates properties for an Absolute-mode AngularPointer area.
+    pub fn new_absolute(width: u32, height: u32, depth: u32) -> Result<Self, FeagiBasisError> {
+        Self::validate_absolute_dimensions(width, height, depth)?;
+        Ok(AngularPointerProperties {
+            width,
+            height,
+            depth,
+            window_ms: None,
+        })
+    }
+
+    /// Creates properties for an Incremental-mode AngularPointer area.
+    pub fn new_incremental(
+        width: u32,
+        height: u32,
+        depth: u32,
+        window_ms: u32,
+    ) -> Result<Self, FeagiBasisError> {
+        Self::validate_incremental_dimensions(width, height, depth)?;
+        Self::validate_window_ms(window_ms)?;
+        Ok(AngularPointerProperties {
+            width,
+            height,
+            depth,
+            window_ms: Some(window_ms),
+        })
+    }
+
+    /// Returns the validated Incremental look-ahead window.
+    pub fn require_incremental_parameters(&self) -> Result<u32, FeagiBasisError> {
+        let window_ms = self.window_ms.ok_or_else(|| {
+            FeagiFailDataEtc::new(
+                "Incremental AngularPointer requires 'window_ms' in decoder properties".into(),
+            ).into()
+        })?;
+        Self::validate_window_ms(window_ms)?;
+        Ok(window_ms)
+    }
+
+    fn validate_absolute_dimensions(
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> Result<(), FeagiBasisError> {
+        Self::validate_layout(
+            width,
+            height,
+            depth,
+            ANGULAR_POINTER_CHANNEL_WIDTH,
+            "absolute",
+        )
+    }
+
+    fn validate_incremental_dimensions(
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> Result<(), FeagiBasisError> {
+        Self::validate_layout(
+            width,
+            height,
+            depth,
+            ANGULAR_POINTER_INCREMENTAL_CHANNEL_WIDTH,
+            "incremental",
+        )
+    }
+
+    fn validate_layout(
+        width: u32,
+        height: u32,
+        depth: u32,
+        expected_width: u32,
+        mode: &str,
+    ) -> Result<(), FeagiBasisError> {
+        if width != expected_width || height != ANGULAR_POINTER_CHANNEL_HEIGHT {
+            return Err(FeagiFailDataEtc::new((
+                "AngularPointer cortical layout must be")).into());
+        }
+        if depth == 0 {
+            return Err(FeagiFailDataEtc::new(
+                "AngularPointer 'depth' (Z neuron resolution) must be non-zero".into(),
+            ).into());
+        }
+        Ok(())
+    }
+
+    fn validate_window_ms(window_ms: u32) -> Result<(), FeagiBasisError> {
+        if window_ms == 0 {
+            return Err(FeagiFailDataEtc::new(
+                "AngularPointer 'window_ms' must be greater than zero".into(),
+            ).into());
+        }
+        Ok(())
+    }
+}
+
+impl Display for AngularPointerProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "AngularPointer({}x{}x{}, window_ms={:?})",
+            self.width, self.height, self.depth, self.window_ms
+        )
+    }
+}
+
+//endregion

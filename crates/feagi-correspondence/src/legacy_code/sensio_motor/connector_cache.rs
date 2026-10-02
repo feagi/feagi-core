@@ -1,8 +1,9 @@
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 use feagi_basis::{FeagiFailDataEtc, FeagiBasisError};
-use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};
-
+use crate::legacy_code::sensio_motor::caching::{MotorDeviceCache, SensorDeviceCache};
+use crate::legacy_code::sensio_motor::configuration::jsonable::JSONInputOutputDefinition;
+use crate::legacy_code::sensio_motor::feedbacks::{FeedBackRegistration, FeedbackRegistrar, FeedbackRegistrationTargets};
 
 fn feagi_data_etc_error(message: String) -> FeagiBasisError {
     let context: &'static str = Box::leak(message.into_boxed_str());

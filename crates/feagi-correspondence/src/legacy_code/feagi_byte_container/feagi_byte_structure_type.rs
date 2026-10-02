@@ -4,17 +4,6 @@ use std::fmt::{Display, Formatter};
 ///
 /// Each variant corresponds to a specific binary format with a unique byte identifier.
 /// The enum values are used as the first byte in serialized data to identify the structure type.
-///
-/// # Example
-/// ```
-/// use feagi_serialization::FeagiByteStructureType;
-///
-/// let json_type = FeagiByteStructureType::JSON;
-/// assert_eq!(json_type as u8, 1);
-///
-/// let neuron_type = FeagiByteStructureType::NeuronCategoricalXYZP;
-/// assert_eq!(neuron_type as u8, 11);
-/// ```
 #[repr(u8)]
 #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
 pub enum FeagiByteStructureType {

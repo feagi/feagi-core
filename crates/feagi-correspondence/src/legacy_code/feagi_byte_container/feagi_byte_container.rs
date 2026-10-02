@@ -103,20 +103,6 @@ impl FeagiByteContainer {
     ///
     /// Allows external code to write directly to the byte array, then validates
     /// that the resulting data forms a valid container structure.
-    ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::{FeagiByteContainer};
-    ///
-    /// // NOTE: This function is just here as an example, but this specific implementation is invalid
-    /// let mut container = FeagiByteContainer::new_empty();
-    /// let result = container.try_write_data_to_container_and_verify(&mut |bytes| {
-    ///     *bytes = vec![20u8, 2u8, 3u8]; // This is an invalid byte sequence
-    ///     Ok(())
-    /// });
-    /// // This will fail validation since we're setting invalid data
-    /// assert!(result.is_err());
-    /// ```
     pub fn try_write_data_to_container_and_verify<F>(&mut self, byte_writer: &mut F) -> Result<(), ()>
     where
         F: FnMut(&mut Vec<u8>) -> Result<(), ()>,
@@ -128,17 +114,6 @@ impl FeagiByteContainer {
     /// Writes data to the container by taking ownership of a byte vector then validates it. Resets
     /// allocation. Only use this if you have no option
     ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::{FeagiByteContainer};
-    ///
-    /// // NOTE: This here as an example, but this specific implementation is invalid
-    /// let bytes = vec![20u8, 2u8, 3u8];
-    /// let mut container = FeagiByteContainer::new_empty();
-    /// let result = container.try_write_data_by_ownership_to_container_and_verify(bytes);
-    /// // This will fail validation since we're setting invalid data
-    /// assert!(result.is_err());
-    /// ```
     pub fn try_write_data_by_ownership_to_container_and_verify(&mut self, new_data: Vec<u8>) -> Result<(), ()> {
         self.bytes = new_data;
         self.verify_container_valid_and_populate()
@@ -172,14 +147,6 @@ impl FeagiByteContainer {
     ///
     /// Returns true if the container has been validated and contains properly
     /// formatted header and structure data.
-    ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::FeagiByteContainer;
-    ///
-    /// let container = FeagiByteContainer::new_empty();
-    /// assert!(container.is_valid());
-    /// ```
     pub fn is_valid(&self) -> bool {
         self.is_data_valid
     }
@@ -212,14 +179,6 @@ impl FeagiByteContainer {
     /// Returns the total number of bytes currently used by the container.
     ///
     /// This includes headers and all structure data.
-    ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::FeagiByteContainer;
-    ///
-    /// let container = FeagiByteContainer::new_empty();
-    /// assert_eq!(container.get_number_of_bytes_used(), 52); // Header (4) + Agent ID (48)
-    /// ```
     pub fn get_number_of_bytes_used(&self) -> usize {
         self.bytes.len()
     }
@@ -227,14 +186,6 @@ impl FeagiByteContainer {
     /// Returns the total memory allocated for the byte array.
     ///
     /// This may be larger than the number of bytes used due to Vec capacity.
-    ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::FeagiByteContainer;
-    ///
-    /// let container = FeagiByteContainer::new_empty();
-    /// assert!(container.get_number_of_bytes_allocated() >= 4);
-    /// ```
     pub fn get_number_of_bytes_allocated(&self) -> usize {
         self.bytes.capacity()
     }
@@ -243,14 +194,6 @@ impl FeagiByteContainer {
     ///
     /// The increment counter is a 16-bit value stored in bytes 1-2 of the header.
     /// Only works if the container is valid.
-    ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::FeagiByteContainer;
-    ///
-    /// let container = FeagiByteContainer::new_empty();
-    /// assert_eq!(container.get_increment_counter().unwrap(), 0u16);
-    /// ```
     pub fn get_increment_counter(&self) -> Result<u16, ()> {
         if self.is_data_valid {
             return Ok(LittleEndian::read_u16(&self.bytes[1..3]));

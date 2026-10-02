@@ -1,4 +1,7 @@
 use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};
+use crate::legacy_code::sensio_motor::data_types::{GazeProperties, ImageFrame, ImageFrameProcessor, SegmentedImageFrame};
+use crate::legacy_code::sensio_motor::data_types::descriptors::{ColorChannelLayout, ImageXYZDimensions};
+use crate::legacy_code::sensio_motor::internal_prelude::{ImageFrameProperties, SegmentedImageFrameProperties};
 
 fn feagi_data_etc_error(message: String) -> FeagiBasisError {
     let context: &'static str = Box::leak(message.into_boxed_str());

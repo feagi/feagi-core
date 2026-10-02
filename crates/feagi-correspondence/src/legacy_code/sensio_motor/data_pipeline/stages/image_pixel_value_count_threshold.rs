@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::fmt::Display;
-use std::iter::Zip;
+use ndarray::{Array3, Zip};
+use rayon::prelude::*;
 use std::ops::RangeInclusive;
 use std::time::Instant;
 use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};

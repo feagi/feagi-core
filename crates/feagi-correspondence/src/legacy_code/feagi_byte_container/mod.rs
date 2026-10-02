@@ -13,18 +13,6 @@
 //!
 //! ## Basic Usage
 //!
-//! ```rust
-//! use feagi_serialization::{FeagiByteContainer, FeagiSerializable};
-//!
-//! // Create an empty container
-//! let mut container = FeagiByteContainer::new_empty();
-//! assert!(container.is_valid());
-//! assert_eq!(container.try_get_number_contained_structures().unwrap(), 0);
-//!
-//! // Get information about the container
-//! let byte_count = container.get_number_of_bytes_used();
-//! let struct_types = container.get_contained_struct_types();
-//! ```
 //!
 //! More information about the specification can be found in the documentation.
 

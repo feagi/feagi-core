@@ -3,6 +3,8 @@ use super::ImageFrame;
 
 
 use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};
+use ndarray::{Array3, Zip};
+use crate::legacy_code::misc::CorticalChannelIndex;
 use crate::legacy_code::sensio_motor::NeuronVoxelXYZPSparseVectors;
 
 fn feagi_data_etc_error(message: String) -> FeagiBasisError {

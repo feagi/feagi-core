@@ -1,19 +1,15 @@
-use crate::internal_prelude::*;
-use crate::legacy_code::configuration::jsonable::JSONDecoderProperties;
-use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
+use crate::legacy_code::sensio_motor::internal_prelude::*;
+use crate::legacy_code::sensio_motor::configuration::jsonable::JSONDecoderProperties;
+use crate::legacy_code::sensio_motor::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::legacy_code::sensio_motor::data_types::descriptors::SpatialPointerProperties;
-use crate::legacy_code::sensio_motor::data_types::{Percentage, Percentage3D, SignedPercentage, SignedPercentage3D};
-use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
-use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, IOCorticalAreaConfigurationFlag,
-};
-use feagi_genomic_context::cortical_area::CorticalID;
+use crate::legacy_code::sensio_motor::data_types::{Percentage, SignedPercentage, SignedPercentage3D};
+use crate::legacy_code::sensio_motor::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
+use crate::legacy_code::sensio_motor::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 
-use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};
+use feagi_basis::FeagiFailDataEtc;
 
 fn feagi_data_etc_error(message: String) -> FeagiBasisError {
     let context: &'static str = Box::leak(message.into_boxed_str());
@@ -463,19 +459,9 @@ mod tests {
     //region Full decode-path tests
 
     use super::SpatialPointerNeuronVoxelXYZPDecoder;
-    use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
     use crate::legacy_code::sensio_motor::data_types::descriptors::SpatialPointerProperties;
     use crate::legacy_code::sensio_motor::data_types::{Percentage3D, SignedPercentage3D};
-    use crate::wrapped_io_data::WrappedIOData;
     use crate::legacy_code::sensio_motor::data_types::descriptors::CorticalChannelCount;
-    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
-        spatial_pointer_io_flag, FrameChangeHandling, PercentageNeuronPositioning,
-    };
-    use feagi_genomic_context::cortical_area::CorticalID;
-    use feagi_genomic_context::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
-    use crate::neuron_voxels::xyzp::{
-        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
-    };
     use std::time::{Duration, Instant};
 
     /// Builds the SpatialPointer cortical_area ID for the given frame-change mode, matching how

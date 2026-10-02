@@ -1,26 +1,24 @@
 //! Unified encoder for all percentage types (unsigned/signed, 1D-4D, linear/exponential).
 
-use crate::internal_prelude::*;
-use crate::legacy_code::configuration::jsonable::JSONEncoderProperties;
-use crate::data_pipeline::per_channel_stream_caches::{
+use crate::legacy_code::sensio_motor::internal_prelude::*;
+use crate::legacy_code::sensio_motor::configuration::jsonable::JSONEncoderProperties;
+use crate::legacy_code::sensio_motor::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
 };
 use crate::legacy_code::sensio_motor::data_types::descriptors::PercentageChannelDimensionality;
 use crate::legacy_code::sensio_motor::data_types::{
-    Percentage, Percentage2D, Percentage3D, Percentage4D, SignedPercentage, SignedPercentage2D,
+    Percentage, Percentage2D, Percentage4D, SignedPercentage, SignedPercentage2D,
     SignedPercentage3D, SignedPercentage4D,
 };
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
+use crate::legacy_code::sensio_motor::neuron_voxel_coding::xyzp::coder_shared_functions::{
     encode_signed_percentage_to_fractional_exponential_neuron_z_indexes,
     encode_signed_percentage_to_linear_neuron_z_index,
     encode_signed_percentage_to_linear_neuron_z_index_along_z,
     encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes,
     encode_unsigned_percentage_to_linear_neuron_z_index,
 };
-use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
-use crate::wrapped_io_data::WrappedIOType;
-use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-use feagi_genomic_context::cortical_area::CorticalID;
+use crate::legacy_code::sensio_motor::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
+use crate::legacy_code::sensio_motor::wrapped_io_data::WrappedIOType;
 use rayon::prelude::*;
 use std::time::Instant;
 

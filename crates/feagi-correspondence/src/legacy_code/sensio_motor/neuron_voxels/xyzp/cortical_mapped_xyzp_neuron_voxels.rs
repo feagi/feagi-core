@@ -1,6 +1,6 @@
 use super::{NeuronVoxelXYZP, NeuronVoxelXYZPArrays};
-use feagi_genomic_context::cortical_area::CorticalID;
-use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
+use feagi_basis::feagi_genome::identifiers::cortical_id::CorticalID;
+use crate::legacy_code::feagi_byte_container::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 use std::any::Any;
 use std::collections::HashMap;
 

@@ -7,7 +7,7 @@ use crate::legacy_code::sensio_motor::data_types::{
     Percentage3D, Percentage4D, PoseEstimationData, RawIMU, SegmentedImageFrame, SignedPercentage,
     SignedPercentage2D, SignedPercentage3D, SignedPercentage4D,
 };
-use crate::wrapped_io_data::WrappedIOData;
+use crate::legacy_code::sensio_motor::wrapped_io_data::WrappedIOData;
 use serde::{Deserialize, Serialize};
 use std::mem::discriminant;
 

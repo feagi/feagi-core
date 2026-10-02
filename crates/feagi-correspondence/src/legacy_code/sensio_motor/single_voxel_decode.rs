@@ -4,17 +4,14 @@
 //! what Brain Visualizer displays matches what a robot/controller would process.
 
 use crate::legacy_code::sensio_motor::data_types::{Percentage, SignedPercentage};
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
+use crate::legacy_code::sensio_motor::neuron_voxel_coding::xyzp::coder_shared_functions::{
     decode_signed_percentage_from_fractional_exponential_neurons,
     decode_signed_percentage_from_linear_neurons,
     decode_signed_percentage_from_linear_neurons_along_z,
     decode_unsigned_percentage_from_fractional_exponential_neurons,
     decode_unsigned_percentage_from_linear_neurons,
 };
-use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
-    IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
-};
-use feagi_genomic_context::cortical_area::CorticalID;
+use feagi_basis::feagi_genome::identifiers::cortical_id::CorticalID;
 use std::fmt;
 
 /// Result of decoding a single voxel.
@@ -490,9 +487,6 @@ fn decode_pose_estimation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::{
-        FrameChangeHandling, PercentageNeuronPositioning,
-    };
 
     fn make_percentage_linear_id() -> CorticalID {
         let flag = IOCorticalAreaConfigurationFlag::Percentage(

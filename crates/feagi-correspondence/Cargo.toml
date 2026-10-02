@@ -23,13 +23,13 @@ alloc = [
     "serde/alloc", "serde/derive", "serde_json/alloc",
 ]
 
-serde_json = [
-    "dep:serde_json",
-    "feagi-basis/serde_json", "feagi-correspondence-io/serde_json"
-]
+#serde_json = [
+#    "dep:serde_json",
+#    "feagi-basis/serde_json", "feagi-correspondence-io/serde_json"
+#]
 
 feagi-server-requests-rest = [
-    "serde_json", # required for serialization of data
+    #"serde_json", # required for serialization of data
     "feagi-correspondence-io/rest-server"
 ]
 
@@ -51,7 +51,10 @@ feagi-basis = {path = "../feagi-basis"}
 # External crates
 paste = {workspace = true}
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true, optional = true, features = [] }
+serde_json = { workspace = true, features = [] } # TODO make optional again
 byteorder = {workspace = true}
 base64 = {workspace = true}
+ndarray = {workspace = true}
+rayon = {workspace = true}
+image = {workspace = true}
 getrandom = "0.2.17" # TODO delete me!

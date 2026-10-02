@@ -1,4 +1,5 @@
 use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};
+use ndarray::{s, ArrayView3, Zip};
 use crate::legacy_code::sensio_motor::data_types::descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
 use crate::legacy_code::sensio_motor::data_types::ImageFrame;
 

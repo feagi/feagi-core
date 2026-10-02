@@ -1,17 +1,15 @@
 //! Unified decoder for ImageFilteringSettings (brightness, contrast, diff threshold).
 
-use crate::internal_prelude::*;
-use crate::legacy_code::configuration::jsonable::JSONDecoderProperties;
-use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
+use crate::legacy_code::sensio_motor::internal_prelude::*;
+use crate::legacy_code::sensio_motor::configuration::jsonable::JSONDecoderProperties;
+use crate::legacy_code::sensio_motor::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::legacy_code::sensio_motor::data_types::ImageFilteringSettings;
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
+use crate::legacy_code::sensio_motor::neuron_voxel_coding::xyzp::coder_shared_functions::{
     decode_unsigned_percentage_from_fractional_exponential_neurons,
     decode_unsigned_percentage_from_linear_neurons,
 };
-use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
-use crate::wrapped_io_data::WrappedIOType;
-use feagi_genomic_context::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-use feagi_genomic_context::cortical_area::CorticalID;
+use crate::legacy_code::sensio_motor::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
+use crate::legacy_code::sensio_motor::wrapped_io_data::WrappedIOType;
 use std::time::Instant;
 
 const CHANNEL_Y_HEIGHT: u32 = 1;

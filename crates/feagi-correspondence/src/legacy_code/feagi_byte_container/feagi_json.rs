@@ -14,13 +14,6 @@ pub struct FeagiJSON {
 impl FeagiJSON {
     /// Creates an empty JSON object.
     ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::FeagiJSON;
-    ///
-    /// let json = FeagiJSON::new_empty();
-    /// assert_eq!(json.to_string(), "{}");
-    /// ```
     pub fn new_empty() -> FeagiJSON {
         FeagiJSON { json: serde_json::json!({}) }
     }
@@ -30,16 +23,6 @@ impl FeagiJSON {
     /// # Errors
     ///
     /// Returns the underlying [`serde_json::Error`] if the string is not valid JSON.
-    ///
-    /// # Example
-    /// ```
-    /// use feagi_serialization::FeagiJSON;
-    ///
-    /// let json = FeagiJSON::from_json_string(r#"{"key": "value"}"#.to_string()).unwrap();
-    /// assert_eq!(json.borrow_json_value()["key"], "value");
-    ///
-    /// assert!(FeagiJSON::from_json_string("not json".to_string()).is_err());
-    /// ```
     pub fn from_json_string(string: String) -> Result<FeagiJSON, serde_json::Error> {
         serde_json::from_str(&string).map(|json| FeagiJSON { json })
     }
