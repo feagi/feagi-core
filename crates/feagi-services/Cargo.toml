@@ -25,7 +25,7 @@ feagi-state-manager = { version = "0.0.40", path = "../feagi-state-manager", def
 feagi-structures = { workspace = true }
 
 # Async runtime (optional for embedded)
-async-trait = "0.1"
+async-trait = "0.1.92"
 tokio = { version = "1.0", features = ["sync", "rt", "time", "rt-multi-thread"], optional = true }
 
 # Synchronization
