@@ -50,7 +50,7 @@ use feagi_io::protocol_implementations::websocket::websocket_std::{
     FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties, FeagiWebSocketServerRouterProperties,
 };
 #[cfg(feature = "feagi-agent")]
-use feagi_io::traits_and_enums::client::{FeagiClient, FeagiClientPusher};
+use crate::feagi_io_prev::traits_and_enums::client::{FeagiClient, FeagiClientPusher};
 #[cfg(feature = "feagi-agent")]
 use feagi_io::AgentID;
 use feagi_npu_burst_engine::backend::CPUBackend;
@@ -370,7 +370,7 @@ fn wait_for_registered_agent(
     handler: &Arc<Mutex<FeagiAgentHandler>>,
     client: &mut CommandControlAgent,
     timeout: Duration,
-) -> (String, feagi_io::traits_and_enums::shared::TransportProtocolEndpoint) {
+) -> (String, crate::feagi_io_prev::traits_and_enums::shared::TransportProtocolEndpoint) {
     let deadline = Instant::now() + timeout;
     loop {
         {

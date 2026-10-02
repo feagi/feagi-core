@@ -15,7 +15,8 @@ impl IOManager {
 
     pub fn new() -> Self {
         Self {
-            rest_server: None
+            #[cfg(feature = "rest-server")]
+            rest_server: None,
         }
     }
 
@@ -31,7 +32,7 @@ impl IOManager {
             #[cfg(feature = "std")]
             {
                 use feagi_io_rest::feagi_rest_server_std::OhkamiServerEndpointLauncher;
-                OhkamiServerEndpointLauncher::launch_server_endpoint(config)?
+                OhkamiServerEndpointLauncher::launch_server_endpoint(config)?;
             }
             #[cfg(not(feature = "std"))]
             {

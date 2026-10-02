@@ -1,7 +1,9 @@
 // TODO we can pick different ones for different usecases
 
 mod default {
+    use feagi_basis::thread_messaging::multi_request_channel::alloc_requester_processor::*;
     use feagi_io_basis::create_request_response_sender_receiver_sets;
+    use feagi_io_basis::contracts::request_response::request_response_set::{RequestResponseEndpointSenderSet, RequestResponseEndpointReceiverSet};
     use feagi_io_basis::contracts::request_response::feagi_server_requests::agent::*;
     use feagi_io_basis::contracts::request_response::feagi_server_requests::system::*;
 

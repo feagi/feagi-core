@@ -698,6 +698,7 @@ dependencies = [
 name = "feagi-correspondence"
 version = "0.1.1"
 dependencies = [
+ "byteorder",
  "feagi-basis",
  "feagi-correspondence-io",
  "serde",
@@ -714,10 +715,6 @@ dependencies = [
  "serde",
  "serde_json",
 ]
-
-[[package]]
-name = "feagi-correspondence-serialization"
-version = "0.1.1"
 
 [[package]]
 name = "feagi-io-api"

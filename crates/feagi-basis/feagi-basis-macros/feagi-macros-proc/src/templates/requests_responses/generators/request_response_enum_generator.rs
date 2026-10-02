@@ -173,7 +173,7 @@ impl GeneratorFromTemplate<TemplateRequestResponseCategory> for EnumRequestRespo
 
         // create the requester / responder creator function
         let category_name_snake = &template.category_name.value().to_snake_case();
-        let req_res_func_name = format_ident!("{}_{}", "create_requester_responder_", category_name_snake);
+        let req_res_func_name = format_ident!("{}_{}", "create_requester_responder", category_name_snake);
         let root_error_type = &template.feagi_error_type;
         let recycle = quote! {
             ::feagi_basis::thread_messaging::multi_request_channel::alloc_requester_processor::RequestResponseRecycle

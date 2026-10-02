@@ -118,7 +118,6 @@ members = [
     "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
 
     "crates/feagi-correspondence", # TODO Desolve me with feagi-correspondence-io
-    "crates/feagi-correspondence/feagi-correspondence-serialization", # TODO Delete / move me
     "crates/feagi-correspondence/feagi-correspondence-io",
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-api", # TODO delete me
     "crates/feagi-correspondence/feagi-correspondence-io/feagi-io-basis",
@@ -174,6 +173,7 @@ image = { version = "0.25.10", default-features = false }
 base64 = {version = "0.23.1", default-features = false}
 ohkami = {version = "0.24.9"}
 smol = {version = "2.0.2"}
+byteorder = {version = "1.5.0"}
 
 
 

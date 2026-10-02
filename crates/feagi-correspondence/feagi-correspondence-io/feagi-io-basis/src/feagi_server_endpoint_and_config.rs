@@ -38,8 +38,6 @@ pub trait FeagiServerEndpointLauncher<Config: FeagiServerEndpointConfig> {
 
 
 
-
-
 /// Holds the actual server endpoint on a std thread
 pub struct FeagiServerEndpoint {
     #[cfg(feature = "std")]
@@ -53,10 +51,16 @@ impl FeagiServerEndpoint {
     /// (sends a shutdown command, then blocks until the thread dies)
     pub async fn stop_server(self) -> () {
         _ = self.command_channel.send(FeagiServerEndpointCommand::StopServer).await;
-        _ = self.running_handle.join(); // TODO force shutdown?
+        #[cfg(feature = "std")]
+        {
+            _ = self.running_handle.join(); // TODO force shutdown?
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            // TODO no-std
+        }
         ()
     }
-
     // TODO other commands?
 }
 
