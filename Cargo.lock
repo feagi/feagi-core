@@ -542,7 +542,6 @@ dependencies = [
  "feagi-basis-macros",
  "feagi-basis-neuron",
  "feagi-basis-quantization",
- "feagi-basis-sensiomotor",
  "flume",
  "heapless 0.9.3",
  "paste",
@@ -640,10 +639,6 @@ dependencies = [
  "serde",
  "serde_json",
 ]
-
-[[package]]
-name = "feagi-basis-sensiomotor"
-version = "0.1.1"
 
 [[package]]
 name = "feagi-brain"

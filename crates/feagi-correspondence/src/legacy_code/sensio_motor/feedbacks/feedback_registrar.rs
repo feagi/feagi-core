@@ -1,0 +1,77 @@
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
+
+
+use feagi_basis::{FeagiBasisError, FeagiFailDataEtc};
+use crate::legacy_code::sensio_motor::caching::{MotorDeviceCache, SensorDeviceCache};
+use crate::legacy_code::sensio_motor::feedbacks::{FeedBackRegistration, FeedbackRegistrationTargets};
+
+fn feagi_data_etc_error(message: String) -> FeagiBasisError {
+    let context: &'static str = Box::leak(message.into_boxed_str());
+    FeagiFailDataEtc::new(context).into()
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct FeedbackRegistrar {
+    registered_feedbacks: Vec<(FeedbackRegistrationTargets, FeedBackRegistration)>,
+}
+
+impl FeedbackRegistrar {
+    pub fn new() -> FeedbackRegistrar {
+        FeedbackRegistrar {
+            registered_feedbacks: Vec::new(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn clear(&mut self) {
+        self.registered_feedbacks.clear();
+    }
+
+    pub fn reload_all_from_self(
+        &mut self,
+        sensor_cache: Arc<Mutex<SensorDeviceCache>>,
+        motor_cache: Arc<Mutex<MotorDeviceCache>>,
+    ) -> Result<(), FeagiBasisError> {
+        for feedback in self.registered_feedbacks.iter() {
+            let target = feedback.0.clone();
+            let registration = feedback.1.clone();
+            registration.try_registering_feedbacks(
+                sensor_cache.clone(),
+                motor_cache.clone(),
+                target,
+            )?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn push_verified_feedback(
+        &mut self,
+        target: FeedbackRegistrationTargets,
+        feed_back_registration: FeedBackRegistration,
+    ) -> Result<(), FeagiBasisError> {
+        self.verify_not_contain_registration(&target, &feed_back_registration)?;
+        self.registered_feedbacks
+            .push((target, feed_back_registration));
+        Ok(())
+    }
+
+    fn verify_not_contain_registration(
+        &self,
+        targets: &FeedbackRegistrationTargets,
+        registration: &FeedBackRegistration,
+    ) -> Result<(), FeagiBasisError> {
+        let compare = &(targets.clone(), registration.clone());
+        if self.registered_feedbacks.contains(compare) {
+            return Err(feagi_data_etc_error(format!(
+                "Feedback {} already registered to motor unit {} channel {}, and sensor unit {} channel {}!",
+                compare.1,
+                compare.0.get_motor_unit_index().deref(),
+                compare.0.get_motor_channel_index(),
+                compare.0.get_sensor_unit_index().deref(),
+                compare.0.get_sensor_channel_index(),
+            )));
+        }
+        Ok(())
+    }
+}

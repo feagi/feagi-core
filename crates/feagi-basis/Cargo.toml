@@ -73,7 +73,6 @@ feagi-basis-collections = {path = "feagi-basis-collections"}
 feagi-basis-data-serialization = {path = "feagi-basis-data-serialization"}
 feagi-basis-neuron = {path = "feagi-basis-neuron" }
 feagi-basis-genome = {path = "feagi-basis-genome"}
-feagi-basis-sensiomotor = {path = "feagi-basis-sensiomotor"}
 
 # Root Crates
 # NONE! THIS CRATE MUST NOT DEPEND ON OTHER FEAGI ROOT CRATES

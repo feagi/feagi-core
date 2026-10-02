@@ -5,3 +5,4 @@ pub mod server;
 pub mod common;
 pub mod feagi_agent_error;
 pub mod feagi_byte_container;
+pub mod sensio_motor;

@@ -14,8 +14,6 @@
 use std::time::{Duration, Instant};
 
 //use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
-use crate::legacy_code::command_and_control::FeagiMessage;
-use crate::legacy_code::feagi_io_prev::traits_and_enums::client::FeagiClientRequesterProperties;
 use crate::legacy_code::feagi_io_prev::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
 use crate::legacy_code::feagi_io_prev::traits_and_enums::shared::FeagiEndpointState;
 

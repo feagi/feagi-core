@@ -105,7 +105,6 @@ members = [
     "crates/feagi-basis/feagi-basis-genome/feagi-basis-genome-proc",
     "crates/feagi-basis/feagi-basis-neuron",
     "crates/feagi-basis/feagi-basis-data-serialization",
-    "crates/feagi-basis/feagi-basis-sensiomotor",
 
     # TODO make feagi-data again
 
