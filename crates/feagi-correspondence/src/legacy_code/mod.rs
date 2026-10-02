@@ -1,0 +1,7 @@
+pub mod clients;
+pub mod command_and_control;
+pub mod feagi_io_prev;
+pub mod server;
+pub mod common;
+pub mod feagi_agent_error;
+pub mod feagi_byte_container;
