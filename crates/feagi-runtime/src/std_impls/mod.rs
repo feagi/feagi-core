@@ -1,1 +1,1 @@
-pub mod feagi_server;
+pub mod standard_feagi_server;
