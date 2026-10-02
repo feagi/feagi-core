@@ -1840,6 +1840,7 @@ fn classifier_output_changes(
     changes
 }
 
+#[allow(clippy::too_many_arguments)]
 fn classifier_scan_twin_params(
     cortical_id: String,
     name: String,

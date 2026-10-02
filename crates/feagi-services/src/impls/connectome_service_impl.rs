@@ -5376,9 +5376,22 @@ mod tests {
         let current_genome = Arc::new(RwLock::new(None));
         let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
 
-        let mappings_hash_before = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_cortical_mappings_hash();
+        // StateManager is process-global; reset and refresh from this connectome so parallel
+        // lib tests do not leave a stale cortical_mappings_hash here.
+        feagi_state_manager::StateManager::instance()
+            .write()
+            .set_cortical_mappings_hash(0);
+        let mappings_hash_before = {
+            let manager = connectome.write();
+            manager.refresh_cortical_mappings_hash();
+            feagi_state_manager::StateManager::instance()
+                .read()
+                .get_cortical_mappings_hash()
+        };
+        assert_ne!(
+            mappings_hash_before, 0,
+            "fixture mappings must publish a non-zero cortical_mappings_hash"
+        );
 
         svc.delete_cortical_area(&doomed_id.as_base_64()).await?;
 
@@ -7352,6 +7365,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "plasticity")]
     fn raw_pattern_hash_changes_when_runtime_neuron_id_changes() {
         use feagi_npu_plasticity::{PatternConfig, PatternDetector};
 
