@@ -7,6 +7,7 @@ use crate::feagi_io_prev::traits_and_enums::shared::{FeagiEndpointState, Transpo
 use crate::feagi_io_prev::AgentID;
 use std::collections::HashMap;
 use std::future::Future;
+use crate::feagi_byte_container::FeagiByteContainer;
 use crate::feagi_io_prev::traits_and_enums::client::{FeagiClientRequester, FeagiClientRequesterProperties};
 
 pub struct CommandControlAgent {

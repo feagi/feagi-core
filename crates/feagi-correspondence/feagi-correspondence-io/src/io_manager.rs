@@ -3,7 +3,8 @@
 // TODO we need to prox through here to handle permissions and security (rbac?)
 
 use core::net::SocketAddrV4;
-use feagi_io_basis::feagi_server_endpoint_and_config::{FeagiServerEndpoint, FeagiServerEndpointLauncher};
+use feagi_io_basis::contracts::request_response::request_response_set::RequestResponseEndpointSenderSet;
+use feagi_io_basis::feagi_server_endpoint_and_config::{FeagiRestServerStartError, FeagiServerEndpoint, FeagiServerEndpointLauncher};
 
 
 pub struct IOManager {
@@ -21,7 +22,7 @@ impl IOManager {
     }
 
     #[cfg(feature = "rest-server")]
-    pub fn start_web_server(&mut self, requests: (), socket: SocketAddrV4) {
+    pub fn start_web_server<Requesters: RequestResponseEndpointSenderSet>(&mut self, requests: Requesters, socket: SocketAddrV4) -> Result<(), FeagiRestServerStartError> {
 
         use feagi_io_rest::feagi_rest_basis::rest_feagi_server_endpoint_config::RestFeagiServerEndpointConfig;
 
@@ -32,14 +33,15 @@ impl IOManager {
             #[cfg(feature = "std")]
             {
                 use feagi_io_rest::feagi_rest_server_std::OhkamiServerEndpointLauncher;
-                OhkamiServerEndpointLauncher::launch_server_endpoint(config)?;
+                OhkamiServerEndpointLauncher::launch_server_endpoint(config)?
             }
             #[cfg(not(feature = "std"))]
             {
                 todo!()
             }
         };
-        self.rest_server = Some(running_server_endpoint)
+        self.rest_server = Some(running_server_endpoint);
+        Ok(())
     }
 
     pub async fn stop_all_servers(&mut self) {

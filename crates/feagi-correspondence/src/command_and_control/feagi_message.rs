@@ -3,9 +3,9 @@ use crate::command_and_control::agent_registration_message::AgentRegistrationMes
 use crate::command_and_control::health_check_message::HealthCheckMessage;
 use crate::command_and_control::messages::burst_engine::BurstEnginesMessage;
 use crate::FeagiAgentError;
-use feagi_io::AgentID;
-use feagi_serialization::{FeagiByteContainer, FeagiJSON};
 use serde::{Deserialize, Serialize};
+use crate::feagi_byte_container::{FeagiByteContainer, FeagiJSON};
+use crate::feagi_io_prev::AgentID;
 
 // All Command and Control messages are within this nested enum.
 #[allow(clippy::large_enum_variant)]

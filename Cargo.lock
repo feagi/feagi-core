@@ -698,9 +698,12 @@ dependencies = [
 name = "feagi-correspondence"
 version = "0.1.1"
 dependencies = [
+ "base64 0.23.1",
  "byteorder",
  "feagi-basis",
  "feagi-correspondence-io",
+ "getrandom 0.2.17",
+ "paste",
  "serde",
  "serde_json",
 ]

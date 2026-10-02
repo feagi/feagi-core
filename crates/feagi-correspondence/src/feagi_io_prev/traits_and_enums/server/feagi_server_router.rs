@@ -1,6 +1,6 @@
-use crate::traits_and_enums::server::FeagiServer;
-use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
-use crate::{AgentID, FeagiNetworkError};
+use crate::feagi_io_prev::{AgentID, FeagiNetworkError};
+use crate::feagi_io_prev::traits_and_enums::server::FeagiServer;
+use crate::feagi_io_prev::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 
 /// A server that handles request-response communication with multiple clients.
 ///

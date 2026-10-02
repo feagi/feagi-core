@@ -8,11 +8,10 @@ use crate::feagi_io_prev::traits_and_enums::server::{
     FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties,
 };
 use crate::feagi_io_prev::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
-use feagi_io::AgentID;
-use feagi_serialization::FeagiByteContainer;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
-use tracing::{debug, error, info, warn};
+use crate::feagi_byte_container::FeagiByteContainer;
+use crate::feagi_io_prev::AgentID;
 
 type CommandServerIndex = usize;
 
@@ -558,22 +557,8 @@ impl FeagiAgentHandler {
             FeagiMessage::AgentRegistration(register_message) => {
                 match &register_message {
                     AgentRegistrationMessage::ClientRequestRegistration(registration_request) => {
-                        debug!(
-                            target: "feagi-agent",
-                            "WS registration request received: session={} descriptor={:?} caps={:?} protocol={:?}",
-                            agent_id.to_base64(),
-                            registration_request.agent_descriptor(),
-                            registration_request.requested_capabilities(),
-                            registration_request.connection_protocol()
-                        );
                         let auth_result = self.agent_auth_backend.verify_agent_allowed_to_connect(registration_request);
                         if auth_result.is_err() {
-                            warn!(
-                                target: "feagi-agent",
-                                "WS registration rejected by auth backend: session={} descriptor={:?}",
-                                agent_id.to_base64(),
-                                registration_request.agent_descriptor()
-                            );
                             self.send_message_via_command_server(
                                 command_control_index,
                                 agent_id,
@@ -597,23 +582,11 @@ impl FeagiAgentHandler {
                         if let Some(existing_agent_id) = self.find_agent_id_by_descriptor(registration_request.agent_descriptor()) {
                             if let Some((_, existing_capabilities)) = self.all_registered_agents.get(&existing_agent_id) {
                                 if !Self::capabilities_equivalent(existing_capabilities, registration_request.requested_capabilities()) {
-                                    info!(
-                                        target: "feagi-agent",
-                                        "Replacing session {} for descriptor {:?}: capability set changed (reconfigure)",
-                                        existing_agent_id.to_base64(),
-                                        registration_request.agent_descriptor(),
-                                    );
                                     self.deregister_agent_internal(
                                         existing_agent_id,
                                         "re-registration with different capabilities for same AgentDescriptor",
                                     );
                                 } else if !self.should_replace_existing_descriptor_session(existing_agent_id) {
-                                    debug!(
-                                        target: "feagi-agent",
-                                        "Ignoring duplicate registration for descriptor {:?}: existing session {} remains active",
-                                        registration_request.agent_descriptor(),
-                                        existing_agent_id.to_base64()
-                                    );
                                     self.send_message_via_command_server(
                                         command_control_index,
                                         agent_id,
@@ -640,12 +613,6 @@ impl FeagiAgentHandler {
                         ) {
                             Ok(mappings) => mappings,
                             Err(_) => {
-                                error!(
-                                    target: "feagi-agent",
-                                    "WS registration failed while creating transport mappings: session={} descriptor={:?}",
-                                    agent_id.to_base64(),
-                                    registration_request.agent_descriptor()
-                                );
                                 self.send_message_via_command_server(
                                     command_control_index,
                                     agent_id,
@@ -662,13 +629,6 @@ impl FeagiAgentHandler {
                         let response = RegistrationResponse::Success(agent_id, mappings);
                         let response_message = FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(response));
                         self.send_message_via_command_server(command_control_index, agent_id, response_message, 0)?;
-                        debug!(
-                            target: "feagi-agent",
-                            "WS registration success response sent: session={} descriptor={:?} mapped_caps={:?}",
-                            agent_id.to_base64(),
-                            registration_request.agent_descriptor(),
-                            mapped_caps
-                        );
                         Ok(None)
                     }
                     AgentRegistrationMessage::ClientRequestDeregistration(_) => {
@@ -940,13 +900,7 @@ impl FeagiAgentHandler {
             .as_ref()
             .map(|item| format!("{:?}", item))
             .unwrap_or_else(|| "<unknown-descriptor>".to_string());
-        info!(
-            target: "feagi-agent",
-            "Agent deregistered: agent_id={} descriptor={} reason={}",
-            agent_id.to_base64(),
-            descriptor_text,
-            reason
-        );
+
         self.device_registrations_by_agent.remove(&agent_id);
 
         if let Some(sensor) = self.sensors.remove(&agent_id) {

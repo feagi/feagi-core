@@ -1,6 +1,6 @@
-use crate::traits_and_enums::client::FeagiClient;
-use crate::traits_and_enums::shared::TransportProtocolEndpoint;
-use crate::FeagiNetworkError;
+use crate::feagi_io_prev::FeagiNetworkError;
+use crate::feagi_io_prev::traits_and_enums::client::FeagiClient;
+use crate::feagi_io_prev::traits_and_enums::shared::TransportProtocolEndpoint;
 
 /// A client that pushes data to a server in a fire-and-forget pattern.
 ///

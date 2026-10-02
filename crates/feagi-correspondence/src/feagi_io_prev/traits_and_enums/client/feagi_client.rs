@@ -1,5 +1,5 @@
-use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
-use crate::FeagiNetworkError;
+use crate::feagi_io_prev::FeagiNetworkError;
+use crate::feagi_io_prev::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
 
 /// Base trait for all FEAGI client types.
 ///

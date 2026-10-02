@@ -1,7 +1,8 @@
-use crate::FeagiNetworkError;
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
-use feagi_serialization::{AgentIdentifier, FeagiByteContainer};
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use crate::feagi_byte_container::{AgentIdentifier, FeagiByteContainer};
+use crate::feagi_io_prev::FeagiNetworkError;
 
 /// Agent identifier: 48-byte AgentDescriptor (instance_id(4) + manufacturer(20) + agent_name(20) + version(4)).
 /// Single format - no 8-byte legacy.

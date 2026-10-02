@@ -1,8 +1,9 @@
 //! Shared types for FEAGI networking traits.
 
-use crate::FeagiNetworkError;
 use serde::{Deserialize, Serialize};
-
+use crate::feagi_io_prev::FeagiNetworkError;
+use crate::feagi_io_prev::traits_and_enums::client::{FeagiClientPusherProperties, FeagiClientRequesterProperties, FeagiClientSubscriberProperties};
+use crate::feagi_io_prev::traits_and_enums::server::{FeagiServerPublisherProperties, FeagiServerPullerProperties, FeagiServerRouterProperties};
 #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
 use crate::protocol_implementations::websocket::WebSocketUrl;
 #[cfg(feature = "zmq-transport")]
@@ -25,8 +26,6 @@ use crate::protocol_implementations::websocket::websocket_std::{
 use crate::protocol_implementations::zmq::{FeagiZmqServerPublisherProperties, FeagiZmqServerPullerProperties, FeagiZmqServerRouterProperties};
 
 // Trait imports
-use crate::traits_and_enums::client::{FeagiClientPusherProperties, FeagiClientRequesterProperties, FeagiClientSubscriberProperties};
-use crate::traits_and_enums::server::{FeagiServerPublisherProperties, FeagiServerPullerProperties, FeagiServerRouterProperties};
 
 /// Represents the current state of a FEAGI network endpoint (client or server).
 ///
@@ -154,6 +153,7 @@ impl TransportProtocolEndpoint {
             }
             #[cfg(feature = "zmq-transport")]
             TransportProtocolEndpoint::Zmq(endpoint) => Box::new(FeagiZmqClientSubscriberProperties::new(endpoint.as_str()).unwrap()),
+            _ => {unreachable!()}
         }
     }
 
@@ -177,6 +177,7 @@ impl TransportProtocolEndpoint {
             }
             #[cfg(feature = "zmq-transport")]
             TransportProtocolEndpoint::Zmq(endpoint) => Ok(Box::new(FeagiZmqClientSubscriberProperties::new(endpoint.as_str())?)),
+            _ => {unreachable!()}
         }
     }
 
@@ -192,6 +193,7 @@ impl TransportProtocolEndpoint {
             }
             #[cfg(feature = "zmq-transport")]
             TransportProtocolEndpoint::Zmq(endpoint) => Box::new(FeagiZmqClientPusherProperties::new(endpoint.as_str()).unwrap()),
+            _ => {unreachable!()}
         }
     }
 
@@ -215,6 +217,7 @@ impl TransportProtocolEndpoint {
             }
             #[cfg(feature = "zmq-transport")]
             TransportProtocolEndpoint::Zmq(endpoint) => Ok(Box::new(FeagiZmqClientPusherProperties::new(endpoint.as_str())?)),
+            _ => {unreachable!()}
         }
     }
 
@@ -230,6 +233,7 @@ impl TransportProtocolEndpoint {
             }
             #[cfg(feature = "zmq-transport")]
             TransportProtocolEndpoint::Zmq(endpoint) => Box::new(FeagiZmqClientRequesterProperties::new(endpoint.as_str()).unwrap()),
+            _ => {unreachable!()}
         }
     }
 
@@ -253,6 +257,7 @@ impl TransportProtocolEndpoint {
             }
             #[cfg(feature = "zmq-transport")]
             TransportProtocolEndpoint::Zmq(endpoint) => Ok(Box::new(FeagiZmqClientRequesterProperties::new(endpoint.as_str())?)),
+            _ => {unreachable!()}
         }
     }
 

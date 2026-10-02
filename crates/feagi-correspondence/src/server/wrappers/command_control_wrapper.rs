@@ -10,6 +10,7 @@ use crate::feagi_io_prev::traits_and_enums::server::{FeagiServerRouter, FeagiSer
 use crate::feagi_io_prev::traits_and_enums::shared::FeagiEndpointState;
 use std::collections::HashMap;
 use std::future::Future;
+use crate::feagi_byte_container::FeagiByteContainer;
 use crate::feagi_io_prev::{AgentID, FeagiNetworkError};
 
 pub type IsNewSessionId = bool;

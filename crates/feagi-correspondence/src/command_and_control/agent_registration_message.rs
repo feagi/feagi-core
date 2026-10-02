@@ -1,8 +1,8 @@
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiApiVersion};
 use crate::feagi_io_prev::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
-use feagi_io::AgentID;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::feagi_io_prev::AgentID;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
