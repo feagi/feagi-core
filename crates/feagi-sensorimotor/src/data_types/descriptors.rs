@@ -315,10 +315,11 @@ impl ImageFrameProperties {
         image_frame: &ImageFrame,
     ) -> Result<(), FeagiDataError> {
         if image_frame.get_xy_resolution() != self.image_resolution {
-            return Err(FeagiDataError::BadParameters(
-                format! {"Expected resolution of {} but received an image with resolution of {}!",
-                self.image_resolution, image_frame.get_xy_resolution()},
-            ));
+            return Err(FeagiDataError::BadParameters(format!(
+                "Expected resolution of {} but received an image with resolution of {}!",
+                self.image_resolution,
+                image_frame.get_xy_resolution()
+            )));
         }
         if image_frame.get_color_space() != &self.color_space {
             return Err(FeagiDataError::BadParameters(format!(
