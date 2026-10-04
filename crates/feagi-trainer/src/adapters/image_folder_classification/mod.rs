@@ -93,7 +93,7 @@ pub struct ImageFolderClassificationConfig {
     /// Cap after class keep. `None` uses every remaining sample in this split.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_samples: Option<u64>,
-    /// With `max_samples`, keep a seeded random subset instead of the first samples.
+    /// With `max_samples`, keep a seeded class-balanced subset instead of the first samples.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sample_draw_seed: Option<u64>,
 }
@@ -199,10 +199,11 @@ impl ImageFolderClassificationAdapter {
             .map(|row| row.label.clone())
             .collect();
         let images = apply_image_class_keep(images, &self.config.class_keep_percents, &labels)?;
-        let images = crate::adapters::class_keep::apply_max_samples(
+        let images = crate::adapters::class_keep::apply_balanced_max_samples(
             images,
             self.config.max_samples,
             self.config.sample_draw_seed,
+            |image| Ok(image.class_id),
         )?;
         Ok((self.manifest(source, &images, fingerprint), images))
     }
@@ -1737,9 +1738,9 @@ mod tests {
         assert_eq!(capped.len(), 1);
         assert_eq!(capped[0].label, "1");
 
-        // A seeded cap draws different images per seed; the dataset hash stays the split's.
+        // A one-sample seeded cap keeps the lowest class id, for every seed. The dataset
+        // hash stays the split's.
         let full_hash = adapter.index(&source).expect("full index").0.content_hash;
-        let mut drawn_labels = std::collections::BTreeSet::new();
         for seed in 0..32 {
             let (manifest, images) =
                 ImageFolderClassificationAdapter::new(ImageFolderClassificationConfig {
@@ -1757,10 +1758,9 @@ mod tests {
                 .index(&source)
                 .expect("drawn index");
             assert_eq!(images.len(), 1);
+            assert_eq!(images[0].label, "0");
             assert_eq!(manifest.content_hash, full_hash);
-            drawn_labels.insert(images[0].label.clone());
         }
-        assert_eq!(drawn_labels.len(), 2, "both images are drawn across seeds");
     }
 
     #[test]

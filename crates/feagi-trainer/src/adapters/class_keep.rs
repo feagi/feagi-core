@@ -92,6 +92,8 @@ pub fn apply_class_keep_percents(
 ///
 /// Without `draw_seed` the first `max_samples` items in encounter order are kept. With it, a
 /// seeded uniform subset is kept, still in encounter order (see [`super::sample_draw`]).
+/// Classification adapters use [`apply_balanced_max_samples`] so a seeded cap covers classes
+/// evenly instead of this uniform draw.
 pub fn apply_max_samples<T>(
     samples: Vec<T>,
     max_samples: Option<u64>,
@@ -130,6 +132,65 @@ pub fn apply_max_samples<T>(
             }
         })
         .collect())
+}
+
+/// Caps `samples` at `max_samples`, balancing a seeded draw across classes.
+///
+/// Without `draw_seed` this is the first `max_samples` items, matching [`apply_max_samples`].
+/// With a seed, each class receives as equal a share of the cap as its size allows
+/// ([`super::sample_draw::draw_balanced_indices`]). Kept items stay in encounter order.
+pub fn apply_balanced_max_samples<T>(
+    samples: Vec<T>,
+    max_samples: Option<u64>,
+    draw_seed: Option<u64>,
+    class_id: impl Fn(&T) -> Result<u32, TrainerError>,
+) -> Result<Vec<T>, TrainerError> {
+    let Some(seed) = draw_seed else {
+        return apply_max_samples(samples, max_samples, None);
+    };
+    let Some(max) = max_samples else {
+        return Ok(samples);
+    };
+    if max == 0 {
+        return Err(TrainerError::Config(
+            "max_samples must be greater than zero when set".to_string(),
+        ));
+    }
+    if samples.is_empty() {
+        return Err(TrainerError::Parse(
+            "max_samples cannot be applied to an empty sample list".to_string(),
+        ));
+    }
+    let keep = (max as usize).min(samples.len());
+    let mut groups: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+    for (index, sample) in samples.iter().enumerate() {
+        groups.entry(class_id(sample)?).or_default().push(index);
+    }
+    let group_lists: Vec<Vec<usize>> = groups.into_values().collect();
+    let drawn = super::sample_draw::draw_balanced_indices(&group_lists, keep, seed);
+    let mut next = drawn.iter().peekable();
+    Ok(samples
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, sample)| {
+            if next.peek() == Some(&&index) {
+                next.next();
+                Some(sample)
+            } else {
+                None
+            }
+        })
+        .collect())
+}
+
+/// Class id of a labeled classification sample.
+pub fn ir_sample_class_id(sample: &IRSample) -> Result<u32, TrainerError> {
+    match &sample.target {
+        Some(TypedTarget::Class { class_id, .. }) => Ok(*class_id),
+        other => Err(TrainerError::Parse(format!(
+            "class-balanced sample cap requires a class target, got {other:?}"
+        ))),
+    }
 }
 
 fn class_label(sample: &IRSample) -> Result<String, TrainerError> {
@@ -266,5 +327,36 @@ mod tests {
         let other = apply_max_samples(items, Some(10), Some(2)).expect("cap");
         assert_eq!(first, again);
         assert_ne!(first, other);
+    }
+
+    #[test]
+    fn seeded_cap_covers_each_class_evenly() {
+        let mut samples = Vec::new();
+        for _ in 0..50 {
+            samples.push(sample("0", 0));
+        }
+        for _ in 0..5 {
+            samples.push(sample("1", 1));
+        }
+        for _ in 0..50 {
+            samples.push(sample("2", 2));
+        }
+        let kept = apply_balanced_max_samples(samples, Some(9), Some(11), ir_sample_class_id)
+            .expect("cap");
+        let mut counts = [0u32; 3];
+        for sample in &kept {
+            counts[ir_sample_class_id(sample).expect("class") as usize] += 1;
+        }
+        assert_eq!(counts, [3, 3, 3]);
+    }
+
+    #[test]
+    fn unseeded_balanced_cap_keeps_the_prefix() {
+        let samples = vec![sample("N", 0), sample("V", 1), sample("N", 0)];
+        let kept =
+            apply_balanced_max_samples(samples, Some(2), None, ir_sample_class_id).expect("cap");
+        assert_eq!(kept.len(), 2);
+        assert_eq!(class_label(&kept[0]).expect("label"), "N");
+        assert_eq!(class_label(&kept[1]).expect("label"), "V");
     }
 }

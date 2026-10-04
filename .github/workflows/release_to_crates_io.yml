@@ -400,7 +400,23 @@ jobs:
       - name: Build release
         run: cargo build --release --lib --verbose
 
-      - name: Set release SHA (ref being published; no commit)
+      - name: Record crate graph snapshot on the release branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/generate-crate-graph.mjs
+          git add docs/crate-graphs
+          if git diff --cached --quiet; then
+            echo "Crate graph snapshot already recorded for this version."
+          else
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git commit -m "Record feagi-core crate graph snapshot for this release."
+            git push origin "HEAD:${PUBLISH_REF}"
+          fi
+
+      - name: Set release SHA
         id: release_sha
         run: |
           echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

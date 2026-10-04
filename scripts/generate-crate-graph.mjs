@@ -21,9 +21,10 @@
  */
 
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeCrateGraphIndex } from "./crate-graph-index.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WORKSPACE_ROOT = resolve(__dirname, "..");
@@ -108,7 +109,18 @@ const defaultOut = join(
 const targetPath = outPath ?? defaultOut;
 
 mkdirSync(dirname(targetPath), { recursive: true });
-writeFileSync(targetPath, JSON.stringify(snapshot, null, 2) + "\n");
 
-console.log(`Wrote ${crates.length} crates, ${requiredEdges.length} required edges, ${optionalEdges.length} optional edges`);
-console.log(`Output: ${targetPath}`);
+const graphsDir = join(WORKSPACE_ROOT, "docs", "crate-graphs");
+const versionAlreadyRecorded = !outPath && existsSync(targetPath);
+if (versionAlreadyRecorded) {
+  console.log(`Snapshot already recorded, leaving ${targetPath}`);
+} else {
+  writeFileSync(targetPath, JSON.stringify(snapshot, null, 2) + "\n");
+  console.log(
+    `Wrote ${crates.length} crates, ${requiredEdges.length} required edges, ${optionalEdges.length} optional edges`
+  );
+  console.log(`Output: ${targetPath}`);
+}
+
+const indexed = writeCrateGraphIndex(graphsDir);
+console.log(`Index: ${join(graphsDir, "index.json")} (${indexed.join(", ")})`);

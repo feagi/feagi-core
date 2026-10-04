@@ -57,6 +57,72 @@ pub fn draw_indices(len: usize, keep: usize, seed: u64) -> Vec<usize> {
     drawn
 }
 
+/// Sample indices for a class-balanced cap.
+///
+/// `groups` is one list of sample indices per class, in the class order chosen by the caller
+/// (lowest class id first). Each class gets as equal a share of `keep` as its size allows.
+/// Leftover slots go one each to the earliest classes that still have unused samples. Within a
+/// class the share is a [`draw_indices`] subset from a seed derived from `seed` and that
+/// class's position, so the same inputs always select the same samples. The result is ascending.
+pub fn draw_balanced_indices(groups: &[Vec<usize>], keep: usize, seed: u64) -> Vec<usize> {
+    if groups.is_empty() || keep == 0 {
+        return Vec::new();
+    }
+    let quotas = balanced_quotas(groups.iter().map(|group| group.len()).collect(), keep);
+    let mut rng = SplitMix64::new(seed);
+    let mut selected = Vec::with_capacity(keep);
+    for (group, quota) in groups.iter().zip(quotas) {
+        let class_seed = rng.next_u64();
+        if quota == 0 {
+            continue;
+        }
+        for local in draw_indices(group.len(), quota, class_seed) {
+            selected.push(group[local]);
+        }
+    }
+    selected.sort_unstable();
+    selected
+}
+
+/// Per-class counts that sum to `keep` and differ by at most one, capped by `sizes`.
+fn balanced_quotas(sizes: Vec<usize>, keep: usize) -> Vec<usize> {
+    let mut quota = vec![0usize; sizes.len()];
+    let mut room = sizes;
+    let mut left = keep;
+    let mut active: Vec<usize> = (0..room.len()).filter(|&index| room[index] > 0).collect();
+    while left > 0 && !active.is_empty() {
+        let share = left / active.len();
+        let extra = left % active.len();
+        if share == 0 {
+            for &index in active.iter().take(left) {
+                quota[index] += 1;
+            }
+            break;
+        }
+        let mut given = 0usize;
+        let mut next = Vec::new();
+        for (rank, &index) in active.iter().enumerate() {
+            let mut want = share;
+            if rank < extra {
+                want += 1;
+            }
+            let take = want.min(room[index]);
+            quota[index] += take;
+            room[index] -= take;
+            given += take;
+            if room[index] > 0 {
+                next.push(index);
+            }
+        }
+        if given == 0 {
+            break;
+        }
+        left -= given;
+        active = next;
+    }
+    quota
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +170,64 @@ mod tests {
             }
         }
         assert!(seen.iter().all(|&hit| hit));
+    }
+
+    fn groups_of(sizes: &[usize]) -> Vec<Vec<usize>> {
+        let mut next = 0usize;
+        sizes
+            .iter()
+            .map(|&size| {
+                let group: Vec<usize> = (next..next + size).collect();
+                next += size;
+                group
+            })
+            .collect()
+    }
+
+    fn counts_by_group(groups: &[Vec<usize>], selected: &[usize]) -> Vec<usize> {
+        groups
+            .iter()
+            .map(|group| {
+                selected
+                    .iter()
+                    .filter(|index| group.contains(index))
+                    .count()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn balanced_draw_splits_an_even_cap_across_classes() {
+        let groups = groups_of(&[50; 10]);
+        let selected = draw_balanced_indices(&groups, 100, 7);
+        assert_eq!(selected.len(), 100);
+        assert_eq!(counts_by_group(&groups, &selected), vec![10; 10]);
+        assert!(selected.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn balanced_draw_gives_leftover_slots_to_earlier_classes() {
+        let groups = groups_of(&[40, 40, 40]);
+        let selected = draw_balanced_indices(&groups, 5, 1);
+        assert_eq!(counts_by_group(&groups, &selected), vec![2, 2, 1]);
+    }
+
+    #[test]
+    fn balanced_draw_does_not_ask_a_small_class_for_more_than_it_has() {
+        let groups = groups_of(&[2, 100, 100]);
+        let selected = draw_balanced_indices(&groups, 30, 3);
+        assert_eq!(counts_by_group(&groups, &selected), vec![2, 14, 14]);
+    }
+
+    #[test]
+    fn balanced_draw_repeats_for_a_seed_and_changes_with_it() {
+        let groups = groups_of(&[20, 20]);
+        let first = draw_balanced_indices(&groups, 4, 1);
+        let again = draw_balanced_indices(&groups, 4, 1);
+        let other = draw_balanced_indices(&groups, 4, 2);
+        assert_eq!(first, again);
+        assert_ne!(first, other);
+        assert_eq!(counts_by_group(&groups, &first), vec![2, 2]);
+        assert_eq!(counts_by_group(&groups, &other), vec![2, 2]);
     }
 }

@@ -154,10 +154,11 @@ impl TimeSeriesPackageAdapter {
             &self.config.class_keep_percents,
             &self.config.class_labels,
         )?;
-        crate::adapters::class_keep::apply_max_samples(
+        crate::adapters::class_keep::apply_balanced_max_samples(
             samples,
             self.config.max_samples,
             self.config.sample_draw_seed,
+            crate::adapters::class_keep::ir_sample_class_id,
         )
     }
 }

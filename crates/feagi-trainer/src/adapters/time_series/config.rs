@@ -134,7 +134,7 @@ pub struct TimeSeriesPackageConfig {
     /// Cap after class keep. `None` uses every remaining window.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_samples: Option<u64>,
-    /// With `max_samples`, keep a seeded random subset instead of the first windows.
+    /// With `max_samples`, keep a seeded class-balanced subset instead of the first windows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sample_draw_seed: Option<u64>,
     /// Filled at ingest for `MinMaxDataset`. Not part of the run JSON.

@@ -9,9 +9,10 @@ feagi-core Rust workspace and how those snapshots are published to the BrainsFor
 The process has two parts:
 
 1. **Extraction** — a Node.js script (`scripts/generate-crate-graph.mjs`) reads the workspace
-   via `cargo metadata` and writes a versioned JSON file.
-2. **Publication** — the JSON file is committed to `nrs-portal/src/data/crate-graphs/` and
-   the website page serves it alongside a version list sourced from the GitHub releases API.
+   via `cargo metadata` and writes a versioned JSON file plus `docs/crate-graphs/index.json`.
+2. **Publication** — the feagi-core release workflow commits those files on the public
+   `staging` branch and tags that commit. `nrs-portal` reads them from the public
+   repository. It does not store a copy.
 
 ---
 
@@ -24,13 +25,14 @@ The process has two parts:
 | `scripts/generate-crate-graph.mjs` | Extraction script — runs `cargo metadata` and writes the JSON snapshot |
 | `scripts/crate-categories.json` | Maps each crate name to its architectural layer category |
 | `docs/crate-graphs/v{version}.json` | Generated snapshots; committed to version control |
+| `docs/crate-graphs/index.json` | Newest-first version list. The portal fetches this file, then each snapshot |
 
 ### nrs-portal
 
 | Path | Purpose |
 |------|---------|
-| `src/data/crate-graphs/v{version}.json` | Snapshots served at build time (copied from feagi-core) |
-| `src/app/feagi/architecture/page.tsx` | Next.js server component; fetches GitHub releases and loads snapshots |
+| `src/lib/feagi/crateGraphSnapshots.ts` | Fetches `index.json` and the listed snapshots from the public feagi-core repo |
+| `src/app/feagi/architecture/page.tsx` | Next.js server component; renders the fetched snapshots or the fetch error |
 | `src/components/feagi/architecture/CrateGraph.tsx` | Interactive SVG dependency graph (client component) |
 | `src/components/feagi/architecture/ArchitectureView.tsx` | Version picker shell (client component) |
 
@@ -51,7 +53,8 @@ The script:
 3. Reads `scripts/crate-categories.json` to assign each crate to an architectural layer.
 4. Separates required dependencies from optional / feature-gated ones using the `optional` flag
    from `Cargo.toml`.
-5. Writes the output to `docs/crate-graphs/v{workspace_version}.json`.
+5. Writes `docs/crate-graphs/v{workspace_version}.json` when that version is not already recorded.
+6. Rewrites `docs/crate-graphs/index.json` from the snapshot filenames in that directory.
 
 To write to a custom path:
 
@@ -86,26 +89,30 @@ node scripts/generate-crate-graph.mjs --out path/to/output.json
 
 ## Publishing a New Version
 
-After cutting a release in the `feagi/feagi` GitHub repository:
+`.github/workflows/release_to_crates_io.yml` does this on the publish branch (`staging`)
+before the release tag is created:
 
-1. Generate the snapshot:
-   ```bash
-   cd feagi-core
-   node scripts/generate-crate-graph.mjs
-   ```
+1. Run `node scripts/generate-crate-graph.mjs`.
+2. If `docs/crate-graphs/v{version}.json` is new, or `index.json` changed, commit those files
+   and push them to `staging`.
+3. Tag that commit and publish the crates from it.
 
-2. Copy the output to the website:
-   ```bash
-   cp docs/crate-graphs/v{version}.json \
-      ../nrs-portal/src/data/crate-graphs/v{version}.json
-   ```
+An existing `v{version}.json` is left in place, so a rerun of the same version does not
+rewrite the snapshot.
 
-3. Commit and deploy the `nrs-portal`. The `/feagi/architecture` page will:
-   - Pull the release list from `https://api.github.com/repos/feagi/feagi/releases`.
-   - Show any release in the version picker for which a local snapshot file exists.
-   - Fall back to local snapshots only if the GitHub API is unavailable.
+The portal reads:
 
-No changes to website code are required unless the crate structure itself changes significantly.
+`https://raw.githubusercontent.com/feagi/feagi-core/staging/docs/crate-graphs/index.json`
+
+and then each `v{version}.json` listed there. The responses are cached for one hour.
+A failed request is shown on the page. There is no copy of the JSON in `nrs-portal`.
+
+To regenerate locally:
+
+```bash
+cd feagi-core
+node scripts/generate-crate-graph.mjs
+```
 
 ---
 
@@ -133,17 +140,13 @@ renders with a neutral grey color.
 
 ## How the Website Page Works
 
-`/feagi/architecture` is a Next.js server component with `revalidate = 3600` (ISR, re-fetched
-hourly). On each server render:
+`/feagi/architecture` loads snapshots from the public feagi-core repository at request time.
+Cached responses are reused for one hour.
 
-1. The GitHub releases API is queried for all published (non-draft, non-prerelease) tags in
-   `feagi/feagi`.
-2. All local snapshot files in `src/data/crate-graphs/` are loaded.
-3. The version picker shows the intersection: GitHub-confirmed releases that have a local
-   snapshot. Any local snapshot not yet on GitHub (e.g. a pre-release build) appears at the
-   bottom of the list.
-4. The selected snapshot is passed as a prop to the `CrateGraph` client component, which
-   computes a `dagre` layout and renders an interactive SVG.
+1. Fetch `docs/crate-graphs/index.json` from the `staging` branch.
+2. Fetch each listed `v{version}.json` in that order.
+3. Pass the snapshots to `CrateGraph`, which computes a `dagre` layout and renders an SVG.
+4. If either request fails, the page shows that error and does not substitute another graph.
 
 ---
 
@@ -155,4 +158,4 @@ hourly). On each server render:
    ```ts
    newcategory: { label: "Display Name", color: "#hexcolor" },
    ```
-3. Regenerate the snapshot and publish following the steps above.
+3. Regenerate the snapshot. The next feagi-core release commits it.

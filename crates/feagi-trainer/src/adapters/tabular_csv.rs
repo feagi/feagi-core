@@ -48,7 +48,7 @@ pub struct TabularCsvConfig {
     /// Cap after class keep. `None` uses every remaining row.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_samples: Option<u64>,
-    /// With `max_samples`, keep a seeded random subset instead of the first rows.
+    /// With `max_samples`, keep a seeded class-balanced subset instead of the first rows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sample_draw_seed: Option<u64>,
 }
@@ -182,10 +182,11 @@ impl TabularCsvAdapter {
             &self.config.class_keep_percents,
             &self.config.class_labels,
         )?;
-        crate::adapters::class_keep::apply_max_samples(
+        crate::adapters::class_keep::apply_balanced_max_samples(
             samples,
             self.config.max_samples,
             self.config.sample_draw_seed,
+            crate::adapters::class_keep::ir_sample_class_id,
         )
     }
 }
