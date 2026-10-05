@@ -16,7 +16,7 @@ macro_rules! create_request_response_sender_receiver_sets {
         }
     ) => {
 
-        $crate::paste::paste! {
+        ::paste::paste! {
 
             #[derive(Clone)]
             pub struct [<$base_name:camel SenderSet>] {
