@@ -400,21 +400,58 @@ jobs:
       - name: Build release
         run: cargo build --release --lib --verbose
 
-      - name: Record crate graph snapshot on the release branch
+      - name: Open a pull request for the crate graph snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # Publish from the commit already on the release branch. staging
+          # rejects direct pushes (changes must go through a pull request).
+          BASE_SHA="$(git rev-parse HEAD)"
           node scripts/generate-crate-graph.mjs
           git add docs/crate-graphs
           if git diff --cached --quiet; then
             echo "Crate graph snapshot already recorded for this version."
-          else
-            git config --local user.email "action@github.com"
-            git config --local user.name "GitHub Action"
-            git commit -m "Record feagi-core crate graph snapshot for this release."
-            git push origin "HEAD:${PUBLISH_REF}"
+            exit 0
           fi
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git commit -m "Record feagi-core crate graph snapshot for this release."
+          VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
+          if [ -z "${VERSION}" ]; then
+            echo "Failed to read workspace version for the crate graph branch"
+            exit 1
+          fi
+          BRANCH="crate-graph/v${VERSION}"
+          if git fetch origin "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"; then
+            git push --force-with-lease="refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" origin "HEAD:refs/heads/${BRANCH}"
+          else
+            git push origin "HEAD:refs/heads/${BRANCH}"
+          fi
+          EXISTING="$(gh pr list --head "${BRANCH}" --base "${PUBLISH_REF}" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "${EXISTING}" ]; then
+            echo "Crate graph pull request already open: #${EXISTING}"
+          else
+            gh pr create \
+              --base "${PUBLISH_REF}" \
+              --head "${BRANCH}" \
+              --title "Record crate graph snapshot v${VERSION}" \
+              --body "Generated during the crates.io release. The release branch rejects direct pushes, so this snapshot lands through a pull request. The portal reads docs/crate-graphs from that branch after merge."
+          fi
+          git checkout --detach "${BASE_SHA}"
 
       - name: Set release SHA
         id: release_sha

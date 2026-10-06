@@ -10,9 +10,10 @@ The process has two parts:
 
 1. **Extraction** — a Node.js script (`scripts/generate-crate-graph.mjs`) reads the workspace
    via `cargo metadata` and writes a versioned JSON file plus `docs/crate-graphs/index.json`.
-2. **Publication** — the feagi-core release workflow commits those files on the public
-   `staging` branch and tags that commit. `nrs-portal` reads them from the public
-   repository. It does not store a copy.
+2. **Publication** — the feagi-core release workflow commits those files on a
+   `crate-graph/v{version}` branch and opens a pull request into `staging`.
+   `staging` rejects direct pushes. `nrs-portal` reads the files from `staging`
+   after that pull request is merged. It does not store a copy.
 
 ---
 
@@ -89,13 +90,15 @@ node scripts/generate-crate-graph.mjs --out path/to/output.json
 
 ## Publishing a New Version
 
-`.github/workflows/release_to_crates_io.yml` does this on the publish branch (`staging`)
-before the release tag is created:
+`.github/workflows/release_to_crates_io.yml` does this before the release tag is created:
 
 1. Run `node scripts/generate-crate-graph.mjs`.
 2. If `docs/crate-graphs/v{version}.json` is new, or `index.json` changed, commit those files
-   and push them to `staging`.
-3. Tag that commit and publish the crates from it.
+   on `crate-graph/v{version}` and open a pull request into the publish branch
+   (`staging`). The release itself stays on the commit already on that branch,
+   because a direct push is rejected.
+3. Tag that existing commit and publish the crates from it. Merge the snapshot
+   pull request so the portal can read the new graph.
 
 An existing `v{version}.json` is left in place, so a rerun of the same version does not
 rewrite the snapshot.
