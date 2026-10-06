@@ -8,10 +8,10 @@ pub struct BlockingPool<T, const N: usize> (
 impl<T, const N: usize> BlockingPool<T, N> {
 
     /// Creates new pool
-    pub fn new(initial: heapless::Vec<T, N>) -> Self {
+    pub const fn new(initial: heapless::Vec<T, N>) -> Self {
         Self(std::sync::Mutex::new(initial))
     }
-
+    
     /// Briefly locks the internal to try to remove an item. Returns none if empty
     pub fn take_item(&mut self) -> Option<T> {
         let vec = &mut self.0.lock();
