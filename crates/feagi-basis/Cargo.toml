@@ -14,54 +14,41 @@ description = "Base data structures and methods used throughout FEAGI"
 
 default = [
     "std",
-    "serde_json",
+    "serde_json", "rayon"
 ]
 
 std = [
     "alloc",
-    "thiserror/std", "serde/std", "serde_json/std", "ahash/std", "thingbuf/std",
-    "feagi-basis-quantization/std", "feagi-basis-collections/std",
+    "thiserror/std", "serde/std", "serde_json/std", "ahash/std", "thingbuf/std", "half/std",
 ]
 
 alloc = [
-    "serde/alloc", "serde_json/alloc", "thingbuf/alloc",
-    "feagi-basis-quantization/alloc", "feagi-basis-collections/alloc"
+    "serde/alloc", "serde_json/alloc", "serde_arrays/alloc", "thingbuf/alloc", "half/alloc", "heapless/alloc",
 ]
 
 # Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
 rayon = [
     "dep:rayon",
-    "feagi-basis-collections/rayon",
     "std",
 ]
 
-# Support for serializing and deserializng JSON via serde
-serde_json = [
-    "dep:serde_json",
-    "feagi-basis-collections/serde_json",
-    "ahash/serde"
-]
-
-
 
 [dependencies]
-# Sub Crates
-feagi-basis-quantization = {path = "feagi-basis-quantization" }
-feagi-basis-collections = {path = "feagi-basis-collections"}
-feagi-basis-threading = {path = "feagi-basis-threading"}
-
 # Root Crates
 # NONE! THIS CRATE MUST NOT DEPEND ON OTHER FEAGI ROOT CRATES
 
 # External crates
 thiserror = {workspace = true}
 paste = { workspace = true }
-ahash = { workspace = true}
+ahash = { workspace = true, features = ["serde"]}
 serde = { workspace = true, features = ["derive"]}
+serde_arrays = { workspace = true }
 heapless = {workspace = true}
 thingbuf = {workspace = true, features = ["static"]} # TODO review features
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
+half = { workspace = true, default-features = false, features = ["serde"] }
+
 
 
 

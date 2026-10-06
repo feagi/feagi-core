@@ -1,7 +1,7 @@
-use crate::generic_collections::feagi_index_organizer_error::IndexOrganizerError;
-use feagi_basis_collections::FeagiBasisCollectionsError;
-use feagi_basis_quantization::FeagiBasisQuantizationError;
-use feagi_basis_threading::FeagiBasisThreadingError;
+use crate::collections::generic_collections::feagi_index_organizer_error::GenericCollectionError;
+use crate::collections::CollectionsError;
+use crate::quantization::QuantizationError;
+use crate::threading::ThreadingError;
 use thiserror::Error;
 
 /// The root error for the Basis crate.
@@ -11,11 +11,11 @@ pub enum FeagiBasisError {
     #[error("A generic error type. Anything using this should be updated with more specific errors")]
     DataEtc,
     #[error(transparent)]
-    IndexOrganizerError(#[from] IndexOrganizerError),
+    IndexOrganizerError(#[from] GenericCollectionError),
     #[error(transparent)]
-    Quantization(#[from] FeagiBasisQuantizationError),
+    Quantization(#[from] QuantizationError),
     #[error(transparent)]
-    Collections(#[from] FeagiBasisCollectionsError),
+    Collections(#[from] CollectionsError),
     #[error(transparent)]
-    ThreadMessaging(#[from] FeagiBasisThreadingError),
+    ThreadMessaging(#[from] ThreadingError),
 }

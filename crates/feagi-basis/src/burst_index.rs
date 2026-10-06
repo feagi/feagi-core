@@ -1,5 +1,5 @@
-use feagi_quantization::create_wrapped_quantized_unsigned_integer;
-use feagi_quantization::prelude::{QuantizedUnsignedIntegerUnwrappedTrait};
+use crate::create_wrapped_quantized_unsigned_integer;
+use crate::quantization::prelude::QuantizedUnsignedIntegerUnwrappedTrait;
 
 create_wrapped_quantized_unsigned_integer!(
     /// Defines the burst index, the current "tick" that the burst engine is on

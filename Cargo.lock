@@ -660,23 +660,6 @@ name = "feagi-basis"
 version = "0.1.1"
 dependencies = [
  "ahash",
- "feagi-basis-collections",
- "feagi-basis-quantization",
- "feagi-basis-threading",
- "heapless",
- "paste",
- "rayon",
- "serde",
- "serde_json",
- "thingbuf",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "feagi-basis-collections"
-version = "0.1.1"
-dependencies = [
- "feagi-basis-quantization",
  "half",
  "heapless",
  "paste",
@@ -684,6 +667,7 @@ dependencies = [
  "serde",
  "serde_arrays",
  "serde_json",
+ "thingbuf",
  "thiserror 2.0.21",
 ]
 
@@ -695,28 +679,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
-]
-
-[[package]]
-name = "feagi-basis-quantization"
-version = "0.1.1"
-dependencies = [
- "half",
- "paste",
- "rayon",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "feagi-basis-threading"
-version = "0.1.1"
-dependencies = [
- "heapless",
- "serde",
- "thingbuf",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1167,7 +1129,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4"
 dependencies = [
  "hash32",
- "serde_core",
  "stable_deref_trait",
 ]
 

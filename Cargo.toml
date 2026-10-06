@@ -92,9 +92,6 @@ resolver = "2"
 members = [
     "crates/feagi-macro-components",
     "crates/feagi-basis",
-    "crates/feagi-basis/feagi-basis-quantization",
-    "crates/feagi-basis/feagi-basis-collections",
-    "crates/feagi-basis/feagi-basis-threading",
 
     "crates/feagi-data",
     "crates/feagi-data/feagi-data-basis",
