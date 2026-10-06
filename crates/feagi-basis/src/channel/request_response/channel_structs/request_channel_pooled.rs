@@ -5,6 +5,10 @@ use crate::threading::BlockingPool;
 
 type OneShot<Request, Response> = (Request, Sender<Response, RecyclableRecyclePolicy<Response>>);
 
+/// Allows sending requests to a response channel. This is clonable, allowing multiple requestors to
+/// request from a single response channel (MPSC). This variant uses request pooling, which stores
+/// the oneshot responses in a buffer to avoid repeated allocations. However, the bool flag
+/// allows the struct to allocate additional oneshots if it exceeds the request pool
 pub struct RequestChannelPooled<Request, Response, const POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool>
 where
     Request: Send + Recyclable,
@@ -14,7 +18,7 @@ where
         Sender<Response, RecyclableRecyclePolicy<Response>>,
         Receiver<Response, RecyclableRecyclePolicy<Response>>),
         POOL_SIZE>,
-    request_sender: Sender<OneShot<Request, Response>, >,
+    request_sender: Sender<OneShot<Request, Response>, RecyclableRecyclePolicy<OneShot<Request, Response>>>
 }
 
 impl<Request, Response, const POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool>
@@ -24,7 +28,7 @@ where
     Response: Send + Recyclable,
 {
     /// Creates a new Requester with an internal channel system to the Request Processor and pool for the oneshots
-    fn new(request_sender: Sender<OneShot<Request, Response>>) -> Self {
+    pub(crate) fn new(request_sender: Sender<OneShot<Request, Response>, RecyclableRecyclePolicy<OneShot<Request, Response>>>) -> Self {
 
         let mut pool: heapless::Vec<
             (Sender<Response, RecyclableRecyclePolicy<Response>>,
@@ -76,9 +80,18 @@ where
         Ok(response)
     }
 
-
     fn create_oneshot_pair() -> (Sender<Response, RecyclableRecyclePolicy<Response>>, Receiver<Response, RecyclableRecyclePolicy<Response>>) {
         let channel = thingbuf::mpsc::with_recycle(1, RecyclableRecyclePolicy::NEW);
         channel
+    }
+}
+
+impl<Request, Response, const POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool> Clone for RequestChannelPooled<Request, Response, POOL_SIZE, ALLOW_BEYOND_POOL>
+where
+    Request: Send + Recyclable + Clone,
+    Response: Send + Recyclable + Clone,
+{
+    fn clone(&self) -> Self {
+        Self::new(self.request_sender.clone())
     }
 }

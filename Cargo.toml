@@ -94,7 +94,7 @@ members = [
     "crates/feagi-basis",
 
     "crates/feagi-data",
-    "crates/feagi-data/feagi-data-basis",
+    "crates/feagi-data/feagi-quantization_levels",
     "crates/feagi-data/feagi-data-neuron",
     "crates/feagi-data/feagi-data-genome",
     "crates/feagi-data/feagi-data-genome/feagi-basis-genome-proc",

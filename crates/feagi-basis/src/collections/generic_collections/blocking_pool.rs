@@ -35,8 +35,18 @@ impl<T, const N: usize> BlockingPool<T, N> {
     }
 }
 
-
 unsafe impl<T, const N: usize> Send for BlockingPool<T, N> where T: Send {}
+
+impl<T, const N: usize> Clone for BlockingPool<T, N>
+where T: Clone
+{
+    fn clone(&self) -> Self {
+        let vec = self.0.lock().unwrap();
+        Self {
+            0: std::sync::Mutex::new(vec.clone()),
+        }
+    }
+}
 
 // TODO no-std impl version for embassy? We can use types as a proxy and pick the correct one without
 // changing the name
