@@ -16,7 +16,7 @@ description = "A Data Quantization system used to represent values for FEAGI"
 
 std = [
     "alloc",
-    "half/std", "serde/std", "serde_json/std"
+    "thiserror/std","half/std", "serde/std", "serde_json/std"
 ]
 
 alloc = [
@@ -36,12 +36,13 @@ expose_json = [
 # Sub Crates
 
 # Sibling Crates
-feagi-basis-macros = {path = "../feagi-basis-macros" }
+# NONE
 
 # Root Crates
 # NONE! NOTHING WITHIN BASIS CAN USE OTHER ROOT CRATES!
 
 # External Crates
+thiserror = {workspace = true}
 paste = { workspace = true }
 half = {workspace = true, default-features = false, features = ["serde"]}
 serde = { workspace = true, default-features = false, features = ["derive"]}

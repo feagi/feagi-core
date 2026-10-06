@@ -1,7 +1,7 @@
-use crate::values::quantizable::feagi_data_value_quantization_error::FeagiFailQuantizationOutOfRange;
-use crate::values::quantizable::{FeagiDataValueQuantizationError, QuantizationLevelPacking, QuantizedElementBase};
+use crate::values::quantizable::{QuantizationLevelPacking, QuantizedElementBase};
 use serde::{Deserialize, Serialize};
 use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
+use crate::values::quantizable::data_value_quantization_error::DataValueQuantizationError;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -103,7 +103,7 @@ pub trait QuantizedUnsignedIntegerTrait:
     fn quant_to_enum(self) -> UnsignedIntegerEnum;
 
     /// Tries converting from usize, returns an error if out of bounds
-    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError>;
+    fn quant_try_from_usize(value: usize) -> Result<Self, DataValueQuantizationError>;
 
     /// Converts to usize. No need to check as we have no indexes that will exceed a usize on a
     /// system // TODO THIS IS NOT TRUE: a u64 on a 32 bit system cast to a usize truncates the bits! We should think about how to address this!
@@ -128,7 +128,7 @@ pub trait QuantizedUnsignedIntegerTrait:
     fn from_quantization_clamped<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self;
 
     /// Tries to create an index of another quantization, returns an error if it would break the bounds
-    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError>;
+    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, DataValueQuantizationError>;
 
     /// Converts to an index of another quantization. Does not check for validity of ranges!
     fn to_quantization_unchecked<ToQuant: QuantizedUnsignedIntegerTrait>(self) -> ToQuant {
@@ -141,7 +141,7 @@ pub trait QuantizedUnsignedIntegerTrait:
     }
 
     /// Tries to convert to an index of another quantization, returns an error if it would break the bounds
-    fn try_to_quantization<ToQuant: QuantizedUnsignedIntegerTrait>(self) -> Result<ToQuant, FeagiDataValueQuantizationError> {
+    fn try_to_quantization<ToQuant: QuantizedUnsignedIntegerTrait>(self) -> Result<ToQuant, DataValueQuantizationError> {
         ToQuant::try_from_quantization(self)
     }
 
@@ -186,9 +186,9 @@ impl QuantizedUnsignedIntegerTrait for u8 {
         UnsignedIntegerEnum::U8(self)
     }
 
-    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
+    fn quant_try_from_usize(value: usize) -> Result<Self, DataValueQuantizationError> {
         if value > u8::MAX as usize {
-            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u8!", value).into());
+            return Err(DataValueQuantizationError::QuantizationOutOfRange);
         }
         Ok(value as u8)
     }
@@ -224,9 +224,9 @@ impl QuantizedUnsignedIntegerTrait for u8 {
         value.quant_to_u8_unchecked()
     }
 
-    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, DataValueQuantizationError> {
         if value > FromQuant::QUANT_MAX_U8 {
-            return Err(FeagiFailQuantizationOutOfRange::new("Quantized index exceeds u8 quantization!", value.quant_to_usize()).into());
+            return Err(DataValueQuantizationError::QuantizationOutOfRange);
         }
         Ok(value.quant_to_u8_unchecked())
     }
@@ -275,9 +275,9 @@ impl QuantizedUnsignedIntegerTrait for u16 {
         UnsignedIntegerEnum::U16(self)
     }
 
-    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
+    fn quant_try_from_usize(value: usize) -> Result<Self, DataValueQuantizationError> {
         if value > u16::MAX as usize {
-            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u16!", value).into());
+            return Err(DataValueQuantizationError::QuantizationOutOfRange);
         }
         Ok(value as u16)
     }
@@ -313,9 +313,9 @@ impl QuantizedUnsignedIntegerTrait for u16 {
         value.quant_to_u16_unchecked()
     }
 
-    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, DataValueQuantizationError> {
         if value > FromQuant::QUANT_MAX_U16 {
-            return Err(FeagiFailQuantizationOutOfRange::new("Quantized index exceeds u16 quantization!", value.quant_to_usize()).into());
+            return Err(DataValueQuantizationError::QuantizationOutOfRange);
         }
         Ok(value.quant_to_u16_unchecked())
     }
@@ -364,9 +364,9 @@ impl QuantizedUnsignedIntegerTrait for u32 {
         UnsignedIntegerEnum::U32(self)
     }
 
-    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
+    fn quant_try_from_usize(value: usize) -> Result<Self, DataValueQuantizationError> {
         if value > u32::MAX as usize {
-            return Err(FeagiFailQuantizationOutOfRange::new("Given index value cannot fit in a quantized u32!", value).into());
+            return Err(DataValueQuantizationError::QuantizationOutOfRange);
         }
         Ok(value as u32)
     }
@@ -402,9 +402,9 @@ impl QuantizedUnsignedIntegerTrait for u32 {
         value.quant_to_u32_unchecked()
     }
 
-    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, DataValueQuantizationError> {
         if value > FromQuant::QUANT_MAX_U32 {
-            return Err(FeagiFailQuantizationOutOfRange::new("Quantized index exceeds u32 quantization!", value.quant_to_usize()).into());
+            return Err(DataValueQuantizationError::QuantizationOutOfRange);
         }
         Ok(value.quant_to_u32_unchecked())
     }
@@ -453,7 +453,7 @@ impl QuantizedUnsignedIntegerTrait for u64 {
         UnsignedIntegerEnum::U64(self)
     }
 
-    fn quant_try_from_usize(value: usize) -> Result<Self, FeagiDataValueQuantizationError> {
+    fn quant_try_from_usize(value: usize) -> Result<Self, DataValueQuantizationError> {
         // never fails
         Ok(value as u64)
     }
@@ -489,9 +489,9 @@ impl QuantizedUnsignedIntegerTrait for u64 {
         value.quant_to_u64_unchecked()
     }
 
-    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, FeagiDataValueQuantizationError> {
+    fn try_from_quantization<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Result<Self, DataValueQuantizationError> {
         if value > FromQuant::QUANT_MAX_U64 {
-            return Err(FeagiFailQuantizationOutOfRange::new("Quantized index exceeds u64 quantization!", value.quant_to_usize()).into());
+            return Err(DataValueQuantizationError::QuantizationOutOfRange);
         }
         Ok(value.quant_to_u64_unchecked())
     }
@@ -540,7 +540,7 @@ impl UnsignedIntegerEnum {
         }
     }
 
-    pub fn try_into_quant<Quant: QuantizedUnsignedIntegerUnwrappedTrait>(self) -> Result<Quant, FeagiDataValueQuantizationError> {
+    pub fn try_into_quant<Quant: QuantizedUnsignedIntegerUnwrappedTrait>(self) -> Result<Quant, DataValueQuantizationError> {
         // TODO assert Debug Check!
         match self {
             UnsignedIntegerEnum::U8(value) => value.try_to_quantization(),
@@ -615,7 +615,7 @@ pub trait WrappedQuantizedUnsignedIntegerEnum:
 {
     fn get_level(&self) -> UnsignedIntegerQuantizationLevel;
 
-    fn try_into_quant<Quant: QuantizedUnsignedIntegerUnwrappedTrait>(self) -> Result<Quant, FeagiDataValueQuantizationError>;
+    fn try_into_quant<Quant: QuantizedUnsignedIntegerUnwrappedTrait>(self) -> Result<Quant, DataValueQuantizationError>;
 
     fn into_quant<Quant: QuantizedUnsignedIntegerUnwrappedTrait>(self) -> Quant;
 
@@ -708,7 +708,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer {
                 self.0.quant_to_enum()
             }
 
-            fn quant_try_from_usize(value: usize) -> Result<Self, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+            fn quant_try_from_usize(value: usize) -> Result<Self, $crate::values::quantizable::DataValueQuantizationError> {
                 Ok(Self::const_new(Q::quant_try_from_usize(value)?))
             }
 
@@ -746,7 +746,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer {
 
             fn try_from_quantization<FromQuant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(
                 value: FromQuant,
-            ) -> Result<Self, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+            ) -> Result<Self, $crate::values::quantizable::DataValueQuantizationError> {
                 Ok(Self::const_new(Q::try_from_quantization(value)?))
             }
 
@@ -1025,7 +1025,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer {
 
                 pub fn try_into_quant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait>(
                     self
-                ) -> Result<Quant, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                ) -> Result<Quant, $crate::values::quantizable::DataValueQuantizationError> {
                     match self {
                         Self::U8(value) => Quant::try_from_quantization(value.deref()),
                         Self::U16(value) => Quant::try_from_quantization(value.deref()),
@@ -1054,7 +1054,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer {
 
                 pub fn try_into_wrapped_quant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait>(
                     self
-                ) -> Result<$struct_name<Quant>, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                ) -> Result<$struct_name<Quant>, $crate::values::quantizable::DataValueQuantizationError> {
                     Ok($struct_name::<Quant>::new(self.try_into_quant::<Quant>()?))
                 }
 
@@ -1072,7 +1072,7 @@ macro_rules! create_wrapped_quantized_unsigned_integer {
 
                 fn try_into_quant<Quant: $crate::values::quantizable::QuantizedUnsignedIntegerUnwrappedTrait>(
                     self
-                ) -> Result<Quant, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+                ) -> Result<Quant, $crate::values::quantizable::DataValueQuantizationError> {
                     [<$struct_name Enum>]::try_into_quant(self)
                 }
 

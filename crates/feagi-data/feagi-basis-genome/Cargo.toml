@@ -36,12 +36,7 @@ support_base64 = [
 [dependencies]
 
 # Sub Crates
-feagi-basis-genome-proc = {path = "feagi-basis-genome-proc"}
-
-# Sibling Crates
-feagi-basis-neuron = {path = "../feagi-basis-neuron"}
-feagi-basis-macros = {path = "../feagi-basis-macros" }
-feagi-basis-quantization = {path = "../feagi-basis-quantization" }
+feagi-basis-genome-proc = {path = "feagi-basis-genome-proc" }
 
 # Root Crates
 # NONE! NOTHING WITHIN BASIS CAN USE OTHER ROOT CRATES!

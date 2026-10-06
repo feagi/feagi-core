@@ -1,5 +1,5 @@
 [package]
-name = "feagi-runtime"
+name = "feagi-runtimes"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,7 +19,6 @@ description = "Root library for holding common patterns of feagi runtimes / exec
 # FEAGI Root Crates
 feagi-basis = {path = "../feagi-basis"}
 feagi-brain = {path = "../feagi-brain"}
-feagi-correspondence = {path = "../feagi-correspondence"}
 
 
 

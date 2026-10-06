@@ -1,7 +1,7 @@
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use crate::values::quantizable::feagi_data_value_quantization_error::{FeagiDataValueQuantizationError, FeagiFailPercentageOutOfRange};
 use crate::values::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
+use crate::values::quantizable::data_value_quantization_error::DataValueQuantizationError;
 
 /// Shared unsigned-percentage semantics for both [`PercentageUnsigned`] and wrapped newtypes.
 ///
@@ -34,7 +34,7 @@ pub trait QuantizedUnsignedPercentageTrait:
     const HUNDRED_PERCENT: Self;
 
     /// Checks value is between 0.0 - 1.0 before creating itself as such.
-    fn new_checked(value: Self::DecimalQuant) -> Result<Self, FeagiDataValueQuantizationError>;
+    fn new_checked(value: Self::DecimalQuant) -> Result<Self, DataValueQuantizationError>;
 
     /// Enforces value is within range before returning.
     fn new_clamped(value: Self::DecimalQuant) -> Self;
@@ -69,9 +69,9 @@ impl<D: QuantizedDecimalTrait> QuantizedUnsignedPercentageTrait for PercentageUn
     const ZERO_PERCENT: Self = Self(D::QUANT_ZERO);
     const HUNDRED_PERCENT: Self = Self(D::QUANT_ONE);
 
-    fn new_checked(value: D) -> Result<Self, FeagiDataValueQuantizationError> {
+    fn new_checked(value: D) -> Result<Self, DataValueQuantizationError> {
         if value < D::QUANT_ZERO || value > D::QUANT_ONE {
-            return Err(FeagiFailPercentageOutOfRange::new("Attempted to store out of range percentage!", value.quant_to_f32()).into());
+            return Err(DataValueQuantizationError::PercentageOutOfRange);
         }
         Ok(Self(value))
     }

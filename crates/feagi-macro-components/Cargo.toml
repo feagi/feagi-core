@@ -1,0 +1,22 @@
+[package]
+name = "feagi-macro-components"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Structures and functions that are used commonly in proc macros in FEAGI core, NOT direct source code!"
+
+[dependencies]
+
+# External Crates (ONLY, NO DEPENDENTS FROM THIS WORKSPACE!)
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
+heck = {workspace = true}
+
+[lints]
+workspace = true

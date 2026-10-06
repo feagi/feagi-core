@@ -9,14 +9,13 @@ mod signed_integer;
 mod signed_percentage;
 mod unsigned_integer;
 mod unsigned_percentage;
-pub mod feagi_data_value_quantization_error;
+mod data_value_quantization_error;
 
 pub use base_traits::QuantizedElementBase;
 pub use decimal::{
     DecimalEnum, DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait, QuantizedDecimalWrappedTrait,
     WrappedQuantizedDecimalEnum,
 };
-pub use feagi_data_value_quantization_error::FeagiDataValueQuantizationError;
 pub use quantization_level_packing::QuantizationLevelPacking;
 pub use signed_integer::{
     QuantizedSignedIntegerTrait, QuantizedSignedIntegerUnwrappedTrait, QuantizedSignedIntegerWrappedTrait, SignedIntegerEnum,

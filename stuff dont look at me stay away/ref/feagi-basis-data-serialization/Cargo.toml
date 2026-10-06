@@ -28,9 +28,8 @@ alloc = [
 [dependencies]
 
 # Sibling Crates
-feagi-basis-quantization = {path = "../feagi-basis-quantization"}
-feagi-basis-macros = {path = "../feagi-basis-macros" }
-feagi-basis-neuron = {path = "../feagi-basis-neuron"}
+feagi-basis-quantization = {path = "../../../crates/feagi-basis/feagi-basis-quantization" }
+feagi-basis-neuron = {path = "../../../crates/feagi-data/feagi-basis-neuron" }
 
 
 # External crates

@@ -1,5 +1,5 @@
 [package]
-name = "feagi-io-api"
+name = "feagi-data"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,18 +8,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = ""
-
-[features]
-
-# subcrates should not have default in order to avoid confusion
 
 [dependencies]
-# Sub Crates
 
-# Sibling Crates
-
-# Root Crates
-feagi-basis = {path = "../../../feagi-basis"}
-
-# External Crates
+[lints]
+workspace = true

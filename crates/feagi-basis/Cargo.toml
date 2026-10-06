@@ -15,20 +15,17 @@ description = "Base data structures and methods used throughout FEAGI"
 default = [
     "std",
     "serde_json",
-    "channel_flume" # TODO scrap
 ]
 
 std = [
     "alloc",
-    "serde/std", "serde_json/std", "ahash/std", "thingbuf/std",
-    "feagi-basis-quantization/std", "feagi-basis-collections/std", "feagi-basis-data-serialization/std",
-    "feagi-basis-neuron/std", "feagi-basis-genome/std"
+    "thiserror/std", "serde/std", "serde_json/std", "ahash/std", "thingbuf/std",
+    "feagi-basis-quantization/std", "feagi-basis-collections/std",
 ]
 
 alloc = [
     "serde/alloc", "serde/derive", "serde_json/alloc", "thingbuf/alloc",
-    "feagi-basis-quantization/alloc", "feagi-basis-collections/alloc", "feagi-basis-data-serialization/alloc",
-    "feagi-basis-neuron/alloc", "feagi-basis-genome/alloc"
+    "feagi-basis-quantization/alloc", "feagi-basis-collections/alloc"
 ]
 
 # Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
@@ -47,37 +44,16 @@ serde_json = [
 
 
 
-# TODO all the features below here should be scrapped (either being removed, or just moved)
-
-channel_flume = [
-    "std",
-    "flume"
-]
-
-# Exposes the base request/response contract macros (structs + enums)
-feagi_server_requests = [
-    "feagi-basis-macros/__feagi_request_response_macros"
-]
-
-feagi_server_requests_rest = [
-    "feagi_server_requests",
-    "feagi-basis-macros/feagi_server_request_rest"
-]
-
-
 [dependencies]
 # Sub Crates
-feagi-basis-macros = {path = "feagi-basis-macros" }
 feagi-basis-quantization = {path = "feagi-basis-quantization" }
 feagi-basis-collections = {path = "feagi-basis-collections"}
-feagi-basis-data-serialization = {path = "feagi-basis-data-serialization"}
-feagi-basis-neuron = {path = "feagi-basis-neuron" }
-feagi-basis-genome = {path = "feagi-basis-genome"}
 
 # Root Crates
 # NONE! THIS CRATE MUST NOT DEPEND ON OTHER FEAGI ROOT CRATES
 
 # External crates
+thiserror = {workspace = true}
 paste = { workspace = true }
 ahash = { workspace = true}
 serde = { workspace = true}
@@ -85,7 +61,7 @@ heapless = {workspace = true}
 thingbuf = {workspace = true, features = ["static"]} # TODO review features
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
-flume = {workspace = true, optional = true}
+
 
 
 [lints]
