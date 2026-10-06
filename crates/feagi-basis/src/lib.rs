@@ -4,7 +4,7 @@
 
 pub mod prelude {
     pub use super::feagi_quantization::prelude::*;
-    pub use super::feagi_basis_error::{FeagiBasisError, FeagiFailDataEtc};
+    pub use super::feagi_basis_error::FeagiBasisError;
     pub use super::burst_index::BurstIndex;
 }
 
@@ -18,7 +18,7 @@ pub extern crate feagi_basis_quantization as feagi_quantization;
 
 pub mod generic_collections;
 
-pub use feagi_basis_error::{FeagiBasisError, FeagiFailDataEtc};
+pub use feagi_basis_error::FeagiBasisError;
 
 pub use burst_index::{BurstIndex, BurstIndexEnum};
 mod feagi_basis_error;

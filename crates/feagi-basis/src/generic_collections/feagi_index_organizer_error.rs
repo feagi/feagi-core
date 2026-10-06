@@ -1,35 +1,13 @@
-use feagi_basis_macros::prelude::*;
+use thiserror::Error;
 
-#[derive(FeagiFail)]
-pub struct FeagiIndexManagerInvalid {
-    context: &'static str,
-}
-
-#[derive(FeagiFail)]
-pub struct FeagiIndexManagerLimit {
-    context: &'static str,
-}
-
-#[derive(FeagiFail)]
-pub struct FeagiIndexManagerInvalidIndex {
-    context: &'static str,
-    index: usize,
-}
-
-#[derive(FeagiFail)]
-pub struct FeagiIndexRangeVectorFailedMerge {
-    context: &'static str,
-}
-
-generate_feagi_error! {
-    FeagiIndexOrganizerError,
-    keys: {
-        IndexManagerError: FeagiIndexManagerInvalid,
-        IndexManagerLimit: FeagiIndexManagerLimit,
-        IndexManagerIndex: FeagiIndexManagerInvalidIndex,
-        RangeVectorFailedMerge: FeagiIndexRangeVectorFailedMerge,
-    },
-    sub_errors: {
-
-    }
+#[derive(Error, Debug)]
+pub enum IndexOrganizerError {
+    #[error("The index manager was given an invalid range")]
+    IndexManagerError,
+    #[error("Reached maximum index")]
+    IndexManagerLimit,
+    #[error("Index not found")]
+    IndexManagerIndex { index: usize },
+    #[error("Failed to merge an index range")]
+    RangeVectorFailedMerge,
 }

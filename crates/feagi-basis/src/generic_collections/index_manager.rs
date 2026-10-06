@@ -1,7 +1,5 @@
 use feagi_basis_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
-use crate::generic_collections::feagi_index_organizer_error::{
-    FeagiIndexManagerInvalid, FeagiIndexManagerInvalidIndex, FeagiIndexManagerLimit, FeagiIndexOrganizerError,
-};
+use crate::generic_collections::feagi_index_organizer_error::IndexOrganizerError;
 
 pub struct IndexManager<Q: QuantizedUnsignedIntegerTrait> {
     minimum_index: Q,
@@ -11,13 +9,13 @@ pub struct IndexManager<Q: QuantizedUnsignedIntegerTrait> {
 }
 
 impl<Q: QuantizedUnsignedIntegerTrait> IndexManager<Q> {
-    pub fn new(minimum_index: Q, maximum_index: Q, initial_number_indexes: Q) -> Result<IndexManager<Q>, FeagiIndexOrganizerError> {
+    pub fn new(minimum_index: Q, maximum_index: Q, initial_number_indexes: Q) -> Result<IndexManager<Q>, IndexOrganizerError> {
         if minimum_index > maximum_index {
-            return Err(FeagiIndexManagerInvalid::new("Minimum index is greater than maximum index.").into());
+            return Err(IndexOrganizerError::IndexManagerError);
         }
 
         if maximum_index - minimum_index < initial_number_indexes {
-            return Err(FeagiIndexManagerInvalid::new("Initial number of indexes exceeds what range allows!").into());
+            return Err(IndexOrganizerError::IndexManagerError);
         }
 
         Ok(Self {
@@ -28,13 +26,13 @@ impl<Q: QuantizedUnsignedIntegerTrait> IndexManager<Q> {
         })
     }
 
-    pub fn get_next_index(&mut self) -> Result<Q, FeagiIndexOrganizerError> {
+    pub fn get_next_index(&mut self) -> Result<Q, IndexOrganizerError> {
         if let Some(i) = self.skipped_indexes.pop() {
             return Ok(i);
         }
 
         if self.next_index == self.maximum_index {
-            return Err(FeagiIndexManagerLimit::new("Reached maximum index").into());
+            return Err(IndexOrganizerError::IndexManagerLimit);
         }
 
         let i: Q = self.next_index;
@@ -42,7 +40,7 @@ impl<Q: QuantizedUnsignedIntegerTrait> IndexManager<Q> {
         Ok(i)
     }
 
-    pub fn return_index(&mut self, index: Q) -> Result<(), FeagiIndexOrganizerError> {
+    pub fn return_index(&mut self, index: Q) -> Result<(), IndexOrganizerError> {
         if index == self.minimum_index - Q::QUANT_ONE {
             self.minimum_index -= Q::QUANT_ONE;
             return Ok(());
@@ -52,6 +50,6 @@ impl<Q: QuantizedUnsignedIntegerTrait> IndexManager<Q> {
             self.skipped_indexes.swap_remove(index);
         }
 
-        Err(FeagiIndexManagerInvalidIndex::new("Index not found.", index.quant_to_usize()).into())
+        Err(IndexOrganizerError::IndexManagerIndex { index: index.quant_to_usize() })
     }
 }

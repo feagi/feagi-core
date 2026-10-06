@@ -662,6 +662,7 @@ dependencies = [
  "ahash",
  "feagi-basis-collections",
  "feagi-basis-quantization",
+ "feagi-basis-threading",
  "heapless",
  "paste",
  "rayon",

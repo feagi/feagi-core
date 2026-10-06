@@ -48,6 +48,7 @@ serde_json = [
 # Sub Crates
 feagi-basis-quantization = {path = "feagi-basis-quantization" }
 feagi-basis-collections = {path = "feagi-basis-collections"}
+feagi-basis-threading = {path = "feagi-basis-threading"}
 
 # Root Crates
 # NONE! THIS CRATE MUST NOT DEPEND ON OTHER FEAGI ROOT CRATES
