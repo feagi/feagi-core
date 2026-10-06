@@ -9,10 +9,10 @@ homepage.workspace = true
 description = "FEAGI plasticity algorithms - STDP and memory formation"
 
 [dependencies]
-feagi-npu-neural = { version = "0.0.40", path = "../neural" } # For NeuronId
-feagi-npu-burst-engine = { version = "0.0.40", path = "../burst-engine" } # For DynamicNPU and FireLedger
+feagi-npu-neural = { version = "0.0.41", path = "../neural" } # For NeuronId
+feagi-npu-burst-engine = { version = "0.0.41", path = "../burst-engine" } # For DynamicNPU and FireLedger
 feagi-structures = { workspace = true } # For class-map potential encoding
-feagi-state-manager = { version = "0.0.40", path = "../../feagi-state-manager", default-features = false, optional = true }
+feagi-state-manager = { version = "0.0.41", path = "../../feagi-state-manager", default-features = false, optional = true }
 thiserror.workspace = true
 rayon.workspace = true
 ahash.workspace = true
@@ -28,7 +28,7 @@ default = ["std"]
 std = ["feagi-state-manager/std"]
 
 [dev-dependencies]
-feagi-npu-runtime = { version = "0.0.40", path = "../runtime", features = ["std"] }
+feagi-npu-runtime = { version = "0.0.41", path = "../runtime", features = ["std"] }
 
 
 
