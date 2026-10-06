@@ -768,11 +768,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-pns-context"
+name = "feagi-pns-processing"
 version = "0.1.1"
 
 [[package]]
-name = "feagi-pns-processing"
+name = "feagi-pns-structures"
 version = "0.1.1"
 
 [[package]]

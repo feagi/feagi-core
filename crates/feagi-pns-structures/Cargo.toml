@@ -1,5 +1,5 @@
 [package]
-name = "feagi-pns-context"
+name = "feagi-pns-structures"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
