@@ -15,23 +15,23 @@ description = "Structures related to Neuron Data used in FEAGI"
 # subcrates should not have default in order to avoid confusion
 
 std = [
-    "alloc"
+    "alloc",
+    "feagi-basis/std",
+    "half/std", "serde/std", "serde_json/std"
 ]
 
-alloc = []
+alloc = [
+    "feagi-basis/alloc",
+    "half/alloc", "serde/alloc", "serde_json/alloc"
+]
 
 rayon = [
     "std"
 ]
 
 [dependencies]
-# Sub Crates
-
-# Sibling Crates
-
-
 # Root Crates
-# NONE! NOTHING WITHIN BASIS CAN USE OTHER ROOT CRATES!
+feagi-basis = {path = "../../feagi-basis"}
 
 # External Crates
 paste = { workspace = true }

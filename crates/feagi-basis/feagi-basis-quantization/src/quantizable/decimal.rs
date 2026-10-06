@@ -3,13 +3,13 @@
 
 // TODO Equal check with epsilon
 
-use crate::values::quantizable::quantization_level_packing::QuantizationLevelPacking;
-use crate::values::quantizable::{PercentageUnsigned, QuantizedElementBase, QuantizedUnsignedPercentageTrait};
+use crate::quantizable::quantization_level_packing::QuantizationLevelPacking;
+use crate::quantizable::{PercentageUnsigned, QuantizedElementBase, QuantizedUnsignedPercentageTrait};
 use half::{bf16, f16};
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use crate::prelude::{QuantizedSignedIntegerTrait, QuantizedUnsignedIntegerTrait};
-use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
+use crate::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 
 /// Represents a value that is represented as a decimal number, main backbone for computations
 #[repr(u8)]
@@ -386,11 +386,11 @@ macro_rules! create_wrapped_quantized_decimal {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, ::serde::Serialize, ::serde::Deserialize)]
         #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
-        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>(Q);
+        $vis struct $struct_name<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>(Q);
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> $struct_name<Q> {
 
-            pub const LEVEL: $crate::values::quantizable::DecimalQuantizationLevel = Q::LEVEL;
+            pub const LEVEL: $crate::quantizable::DecimalQuantizationLevel = Q::LEVEL;
             pub const QUANT_ZERO: Self = Self::const_new(Q::QUANT_ZERO);
             pub const QUANT_ONE: Self = Self::const_new(Q::QUANT_ONE);
 
@@ -417,25 +417,25 @@ macro_rules! create_wrapped_quantized_decimal {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>
-            $crate::values::quantizable::QuantizedElementBase for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>
+            $crate::quantizable::QuantizedElementBase for $struct_name<Q>
         {
             const QUANT_ZERO: Self = Self::const_new(Q::QUANT_ZERO);
             const QUANT_ONE: Self = Self::const_new(Q::QUANT_ONE);
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>
-            $crate::values::quantizable::QuantizedDecimalTrait for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>
+            $crate::quantizable::QuantizedDecimalTrait for $struct_name<Q>
         {
             type QuantType = Q;
-            const LEVEL: $crate::values::quantizable::DecimalQuantizationLevel = Q::LEVEL;
+            const LEVEL: $crate::quantizable::DecimalQuantizationLevel = Q::LEVEL;
             const QUANT_NEGATIVE_ONE: Self = Self::const_new(Q::QUANT_NEGATIVE_ONE);
 
             fn quant_clamp(&self, min: Self, max: Self) -> Self {
                 Self::const_new(self.0.quant_clamp(min.0, max.0))
             }
 
-            fn quant_to_enum(self) -> $crate::values::quantizable::DecimalEnum {
+            fn quant_to_enum(self) -> $crate::quantizable::DecimalEnum {
                 self.0.quant_to_enum()
             }
 
@@ -455,37 +455,37 @@ macro_rules! create_wrapped_quantized_decimal {
                 self.0.quant_to_f64()
             }
 
-            fn from_quantization<FromQuant: $crate::values::quantizable::QuantizedDecimalTrait>(
+            fn from_quantization<FromQuant: $crate::quantizable::QuantizedDecimalTrait>(
                 value: FromQuant,
             ) -> Self {
                 Self::const_new(Q::from_quantization(value))
             }
             
-            fn from_quantized_unsigned_integer<FromQuant: $crate::values::quantizable::QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
+            fn from_quantized_unsigned_integer<FromQuant: $crate::quantizable::QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
                 Self::const_new(Q::from_quantized_unsigned_integer(value))
             }
         
-            fn from_quantized_signed_integer<FromQuant: $crate::values::quantizable::QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
+            fn from_quantized_signed_integer<FromQuant: $crate::quantizable::QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
                 Self::const_new(Q::from_quantized_signed_integer(value))
             }
 
-            fn scale_by_unsigned_percentage<OTHER: $crate::values::quantizable::QuantizedDecimalTrait>(
+            fn scale_by_unsigned_percentage<OTHER: $crate::quantizable::QuantizedDecimalTrait>(
                 self,
-                p: $crate::values::quantizable::PercentageUnsigned<OTHER>,
+                p: $crate::quantizable::PercentageUnsigned<OTHER>,
             ) -> Self {
                 Self::const_new(self.0.scale_by_unsigned_percentage(p))
             }
 
             fn scale_by_same_quant_unsigned_percentage(
                 self,
-                p: &$crate::values::quantizable::PercentageUnsigned<Self>,
+                p: &$crate::quantizable::PercentageUnsigned<Self>,
             ) -> Self {
-                self * $crate::values::quantizable::QuantizedUnsignedPercentageTrait::get_decimal(*p)
+                self * $crate::quantizable::QuantizedUnsignedPercentageTrait::get_decimal(*p)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>
-            $crate::values::quantizable::QuantizedDecimalWrappedTrait for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>
+            $crate::quantizable::QuantizedDecimalWrappedTrait for $struct_name<Q>
         {
             fn new(value: Q) -> Self {
                 Self(value)
@@ -496,115 +496,115 @@ macro_rules! create_wrapped_quantized_decimal {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> From<Q> for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> From<Q> for $struct_name<Q> {
             fn from(value: Q) -> Self {
                 Self(value)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> From<&Q> for &$struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> From<&Q> for &$struct_name<Q> {
             fn from(value: &Q) -> Self {
                 // tRust me bro
                 unsafe { &*(value as *const Q as *const $struct_name<Q>) }
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> From<&mut Q> for &mut $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> From<&mut Q> for &mut $struct_name<Q> {
             fn from(value: &mut Q) -> Self {
                 // tRust me bro
                 unsafe { &mut *(value as *mut Q as *mut $struct_name<Q>) }
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> AsRef<Q> for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> AsRef<Q> for $struct_name<Q> {
             fn as_ref(&self) -> &Q {
                 &self.0
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> AsMut<Q> for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> AsMut<Q> for $struct_name<Q> {
             fn as_mut(&mut self) -> &mut Q {
                 &mut self.0
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::fmt::Display for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::fmt::Display for $struct_name<Q> {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 core::fmt::Display::fmt(&self.0, f)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Add for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Add for $struct_name<Q> {
             type Output = Self;
             fn add(self, rhs: Self) -> Self::Output {
                 Self(self.0 + rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Sub for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Sub for $struct_name<Q> {
             type Output = Self;
             fn sub(self, rhs: Self) -> Self::Output {
                 Self(self.0 - rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Mul for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Mul for $struct_name<Q> {
             type Output = Self;
             fn mul(self, rhs: Self) -> Self::Output {
                 Self(self.0 * rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Div for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Div for $struct_name<Q> {
             type Output = Self;
             fn div(self, rhs: Self) -> Self::Output {
                 Self(self.0 / rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::AddAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::AddAssign for $struct_name<Q> {
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::SubAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::SubAssign for $struct_name<Q> {
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::MulAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::MulAssign for $struct_name<Q> {
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::DivAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::DivAssign for $struct_name<Q> {
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::iter::Sum for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::iter::Sum for $struct_name<Q> {
             fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
                 Self(
-                    iter.map($crate::values::quantizable::QuantizedDecimalWrappedTrait::dewrap)
+                    iter.map($crate::quantizable::QuantizedDecimalWrappedTrait::dewrap)
                         .sum(),
                 )
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::iter::Product for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::iter::Product for $struct_name<Q> {
             fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
                 Self(
-                    iter.map($crate::values::quantizable::QuantizedDecimalWrappedTrait::dewrap)
+                    iter.map($crate::quantizable::QuantizedDecimalWrappedTrait::dewrap)
                         .product(),
                 )
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> Default for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> Default for $struct_name<Q> {
             fn default() -> Self {
                 Self(Q::default())
             }
@@ -620,74 +620,74 @@ macro_rules! create_wrapped_quantized_decimal {
             }
 
             impl [<$struct_name Enum>] {
-                pub fn new_from_quantized<FromQuant: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>(
+                pub fn new_from_quantized<FromQuant: $crate::quantizable::QuantizedDecimalUnwrappedTrait>(
                     value: $struct_name<FromQuant>
                 ) -> Self {
                     match FromQuant::LEVEL {
-                        $crate::values::quantizable::DecimalQuantizationLevel::F16 => {
-                            Self::F16($struct_name::<half::f16>::new(<half::f16 as $crate::values::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())))
+                        $crate::quantizable::DecimalQuantizationLevel::F16 => {
+                            Self::F16($struct_name::<half::f16>::new(<half::f16 as $crate::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())))
                         }
-                        $crate::values::quantizable::DecimalQuantizationLevel::BF16 => {
-                            Self::BF16($struct_name::<half::bf16>::new(<half::bf16 as $crate::values::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())))
+                        $crate::quantizable::DecimalQuantizationLevel::BF16 => {
+                            Self::BF16($struct_name::<half::bf16>::new(<half::bf16 as $crate::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())))
                         }
-                        $crate::values::quantizable::DecimalQuantizationLevel::F32 => {
-                            Self::F32($struct_name::<f32>::new(<f32 as $crate::values::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())))
+                        $crate::quantizable::DecimalQuantizationLevel::F32 => {
+                            Self::F32($struct_name::<f32>::new(<f32 as $crate::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())))
                         }
-                        $crate::values::quantizable::DecimalQuantizationLevel::F64 => {
-                            Self::F64($struct_name::<f64>::new(<f64 as $crate::values::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())))
+                        $crate::quantizable::DecimalQuantizationLevel::F64 => {
+                            Self::F64($struct_name::<f64>::new(<f64 as $crate::quantizable::QuantizedDecimalTrait>::from_quantization(value.deref())))
                         }
-                        $crate::values::quantizable::DecimalQuantizationLevel::StorageF8 => {
+                        $crate::quantizable::DecimalQuantizationLevel::StorageF8 => {
                             panic!("StorageF8 is not supported by wrapped decimal macro generation")
                         }
                     }
                 }
 
-                pub fn from_decimal_enum(value: $crate::values::quantizable::DecimalEnum) -> Self {
+                pub fn from_decimal_enum(value: $crate::quantizable::DecimalEnum) -> Self {
                     match value {
-                        $crate::values::quantizable::DecimalEnum::F16(v) => {
+                        $crate::quantizable::DecimalEnum::F16(v) => {
                             Self::F16($struct_name::<half::f16>::new(v))
                         }
-                        $crate::values::quantizable::DecimalEnum::BF16(v) => {
+                        $crate::quantizable::DecimalEnum::BF16(v) => {
                             Self::BF16($struct_name::<half::bf16>::new(v))
                         }
-                        $crate::values::quantizable::DecimalEnum::F32(v) => {
+                        $crate::quantizable::DecimalEnum::F32(v) => {
                             Self::F32($struct_name::<f32>::new(v))
                         }
-                        $crate::values::quantizable::DecimalEnum::F64(v) => {
+                        $crate::quantizable::DecimalEnum::F64(v) => {
                             Self::F64($struct_name::<f64>::new(v))
                         }
                     }
                 }
 
-                pub fn into_decimal_enum(self) -> $crate::values::quantizable::DecimalEnum {
+                pub fn into_decimal_enum(self) -> $crate::quantizable::DecimalEnum {
                     match self {
-                        Self::F16(v) => $crate::values::quantizable::DecimalEnum::F16(v.deref()),
-                        Self::BF16(v) => $crate::values::quantizable::DecimalEnum::BF16(v.deref()),
-                        Self::F32(v) => $crate::values::quantizable::DecimalEnum::F32(v.deref()),
-                        Self::F64(v) => $crate::values::quantizable::DecimalEnum::F64(v.deref()),
+                        Self::F16(v) => $crate::quantizable::DecimalEnum::F16(v.deref()),
+                        Self::BF16(v) => $crate::quantizable::DecimalEnum::BF16(v.deref()),
+                        Self::F32(v) => $crate::quantizable::DecimalEnum::F32(v.deref()),
+                        Self::F64(v) => $crate::quantizable::DecimalEnum::F64(v.deref()),
                     }
                 }
 
-                pub fn into_wrapped_quant<Quant: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>(
+                pub fn into_wrapped_quant<Quant: $crate::quantizable::QuantizedDecimalUnwrappedTrait>(
                     self
                 ) -> $struct_name<Quant> {
                     $struct_name::<Quant>::new(
-                        <Self as $crate::values::quantizable::WrappedQuantizedDecimalEnum>::into_quant::<Quant>(self)
+                        <Self as $crate::quantizable::WrappedQuantizedDecimalEnum>::into_quant::<Quant>(self)
                     )
                 }
             }
 
-            impl $crate::values::quantizable::WrappedQuantizedDecimalEnum for [<$struct_name Enum>] {
-                fn get_level(&self) -> $crate::values::quantizable::DecimalQuantizationLevel {
+            impl $crate::quantizable::WrappedQuantizedDecimalEnum for [<$struct_name Enum>] {
+                fn get_level(&self) -> $crate::quantizable::DecimalQuantizationLevel {
                     match self {
-                        Self::F16(_) => $crate::values::quantizable::DecimalQuantizationLevel::F16,
-                        Self::BF16(_) => $crate::values::quantizable::DecimalQuantizationLevel::BF16,
-                        Self::F32(_) => $crate::values::quantizable::DecimalQuantizationLevel::F32,
-                        Self::F64(_) => $crate::values::quantizable::DecimalQuantizationLevel::F64,
+                        Self::F16(_) => $crate::quantizable::DecimalQuantizationLevel::F16,
+                        Self::BF16(_) => $crate::quantizable::DecimalQuantizationLevel::BF16,
+                        Self::F32(_) => $crate::quantizable::DecimalQuantizationLevel::F32,
+                        Self::F64(_) => $crate::quantizable::DecimalQuantizationLevel::F64,
                     }
                 }
 
-                fn into_quant<Quant: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>(self) -> Quant {
+                fn into_quant<Quant: $crate::quantizable::QuantizedDecimalUnwrappedTrait>(self) -> Quant {
                     match self {
                         Self::F16(value) => Quant::from_quantization(value.deref()),
                         Self::BF16(value) => Quant::from_quantization(value.deref()),
@@ -699,13 +699,13 @@ macro_rules! create_wrapped_quantized_decimal {
                 fn to_f64(self) -> f64 {
                     match self {
                         Self::F16(value) => {
-                            <half::f16 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
+                            <half::f16 as $crate::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
                         }
                         Self::BF16(value) => {
-                            <half::bf16 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
+                            <half::bf16 as $crate::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
                         }
                         Self::F32(value) => {
-                            <f32 as $crate::values::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
+                            <f32 as $crate::quantizable::QuantizedDecimalTrait>::quant_to_f64(value.dewrap())
                         }
                         Self::F64(value) => value.dewrap(),
                     }

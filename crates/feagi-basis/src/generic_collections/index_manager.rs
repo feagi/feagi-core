@@ -1,4 +1,4 @@
-use feagi_basis_quantization::values::quantizable::QuantizedUnsignedIntegerTrait;
+use feagi_basis_quantization::quantizable::QuantizedUnsignedIntegerTrait;
 use crate::generic_collections::feagi_index_organizer_error::IndexOrganizerError;
 
 pub struct IndexManager<Q: QuantizedUnsignedIntegerTrait> {

@@ -1,8 +1,8 @@
-use crate::values::quantizable::{QuantizationLevelPacking, QuantizedElementBase};
+use crate::quantizable::{QuantizationLevelPacking, QuantizedElementBase};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use crate::values::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
-use crate::values::quantizable::data_value_quantization_error::DataValueQuantizationError;
+use crate::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
+use crate::quantizable::data_value_quantization_error::DataValueQuantizationError;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -651,10 +651,10 @@ macro_rules! create_wrapped_quantized_signed_integer {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, ::serde::Deserialize)]
         #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
-        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(Q);
+        $vis struct $struct_name<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>(Q);
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> $struct_name<Q> {
-            pub const LEVEL: $crate::values::quantizable::SignedIntegerQuantizationLevel = Q::LEVEL;
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> $struct_name<Q> {
+            pub const LEVEL: $crate::quantizable::SignedIntegerQuantizationLevel = Q::LEVEL;
             pub const QUANT_ZERO: Self = Self::const_new(Q::QUANT_ZERO);
             pub const QUANT_ONE: Self = Self::const_new(Q::QUANT_ONE);
             pub const QUANT_MAX: Self = Self::const_new(Q::QUANT_MAX);
@@ -689,18 +689,18 @@ macro_rules! create_wrapped_quantized_signed_integer {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>
-            $crate::values::quantizable::QuantizedElementBase for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>
+            $crate::quantizable::QuantizedElementBase for $struct_name<Q>
         {
             const QUANT_ZERO: Self = Self::const_new(Q::QUANT_ZERO);
             const QUANT_ONE: Self = Self::const_new(Q::QUANT_ONE);
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>
-            $crate::values::quantizable::QuantizedSignedIntegerTrait for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>
+            $crate::quantizable::QuantizedSignedIntegerTrait for $struct_name<Q>
         {
             type QuantType = Q;
-            const LEVEL: $crate::values::quantizable::SignedIntegerQuantizationLevel = Q::LEVEL;
+            const LEVEL: $crate::quantizable::SignedIntegerQuantizationLevel = Q::LEVEL;
             const QUANT_MAX: Self = Self::const_new(Q::QUANT_MAX);
             const QUANT_MAX_I8: Self = Self::const_new(Q::QUANT_MAX_I8);
             const QUANT_MAX_I16: Self = Self::const_new(Q::QUANT_MAX_I16);
@@ -718,11 +718,11 @@ macro_rules! create_wrapped_quantized_signed_integer {
                 Self::const_new(Q::quant_from_isize_unchecked(value))
             }
 
-            fn quant_to_enum(self) -> $crate::values::quantizable::SignedIntegerEnum {
+            fn quant_to_enum(self) -> $crate::quantizable::SignedIntegerEnum {
                 self.0.quant_to_enum()
             }
 
-            fn quant_try_from_isize(value: isize) -> Result<Self, $crate::values::quantizable::DataValueQuantizationError> {
+            fn quant_try_from_isize(value: isize) -> Result<Self, $crate::quantizable::DataValueQuantizationError> {
                 Ok(Self::const_new(Q::quant_try_from_isize(value)?))
             }
 
@@ -746,25 +746,25 @@ macro_rules! create_wrapped_quantized_signed_integer {
                 self.0.quant_to_i64_unchecked()
             }
 
-            fn from_quantization_unchecked<FromQuant: $crate::values::quantizable::QuantizedSignedIntegerTrait>(
+            fn from_quantization_unchecked<FromQuant: $crate::quantizable::QuantizedSignedIntegerTrait>(
                 value: FromQuant,
             ) -> Self {
                 Self::const_new(Q::from_quantization_unchecked(value))
             }
 
-            fn from_quantization_clamped<FromQuant: $crate::values::quantizable::QuantizedSignedIntegerTrait>(
+            fn from_quantization_clamped<FromQuant: $crate::quantizable::QuantizedSignedIntegerTrait>(
                 value: FromQuant,
             ) -> Self {
                 Self::const_new(Q::from_quantization_clamped(value))
             }
 
-            fn try_from_quantization<FromQuant: $crate::values::quantizable::QuantizedSignedIntegerTrait>(
+            fn try_from_quantization<FromQuant: $crate::quantizable::QuantizedSignedIntegerTrait>(
                 value: FromQuant,
-            ) -> Result<Self, $crate::values::quantizable::DataValueQuantizationError> {
+            ) -> Result<Self, $crate::quantizable::DataValueQuantizationError> {
                 Ok(Self::const_new(Q::try_from_quantization(value)?))
             }
 
-            fn clamp_for_quantization<ClampFor: $crate::values::quantizable::QuantizedSignedIntegerTrait>(
+            fn clamp_for_quantization<ClampFor: $crate::quantizable::QuantizedSignedIntegerTrait>(
                 self,
             ) -> Self {
                 Self::const_new(self.0.clamp_for_quantization::<ClampFor>())
@@ -772,7 +772,7 @@ macro_rules! create_wrapped_quantized_signed_integer {
 
             fn clamp_for_quantization_level_runtime(
                 self,
-                level: $crate::values::quantizable::SignedIntegerQuantizationLevel,
+                level: $crate::quantizable::SignedIntegerQuantizationLevel,
             ) -> Self {
                 Self::const_new(self.0.clamp_for_quantization_level_runtime(level))
             }
@@ -786,8 +786,8 @@ macro_rules! create_wrapped_quantized_signed_integer {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>
-            $crate::values::quantizable::QuantizedSignedIntegerWrappedTrait for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>
+            $crate::quantizable::QuantizedSignedIntegerWrappedTrait for $struct_name<Q>
         {
             const QUANT_MAX: Self = Self::const_new(Q::QUANT_MAX);
             const QUANT_MAX_I8: Self = Self::const_new(Q::QUANT_MAX_I8);
@@ -804,43 +804,43 @@ macro_rules! create_wrapped_quantized_signed_integer {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> From<Q> for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> From<Q> for $struct_name<Q> {
             fn from(value: Q) -> Self {
                 Self(value)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> From<&Q> for &$struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> From<&Q> for &$struct_name<Q> {
             fn from(value: &Q) -> Self {
                 unsafe { &*(value as *const Q as *const $struct_name<Q>) }
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> From<&mut Q> for &mut $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> From<&mut Q> for &mut $struct_name<Q> {
             fn from(value: &mut Q) -> Self {
                 unsafe { &mut *(value as *mut Q as *mut $struct_name<Q>) }
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> AsRef<Q> for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> AsRef<Q> for $struct_name<Q> {
             fn as_ref(&self) -> &Q {
                 &self.0
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> AsMut<Q> for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> AsMut<Q> for $struct_name<Q> {
             fn as_mut(&mut self) -> &mut Q {
                 &mut self.0
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::fmt::Display for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::fmt::Display for $struct_name<Q> {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 core::fmt::Display::fmt(&self.0, f)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> ::serde::Serialize for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> ::serde::Serialize for $struct_name<Q> {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
                 S: ::serde::Serializer,
@@ -849,90 +849,90 @@ macro_rules! create_wrapped_quantized_signed_integer {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::iter::Sum for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::iter::Sum for $struct_name<Q> {
             fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
                 Self(
-                    iter.map($crate::values::quantizable::QuantizedSignedIntegerWrappedTrait::deref)
+                    iter.map($crate::quantizable::QuantizedSignedIntegerWrappedTrait::deref)
                         .sum(),
                 )
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::iter::Product for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::iter::Product for $struct_name<Q> {
             fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
                 Self(
-                    iter.map($crate::values::quantizable::QuantizedSignedIntegerWrappedTrait::deref)
+                    iter.map($crate::quantizable::QuantizedSignedIntegerWrappedTrait::deref)
                         .product(),
                 )
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Add for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Add for $struct_name<Q> {
             type Output = Self;
             fn add(self, rhs: Self) -> Self::Output {
                 Self(self.0 + rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Sub for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Sub for $struct_name<Q> {
             type Output = Self;
             fn sub(self, rhs: Self) -> Self::Output {
                 Self(self.0 - rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Mul for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Mul for $struct_name<Q> {
             type Output = Self;
             fn mul(self, rhs: Self) -> Self::Output {
                 Self(self.0 * rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Div for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Div for $struct_name<Q> {
             type Output = Self;
             fn div(self, rhs: Self) -> Self::Output {
                 Self(self.0 / rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Rem for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::Rem for $struct_name<Q> {
             type Output = Self;
             fn rem(self, rhs: Self) -> Self::Output {
                 Self(self.0 % rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::AddAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::AddAssign for $struct_name<Q> {
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::SubAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::SubAssign for $struct_name<Q> {
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::MulAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::MulAssign for $struct_name<Q> {
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::DivAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::DivAssign for $struct_name<Q> {
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::RemAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> core::ops::RemAssign for $struct_name<Q> {
             fn rem_assign(&mut self, rhs: Self) {
                 self.0 %= rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait> Default for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait> Default for $struct_name<Q> {
             fn default() -> Self {
                 Self(Q::default())
             }
@@ -948,52 +948,52 @@ macro_rules! create_wrapped_quantized_signed_integer {
             }
 
             impl [<$struct_name Enum>] {
-                pub fn new_from_quantized<FromQuant: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
+                pub fn new_from_quantized<FromQuant: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
                     value: $struct_name<FromQuant>
                 ) -> Self {
                     Self::from_signed_integer_enum(
-                        $crate::values::quantizable::SignedIntegerEnum::new_from_quantized(value.deref())
+                        $crate::quantizable::SignedIntegerEnum::new_from_quantized(value.deref())
                     )
                 }
 
-                pub fn from_signed_integer_enum(value: $crate::values::quantizable::SignedIntegerEnum) -> Self {
+                pub fn from_signed_integer_enum(value: $crate::quantizable::SignedIntegerEnum) -> Self {
                     match value {
-                        $crate::values::quantizable::SignedIntegerEnum::I8(v) => {
+                        $crate::quantizable::SignedIntegerEnum::I8(v) => {
                             Self::I8($struct_name::<i8>::new(v))
                         }
-                        $crate::values::quantizable::SignedIntegerEnum::I16(v) => {
+                        $crate::quantizable::SignedIntegerEnum::I16(v) => {
                             Self::I16($struct_name::<i16>::new(v))
                         }
-                        $crate::values::quantizable::SignedIntegerEnum::I32(v) => {
+                        $crate::quantizable::SignedIntegerEnum::I32(v) => {
                             Self::I32($struct_name::<i32>::new(v))
                         }
-                        $crate::values::quantizable::SignedIntegerEnum::I64(v) => {
+                        $crate::quantizable::SignedIntegerEnum::I64(v) => {
                             Self::I64($struct_name::<i64>::new(v))
                         }
                     }
                 }
 
-                pub fn into_signed_integer_enum(self) -> $crate::values::quantizable::SignedIntegerEnum {
+                pub fn into_signed_integer_enum(self) -> $crate::quantizable::SignedIntegerEnum {
                     match self {
-                        Self::I8(v) => $crate::values::quantizable::SignedIntegerEnum::I8(v.deref()),
-                        Self::I16(v) => $crate::values::quantizable::SignedIntegerEnum::I16(v.deref()),
-                        Self::I32(v) => $crate::values::quantizable::SignedIntegerEnum::I32(v.deref()),
-                        Self::I64(v) => $crate::values::quantizable::SignedIntegerEnum::I64(v.deref()),
+                        Self::I8(v) => $crate::quantizable::SignedIntegerEnum::I8(v.deref()),
+                        Self::I16(v) => $crate::quantizable::SignedIntegerEnum::I16(v.deref()),
+                        Self::I32(v) => $crate::quantizable::SignedIntegerEnum::I32(v.deref()),
+                        Self::I64(v) => $crate::quantizable::SignedIntegerEnum::I64(v.deref()),
                     }
                 }
 
-                pub fn get_level(&self) -> $crate::values::quantizable::SignedIntegerQuantizationLevel {
+                pub fn get_level(&self) -> $crate::quantizable::SignedIntegerQuantizationLevel {
                     match self {
-                        Self::I8(_) => $crate::values::quantizable::SignedIntegerQuantizationLevel::I8,
-                        Self::I16(_) => $crate::values::quantizable::SignedIntegerQuantizationLevel::I16,
-                        Self::I32(_) => $crate::values::quantizable::SignedIntegerQuantizationLevel::I32,
-                        Self::I64(_) => $crate::values::quantizable::SignedIntegerQuantizationLevel::I64,
+                        Self::I8(_) => $crate::quantizable::SignedIntegerQuantizationLevel::I8,
+                        Self::I16(_) => $crate::quantizable::SignedIntegerQuantizationLevel::I16,
+                        Self::I32(_) => $crate::quantizable::SignedIntegerQuantizationLevel::I32,
+                        Self::I64(_) => $crate::quantizable::SignedIntegerQuantizationLevel::I64,
                     }
                 }
 
-                pub fn try_into_quant<Quant: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
+                pub fn try_into_quant<Quant: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
                     self
-                ) -> Result<Quant, $crate::values::quantizable::DataValueQuantizationError> {
+                ) -> Result<Quant, $crate::quantizable::DataValueQuantizationError> {
                     match self {
                         Self::I8(value) => Quant::try_from_quantization(value.deref()),
                         Self::I16(value) => Quant::try_from_quantization(value.deref()),
@@ -1002,7 +1002,7 @@ macro_rules! create_wrapped_quantized_signed_integer {
                     }
                 }
 
-                pub fn into_quant<Quant: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(self) -> Quant {
+                pub fn into_quant<Quant: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>(self) -> Quant {
                     match self {
                         Self::I8(value) => Quant::from_quantization_unchecked(value.deref()),
                         Self::I16(value) => Quant::from_quantization_unchecked(value.deref()),
@@ -1020,31 +1020,31 @@ macro_rules! create_wrapped_quantized_signed_integer {
                     }
                 }
 
-                pub fn try_into_wrapped_quant<Quant: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
+                pub fn try_into_wrapped_quant<Quant: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
                     self
-                ) -> Result<$struct_name<Quant>, $crate::values::quantizable::DataValueQuantizationError> {
+                ) -> Result<$struct_name<Quant>, $crate::quantizable::DataValueQuantizationError> {
                     Ok($struct_name::<Quant>::new(self.try_into_quant::<Quant>()?))
                 }
 
-                pub fn into_wrapped_quant<Quant: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
+                pub fn into_wrapped_quant<Quant: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
                     self
                 ) -> $struct_name<Quant> {
                     $struct_name::<Quant>::new(self.into_quant::<Quant>())
                 }
             }
 
-            impl $crate::values::quantizable::WrappedQuantizedSignedIntegerEnum for [<$struct_name Enum>] {
-                fn get_level(&self) -> $crate::values::quantizable::SignedIntegerQuantizationLevel {
+            impl $crate::quantizable::WrappedQuantizedSignedIntegerEnum for [<$struct_name Enum>] {
+                fn get_level(&self) -> $crate::quantizable::SignedIntegerQuantizationLevel {
                     [<$struct_name Enum>]::get_level(self)
                 }
 
-                fn try_into_quant<Quant: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
+                fn try_into_quant<Quant: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
                     self
-                ) -> Result<Quant, $crate::values::quantizable::DataValueQuantizationError> {
+                ) -> Result<Quant, $crate::quantizable::DataValueQuantizationError> {
                     [<$struct_name Enum>]::try_into_quant(self)
                 }
 
-                fn into_quant<Quant: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(self) -> Quant {
+                fn into_quant<Quant: $crate::quantizable::QuantizedSignedIntegerUnwrappedTrait>(self) -> Quant {
                     [<$struct_name Enum>]::into_quant(self)
                 }
 

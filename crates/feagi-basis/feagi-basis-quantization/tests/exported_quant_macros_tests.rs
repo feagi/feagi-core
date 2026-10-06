@@ -1,13 +1,10 @@
-use feagi_basis_quantization::values::quantizable::{
-    DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedSignedIntegerTrait, QuantizedUnsignedIntegerTrait,
-    QuantizedUnsignedPercentageTrait, SignedIntegerQuantizationLevel, UnsignedIntegerQuantizationLevel,
-    WrappedQuantizedDecimalEnum,
-};
+use feagi_basis_quantization::prelude::*;
+use feagi_basis_quantization::quantizable::{DecimalQuantizationLevel, QuantizedUnsignedPercentageTrait, SignedIntegerQuantizationLevel, UnsignedIntegerQuantizationLevel, WrappedQuantizedDecimalEnum};
 
-feagi_basis_quantization::create_wrapped_quantized_unsigned_integer!(pub TestUnsignedWrap);
-feagi_basis_quantization::create_wrapped_quantized_signed_integer!(pub TestSignedWrap);
-feagi_basis_quantization::create_wrapped_quantized_decimal!(pub TestDecimalWrap);
-feagi_basis_quantization::create_wrapped_percentage_unsigned!(pub TestPercentWrap);
+create_wrapped_quantized_unsigned_integer!(pub TestUnsignedWrap);
+create_wrapped_quantized_signed_integer!(pub TestSignedWrap);
+create_wrapped_quantized_decimal!(pub TestDecimalWrap);
+create_wrapped_percentage_unsigned!(pub TestPercentWrap);
 
 #[test]
 fn unsigned_wrapper_macro_supports_cross_quantization_and_runtime_clamping() {

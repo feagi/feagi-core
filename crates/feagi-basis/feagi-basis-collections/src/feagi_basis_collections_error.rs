@@ -1,6 +1,6 @@
 use crate::bit_packed_bool::BitBatchParDataError;
 use crate::generic_data::ParDataError;
-use crate::spatial_indexing_structs::SpatialIndexingError;
+use crate::spatial_helpers::SpatialHelperError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -10,5 +10,5 @@ pub enum FeagiBasisCollectionsError {
     #[error(transparent)]
     BitBatchParDataError(#[from] BitBatchParDataError),
     #[error(transparent)]
-    SpatialIndexingError(#[from] SpatialIndexingError),
+    SpatialIndexingError(#[from] SpatialHelperError),
 }

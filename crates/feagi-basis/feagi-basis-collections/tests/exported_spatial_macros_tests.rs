@@ -1,9 +1,12 @@
+use feagi_basis_collections::prelude::*;
+
 feagi_basis_quantization::create_wrapped_quantized_unsigned_integer!(pub TestAxis);
 feagi_basis_quantization::create_wrapped_quantized_unsigned_integer!(pub TestLinearIndex);
 feagi_basis_quantization::create_wrapped_quantized_unsigned_integer!(pub TestLinearCount);
 feagi_basis_quantization::create_wrapped_quantized_signed_integer!(pub TestSignedAxis);
 
-feagi_basis_quantization::create_wrapped_unsigned_integer_spatial_coordinate!(
+
+create_wrapped_unsigned_integer_spatial_coordinate!(
     pub TestCoord3,
     3,
     (0, x, TestAxis),
@@ -11,7 +14,7 @@ feagi_basis_quantization::create_wrapped_unsigned_integer_spatial_coordinate!(
     (2, z, TestAxis),
 );
 
-feagi_basis_quantization::create_wrapped_unsigned_integer_spatial_data!(
+create_wrapped_unsigned_integer_spatial_data!(
     pub TestData3,
     3,
     (0, x, TestAxis),
@@ -19,7 +22,7 @@ feagi_basis_quantization::create_wrapped_unsigned_integer_spatial_data!(
     (2, z, TestAxis),
 );
 
-feagi_basis_quantization::create_wrapped_unsigned_integer_spatial_dimensions!(
+create_wrapped_unsigned_integer_spatial_dimensions!(
     pub TestDims3,
     TestCoord3,
     TestLinearIndex,
@@ -30,7 +33,7 @@ feagi_basis_quantization::create_wrapped_unsigned_integer_spatial_dimensions!(
     (2, z, TestAxis),
 );
 
-feagi_basis_quantization::create_wrapped_signed_integer_spatial!(
+create_wrapped_signed_integer_spatial!(
     pub TestSignedSpatial3,
     3,
     (0, x, TestSignedAxis),

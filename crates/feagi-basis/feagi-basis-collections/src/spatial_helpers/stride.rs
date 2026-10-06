@@ -1,7 +1,7 @@
 use feagi_basis_quantization::prelude::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
-use crate::spatial_indexing_structs::axis_order::AxisOrderArray;
-use crate::spatial_indexing_structs::coordinate::SpatialCoordinate;
-use crate::spatial_indexing_structs::dimensions::SpatialDimensions;
+use crate::spatial_helpers::axis_order::AxisOrderArray;
+use crate::spatial_helpers::coordinate::SpatialCoordinate;
+use crate::spatial_helpers::dimensions::SpatialDimensions;
 
 /// Generic owned stride value for an N-dimensional index space. This can use usize since we do
 /// not actually serialize this, we skip it

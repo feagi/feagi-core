@@ -1,9 +1,5 @@
 use serde::de::DeserializeOwned;
-use feagi_basis_collections::generic_data::par_data::{ParData, ParDataStore};
-use feagi_basis_collections::generic_data::spatial::SpatialParDataOwning;
-use feagi_basis_collections::prelude::*;
-use feagi_basis_collections::spatial_indexing_structs::axis_order::AxisOrderIncrementing;
-use feagi_basis_quantization::prelude::*;
+use feagi_basis::prelude::*;
 
 create_wrapped_quantized_decimal!(
     /// Represents the Membrane Potential of a single neuron

@@ -1,8 +1,8 @@
-use crate::values::quantizable::DataValueQuantizationError;
+use feagi_basis_quantization::quantizable::DataValueQuantizationError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum DataValuesSpatialError {
+pub enum SpatialContextError {
     #[error("Attempted to index using a coordinate, but it was not in the given dimensions")]
     InvalidSpatialIndex,
     #[error("Attempted to create a dimensions value with a zero sized axis")]

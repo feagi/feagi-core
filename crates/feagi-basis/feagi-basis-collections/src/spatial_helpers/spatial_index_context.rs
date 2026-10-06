@@ -1,14 +1,14 @@
 use std::marker::PhantomData;
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 use crate::prelude::{SpatialCoordinate, SpatialDimensions};
-use crate::spatial_indexing_structs::axis_order::{AxisOrder, AxisOrderArray};
-use crate::spatial_indexing_structs::SpatialStride;
+use crate::spatial_helpers::axis_order::{AxisOrder, AxisOrderArray};
+use crate::spatial_helpers::SpatialStride;
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, ::serde::Serialize)]
 #[serde(bound(
     serialize = "QDims: ::serde::Serialize",
 ))]
-pub struct SpatialContext<QDims, AxisOrderType, const NUM_DIMS: usize>
+pub struct SpatialHelper<QDims, AxisOrderType, const NUM_DIMS: usize>
 where
     QDims: QuantizedUnsignedIntegerTrait,
     AxisOrderType: AxisOrder<NUM_DIMS>,
@@ -21,7 +21,7 @@ where
     _p: core::marker::PhantomData<AxisOrderType>
 }
 
-impl<QDims, AxisOrderType, const NUM_DIMS: usize> SpatialContext<QDims, AxisOrderType, NUM_DIMS>
+impl<QDims, AxisOrderType, const NUM_DIMS: usize> SpatialHelper<QDims, AxisOrderType, NUM_DIMS>
 where
     QDims: QuantizedUnsignedIntegerTrait,
     AxisOrderType: AxisOrder<NUM_DIMS>,
@@ -78,7 +78,7 @@ where
     _p: PhantomData<AxisOrderType>
 }
 impl<'de, QDims, AxisOrderType, const NUM_DIMS: usize> ::serde::Deserialize<'de>
-for SpatialContext<QDims, AxisOrderType, NUM_DIMS>
+for SpatialHelper<QDims, AxisOrderType, NUM_DIMS>
 where
     QDims: QuantizedUnsignedIntegerTrait,
     AxisOrderType: AxisOrder<NUM_DIMS>,

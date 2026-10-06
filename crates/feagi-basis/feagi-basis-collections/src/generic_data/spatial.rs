@@ -2,12 +2,13 @@ use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
-use crate::spatial_indexing_structs::SpatialIndexingError;
+use crate::spatial_helpers::SpatialHelperError;
 use crate::generic_data::par_data::{ParDataStore, ParDataStoreMut, ParDataStoreResizable};
 use crate::prelude::SpatialDimensions;
-use crate::spatial_indexing_structs::axis_order::{AxisOrder, AxisOrderArray};
-use crate::spatial_indexing_structs::spatial_index_context::SpatialContext;
-use crate::spatial_indexing_structs::SpatialCoordinate;
+use crate::spatial_context::spatial_context_error::SpatialContextError;
+use crate::spatial_helpers::axis_order::{AxisOrder, AxisOrderArray};
+use crate::spatial_helpers::spatial_index_context::SpatialHelper;
+use crate::spatial_helpers::SpatialCoordinate;
 
 pub trait SpatialParDataTrait<QLinear, QCoord, QDims, AxisOrderType, S, const NUM_DIMS: usize>: Sized
 where
@@ -19,7 +20,7 @@ where
 {
     fn data_as_slice(&self) -> &[S::Elem];
 
-    fn get_spatial_context(&self) -> &SpatialContext<QDims, AxisOrderType, NUM_DIMS>;
+    fn get_spatial_context(&self) -> &SpatialHelper<QDims, AxisOrderType, NUM_DIMS>;
 
     //region Impls
     fn get_dimensions(&self) -> &SpatialDimensions<QDims, NUM_DIMS> {
@@ -78,7 +79,7 @@ where
     AxisOrderType: AxisOrder<NUM_DIMS>,
     S: ParDataStore<Elem=D> + DeserializeOwned + 'static,
 {
-    context: SpatialContext<QDims, AxisOrderType, NUM_DIMS>,
+    context: SpatialHelper<QDims, AxisOrderType, NUM_DIMS>,
     data: S,
     _p: core::marker::PhantomData<(QLinear, QCoord)>
 }
@@ -92,11 +93,11 @@ where
     AxisOrderType: AxisOrder<NUM_DIMS>,
     S: ParDataStore<Elem=D> + DeserializeOwned + 'static,
 {
-    pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>, data: S) -> Result<Self, SpatialIndexingError> {
+    pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>, data: S) -> Result<Self, SpatialHelperError> {
         if dimensions.spatial_element_count() != data.len() {
-            return Err(SpatialIndexingError::InvalidDimensions);
+            return Err(SpatialHelperError::InvalidContext(SpatialContextError::DimensionsCannotBeZero));
         }
-        let context = SpatialContext::new(dimensions);
+        let context = SpatialHelper::new(dimensions);
         Ok(Self {
             context,
             data,
@@ -110,7 +111,7 @@ where
         S::Elem: Default
     {
         let data = S::new_from_element_default(dimensions.spatial_element_count());
-        let context = SpatialContext::new(dimensions);
+        let context = SpatialHelper::new(dimensions);
         Self {
             context,
             data,
@@ -124,7 +125,7 @@ where
         S::Elem: Clone
     {
         let data = S::new_from_element_clonable(dimensions.spatial_element_count(), source_element);
-        let context = SpatialContext::new(dimensions);
+        let context = SpatialHelper::new(dimensions);
         Self {
             context,
             data,
@@ -147,7 +148,7 @@ where
         self.data.store_as_slice()
     }
 
-    fn get_spatial_context(&self) -> &SpatialContext<QDims, AxisOrderType, NUM_DIMS> {
+    fn get_spatial_context(&self) -> &SpatialHelper<QDims, AxisOrderType, NUM_DIMS> {
         &self.context
     }
 

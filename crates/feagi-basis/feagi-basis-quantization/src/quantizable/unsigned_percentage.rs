@@ -1,7 +1,7 @@
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use crate::values::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
-use crate::values::quantizable::data_value_quantization_error::DataValueQuantizationError;
+use crate::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
+use crate::quantizable::data_value_quantization_error::DataValueQuantizationError;
 
 /// Shared unsigned-percentage semantics for both [`PercentageUnsigned`] and wrapped newtypes.
 ///
@@ -175,72 +175,72 @@ macro_rules! create_wrapped_percentage_unsigned {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, ::serde::Serialize, ::serde::Deserialize)]
         #[serde(bound(deserialize = "Q: ::serde::de::DeserializeOwned"))]
-        $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>(
-            $crate::values::quantizable::PercentageUnsigned<Q>
+        $vis struct $struct_name<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>(
+            $crate::quantizable::PercentageUnsigned<Q>
         );
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> $struct_name<Q> {
             pub const ZERO_PERCENT: Self =
-                Self::const_new($crate::values::quantizable::PercentageUnsigned::<Q>::ZERO_PERCENT);
+                Self::const_new($crate::quantizable::PercentageUnsigned::<Q>::ZERO_PERCENT);
             pub const HUNDRED_PERCENT: Self =
-                Self::const_new($crate::values::quantizable::PercentageUnsigned::<Q>::HUNDRED_PERCENT);
+                Self::const_new($crate::quantizable::PercentageUnsigned::<Q>::HUNDRED_PERCENT);
 
-            pub const fn const_new(value: $crate::values::quantizable::PercentageUnsigned<Q>) -> Self {
+            pub const fn const_new(value: $crate::quantizable::PercentageUnsigned<Q>) -> Self {
                 Self(value)
             }
 
-            pub const fn const_dewrap(self) -> $crate::values::quantizable::PercentageUnsigned<Q> {
+            pub const fn const_dewrap(self) -> $crate::quantizable::PercentageUnsigned<Q> {
                 self.0
             }
 
-            pub fn new(v: $crate::values::quantizable::PercentageUnsigned<Q>) -> Self {
+            pub fn new(v: $crate::quantizable::PercentageUnsigned<Q>) -> Self {
                 Self(v)
             }
 
             /// Extracts the inner percentage.
-            pub fn dewrap(self) -> $crate::values::quantizable::PercentageUnsigned<Q> {
+            pub fn dewrap(self) -> $crate::quantizable::PercentageUnsigned<Q> {
                 self.0
             }
 
             /// Alias for [`Self::dewrap`].
-            pub fn deref(self) -> $crate::values::quantizable::PercentageUnsigned<Q> {
+            pub fn deref(self) -> $crate::quantizable::PercentageUnsigned<Q> {
                 self.dewrap()
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>
-            $crate::values::quantizable::QuantizedUnsignedPercentageTrait for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>
+            $crate::quantizable::QuantizedUnsignedPercentageTrait for $struct_name<Q>
         {
             type DecimalQuant = Q;
 
             const ZERO_PERCENT: Self =
-                Self::const_new($crate::values::quantizable::PercentageUnsigned::<Q>::ZERO_PERCENT);
+                Self::const_new($crate::quantizable::PercentageUnsigned::<Q>::ZERO_PERCENT);
             const HUNDRED_PERCENT: Self =
-                Self::const_new($crate::values::quantizable::PercentageUnsigned::<Q>::HUNDRED_PERCENT);
+                Self::const_new($crate::quantizable::PercentageUnsigned::<Q>::HUNDRED_PERCENT);
 
-            fn new_checked(value: Q) -> Result<Self, $crate::values::quantizable::DataValueQuantizationError> {
+            fn new_checked(value: Q) -> Result<Self, $crate::quantizable::DataValueQuantizationError> {
                 Ok(Self::const_new(
-                    $crate::values::quantizable::PercentageUnsigned::new_checked(value)?,
+                    $crate::quantizable::PercentageUnsigned::new_checked(value)?,
                 ))
             }
 
             fn new_clamped(value: Q) -> Self {
-                Self::const_new($crate::values::quantizable::PercentageUnsigned::new_clamped(value))
+                Self::const_new($crate::quantizable::PercentageUnsigned::new_clamped(value))
             }
 
             fn new_unchecked(value: Q) -> Self {
-                Self::const_new($crate::values::quantizable::PercentageUnsigned::new_unchecked(value))
+                Self::const_new($crate::quantizable::PercentageUnsigned::new_unchecked(value))
             }
 
-            fn from_quantization<FromQuant: $crate::values::quantizable::QuantizedDecimalTrait>(
-                value: $crate::values::quantizable::PercentageUnsigned<FromQuant>,
+            fn from_quantization<FromQuant: $crate::quantizable::QuantizedDecimalTrait>(
+                value: $crate::quantizable::PercentageUnsigned<FromQuant>,
             ) -> Self {
-                Self::const_new($crate::values::quantizable::PercentageUnsigned::from_quantization(value))
+                Self::const_new($crate::quantizable::PercentageUnsigned::from_quantization(value))
             }
 
-            fn to_quantization<ToQuant: $crate::values::quantizable::QuantizedDecimalTrait>(
+            fn to_quantization<ToQuant: $crate::quantizable::QuantizedDecimalTrait>(
                 self,
-            ) -> $crate::values::quantizable::PercentageUnsigned<ToQuant> {
+            ) -> $crate::quantizable::PercentageUnsigned<ToQuant> {
                 self.0.to_quantization()
             }
 
@@ -249,89 +249,89 @@ macro_rules! create_wrapped_percentage_unsigned {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>
-            $crate::values::quantizable::QuantizedUnsignedPercentageWrappedTrait for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>
+            $crate::quantizable::QuantizedUnsignedPercentageWrappedTrait for $struct_name<Q>
         {
             type Quant = Q;
 
-            fn new(value: $crate::values::quantizable::PercentageUnsigned<Q>) -> Self {
+            fn new(value: $crate::quantizable::PercentageUnsigned<Q>) -> Self {
                 Self(value)
             }
 
-            fn dewrap(self) -> $crate::values::quantizable::PercentageUnsigned<Q> {
+            fn dewrap(self) -> $crate::quantizable::PercentageUnsigned<Q> {
                 self.0
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>
-            From<$crate::values::quantizable::PercentageUnsigned<Q>> for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>
+            From<$crate::quantizable::PercentageUnsigned<Q>> for $struct_name<Q>
         {
-            fn from(value: $crate::values::quantizable::PercentageUnsigned<Q>) -> Self {
+            fn from(value: $crate::quantizable::PercentageUnsigned<Q>) -> Self {
                 Self(value)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>
-            From<&$crate::values::quantizable::PercentageUnsigned<Q>> for &$struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>
+            From<&$crate::quantizable::PercentageUnsigned<Q>> for &$struct_name<Q>
         {
-            fn from(value: &$crate::values::quantizable::PercentageUnsigned<Q>) -> Self {
+            fn from(value: &$crate::quantizable::PercentageUnsigned<Q>) -> Self {
                 unsafe {
-                    &*(value as *const $crate::values::quantizable::PercentageUnsigned<Q> as *const $struct_name<Q>)
+                    &*(value as *const $crate::quantizable::PercentageUnsigned<Q> as *const $struct_name<Q>)
                 }
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>
-            AsRef<$crate::values::quantizable::PercentageUnsigned<Q>> for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>
+            AsRef<$crate::quantizable::PercentageUnsigned<Q>> for $struct_name<Q>
         {
-            fn as_ref(&self) -> &$crate::values::quantizable::PercentageUnsigned<Q> {
+            fn as_ref(&self) -> &$crate::quantizable::PercentageUnsigned<Q> {
                 &self.0
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait>
-            AsMut<$crate::values::quantizable::PercentageUnsigned<Q>> for $struct_name<Q>
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait>
+            AsMut<$crate::quantizable::PercentageUnsigned<Q>> for $struct_name<Q>
         {
-            fn as_mut(&mut self) -> &mut $crate::values::quantizable::PercentageUnsigned<Q> {
+            fn as_mut(&mut self) -> &mut $crate::quantizable::PercentageUnsigned<Q> {
                 &mut self.0
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::fmt::Display for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::fmt::Display for $struct_name<Q> {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 core::fmt::Display::fmt(&self.0, f)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Mul for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Mul for $struct_name<Q> {
             type Output = Self;
             fn mul(self, rhs: Self) -> Self::Output {
                 Self(self.0 * rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Div for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::Div for $struct_name<Q> {
             type Output = Self;
             fn div(self, rhs: Self) -> Self::Output {
                 Self(self.0 / rhs.0)
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::MulAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::MulAssign for $struct_name<Q> {
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::DivAssign for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> core::ops::DivAssign for $struct_name<Q> {
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedDecimalUnwrappedTrait> Default for $struct_name<Q> {
+        impl<Q: $crate::quantizable::QuantizedDecimalUnwrappedTrait> Default for $struct_name<Q> {
             fn default() -> Self {
-                Self($crate::values::quantizable::PercentageUnsigned::<Q>::default())
+                Self($crate::quantizable::PercentageUnsigned::<Q>::default())
             }
         }
     };

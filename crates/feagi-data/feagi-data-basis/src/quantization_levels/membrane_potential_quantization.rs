@@ -2,7 +2,7 @@ use core::hash::Hash;
 use half::{bf16, f16};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use feagi_basis::feagi_quantization::values::quantizable::DecimalQuantizationLevel;
+use feagi_basis_quantization::::DecimalQuantizationLevel;
 use feagi_basis::prelude::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
 
 /// Defines the quantization of the neuron potential for a specific cortical area. All cortical
