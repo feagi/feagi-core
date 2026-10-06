@@ -1,5 +1,5 @@
 [package]
-name = "feagi-basis-genome"
+name = "feagi-data-genome"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

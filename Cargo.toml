@@ -91,16 +91,16 @@ serde_json = {workspace = true, optional = true, default-features = false}
 resolver = "2"
 members = [
     "crates/feagi-macro-components",
-
     "crates/feagi-basis",
     "crates/feagi-basis/feagi-basis-quantization",
     "crates/feagi-basis/feagi-basis-collections",
     "crates/feagi-basis/feagi-basis-threading",
 
     "crates/feagi-data",
-    "crates/feagi-data/feagi-basis-neuron",
-    "crates/feagi-data/feagi-basis-genome",
-    "crates/feagi-data/feagi-basis-genome/feagi-basis-genome-proc",
+    "crates/feagi-data/feagi-data-basis",
+    "crates/feagi-data/feagi-data-neuron",
+    "crates/feagi-data/feagi-data-genome",
+    "crates/feagi-data/feagi-data-genome/feagi-basis-genome-proc",
 
     "crates/feagi-brain",
     "crates/feagi-brain/feagi-brain-models",

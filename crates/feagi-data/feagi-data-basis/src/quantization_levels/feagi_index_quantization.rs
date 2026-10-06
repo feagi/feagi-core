@@ -1,7 +1,6 @@
 use core::hash::Hash;
-
 use serde::{Deserialize, Serialize};
-use crate::values::quantizable::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
+use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 // TODO xxhash?
 
 

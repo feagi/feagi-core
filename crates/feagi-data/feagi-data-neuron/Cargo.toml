@@ -1,5 +1,5 @@
 [package]
-name = "feagi-basis-neuron"
+name = "feagi-data-neuron"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

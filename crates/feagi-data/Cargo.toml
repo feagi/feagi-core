@@ -10,6 +10,11 @@ homepage.workspace = true
 documentation.workspace = true
 
 [dependencies]
+# Child crates
+feagi-data-basis = {path = "feagi-data-basis"}
+feagi-data-neuron = {path = "feagi-data-neuron"}
+feagi-data-genome = {path = "feagi-data-genome"}
+
 
 [lints]
 workspace = true

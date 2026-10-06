@@ -688,19 +688,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-basis-genome"
-version = "0.1.1"
-dependencies = [
- "ahash",
- "base64 0.23.1",
- "feagi-basis-genome-proc",
- "paste",
- "serde",
- "serde_json",
- "uuid",
-]
-
-[[package]]
 name = "feagi-basis-genome-proc"
 version = "0.1.1"
 dependencies = [
@@ -708,16 +695,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.6",
-]
-
-[[package]]
-name = "feagi-basis-neuron"
-version = "0.1.1"
-dependencies = [
- "half",
- "paste",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -792,6 +769,43 @@ dependencies = [
 [[package]]
 name = "feagi-data"
 version = "0.1.1"
+dependencies = [
+ "feagi-data-basis",
+ "feagi-data-genome",
+ "feagi-data-neuron",
+]
+
+[[package]]
+name = "feagi-data-basis"
+version = "0.1.1"
+dependencies = [
+ "feagi-basis",
+ "half",
+ "serde",
+]
+
+[[package]]
+name = "feagi-data-genome"
+version = "0.1.1"
+dependencies = [
+ "ahash",
+ "base64 0.23.1",
+ "feagi-basis-genome-proc",
+ "paste",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "feagi-data-neuron"
+version = "0.1.1"
+dependencies = [
+ "half",
+ "paste",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "feagi-macro-components"
