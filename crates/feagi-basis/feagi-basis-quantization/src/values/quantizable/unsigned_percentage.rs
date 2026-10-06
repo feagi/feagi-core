@@ -218,7 +218,7 @@ macro_rules! create_wrapped_percentage_unsigned {
             const HUNDRED_PERCENT: Self =
                 Self::const_new($crate::values::quantizable::PercentageUnsigned::<Q>::HUNDRED_PERCENT);
 
-            fn new_checked(value: Q) -> Result<Self, $crate::values::quantizable::FeagiDataValueQuantizationError> {
+            fn new_checked(value: Q) -> Result<Self, $crate::values::quantizable::DataValueQuantizationError> {
                 Ok(Self::const_new(
                     $crate::values::quantizable::PercentageUnsigned::new_checked(value)?,
                 ))

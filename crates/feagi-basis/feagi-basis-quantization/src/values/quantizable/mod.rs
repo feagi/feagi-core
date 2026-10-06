@@ -11,6 +11,8 @@ mod unsigned_integer;
 mod unsigned_percentage;
 mod data_value_quantization_error;
 
+pub use data_value_quantization_error::DataValueQuantizationError;
+
 pub use base_traits::QuantizedElementBase;
 pub use decimal::{
     DecimalEnum, DecimalQuantizationLevel, QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait, QuantizedDecimalWrappedTrait,

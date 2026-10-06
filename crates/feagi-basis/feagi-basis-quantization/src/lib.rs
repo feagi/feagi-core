@@ -1,10 +1,5 @@
-
-
 /// Singular values that are quantized
 pub mod values;
-
-/// Collections that are quantized, allow parallel mutable (unsafe) access
-//pub mod generic_collections;
 
 /// Common levels of quantizations that is used throughout FEAGI
 pub mod quantization_levels;
@@ -27,3 +22,7 @@ pub mod prelude {
     create_wrapped_percentage_unsigned, create_wrapped_quantized_signed_integer
     };
 }
+
+pub use feagi_basis_quantization_error::FeagiBasisQuantizationError;
+
+mod feagi_basis_quantization_error;

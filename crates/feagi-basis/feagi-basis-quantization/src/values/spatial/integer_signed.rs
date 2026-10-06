@@ -1,5 +1,5 @@
 use crate::values::quantizable::{QuantizedSignedIntegerTrait, QuantizedSignedIntegerUnwrappedTrait, SignedIntegerQuantizationLevel};
-use crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError;
+use crate::values::spatial::data_values_spatial_error::DataValuesSpatialError;
 use core::marker::PhantomData;
 use serde::de::{self, IgnoredAny, SeqAccess, Visitor};
 use serde::ser::SerializeSeq;
@@ -88,7 +88,7 @@ pub trait SignedIntegerSpatialTrait<Q: QuantizedSignedIntegerTrait, const NUM_DI
     /// value does not fit in the current quantization.
     fn new_from_quant<FromQuant: QuantizedSignedIntegerTrait>(
         value: SignedIntegerSpatial<FromQuant, NUM_DIMS>,
-    ) -> Result<Self, FeagiDataValuesSpatialError>;
+    ) -> Result<Self, DataValuesSpatialError>;
 
     /// Create from a correctly sized array of some other quant, clamping each axis value to fit.
     fn new_from_quant_clamped<FromQuant: QuantizedSignedIntegerTrait>(value: SignedIntegerSpatial<FromQuant, NUM_DIMS>) -> Self;
@@ -159,10 +159,10 @@ impl<Q: QuantizedSignedIntegerTrait, const NUM_DIMS: usize> SignedIntegerSpatial
 
     /// Create self from a correctly sized isize array, returning an error if any axis value does
     /// not fit in the current quantization.
-    pub fn new_from_isize_array(isize_array: [isize; NUM_DIMS]) -> Result<Self, FeagiDataValuesSpatialError> {
+    pub fn new_from_isize_array(isize_array: [isize; NUM_DIMS]) -> Result<Self, DataValuesSpatialError> {
         let mut data = [Q::QUANT_ZERO; NUM_DIMS];
         for (q, &i) in data.iter_mut().zip(isize_array.iter()) {
-            *q = Q::quant_try_from_isize(i).map_err(|e| e.into())?;
+            *q = Q::quant_try_from_isize(i)?;
         }
         Ok(Self { data })
     }
@@ -180,10 +180,10 @@ impl<Q: QuantizedSignedIntegerTrait, const NUM_DIMS: usize> SignedIntegerSpatial
     /// axis value does not fit in the current quantization.
     pub fn new_from_quant<FromQuant: QuantizedSignedIntegerTrait>(
         value_array: SignedIntegerSpatial<FromQuant, NUM_DIMS>,
-    ) -> Result<Self, FeagiDataValuesSpatialError> {
+    ) -> Result<Self, DataValuesSpatialError> {
         let mut data = [Q::QUANT_ZERO; NUM_DIMS];
         for (q, &v) in data.iter_mut().zip(value_array.as_data_slice().iter()) {
-            *q = Q::try_from_quantization(v).map_err(|e| e.into())?;
+            *q = Q::try_from_quantization(v)?;
         }
         Ok(Self { data })
     }
@@ -211,10 +211,10 @@ impl<Q: QuantizedSignedIntegerTrait, const NUM_DIMS: usize> SignedIntegerSpatial
     /// returning an error if any axis value does not fit.
     pub fn try_to_quantization<ToQuant: QuantizedSignedIntegerTrait>(
         self,
-    ) -> Result<SignedIntegerSpatial<ToQuant, NUM_DIMS>, FeagiDataValuesSpatialError> {
+    ) -> Result<SignedIntegerSpatial<ToQuant, NUM_DIMS>, DataValuesSpatialError> {
         let mut out = [ToQuant::QUANT_ZERO; NUM_DIMS];
         for (o, &s) in out.iter_mut().zip(self.data.iter()) {
-            *o = s.try_to_quantization().map_err(|e| e.into())?;
+            *o = s.try_to_quantization()?;
         }
         Ok(SignedIntegerSpatial { data: out })
     }
@@ -299,10 +299,10 @@ impl<Q: QuantizedSignedIntegerTrait, const NUM_DIMS: usize> SignedIntegerSpatial
 
     fn new_from_quant<FromQuant: QuantizedSignedIntegerTrait>(
         value: SignedIntegerSpatial<FromQuant, NUM_DIMS>,
-    ) -> Result<Self, FeagiDataValuesSpatialError> {
+    ) -> Result<Self, DataValuesSpatialError> {
         let mut data = [Q::QUANT_ZERO; NUM_DIMS];
         for (q, &v) in data.iter_mut().zip(value.as_data_slice().iter()) {
-            *q = Q::try_from_quantization(v).map_err(|e| e.into())?;
+            *q = Q::try_from_quantization(v)?;
         }
         Ok(Self { data })
     }
@@ -354,7 +354,7 @@ impl<const NUM_DIMS: usize> SignedIntegerSpatialEnum<NUM_DIMS> {
 
     /// Tries to convert to a spatial value of another quantization, returning an error if any axis
     /// value does not fit.
-    pub fn try_into_quant<Quant: QuantizedSignedIntegerTrait>(self) -> Result<SignedIntegerSpatial<Quant, NUM_DIMS>, FeagiDataValuesSpatialError> {
+    pub fn try_into_quant<Quant: QuantizedSignedIntegerTrait>(self) -> Result<SignedIntegerSpatial<Quant, NUM_DIMS>, DataValuesSpatialError> {
         match self {
             Self::I8(value) => value.try_to_quantization(),
             Self::I16(value) => value.try_to_quantization(),
@@ -397,7 +397,7 @@ pub trait WrappedSignedIntegerSpatialEnum:
 
     fn into_quantization_unchecked<NewQ: QuantizedSignedIntegerUnwrappedTrait>(self) -> Self::Shape<NewQ>;
 
-    fn try_into_quantization<NewQ: QuantizedSignedIntegerUnwrappedTrait>(self) -> Result<Self::Shape<NewQ>, FeagiDataValuesSpatialError>;
+    fn try_into_quantization<NewQ: QuantizedSignedIntegerUnwrappedTrait>(self) -> Result<Self::Shape<NewQ>, DataValuesSpatialError>;
 
     fn into_quantization_clamped<NewQ: QuantizedSignedIntegerUnwrappedTrait>(self) -> Self::Shape<NewQ>;
 }
@@ -437,7 +437,7 @@ macro_rules! create_wrapped_signed_integer_spatial {
                     )
                 }
 
-                pub fn try_new_from_isizes($( $field: isize ),+ ) -> Result<Self, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                pub fn try_new_from_isizes($( $field: isize ),+ ) -> Result<Self, $crate::values::spatial::data_values_spatial_error::DataValuesSpatialError> {
                     Ok(Self(
                         $crate::values::spatial::integer_signed::SignedIntegerSpatial::new_from_isize_array([
                             $( $field ),+
@@ -483,7 +483,7 @@ macro_rules! create_wrapped_signed_integer_spatial {
 
                 pub fn try_to_quantization<NewQ: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
                     self
-                ) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                ) -> Result<$struct_name<NewQ>, $crate::values::spatial::data_values_spatial_error::DataValuesSpatialError> {
                     Ok($struct_name::new_from_spatial(self.0.try_to_quantization()?))
                 }
 
@@ -529,7 +529,7 @@ macro_rules! create_wrapped_signed_integer_spatial {
 
                 fn new_from_quant<FromQuant: $crate::values::quantizable::QuantizedSignedIntegerTrait>(
                     value: $crate::values::spatial::integer_signed::SignedIntegerSpatial<FromQuant, $num_dimensions>,
-                ) -> Result<Self, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                ) -> Result<Self, $crate::values::spatial::data_values_spatial_error::DataValuesSpatialError> {
                     Ok(<Self as $crate::values::spatial::integer_signed::SignedIntegerSpatialWrappedTrait<Q, $num_dimensions>>::wrap_unchecked(
                         $crate::values::spatial::integer_signed::SignedIntegerSpatial::<Q, $num_dimensions>::new_from_quant(value)?,
                     ))
@@ -633,7 +633,7 @@ macro_rules! create_wrapped_signed_integer_spatial {
 
                 pub fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
                     self
-                ) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                ) -> Result<$struct_name<NewQ>, $crate::values::spatial::data_values_spatial_error::DataValuesSpatialError> {
                     <Self as $crate::values::spatial::integer_signed::WrappedSignedIntegerSpatialEnum>::try_into_quantization(self)
                 }
 
@@ -705,7 +705,7 @@ macro_rules! create_wrapped_signed_integer_spatial {
 
                 fn try_into_quantization<NewQ: $crate::values::quantizable::QuantizedSignedIntegerUnwrappedTrait>(
                     self
-                ) -> Result<$struct_name<NewQ>, $crate::values::spatial::feagi_data_values_spatial_error::FeagiDataValuesSpatialError> {
+                ) -> Result<$struct_name<NewQ>, $crate::values::spatial::data_values_spatial_error::DataValuesSpatialError> {
                     match self {
                         Self::I8(value) => value.try_to_quantization(),
                         Self::I16(value) => value.try_to_quantization(),
