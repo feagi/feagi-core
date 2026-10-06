@@ -79,12 +79,21 @@ impl Default for SystemConfig {
 #[serde(default)]
 pub struct GenomeConfig {
     pub auto_recovery_on_validation_failure: bool,
+    /// Genome changes held in memory for `GET /v1/genome/changes` polling.
+    pub change_ledger_session_capacity: usize,
+    /// Changes kept in the genome's `change_history` section (oldest dropped first).
+    pub change_history_max_entries: usize,
+    /// Longest accepted `X-FEAGI-Agent-Id` value, in bytes.
+    pub change_agent_id_max_length: usize,
 }
 
 impl Default for GenomeConfig {
     fn default() -> Self {
         Self {
             auto_recovery_on_validation_failure: true,
+            change_ledger_session_capacity: 10_000,
+            change_history_max_entries: 50_000,
+            change_agent_id_max_length: 128,
         }
     }
 }

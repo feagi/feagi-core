@@ -12,6 +12,8 @@ pub mod cortical_area; // ✅ COMPLETE - /v1/cortical_area/* (23 endpoints)
 pub mod cortical_mapping; // ✅ COMPLETE - /v1/cortical_mapping/* (4 endpoints)
 pub mod evolution; // ✅ COMPLETE - /v1/evolution/* (2 endpoints)
 pub mod genome; // ✅ COMPLETE - /v1/genome/* (5 endpoints)
+#[cfg(feature = "services")]
+pub mod genome_changes; // /v1/genome/changes* (change ledger)
 pub mod input; // ✅ COMPLETE - /v1/input/* (2 endpoints)
 pub mod insight; // ✅ COMPLETE - /v1/insight/* (4 endpoints)
 pub mod monitoring; // ✅ COMPLETE - /v1/monitoring/* (3 endpoints)

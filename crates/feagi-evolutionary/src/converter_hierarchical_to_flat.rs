@@ -196,6 +196,12 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         classifiers_map.insert(classifier_id.clone(), classifier_json);
     }
     flat_genome.insert("classifiers".to_string(), Value::Object(classifiers_map));
+    if !genome.change_history.is_empty() {
+        flat_genome.insert(
+            "change_history".to_string(),
+            Value::Array(genome.change_history.clone()),
+        );
+    }
 
     Ok(Value::Object(flat_genome))
 }
@@ -544,6 +550,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let flat = convert_hierarchical_to_flat(&genome).unwrap();
@@ -580,6 +587,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
         genome.classifiers.insert(
             "clf-1".to_string(),
@@ -649,6 +657,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         // Create test areas with different cortical types
@@ -731,6 +740,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let twin_id = CorticalID::try_from_base_64("Y7Gx8Xy7Fpo=").unwrap();
@@ -785,6 +795,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let cid = CorticalID::try_from_base_64("Y7Gx8Xy7Fpo=").unwrap();
@@ -836,6 +847,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let power_id = CoreCorticalType::Power.to_cortical_id();

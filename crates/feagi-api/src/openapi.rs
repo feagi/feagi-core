@@ -218,6 +218,8 @@ use crate::{
         crate::endpoints::genome::post_export_format,
         crate::endpoints::genome::get_amalgamation,
         crate::endpoints::genome::get_amalgamation_history_exact,
+        crate::endpoints::genome_changes::get_changes,
+        crate::endpoints::genome_changes::post_apply_change,
         crate::endpoints::genome::get_cortical_template,
         crate::endpoints::genome::get_defaults_files,
         crate::endpoints::genome::get_download_region,

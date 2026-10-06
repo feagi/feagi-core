@@ -262,6 +262,7 @@ pub fn create_minimal_genome(genome_id: String, genome_title: String) -> Runtime
             morphologies: None,
         },
         stats: GenomeStats::default(),
+        change_history: Vec::new(),
     }
 }
 

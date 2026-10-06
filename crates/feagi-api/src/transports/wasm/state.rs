@@ -50,6 +50,8 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
         genome_transition_lock,
         genome_transition_in_progress,
         last_failed_mutation: ApiState::init_last_failed_mutation(),
+        #[cfg(feature = "services")]
+        change_ledger: None,
         #[cfg(feature = "feagi-agent")]
         agent_handler: Some(ApiState::init_agent_registration_handler()),
     }

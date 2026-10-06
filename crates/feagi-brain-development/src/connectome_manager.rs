@@ -12512,6 +12512,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
         for area in [kernel, class_area, field, kernel_mem, class_mem, twin] {
             genome.cortical_areas.insert(area.cortical_id, area);
@@ -12760,6 +12761,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
         for area in [field, mask, kernel_mem, class_mem, twin] {
             genome.cortical_areas.insert(area.cortical_id, area);

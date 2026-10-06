@@ -83,6 +83,10 @@ pub struct ApiState {
     /// Surfaced by `GET /v1/system/last_failed_mutation` so agents can diagnose
     /// upload/body-limit failures without scraping process logs.
     pub last_failed_mutation: Arc<Mutex<Option<crate::endpoints::system::LastFailedMutation>>>,
+    /// Genome change ledger (who changed what, when). `None` disables the
+    /// `/v1/genome/changes*` endpoints.
+    #[cfg(feature = "services")]
+    pub change_ledger: Option<Arc<feagi_services::change_ledger::ChangeLedger>>,
     /// Agent handler for device registrations and transport management
     #[cfg(feature = "feagi-agent")]
     pub agent_handler: Option<Arc<std::sync::Mutex<feagi_agent::server::FeagiAgentHandler>>>,
@@ -285,6 +289,10 @@ pub fn create_http_server(state: ApiState) -> Router {
         // Add middleware
         .layer(middleware::from_fn_with_state(
             middleware_state.clone(),
+            attribute_genome_changes,
+        ))
+        .layer(middleware::from_fn_with_state(
+            middleware_state.clone(),
             reject_during_genome_transition,
         ))
         .layer(middleware::from_fn_with_state(
@@ -388,6 +396,7 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::cortical_mapping;
     use crate::endpoints::evolution;
     use crate::endpoints::genome;
+    use crate::endpoints::genome_changes;
     use crate::endpoints::input;
     use crate::endpoints::insight;
     use crate::endpoints::monitoring;
@@ -1114,6 +1123,11 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(genome::post_export_format),
         )
         .route("/genome/amalgamation", get(genome::get_amalgamation))
+        .route("/genome/changes", get(genome_changes::get_changes))
+        .route(
+            "/genome/changes/apply",
+            axum::routing::post(genome_changes::post_apply_change),
+        )
         .route(
             "/genome/amalgamation_history",
             get(genome::get_amalgamation_history_exact),
@@ -1392,6 +1406,50 @@ fn error_message_from_response_body(bytes: &[u8]) -> Option<String> {
 }
 
 /// Record the most recent failed mutating HTTP request for agent diagnostics.
+/// Attribute genome changes made while handling this request.
+///
+/// Reads the caller identity from `X-FEAGI-Agent-Id` (rejecting an invalid value
+/// with 400) and gives every change the request records one shared group id.
+async fn attribute_genome_changes(
+    State(state): State<ApiState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    use feagi_services::change_ledger::{with_change_context, ChangeContext};
+
+    let Some(ledger) = state.change_ledger.as_ref() else {
+        return next.run(request).await;
+    };
+    let agent_id = match request
+        .headers()
+        .get(crate::endpoints::genome_changes::AGENT_ID_HEADER)
+    {
+        None => None,
+        Some(raw) => {
+            let validated = raw
+                .to_str()
+                .map_err(|_| {
+                    crate::common::ApiError::invalid_input("X-FEAGI-Agent-Id must be visible ASCII")
+                })
+                .and_then(|value| {
+                    ledger
+                        .validate_agent_id(value)
+                        .map_err(crate::common::ApiError::from)
+                });
+            match validated {
+                Ok(agent_id) => Some(agent_id),
+                Err(error) => return error.into_response(),
+            }
+        }
+    };
+    let context = ChangeContext {
+        agent_id,
+        group_id: Some(uuid::Uuid::now_v7().to_string()),
+        replay: None,
+    };
+    with_change_context(context, next.run(request)).await
+}
+
 async fn record_failed_mutations(
     State(state): State<ApiState>,
     request: Request<Body>,

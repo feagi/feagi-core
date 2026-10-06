@@ -4554,6 +4554,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let pairs = collect_morphology_usage_pairs(&genome, "m_shared");
@@ -4614,6 +4615,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let current_genome = Arc::new(RwLock::new(Some(genome)));
 
@@ -4763,6 +4765,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         {
@@ -4874,6 +4877,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let current_genome = Arc::new(RwLock::new(Some(genome)));
@@ -4993,6 +4997,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let current_genome = Arc::new(RwLock::new(Some(genome)));
 
@@ -5095,6 +5100,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let current_genome = Arc::new(RwLock::new(Some(genome)));
 
@@ -5229,6 +5235,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let current_genome = Arc::new(RwLock::new(Some(genome)));
 
@@ -5617,6 +5624,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let npu =
             RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).expect("test NPU");
@@ -5953,6 +5961,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
 
@@ -6138,6 +6147,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
 
@@ -6272,6 +6282,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
 
@@ -6418,6 +6429,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
 
@@ -6617,6 +6629,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let source_npu = Arc::new(TracingMutex::new(
@@ -6946,6 +6959,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let source_npu = Arc::new(TracingMutex::new(
@@ -7699,6 +7713,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         svc.apply_runtime_genome_to_connectome(&genome)?;

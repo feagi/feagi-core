@@ -77,6 +77,9 @@ pub struct ParsedGenome {
 
     /// Raw physiology data (for later processing)
     pub physiology: Option<Value>,
+
+    /// Recorded structural changes, carried as-is (see `RuntimeGenome::change_history`)
+    pub change_history: Vec<Value>,
 }
 
 /// Raw genome JSON structure for deserialization
@@ -104,6 +107,9 @@ pub struct RawGenome {
     /// Root brain region ID (UUID string) - for O(1) root lookup
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
+    /// Recorded structural changes (optional; see `RuntimeGenome::change_history`)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub change_history: Vec<Value>,
 }
 
 /// Raw cortical area from blueprint
@@ -470,6 +476,7 @@ impl GenomeParser {
             classifiers,
             neuron_morphologies: raw.neuron_morphologies,
             physiology: raw.physiology,
+            change_history: raw.change_history,
         })
     }
 

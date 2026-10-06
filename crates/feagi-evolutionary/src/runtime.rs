@@ -45,6 +45,12 @@ pub struct RuntimeGenome {
 
     /// Statistics
     pub stats: GenomeStats,
+
+    /// Recorded structural changes (optional top-level `change_history` key).
+    ///
+    /// Opaque entries owned by the change ledger in `feagi-services`; the genome only
+    /// carries them. Never part of `signatures`.
+    pub change_history: Vec<serde_json::Value>,
 }
 
 impl RuntimeGenome {
@@ -588,6 +594,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         }
     }
 

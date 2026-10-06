@@ -59,6 +59,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let json_str = save_genome_to_json(&genome).unwrap();

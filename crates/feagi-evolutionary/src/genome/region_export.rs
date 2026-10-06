@@ -352,6 +352,7 @@ pub fn subset_runtime_genome_for_region_branch(
             morphologies: None,
         },
         stats: GenomeStats::default(),
+        change_history: Vec::new(),
     })
 }
 
@@ -406,6 +407,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
         (g, parent_key, child_key)
     }
@@ -567,6 +569,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let sub = subset_runtime_genome_for_region_branch(&g, &root_key).expect("subset");

@@ -57,6 +57,9 @@ use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
 use feagi_npu_runtime::StdRuntime;
 #[cfg(feature = "feagi-agent")]
 use feagi_serialization::FeagiByteContainer;
+use feagi_services::change_ledger::{
+    ChangeLedger, ChangeLedgerConfig, RecordingConnectomeService, RecordingGenomeService,
+};
 use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     SystemServiceImpl,
@@ -64,6 +67,7 @@ use feagi_services::impls::{
 use feagi_services::types::CreateCorticalAreaParams;
 #[cfg(feature = "feagi-agent")]
 use feagi_services::RuntimeService;
+use feagi_services::{ConnectomeService, GenomeService};
 #[cfg(feature = "feagi-agent")]
 use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 #[cfg(feature = "feagi-agent")]
@@ -128,7 +132,29 @@ fn build_test_state() -> ApiState {
     let mut connectome_service_impl =
         ConnectomeServiceImpl::new(Arc::clone(&manager), current_genome.clone());
     connectome_service_impl.set_genome_load_signals(genome_load_counter, genome_load_timestamp);
-    let connectome_service = Arc::new(connectome_service_impl);
+    let connectome_service_impl: Arc<dyn ConnectomeService + Send + Sync> =
+        Arc::new(connectome_service_impl);
+    let genome_config = feagi_config::GenomeConfig::default();
+    let change_ledger = Arc::new(
+        ChangeLedger::new(
+            ChangeLedgerConfig {
+                session_capacity: genome_config.change_ledger_session_capacity,
+                max_persisted_entries: genome_config.change_history_max_entries,
+                agent_id_max_length: genome_config.change_agent_id_max_length,
+            },
+            current_genome.clone(),
+        )
+        .expect("change ledger"),
+    );
+    let genome_service: Arc<dyn GenomeService + Send + Sync> =
+        Arc::new(RecordingGenomeService::new(
+            genome_service,
+            Arc::clone(&connectome_service_impl),
+            Arc::clone(&change_ledger),
+        ));
+    let connectome_service: Arc<dyn ConnectomeService + Send + Sync> = Arc::new(
+        RecordingConnectomeService::new(connectome_service_impl, Arc::clone(&change_ledger)),
+    );
     // For tests, use empty version info
     let version_info = feagi_services::types::VersionInfo::default();
     let system_service = Arc::new(SystemServiceImpl::new(
@@ -320,6 +346,7 @@ fn build_test_state() -> ApiState {
         genome_transition_lock,
         genome_transition_in_progress,
         last_failed_mutation: ApiState::init_last_failed_mutation(),
+        change_ledger: Some(change_ledger),
         #[cfg(feature = "feagi-agent")]
         agent_handler: Some(ApiState::init_agent_registration_handler()),
     }
@@ -3253,4 +3280,290 @@ async fn test_error_format_consistency() {
 #[test]
 fn test_compilation() {
     // This test just ensures the code compiles
+}
+
+// ============================================================================
+// GENOME CHANGE LEDGER TESTS
+// ============================================================================
+
+async fn seed_ledger_test_area(state: &ApiState, raw_id: &[u8; 8]) -> String {
+    let cortical_id = general_purpose::STANDARD.encode(raw_id);
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "ledger-area".to_string(),
+            dimensions: (1, 1, 1),
+            position: (0, 0, 0),
+            area_type: "Custom".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("seed ledger test area");
+    cortical_id
+}
+
+async fn request_json_as(
+    app: axum::Router,
+    method: &str,
+    path: &str,
+    agent_id: &str,
+    body: Value,
+) -> (StatusCode, Value) {
+    let request = Request::builder()
+        .uri(path)
+        .method(method)
+        .header("content-type", "application/json")
+        .header("x-feagi-agent-id", agent_id)
+        .body(Body::from(serde_json::to_vec(&body).unwrap()))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(json!(null)),
+    )
+}
+
+#[tokio::test]
+async fn test_genome_changes_record_http_caller_and_advance_health_sequence() {
+    let state = build_test_state();
+    let cortical_id = seed_ledger_test_area(&state, b"cLEDGER1").await;
+
+    let (status, _) = request_json_as(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_area/cortical_area",
+        "member-a",
+        json!({"cortical_id": cortical_id, "cortical_name": "renamed over http"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, page) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/genome/changes?since=0",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let changes = page["changes"].as_array().expect("changes array");
+    assert_eq!(changes.len(), 2, "seed create plus the HTTP update");
+    assert!(changes[0].get("agent_id").is_none(), "seed had no caller");
+    let update = &changes[1];
+    assert_eq!(update["agent_id"], "member-a");
+    assert_eq!(update["origin"], "local");
+    assert_eq!(update["operation"]["kind"], "update_cortical_area");
+    assert_eq!(update["operation"]["cortical_id"], cortical_id.as_str());
+    assert_eq!(update["targets"][0]["kind"], "cortical_area");
+    assert!(update["before"].is_object() && update["after"].is_object());
+
+    let (_, health) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/system/health_check",
+        None,
+    )
+    .await;
+    assert_eq!(health["genome_change_sequence"], page["latest_sequence"]);
+
+    let since = update["sequence"].as_u64().expect("sequence");
+    let (_, empty) = request_json(
+        create_http_server(state),
+        "GET",
+        &format!("/v1/genome/changes?since={since}"),
+        None,
+    )
+    .await;
+    assert!(empty["changes"].as_array().expect("array").is_empty());
+}
+
+#[tokio::test]
+async fn test_genome_changes_reject_invalid_agent_header_and_limit() {
+    let state = build_test_state();
+    let too_long = "a".repeat(
+        state
+            .change_ledger
+            .as_ref()
+            .expect("ledger")
+            .config()
+            .agent_id_max_length
+            + 1,
+    );
+    let (status, _) = request_json_as(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_area/cortical_area",
+        &too_long,
+        json!({"cortical_id": "x"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = request_json(
+        create_http_server(state),
+        "GET",
+        "/v1/genome/changes?since=0&limit=0",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_genome_change_applies_once_on_peer_instance() {
+    let source = build_test_state();
+    let peer = build_test_state();
+    let cortical_id = seed_ledger_test_area(&source, b"cLEDGER2").await;
+    seed_ledger_test_area(&peer, b"cLEDGER2").await;
+
+    let (status, _) = request_json_as(
+        create_http_server(source.clone()),
+        "PUT",
+        "/v1/cortical_area/cortical_area",
+        "member-a",
+        json!({"cortical_id": cortical_id, "cortical_name": "from source"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, page) = request_json(
+        create_http_server(source),
+        "GET",
+        "/v1/genome/changes?since=1",
+        None,
+    )
+    .await;
+    let change = page["changes"][0].clone();
+
+    let (status, applied) = request_json(
+        create_http_server(peer.clone()),
+        "POST",
+        "/v1/genome/changes/apply",
+        Some(change.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(applied["status"], "applied");
+
+    let (status, again) = request_json(
+        create_http_server(peer.clone()),
+        "POST",
+        "/v1/genome/changes/apply",
+        Some(change.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(again["status"], "already_applied");
+
+    let area = peer
+        .connectome_service
+        .get_cortical_area(&cortical_id)
+        .await
+        .expect("area on peer");
+    assert_eq!(area.name, "from source");
+    let recorded = peer
+        .change_ledger
+        .as_ref()
+        .expect("ledger")
+        .find(change["change_id"].as_str().expect("change id"))
+        .expect("recorded on peer");
+    assert_eq!(recorded.agent_id.as_deref(), Some("member-a"));
+    assert_eq!(
+        serde_json::to_value(recorded.origin).expect("origin"),
+        json!("replayed")
+    );
+}
+
+#[tokio::test]
+async fn test_genome_change_apply_rejects_markers_and_missing_targets() {
+    let state = build_test_state();
+    let marker = json!({
+        "change_id": "marker-1",
+        "group_id": "marker-1",
+        "timestamp_ms": 0,
+        "operation": {"kind": "connectome_reset"}
+    });
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/genome/changes/apply",
+        Some(marker),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let missing = json!({
+        "change_id": "missing-1",
+        "group_id": "missing-1",
+        "timestamp_ms": 0,
+        "operation": {"kind": "delete_brain_region", "region_id": "no-such-region"}
+    });
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/genome/changes/apply",
+        Some(missing),
+    )
+    .await;
+    assert!(
+        status.is_client_error(),
+        "missing target must be rejected, got {status}"
+    );
+    assert!(!state
+        .change_ledger
+        .as_ref()
+        .expect("ledger")
+        .contains_change_id("missing-1"));
+}
+
+#[tokio::test]
+async fn test_genome_changes_not_enabled_without_ledger() {
+    let mut state = build_test_state();
+    state.change_ledger = None;
+    let (status, _) = request_json(
+        create_http_server(state),
+        "GET",
+        "/v1/genome/changes?since=0",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+}
+
+#[tokio::test]
+async fn test_saved_genome_carries_change_history() {
+    let state = build_test_state();
+    let cortical_id = seed_ledger_test_area(&state, b"cLEDGER3").await;
+    let saved = state
+        .genome_service
+        .save_genome(feagi_services::types::SaveGenomeParams {
+            genome_id: None,
+            genome_title: None,
+        })
+        .await
+        .expect("save");
+    let saved: Value = serde_json::from_str(&saved).expect("saved JSON");
+    let history = saved["change_history"].as_array().expect("history");
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0]["operation"]["kind"], "create_cortical_areas");
+    assert_eq!(history[0]["targets"][0]["id"], cortical_id.as_str());
 }

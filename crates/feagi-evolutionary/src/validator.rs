@@ -765,6 +765,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let result = validate_genome(&genome);
@@ -797,6 +798,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         // Add a valid cortical area (use CoreCorticalType::Power)
@@ -960,6 +962,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         }
     }
 }

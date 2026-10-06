@@ -254,6 +254,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         genome_transition_lock,
         genome_transition_in_progress,
         last_failed_mutation: ApiState::init_last_failed_mutation(),
+        change_ledger: None,
         #[cfg(feature = "feagi-agent")]
         agent_handler: Some(ApiState::init_agent_registration_handler()),
     };

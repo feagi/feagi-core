@@ -4983,6 +4983,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let svc = GenomeServiceImpl::new(connectome);
@@ -5212,6 +5213,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let svc = GenomeServiceImpl::new(Arc::clone(&connectome));
         *svc.get_current_genome_arc().write() = Some(genome);
@@ -5393,6 +5395,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
         };
         let genome_store = Arc::new(RwLock::new(Some(genome)));
 

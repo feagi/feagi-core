@@ -351,6 +351,7 @@ fn test_save_load_roundtrip_memory_plastic_and_regions() {
             morphologies: None,
         },
         stats: feagi_evolutionary::GenomeStats::default(),
+        change_history: Vec::new(),
     };
 
     let json = save_genome_to_json(&genome).expect("save");

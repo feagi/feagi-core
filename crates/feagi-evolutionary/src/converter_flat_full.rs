@@ -216,6 +216,9 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
     } else {
         hierarchical.insert("classifiers".to_string(), json!({}));
     }
+    if let Some(history) = flat_genome.get("change_history") {
+        hierarchical.insert("change_history".to_string(), history.clone());
+    }
 
     Ok(Value::Object(hierarchical))
 }

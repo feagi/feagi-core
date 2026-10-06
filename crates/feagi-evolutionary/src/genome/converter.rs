@@ -88,6 +88,7 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         physiology,
         signatures,
         stats,
+        change_history: parsed.change_history,
     };
     genome.apply_classifier_required_mappings();
     Ok(genome)

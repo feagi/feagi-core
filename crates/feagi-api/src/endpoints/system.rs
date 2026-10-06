@@ -88,6 +88,10 @@ pub struct HealthCheckResponse {
     /// Root brain region ID (UUID string) for O(1) root lookup
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
+    /// Latest genome change ledger sequence; advances on every recorded change.
+    /// Poll `GET /v1/genome/changes?since=<previous>` when it moves.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub genome_change_sequence: Option<u64>,
     /// Fatigue information (index, active state, and breakdown of contributing elements)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fatigue: Option<FatigueInfo>,
@@ -269,6 +273,14 @@ pub async fn get_health_check(
     #[cfg(not(feature = "services"))]
     let brain_regions_root = None; // WASM: Use connectome service instead
 
+    #[cfg(feature = "services")]
+    let genome_change_sequence = state
+        .change_ledger
+        .as_ref()
+        .map(|ledger| ledger.latest_sequence());
+    #[cfg(not(feature = "services"))]
+    let genome_change_sequence = None;
+
     // Get fatigue information from state manager
     // Note: feagi-state-manager is included in the "services" feature
     #[cfg(feature = "services")]
@@ -372,6 +384,7 @@ pub async fn get_health_check(
         agent_data_hash,
         synaptic_plasticity_generation,
         brain_regions_root, // NEW: Root region ID for O(1) lookup
+        genome_change_sequence,
         fatigue,
     }))
 }

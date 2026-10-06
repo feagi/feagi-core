@@ -260,6 +260,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let mut host = HashSet::new();
@@ -360,6 +361,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let (inputs_before, _) = designated_io_lists_for_cloned_circuit(&genome);
