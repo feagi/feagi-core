@@ -1,5 +1,5 @@
 [package]
-name = "feagi-runtimes"
+name = "feagi-cns-processing"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,17 +8,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Root library for holding common patterns of feagi runtimes / executables"
-
-[features]
-
-
 
 [dependencies]
-
-# FEAGI Root Crates
-feagi-basis = {path = "../feagi-basis"}
-
 
 [lints]
 workspace = true

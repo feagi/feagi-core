@@ -1,5 +1,5 @@
 [package]
-name = "feagi-runtimes"
+name = "feagi-cns-structures"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,16 +8,16 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Root library for holding common patterns of feagi runtimes / executables"
-
-[features]
+description = "Various structures used to describe the structure and state of the FEAGI Brain"
 
 
 
 [dependencies]
-
-# FEAGI Root Crates
+# Workspace Crates
 feagi-basis = {path = "../feagi-basis"}
+
+# External Crates
+serde = {workspace = true, features = ["derive"]}
 
 
 [lints]

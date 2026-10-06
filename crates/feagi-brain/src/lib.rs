@@ -1,3 +1,0 @@
-pub mod typing;
-pub mod genome_metadata;
-pub mod connectome_data;

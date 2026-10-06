@@ -1,0 +1,39 @@
+[package]
+name = "feagi-brain-models"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Contains the definitions and math behind the neuron and synapse models"
+
+[features]
+
+default = [
+    "std",
+]
+
+std = [
+    "alloc",
+]
+
+alloc = [
+    "serde",
+]
+
+[dependencies]
+# Sub Crates
+
+# Sibling Crates
+
+# Root Crates
+feagi-basis = {path = "../../feagi-basis" }
+
+# External Crates
+paste = {workspace = true}
+half = {workspace = true}
+serde = { workspace = true, optional = true }
+

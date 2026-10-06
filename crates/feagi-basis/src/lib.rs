@@ -18,6 +18,8 @@ mod feagi_basis_error;
 mod burst_index;
 pub mod misc;
 pub mod channel;
+pub mod neurons;
+pub mod voxels;
 // TODO future UI work, may need its own crate? or maybe not
 //pub mod ui_parameters;
 

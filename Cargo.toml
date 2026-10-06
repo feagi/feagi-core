@@ -68,7 +68,6 @@ feagi-server-requests-rest = [
 [dependencies]
 # FEAGI
 feagi-basis = {path = "crates/feagi-basis"}
-feagi-brain = {path = "crates/feagi-brain"}
 
 # External (always)
 serde = {workspace = true, default-features = false}
@@ -79,10 +78,6 @@ serde_json = {workspace = true, optional = true, default-features = false}
 [dev-dependencies]
 
 
-
-
-
-
 # ============================================================================
 #                             WORKSPACE CONFIGURATION
 # ============================================================================
@@ -91,25 +86,28 @@ serde_json = {workspace = true, optional = true, default-features = false}
 resolver = "2"
 members = [
     "crates/feagi-macro-components",
+
     "crates/feagi-basis",
 
-    "crates/feagi-data",
-    "crates/feagi-data/feagi-quantization_levels",
-    "crates/feagi-data/feagi-data-neuron",
-    "crates/feagi-data/feagi-data-genome",
-    "crates/feagi-data/feagi-data-genome/feagi-basis-genome-proc",
+    "crates/feagi-transport",
 
-    "crates/feagi-brain",
-    "crates/feagi-brain/feagi-brain-models",
-    "crates/feagi-brain/feagi-brain-npu",
-    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines",
-    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-basis",
-    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon",
-    "crates/feagi-brain/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
+    "crates/feagi-cns-structures",
 
-    "crates/feagi-transports",
+    "crates/feagi-cns-processing",
 
-    "crates/feagi-runtimes"
+    "crates/feagi-pns-structures",
+
+    "crates/feagi-pns-processing",
+
+    "crates/feagi-runtimes",
+
+
+    "crates/feagi-cns-structures/feagi-brain-models",
+    "crates/feagi-cns-processing/feagi-brain-npu",
+    "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines",
+    "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-basis",
+    "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon",
+    "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
 ]
 
 
