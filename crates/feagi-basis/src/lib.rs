@@ -3,24 +3,18 @@
 
 
 pub mod prelude {
-    pub use super::feagi_macros::prelude::*;
     pub use super::feagi_quantization::prelude::*;
-    pub use super::feagi_genome::prelude::*;
-    pub use super::feagi_neuron::prelude::*;
     pub use super::feagi_basis_error::{FeagiBasisError, FeagiFailDataEtc};
     pub use super::burst_index::BurstIndex;
 }
 
-pub extern crate feagi_basis_macros as feagi_macros;
+
 
 pub extern crate feagi_basis_quantization as feagi_quantization;
 
-pub extern crate feagi_basis_genome as feagi_genome;
-
-pub extern crate feagi_basis_neuron as feagi_neuron;
 
 /// Generic traits and implementations for sending data between threads
-pub mod thread_messaging;
+
 
 pub mod generic_collections;
 
@@ -31,7 +25,6 @@ mod feagi_basis_error;
 
 mod burst_index;
 pub mod misc;
-pub mod blocking_pool;
 // TODO future UI work, may need its own crate? or maybe not
 //pub mod ui_parameters;
 

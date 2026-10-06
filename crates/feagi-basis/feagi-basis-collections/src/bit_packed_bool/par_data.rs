@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 use crate::bit_packed_bool::bit_batch_word::BitBatchWord;
 use crate::generic_data::par_data::{ParDataStore, ParDataStoreMut};
-use crate::feagi_collection_error::{BitBatchParDataInvalidRange, FeagiDataCollectionError};
+use super::BitBatchParDataError;
 
 /// Bit-packed bools held as words of `S`, addressed by word index `QWord` or bool index `QBit`.
 ///
@@ -117,7 +117,7 @@ where
     }
 
     /// Borrows a half-open word sub-range as a [`BitBatchParDataSlice`] view.
-    pub fn subslice(&self, range: Range<QWord>) -> Result<BitBatchParDataSlice<'_, QWord, QBit, S::Elem>, FeagiDataCollectionError> {
+    pub fn subslice(&self, range: Range<QWord>) -> Result<BitBatchParDataSlice<'_, QWord, QBit, S::Elem>, BitBatchParDataError> {
         let start = range.start.quant_to_usize();
         let end = range.end.quant_to_usize();
         match self.words.store_as_slice().get(start..end) {
@@ -125,7 +125,7 @@ where
                 let range_valid_bools = self.number_valid_bools_for_word_range(start, end);
                 Ok(BitBatchParData::from_store(slice, range_valid_bools))
             }
-            None => Err(BitBatchParDataInvalidRange::new("subslice range is out of bounds", start, end).into()),
+            None => Err(BitBatchParDataError::BitBatchParDataInvalidRange { start, end }),
         }
     }
 
@@ -261,13 +261,13 @@ where
     }
 
     /// Mutably borrows a half-open word sub-range as a [`BitBatchParDataSliceMut`] view.
-    pub fn subslice_mut(&mut self, range: Range<QWord>) -> Result<BitBatchParDataSliceMut<'_, QWord, QBit, S::Elem>, FeagiDataCollectionError> {
+    pub fn subslice_mut(&mut self, range: Range<QWord>) -> Result<BitBatchParDataSliceMut<'_, QWord, QBit, S::Elem>, BitBatchParDataError> {
         let start = range.start.quant_to_usize();
         let end = range.end.quant_to_usize();
         let range_valid_bools = self.number_valid_bools_for_word_range(start, end);
         match self.words.store_as_mut_slice().get_mut(start..end) {
             Some(slice) => Ok(BitBatchParData::from_store(slice, range_valid_bools)),
-            None => Err(BitBatchParDataInvalidRange::new("subslice range is out of bounds", start, end).into()),
+            None => Err(BitBatchParDataError::BitBatchParDataInvalidRange { start, end }),
         }
     }
 }

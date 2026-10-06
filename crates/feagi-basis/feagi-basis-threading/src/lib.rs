@@ -1,14 +1,7 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub use blocking_pool::BlockingPool;
+pub mod thread_messaging;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod blocking_pool;
+mod feagi_basis_threading_error;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use feagi_basis_threading_error::FeagiBasisThreadingError;

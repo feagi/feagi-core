@@ -2,7 +2,7 @@ use std::error::Error;
 use thingbuf::mpsc::{Receiver, Sender};
 use thingbuf::mpsc::errors::TryRecvError;
 use crate::blocking_pool::BlockingPool;
-use crate::thread_messaging::errors::{ChannelError, FeagiFailChannelClosed, FeagiFailPoolEmpty};
+use crate::thread_messaging::errors::ChannelError;
 
 pub fn create_requester_and_responder<Req, Res, ResRec, ReqRec, ResErr, const REQUEST_POOL_SIZE: usize, const ALLOW_BEYOND_POOL: bool>
 (request_queue_length: usize, request_recycler: ReqRec, response_recycler: ResRec)
@@ -73,7 +73,7 @@ where
                 if ALLOW_BEYOND_POOL {
                     oneshot_pair = Self::create_oneshot_pair(&self.recycle_policy);
                 } else {
-                    return Err(FeagiFailPoolEmpty::new("Too many requests pending! Unable to make another request!").into())
+                    return Err(ChannelError::PoolEmpty);
                 }
             }
             Some(op) => {
@@ -86,9 +86,7 @@ where
         let response = oneshot_pair.1.recv().await;
         let response = match response {
             None => {
-                return Err(
-                    FeagiFailChannelClosed::new("Oneshot sender died!").into()
-                )
+                return Err(ChannelError::SendClosed);
             }
             Some(r) => {r}
         };
@@ -177,7 +175,7 @@ where
                         return Ok(()) // nothing to do, return
                     }
                     TryRecvError::Closed => {
-                        return Err(FeagiFailChannelClosed::new("Request Receiver channels have all be closed!").into())
+                        return Err(ChannelError::SendClosed);
                     }
                     _ => {
                         // For some reason the linter is forcing this, even though this is impossible??

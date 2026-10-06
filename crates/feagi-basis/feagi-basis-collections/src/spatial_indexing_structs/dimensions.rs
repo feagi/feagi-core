@@ -1,4 +1,4 @@
-use crate::feagi_collection_error::{FeagiDataCollectionError, FeagiFailInvalidDimensions};
+use super::SpatialIndexingError;
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
 
 /// Generic owned dimensions value for an N-dimensional index space.
@@ -10,14 +10,14 @@ pub struct SpatialDimensions<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: 
 
 impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> SpatialDimensions<QI, NUM_DIMS> {
     /// Constructor for dimensions; no axis may be zero.
-    pub fn new_dimensions(data: [QI; NUM_DIMS]) -> Result<Self, FeagiDataCollectionError> {
+    pub fn new_dimensions(data: [QI; NUM_DIMS]) -> Result<Self, SpatialIndexingError> {
         if data.contains(&QI::QUANT_ZERO) {
-            return Err(FeagiFailInvalidDimensions::new("Dimensions cannot be 0 in any direction!").into());
+            return Err(SpatialIndexingError::InvalidDimensions);
         }
         Ok(Self { data })
     }
     
-    pub fn new_dimensions_from_usize(data: [usize; NUM_DIMS]) -> Result<Self, FeagiDataCollectionError> {
+    pub fn new_dimensions_from_usize(data: [usize; NUM_DIMS]) -> Result<Self, SpatialIndexingError> {
         let data_in: [QI; NUM_DIMS] = data.map(|e| QI::quant_try_from_usize(e).unwrap()); // TODO Error Handling
         Self::new_dimensions(data_in)        
     }

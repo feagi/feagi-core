@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
 use serde::{Deserialize, Serialize};
 use feagi_basis_quantization::prelude::*;
-use crate::feagi_collection_error::{FeagiDataCollectionError, ParDataInvalidRange};
+use super::ParDataError;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParData<QI, S> {
@@ -217,12 +217,12 @@ impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStore> ParData<QI, S> {
     }
 
     /// Borrows a half-open element sub-range as a [`ParDataSlice`] view.
-    pub fn subslice(&self, range: Range<QI>) -> Result<ParDataSlice<'_, QI, S::Elem>, FeagiDataCollectionError> {
+    pub fn subslice(&self, range: Range<QI>) -> Result<ParDataSlice<'_, QI, S::Elem>, ParDataError> {
         let start = range.start.quant_to_usize();
         let end = range.end.quant_to_usize();
         match self.data.store_as_slice().get(start..end) {
             Some(slice) => Ok(ParData::from_store(slice)),
-            None => Err(ParDataInvalidRange::new("subslice range is out of bounds", start, end).into()),
+            None => Err(ParDataError::ParDataInvalidRange { start, end }),
         }
     }
 
@@ -282,12 +282,12 @@ impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStoreMut> ParData<QI, S> {
     }
 
     /// Mutably borrows a half-open element sub-range as a [`ParDataSliceMut`] view.
-    pub fn subslice_mut(&mut self, range: Range<QI>) -> Result<ParDataSliceMut<'_, QI, S::Elem>, FeagiDataCollectionError> {
+    pub fn subslice_mut(&mut self, range: Range<QI>) -> Result<ParDataSliceMut<'_, QI, S::Elem>, ParDataError> {
         let start = range.start.quant_to_usize();
         let end = range.end.quant_to_usize();
         match self.data.store_as_mut_slice().get_mut(start..end) {
             Some(slice) => Ok(ParData::from_store(slice)),
-            None => Err(ParDataInvalidRange::new("subslice range is out of bounds", start, end).into()),
+            None => Err(ParDataError::ParDataInvalidRange { start, end }),
         }
     }
 }

@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use feagi_basis_quantization::prelude::QuantizedUnsignedIntegerTrait;
-use crate::feagi_collection_error::{FeagiDataCollectionError, FeagiFailInvalidDimensions};
+use crate::spatial_indexing_structs::SpatialIndexingError;
 use crate::generic_data::par_data::{ParDataStore, ParDataStoreMut, ParDataStoreResizable};
 use crate::prelude::SpatialDimensions;
 use crate::spatial_indexing_structs::axis_order::{AxisOrder, AxisOrderArray};
@@ -92,9 +92,9 @@ where
     AxisOrderType: AxisOrder<NUM_DIMS>,
     S: ParDataStore<Elem=D> + DeserializeOwned + 'static,
 {
-    pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>, data: S) -> Result<Self, FeagiDataCollectionError> {
+    pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>, data: S) -> Result<Self, SpatialIndexingError> {
         if dimensions.spatial_element_count() != data.len() {
-            return Err(FeagiFailInvalidDimensions::new("Dimensions are invalid for the given data size").into())
+            return Err(SpatialIndexingError::InvalidDimensions);
         }
         let context = SpatialContext::new(dimensions);
         Ok(Self {

@@ -10,4 +10,21 @@ homepage.workspace = true
 documentation.workspace = true
 description = "Various threading related structures used through FEAGI"
 
+[features]
+
+std = [
+    "alloc",
+    "serde/std", "thingbuf/std", "thiserror/std"
+]
+
+alloc = [
+    "serde/alloc", "heapless/alloc", "thingbuf/alloc",
+]
+
 [dependencies]
+
+# External Crates
+serde = {workspace = true}
+heapless = {workspace = true, default-features = false, features = ["serde"]}
+thiserror = {workspace = true}
+thingbuf = {workspace = true}

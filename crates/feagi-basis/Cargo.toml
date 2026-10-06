@@ -24,7 +24,7 @@ std = [
 ]
 
 alloc = [
-    "serde/alloc", "serde/derive", "serde_json/alloc", "thingbuf/alloc",
+    "serde/alloc", "serde_json/alloc", "thingbuf/alloc",
     "feagi-basis-quantization/alloc", "feagi-basis-collections/alloc"
 ]
 
@@ -56,7 +56,7 @@ feagi-basis-collections = {path = "feagi-basis-collections"}
 thiserror = {workspace = true}
 paste = { workspace = true }
 ahash = { workspace = true}
-serde = { workspace = true}
+serde = { workspace = true, features = ["derive"]}
 heapless = {workspace = true}
 thingbuf = {workspace = true, features = ["static"]} # TODO review features
 serde_json = { workspace = true, optional = true}
