@@ -10,6 +10,17 @@ homepage.workspace = true
 documentation.workspace = true
 description = "Various structures used to describe the structure and state of the FEAGI Brain"
 
+[features]
+
+std = [
+    "alloc",
+    "serde/std", "base64/std"
+]
+
+alloc = [
+    "serde/alloc", "base64/alloc"
+]
+
 
 
 [dependencies]
@@ -18,7 +29,7 @@ feagi-basis = {path = "../feagi-basis"}
 
 # External Crates
 serde = {workspace = true, features = ["derive"]}
-
+base64 = {workspace = true, features = []}
 
 [lints]
 workspace = true
