@@ -6,9 +6,3 @@
 
 
 pub extern crate feagi_basis;
-
-pub extern crate feagi_brain;
-
-pub extern crate feagi_correspondence;
-
-pub extern crate feagi_runtime;

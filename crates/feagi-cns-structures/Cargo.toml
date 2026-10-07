@@ -14,11 +14,11 @@ description = "Various structures used to describe the structure and state of th
 
 std = [
     "alloc",
-    "serde/std", "base64/std"
+    "serde/std", "base64/std", "thiserror/std"
 ]
 
 alloc = [
-    "serde/alloc", "base64/alloc"
+    "serde/alloc", "base64/alloc", "heapless/alloc"
 ]
 
 
@@ -28,8 +28,10 @@ alloc = [
 feagi-basis = {path = "../feagi-basis"}
 
 # External Crates
-serde = {workspace = true, features = ["derive"]}
-base64 = {workspace = true, features = []}
+thiserror = {workspace = true, default-features = false}
+serde = {workspace = true, default-features = false, features = ["derive"]}
+base64 = {workspace = true, default-features = false}
+heapless = {workspace = true, default-features = false, features = ["serde"]}
 
 [lints]
 workspace = true

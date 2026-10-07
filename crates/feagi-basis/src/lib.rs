@@ -20,6 +20,7 @@ pub mod misc;
 pub mod channel;
 pub mod neurons;
 pub mod voxels;
+pub mod feagi_message_element;
 // TODO future UI work, may need its own crate? or maybe not
 //pub mod ui_parameters;
 

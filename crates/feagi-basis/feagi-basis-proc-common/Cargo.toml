@@ -1,0 +1,23 @@
+[package]
+name = "feagi-basis-proc-common"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Common procedural macros used throughout FEAGI Core"
+
+[dependencies]
+feagi-macro-components = {path = "../../feagi-macro-components"}
+
+# External Crates]
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
+heck = {workspace = true}
+
+[lints]
+workspace = true

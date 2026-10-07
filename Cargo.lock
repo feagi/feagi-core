@@ -662,6 +662,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-basis-proc-common"
+version = "0.1.1"
+dependencies = [
+ "feagi-macro-components",
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
+]
+
+[[package]]
 name = "feagi-brain-models"
 version = "0.1.1"
 dependencies = [
@@ -695,7 +706,9 @@ version = "0.1.1"
 dependencies = [
  "base64 0.23.1",
  "feagi-basis",
+ "heapless",
  "serde",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1073,6 +1086,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4"
 dependencies = [
  "hash32",
+ "serde_core",
  "stable_deref_trait",
 ]
 

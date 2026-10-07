@@ -88,6 +88,7 @@ members = [
     "crates/feagi-macro-components",
 
     "crates/feagi-basis",
+    "crates/feagi-basis/feagi-basis-proc-common",
 
     "crates/feagi-transport",
 
