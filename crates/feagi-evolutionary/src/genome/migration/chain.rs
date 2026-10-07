@@ -188,7 +188,7 @@ mod tests {
     fn no_op_when_already_at_target() {
         let reg = ChainRegistry::new();
         let runner = ChainRunner::new(&reg);
-        let mut genome = json!({ "genome_schema_version": 3 });
+        let mut genome = json!({ "genome_schema_version": CURRENT_SCHEMA_VERSION.as_u32() });
 
         let result = runner.run_to(&mut genome, CURRENT_SCHEMA_VERSION).unwrap();
 

@@ -52,6 +52,11 @@ pub struct SynapseArray {
     /// See `feagi_npu_runtime::SynapseStorage::eligibility_traces` for semantics.
     pub eligibility_traces: Vec<f32>,
 
+    /// Modulation group per synapse. Empty until the first synaptic modulator allocates it.
+    pub modulation_groups: Vec<u16>,
+    /// True after the modulation-group column has been allocated.
+    pub modulation_groups_allocated: bool,
+
     /// Source index for fast lookup
     pub source_index: AHashMap<u32, Vec<usize>>,
 }
@@ -70,6 +75,8 @@ impl SynapseArray {
             delay_bursts: Vec::with_capacity(capacity),
             valid_mask: Vec::with_capacity(capacity),
             eligibility_traces: Vec::with_capacity(capacity),
+            modulation_groups: Vec::new(),
+            modulation_groups_allocated: false,
             source_index: AHashMap::new(),
         }
     }
@@ -190,6 +197,26 @@ impl SynapseStorage for SynapseArray {
         &mut self.eligibility_traces[..count]
     }
 
+    fn modulation_groups(&self) -> &[u16] {
+        &self.modulation_groups
+    }
+
+    fn ensure_modulation_groups(&mut self) {
+        if !self.modulation_groups_allocated {
+            self.modulation_groups = vec![0; self.count];
+            self.modulation_groups_allocated = true;
+        } else if self.modulation_groups.len() < self.count {
+            self.modulation_groups.resize(self.count, 0);
+        }
+    }
+
+    fn set_modulation_group(&mut self, index: usize, group: u16) {
+        self.ensure_modulation_groups();
+        if let Some(slot) = self.modulation_groups.get_mut(index) {
+            *slot = group;
+        }
+    }
+
     // Metadata
     fn count(&self) -> usize {
         self.count
@@ -226,6 +253,9 @@ impl SynapseStorage for SynapseArray {
         self.delay_bursts.push(delay_bursts);
         self.valid_mask.push(true);
         self.eligibility_traces.push(0.0);
+        if self.modulation_groups_allocated {
+            self.modulation_groups.push(0);
+        }
 
         // Update index
         self.source_index.entry(source).or_default().push(idx);

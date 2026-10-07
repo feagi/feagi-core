@@ -162,6 +162,9 @@ pub fn describe_cortical_type(area: &CorticalArea) -> String {
             CorticalAreaType::Custom(_) => {
                 format!("{} (CUSTOM)", area.cortical_id)
             }
+            CorticalAreaType::Modulator => {
+                format!("{} (MODULATOR)", area.cortical_id)
+            }
         }
     } else {
         // Fallback to cortical_group

@@ -343,6 +343,7 @@ fn test_save_load_roundtrip_memory_plastic_and_regions() {
         brain_regions,
         classifiers: std::collections::HashMap::new(),
         morphologies,
+        modulators: feagi_evolutionary::ModulatorRegistry::new(),
         physiology: feagi_evolutionary::PhysiologyConfig::default(),
         signatures: feagi_evolutionary::GenomeSignatures {
             genome: "0".to_string(),

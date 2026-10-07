@@ -399,6 +399,7 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::genome_changes;
     use crate::endpoints::input;
     use crate::endpoints::insight;
+    use crate::endpoints::modulator;
     use crate::endpoints::monitoring;
     use crate::endpoints::morphology;
     use crate::endpoints::network;
@@ -688,6 +689,26 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(cortical_area::post_mapping_restrictions_between_areas),
         )
         .route("/cortical_area/coord_3d", put(cortical_area::put_coord_3d))
+        .route("/modulator/types", get(modulator::get_modulator_types))
+        .route("/modulator/modulators", get(modulator::get_modulators))
+        .route(
+            "/modulator/modulator/{modulator_id}",
+            get(modulator::get_modulator),
+        )
+        .route(
+            "/modulator/modulator",
+            axum::routing::post(modulator::post_modulator)
+                .put(modulator::put_modulator)
+                .delete(modulator::delete_modulator),
+        )
+        .route(
+            "/modulator/rename",
+            axum::routing::put(modulator::put_rename_modulator),
+        )
+        .route(
+            "/modulator/usage/{modulator_id}",
+            get(modulator::get_modulator_usage),
+        )
         // ===== MORPHOLOGY MODULE (14 endpoints) =====
         .route(
             "/morphology/morphology_list",

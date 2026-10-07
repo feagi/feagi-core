@@ -52,6 +52,9 @@ pub struct SynapseArray<const N: usize> {
     /// Per-synapse R-STDP eligibility traces (`f32`). Initialized to 0.0; reset on synapse
     /// creation. See `feagi_npu_runtime::SynapseStorage::eligibility_traces` for semantics.
     pub eligibility_traces: alloc::boxed::Box<[f32; N]>,
+
+    /// Modulation group per synapse. Zeros mean no group.
+    pub modulation_groups: alloc::boxed::Box<[u16; N]>,
 }
 
 impl<const N: usize> SynapseArray<N> {
@@ -68,6 +71,7 @@ impl<const N: usize> SynapseArray<N> {
             delay_bursts: crate::embedded_impl::boxed_repeat(1),
             valid_mask: crate::embedded_impl::boxed_repeat(false),
             eligibility_traces: crate::embedded_impl::boxed_repeat(0.0),
+            modulation_groups: crate::embedded_impl::boxed_repeat(0),
         }
     }
 }
@@ -188,6 +192,16 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
 
     fn eligibility_traces(&self) -> &[f32] {
         &self.eligibility_traces[..self.count]
+    }
+
+    fn modulation_groups(&self) -> &[u16] {
+        &self.modulation_groups[..self.count]
+    }
+
+    fn set_modulation_group(&mut self, index: usize, group: u16) {
+        if index < self.count {
+            self.modulation_groups[index] = group;
+        }
     }
 
     fn weights_mut(&mut self) -> &mut [f32] {

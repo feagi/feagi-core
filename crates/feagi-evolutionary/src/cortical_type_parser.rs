@@ -61,6 +61,7 @@ pub fn parse_cortical_type(
         "MEMORY" => CorticalAreaType::Memory(
             feagi_structures::genomic::cortical_area::MemoryCorticalType::Memory
         ),
+        "MODULATOR" => CorticalAreaType::Modulator,
         _ => return Err(EvoError::InvalidGenome(format!("Unknown cortical_group: {}", cortical_group))),
     };
 

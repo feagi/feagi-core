@@ -73,6 +73,8 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("devcnt-i", "dev_count"),
     ("twinrf-t", "memory_twin_of"),
     ("brsten-b", "burst_engine_active"),
+    ("spktrn-b", "spike_train"),
+    ("modls-d", "modulators"),
 ];
 
 /// Build property mapping lookup table
@@ -177,6 +179,9 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
     // Copy other sections
     if let Some(morphologies) = flat_genome.get("neuron_morphologies") {
         hierarchical.insert("neuron_morphologies".to_string(), morphologies.clone());
+    }
+    if let Some(modulators) = flat_genome.get("modulators") {
+        hierarchical.insert("modulators".to_string(), modulators.clone());
     }
 
     if let Some(physiology) = flat_genome.get("physiology") {

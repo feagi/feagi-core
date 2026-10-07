@@ -459,6 +459,18 @@ impl GenomeServiceImpl {
         self.burst_runner = Some(burst_runner);
     }
 
+    /// Drop published activity that still belongs to the previous genome.
+    ///
+    /// The NPU fire ledger is replaced in `prepare_for_new_genome`. Visualization,
+    /// motor output, and the activity monitor read the burst runner's cached
+    /// sample and the global burst taps, which that reset does not touch.
+    fn clear_published_activity(&self) {
+        if let Some(ref burst_runner) = self.burst_runner {
+            burst_runner.read().clear_cached_fire_queue();
+        }
+        feagi_npu_burst_engine::BurstTaps::instance().clear();
+    }
+
     /// Refresh cortical_id cache in burst runner
     fn refresh_burst_runner_cache(&self) {
         if let Some(ref burst_runner) = self.burst_runner {
@@ -761,8 +773,10 @@ impl GenomeService for GenomeServiceImpl {
             (cortical_area_count, brain_region_count)
         };
 
-        // Refresh burst runner cache after genome load
+        // Refresh burst runner cache after genome load and drop the previous
+        // genome's published spikes.
         self.refresh_burst_runner_cache();
+        self.clear_published_activity();
 
         Ok(GenomeInfo {
             genome_id: "current".to_string(),
@@ -924,6 +938,7 @@ impl GenomeService for GenomeServiceImpl {
             .write()
             .prepare_for_new_genome()
             .map_err(ServiceError::from)?;
+        self.clear_published_activity();
 
         info!(target: "feagi-services", "Connectome reset complete");
         Ok(())
@@ -1119,15 +1134,35 @@ impl GenomeService for GenomeServiceImpl {
                 .get("parent_region_id")
                 .and_then(|value| value.as_str())
                 .is_some_and(|parent| root_region_id.as_deref() == Some(parent));
+            if matches!(area_type, CorticalAreaType::Modulator) {
+                if !area.properties.contains_key("modulator_instance_id") {
+                    return Err(ServiceError::InvalidInput(
+                        "Modulator driver areas are created with their modulator instance"
+                            .to_string(),
+                    ));
+                }
+                if param.dimensions != (1, 1, 1) {
+                    return Err(ServiceError::InvalidInput(
+                        "Modulator driver areas are 1x1x1".to_string(),
+                    ));
+                }
+                if !joins_root {
+                    return Err(ServiceError::InvalidInput(
+                        "Modulator driver areas belong to the root region".to_string(),
+                    ));
+                }
+            }
+
             let root_reserved = !matches!(
                 area_type,
                 CorticalAreaType::Core(_)
                     | CorticalAreaType::BrainInput(_)
                     | CorticalAreaType::BrainOutput(_)
+                    | CorticalAreaType::Modulator
             );
             if joins_root && root_reserved {
                 return Err(ServiceError::InvalidInput(format!(
-                    "Cortical area {} cannot join root; root is reserved for core, IPU, and OPU areas",
+                    "Cortical area {} cannot join root; root is reserved for core, IPU, OPU, and modulator areas",
                     param.cortical_id
                 )));
             }
@@ -1215,11 +1250,42 @@ impl GenomeService for GenomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "Updating cortical area: {} with {} changes", cortical_id, changes.len());
 
-        // Convert String to CorticalID (supports legacy core aliases)
-        let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
-
         let mut changes = changes;
+        let service_owns_driver_fields = changes.remove("modulator_field_owner").is_some();
+        let cortical_id_typed_for_lock = feagi_evolutionary::string_to_cortical_id(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        if cortical_id_typed_for_lock.is_modulator_driver() && !service_owns_driver_fields {
+            let locked = feagi_evolutionary::driver_locked_property_names();
+            if changes.keys().any(|key| locked.contains(&key.as_str())) {
+                return Err(ServiceError::InvalidInput(
+                    "consecutive_fire_limit, snooze_period, mp_driven_psp, refractory_period, and spike_train on a modulator driver are owned by the modulator instance".to_string(),
+                ));
+            }
+        }
+        if let Some(enabled) = changes.get("spike_train").and_then(|value| value.as_bool()) {
+            let limit = spike_train_limit_from_changes(&changes).or_else(|| {
+                let genome = self.current_genome.read();
+                genome.as_ref().and_then(|genome| {
+                    genome
+                        .cortical_areas
+                        .get(&cortical_id_typed_for_lock)
+                        .and_then(|area| spike_train_limit_from_properties(&area.properties))
+                })
+            });
+            if enabled {
+                let limit = limit.ok_or_else(|| {
+                    ServiceError::InvalidInput(
+                        "spike_train requires consecutive_fire_limit >= 1".to_string(),
+                    )
+                })?;
+                feagi_structures::genomic::validate_spike_train(true, limit)
+                    .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
+            }
+        }
+
+        // Convert String to CorticalID (supports legacy core aliases)
+        let cortical_id_typed = cortical_id_typed_for_lock;
+
         let mut effective_cortical_id = cortical_id_typed;
         let mut effective_cortical_id_str = cortical_id.to_string();
 
@@ -1345,9 +1411,436 @@ impl GenomeService for GenomeServiceImpl {
             }
         }
     }
+
+    async fn list_modulator_types(&self) -> ServiceResult<Vec<String>> {
+        Ok(feagi_structures::genomic::ModulatorKind::all()
+            .iter()
+            .map(|kind| kind.as_str().to_string())
+            .collect())
+    }
+
+    async fn list_modulators(&self) -> ServiceResult<Value> {
+        let genome = self.current_genome.read();
+        let genome = genome
+            .as_ref()
+            .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+        Ok(genome.modulators.to_json())
+    }
+
+    async fn get_modulator(&self, id: &str) -> ServiceResult<Value> {
+        let genome = self.current_genome.read();
+        let genome = genome
+            .as_ref()
+            .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+        let instance = genome
+            .modulators
+            .get(id)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "modulator".to_string(),
+                id: id.to_string(),
+            })?;
+        Ok(instance.to_json())
+    }
+
+    async fn create_modulator(
+        &self,
+        id: String,
+        write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<Value> {
+        if id.is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "modulator id must not be empty".to_string(),
+            ));
+        }
+        let (driver, instance) = {
+            let genome = self.current_genome.read();
+            let genome = genome
+                .as_ref()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            if genome.modulators.contains(&id) {
+                return Err(ServiceError::Conflict(format!(
+                    "modulator '{id}' already exists"
+                )));
+            }
+            let serial = next_modulator_serial(genome);
+            let driver = CorticalID::modulator_driver(serial);
+            let instance = write
+                .into_instance(driver)
+                .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
+            (driver, instance)
+        };
+        let root_region_id = self.connectome.read().get_root_region_id().ok_or_else(|| {
+            ServiceError::InvalidInput("Root region is required for a modulator driver".to_string())
+        })?;
+        let mut properties = get_default_neural_properties();
+        for (key, value) in feagi_evolutionary::driver_locked_properties(&instance) {
+            properties.insert(key, value);
+        }
+        properties.insert("firing_threshold".to_string(), serde_json::json!(1.0));
+        properties.insert("leak_coefficient".to_string(), serde_json::json!(0.0));
+        properties.insert("excitability".to_string(), serde_json::json!(1.0));
+        properties.insert("modulator_instance_id".to_string(), serde_json::json!(id));
+        properties.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(root_region_id),
+        );
+        self.create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: driver.as_base_64(),
+            name: id.clone(),
+            dimensions: (1, 1, 1),
+            position: (0, 0, 0),
+            area_type: "MODULATOR".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: Some(u32::from(instance.effect_duration_bursts)),
+            snooze_period: Some(u32::from(instance.rest_bursts)),
+            refractory_period: Some(0),
+            leak_coefficient: Some(0.0),
+            leak_variability: None,
+            burst_engine_active: Some(true),
+            properties: Some(properties),
+        }])
+        .await?;
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            genome.modulators.insert(id.clone(), instance);
+        }
+        self.push_modulator_bindings()?;
+        self.get_modulator(&id).await
+    }
+
+    async fn update_modulator(
+        &self,
+        id: &str,
+        write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<Value> {
+        let (driver_id, changes) = {
+            let genome = self.current_genome.read();
+            let genome = genome
+                .as_ref()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            let current = genome
+                .modulators
+                .get(id)
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "modulator".to_string(),
+                    id: id.to_string(),
+                })?;
+            let updated = write
+                .into_instance(current.driver_cortical_id)
+                .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
+            if updated.kind != current.kind && !usage_is_empty(&modulator_usage_of(genome, id)) {
+                return Err(ServiceError::Conflict(format!(
+                    "modulator '{id}' type cannot change while subscribers exist"
+                )));
+            }
+            let mut changes = feagi_evolutionary::driver_locked_properties(&updated);
+            changes.insert("modulator_field_owner".to_string(), serde_json::json!(true));
+            (current.driver_cortical_id.as_base_64(), (updated, changes))
+        };
+        let (updated, changes) = changes;
+        self.update_cortical_area(&driver_id, changes).await?;
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            genome.modulators.insert(id.to_string(), updated);
+        }
+        self.push_modulator_bindings()?;
+        self.get_modulator(id).await
+    }
+
+    async fn rename_modulator(&self, old_id: &str, new_id: String) -> ServiceResult<()> {
+        if new_id.is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "modulator id must not be empty".to_string(),
+            ));
+        }
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            if genome.modulators.contains(&new_id) {
+                return Err(ServiceError::Conflict(format!(
+                    "modulator '{new_id}' already exists"
+                )));
+            }
+            if !genome.modulators.rename(old_id, new_id.clone()) {
+                return Err(ServiceError::NotFound {
+                    resource: "modulator".to_string(),
+                    id: old_id.to_string(),
+                });
+            }
+            rewrite_modulator_id(genome, old_id, &new_id);
+        }
+        self.push_modulator_bindings()?;
+        Ok(())
+    }
+
+    async fn modulator_usage(&self, id: &str) -> ServiceResult<Value> {
+        let genome = self.current_genome.read();
+        let genome = genome
+            .as_ref()
+            .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+        if !genome.modulators.contains(id) {
+            return Err(ServiceError::NotFound {
+                resource: "modulator".to_string(),
+                id: id.to_string(),
+            });
+        }
+        Ok(modulator_usage_of(genome, id))
+    }
+
+    async fn delete_modulator(&self, id: &str, force: bool) -> ServiceResult<()> {
+        let snapshot = {
+            let genome = self.current_genome.read();
+            genome
+                .as_ref()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?
+                .clone()
+        };
+        let driver = snapshot
+            .modulators
+            .get(id)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "modulator".to_string(),
+                id: id.to_string(),
+            })?
+            .driver_cortical_id;
+        let usage = modulator_usage_of(&snapshot, id);
+        if !force && !usage_is_empty(&usage) {
+            return Err(ServiceError::Conflict(
+                serde_json::json!({
+                    "message": format!("modulator '{id}' is in use"),
+                    "usage": usage,
+                })
+                .to_string(),
+            ));
+        }
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            if force {
+                strip_modulator_subscriptions(genome, id);
+            }
+            genome.modulators.remove(id);
+            genome.cortical_areas.remove(&driver);
+            for region in genome.brain_regions.values_mut() {
+                region.cortical_areas.remove(&driver);
+            }
+        }
+        let removed = self.connectome.write().remove_cortical_area(&driver);
+        if let Err(err) = removed {
+            *self.current_genome.write() = Some(snapshot);
+            return Err(ServiceError::Backend(err.to_string()));
+        }
+        self.push_modulator_bindings()?;
+        Ok(())
+    }
+}
+
+fn json_as_u16(value: &Value) -> Option<u16> {
+    value
+        .as_u64()
+        .or_else(|| value.as_f64().map(|number| number as u64))
+        .and_then(|number| u16::try_from(number).ok())
+}
+
+fn spike_train_limit_from_changes(changes: &HashMap<String, Value>) -> Option<u16> {
+    for key in [
+        "consecutive_fire_limit",
+        "consecutive_fire_cnt_max",
+        "neuron_consecutive_fire_count",
+        "consecutive_fire_count",
+    ] {
+        if let Some(limit) = changes.get(key).and_then(json_as_u16) {
+            return Some(limit);
+        }
+    }
+    None
+}
+
+fn spike_train_limit_from_properties(properties: &HashMap<String, Value>) -> Option<u16> {
+    for key in ["consecutive_fire_limit", "consecutive_fire_cnt_max"] {
+        if let Some(limit) = properties.get(key).and_then(json_as_u16) {
+            return Some(limit);
+        }
+    }
+    None
+}
+
+fn next_modulator_serial(genome: &feagi_evolutionary::RuntimeGenome) -> u32 {
+    let mut next = 0u32;
+    let mut consider = |id: CorticalID| {
+        if !id.is_modulator_driver() {
+            return;
+        }
+        let bytes = id.as_bytes();
+        let serial = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+        next = next.max(serial.saturating_add(1));
+    };
+    for id in genome.cortical_areas.keys() {
+        consider(*id);
+    }
+    for (_, instance) in genome.modulators.iter() {
+        consider(instance.driver_cortical_id);
+    }
+    next
+}
+
+fn modulator_usage_of(genome: &feagi_evolutionary::RuntimeGenome, id: &str) -> Value {
+    let mut areas = Vec::new();
+    let mut mappings = Vec::new();
+    for (area_id, area) in &genome.cortical_areas {
+        if property_lists_modulator(&area.properties, "modulators", id) {
+            areas.push(area_id.as_base_64());
+        }
+        let Some(dst) = area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|value| value.as_object())
+        else {
+            continue;
+        };
+        for (dst_id, rules) in dst {
+            let rules = rules
+                .as_array()
+                .map(|rules| rules.as_slice())
+                .unwrap_or(&[]);
+            for rule in rules {
+                let Some(rule) = rule.as_object() else {
+                    continue;
+                };
+                if property_list_contains(rule.get("modulators"), id) {
+                    mappings.push(serde_json::json!({
+                        "src": area_id.as_base_64(),
+                        "dst": dst_id,
+                    }));
+                }
+            }
+        }
+    }
+    serde_json::json!({ "areas": areas, "mappings": mappings })
+}
+
+fn usage_is_empty(usage: &Value) -> bool {
+    usage
+        .get("areas")
+        .and_then(|value| value.as_array())
+        .map(|list| list.is_empty())
+        .unwrap_or(true)
+        && usage
+            .get("mappings")
+            .and_then(|value| value.as_array())
+            .map(|list| list.is_empty())
+            .unwrap_or(true)
+}
+
+fn property_lists_modulator(properties: &HashMap<String, Value>, key: &str, id: &str) -> bool {
+    property_list_contains(properties.get(key), id)
+}
+
+fn property_list_contains(value: Option<&Value>, id: &str) -> bool {
+    value
+        .and_then(|value| value.as_array())
+        .map(|list| list.iter().any(|entry| entry.as_str() == Some(id)))
+        .unwrap_or(false)
+}
+
+fn rewrite_modulator_id(
+    genome: &mut feagi_evolutionary::RuntimeGenome,
+    old_id: &str,
+    new_id: &str,
+) {
+    for area in genome.cortical_areas.values_mut() {
+        rewrite_id_list(area.properties.get_mut("modulators"), old_id, new_id);
+        if let Some(dst) = area
+            .properties
+            .get_mut("cortical_mapping_dst")
+            .and_then(|value| value.as_object_mut())
+        {
+            for rules in dst.values_mut() {
+                let Some(rules) = rules.as_array_mut() else {
+                    continue;
+                };
+                for rule in rules {
+                    let Some(rule) = rule.as_object_mut() else {
+                        continue;
+                    };
+                    rewrite_id_list(rule.get_mut("modulators"), old_id, new_id);
+                }
+            }
+        }
+    }
+}
+
+fn rewrite_id_list(value: Option<&mut Value>, old_id: &str, new_id: &str) {
+    let Some(list) = value.and_then(|value| value.as_array_mut()) else {
+        return;
+    };
+    for entry in list {
+        if entry.as_str() == Some(old_id) {
+            *entry = serde_json::json!(new_id);
+        }
+    }
+}
+
+fn strip_modulator_subscriptions(genome: &mut feagi_evolutionary::RuntimeGenome, id: &str) {
+    for area in genome.cortical_areas.values_mut() {
+        strip_id_list(area.properties.get_mut("modulators"), id);
+        if let Some(dst) = area
+            .properties
+            .get_mut("cortical_mapping_dst")
+            .and_then(|value| value.as_object_mut())
+        {
+            for rules in dst.values_mut() {
+                let Some(rules) = rules.as_array_mut() else {
+                    continue;
+                };
+                for rule in rules {
+                    let Some(rule) = rule.as_object_mut() else {
+                        continue;
+                    };
+                    strip_id_list(rule.get_mut("modulators"), id);
+                }
+            }
+        }
+    }
+}
+
+fn strip_id_list(value: Option<&mut Value>, id: &str) {
+    let Some(list) = value.and_then(|value| value.as_array_mut()) else {
+        return;
+    };
+    list.retain(|entry| entry.as_str() != Some(id));
 }
 
 impl GenomeServiceImpl {
+    fn push_modulator_bindings(&self) -> ServiceResult<()> {
+        let genome = self.current_genome.read();
+        let Some(genome) = genome.as_ref() else {
+            return Ok(());
+        };
+        self.connectome
+            .read()
+            .sync_modulators_from_genome(genome)
+            .map_err(|err| ServiceError::Backend(err.to_string()))
+    }
+
     /// Fast path: Update only neuron parameters without synapse rebuild
     ///
     /// Performance: ~1-2µs to queue (non-blocking), applied in next burst cycle
@@ -4975,6 +5468,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -5205,6 +5699,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -5387,6 +5882,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),

@@ -128,4 +128,37 @@ pub trait GenomeService: Send + Sync {
         &self,
         params: Vec<CreateCorticalAreaParams>,
     ) -> ServiceResult<Vec<CorticalAreaInfo>>;
+
+    /// Built-in modulator types. Instances are created separately.
+    async fn list_modulator_types(&self) -> ServiceResult<Vec<String>>;
+
+    /// Every modulator instance in the loaded genome.
+    async fn list_modulators(&self) -> ServiceResult<serde_json::Value>;
+
+    /// One modulator instance.
+    async fn get_modulator(&self, id: &str) -> ServiceResult<serde_json::Value>;
+
+    /// Create an instance and its 1x1x1 root driver area.
+    async fn create_modulator(
+        &self,
+        id: String,
+        write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<serde_json::Value>;
+
+    /// Rewrite an instance and the locked fields of its driver.
+    /// Changing type is rejected while subscribers exist.
+    async fn update_modulator(
+        &self,
+        id: &str,
+        write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<serde_json::Value>;
+
+    /// Rename an instance and every subscriber reference.
+    async fn rename_modulator(&self, old_id: &str, new_id: String) -> ServiceResult<()>;
+
+    /// Areas and mapping rules that subscribe to this instance.
+    async fn modulator_usage(&self, id: &str) -> ServiceResult<serde_json::Value>;
+
+    /// Delete the instance and its driver. Without `force`, subscribers reject the delete.
+    async fn delete_modulator(&self, id: &str, force: bool) -> ServiceResult<()>;
 }

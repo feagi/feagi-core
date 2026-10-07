@@ -89,7 +89,7 @@ pub(crate) fn embed_manifest_for_current_export(snapshot: &mut ConnectomeSnapsho
                     "exported embedded genome is invalid: {error}"
                 ))
             })?;
-            if report.from_version != report.to_version || !report.is_blocking_clean() {
+            if !report.is_blocking_clean() {
                 return Ok(());
             }
             let canonical_genome = canonical_json_string(&current_genome)?;
@@ -565,12 +565,16 @@ mod tests {
         .expect("parse migrated genome");
 
         assert_eq!(result.report.source_genome_schema_version, Some(2));
-        assert_eq!(result.report.target_genome_schema_version, Some(3));
+        assert_eq!(result.report.target_genome_schema_version, Some(4));
         assert!(result
             .report
             .migration_steps
             .contains(&"genome:v2_to_v3".to_string()));
-        assert_eq!(migrated_genome["genome_schema_version"], 3);
+        assert!(result
+            .report
+            .migration_steps
+            .contains(&"genome:v3_to_v4".to_string()));
+        assert_eq!(migrated_genome["genome_schema_version"], 4);
         assert!(migrated_snapshot
             .metadata
             .tags

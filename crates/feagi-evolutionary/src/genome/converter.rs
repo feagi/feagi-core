@@ -63,6 +63,8 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
 
     // Parse morphologies
     let morphologies = parse_morphologies(&parsed.neuron_morphologies)?;
+    let modulators =
+        crate::modulators::parse_modulator_registry(Some(&serde_json::json!(parsed.modulators)))?;
 
     // Parse physiology
     let physiology = parse_physiology(&parsed.physiology)?;
@@ -85,6 +87,7 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         brain_regions,
         classifiers,
         morphologies,
+        modulators,
         physiology,
         signatures,
         stats,

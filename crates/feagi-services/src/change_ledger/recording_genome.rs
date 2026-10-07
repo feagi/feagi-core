@@ -117,4 +117,44 @@ impl GenomeService for RecordingGenomeService {
         );
         Ok(created)
     }
+
+    async fn list_modulator_types(&self) -> ServiceResult<Vec<String>> {
+        self.inner.list_modulator_types().await
+    }
+
+    async fn list_modulators(&self) -> ServiceResult<serde_json::Value> {
+        self.inner.list_modulators().await
+    }
+
+    async fn get_modulator(&self, id: &str) -> ServiceResult<serde_json::Value> {
+        self.inner.get_modulator(id).await
+    }
+
+    async fn create_modulator(
+        &self,
+        id: String,
+        write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<serde_json::Value> {
+        self.inner.create_modulator(id, write).await
+    }
+
+    async fn update_modulator(
+        &self,
+        id: &str,
+        write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<serde_json::Value> {
+        self.inner.update_modulator(id, write).await
+    }
+
+    async fn rename_modulator(&self, old_id: &str, new_id: String) -> ServiceResult<()> {
+        self.inner.rename_modulator(old_id, new_id).await
+    }
+
+    async fn modulator_usage(&self, id: &str) -> ServiceResult<serde_json::Value> {
+        self.inner.modulator_usage(id).await
+    }
+
+    async fn delete_modulator(&self, id: &str, force: bool) -> ServiceResult<()> {
+        self.inner.delete_modulator(id, force).await
+    }
 }

@@ -742,6 +742,41 @@ where
         dispatch_mut!(self, rebuild_synapse_index())
     }
 
+    pub fn set_modulator_bindings(&self, bindings: Vec<crate::modulator_engine::ModulatorBinding>) {
+        dispatch!(self, set_modulator_bindings(bindings))
+    }
+
+    pub fn set_modulator_area_subscriptions(
+        &self,
+        subscriptions: ahash::AHashMap<u32, Vec<String>>,
+    ) {
+        dispatch!(self, set_modulator_area_subscriptions(subscriptions))
+    }
+
+    pub fn set_spike_train_areas(&self, areas: ahash::AHashSet<u32>) {
+        dispatch!(self, set_spike_train_areas(areas))
+    }
+
+    pub fn set_homeostatic_leak_areas(&self, areas: ahash::AHashSet<u32>) {
+        dispatch!(self, set_homeostatic_leak_areas(areas))
+    }
+
+    pub fn allocate_modulation_group(&self, instance_ids: &[String]) -> u16 {
+        dispatch!(self, allocate_modulation_group(instance_ids))
+    }
+
+    pub fn authored_reward_signal(&self, driver_cortical_idx: u32) -> Option<f32> {
+        dispatch!(self, authored_reward_signal(driver_cortical_idx))
+    }
+
+    pub fn stamp_synapse_modulation_group(&self, start: usize, end: usize, group: u16) {
+        dispatch!(self, stamp_synapse_modulation_group(start, end, group))
+    }
+
+    pub fn synapse_count(&self) -> usize {
+        dispatch!(self, synapse_count())
+    }
+
     /// Rebuild power neuron cache (useful after major structural changes)
     pub fn rebuild_power_neuron_cache(&mut self) {
         dispatch_mut!(self, rebuild_power_neuron_cache())

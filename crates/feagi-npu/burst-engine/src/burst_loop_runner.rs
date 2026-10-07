@@ -837,6 +837,15 @@ impl BurstLoopRunner {
         result
     }
 
+    /// Drop the last burst's fire-queue sample.
+    ///
+    /// Genome load replaces the NPU fire ledger, but visualization, motor output,
+    /// and activity monitoring read this cache. Leaving it in place republishes
+    /// the previous genome's spikes under the new cortical index map.
+    pub fn clear_cached_fire_queue(&self) {
+        *self.cached_fire_queue.lock().unwrap() = None;
+    }
+
     /// Get current fire queue for monitoring
     /// Returns the last cached fire queue data from previous burst
     pub fn get_fire_queue_sample(&mut self) -> Option<FireQueueSample> {
@@ -2533,10 +2542,9 @@ fn burst_loop(
                 // Area names are stored in ConnectomeManager, not NPU - we cache them here
                 //
                 // NOTE: Cache is refreshed via refresh_cortical_id_mappings() when areas are created/updated
-                // or on genome load. If the NPU is not reset on genome load (see ConnectomeManager
-                // prepare_for_new_genome), fire queue (area_id, coords) can be from the OLD genome
-                // while cache has NEW genome idx->id; that causes out-of-region visualization until
-                // feagi-rs is restarted.
+                // or on genome load. Genome load also clears this fire-queue sample
+                // (`clear_cached_fire_queue`) after `prepare_for_new_genome` replaces the NPU
+                // fire ledger, so the previous genome's spikes are not republished.
 
                 // CRITICAL PERFORMANCE: Clone both maps to release locks immediately
                 // This prevents holding locks during expensive visualization aggregation and vector cloning
@@ -3435,6 +3443,13 @@ mod tests {
         >>::new_cpu_only(1000, 10000, 20);
         let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "TestNPU"));
         let mut runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu, None, None, 10.0);
+
+        let mut sample = ahash::AHashMap::new();
+        sample.insert(7, (vec![1], vec![0], vec![0], vec![0], vec![1.0]));
+        *runner.cached_fire_queue.lock().unwrap() = Some(Arc::new(sample));
+        assert!(runner.get_fire_queue_sample().is_some());
+        runner.clear_cached_fire_queue();
+        assert!(runner.get_fire_queue_sample().is_none());
 
         assert!(!runner.is_running());
 

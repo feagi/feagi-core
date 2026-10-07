@@ -116,6 +116,8 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         Value::Object(morphologies_map),
     );
 
+    flat_genome.insert("modulators".to_string(), genome.modulators.to_json());
+
     // Physiology
     let physiology = json!({
         "simulation_timestep": genome.physiology.simulation_timestep,
@@ -255,6 +257,7 @@ fn convert_area_to_flat(
             CorticalAreaType::Memory(_) => "MEMORY",
             CorticalAreaType::Core(_) => "CORE",
             CorticalAreaType::Custom(_) => "CUSTOM",
+            CorticalAreaType::Modulator => "MODULATOR",
         };
         properties_with_group.insert("cortical_group".to_string(), json!(cortical_group));
     }
@@ -324,6 +327,8 @@ fn convert_properties_to_flat(
         ("dev_count", ("devcnt-i", "cx")),
         ("memory_twin_of", ("twinrf-t", "cx")),
         ("burst_engine_active", ("brsten-b", "cx")),
+        ("spike_train", ("spktrn-b", "cx")),
+        ("modulators", ("modls-d", "cx")),
     ]
     .iter()
     .cloned()
@@ -542,6 +547,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0000000000000000".to_string(),
@@ -579,6 +585,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0000000000000000".to_string(),
@@ -649,6 +656,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0000000000000000".to_string(),
@@ -732,6 +740,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0000000000000000".to_string(),
@@ -787,6 +796,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0000000000000000".to_string(),
@@ -839,6 +849,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0000000000000000".to_string(),

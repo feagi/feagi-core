@@ -187,6 +187,15 @@ impl BurstTaps {
         })
     }
 
+    /// Drop the latest motor and sensor snapshots.
+    ///
+    /// Called when a genome is loaded so diagnostics do not keep the previous
+    /// brain's last burst.
+    pub fn clear(&self) {
+        *self.motor.write() = MotorOutputTap::default();
+        *self.sensor.write() = SensorInputTap::default();
+    }
+
     /// Read the latest motor snapshot (clones into the caller).
     pub fn motor_snapshot(&self) -> MotorOutputTap {
         self.motor.read().clone()
@@ -223,6 +232,38 @@ pub fn now_unix_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clear_drops_motor_and_sensor_snapshots() {
+        let taps = BurstTaps::instance();
+        {
+            let mut motor = taps.motor.write();
+            motor.burst_num = 9;
+            motor.areas.push(AreaActivity {
+                cortical_id: "old".to_string(),
+                cortical_idx: 7,
+                neuron_count: 1,
+                samples: Vec::new(),
+            });
+        }
+        {
+            let mut sensor = taps.sensor.write();
+            sensor.burst_num = 9;
+            sensor.areas.push(AreaActivity {
+                cortical_id: "old".to_string(),
+                cortical_idx: 8,
+                neuron_count: 1,
+                samples: Vec::new(),
+            });
+        }
+        taps.clear();
+        let motor = taps.motor_snapshot();
+        let sensor = taps.sensor_snapshot();
+        assert_eq!(motor.burst_num, 0);
+        assert!(motor.areas.is_empty());
+        assert_eq!(sensor.burst_num, 0);
+        assert!(sensor.areas.is_empty());
+    }
 
     #[test]
     fn instance_is_idempotent() {

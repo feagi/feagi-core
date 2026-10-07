@@ -35,7 +35,7 @@ use serde_json::{json, Value};
 
 use super::{NormalizationDiagnostics, Normalizer};
 use crate::genome::migration::MigrationError;
-use crate::genome::schema::{GenomeSchemaVersion, CURRENT_SCHEMA_VERSION};
+use crate::genome::schema::GenomeSchemaVersion;
 
 /// Default quantization precision used when the field is empty or invalid.
 /// Mirrors `crate::runtime::default_quantization_precision()` to avoid a
@@ -61,7 +61,7 @@ impl V3Normalizer {
 
 impl Normalizer for V3Normalizer {
     fn schema_version(&self) -> GenomeSchemaVersion {
-        CURRENT_SCHEMA_VERSION
+        GenomeSchemaVersion(3)
     }
 
     fn name(&self) -> &'static str {
@@ -69,7 +69,7 @@ impl Normalizer for V3Normalizer {
     }
 
     fn normalize(&self, genome: &mut Value) -> Result<NormalizationDiagnostics, MigrationError> {
-        let mut diag = NormalizationDiagnostics::new(CURRENT_SCHEMA_VERSION);
+        let mut diag = NormalizationDiagnostics::new(GenomeSchemaVersion(3));
 
         normalize_physiology(genome, &mut diag);
         normalize_blueprint(genome, &mut diag);
@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn reports_current_schema_version() {
         let n = V3Normalizer::new();
-        assert_eq!(n.schema_version(), CURRENT_SCHEMA_VERSION);
+        assert_eq!(n.schema_version(), GenomeSchemaVersion(3));
         assert_eq!(n.name(), "v3_normalizer");
     }
 

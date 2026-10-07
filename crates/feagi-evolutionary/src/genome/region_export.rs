@@ -258,6 +258,55 @@ fn cortical_ids_in_branch(genome: &RuntimeGenome, branch_region_ids: &[String]) 
 }
 
 /// Remove `cortical_mapping_dst` entries whose destination keys are not in `kept`.
+fn modulators_for_kept_areas(
+    genome: &RuntimeGenome,
+    kept: &mut HashSet<String>,
+) -> crate::modulators::ModulatorRegistry {
+    let mut ids = std::collections::BTreeSet::new();
+    for (cortical_id, area) in &genome.cortical_areas {
+        if !kept.contains(&cortical_id.as_base_64()) {
+            continue;
+        }
+        collect_modulator_ids(area.properties.get("modulators"), &mut ids);
+        if let Some(dst) = area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|value| value.as_object())
+        {
+            for rules in dst.values() {
+                let Some(rules) = rules.as_array() else {
+                    continue;
+                };
+                for rule in rules {
+                    collect_modulator_ids(rule.get("modulators"), &mut ids);
+                }
+            }
+        }
+    }
+    let mut registry = crate::modulators::ModulatorRegistry::new();
+    for id in ids {
+        if let Some(instance) = genome.modulators.get(&id) {
+            kept.insert(instance.driver_cortical_id.as_base_64());
+            registry.insert(id, instance.clone());
+        }
+    }
+    registry
+}
+
+fn collect_modulator_ids(
+    value: Option<&serde_json::Value>,
+    ids: &mut std::collections::BTreeSet<String>,
+) {
+    let Some(list) = value.and_then(|value| value.as_array()) else {
+        return;
+    };
+    for entry in list {
+        if let Some(id) = entry.as_str() {
+            ids.insert(id.to_string());
+        }
+    }
+}
+
 fn strip_dst_mappings_outside_branch(area: &mut CorticalArea, kept: &HashSet<String>) {
     let Some(Value::Object(dst_map)) = area.properties.get_mut("cortical_mapping_dst") else {
         return;
@@ -279,7 +328,8 @@ pub fn subset_runtime_genome_for_region_branch(
     let branch_ids = collect_region_branch_ids(genome, root_region_id, &children)?;
     let branch_set: HashSet<String> = branch_ids.iter().cloned().collect();
 
-    let kept_cortical = cortical_ids_in_branch(genome, &branch_ids);
+    let mut kept_cortical = cortical_ids_in_branch(genome, &branch_ids);
+    let modulators = modulators_for_kept_areas(genome, &mut kept_cortical);
 
     let mut cortical_areas: HashMap<CorticalID, CorticalArea> = HashMap::new();
     for (cid, area) in &genome.cortical_areas {
@@ -318,6 +368,9 @@ pub fn subset_runtime_genome_for_region_branch(
         .unwrap_or_else(|| "Neural circuit".to_string());
     if let Some(circuit) = brain_regions.get_mut(root_region_id) {
         circuit.name = circuit_name.clone();
+        for (_, instance) in modulators.iter() {
+            circuit.cortical_areas.insert(instance.driver_cortical_id);
+        }
     }
 
     let genome_root_id = wrap_parentless_regions_under_named_root(&mut brain_regions)
@@ -344,6 +397,7 @@ pub fn subset_runtime_genome_for_region_branch(
         brain_regions,
         classifiers: HashMap::new(),
         morphologies: genome.morphologies.clone(),
+        modulators,
         physiology: genome.physiology.clone(),
         signatures: GenomeSignatures {
             genome: "0".to_string(),
@@ -399,6 +453,7 @@ mod tests {
             brain_regions,
             classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),
@@ -561,6 +616,7 @@ mod tests {
             brain_regions,
             classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),

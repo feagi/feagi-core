@@ -205,6 +205,18 @@ type NeuronData = (
     bool,
 );
 
+fn rule_modulator_ids(rule_obj: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
+    rule_obj
+        .get("modulators")
+        .and_then(|value| value.as_array())
+        .map(|list| {
+            list.iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 impl ConnectomeManager {
     fn get_mapping_rules_for_destination<'a>(
         mapping_dst: &'a serde_json::Map<String, serde_json::Value>,
@@ -954,8 +966,8 @@ impl ConnectomeManager {
         self.cortical_areas.insert(cortical_id, area);
 
         // Update region membership (source of truth for region->areas listing).
-        // Root stays reserved for core, IPU, and OPU. Custom and memory areas that
-        // arrive with a root parent are rejected instead of being stored there.
+        // Root stays reserved for core, IPU, OPU, and modulator drivers. Custom and
+        // memory areas that arrive with a root parent are rejected.
         if let Some(region_id) = parent_region_id {
             let joining_root = self.get_root_region_id().as_deref() == Some(region_id.as_str());
             let blocked_from_root = joining_root
@@ -968,7 +980,7 @@ impl ConnectomeManager {
                 self.cortical_id_to_idx.remove(&cortical_id);
                 self.cortical_idx_to_id.remove(&cortical_idx);
                 return Err(BduError::InvalidArea(format!(
-                    "Cortical area {} cannot join root; root is reserved for core, IPU, and OPU areas",
+                    "Cortical area {} cannot join root; root is reserved for core, IPU, OPU, and modulator areas",
                     cortical_id.as_base_64()
                 )));
             }
@@ -1585,13 +1597,14 @@ impl ConnectomeManager {
             .is_some_and(Self::area_may_join_root)
     }
 
-    /// Root membership is only legal for core, IPU, and OPU areas.
+    /// Root membership is legal for core, IPU, OPU, and modulator driver areas.
     fn area_may_join_root(area: &CorticalArea) -> bool {
         matches!(
             area.cortical_type,
             CorticalAreaType::Core(_)
                 | CorticalAreaType::BrainInput(_)
                 | CorticalAreaType::BrainOutput(_)
+                | CorticalAreaType::Modulator
         )
     }
 
@@ -3933,6 +3946,91 @@ impl ConnectomeManager {
 
     /// Register STDP mapping parameters for a plastic rule
     #[allow(clippy::too_many_arguments)]
+    /// Push genome modulator instances, area subscriptions, and spike-train areas into the NPU.
+    pub fn sync_modulators_from_genome(
+        &self,
+        genome: &feagi_evolutionary::RuntimeGenome,
+    ) -> BduResult<()> {
+        let npu = self
+            .npu
+            .as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        let mut bindings = Vec::new();
+        for (instance_id, instance) in genome.modulators.iter() {
+            let driver_cortical_idx = *self
+                .cortical_id_to_idx
+                .get(&instance.driver_cortical_id)
+                .ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "modulator '{}' driver area {} is not in the connectome",
+                        instance_id, instance.driver_cortical_id
+                    ))
+                })?;
+            let full_scale_potential = if instance.graded {
+                instance.full_scale_potential.ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "graded modulator '{}' is missing full_scale_potential",
+                        instance_id
+                    ))
+                })?
+            } else {
+                0.0
+            };
+            bindings.push(feagi_npu_burst_engine::modulator_engine::ModulatorBinding {
+                instance_id: instance_id.clone(),
+                kind: instance.kind,
+                magnitude_percent: instance.magnitude_percent,
+                graded: instance.graded,
+                full_scale_potential,
+                driver_cortical_idx,
+            });
+        }
+        let mut area_subscriptions = ahash::AHashMap::new();
+        let mut spike_train_areas = ahash::AHashSet::new();
+        let mut homeostatic_leak_areas = ahash::AHashSet::new();
+        for (cortical_id, area) in &genome.cortical_areas {
+            let Some(cortical_idx) = self.cortical_id_to_idx.get(cortical_id).copied() else {
+                continue;
+            };
+            if area
+                .properties
+                .get("spike_train")
+                .and_then(|value| value.as_bool())
+                == Some(true)
+            {
+                spike_train_areas.insert(cortical_idx);
+            }
+            if let Some(value) = area.properties.get("rate_modulated_leak") {
+                if feagi_npu_burst_engine::rate_modulated_leak::RateModulatedLeakConfig::parse_from_cortical_property(value).is_some()
+                {
+                    homeostatic_leak_areas.insert(cortical_idx);
+                }
+            }
+            if let Some(list) = area
+                .properties
+                .get("modulators")
+                .and_then(|value| value.as_array())
+            {
+                let ids: Vec<String> = list
+                    .iter()
+                    .filter_map(|value| value.as_str().map(str::to_string))
+                    .collect();
+                if !ids.is_empty() {
+                    area_subscriptions.insert(cortical_idx, ids);
+                }
+            }
+        }
+        let npu = npu.lock().map_err(|err| {
+            BduError::Internal(format!("Failed to lock NPU for modulators: {err}"))
+        })?;
+        npu.set_modulator_bindings(bindings);
+        npu.set_modulator_area_subscriptions(area_subscriptions);
+        npu.set_spike_train_areas(spike_train_areas);
+        npu.set_homeostatic_leak_areas(homeostatic_leak_areas);
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn register_stdp_mapping_for_rule(
         npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         src_area_id: &CorticalID,
@@ -4209,6 +4307,17 @@ impl ConnectomeManager {
             max_weight,
             plasticity_eta,
             instance_reward,
+            modulation_group: {
+                let ids = rule_modulator_ids(rule_obj);
+                let group = npu_lock.allocate_modulation_group(&ids);
+                if !ids.is_empty() && group == 0 {
+                    return Err(BduError::Internal(format!(
+                        "mapping {} -> {} lists modulators that are not synaptic instances",
+                        src_area_id, dst_area_id
+                    )));
+                }
+                group
+            },
         };
 
         npu_lock
@@ -4527,6 +4636,20 @@ impl ConnectomeManager {
                     return Err(e);
                 }
             };
+            if let Some(rule_obj) = rule.as_object() {
+                let ids = rule_modulator_ids(rule_obj);
+                if !ids.is_empty() && synapse_count > 0 {
+                    let npu_lock = npu_arc.lock().map_err(|_| {
+                        crate::types::BduError::Internal(
+                            "Failed to lock NPU to stamp modulation groups".to_string(),
+                        )
+                    })?;
+                    let group = npu_lock.allocate_modulation_group(&ids);
+                    let end = npu_lock.synapse_count();
+                    let start = end.saturating_sub(synapse_count);
+                    npu_lock.stamp_synapse_modulation_group(start, end, group);
+                }
+            }
             total_synapses += synapse_count;
             tracing::debug!(
                 target: "feagi-bdu",
@@ -9848,6 +9971,60 @@ mod tests {
         assert!(manager.is_initialized());
     }
 
+    /// Modulator drivers are root members. Custom areas stay blocked from root.
+    #[test]
+    fn modulator_driver_may_join_root() {
+        use feagi_structures::genomic::brain_regions::RegionID;
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        let root = BrainRegion::new(
+            RegionID::new(),
+            "root".to_string(),
+            crate::models::RegionType::Undefined,
+        )
+        .unwrap();
+        let root_id = root.region_id.to_string();
+        manager.add_brain_region(root, None).expect("root region");
+
+        let driver = CorticalID::modulator_driver(1);
+        let mut area = CorticalArea::new(
+            driver,
+            0,
+            "reward_1".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Modulator,
+        )
+        .unwrap();
+        area.properties.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(root_id.clone()),
+        );
+        manager
+            .add_cortical_area(area)
+            .expect("modulator driver belongs in the root region");
+        assert!(manager.has_cortical_area(&driver));
+
+        let custom_id = CorticalID::try_from_bytes(b"crootblk").unwrap();
+        let mut custom = CorticalArea::new(
+            custom_id,
+            0,
+            "custom".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        custom
+            .properties
+            .insert("parent_region_id".to_string(), serde_json::json!(root_id));
+        let rejected = manager.add_cortical_area(custom);
+        assert!(
+            rejected.is_err(),
+            "custom areas remain blocked from the root region"
+        );
+    }
+
     #[test]
     fn refresh_all_connectome_hashes_publishes_mappings() {
         use feagi_structures::genomic::cortical_area::{
@@ -12504,6 +12681,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),
@@ -12753,6 +12931,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),

@@ -46,7 +46,7 @@ pub const MIN_SCHEMA_VERSION: GenomeSchemaVersion = GenomeSchemaVersion(2);
 
 /// Latest schema version. New genomes are produced at this version, and
 /// `Validator(CURRENT_SCHEMA_VERSION)` is the only blocking validator.
-pub const CURRENT_SCHEMA_VERSION: GenomeSchemaVersion = GenomeSchemaVersion(3);
+pub const CURRENT_SCHEMA_VERSION: GenomeSchemaVersion = GenomeSchemaVersion(4);
 
 #[cfg(test)]
 mod tests {
@@ -69,8 +69,8 @@ mod tests {
     }
 
     #[test]
-    fn current_is_three() {
-        assert_eq!(CURRENT_SCHEMA_VERSION.as_u32(), 3);
+    fn current_is_four() {
+        assert_eq!(CURRENT_SCHEMA_VERSION.as_u32(), 4);
     }
 
     #[test]

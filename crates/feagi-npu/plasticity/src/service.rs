@@ -1808,11 +1808,25 @@ impl PlasticityService {
                                             feedback.as_deref(),
                                         );
                                         if !updates.is_empty() {
+                                            let mut applied_reward = false;
                                             for update in updates {
-                                                let delta = match update.affect {
-                                                    ChannelAffect::Pleasure => reward.pleasure_step,
-                                                    ChannelAffect::Pain => -reward.pain_step,
+                                                let driver_idx = match update.affect {
+                                                    ChannelAffect::Pleasure => {
+                                                        reward.pleasure_area_idx
+                                                    }
+                                                    ChannelAffect::Pain => reward.pain_area_idx,
                                                 };
+                                                let signal = npu.lock().ok().and_then(|guard| {
+                                                    guard.authored_reward_signal(driver_idx)
+                                                });
+                                                let Some(signal) = signal else {
+                                                    continue;
+                                                };
+                                                let step = match update.affect {
+                                                    ChannelAffect::Pleasure => reward.pleasure_step,
+                                                    ChannelAffect::Pain => reward.pain_step,
+                                                };
+                                                let delta = step * signal;
                                                 let initial = if update.bind {
                                                     0.0
                                                 } else {
@@ -1831,10 +1845,13 @@ impl PlasticityService {
                                                     }
                                                     ChannelAffect::Pain => pain_this_source = true,
                                                 }
+                                                applied_reward = true;
                                             }
-                                            array
-                                                .presentation_ledger_mut()
-                                                .mark_corrected(*kernel_area_idx, spatial_hash);
+                                            if applied_reward {
+                                                array
+                                                    .presentation_ledger_mut()
+                                                    .mark_corrected(*kernel_area_idx, spatial_hash);
+                                            }
                                         }
                                     }
                                 }
@@ -2628,6 +2645,29 @@ mod tests {
     use feagi_npu_burst_engine::TracingMutex;
     use feagi_npu_runtime::StdRuntime;
     use std::sync::Arc;
+
+    fn bind_classifier_reward_drivers(npu: &DynamicNPU, pain_idx: u32, pleasure_idx: u32) {
+        use feagi_npu_burst_engine::modulator_engine::ModulatorBinding;
+        use feagi_structures::genomic::ModulatorKind;
+        npu.set_modulator_bindings(vec![
+            ModulatorBinding {
+                instance_id: "classifier_pain".to_string(),
+                kind: ModulatorKind::Reward,
+                magnitude_percent: -100.0,
+                graded: false,
+                full_scale_potential: 0.0,
+                driver_cortical_idx: pain_idx,
+            },
+            ModulatorBinding {
+                instance_id: "classifier_pleasure".to_string(),
+                kind: ModulatorKind::Reward,
+                magnitude_percent: 100.0,
+                graded: false,
+                full_scale_potential: 0.0,
+                driver_cortical_idx: pleasure_idx,
+            },
+        ]);
+    }
 
     #[test]
     fn silent_upstream_does_not_keep_a_stale_ledger_pattern() {
@@ -3466,6 +3506,7 @@ mod tests {
             guard.register_cortical_area(TWIN_IDX, "Y3R3aW4wMDE=".to_string());
             guard.register_cortical_area(PAIN_IDX, "Y3BhaW4wMDE=".to_string());
             guard.register_cortical_area(PLEASURE_IDX, "Y3BsZWEwMDE=".to_string());
+            bind_classifier_reward_drivers(&guard, PAIN_IDX, PLEASURE_IDX);
             guard.configure_fire_ledger_window(FIELD_IDX, 1).unwrap();
             let field_neuron = guard
                 .add_neuron(
@@ -3684,6 +3725,7 @@ mod tests {
             guard.register_cortical_area(TWIN_IDX, "Y3R3aW4wMDE=".to_string());
             guard.register_cortical_area(PAIN_IDX, "Y3BhaW4wMDE=".to_string());
             guard.register_cortical_area(PLEASURE_IDX, "Y3BsZWEwMDE=".to_string());
+            bind_classifier_reward_drivers(&guard, PAIN_IDX, PLEASURE_IDX);
             guard.register_cortical_area(FEEDBACK_IDX, "Y2ZlZWQwMDE=".to_string());
             guard.configure_fire_ledger_window(FIELD_IDX, 1).unwrap();
             guard.configure_fire_ledger_window(FEEDBACK_IDX, 1).unwrap();

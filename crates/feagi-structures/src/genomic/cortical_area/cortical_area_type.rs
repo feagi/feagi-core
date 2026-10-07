@@ -13,6 +13,8 @@ pub enum CorticalAreaType {
     Memory(MemoryCorticalType),
     BrainInput(IOCorticalAreaConfigurationFlag),
     BrainOutput(IOCorticalAreaConfigurationFlag),
+    /// 1x1x1 driver for one modulator instance. Created and deleted with that instance.
+    Modulator,
 }
 
 impl fmt::Display for CorticalAreaType {
@@ -23,6 +25,7 @@ impl fmt::Display for CorticalAreaType {
             CorticalAreaType::Memory(c) => write!(f, "Memory({})", c),
             CorticalAreaType::BrainInput(c) => write!(f, "BrainInput({})", c),
             CorticalAreaType::BrainOutput(c) => write!(f, "BrainOutput({})", c),
+            CorticalAreaType::Modulator => write!(f, "Modulator"),
         }
     }
 }

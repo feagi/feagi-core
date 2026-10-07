@@ -211,6 +211,8 @@ pub struct SynapticPropagationEngine {
     /// Set of (src_area, dst_area) pairs whose gate is currently closed (no activity
     /// in the gate area this burst). Updated before each propagation call by the NPU.
     closed_gates: AHashSet<(CorticalID, CorticalID)>,
+    /// Transmission-gain factors indexed by modulation group. Empty means every factor is 1.
+    transmission_factors: Vec<f32>,
     /// Performance stats
     total_propagations: u64,
     total_synapses_processed: u64,
@@ -247,10 +249,46 @@ impl SynapticPropagationEngine {
             area_degeneration: AHashMap::new(),
             gate_mappings: AHashMap::new(),
             closed_gates: AHashSet::new(),
+            transmission_factors: Vec::new(),
             total_propagations: 0,
             total_synapses_processed: 0,
             last_profile: None,
         }
+    }
+
+    /// Replace the transmission-gain table used by the next propagation.
+    pub fn set_transmission_factors(&mut self, factors: Vec<f32>) {
+        self.transmission_factors = factors;
+    }
+
+    /// Clear transmission scaling so every synapse contributes its unscaled PSP.
+    pub fn clear_transmission_factors(&mut self) {
+        self.transmission_factors.clear();
+    }
+
+    fn scale_transmission<S: feagi_npu_runtime::SynapseStorage>(
+        &self,
+        synapse_storage: &S,
+        syn_idx: usize,
+        contribution: f32,
+    ) -> f32 {
+        if self.transmission_factors.is_empty() {
+            return contribution;
+        }
+        let group = synapse_storage
+            .modulation_groups()
+            .get(syn_idx)
+            .copied()
+            .unwrap_or(0);
+        if group == 0 {
+            return contribution;
+        }
+        let factor = self
+            .transmission_factors
+            .get(group as usize)
+            .copied()
+            .unwrap_or(1.0);
+        contribution * factor
     }
 
     /// Returns the most recent propagation profile, if any.
@@ -732,6 +770,8 @@ impl SynapticPropagationEngine {
                         base_contribution
                     }
                 };
+                let final_contribution =
+                    self.scale_transmission(synapse_storage, syn_idx, final_contribution);
 
                 if allow_trace {
                     if synapse_verbose {
@@ -812,6 +852,8 @@ impl SynapticPropagationEngine {
                 } else {
                     base_contribution
                 };
+                let final_contribution =
+                    self.scale_transmission(synapse_storage, syn_idx, final_contribution);
                 Some((delay_bursts, target_neuron.0, final_contribution))
             })
             .fold(
@@ -938,6 +980,8 @@ mod tests {
             delay_bursts: vec![1, 1, 1],
             valid_mask: vec![true, true, true],
             eligibility_traces: vec![0.0, 0.0, 0.0],
+            modulation_groups: Vec::new(),
+            modulation_groups_allocated: false,
             source_index: ahash::AHashMap::new(),
         };
 

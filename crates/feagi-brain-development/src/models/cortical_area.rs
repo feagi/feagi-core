@@ -303,6 +303,7 @@ impl CorticalAreaExt for CorticalArea {
                     CorticalAreaType::Memory(_) => Some("MEMORY".to_string()),
                     CorticalAreaType::Custom(_) => Some("CUSTOM".to_string()),
                     CorticalAreaType::Core(_) => Some("CORE".to_string()),
+                    CorticalAreaType::Modulator => Some("MODULATOR".to_string()),
                 }
             })
     }

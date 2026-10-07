@@ -1277,6 +1277,7 @@ pub async fn post_cortical_area(
                 .unwrap_or_else(|| format!("{} Unit {}", cortical_type_key, group_id))
             });
 
+        properties.remove("modulator_instance_id");
         let params = CreateCorticalAreaParams {
             cortical_id: cortical_id.clone(),
             name: area_name,
@@ -1988,12 +1989,12 @@ fn classifier_edge_rules_without_morphology(
         .collect()
 }
 
-/// Associative rule whose pain and pleasure are applied per scanning instance.
+/// Associative rule whose Reward instances are applied per scanning instance.
 fn classifier_reward_mapping_rule(
     associative_window: u32,
     existing: &serde_json::Value,
-    pleasure_area_id: &str,
-    pain_area_id: &str,
+    pleasure_instance_id: &str,
+    pain_instance_id: &str,
 ) -> serde_json::Value {
     let mut rule = if existing.is_object() {
         existing.clone()
@@ -2007,13 +2008,11 @@ fn classifier_reward_mapping_rule(
         );
         object.insert("plasticity_flag".to_string(), serde_json::json!(true));
         object.insert("plasticity_mode".to_string(), serde_json::json!("rstdp"));
+        object.remove("reward_source_area");
+        object.remove("punishment_source_area");
         object.insert(
-            "reward_source_area".to_string(),
-            serde_json::json!(pleasure_area_id),
-        );
-        object.insert(
-            "punishment_source_area".to_string(),
-            serde_json::json!(pain_area_id),
+            "modulators".to_string(),
+            serde_json::json!([pleasure_instance_id, pain_instance_id]),
         );
         object.insert(
             "classifier_instance_reward".to_string(),
@@ -2048,6 +2047,7 @@ fn classifier_plain_associative_rule(
         object.remove("plasticity_mode");
         object.remove("reward_source_area");
         object.remove("punishment_source_area");
+        object.remove("modulators");
         object.remove("classifier_instance_reward");
         object.remove("eligibility_decay_bursts");
         object.insert("plasticity_flag".to_string(), serde_json::json!(true));
@@ -2059,59 +2059,19 @@ fn classifier_plain_associative_rule(
     rule
 }
 
-fn classifier_affect_area_params(
-    cortical_id: String,
-    name: String,
-    position: (i32, i32, i32),
-    parent_region_id: &str,
-    role: &str,
-) -> feagi_services::types::CreateCorticalAreaParams {
-    let mut properties = HashMap::new();
-    properties.insert(
-        "parent_region_id".to_string(),
-        serde_json::Value::String(parent_region_id.to_string()),
-    );
-    properties.insert("classifier_assembly".to_string(), serde_json::json!(true));
-    properties.insert("classifier_role".to_string(), serde_json::json!(role));
-    properties.insert("burst_engine_active".to_string(), serde_json::json!(true));
-    feagi_services::types::CreateCorticalAreaParams {
-        cortical_id,
-        name,
-        dimensions: (1, 1, 1),
-        position,
-        area_type: "Custom".to_string(),
-        visible: Some(false),
-        sub_group: None,
-        neurons_per_voxel: Some(1),
-        postsynaptic_current: None,
-        plasticity_constant: Some(0.0),
-        degeneration: Some(0.0),
-        psp_uniform_distribution: Some(false),
-        firing_threshold_increment: Some(0.0),
-        firing_threshold_limit: Some(0.0),
-        consecutive_fire_count: Some(0),
-        snooze_period: Some(0),
-        refractory_period: Some(0),
-        leak_coefficient: Some(0.0),
-        leak_variability: Some(0.0),
-        burst_engine_active: Some(true),
-        properties: Some(properties),
+fn classifier_reward_instance_id(name: &str, role: &str) -> String {
+    let mut id = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            id.push(ch.to_ascii_lowercase());
+        } else {
+            id.push('_');
+        }
     }
-}
-
-fn new_classifier_affect_id(role_byte: u8) -> String {
-    use base64::{engine::general_purpose, Engine as _};
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
-    let mut bytes = [0u8; 8];
-    bytes[0] = role_byte;
-    let time_bytes = nanos.to_le_bytes();
-    bytes[1..].copy_from_slice(&time_bytes[..7]);
-    general_purpose::STANDARD.encode(bytes)
+    if id.is_empty() {
+        id.push_str("classifier");
+    }
+    format!("{id}_{role}")
 }
 
 fn existing_associative_rule(
@@ -2742,82 +2702,119 @@ async fn answer_feedback_reference(
     }
 }
 
+/// Pain and pleasure drivers are Reward instances. Returns
+/// `(pain_area, pleasure_area, pain_instance, pleasure_instance)`.
 async fn ensure_classifier_affect_areas(
     state: &ApiState,
     classifier: &feagi_structures::genomic::classifiers::Classifier,
+) -> ApiResult<(String, String, String, String)> {
+    let (pain_area_id, pain_instance_id) = ensure_classifier_reward_instance(
+        state,
+        &classifier.name,
+        classifier.pain_area_id.as_deref(),
+        "pain",
+        -100.0,
+    )
+    .await?;
+    let (pleasure_area_id, pleasure_instance_id) = ensure_classifier_reward_instance(
+        state,
+        &classifier.name,
+        classifier.pleasure_area_id.as_deref(),
+        "pleasure",
+        100.0,
+    )
+    .await?;
+    Ok((
+        pain_area_id,
+        pleasure_area_id,
+        pain_instance_id,
+        pleasure_instance_id,
+    ))
+}
+
+/// Reuse a Reward driver that already exists, otherwise create the instance.
+async fn ensure_classifier_reward_instance(
+    state: &ApiState,
+    classifier_name: &str,
+    existing_area_id: Option<&str>,
+    role: &str,
+    magnitude_percent: f32,
 ) -> ApiResult<(String, String)> {
-    let position = (
-        classifier.coordinates_3d[0],
-        classifier.coordinates_3d[1],
-        classifier.coordinates_3d[2],
-    );
-    let mut created = Vec::new();
-    let pain_exists = match classifier.pain_area_id.as_deref() {
-        Some(area_id) => state
-            .connectome_service
-            .get_cortical_area(area_id)
-            .await
-            .is_ok(),
-        None => false,
-    };
-    let pain_area_id = if pain_exists {
-        classifier
-            .pain_area_id
-            .clone()
-            .ok_or_else(|| ApiError::internal("Classifier pain area id disappeared".to_string()))?
-    } else {
-        let area_id = new_classifier_affect_id(b'p');
-        created.push(classifier_affect_area_params(
-            area_id.clone(),
-            format!("{}_pain", classifier.name),
-            position,
-            &classifier.parent_region_id,
-            "pain",
-        ));
-        area_id
-    };
-    let pleasure_exists = match classifier.pleasure_area_id.as_deref() {
-        Some(area_id) => state
-            .connectome_service
-            .get_cortical_area(area_id)
-            .await
-            .is_ok(),
-        None => false,
-    };
-    let pleasure_area_id = if pleasure_exists {
-        classifier.pleasure_area_id.clone().ok_or_else(|| {
-            ApiError::internal("Classifier pleasure area id disappeared".to_string())
-        })?
-    } else {
-        let area_id = new_classifier_affect_id(b'l');
-        created.push(classifier_affect_area_params(
-            area_id.clone(),
-            format!("{}_pleasure", classifier.name),
-            position,
-            &classifier.parent_region_id,
-            "pleasure",
-        ));
-        area_id
-    };
-    if !created.is_empty() {
-        state
-            .genome_service
-            .create_cortical_areas(created)
-            .await
-            .map_err(|e| {
-                ApiError::internal(format!(
-                    "Failed to create classifier pain and pleasure areas: {}",
-                    e
-                ))
-            })?;
+    if let Some(area_id) = existing_area_id {
+        if let Some(instance_id) = reward_instance_for_driver(state, area_id).await? {
+            return Ok((area_id.to_string(), instance_id));
+        }
     }
-    Ok((pain_area_id, pleasure_area_id))
+    let instance_id = classifier_reward_instance_id(classifier_name, role);
+    let write = feagi_evolutionary::ModulatorWrite {
+        kind: "synaptic.reward".to_string(),
+        magnitude_percent,
+        effect_duration_bursts: 1,
+        rest_bursts: 0,
+        graded: false,
+        full_scale_potential: None,
+    };
+    let created = match state
+        .genome_service
+        .create_modulator(instance_id.clone(), write)
+        .await
+    {
+        Ok(created) => created,
+        Err(feagi_services::types::errors::ServiceError::Conflict(_)) => state
+            .genome_service
+            .get_modulator(&instance_id)
+            .await
+            .map_err(|err| {
+                ApiError::internal(format!(
+                    "Failed to read existing classifier reward instance: {err}"
+                ))
+            })?,
+        Err(err) => {
+            return Err(ApiError::internal(format!(
+                "Failed to create classifier reward instance: {err}"
+            )));
+        }
+    };
+    let driver = created
+        .get("driver_cortical_id")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            ApiError::internal("Classifier reward instance did not return a driver".to_string())
+        })?;
+    Ok((driver.to_string(), instance_id))
+}
+
+async fn reward_instance_for_driver(
+    state: &ApiState,
+    driver_cortical_id: &str,
+) -> ApiResult<Option<String>> {
+    let modulators = state
+        .genome_service
+        .list_modulators()
+        .await
+        .map_err(|err| ApiError::internal(format!("Failed to list modulators: {err}")))?;
+    let Some(object) = modulators.as_object() else {
+        return Ok(None);
+    };
+    for (instance_id, body) in object {
+        let matches_driver = body
+            .get("driver_cortical_id")
+            .and_then(|value| value.as_str())
+            == Some(driver_cortical_id);
+        let is_reward =
+            body.get("type").and_then(|value| value.as_str()) == Some("synaptic.reward");
+        if matches_driver && is_reward {
+            return Ok(Some(instance_id.clone()));
+        }
+    }
+    Ok(None)
 }
 
 async fn sync_classifier_reward_mapping(
     state: &ApiState,
     classifier: &feagi_structures::genomic::classifiers::Classifier,
     associative_window: u32,
+    reward_instances: Option<(&str, &str)>,
 ) -> ApiResult<()> {
     let kernel_area = state
         .connectome_service
@@ -2826,15 +2823,15 @@ async fn sync_classifier_reward_mapping(
         .map_err(|e| ApiError::internal(format!("Classifier kernel memory is missing: {}", e)))?;
     let existing = existing_associative_rule(&kernel_area.properties, &classifier.class_memory_id);
     let rule = if classifier.reward_training {
-        let pleasure = classifier
-            .pleasure_area_id
-            .as_deref()
-            .ok_or_else(|| ApiError::internal("Classifier pleasure area is missing".to_string()))?;
-        let pain = classifier
-            .pain_area_id
-            .as_deref()
-            .ok_or_else(|| ApiError::internal("Classifier pain area is missing".to_string()))?;
-        classifier_reward_mapping_rule(associative_window, &existing, pleasure, pain)
+        let (pleasure_instance, pain_instance) = reward_instances.ok_or_else(|| {
+            ApiError::internal("Classifier reward instances are missing".to_string())
+        })?;
+        classifier_reward_mapping_rule(
+            associative_window,
+            &existing,
+            pleasure_instance,
+            pain_instance,
+        )
     } else {
         classifier_plain_associative_rule(associative_window, &existing)
     };
@@ -3146,13 +3143,20 @@ pub async fn update_classifier(
         }
     }
     if request.reward_training.is_some() {
-        if classifier.reward_training {
-            let (pain_area_id, pleasure_area_id) =
+        let reward_instances = if classifier.reward_training {
+            let (pain_area_id, pleasure_area_id, pain_instance_id, pleasure_instance_id) =
                 ensure_classifier_affect_areas(&state, &classifier).await?;
             classifier.pain_area_id = Some(pain_area_id);
             classifier.pleasure_area_id = Some(pleasure_area_id);
-        }
-        sync_classifier_reward_mapping(&state, &classifier, associative_window).await?;
+            Some((pleasure_instance_id, pain_instance_id))
+        } else {
+            None
+        };
+        let reward_refs = reward_instances
+            .as_ref()
+            .map(|(pleasure, pain)| (pleasure.as_str(), pain.as_str()));
+        sync_classifier_reward_mapping(&state, &classifier, associative_window, reward_refs)
+            .await?;
     }
 
     state
