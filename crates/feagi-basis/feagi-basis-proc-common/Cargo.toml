@@ -10,6 +10,9 @@ homepage.workspace = true
 documentation.workspace = true
 description = "Common procedural macros used throughout FEAGI Core"
 
+[lib]
+proc-macro = true
+
 [dependencies]
 feagi-macro-components = {path = "../../feagi-macro-components"}
 

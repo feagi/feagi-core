@@ -13,16 +13,16 @@ pub trait FeagiMessage: Sized + Clone {
 
     /// Decompose into the specifications of data needed by the FEAGI Message
     fn to_message_data(self) -> (Self::Parameters, Self::Queryables, Self::Payload);
-    
+
     // NOTE: Generated struct should have the members across all specifications accessible as pub
 }
 
 /// Represents the actual path that a message takes
-pub trait FeagiMessagePath: Sized + Clone + Copy 
+pub trait FeagiMessagePath: Sized + Clone + Copy
 {
     /// The actual path of the message
     const PATH: [MessagePathElement];
-    
+
     type Message: FeagiMessage<Path=Self>;
 }
 

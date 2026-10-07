@@ -1,14 +1,7 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// For a given category, parse a given Feagi Message Path definition with its Request
+/// Parameters, Queryables, and Payload (if allowed), and its type.
+#[proc_macro]
+pub fn regenerate_template_pathing_request_response(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
 }
