@@ -3,8 +3,9 @@ use proc_macro2::{Ident};
 use quote::{quote, TokenStreamExt};
 use syn::{braced, Lit, LitStr, Token};
 use syn::parse::{Parse, ParseStream};
-use crate::templates::TemplateStruct;
+use crate::templates::Unparse;
 
+/// Allows adding comments to a given property
 pub struct PropertyDescriptors(HashMap<Ident, LitStr>);
 
 impl PropertyDescriptors {
@@ -32,17 +33,12 @@ impl Parse for PropertyDescriptors {
     }
 }
 
-impl TemplateStruct for PropertyDescriptors {
-    fn expand_template(&self) -> proc_macro2::TokenStream {
-        let fields = &self.0;
-        if fields.is_empty() {
-            return quote! { [] };
-        }
-
+impl Unparse for PropertyDescriptors {
+    fn unparse(&self) -> proc_macro2::TokenStream {
         let mut stream = proc_macro2::TokenStream::new();
 
         for (prop, desc) in &self.0 {
-            stream.extend(quote!(#prop: desc));
+            stream.extend(quote!(#prop: #desc));
         }
 
         quote! {
