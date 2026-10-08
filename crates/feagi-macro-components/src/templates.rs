@@ -9,13 +9,13 @@ mod kw {
 }
 
 /// A template fragment that can be parsed from tokens and re-emitted as the same DSL.
-pub trait TemplateStruct: Parse {
+pub trait Unparse: Parse {
     /// Export this template into a token stream that can be parsed again
-    fn expand_template(&self) -> proc_macro2::TokenStream;
+    fn unparse(&self) -> proc_macro2::TokenStream;
 }
 
 /// Takes in a template data struct, then outputs actual usable source code
-pub trait GeneratorFromTemplate<T: TemplateStruct> {
+pub trait GeneratorFromTemplate<T: Unparse> {
     fn generate_code_from_template(template: T) -> proc_macro2::TokenStream;
 
     fn read_template_and_generate_code(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
@@ -27,12 +27,12 @@ pub trait GeneratorFromTemplate<T: TemplateStruct> {
 }
 
 
-pub struct TemplateRoot<T: TemplateStruct> {
+pub struct TemplateRoot<T: Unparse> {
     pub macro_name: syn::Ident,
     pub generated_template: T
 }
 
-impl<T: TemplateStruct> TemplateRoot<T> {
+impl<T: Unparse> TemplateRoot<T> {
     /// Parse and validate a template definition, then export it as a reusable `macro_rules!`.
     /// [`Self::parse_generator_input_macro`].
     pub fn parse_template_and_generate_generator_input_macro(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
@@ -58,7 +58,7 @@ impl<T: TemplateStruct> TemplateRoot<T> {
     }
 }
 
-impl<T: TemplateStruct> Parse for TemplateRoot<T> {
+impl<T: Unparse> Parse for TemplateRoot<T> {
     fn parse(input: ParseStream) -> syn::Result<Self> {
 
         input.parse::<kw::exported_macro_name>()?;

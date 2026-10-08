@@ -2,6 +2,8 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{LitStr, Type};
 use syn::parse::{Parse, ParseStream};
+use crate::template_parsing::feagi_messsages::kw::path_item_descriptions;
+use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::template_parsing::struct_template::StructTemplate;
 use crate::templates::Unparse;
 
@@ -9,6 +11,10 @@ use crate::templates::Unparse;
 mod kw {
 
     syn::custom_keyword!(path);
+    syn::custom_keyword!(path_item_descriptions);
+    syn::custom_keyword!(description);
+    syn::custom_keyword!(payload);
+    syn::custom_keyword!(response);
 
 
 }
@@ -28,10 +34,11 @@ mod kw {
 ///     }
 /// }
 pub struct FeagiMessageWithPayload {
-    path: FeagiMessagePath,
-    description: LitStr,
-    payload: StructTemplate,
-    response: StructTemplate
+    pub path: FeagiMessagePath,
+    pub path_item_descriptions: PropertyDescriptors,
+    pub description: LitStr,
+    pub payload: StructTemplate,
+    pub response: StructTemplate
 }
 
 impl Parse for FeagiMessageWithPayload {
