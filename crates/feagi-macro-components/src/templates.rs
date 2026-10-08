@@ -1,6 +1,6 @@
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Parser};
-use syn::{braced, parse_macro_input, Token};
+use syn::{braced, Token};
 
 mod kw {
     syn::custom_keyword!(exported_macro_name);
@@ -36,10 +36,13 @@ impl<T: Unparse> TemplateRoot<T> {
     /// Parse and validate a template definition, then export it as a reusable `macro_rules!`.
     /// [`Self::parse_generator_input_macro`].
     pub fn parse_template_and_generate_generator_input_macro(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
-        let template_root = parse_macro_input!(input);
+        let template_root = match TemplateRoot::<T>::parse.parse2(input) {
+            Ok(template_root) => template_root,
+            Err(err) => return err.to_compile_error(),
+        };
 
         let macro_name = template_root.macro_name;
-        let template = template_root.generated_template.expand_template();
+        let template = template_root.generated_template.unparse();
 
         quote! {
             macro_rules! #macro_name {
@@ -49,7 +52,7 @@ impl<T: Unparse> TemplateRoot<T> {
                     }
                 };
             }
-        }.into()
+        }
     }
 
     /// Parse the tokens a consumer receives from an exported template callback.
