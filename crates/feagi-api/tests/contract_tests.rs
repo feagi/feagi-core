@@ -64,7 +64,7 @@ use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     SystemServiceImpl,
 };
-use feagi_services::types::CreateCorticalAreaParams;
+use feagi_services::types::{CreateBrainRegionParams, CreateCorticalAreaParams};
 #[cfg(feature = "feagi-agent")]
 use feagi_services::RuntimeService;
 use feagi_services::{ConnectomeService, GenomeService};
@@ -3547,6 +3547,188 @@ async fn test_genome_changes_not_enabled_without_ledger() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+}
+
+#[tokio::test]
+async fn test_clone_replicates_stored_neural_parameters() {
+    let state = build_test_state();
+    let root_id = "550e8400-e29b-41d4-a716-446655440000";
+    let region_id = "550e8400-e29b-41d4-a716-446655440001";
+    state
+        .connectome_service
+        .create_brain_region(CreateBrainRegionParams {
+            region_id: root_id.to_string(),
+            name: "root".to_string(),
+            region_type: "Custom".to_string(),
+            parent_id: None,
+            properties: None,
+        })
+        .await
+        .expect("root region");
+    state
+        .connectome_service
+        .create_brain_region(CreateBrainRegionParams {
+            region_id: region_id.to_string(),
+            name: "circuit".to_string(),
+            region_type: "Custom".to_string(),
+            parent_id: Some(root_id.to_string()),
+            properties: None,
+        })
+        .await
+        .expect("circuit region");
+
+    let source_id = general_purpose::STANDARD.encode(b"csource1");
+    let mut properties = HashMap::new();
+    properties.insert("parent_region_id".to_string(), json!(region_id));
+    properties.insert("coordinate_2d".to_string(), json!([10, 20]));
+    properties.insert("2d_coordinate".to_string(), json!([10, 20]));
+    properties.insert("relative_coordinate".to_string(), json!([100, 0, 0]));
+    properties.insert("visible".to_string(), json!(false));
+    properties.insert("sub_group".to_string(), json!("assoc"));
+    properties.insert("cortical_group".to_string(), json!("CUSTOM"));
+    properties.insert("group_id".to_string(), json!("g1"));
+    properties.insert("sub_group_id".to_string(), json!("sg1"));
+    properties.insert("neurons_per_voxel".to_string(), json!(3));
+    properties.insert("postsynaptic_current".to_string(), json!(1.25));
+    properties.insert("postsynaptic_current_max".to_string(), json!(42.0));
+    properties.insert("plasticity_constant".to_string(), json!(0.4));
+    properties.insert("degeneration".to_string(), json!(0.15));
+    properties.insert("psp_uniform_distribution".to_string(), json!(true));
+    properties.insert("mp_driven_psp".to_string(), json!(true));
+    properties.insert("firing_threshold".to_string(), json!(2.5));
+    properties.insert("firing_threshold_increment_x".to_string(), json!(0.1));
+    properties.insert("firing_threshold_increment_y".to_string(), json!(0.2));
+    properties.insert("firing_threshold_increment_z".to_string(), json!(0.3));
+    properties.insert("firing_threshold_limit".to_string(), json!(9.0));
+    properties.insert("consecutive_fire_limit".to_string(), json!(4));
+    properties.insert("snooze_period".to_string(), json!(5));
+    properties.insert("refractory_period".to_string(), json!(2));
+    properties.insert("leak_coefficient".to_string(), json!(0.25));
+    properties.insert("leak_variability".to_string(), json!(0.05));
+    properties.insert("mp_charge_accumulation".to_string(), json!(true));
+    properties.insert("neuron_excitability".to_string(), json!(7.0));
+    properties.insert("burst_engine_active".to_string(), json!(true));
+    properties.insert("init_lifespan".to_string(), json!(9));
+    properties.insert("lifespan_growth_rate".to_string(), json!(1.5));
+    properties.insert("longterm_mem_threshold".to_string(), json!(6));
+    properties.insert("synapse_attractivity".to_string(), json!(77.0));
+    properties.insert("cortical_mapping_dst".to_string(), json!({}));
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: source_id.clone(),
+            name: "source-area".to_string(),
+            dimensions: (2, 3, 1),
+            position: (100, 0, 0),
+            area_type: "Custom".to_string(),
+            visible: Some(false),
+            sub_group: Some("assoc".to_string()),
+            neurons_per_voxel: Some(3),
+            postsynaptic_current: Some(1.25),
+            plasticity_constant: Some(0.4),
+            degeneration: Some(0.15),
+            psp_uniform_distribution: Some(true),
+            firing_threshold_increment: None,
+            firing_threshold_limit: Some(9.0),
+            consecutive_fire_count: Some(4),
+            snooze_period: Some(5),
+            refractory_period: Some(2),
+            leak_coefficient: Some(0.25),
+            leak_variability: Some(0.05),
+            burst_engine_active: Some(true),
+            properties: Some(properties),
+        }])
+        .await
+        .expect("create source area");
+
+    let response = feagi_api::endpoints::cortical_area::post_clone(
+        ApiStateExtract(state.clone()),
+        ApiJson(
+            feagi_api::endpoints::cortical_area::CloneCorticalAreaRequest {
+                source_area_id: source_id.clone(),
+                new_name: "cloned-area".to_string(),
+                coordinates_3d: [200, 0, 0],
+                coordinates_2d: [40, 50],
+                parent_region_id: Some(region_id.to_string()),
+                clone_cortical_mapping: false,
+            },
+        ),
+    )
+    .await
+    .expect("clone cortical area");
+    let new_area_id = response.0.get("new_area_id").expect("new area id").clone();
+
+    let source = state
+        .connectome_service
+        .get_cortical_area(&source_id)
+        .await
+        .expect("source area");
+    let cloned = state
+        .connectome_service
+        .get_cortical_area(&new_area_id)
+        .await
+        .expect("cloned area");
+
+    assert_eq!(cloned.name, "cloned-area");
+    assert_eq!(cloned.dimensions, source.dimensions);
+    assert_eq!(cloned.position, (200, 0, 0));
+    assert_eq!(cloned.visible, source.visible);
+    assert_eq!(cloned.sub_group, source.sub_group);
+    assert_eq!(cloned.neurons_per_voxel, source.neurons_per_voxel);
+    assert_eq!(cloned.postsynaptic_current, source.postsynaptic_current);
+    assert_eq!(
+        cloned.postsynaptic_current_max,
+        source.postsynaptic_current_max
+    );
+    assert_eq!(cloned.plasticity_constant, source.plasticity_constant);
+    assert_eq!(cloned.degeneration, source.degeneration);
+    assert_eq!(
+        cloned.psp_uniform_distribution,
+        source.psp_uniform_distribution
+    );
+    assert_eq!(cloned.mp_driven_psp, source.mp_driven_psp);
+    assert_eq!(cloned.firing_threshold, source.firing_threshold);
+    assert_eq!(
+        cloned.firing_threshold_increment,
+        source.firing_threshold_increment
+    );
+    assert_eq!(cloned.firing_threshold_limit, source.firing_threshold_limit);
+    assert_eq!(cloned.consecutive_fire_count, source.consecutive_fire_count);
+    assert_eq!(cloned.snooze_period, source.snooze_period);
+    assert_eq!(cloned.refractory_period, source.refractory_period);
+    assert_eq!(cloned.leak_coefficient, source.leak_coefficient);
+    assert_eq!(cloned.leak_variability, source.leak_variability);
+    assert_eq!(cloned.mp_charge_accumulation, source.mp_charge_accumulation);
+    assert_eq!(cloned.neuron_excitability, source.neuron_excitability);
+    assert_eq!(cloned.burst_engine_active, source.burst_engine_active);
+    assert_eq!(cloned.init_lifespan, source.init_lifespan);
+    assert_eq!(cloned.lifespan_growth_rate, source.lifespan_growth_rate);
+    assert_eq!(cloned.longterm_mem_threshold, source.longterm_mem_threshold);
+
+    let cloned_raw = state
+        .connectome_service
+        .get_cortical_area_properties(&new_area_id)
+        .await
+        .expect("cloned raw properties");
+    assert_eq!(cloned_raw.get("synapse_attractivity"), Some(&json!(77.0)));
+    assert_eq!(cloned_raw.get("cortical_group"), Some(&json!("CUSTOM")));
+    assert_eq!(cloned_raw.get("group_id"), Some(&json!("g1")));
+    assert_eq!(cloned_raw.get("sub_group_id"), Some(&json!("sg1")));
+    assert_eq!(cloned_raw.get("coordinate_2d"), Some(&json!([40, 50])));
+    assert_eq!(cloned_raw.get("2d_coordinate"), Some(&json!([40, 50])));
+    assert_eq!(
+        cloned_raw.get("relative_coordinate"),
+        Some(&json!([200, 0, 0]))
+    );
+    assert!(
+        cloned_raw
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+            .map(|map| map.is_empty())
+            .unwrap_or(true),
+        "mappings are reapplied separately, not copied as a stale destination map"
+    );
 }
 
 #[tokio::test]

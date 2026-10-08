@@ -3863,7 +3863,69 @@ pub async fn delete_classifier(
     Ok(Json(response))
 }
 
-/// Clone an existing cortical area with all its properties and structure. (Not yet implemented)
+/// Identity keys added by `get_cortical_area_properties`. They describe the source
+/// area itself and must not be stored on the clone.
+const CLONE_IDENTITY_PROPERTY_KEYS: &[&str] = &[
+    "cortical_id",
+    "cortical_id_s",
+    "cortical_idx",
+    "name",
+    "cortical_name",
+    "area_type",
+    "dimensions",
+    "position",
+    "block_boundaries",
+    "cortical_dimensions",
+];
+
+/// Build the property map for a cloned cortical area.
+///
+/// `raw_properties` is the unfiltered map from `ConnectomeService::get_cortical_area_properties`.
+/// The cortical-area read DTO removes neural parameters from `properties` because those
+/// values are also returned as typed fields. Cloning that stripped map drops them:
+/// `create_cortical_areas` replaces the new area's property bag with the request map
+/// after the typed create fields are written.
+///
+/// Mappings are removed here and reapplied through `update_cortical_mapping` so
+/// synapses are generated for the clone.
+pub(crate) fn properties_for_cortical_clone(
+    raw_properties: HashMap<String, serde_json::Value>,
+    parent_region_id: &str,
+    coordinates_2d: [i32; 2],
+    coordinates_3d: [i32; 3],
+) -> HashMap<String, serde_json::Value> {
+    let mut cloned = raw_properties;
+    for key in CLONE_IDENTITY_PROPERTY_KEYS {
+        cloned.remove(*key);
+    }
+    cloned.remove("cortical_mapping_dst");
+
+    cloned.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(parent_region_id.to_string()),
+    );
+
+    let coord_2d = serde_json::json!([coordinates_2d[0], coordinates_2d[1]]);
+    cloned.insert("coordinate_2d".to_string(), coord_2d.clone());
+    // Parsed genomes store `2d_coordinate`; some clients send `coordinates_2d`.
+    // Rewrite whichever aliases the source actually has so they do not keep the old placement.
+    for key in ["2d_coordinate", "coordinates_2d"] {
+        if cloned.contains_key(key) {
+            cloned.insert(key.to_string(), coord_2d.clone());
+        }
+    }
+
+    let coord_3d = serde_json::json!([coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]]);
+    for key in ["coordinates_3d", "relative_coordinate"] {
+        if cloned.contains_key(key) {
+            cloned.insert(key.to_string(), coord_3d.clone());
+        }
+    }
+
+    cloned
+}
+
+/// Clone an existing cortical area, including its stored properties and neural parameters.
 #[utoipa::path(post, path = "/v1/cortical_area/clone", tag = "cortical_area")]
 pub async fn post_clone(
     State(state): State<ApiState>,
@@ -3872,7 +3934,6 @@ pub async fn post_clone(
     use base64::{engine::general_purpose, Engine as _};
     use feagi_services::types::CreateCorticalAreaParams;
     use feagi_structures::genomic::cortical_area::CorticalID;
-    use serde_json::Value;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let genome_service = state.genome_service.as_ref();
@@ -3928,9 +3989,15 @@ pub async fn post_clone(
         }
     }
 
+    // The read DTO strips neural parameters out of `properties`. Clone from the
+    // raw stored map so those parameters are replicated.
+    let raw_properties = connectome_service
+        .get_cortical_area_properties(&source_id)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to read source properties: {}", e)))?;
+
     // Extract outgoing mappings (we will apply them after creation, via update_cortical_mapping).
-    let outgoing_mapping_dst = source_area
-        .properties
+    let outgoing_mapping_dst = raw_properties
         .get("cortical_mapping_dst")
         .and_then(|v| v.as_object())
         .cloned();
@@ -3966,19 +4033,12 @@ pub async fn post_clone(
 
     let new_area_id = general_purpose::STANDARD.encode(cortical_id_bytes);
 
-    // Clone properties, but do NOT carry over cortical mapping properties directly.
-    // Mappings must be created via update_cortical_mapping so synapses are regenerated.
-    let mut cloned_properties = source_area.properties.clone();
-    cloned_properties.remove("cortical_mapping_dst");
-
-    // Set parent region + 2D coordinate explicitly for the clone.
-    cloned_properties.insert(
-        "parent_region_id".to_string(),
-        Value::String(source_parent_region_id),
-    );
-    cloned_properties.insert(
-        "coordinate_2d".to_string(),
-        serde_json::json!([request.coordinates_2d[0], request.coordinates_2d[1]]),
+    // Clone the full stored property bag. Mappings are omitted and reapplied below.
+    let cloned_properties = properties_for_cortical_clone(
+        raw_properties,
+        &source_parent_region_id,
+        request.coordinates_2d,
+        request.coordinates_3d,
     );
 
     let params = CreateCorticalAreaParams {
@@ -5260,5 +5320,72 @@ mod memory_parameters_response_tests {
         assert_eq!(reported.longterm_mem_threshold, 3);
         assert_eq!(reported.lifespan_growth_rate, 2.0);
         assert_eq!(reported.temporal_depth, 4);
+    }
+}
+
+#[cfg(test)]
+mod cortical_clone_property_tests {
+    use super::properties_for_cortical_clone;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    #[test]
+    fn clone_property_map_keeps_neural_parameters_and_rewrites_placement() {
+        let mut raw = HashMap::new();
+        raw.insert("cortical_id".to_string(), json!("c291cmNl"));
+        raw.insert("name".to_string(), json!("source"));
+        raw.insert(
+            "dimensions".to_string(),
+            json!({"width": 2, "height": 2, "depth": 1}),
+        );
+        raw.insert("position".to_string(), json!([1, 2, 3]));
+        raw.insert(
+            "cortical_mapping_dst".to_string(),
+            json!({"other": [{"morphology_id": "block_to_block"}]}),
+        );
+        raw.insert("firing_threshold".to_string(), json!(2.5));
+        raw.insert("firing_threshold_increment_x".to_string(), json!(0.1));
+        raw.insert("firing_threshold_increment_y".to_string(), json!(0.2));
+        raw.insert("firing_threshold_increment_z".to_string(), json!(0.3));
+        raw.insert("postsynaptic_current_max".to_string(), json!(42.0));
+        raw.insert("mp_driven_psp".to_string(), json!(true));
+        raw.insert("neuron_excitability".to_string(), json!(7.0));
+        raw.insert("init_lifespan".to_string(), json!(9));
+        raw.insert("synapse_attractivity".to_string(), json!(77.0));
+        raw.insert("2d_coordinate".to_string(), json!([10, 20]));
+        raw.insert("relative_coordinate".to_string(), json!([1, 2, 3]));
+        raw.insert("temporal_depth".to_string(), json!(6));
+
+        let cloned = properties_for_cortical_clone(raw, "region-1", [40, 50], [8, 9, 10]);
+
+        assert!(!cloned.contains_key("cortical_id"));
+        assert!(!cloned.contains_key("name"));
+        assert!(!cloned.contains_key("cortical_mapping_dst"));
+        assert_eq!(cloned.get("firing_threshold"), Some(&json!(2.5)));
+        assert_eq!(
+            cloned.get("firing_threshold_increment_x"),
+            Some(&json!(0.1))
+        );
+        assert_eq!(
+            cloned.get("firing_threshold_increment_y"),
+            Some(&json!(0.2))
+        );
+        assert_eq!(
+            cloned.get("firing_threshold_increment_z"),
+            Some(&json!(0.3))
+        );
+        assert_eq!(cloned.get("postsynaptic_current_max"), Some(&json!(42.0)));
+        assert_eq!(cloned.get("mp_driven_psp"), Some(&json!(true)));
+        assert_eq!(cloned.get("neuron_excitability"), Some(&json!(7.0)));
+        assert_eq!(cloned.get("init_lifespan"), Some(&json!(9)));
+        assert_eq!(cloned.get("synapse_attractivity"), Some(&json!(77.0)));
+        assert_eq!(cloned.get("temporal_depth"), Some(&json!(6)));
+        assert_eq!(
+            cloned.get("parent_region_id").and_then(|v| v.as_str()),
+            Some("region-1")
+        );
+        assert_eq!(cloned.get("coordinate_2d"), Some(&json!([40, 50])));
+        assert_eq!(cloned.get("2d_coordinate"), Some(&json!([40, 50])));
+        assert_eq!(cloned.get("relative_coordinate"), Some(&json!([8, 9, 10])));
     }
 }

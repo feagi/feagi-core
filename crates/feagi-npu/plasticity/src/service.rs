@@ -2500,8 +2500,16 @@ impl PlasticityService {
 
     /// Reset (delete) all memory neurons and their synapses in a cortical area.
     ///
-    /// Returns the number of memory neurons deleted.
+    /// Returns the number of memory neurons deleted. Interconnect and other
+    /// non-memory areas are left untouched: cortical reset clears their runtime
+    /// state separately, and deleting their synapses holds the NPU lock in the
+    /// opposite order from the burst loop.
     pub fn reset_memory_neurons_in_area(&self, cortical_idx: u32) -> usize {
+        let registered_memory = self
+            .memory_areas
+            .lock()
+            .unwrap()
+            .contains_key(&cortical_idx);
         let area_name = self
             .memory_area_names
             .lock()
@@ -2509,10 +2517,16 @@ impl PlasticityService {
             .get(&cortical_idx)
             .cloned();
 
-        let mut array = self.memory_neuron_array.lock().unwrap();
-
-        // Get all memory neuron IDs in this area before deleting
-        let memory_neuron_ids = array.get_active_neurons_by_area(cortical_idx);
+        // Snapshot ids, then release the memory array before taking the NPU lock.
+        // The burst loop holds the NPU and then locks this array from the STDP
+        // predicate. Holding the array while waiting for the NPU deadlocks that loop.
+        let memory_neuron_ids = {
+            let array = self.memory_neuron_array.lock().unwrap();
+            array.get_active_neurons_by_area(cortical_idx)
+        };
+        if !registered_memory && memory_neuron_ids.is_empty() {
+            return 0;
+        }
 
         tracing::info!(
             target: "plasticity",
@@ -2540,8 +2554,10 @@ impl PlasticityService {
         self.pattern_detector.forget_area(cortical_idx);
 
         // Delete the memory neurons themselves so the next pattern allocates a new one.
-        let reset_count = array.reset_cortical_area(cortical_idx);
-        drop(array);
+        let reset_count = {
+            let mut array = self.memory_neuron_array.lock().unwrap();
+            array.reset_cortical_area(cortical_idx)
+        };
 
         if reset_count > 0 {
             if let Some(area_name) = area_name {
@@ -3025,6 +3041,49 @@ mod tests {
                 .map(|s| s.neuron_count)
                 .unwrap_or(0),
             0
+        );
+    }
+
+    #[test]
+    fn reset_of_interconnect_does_not_delete_its_synapses() {
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-interconnect-reset-test-npu",
+        ));
+        let service = PlasticityService::new(
+            PlasticityConfig::default(),
+            create_memory_stats_cache(),
+            Arc::clone(&npu),
+        );
+        let dst = {
+            let mut guard = npu.lock().unwrap();
+            guard.register_cortical_area(5, "Y2ludGVyYzE=".to_string());
+            let src = guard
+                .add_neuron(1.0, 1.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, false, 5, 0, 0, 0)
+                .expect("source neuron");
+            let dst = guard
+                .add_neuron(1.0, 1.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, false, 5, 1, 0, 0)
+                .expect("destination neuron");
+            guard
+                .add_synapse(
+                    src,
+                    dst,
+                    feagi_npu_neural::types::SynapticWeight(1.0),
+                    feagi_npu_neural::types::SynapticPsp(1.0),
+                    feagi_npu_neural::types::SynapseType::Excitatory,
+                    0,
+                    1,
+                )
+                .expect("interconnect synapse");
+            guard.rebuild_synapse_index();
+            dst.0
+        };
+
+        assert_eq!(service.reset_memory_neurons_in_area(5), 0);
+        assert_eq!(
+            npu.lock().unwrap().get_incoming_synapses(dst).len(),
+            1,
+            "resetting an interconnect must keep its synapses"
         );
     }
 
