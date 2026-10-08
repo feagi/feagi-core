@@ -17,13 +17,18 @@ use crate::templates::Unparse;
 pub struct StructTemplate(HashMap<Ident, (Type, Option<LitStr>)>);
 
 impl StructTemplate {
+    
+    pub fn new_empty() -> Self {
+        Self(HashMap::new())
+    }
+    
     /// Returns the type and optional description registered for `field`.
     pub fn try_get_field(&self, field: &Ident) -> Option<&(Type, Option<LitStr>)> {
         self.0.get(field)
     }
-    
+
     /// Outputs a token stream that generates this definition as a struct, with name, optional comment, visibility, and derives
-    pub fn generate_rust_struct(&self, struct_name: Ident, description: Option<LitStr>, derives: Vec<Ident>, visibility: syn::Visibility) -> proc_macro2::TokenStream {
+    pub fn generate_rust_struct(&self, struct_name: Ident, description: Option<LitStr>, derives: &Vec<Ident>, visibility: syn::Visibility) -> proc_macro2::TokenStream {
         let mut stream = proc_macro2::TokenStream::new();
 
 
@@ -63,7 +68,7 @@ impl StructTemplate {
         });
         stream
     }
-    
+
     /// Tries to find a field by name. If one is found, overwrites its description with the given.
     /// If none is found, does nothing.
     pub fn try_overwrite_description(&mut self, field_name: &Ident, description: Option<LitStr>) {
@@ -72,7 +77,7 @@ impl StructTemplate {
             f.1 = description
         }
     }
-    
+
     /// Given a PropertyDescriptors, iterates through it to replace any descriptions of this with
     /// the ones from that of the same name
     pub fn overwrite_descriptions_from_property_descriptors(&mut self, descriptors: &PropertyDescriptors) {
@@ -84,6 +89,10 @@ impl StructTemplate {
         }
     }
     
+    pub fn insert_property(&mut self, property_name: Ident, property_type: Type, property_description: Option<LitStr>) {
+        self.0.insert(property_name, (property_type, property_description));
+    }
+
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }

@@ -41,12 +41,6 @@ impl GenericID<u64> for CorticalID {
     }
 }
 
-impl PartialEq for CorticalID {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
-    }
-}
-
 impl Display for CorticalID {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         todo!()

@@ -1,9 +1,9 @@
-use crate::common::{parse_optional_comma, parse_property_colon_member};
+use crate::common::{lit_str_to_ident, parse_optional_comma, parse_property_colon_member};
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::template_parsing::struct_template::StructTemplate;
 use crate::templates::Unparse;
-use proc_macro2::{Span, TokenStream};
-use quote::quote;
+use proc_macro2::{Span};
+use quote::{format_ident, quote, TokenStreamExt};
 use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, LitStr, Token, Type};
@@ -55,11 +55,11 @@ pub struct FeagiMessageCategory {
     pub base_path: LitStr,
     /// Comment Description of this category
     pub category_description: LitStr,
-    pub read: HashMap<LitStr, FeagiMessageWithoutPayload>,
-    pub create: HashMap<LitStr, FeagiMessageWithPayload>,
-    pub edit: HashMap<LitStr, FeagiMessageWithPayload>,
-    pub delete: HashMap<LitStr, FeagiMessageWithPayload>,
-    pub patch: HashMap<LitStr, FeagiMessageWithPayload>,
+    pub read: HashMap<LitStr, FeagiMessage<true>>,
+    pub create: HashMap<LitStr, FeagiMessage<false>>,
+    pub edit: HashMap<LitStr, FeagiMessage<false>>,
+    pub delete: HashMap<LitStr, FeagiMessage<false>>,
+    pub patch: HashMap<LitStr, FeagiMessage<false>>,
 }
 
 impl Parse for FeagiMessageCategory {
@@ -94,31 +94,31 @@ impl Parse for FeagiMessageCategory {
 
         let read = if input.peek(kw::read) {
             input.parse::<kw::read>()?;
-            parse_bucket::<FeagiMessageWithoutPayload>(input, "read")?
+            parse_bucket::<FeagiMessage<true>>(input, "read")?
         } else {
             HashMap::new()
         };
         let create = if input.peek(kw::create) {
             input.parse::<kw::create>()?;
-            parse_bucket::<FeagiMessageWithPayload>(input, "create")?
+            parse_bucket::<FeagiMessage<false>>(input, "create")?
         } else {
             HashMap::new()
         };
         let edit = if input.peek(kw::edit) {
             input.parse::<kw::edit>()?;
-            parse_bucket::<FeagiMessageWithPayload>(input, "edit")?
+            parse_bucket::<FeagiMessage<false>>(input, "edit")?
         } else {
             HashMap::new()
         };
         let delete = if input.peek(kw::delete) {
             input.parse::<kw::delete>()?;
-            parse_bucket::<FeagiMessageWithPayload>(input, "delete")?
+            parse_bucket::<FeagiMessage<false>>(input, "delete")?
         } else {
             HashMap::new()
         };
         let patch = if input.peek(kw::patch) {
             input.parse::<kw::patch>()?;
-            parse_bucket::<FeagiMessageWithPayload>(input, "patch")?
+            parse_bucket::<FeagiMessage<false>>(input, "patch")?
         } else {
             HashMap::new()
         };
@@ -182,69 +182,6 @@ impl Unparse for FeagiMessageCategory {
 
 //region Feagi Message
 
-/// Parses over a FeagiMessage without a payload. Formatted as the following
-/// "MessageTitle": {
-///     path: `FeagiMessagePath`,
-///     path_item_descriptions: {
-///         property_name: "Description String",
-///     },
-///     description: "Description String",
-///     response: {
-///         property_name: Type, "optional_comment",
-///     }
-/// }
-pub struct FeagiMessageWithoutPayload {
-    pub path: FeagiMessagePath,
-    pub path_item_descriptions: PropertyDescriptors,
-    pub description: LitStr,
-    pub response: StructTemplate,
-}
-
-impl FeagiMessageWithoutPayload {}
-
-impl Parse for FeagiMessageWithoutPayload {
-    /// Parse the braced message body. `"MessageTitle":` belongs to the parent entry.
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let members;
-        braced!(members in input);
-
-        let path = parse_property_colon_member::<kw::path, FeagiMessagePath>(&members)?;
-        let path_item_descriptions = parse_property_colon_member::<kw::path_item_descriptions, PropertyDescriptors>(&members)?;
-        let description = parse_property_colon_member::<kw::description, LitStr>(&members)?;
-        let response = parse_property_colon_member::<kw::response, StructTemplate>(&members)?;
-
-        if !members.is_empty() {
-            return Err(members.error("unexpected tokens in FEAGI message"));
-        }
-
-        Ok(Self {
-            path,
-            path_item_descriptions,
-            description,
-            response,
-        })
-    }
-}
-
-impl Unparse for FeagiMessageWithoutPayload {
-    /// Re-emit the braced message body so it can be parsed again.
-    fn unparse(&self) -> proc_macro2::TokenStream {
-        let path = self.path.unparse();
-        let path_item_descriptions = self.path_item_descriptions.unparse();
-        let description = &self.description;
-        let response = self.response.unparse();
-
-        quote! {
-            {
-                path: #path,
-                path_item_descriptions: #path_item_descriptions,
-                description: #description,
-                response: #response,
-            }
-        }
-    }
-}
-
 /// Parses over a FeagiMessage with a payload. Formatted as the following
 /// "MessageTitle": {
 ///     path: `FeagiMessagePath`,
@@ -259,7 +196,8 @@ impl Unparse for FeagiMessageWithoutPayload {
 ///         property_name: Type, "optional_comment",
 ///     }
 /// }
-pub struct FeagiMessageWithPayload {
+/// Note that the payload is skipped for Read Messages
+pub struct FeagiMessage<const NO_PAYLOAD: bool> {
     pub path: FeagiMessagePath,
     pub path_item_descriptions: PropertyDescriptors,
     pub description: LitStr,
@@ -267,9 +205,51 @@ pub struct FeagiMessageWithPayload {
     pub response: StructTemplate,
 }
 
-impl FeagiMessageWithPayload {}
+impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
 
-impl Parse for FeagiMessageWithPayload {
+    pub fn generate_feagi_message_structs(&self, name_base: syn::Ident) -> proc_macro2::TokenStream {
+        let name_path = format_ident!("{}{}", name_base, "FeagiMessagePath");
+        let name_message = format_ident!("{}{}", name_base, "FeagiMessage");
+        let name_null = format_ident!("{}", "NullMessageSpecification");
+        let specification_derives = vec![format_ident!("{}", "Clone"), format_ident!("{}", "Debug"), format_ident!("{}", "Serialize"), format_ident!("{}", "DeserializeOwned")];
+
+        let name_queryables;
+        let name_payload;
+        let name_response;
+
+        let tokens_message_path = self.path.generate_feagi_message_path_struct_and_impls(&name_path, &name_message);
+
+        let name_parameters;
+        let mut parameters = self.path.as_parameter_struct_template();
+        parameters.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
+        let tokens_parameters = if parameters.is_empty() {
+            name_parameters = name_null;
+            proc_macro2::TokenStream::new()
+        } else {
+            name_parameters = format_ident!("{}{}", name_base, "FeagiMessageParameters");
+            let mut output = parameters.generate_rust_struct(
+                name_parameters, None, &specification_derives, syn::Visibility::Public(/* Pub */)
+            );
+            output.extend(quote!{ impl FeagiMessageParameters for #name_parameters });
+            output
+        }
+
+
+
+
+
+        let name_parameters = format_ident!("{}{}", name_base, "FeagiMessageParameters");
+        let name_queryables = format_ident!("{}{}", name_base, "FeagiMessageQueryables");
+        let name_payload = format_ident!("{}{}", name_base, "FeagiMessagePayload");
+        let name_response = format_ident!("{}{}", name_base, "FeagiMessageResponse");
+
+
+
+    }
+
+}
+
+impl<const NO_PAYLOAD: bool> Parse for FeagiMessage<NO_PAYLOAD> {
     /// Parse the braced message body. `"MessageTitle":` belongs to the parent entry.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let members;
@@ -278,7 +258,13 @@ impl Parse for FeagiMessageWithPayload {
         let path = parse_property_colon_member::<kw::path, FeagiMessagePath>(&members)?;
         let path_item_descriptions = parse_property_colon_member::<kw::path_item_descriptions, PropertyDescriptors>(&members)?;
         let description = parse_property_colon_member::<kw::description, LitStr>(&members)?;
-        let payload = parse_property_colon_member::<kw::payload, StructTemplate>(&members)?;
+        let payload;
+        if !NO_PAYLOAD {
+            payload = parse_property_colon_member::<kw::payload, StructTemplate>(&members)?;
+        } else {
+            payload = StructTemplate::new_empty();
+        }
+
         let response = parse_property_colon_member::<kw::response, StructTemplate>(&members)?;
 
         if !members.is_empty() {
@@ -295,7 +281,7 @@ impl Parse for FeagiMessageWithPayload {
     }
 }
 
-impl Unparse for FeagiMessageWithPayload {
+impl<const NO_PAYLOAD: bool> Unparse for FeagiMessage<NO_PAYLOAD> {
     /// Re-emit the braced message body so it can be parsed again.
     fn unparse(&self) -> proc_macro2::TokenStream {
         let path = self.path.unparse();
@@ -335,6 +321,57 @@ impl FeagiMessagePath {
     pub fn as_lit_str(&self) -> LitStr {
         let string_out: String = self.leaf.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("/");
         LitStr::new(&string_out, Span::call_site())
+    }
+
+    /// Outputs the parameters as a StructTemplate (No comments)
+    pub fn as_parameter_struct_template(&self) -> StructTemplate {
+        let mut output = StructTemplate::new_empty();
+        for element in &self.leaf {
+            match element {
+                MessagePathElement::ParameterOfName(n, p) => {
+                    let ident = lit_str_to_ident(n).unwrap();
+                    output.insert_property(ident, p.clone(), None);
+                }
+                _ => {} // do nothing
+            }
+        };
+        output
+    }
+
+    /// Outputs the queryable as a StructTemplate (No comments)
+    pub fn as_queryable_struct_template(&self) -> StructTemplate {
+        let mut output = StructTemplate::new_empty();
+        for element in &self.leaf {
+            match element {
+                MessagePathElement::QueryableOfName(n, q) => {
+                    let ident = lit_str_to_ident(n).unwrap();
+                    output.insert_property(ident, q.clone(), None);
+                }
+                _ => {} // do nothing
+            }
+        };
+        output
+    }
+
+    /// Generate the FeagiMessagePath impl struct rust code for this path
+    pub fn generate_feagi_message_path_struct_and_impls(&self, full_struct_name: &syn::Ident, name_of_message_struct: &syn::Ident) -> proc_macro2::TokenStream {
+        let mut output = proc_macro2::TokenStream::new();
+        let elements = self.leaf;
+
+        output.extend(quote! {
+
+            ##[derive(Clone, Copy)]
+            pub struct #full_struct_name;
+
+            impl FeagiMessagePath for #full_struct_name {
+                const: PATH: [MessagePathElement] = [ #( #elements ),* ];
+
+                type Message = #name_of_message_struct
+            }
+        });
+
+        output
+
     }
 }
 
@@ -529,6 +566,26 @@ impl MessagePathElement {
                 format!("{}<{}>", s.value(), quote!(#t).to_string())
             }
         }
+    }
+
+    pub fn as_rust_message_path_element_enum(&self) -> proc_macro2::TokenStream {
+        let mut output = proc_macro2::TokenStream::new();
+
+        match self {
+            MessagePathElement::StaticPath(s) => {
+                output.extend(quote!{ MessagePathElement::StaticPath(#s), });
+                output
+            }
+            MessagePathElement::ParameterOfName(s, _) => {
+                output.extend(quote!{ MessagePathElement::ParameterOfName(#s), });
+                output
+            }
+            MessagePathElement::QueryableOfName(s, _) => {
+                output.extend(quote!{ MessagePathElement::QueryableOfName(#s), });
+                output
+            }
+        }
+
     }
 }
 
