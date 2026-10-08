@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-use crate::common::parse_property_colon_member;
+use crate::common::{parse_optional_comma, parse_property_colon_member};
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::template_parsing::struct_template::StructTemplate;
 use crate::templates::Unparse;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
+use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
-use syn::{braced, LitStr, Type};
+use syn::{braced, LitStr, Token, Type};
 
 mod kw {
 
@@ -55,7 +55,6 @@ pub struct FeagiMessageCategory {
     pub base_path: LitStr,
     /// Comment Description of this category
     pub category_description: LitStr,
-    /// What type of error to use (FeagiError)
     pub read: HashMap<LitStr, FeagiMessageWithoutPayload>,
     pub create: HashMap<LitStr, FeagiMessageWithPayload>,
     pub edit: HashMap<LitStr, FeagiMessageWithPayload>,
@@ -64,15 +63,118 @@ pub struct FeagiMessageCategory {
 }
 
 impl Parse for FeagiMessageCategory {
+    /// Parse the category fields. Verb sections may be omitted, in docstring order.
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        
+        /// Parse `keyword` was already consumed. Read `: { "Title": Message, ... }`.
+        fn parse_bucket<Message: Parse>(input: ParseStream, section: &str) -> syn::Result<HashMap<LitStr, Message>> {
+            input.parse::<Token![:]>()?;
+            let entries;
+            braced!(entries in input);
+            let mut messages = HashMap::new();
+            while !entries.is_empty() {
+                let title: LitStr = entries.parse()?;
+                entries.parse::<Token![:]>()?;
+                let message: Message = entries.parse()?;
+                let title_span = title.span();
+                if messages.insert(title, message).is_some() {
+                    return Err(syn::Error::new(title_span, format!("duplicate message title in `{section}`")));
+                }
+                if entries.is_empty() {
+                    break;
+                }
+                entries.parse::<Token![,]>()?;
+            }
+            parse_optional_comma(input)?;
+            Ok(messages)
+        }
 
+        let category_name = parse_property_colon_member::<kw::category_name, LitStr>(input)?;
+        let base_path = parse_property_colon_member::<kw::base_path, LitStr>(input)?;
+        let category_description = parse_property_colon_member::<kw::category_description, LitStr>(input)?;
+
+        let read = if input.peek(kw::read) {
+            input.parse::<kw::read>()?;
+            parse_bucket::<FeagiMessageWithoutPayload>(input, "read")?
+        } else {
+            HashMap::new()
+        };
+        let create = if input.peek(kw::create) {
+            input.parse::<kw::create>()?;
+            parse_bucket::<FeagiMessageWithPayload>(input, "create")?
+        } else {
+            HashMap::new()
+        };
+        let edit = if input.peek(kw::edit) {
+            input.parse::<kw::edit>()?;
+            parse_bucket::<FeagiMessageWithPayload>(input, "edit")?
+        } else {
+            HashMap::new()
+        };
+        let delete = if input.peek(kw::delete) {
+            input.parse::<kw::delete>()?;
+            parse_bucket::<FeagiMessageWithPayload>(input, "delete")?
+        } else {
+            HashMap::new()
+        };
+        let patch = if input.peek(kw::patch) {
+            input.parse::<kw::patch>()?;
+            parse_bucket::<FeagiMessageWithPayload>(input, "patch")?
+        } else {
+            HashMap::new()
+        };
+
+        if !input.is_empty() {
+            return Err(input.error("unexpected tokens in FEAGI message category"));
+        }
+
+        Ok(Self {
+            category_name,
+            base_path,
+            category_description,
+            read,
+            create,
+            edit,
+            delete,
+            patch,
+        })
     }
 }
 
 impl Unparse for FeagiMessageCategory {
+    /// Re-emit the category. Empty verb sections are left out.
     fn unparse(&self) -> TokenStream {
-        todo!()
+        /// Append `section: { "Title": Message, ... },` when the map is not empty.
+        fn extend_bucket<Message: Unparse>(stream: &mut TokenStream, section: &str, messages: &HashMap<LitStr, Message>) {
+            if messages.is_empty() {
+                return;
+            }
+            let section = proc_macro2::Ident::new(section, Span::call_site());
+            let mut entries = TokenStream::new();
+            for (title, message) in messages {
+                let body = message.unparse();
+                entries.extend(quote!(#title: #body,));
+            }
+            stream.extend(quote! {
+                #section: {
+                    #entries
+                },
+            });
+        }
+
+        let category_name = &self.category_name;
+        let base_path = &self.base_path;
+        let category_description = &self.category_description;
+        let mut stream = quote! {
+            category_name: #category_name,
+            base_path: #base_path,
+            category_description: #category_description,
+        };
+        extend_bucket(&mut stream, "read", &self.read);
+        extend_bucket(&mut stream, "create", &self.create);
+        extend_bucket(&mut stream, "edit", &self.edit);
+        extend_bucket(&mut stream, "delete", &self.delete);
+        extend_bucket(&mut stream, "patch", &self.patch);
+        stream
     }
 }
 
@@ -98,9 +200,7 @@ pub struct FeagiMessageWithoutPayload {
     pub response: StructTemplate,
 }
 
-impl FeagiMessageWithoutPayload {
-
-}
+impl FeagiMessageWithoutPayload {}
 
 impl Parse for FeagiMessageWithoutPayload {
     /// Parse the braced message body. `"MessageTitle":` belongs to the parent entry.
@@ -145,8 +245,6 @@ impl Unparse for FeagiMessageWithoutPayload {
     }
 }
 
-
-
 /// Parses over a FeagiMessage with a payload. Formatted as the following
 /// "MessageTitle": {
 ///     path: `FeagiMessagePath`,
@@ -169,9 +267,7 @@ pub struct FeagiMessageWithPayload {
     pub response: StructTemplate,
 }
 
-impl FeagiMessageWithPayload {
-
-}
+impl FeagiMessageWithPayload {}
 
 impl Parse for FeagiMessageWithPayload {
     /// Parse the braced message body. `"MessageTitle":` belongs to the parent entry.

@@ -15,7 +15,7 @@ description = "Structures and functions that are used commonly in proc macros in
 # External Crates (ONLY, NO DEPENDENTS FROM THIS WORKSPACE!)
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
-syn = { workspace = true }
+syn = { workspace = true, features = ["extra-traits"] }
 heck = {workspace = true}
 
 [lints]
