@@ -12,7 +12,12 @@ impl PropertyDescriptors {
     pub fn try_get_description(&self, property: &Ident) -> Option<&LitStr> {
         self.0.get(property)
     }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<Ident, LitStr> {
+        self.0.iter()
+    }
 }
+
 
 impl Parse for PropertyDescriptors {
     fn parse(input: ParseStream) -> syn::Result<Self> {

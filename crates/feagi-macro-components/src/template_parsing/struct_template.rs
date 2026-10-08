@@ -3,6 +3,7 @@ use proc_macro2::{Ident};
 use quote::quote;
 use syn::{braced, LitStr, Token, Type};
 use syn::parse::{Parse, ParseStream};
+use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::templates::Unparse;
 
 /// Struct fields as `field_name: Type`, with an optional description string.
@@ -12,6 +13,7 @@ use crate::templates::Unparse;
 ///     field_name: Type, "optional description",
 /// }
 /// ```
+#[derive(Clone)]
 pub struct StructTemplate(HashMap<Ident, (Type, Option<LitStr>)>);
 
 impl StructTemplate {
@@ -19,7 +21,7 @@ impl StructTemplate {
     pub fn try_get_field(&self, field: &Ident) -> Option<&(Type, Option<LitStr>)> {
         self.0.get(field)
     }
-
+    
     /// Outputs a token stream that generates this definition as a struct, with name, optional comment, visibility, and derives
     pub fn generate_rust_struct(&self, struct_name: Ident, description: Option<LitStr>, derives: Vec<Ident>, visibility: syn::Visibility) -> proc_macro2::TokenStream {
         let mut stream = proc_macro2::TokenStream::new();
@@ -60,6 +62,26 @@ impl StructTemplate {
             }
         });
         stream
+    }
+    
+    /// Tries to find a field by name. If one is found, overwrites its description with the given.
+    /// If none is found, does nothing.
+    pub fn try_overwrite_description(&mut self, field_name: &Ident, description: Option<LitStr>) {
+        let field = self.0.get_mut(field_name);
+        if let Some(f) = field {
+            f.1 = description
+        }
+    }
+    
+    /// Given a PropertyDescriptors, iterates through it to replace any descriptions of this with
+    /// the ones from that of the same name
+    pub fn overwrite_descriptions_from_property_descriptors(&mut self, descriptors: &PropertyDescriptors) {
+        for (name, description) in descriptors.iter() {
+            let field = self.0.get_mut(name);
+            if let Some(f) = field {
+                f.1 = Some(description.clone())
+            }
+        }
     }
     
     pub fn is_empty(&self) -> bool {

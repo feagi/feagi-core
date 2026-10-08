@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::common::parse_property_colon_member;
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::template_parsing::struct_template::StructTemplate;
@@ -9,6 +10,16 @@ use syn::{braced, LitStr, Type};
 
 mod kw {
 
+    syn::custom_keyword!(category_name);
+    syn::custom_keyword!(base_path);
+    syn::custom_keyword!(category_description);
+    syn::custom_keyword!(feagi_error_type);
+    syn::custom_keyword!(read);
+    syn::custom_keyword!(create);
+    syn::custom_keyword!(edit);
+    syn::custom_keyword!(delete);
+    syn::custom_keyword!(patch);
+
     syn::custom_keyword!(path);
     syn::custom_keyword!(path_item_descriptions);
     syn::custom_keyword!(description);
@@ -16,7 +27,125 @@ mod kw {
     syn::custom_keyword!(response);
 }
 
+//region Feagi Message Category
+
+/// Holds all messages of a given category.  Formatted as the following:
+/// category_name: "category_name",
+/// base_path: "base_path",
+/// category_description: "category_description",
+/// (following sections are optional)
+/// read: {
+///     "MessageTitle": FeagiMessageWithoutPayload,
+/// }
+/// create: {
+///     "MessageTitle": FeagiMessageWithPayload,
+/// }
+/// edit: {
+///     "MessageTitle": FeagiMessageWithPayload,
+/// }
+/// delete: {
+///     "MessageTitle": FeagiMessageWithPayload,
+/// }
+/// patch: {
+///     "MessageTitle": FeagiMessageWithPayload,
+/// }
+pub struct FeagiMessageCategory {
+    pub category_name: LitStr,
+    /// Any additional path to this request that is appended to all defined
+    pub base_path: LitStr,
+    /// Comment Description of this category
+    pub category_description: LitStr,
+    /// What type of error to use (FeagiError)
+    pub read: HashMap<LitStr, FeagiMessageWithoutPayload>,
+    pub create: HashMap<LitStr, FeagiMessageWithPayload>,
+    pub edit: HashMap<LitStr, FeagiMessageWithPayload>,
+    pub delete: HashMap<LitStr, FeagiMessageWithPayload>,
+    pub patch: HashMap<LitStr, FeagiMessageWithPayload>,
+}
+
+impl Parse for FeagiMessageCategory {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        
+
+    }
+}
+
+impl Unparse for FeagiMessageCategory {
+    fn unparse(&self) -> TokenStream {
+        todo!()
+    }
+}
+
+//endregion
+
 //region Feagi Message
+
+/// Parses over a FeagiMessage without a payload. Formatted as the following
+/// "MessageTitle": {
+///     path: `FeagiMessagePath`,
+///     path_item_descriptions: {
+///         property_name: "Description String",
+///     },
+///     description: "Description String",
+///     response: {
+///         property_name: Type, "optional_comment",
+///     }
+/// }
+pub struct FeagiMessageWithoutPayload {
+    pub path: FeagiMessagePath,
+    pub path_item_descriptions: PropertyDescriptors,
+    pub description: LitStr,
+    pub response: StructTemplate,
+}
+
+impl FeagiMessageWithoutPayload {
+
+}
+
+impl Parse for FeagiMessageWithoutPayload {
+    /// Parse the braced message body. `"MessageTitle":` belongs to the parent entry.
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let members;
+        braced!(members in input);
+
+        let path = parse_property_colon_member::<kw::path, FeagiMessagePath>(&members)?;
+        let path_item_descriptions = parse_property_colon_member::<kw::path_item_descriptions, PropertyDescriptors>(&members)?;
+        let description = parse_property_colon_member::<kw::description, LitStr>(&members)?;
+        let response = parse_property_colon_member::<kw::response, StructTemplate>(&members)?;
+
+        if !members.is_empty() {
+            return Err(members.error("unexpected tokens in FEAGI message"));
+        }
+
+        Ok(Self {
+            path,
+            path_item_descriptions,
+            description,
+            response,
+        })
+    }
+}
+
+impl Unparse for FeagiMessageWithoutPayload {
+    /// Re-emit the braced message body so it can be parsed again.
+    fn unparse(&self) -> proc_macro2::TokenStream {
+        let path = self.path.unparse();
+        let path_item_descriptions = self.path_item_descriptions.unparse();
+        let description = &self.description;
+        let response = self.response.unparse();
+
+        quote! {
+            {
+                path: #path,
+                path_item_descriptions: #path_item_descriptions,
+                description: #description,
+                response: #response,
+            }
+        }
+    }
+}
+
+
 
 /// Parses over a FeagiMessage with a payload. Formatted as the following
 /// "MessageTitle": {
@@ -38,6 +167,10 @@ pub struct FeagiMessageWithPayload {
     pub description: LitStr,
     pub payload: StructTemplate,
     pub response: StructTemplate,
+}
+
+impl FeagiMessageWithPayload {
+
 }
 
 impl Parse for FeagiMessageWithPayload {
@@ -68,7 +201,7 @@ impl Parse for FeagiMessageWithPayload {
 
 impl Unparse for FeagiMessageWithPayload {
     /// Re-emit the braced message body so it can be parsed again.
-    fn unparse(&self) -> TokenStream {
+    fn unparse(&self) -> proc_macro2::TokenStream {
         let path = self.path.unparse();
         let path_item_descriptions = self.path_item_descriptions.unparse();
         let description = &self.description;
