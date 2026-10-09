@@ -1427,12 +1427,13 @@ impl Neuroembryogenesis {
                 let Some(rule_array) = rules.as_array() else {
                     continue;
                 };
-                let has_replay = rule_array.iter().any(|rule| {
-                    rule.get("morphology_id")
-                        .and_then(|v| v.as_str())
-                        .is_some_and(|id| id == "memory_replay")
+                let has_twin_recall = rule_array.iter().any(|rule| {
+                    matches!(
+                        rule.get("morphology_id").and_then(|v| v.as_str()),
+                        Some("memory_replay") | Some("episodic_memory")
+                    )
                 });
-                if !has_replay {
+                if !has_twin_recall {
                     continue;
                 }
 
@@ -1451,6 +1452,17 @@ impl Neuroembryogenesis {
                 let Some(twin_area) = genome.cortical_areas.get(&dst_id) else {
                     continue;
                 };
+                let owned_by_this_memory = twin_area
+                    .properties
+                    .get("memory_twin_for")
+                    .and_then(|v| v.as_str())
+                    == Some(memory_id.as_base_64().as_str());
+                let legacy_replay = rule_array.iter().any(|rule| {
+                    rule.get("morphology_id").and_then(|v| v.as_str()) == Some("memory_replay")
+                });
+                if !legacy_replay && !owned_by_this_memory {
+                    continue;
+                }
                 let Some(upstream_id_str) = twin_area
                     .properties
                     .get("memory_twin_of")

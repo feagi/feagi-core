@@ -2223,7 +2223,7 @@ impl ConnectomeManager {
             if let Some(existing) = indexed_twin {
                 if self.twin_is_classifier_stamp(&existing) {
                     self.assign_generated_twin_region(&existing, upstream_area_id, memory_area_id)?;
-                    self.ensure_memory_replay_mapping(memory_area_id, &existing)?;
+                    self.ensure_memory_twin_episodic_mapping(memory_area_id, &existing)?;
                     register_replay_mapping(self, &existing)?;
                     self.refresh_cortical_mappings_hash();
                     return Ok(existing);
@@ -2240,7 +2240,7 @@ impl ConnectomeManager {
 
         if let Some(existing) = indexed_twin {
             self.assign_generated_twin_region(&existing, upstream_area_id, memory_area_id)?;
-            self.ensure_memory_replay_mapping(memory_area_id, &existing)?;
+            self.ensure_memory_twin_episodic_mapping(memory_area_id, &existing)?;
             register_replay_mapping(self, &existing)?;
             self.refresh_cortical_mappings_hash();
             return Ok(existing);
@@ -2280,7 +2280,7 @@ impl ConnectomeManager {
             }
             self.set_memory_twin_mapping(memory_area_id, upstream_area_id, &twin_id);
             self.assign_generated_twin_region(&twin_id, upstream_area_id, memory_area_id)?;
-            self.ensure_memory_replay_mapping(memory_area_id, &twin_id)?;
+            self.ensure_memory_twin_episodic_mapping(memory_area_id, &twin_id)?;
             register_replay_mapping(self, &twin_id)?;
             self.refresh_cortical_mappings_hash();
             return Ok(twin_id);
@@ -2314,7 +2314,7 @@ impl ConnectomeManager {
             let _ = self.teardown_owned_memory_twin_for_mapping(memory_area_id, upstream_area_id);
             return Err(error);
         }
-        self.ensure_memory_replay_mapping(memory_area_id, &twin_id)?;
+        self.ensure_memory_twin_episodic_mapping(memory_area_id, &twin_id)?;
         register_replay_mapping(self, &twin_id)?;
         self.refresh_cortical_mappings_hash();
         Ok(twin_id)
@@ -2696,17 +2696,22 @@ impl ConnectomeManager {
         Ok(())
     }
 
-    fn ensure_memory_replay_mapping(
+    /// Write the generated memory-to-twin edge as episodic memory.
+    ///
+    /// This is the recall path onto the twin created from an episodic mapping into
+    /// the memory area. It is not an associative STDP mapping. A legacy
+    /// `memory_replay` rule on the same pair is replaced.
+    fn ensure_memory_twin_episodic_mapping(
         &mut self,
         memory_area_id: &CorticalID,
         twin_id: &CorticalID,
     ) -> BduResult<()> {
-        if !self.morphology_registry.contains("memory_replay") {
+        if !self.morphology_registry.contains("episodic_memory") {
             feagi_evolutionary::add_core_morphologies(&mut self.morphology_registry);
         }
         self.refresh_morphologies_hash();
         let mapping_data = vec![serde_json::json!({
-            "morphology_id": "memory_replay",
+            "morphology_id": "episodic_memory",
             "morphology_scalar": [1, 1, 1],
             "postSynapticCurrent_multiplier": 1,
             "plasticity_flag": false,
@@ -3440,7 +3445,8 @@ impl ConnectomeManager {
     /// Enforce the directed memory retrieval contract for outbound memory mappings.
     ///
     /// A memory area can connect to a non-memory area only through associative plasticity,
-    /// except for its server-managed `memory_replay` edge to one of its replay twins.
+    /// except for its generated episodic edge to one of its own replay twins. A legacy
+    /// `memory_replay` rule on that same twin is still accepted until it is rewritten.
     /// Associative rules start without physical synapses; the NPU creates directed synapses
     /// only when source and destination neurons co-fire within the configured plasticity window.
     pub fn validate_memory_outbound_mapping_contract(
@@ -3474,16 +3480,20 @@ impl ConnectomeManager {
                         .and_then(|rule_array| rule_array.first())
                         .and_then(|value| value.as_str())
                 });
-            let is_replay_edge_to_own_twin = morphology_id == Some("memory_replay")
-                && dst_area
-                    .properties
-                    .get("memory_twin_for")
-                    .and_then(|value| value.as_str())
-                    == Some(src_area_id.as_base_64().as_str());
-            if morphology_id != Some("associative_memory") && !is_replay_edge_to_own_twin {
+            let owns_destination_twin = dst_area
+                .properties
+                .get("memory_twin_for")
+                .and_then(|value| value.as_str())
+                == Some(src_area_id.as_base_64().as_str());
+            let is_generated_twin_recall = owns_destination_twin
+                && matches!(
+                    morphology_id,
+                    Some("episodic_memory") | Some("memory_replay")
+                );
+            if morphology_id != Some("associative_memory") && !is_generated_twin_recall {
                 return Err(BduError::InvalidMorphology(format!(
                     "Memory-to-non-memory mapping {} -> {} only supports associative_memory \
-                     (or memory_replay to its own twin)",
+                     (or episodic_memory to its own twin)",
                     src_area_id, dst_area_id
                 )));
             }
@@ -5682,13 +5692,14 @@ impl ConnectomeManager {
 
     /// Rebuild `memory_twin_areas` from existing twins and episodic mappings.
     ///
-    /// Connectome import copies twin cortical areas and `memory_replay` rules but
+    /// Connectome import copies twin cortical areas and the memory-to-twin rule but
     /// often omits the reverse index on the memory area. NPU rebind, twin
     /// diagnostics, and replay injection all key off that index, so recall cannot
     /// target the saved twin neurons until it is restored.
     ///
     /// Existing twins are re-indexed in place. Synapses are not regenerated when
-    /// a `memory_replay` mapping is already present.
+    /// an episodic memory-to-twin mapping is already present. A legacy
+    /// `memory_replay` rule is rewritten to `episodic_memory`.
     pub fn rebuild_memory_twin_mappings(&mut self) -> BduResult<usize> {
         self.purge_classifier_auto_twins()?;
         let jobs = self.collect_memory_twin_rebuild_jobs()?;
@@ -5767,7 +5778,7 @@ impl ConnectomeManager {
                 continue;
             };
             for (dst_b64, rules) in dstmap {
-                if !Self::mapping_rules_use_morphology(rules, "memory_replay") {
+                if !Self::mapping_is_generated_twin_recall(rules) {
                     continue;
                 }
                 let twin_id = match CorticalID::try_from_base_64(dst_b64) {
@@ -5777,6 +5788,16 @@ impl ConnectomeManager {
                 let Some(twin_area) = self.cortical_areas.get(&twin_id) else {
                     continue;
                 };
+                let owned_by_this_memory = twin_area
+                    .properties
+                    .get("memory_twin_for")
+                    .and_then(|value| value.as_str())
+                    == Some(memory_id.as_base_64().as_str());
+                if Self::mapping_rules_use_morphology(rules, "episodic_memory")
+                    && !owned_by_this_memory
+                {
+                    continue;
+                }
                 let Some(upstream_b64) = twin_area
                     .properties
                     .get("memory_twin_of")
@@ -5943,9 +5964,9 @@ impl ConnectomeManager {
             .and_then(|area| area.properties.get("cortical_mapping_dst"))
             .and_then(|value| value.as_object())
             .and_then(|map| map.get(&twin_id.as_base_64()))
-            .is_some_and(|rules| Self::mapping_rules_use_morphology(rules, "memory_replay"));
+            .is_some_and(|rules| Self::mapping_rules_use_morphology(rules, "episodic_memory"));
         if !has_replay {
-            self.ensure_memory_replay_mapping(memory_area_id, twin_id)?;
+            self.ensure_memory_twin_episodic_mapping(memory_area_id, twin_id)?;
         }
         self.assign_generated_twin_region(twin_id, upstream_area_id, memory_area_id)?;
         Ok(())
@@ -5958,6 +5979,15 @@ impl ConnectomeManager {
                 .get("is_mem_type")
                 .and_then(|value| value.as_bool())
                 == Some(true)
+    }
+
+    /// True for the generated memory-to-twin recall rule.
+    ///
+    /// New twins use `episodic_memory`. Genomes saved before that change still
+    /// carry `memory_replay` on the same edge.
+    fn mapping_is_generated_twin_recall(rules: &serde_json::Value) -> bool {
+        Self::mapping_rules_use_morphology(rules, "episodic_memory")
+            || Self::mapping_rules_use_morphology(rules, "memory_replay")
     }
 
     fn mapping_rules_use_morphology(rules: &serde_json::Value, morphology_id: &str) -> bool {
@@ -11155,12 +11185,15 @@ mod tests {
             .and_then(|map| map.get(&twin_id.as_base_64()))
             .and_then(|v| v.as_array())
             .expect("Missing memory replay mapping for twin area");
-        let uses_replay = mapping.iter().any(|rule| {
+        let uses_episodic = mapping.iter().any(|rule| {
             rule.get("morphology_id")
                 .and_then(|v| v.as_str())
-                .is_some_and(|id| id == "memory_replay")
+                .is_some_and(|id| id == "episodic_memory")
         });
-        assert!(uses_replay, "Expected memory_replay mapping for twin area");
+        assert!(
+            uses_episodic,
+            "Expected episodic_memory mapping from memory to its twin"
+        );
 
         let twin_area = manager.get_cortical_area(&twin_id).unwrap();
         assert!(matches!(
@@ -11801,12 +11834,15 @@ mod tests {
             .and_then(|map| map.get(&twin_id.as_base_64()))
             .and_then(|v| v.as_array())
             .expect("Missing memory replay mapping for twin area");
-        let uses_replay = replay_map.iter().any(|rule| {
+        let uses_episodic = replay_map.iter().any(|rule| {
             rule.get("morphology_id")
                 .and_then(|v| v.as_str())
-                .is_some_and(|id| id == "memory_replay")
+                .is_some_and(|id| id == "episodic_memory")
         });
-        assert!(uses_replay, "Expected memory_replay mapping for twin area");
+        assert!(
+            uses_episodic,
+            "Expected episodic_memory mapping from memory to its twin"
+        );
 
         let twin_area = manager.get_cortical_area(&twin_id).unwrap();
         assert_eq!(

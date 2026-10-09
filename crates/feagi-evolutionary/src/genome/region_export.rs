@@ -14,6 +14,10 @@ Exporting a region already named `Root Brain Region` is left as-is (full-tree ex
 Cortical mappings that target areas outside the branch are stripped from
 `cortical_mapping_dst` to avoid dangling references.
 
+Classifiers whose parent circuit is in the branch travel with the export.
+Their owned areas (kernel memory, class memory, detection twins) stay in the
+genome so reload still treats the stamp as a classifier.
+
 Copyright 2025 Neuraville Inc.
 */
 
@@ -22,6 +26,7 @@ use crate::{EvoError, EvoResult};
 use feagi_structures::genomic::brain_regions::{
     BrainRegion, RegionID, RegionType, ROOT_BRAIN_REGION_NAME,
 };
+use feagi_structures::genomic::classifiers::Classifier;
 use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalID};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -314,12 +319,80 @@ fn strip_dst_mappings_outside_branch(area: &mut CorticalArea, kept: &HashSet<Str
     dst_map.retain(|dst_key, _| kept.contains(dst_key));
 }
 
+fn classifier_referenced_area_ids(classifier: &Classifier) -> Vec<String> {
+    let mut ids = classifier.owned_area_ids();
+    ids.extend(classifier.input_area_ids());
+    ids
+}
+
+/// Classifiers that belong to the exported branch.
+///
+/// A classifier is included when its parent circuit is in the branch, or when
+/// one of its areas is already a member of that branch. Owned and referenced
+/// areas that exist in the source genome are added to `kept_cortical` so the
+/// stamp, class memory, and inputs reload with the record.
+fn classifiers_for_exported_branch(
+    genome: &RuntimeGenome,
+    branch_set: &HashSet<String>,
+    kept_cortical: &mut HashSet<String>,
+    fallback_parent_region_id: &str,
+) -> HashMap<String, Classifier> {
+    let source_area_ids: HashSet<String> = genome
+        .cortical_areas
+        .keys()
+        .map(CorticalID::as_base_64)
+        .collect();
+    let mut selected = HashMap::new();
+    for (classifier_id, classifier) in &genome.classifiers {
+        let parent_in_branch = branch_set.contains(&classifier.parent_region_id);
+        let touches_branch = classifier_referenced_area_ids(classifier)
+            .iter()
+            .any(|area_id| kept_cortical.contains(area_id));
+        if !parent_in_branch && !touches_branch {
+            continue;
+        }
+        let mut cloned = classifier.clone();
+        if !branch_set.contains(&cloned.parent_region_id) {
+            cloned.parent_region_id = fallback_parent_region_id.to_string();
+        }
+        for area_id in classifier_referenced_area_ids(&cloned) {
+            if source_area_ids.contains(&area_id) {
+                kept_cortical.insert(area_id);
+            }
+        }
+        selected.insert(classifier_id.clone(), cloned);
+    }
+    selected
+}
+
+fn attach_classifier_areas_to_parent_regions(
+    brain_regions: &mut HashMap<String, BrainRegion>,
+    classifiers: &HashMap<String, Classifier>,
+    kept_cortical: &HashSet<String>,
+) {
+    for classifier in classifiers.values() {
+        let Some(region) = brain_regions.get_mut(&classifier.parent_region_id) else {
+            continue;
+        };
+        for area_id in classifier_referenced_area_ids(classifier) {
+            if !kept_cortical.contains(&area_id) {
+                continue;
+            }
+            let Ok(cortical_id) = crate::genome::parser::string_to_cortical_id(&area_id) else {
+                continue;
+            };
+            region.add_area(cortical_id);
+        }
+    }
+}
+
 /// Clone [`RuntimeGenome`] to only include the subtree rooted at `root_region_id`.
 ///
 /// - Preserves physiology and full morphology registry from the source genome.
 /// - Sets a new `genome_id`; `genome_title` is the exported circuit's region name.
 /// - Nested circuits are wrapped under a new `Root Brain Region`; the circuit name is kept.
 /// - Strips synapse destination mappings that leave the branch.
+/// - Keeps classifiers parented in the branch, plus the areas those records own.
 pub fn subset_runtime_genome_for_region_branch(
     genome: &RuntimeGenome,
     root_region_id: &str,
@@ -329,6 +402,12 @@ pub fn subset_runtime_genome_for_region_branch(
     let branch_set: HashSet<String> = branch_ids.iter().cloned().collect();
 
     let mut kept_cortical = cortical_ids_in_branch(genome, &branch_ids);
+    let classifiers = classifiers_for_exported_branch(
+        genome,
+        &branch_set,
+        &mut kept_cortical,
+        root_region_id,
+    );
     let modulators = modulators_for_kept_areas(genome, &mut kept_cortical);
 
     let mut cortical_areas: HashMap<CorticalID, CorticalArea> = HashMap::new();
@@ -359,6 +438,7 @@ pub fn subset_runtime_genome_for_region_branch(
         }
         brain_regions.insert(rid.clone(), br);
     }
+    attach_classifier_areas_to_parent_regions(&mut brain_regions, &classifiers, &kept_cortical);
 
     let circuit_name = genome
         .brain_regions
@@ -395,7 +475,7 @@ pub fn subset_runtime_genome_for_region_branch(
         metadata,
         cortical_areas,
         brain_regions,
-        classifiers: HashMap::new(),
+        classifiers,
         morphologies: genome.morphologies.clone(),
         modulators,
         physiology: genome.physiology.clone(),
@@ -727,5 +807,109 @@ mod tests {
         );
         wrap_parentless_regions_under_named_root(&mut regions);
         assert!(apply_genome_title_to_unique_top_circuit(&mut regions, "Hub Title").is_none());
+    }
+
+    #[test]
+    fn subset_keeps_classifier_parented_in_the_exported_circuit() {
+        use feagi_structures::genomic::classifiers::{Classifier, ClassifierTrainingMode};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, MemoryCorticalType,
+        };
+
+        let (mut genome, _parent_key, child_key) = runtime_parent_and_child();
+        let kernel_mem_id = CorticalID::try_from_bytes(b"mkernexp").expect("kernel memory id");
+        let mut kernel_mem = CorticalArea::new(
+            kernel_mem_id,
+            0,
+            "Demo_kernel_mem".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).expect("dims"),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .expect("kernel memory");
+        kernel_mem.properties.insert(
+            "classifier_role".to_string(),
+            json!("kernel_memory"),
+        );
+        genome
+            .brain_regions
+            .get_mut(&child_key)
+            .expect("child region")
+            .add_area(kernel_mem_id);
+        genome.cortical_areas.insert(kernel_mem_id, kernel_mem);
+        genome.classifiers.insert(
+            "clf-1".to_string(),
+            Classifier {
+                classifier_id: "clf-1".to_string(),
+                name: "Demo".to_string(),
+                parent_region_id: child_key.clone(),
+                coordinates_3d: [1, 2, 3],
+                training_mode: ClassifierTrainingMode::Kernel,
+                kernel_area_id: None,
+                class_area_id: None,
+                mask_area_id: None,
+                class_count: None,
+                kernel_size: None,
+                fields: Vec::new(),
+                kernel_memory_id: kernel_mem_id.as_base_64(),
+                class_memory_id: kernel_mem_id.as_base_64(),
+                reward_training: false,
+                answer_feedback_area_id: None,
+                pain_area_id: None,
+                pleasure_area_id: None,
+                answer_latency_bursts: 0,
+                learn_area_id: None,
+                confidence_area_id: None,
+                properties: HashMap::new(),
+            },
+        );
+
+        let exported = subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
+        let classifier = exported
+            .classifiers
+            .get("clf-1")
+            .expect("classifier stays a classifier record");
+        assert_eq!(classifier.parent_region_id, child_key);
+        assert_eq!(classifier.kernel_memory_id, kernel_mem_id.as_base_64());
+        assert!(exported.cortical_areas.contains_key(&kernel_mem_id));
+        assert!(exported.brain_regions[&child_key]
+            .cortical_areas
+            .contains(&kernel_mem_id));
+    }
+
+    #[test]
+    fn subset_omits_classifier_outside_the_exported_circuit() {
+        use feagi_structures::genomic::classifiers::{Classifier, ClassifierTrainingMode};
+
+        let (mut genome, parent_key, child_key) = runtime_parent_and_child();
+        genome.classifiers.insert(
+            "clf-parent".to_string(),
+            Classifier {
+                classifier_id: "clf-parent".to_string(),
+                name: "Parent only".to_string(),
+                parent_region_id: parent_key,
+                coordinates_3d: [0, 0, 0],
+                training_mode: ClassifierTrainingMode::Kernel,
+                kernel_area_id: None,
+                class_area_id: None,
+                mask_area_id: None,
+                class_count: None,
+                kernel_size: None,
+                fields: Vec::new(),
+                kernel_memory_id: "bW1pc3Npbmch".to_string(),
+                class_memory_id: "bW1pc3Npbmch".to_string(),
+                reward_training: false,
+                answer_feedback_area_id: None,
+                pain_area_id: None,
+                pleasure_area_id: None,
+                answer_latency_bursts: 0,
+                learn_area_id: None,
+                confidence_area_id: None,
+                properties: HashMap::new(),
+            },
+        );
+
+        let exported = subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
+        assert!(exported.classifiers.is_empty());
     }
 }
