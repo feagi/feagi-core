@@ -1,7 +1,7 @@
 use quote::quote;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use syn::{LitStr, Token};
-
+use syn::{token, LitStr, Token, Type, TypeTuple};
+use syn::punctuated::Punctuated;
 //region Parsing
 
 /// If a comma exists, parse it. If not, dont die
@@ -41,6 +41,14 @@ pub fn prepend_to_lit_str(prefix: &str, given: &LitStr) -> LitStr {
 pub fn append_to_lit_str(given: &LitStr, postfix: &str) -> LitStr {
     let combined_value = format!("{}{}", given.value(), postfix);
     LitStr::new(&combined_value, given.span())
+}
+
+pub fn unit_type() -> syn::Type {
+    Type::Tuple(TypeTuple {
+        attrs: vec![],
+        paren_token: token::Paren::default(),
+        elems: Punctuated::new(),
+    })
 }
 
 /// Visibility written onto generated Rust items.
