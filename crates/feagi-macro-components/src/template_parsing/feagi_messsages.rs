@@ -220,89 +220,91 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
 
         let mut all_request_fields = StructTemplate::new_empty();
 
-        let (name_parameters, tokens_parameters) = {
-            let name;
-            let mut struct_template = self.path.as_parameter_struct_template();
-            struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
-            let tokens = if struct_template.is_empty() {
-                name = name_null.clone();
-                proc_macro2::TokenStream::new()
+        fn generate_specification(
+            mut struct_template: StructTemplate,
+            path_item_descriptions: &PropertyDescriptors,
+            name_base: &syn::Ident,
+            name_suffix: &str,
+            name_null: &syn::Ident,
+            specification_derives: &Vec<syn::Ident>,
+            all_request_fields: &mut StructTemplate,
+            include_in_message: bool,
+        ) -> (syn::Ident, proc_macro2::TokenStream, Vec<syn::Ident>) {
+            struct_template.overwrite_descriptions_from_property_descriptors(path_item_descriptions);
+            let (name, tokens) = if struct_template.is_empty() {
+                (name_null.clone(), proc_macro2::TokenStream::new())
             } else {
-                name = format_ident!("{}{}", name_base, "FeagiMessageParameters");
+                let name = format_ident!("{}{}", name_base, name_suffix);
                 let mut tokens = struct_template.generate_rust_struct(
-                    name.clone(), None, &specification_derives, RustVisibility::Public
+                    name.clone(), None, specification_derives, RustVisibility::Public
                 );
-                tokens.extend(quote!{ impl FeagiMessageParameters for #name });
-                tokens
+                let trait_name = format_ident!("{}", name_suffix);
+                tokens.extend(quote! { impl #trait_name for #name });
+                (name, tokens)
             };
-            for (k, (t, d)) in struct_template.get_map() {
-                all_request_fields.insert_property(k.clone(), t.clone(), d.clone());
+            if include_in_message {
+                for (k, (t, d)) in struct_template.get_map() {
+                    all_request_fields.insert_property(k.clone(), t.clone(), d.clone());
+                }
             }
-            (name, tokens)
-        };
+            let field_names: Vec<syn::Ident> = struct_template.get_map().keys().cloned().collect();
+            (name, tokens, field_names)
+        }
+
+        fn moved_fields(owner: &syn::Ident, fields: &[syn::Ident]) -> proc_macro2::TokenStream {
+            let mut tokens = proc_macro2::TokenStream::new();
+            for field in fields {
+                tokens.extend(quote! { #field: #owner.#field, });
+            }
+            tokens
+        }
+
+        let (name_parameters, tokens_parameters, parameter_fields) = generate_specification(
+            self.path.as_parameter_struct_template(),
+            &self.path_item_descriptions,
+            &name_base,
+            "FeagiMessageParameters",
+            &name_null,
+            &specification_derives,
+            &mut all_request_fields,
+            true,
+        );
         output.extend(tokens_parameters);
 
-        let (name_queryables, tokens_queryables) = {
-            let name;
-            let mut struct_template = self.path.as_parameter_struct_template();
-            struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
-            let tokens = if struct_template.is_empty() {
-                name = name_null.clone();
-                proc_macro2::TokenStream::new()
-            } else {
-                name = format_ident!("{}{}", name_base, "FeagiMessageQueryables");
-                let mut tokens = struct_template.generate_rust_struct(
-                    name.clone(), None, &specification_derives, RustVisibility::Public
-                );
-                tokens.extend(quote!{ impl FeagiMessageQueryables for #name });
-                tokens
-            };
-            for (k, (t, d)) in struct_template.get_map() {
-                all_request_fields.insert_property(k.clone(), t.clone(), d.clone());
-            }
-            (name, tokens)
-        };
+        let (name_queryables, tokens_queryables, queryable_fields) = generate_specification(
+            self.path.as_queryable_struct_template(),
+            &self.path_item_descriptions,
+            &name_base,
+            "FeagiMessageQueryables",
+            &name_null,
+            &specification_derives,
+            &mut all_request_fields,
+            true,
+        );
         output.extend(tokens_queryables);
 
-        let (name_payload, tokens_payload) = {
-            let name;
-            let mut struct_template = self.payload.clone();
-            struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
-            let tokens = if struct_template.is_empty() {
-                name = name_null.clone();
-                proc_macro2::TokenStream::new()
-            } else {
-                name = format_ident!("{}{}", name_base, "FeagiMessagePayload");
-                let mut tokens = struct_template.generate_rust_struct(
-                    name.clone(), None, &specification_derives, RustVisibility::Public
-                );
-                tokens.extend(quote!{ impl FeagiMessagePayload for #name });
-                tokens
-            };
-            for (k, (t, d)) in struct_template.get_map() {
-                all_request_fields.insert_property(k.clone(), t.clone(), d.clone());
-            }
-            (name, tokens)
-        };
+        let (name_payload, tokens_payload, payload_fields) = generate_specification(
+            self.payload.clone(),
+            &self.path_item_descriptions,
+            &name_base,
+            "FeagiMessagePayload",
+            &name_null,
+            &specification_derives,
+            &mut all_request_fields,
+            true,
+        );
         output.extend(tokens_payload);
 
-        let (name_response, tokens_response) = {
-            let name;
-            let mut struct_template = self.response.clone();
-            struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
-            let tokens = if struct_template.is_empty() {
-                name = name_null.clone();
-                proc_macro2::TokenStream::new()
-            } else {
-                name = format_ident!("{}{}", name_base, "FeagiMessageResponse");
-                let mut tokens = struct_template.generate_rust_struct(
-                    name.clone(), None, &specification_derives, RustVisibility::Public
-                );
-                tokens.extend(quote!{ impl FeagiMessageResponse for #name });
-                tokens
-            };
-            (name, tokens)
-        };
+        let (name_response, tokens_response, _) = generate_specification(
+            self.response.clone(),
+            &self.path_item_descriptions,
+            &name_base,
+            "FeagiMessageResponse",
+            &name_null,
+            &specification_derives,
+            &mut all_request_fields,
+            false,
+        );
         output.extend(tokens_response);
 
 
@@ -314,7 +316,43 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
 
         output.extend(feagi_message_tokens);
 
+        let parameters_binding = format_ident!("parameters");
+        let queryables_binding = format_ident!("queryables");
+        let payload_binding = format_ident!("payload");
+        let self_binding = format_ident!("self");
+        let from_parameters = moved_fields(&parameters_binding, &parameter_fields);
+        let from_queryables = moved_fields(&queryables_binding, &queryable_fields);
+        let from_payload = moved_fields(&payload_binding, &payload_fields);
+        let to_parameters = moved_fields(&self_binding, &parameter_fields);
+        let to_queryables = moved_fields(&self_binding, &queryable_fields);
+        let to_payload = moved_fields(&self_binding, &payload_fields);
+        // An empty specification is `NullMessageSpecification` and adds no fields.
+        // Name the unused binding so the generated function does not warn.
+        let consume_parameters = if parameter_fields.is_empty() { quote!(let _ = parameters;) } else { quote!() };
+        let consume_queryables = if queryable_fields.is_empty() { quote!(let _ = queryables;) } else { quote!() };
+        let consume_payload = if payload_fields.is_empty() { quote!(let _ = payload;) } else { quote!() };
+        let consume_self = if parameter_fields.is_empty() && queryable_fields.is_empty() && payload_fields.is_empty() {
+            quote!(let _ = self;)
+        } else {
+            quote!()
+        };
+
+        let mut new_arguments = proc_macro2::TokenStream::new();
+        let mut new_members = proc_macro2::TokenStream::new();
+        for (name, (field_type, _)) in all_request_fields.get_map() {
+            new_arguments.extend(quote! { #name: #field_type, });
+            new_members.extend(quote! { #name, });
+        }
+
         output.extend(quote!{
+
+            impl #feagi_message_name {
+                pub fn new(#new_arguments) -> Self {
+                    Self {
+                        #new_members
+                    }
+                }
+            }
 
             impl FeagiMessage for #feagi_message_name {
                 type Path = #name_path;
@@ -323,11 +361,23 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
                 type Payload = #name_payload;
 
                 fn from_message_data(parameters: Self::Parameters, queryables: Self::Queryables, payload: Self::Payload) -> Self {
-                    todo!()
+                    #consume_parameters
+                    #consume_queryables
+                    #consume_payload
+                    Self {
+                        #from_parameters
+                        #from_queryables
+                        #from_payload
+                    }
                 }
 
                 fn to_message_data(self) -> (Self::Parameters, Self::Queryables, Self::Payload) {
-                    todo!()
+                    #consume_self
+                    (
+                        Self::Parameters { #to_parameters },
+                        Self::Queryables { #to_queryables },
+                        Self::Payload { #to_payload },
+                    )
                 }
             }
 
@@ -449,17 +499,17 @@ impl FeagiMessagePath {
     /// Generate the FeagiMessagePath impl struct rust code for this path
     pub fn generate_feagi_message_path_struct_and_impls(&self, full_struct_name: &syn::Ident, name_of_message_struct: &syn::Ident) -> proc_macro2::TokenStream {
         let mut output = proc_macro2::TokenStream::new();
-        let elements = self.leaf;
+        let elements: Vec<proc_macro2::TokenStream> = self.leaf.iter().map(MessagePathElement::as_rust_message_path_element_enum).collect();
 
         output.extend(quote! {
 
-            ##[derive(Clone, Copy)]
+            ##[derive(Clone, Copy, Debug)]
             pub struct #full_struct_name;
 
             impl FeagiMessagePath for #full_struct_name {
-                const: PATH: [MessagePathElement] = [ #( #elements ),* ];
+                const PATH: &'static [MessagePathElement] = &[ #( #elements )* ];
 
-                type Message = #name_of_message_struct
+                type Message = #name_of_message_struct;
             }
         });
 

@@ -28,7 +28,7 @@ pub trait FeagiMessageWithResponse: FeagiMessage {
 pub trait FeagiMessagePath: Sized + Clone + Copy + core::fmt::Debug
 {
     /// The actual path of the message
-    const PATH: [MessagePathElement];
+    const PATH: &'static [MessagePathElement];
 
     type Message: FeagiMessage<Path=Self>;
 }
@@ -48,20 +48,6 @@ impl MessagePathElement {
             MessagePathElement::StaticPath(s) => {s}
             MessagePathElement::ParameterOfName(s) => {s}
             MessagePathElement::QueryableOfName(s) => {s}
-        }
-    }
-    
-    pub fn display_slice(&[MessagePathElement]) -> core::fmt::Result {
-        // TODO display as / element / element / element...
-    }
-}
-
-impl core::fmt::Display for MessagePathElement {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self {
-            MessagePathElement::StaticPath(s) => {}
-            MessagePathElement::ParameterOfName(s) => {}
-            MessagePathElement::QueryableOfName(s) => {}
         }
     }
 }
