@@ -62,6 +62,8 @@ pub struct FeagiMessageCategory {
     pub patch: HashMap<LitStr, FeagiMessage<false>>,
 }
 
+
+
 impl Parse for FeagiMessageCategory {
     /// Parse the category fields. Verb sections may be omitted, in docstring order.
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -207,10 +209,40 @@ pub struct FeagiMessage<const NO_PAYLOAD: bool> {
 
 impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
 
-    pub fn generate_feagi_message_structs(&self, name_base: syn::Ident) -> proc_macro2::TokenStream {
+    /// Struct names this message will generate.
+    pub fn generate_feagi_message_struct_names(&self, name_base: syn::Ident) -> FeagiMessageRustStructNames {
+        let named = |suffix: &str| format_ident!("{}{}", name_base, suffix);
+        let present_name = |template: &StructTemplate, suffix: &str| {
+            if template.is_empty() {
+                None
+            } else {
+                Some(named(suffix))
+            }
+        };
+
+        let parameters = self.path.as_parameter_struct_template();
+        let queryables = self.path.as_queryable_struct_template();
+
+        FeagiMessageRustStructNames {
+            path: named("FeagiMessagePath"),
+            parameter: present_name(&parameters, "FeagiMessageParameters"),
+            queryable: present_name(&queryables, "FeagiMessageQueryables"),
+            payload: present_name(&self.payload, "FeagiMessagePayload"),
+            response: present_name(&self.response, "FeagiMessageResponse"),
+            message: named("FeagiMessage"),
+        }
+    }
+
+    pub fn generate_feagi_message_structs(&self, struct_names: FeagiMessageRustStructNames) -> (proc_macro2::TokenStream) {
         let mut output: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
-        let name_path = format_ident!("{}{}", name_base, "FeagiMessagePath");
-        let name_message = format_ident!("{}{}", name_base, "FeagiMessage");
+        let FeagiMessageRustStructNames {
+            path: name_path,
+            parameter: parameter_name,
+            queryable: queryable_name,
+            payload: payload_name,
+            response: response_name,
+            message: name_message,
+        } = struct_names;
         let name_null = format_ident!("{}", "NullMessageSpecification");
         let specification_derives = vec![format_ident!("{}", "Clone"), format_ident!("{}", "Debug"), format_ident!("{}", "Serialize"), format_ident!("{}", "DeserializeOwned")];
 
@@ -223,24 +255,25 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
         fn generate_specification(
             mut struct_template: StructTemplate,
             path_item_descriptions: &PropertyDescriptors,
-            name_base: &syn::Ident,
-            name_suffix: &str,
+            struct_name: Option<&syn::Ident>,
+            trait_suffix: &str,
             name_null: &syn::Ident,
             specification_derives: &Vec<syn::Ident>,
             all_request_fields: &mut StructTemplate,
             include_in_message: bool,
         ) -> (syn::Ident, proc_macro2::TokenStream, Vec<syn::Ident>) {
             struct_template.overwrite_descriptions_from_property_descriptors(path_item_descriptions);
-            let (name, tokens) = if struct_template.is_empty() {
-                (name_null.clone(), proc_macro2::TokenStream::new())
-            } else {
-                let name = format_ident!("{}{}", name_base, name_suffix);
+            // `None` is the empty template, which reuses `NullMessageSpecification`.
+            let (name, tokens) = if let Some(struct_name) = struct_name {
+                let name = struct_name.clone();
                 let mut tokens = struct_template.generate_rust_struct(
                     name.clone(), None, specification_derives, RustVisibility::Public
                 );
-                let trait_name = format_ident!("{}", name_suffix);
+                let trait_name = format_ident!("{}", trait_suffix);
                 tokens.extend(quote! { impl #trait_name for #name });
                 (name, tokens)
+            } else {
+                (name_null.clone(), proc_macro2::TokenStream::new())
             };
             if include_in_message {
                 for (k, (t, d)) in struct_template.get_map() {
@@ -262,7 +295,7 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
         let (name_parameters, tokens_parameters, parameter_fields) = generate_specification(
             self.path.as_parameter_struct_template(),
             &self.path_item_descriptions,
-            &name_base,
+            parameter_name.as_ref(),
             "FeagiMessageParameters",
             &name_null,
             &specification_derives,
@@ -274,7 +307,7 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
         let (name_queryables, tokens_queryables, queryable_fields) = generate_specification(
             self.path.as_queryable_struct_template(),
             &self.path_item_descriptions,
-            &name_base,
+            queryable_name.as_ref(),
             "FeagiMessageQueryables",
             &name_null,
             &specification_derives,
@@ -283,10 +316,12 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
         );
         output.extend(tokens_queryables);
 
+        // NOTE: since we do validation that theres no payload when NO_PAYLOAD, we can always trust
+        // that this will return empty / NULL in those cases
         let (name_payload, tokens_payload, payload_fields) = generate_specification(
             self.payload.clone(),
             &self.path_item_descriptions,
-            &name_base,
+            payload_name.as_ref(),
             "FeagiMessagePayload",
             &name_null,
             &specification_derives,
@@ -298,7 +333,7 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
         let (name_response, tokens_response, _) = generate_specification(
             self.response.clone(),
             &self.path_item_descriptions,
-            &name_base,
+            response_name.as_ref(),
             "FeagiMessageResponse",
             &name_null,
             &specification_derives,
@@ -308,10 +343,9 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
         output.extend(tokens_response);
 
 
-        let feagi_message_name = format_ident!("{}{}", name_base, "FeagiMessage");
         let feagi_message_derives = vec![format_ident!("{}", "Clone"), format_ident!("{}", "Debug")]; // doesn't need serialization
         let feagi_message_tokens = all_request_fields.generate_rust_struct(
-            feagi_message_name.clone(), Some(self.description.clone()), &feagi_message_derives, RustVisibility::Public
+            name_message.clone(), Some(self.description.clone()), &feagi_message_derives, RustVisibility::Public
         );
 
         output.extend(feagi_message_tokens);
@@ -346,7 +380,7 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
 
         output.extend(quote!{
 
-            impl #feagi_message_name {
+            impl #name_message {
                 pub fn new(#new_arguments) -> Self {
                     Self {
                         #new_members
@@ -354,7 +388,7 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
                 }
             }
 
-            impl FeagiMessage for #feagi_message_name {
+            impl FeagiMessage for #name_message {
                 type Path = #name_path;
                 type Parameters = #name_parameters;
                 type Queryables = #name_queryables;
@@ -381,7 +415,7 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
                 }
             }
 
-            impl FeagiMessageWithResponse for #feagi_message_name {
+            impl FeagiMessageWithResponse for #name_message {
                 type Response = #name_response;
             }
 
@@ -443,6 +477,15 @@ impl<const NO_PAYLOAD: bool> Unparse for FeagiMessage<NO_PAYLOAD> {
             }
         }
     }
+}
+
+pub struct FeagiMessageRustStructNames {
+    pub path: syn::Ident,
+    pub parameter: Option<syn::Ident>,
+    pub queryable: Option<syn::Ident>,
+    pub payload: Option<syn::Ident>,
+    pub response: Option<syn::Ident>,
+    pub message: syn::Ident,
 }
 
 //endregion
