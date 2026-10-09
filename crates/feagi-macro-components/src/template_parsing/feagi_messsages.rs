@@ -62,7 +62,8 @@ pub struct FeagiMessageCategory {
     pub patch: HashMap<LitStr, FeagiMessage<false>>,
 }
 
-
+impl
+/// TODO endpoint logic needs to seperate get / put / etc on the endpoint level for zenoh
 
 impl Parse for FeagiMessageCategory {
     /// Parse the category fields. Verb sections may be omitted, in docstring order.
