@@ -2,11 +2,12 @@ use crate::common::{lit_str_to_ident, parse_optional_comma, parse_property_colon
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::template_parsing::struct_template::StructTemplate;
 use crate::templates::Unparse;
-use proc_macro2::{Span};
+use proc_macro2::Span;
 use quote::{format_ident, quote, TokenStreamExt};
 use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, LitStr, Token, Type};
+use crate::template_parsing::message_path_element::MessagePathElement;
 
 mod kw {
 
@@ -55,15 +56,20 @@ pub struct FeagiMessageCategory {
     pub base_path: LitStr,
     /// Comment Description of this category
     pub category_description: LitStr,
-    pub read: HashMap<LitStr, FeagiMessage<true>>,
-    pub create: HashMap<LitStr, FeagiMessage<false>>,
-    pub edit: HashMap<LitStr, FeagiMessage<false>>,
-    pub delete: HashMap<LitStr, FeagiMessage<false>>,
-    pub patch: HashMap<LitStr, FeagiMessage<false>>,
+    pub read: HashMap<LitStr, FeagiRequestMessage<0>>, // TODO fix message type (why doesnt FeagiMessageType::Const work???)
+    pub create: HashMap<LitStr, FeagiRequestMessage<1>>,
+    pub edit: HashMap<LitStr, FeagiRequestMessage<2>>,
+    pub delete: HashMap<LitStr, FeagiRequestMessage<3>>,
+    pub patch: HashMap<LitStr, FeagiRequestMessage<4>>,
 }
 
-impl
-/// TODO endpoint logic needs to seperate get / put / etc on the endpoint level for zenoh
+// TODO endpoint logic needs to separate get / put / etc on the endpoint level for zenoh
+
+impl FeagiMessageCategory {
+
+
+
+}
 
 impl Parse for FeagiMessageCategory {
     /// Parse the category fields. Verb sections may be omitted, in docstring order.
@@ -97,31 +103,31 @@ impl Parse for FeagiMessageCategory {
 
         let read = if input.peek(kw::read) {
             input.parse::<kw::read>()?;
-            parse_bucket::<FeagiMessage<true>>(input, "read")?
+            parse_bucket::<FeagiRequestMessage<0>>(input, "read")?
         } else {
             HashMap::new()
         };
         let create = if input.peek(kw::create) {
             input.parse::<kw::create>()?;
-            parse_bucket::<FeagiMessage<false>>(input, "create")?
+            parse_bucket::<FeagiRequestMessage<1>>(input, "create")?
         } else {
             HashMap::new()
         };
         let edit = if input.peek(kw::edit) {
             input.parse::<kw::edit>()?;
-            parse_bucket::<FeagiMessage<false>>(input, "edit")?
+            parse_bucket::<FeagiRequestMessage<2>>(input, "edit")?
         } else {
             HashMap::new()
         };
         let delete = if input.peek(kw::delete) {
             input.parse::<kw::delete>()?;
-            parse_bucket::<FeagiMessage<false>>(input, "delete")?
+            parse_bucket::<FeagiRequestMessage<3>>(input, "delete")?
         } else {
             HashMap::new()
         };
         let patch = if input.peek(kw::patch) {
             input.parse::<kw::patch>()?;
-            parse_bucket::<FeagiMessage<false>>(input, "patch")?
+            parse_bucket::<FeagiRequestMessage<4>>(input, "patch")?
         } else {
             HashMap::new()
         };
@@ -181,6 +187,135 @@ impl Unparse for FeagiMessageCategory {
     }
 }
 
+/// Contains the names of the structs across all feagi messages in a feagi message category
+pub struct FeagiMessageRustStructNamesCategorized {
+    pub read: Vec<FeagiRequestMessageRustStructNames>,
+    pub create: Vec<FeagiRequestMessageRustStructNames>,
+    pub edit: Vec<FeagiRequestMessageRustStructNames>,
+    pub delete: Vec<FeagiRequestMessageRustStructNames>,
+    pub patch: Vec<FeagiRequestMessageRustStructNames>,
+}
+
+impl FeagiMessageRustStructNamesCategorized {
+
+    pub fn new_empty() -> Self {
+        Self {
+            read: Vec::new(),
+            create: Vec::new(),
+            edit: Vec::new(),
+            delete: Vec::new(),
+            patch: Vec::new(),
+        }
+    }
+
+    pub fn get_by_method(&self, method: &FeagiRequestMessageMethod) -> &[FeagiRequestMessageRustStructNames] {
+        match method {
+            FeagiRequestMessageMethod::Read => {self.read.as_slice()}
+            FeagiRequestMessageMethod::Create => {self.create.as_slice()}
+            FeagiRequestMessageMethod::Edit => {self.edit.as_slice()}
+            FeagiRequestMessageMethod::Delete => {self.delete.as_slice()}
+            FeagiRequestMessageMethod::Patch => {self.patch.as_slice()}
+        }
+    }
+
+    pub fn get_by_method_mut(&mut self, method: &FeagiRequestMessageMethod) -> &mut Vec<FeagiRequestMessageRustStructNames> {
+        match method {
+            FeagiRequestMessageMethod::Read => {&mut self.read}
+            FeagiRequestMessageMethod::Create => {&mut self.create}
+            FeagiRequestMessageMethod::Edit => {&mut self.edit}
+            FeagiRequestMessageMethod::Delete => {&mut self.delete}
+            FeagiRequestMessageMethod::Patch => {&mut self.patch}
+        }
+    }
+
+    /// Generate the rust enums that contain all the Requests with their Feagi Request Messages, and the Responses with their response datas
+    pub fn generate_rust_request_response_enums_for_category(&self, request_enum_name: syn::Ident, response_enum_name: syn::Ident) -> proc_macro2::TokenStream {
+        let names = self.flatten_all_name_structs();
+        
+        let mut request_enum_variants = proc_macro2::TokenStream::new();
+        let mut response_enum_variants = proc_macro2::TokenStream::new();
+        let mut intos = proc_macro2::TokenStream::new();
+        
+        for name in &names {
+            let base_name = name.method_base_title.clone();
+            let message_name = name.message.clone();
+            let maybe_response_name = name.response.clone();
+
+            request_enum_variants.extend(quote! {
+                #base_name(#message_name),
+            });
+
+            intos.extend( quote! {
+                impl Into<#request_enum_name> for #message_name {
+                    fn into(self) -> #request_enum_name {
+                        #request_enum_name::#base_name(self)
+                    }
+                }
+            });
+
+            if let Some(response_name) = maybe_response_name {
+                response_enum_variants.extend(quote! {
+                    #base_name(#response_name),
+                });
+
+                intos.extend( quote! {
+                impl Into<#response_enum_name> for #response_name {
+                    fn into(self) -> #response_enum_name {
+                        #response_enum_name::#base_name(self)
+                    }
+                }
+            });
+
+            } else {
+                response_enum_variants.extend(quote! {
+                    #base_name,
+                });
+            }
+        };
+
+
+
+        quote! {
+
+            ##[derive(Debug, Clone)]
+            pub enum #request_enum_name {
+                #request_enum_variants
+            }
+
+            ##[derive(Debug, Clone)]
+            pub enum #response_enum_name {
+                #response_enum_variants
+            }
+
+        }
+
+        
+
+
+    }
+
+    /// Gets the names of all message structs and the optional response names
+    fn flatten_all_name_structs(&self) -> Vec<FeagiRequestMessageRustStructNames> {
+        let mut all_names: Vec<FeagiRequestMessageRustStructNames> = Vec::new();
+        for structs in &self.read {
+            all_names.push(structs.clone());
+        }
+        for names in &self.create {
+            all_names.push(names.clone());
+        }
+        for names in &self.edit {
+            all_names.push(names.clone());
+        }
+        for names in &self.delete {
+            all_names.push(names.clone());
+        }
+        for names in &self.patch {
+            all_names.push(names.clone());
+        }
+        all_names
+    }
+}
+
 //endregion
 
 //region Feagi Message
@@ -200,43 +335,47 @@ impl Unparse for FeagiMessageCategory {
 ///     }
 /// }
 /// Note that the payload is skipped for Read Messages
-pub struct FeagiMessage<const NO_PAYLOAD: bool> {
-    pub path: FeagiMessagePath,
+pub struct FeagiRequestMessage<const METHOD_TYPE_U8: FeagiRequestMessageU8> {
+    pub path: FeagiRequestMessagePath<METHOD_TYPE_U8>,
     pub path_item_descriptions: PropertyDescriptors,
     pub description: LitStr,
     pub payload: StructTemplate,
     pub response: StructTemplate,
 }
 
-impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
+impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYPE_U8> {
 
     /// Struct names this message will generate.
-    pub fn generate_feagi_message_struct_names(&self, name_base: syn::Ident) -> FeagiMessageRustStructNames {
-        let named = |suffix: &str| format_ident!("{}{}", name_base, suffix);
-        let present_name = |template: &StructTemplate, suffix: &str| {
+    pub fn generate_feagi_message_struct_names(&self, name_base: syn::Ident) -> FeagiRequestMessageRustStructNames {
+        let named = |method_prefix: &str, suffix: &str| format_ident!("{}{}{}", method_prefix, name_base, suffix);
+        let present_name = |template: &StructTemplate, method_prefix: &str, suffix: &str| {
             if template.is_empty() {
                 None
             } else {
-                Some(named(suffix))
+                Some(named(method_prefix, suffix))
             }
         };
 
         let parameters = self.path.as_parameter_struct_template();
         let queryables = self.path.as_queryable_struct_template();
 
-        FeagiMessageRustStructNames {
-            path: named("FeagiMessagePath"),
-            parameter: present_name(&parameters, "FeagiMessageParameters"),
-            queryable: present_name(&queryables, "FeagiMessageQueryables"),
-            payload: present_name(&self.payload, "FeagiMessagePayload"),
-            response: present_name(&self.response, "FeagiMessageResponse"),
-            message: named("FeagiMessage"),
+        let method_str = FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).as_str();
+        
+        FeagiRequestMessageRustStructNames {
+            method_base_title: named(method_str, ""),
+            path: named(method_str, "FeagiMessagePath"),
+            parameter: present_name(&parameters, method_str, "FeagiMessageParameters"),
+            queryable: present_name(&queryables, method_str, "FeagiMessageQueryables"),
+            payload: present_name(&self.payload, method_str, "FeagiMessagePayload"),
+            response: present_name(&self.response, method_str,"FeagiMessageResponse"),
+            message: named("method_str", "FeagiMessage"),
         }
     }
 
-    pub fn generate_feagi_message_structs(&self, struct_names: FeagiMessageRustStructNames) -> (proc_macro2::TokenStream) {
+    pub fn generate_feagi_message_structs(&self, struct_names: FeagiRequestMessageRustStructNames) -> proc_macro2::TokenStream {
         let mut output: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
-        let FeagiMessageRustStructNames {
+        let FeagiRequestMessageRustStructNames {
+            method_base_title,
             path: name_path,
             parameter: parameter_name,
             queryable: queryable_name,
@@ -427,17 +566,17 @@ impl<const NO_PAYLOAD: bool> FeagiMessage<NO_PAYLOAD> {
 
 }
 
-impl<const NO_PAYLOAD: bool> Parse for FeagiMessage<NO_PAYLOAD> {
+impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Parse for FeagiRequestMessage<METHOD_TYPE_U8> {
     /// Parse the braced message body. `"MessageTitle":` belongs to the parent entry.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let members;
         braced!(members in input);
 
-        let path = parse_property_colon_member::<kw::path, FeagiMessagePath>(&members)?;
+        let path = parse_property_colon_member::<kw::path, FeagiRequestMessagePath<METHOD_TYPE_U8>>(&members)?;
         let path_item_descriptions = parse_property_colon_member::<kw::path_item_descriptions, PropertyDescriptors>(&members)?;
         let description = parse_property_colon_member::<kw::description, LitStr>(&members)?;
         let payload;
-        if !NO_PAYLOAD {
+        if !FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).had_no_payload() {
             payload = parse_property_colon_member::<kw::payload, StructTemplate>(&members)?;
         } else {
             payload = StructTemplate::new_empty();
@@ -459,7 +598,7 @@ impl<const NO_PAYLOAD: bool> Parse for FeagiMessage<NO_PAYLOAD> {
     }
 }
 
-impl<const NO_PAYLOAD: bool> Unparse for FeagiMessage<NO_PAYLOAD> {
+impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Unparse for FeagiRequestMessage<METHOD_TYPE_U8> {
     /// Re-emit the braced message body so it can be parsed again.
     fn unparse(&self) -> proc_macro2::TokenStream {
         let path = self.path.unparse();
@@ -480,7 +619,11 @@ impl<const NO_PAYLOAD: bool> Unparse for FeagiMessage<NO_PAYLOAD> {
     }
 }
 
-pub struct FeagiMessageRustStructNames {
+/// Contains all the names of the rust structs that would be generated from a FeagiMessage
+#[derive(Clone)]
+pub struct FeagiRequestMessageRustStructNames {
+    /// The base title of all of these structs with the prefix of the method (Pascal)
+    pub method_base_title: syn::Ident,
     pub path: syn::Ident,
     pub parameter: Option<syn::Ident>,
     pub queryable: Option<syn::Ident>,
@@ -491,19 +634,21 @@ pub struct FeagiMessageRustStructNames {
 
 //endregion
 
-//region FeagiMessagePath
+//region FeagiRequestMessagePath
 
 /// Parses over a single string to get the pathing out, with the formatting:
 /// "static_1/static_2/:parameter_1<ParameterType1>/static_3?query_1<QueryType1>&query_2<QueryType2>"
-pub struct FeagiMessagePath {
+pub struct FeagiRequestMessagePath<const METHOD_U8: FeagiRequestMessageU8> {
     leaf: Vec<MessagePathElement>,
 }
 
-impl FeagiMessagePath {
+impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
     pub fn full_message_path(&self, category: &LitStr) -> LitStr {
         let path = self.as_lit_str();
         LitStr::new(&format!("{}/{}", category.value(), path.value()), Span::call_site())
     }
+
+    // TODO full_message_path_with_method(&self, category: &LitStr) -> LitStr should append the method at the end
 
     pub fn as_lit_str(&self) -> LitStr {
         let string_out: String = self.leaf.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("/");
@@ -562,12 +707,19 @@ impl FeagiMessagePath {
     }
 }
 
-impl Parse for FeagiMessagePath {
+impl<const METHOD: FeagiRequestMessageU8> Parse for FeagiRequestMessagePath<METHOD> {
     /// Parse `"static/:parameter<Type>/static?query<Type>&query<Type>"` into path elements.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let path_str: LitStr = input.parse()?;
         let leaf = message_path_elements(&path_str)?;
         Ok(Self { leaf })
+    }
+}
+
+impl<const METHOD: FeagiRequestMessageU8> Unparse for FeagiRequestMessagePath<METHOD> {
+    fn unparse(&self) -> proc_macro2::TokenStream {
+        let string_out = self.as_lit_str();
+        quote! { #string_out }
     }
 }
 
@@ -729,50 +881,67 @@ fn split_name_and_type(spec: &str, span: Span) -> syn::Result<(&str, &str)> {
     Ok((name, type_src))
 }
 
-impl Unparse for FeagiMessagePath {
-    fn unparse(&self) -> proc_macro2::TokenStream {
-        let string_out = self.as_lit_str();
-        quote! { #string_out }
-    }
+//endregion
+
+//region Request Method
+
+/// Have to do this because of compiler limits
+pub type FeagiRequestMessageU8 = u8;
+
+/// Represents the method of the request (equivalent to HTTP Get / Put / etc)
+#[repr(u8)]
+pub enum FeagiRequestMessageMethod {
+    Read = Self::READ, // GET
+    Create = Self::CREATE, // PUT
+    Edit = Self::EDIT, // POST
+    Delete = Self::DELETE, // DELETE
+    Patch = Self::PATCH // PATCH
 }
 
-pub enum MessagePathElement {
-    StaticPath(LitStr),
-    ParameterOfName(LitStr, Type),
-    QueryableOfName(LitStr, Type),
-}
+impl FeagiRequestMessageMethod {
+    pub const READ: u8 = 0;
+    pub const CREATE: u8 = 1;
+    pub const EDIT: u8 = 2;
+    pub const DELETE: u8 = 3;
+    pub const PATCH: u8 = 4;
 
-impl MessagePathElement {
-    pub fn to_string(&self) -> String {
+
+    pub const fn had_no_payload(&self) -> bool {
         match self {
-            MessagePathElement::StaticPath(s) => s.value(),
-            MessagePathElement::ParameterOfName(s, t) => {
-                format!("{}<{}>", s.value(), quote!(#t).to_string())
-            }
-            MessagePathElement::QueryableOfName(s, t) => {
-                format!("{}<{}>", s.value(), quote!(#t).to_string())
-            }
+            FeagiRequestMessageMethod::Read => {true}
+            _ => {false}
         }
     }
 
-    pub fn as_rust_message_path_element_enum(&self) -> proc_macro2::TokenStream {
-        let mut output = proc_macro2::TokenStream::new();
-
-        match self {
-            MessagePathElement::StaticPath(s) => {
-                output.extend(quote!{ MessagePathElement::StaticPath(#s), });
-                output
-            }
-            MessagePathElement::ParameterOfName(s, _) => {
-                output.extend(quote!{ MessagePathElement::ParameterOfName(#s), });
-                output
-            }
-            MessagePathElement::QueryableOfName(s, _) => {
-                output.extend(quote!{ MessagePathElement::QueryableOfName(#s), });
-                output
-            }
+    pub const fn from_u8(u: u8) -> Self {
+        match u {
+            Self::READ => Self::Read,
+            Self::CREATE => Self::Create,
+            Self::EDIT => Self::Edit,
+            Self::DELETE => Self::Delete,
+            Self::PATCH => Self::Patch,
+            _ => panic!("Invalid Method!")
         }
+    }
 
+    pub const fn to_u8(self) -> u8 {
+        match self {
+            FeagiRequestMessageMethod::Read => {Self::READ}
+            FeagiRequestMessageMethod::Create => {Self::CREATE}
+            FeagiRequestMessageMethod::Edit => {Self::EDIT}
+            FeagiRequestMessageMethod::Delete => {Self::DELETE}
+            FeagiRequestMessageMethod::Patch => {Self::PATCH}
+        }
+    }
+    
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            FeagiRequestMessageMethod::Read => {"Read"}
+            FeagiRequestMessageMethod::Create => {"Crate"}
+            FeagiRequestMessageMethod::Edit => {"Edit"}
+            FeagiRequestMessageMethod::Delete => {"Delete"}
+            FeagiRequestMessageMethod::Patch => {"Patch"}
+        }
     }
 }
 

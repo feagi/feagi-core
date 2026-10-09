@@ -1,4 +1,4 @@
-use std::fmt::Formatter;
+use crate::feagi_message::feagi_message_path::{FeagiMessagePath, FeagiRequestMessagePath};
 use crate::feagi_message::feagi_message_specifications::{FeagiMessageParameters, FeagiMessagePayload, FeagiMessageQueryables, FeagiMessageResponse};
 
 
@@ -16,38 +16,41 @@ pub trait FeagiMessage: Sized + Clone + core::fmt::Debug {
     fn to_message_data(self) -> (Self::Parameters, Self::Queryables, Self::Payload);
 
     // NOTE: Generated struct should have the members across all specifications accessible as pub
-    // (this does NOT include response members)
 }
 
-/// Includes the response type of a FeagiMessage if a response is expected
-pub trait FeagiMessageWithResponse: FeagiMessage {
+/// In the case of a request type message, a response is expected
+pub trait FeagiRequestMessage: FeagiMessage<Path: FeagiRequestMessagePath> {
+    /// The response struct we expect (could be null type potentially)
     type Response: FeagiMessageResponse;
+    
+    /// The type of request method being used
+    const METHOD: FeagiMessageRequestMethod = Self::Path::METHOD;
+
+    /// Returns true if the given request type allows payloads (AKA is not Read/GET)
+    const IS_PAYLOAD_ALLOWED: bool = Self::METHOD.is_payload_allowed();
+
+    // NOTE: Generated struct should NOT include response members
 }
 
-/// Represents the actual path that a message takes
-pub trait FeagiMessagePath: Sized + Clone + Copy + core::fmt::Debug
-{
-    /// The actual path of the message
-    const PATH: &'static [MessagePathElement];
 
-    type Message: FeagiMessage<Path=Self>;
+/// Defines what type of method (REST equivilent) a FEAGI Request message is using
+#[repr(u8)]
+#[derive(Debug, Clone, Copy)]
+pub enum FeagiMessageRequestMethod {
+    Read = 0,
+    Create = 1,
+    Edit = 2,
+    Delete = 3,
+    Patch = 4
 }
 
-
-/// Individual path segment
-#[derive(Debug, Copy, Clone)]
-pub enum MessagePathElement {
-    StaticPath(&'static str),
-    ParameterOfName(&'static str),
-    QueryableOfName(&'static str)
-}
-
-impl MessagePathElement {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            MessagePathElement::StaticPath(s) => {s}
-            MessagePathElement::ParameterOfName(s) => {s}
-            MessagePathElement::QueryableOfName(s) => {s}
+impl FeagiMessageRequestMethod {
+    
+    /// Returns true if a payload is allowed
+    pub const fn is_payload_allowed(&self) -> bool {
+        match self { 
+            Self::Read => false,
+            _ => true
         }
     }
 }
