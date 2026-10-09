@@ -3,7 +3,7 @@
 /// Represents a struct with pub fields corresponding to a tuple of `FeagiMessagePath` that represent 
 /// a messages data path (and points to the data structure type) and a given data type to be coupled
 /// to it (depending on the usecase)
-pub trait FeagiRequestMessageCategorizedMappings<T>  {
+pub trait FeagiRequestMessageCategoryMappings<T>  {
     // Struct should be `pub message_name: (FeagiMessagePath, T)`
 }
 

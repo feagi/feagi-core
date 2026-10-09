@@ -5,7 +5,7 @@ use crate::templates::Unparse;
 use proc_macro2::Span;
 use quote::{format_ident, quote, TokenStreamExt};
 use std::collections::HashMap;
-use heck::ToSnakeCase;
+use heck::{ToPascalCase, ToSnakeCase};
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, LitStr, Token, Type};
 use crate::template_parsing::message_path_element::MessagePathElement;
@@ -52,13 +52,13 @@ mod kw {
 ///     "MessageTitle": FeagiMessageWithPayload,
 /// }
 pub struct FeagiMessageCategory {
-    pub category_name: LitStr,
+    pub category_name: LitStr, // PascalCase
     /// Any additional path to this request that is appended to all defined
     pub base_path: LitStr,
     /// Comment Description of this category
     pub category_description: LitStr,
     pub read: HashMap<LitStr, FeagiRequestMessage<0>>, // TODO fix message type (why doesnt FeagiMessageType::Const work???)
-    pub create: HashMap<LitStr, FeagiRequestMessage<1>>,
+    pub create: HashMap<LitStr, FeagiRequestMessage<1>>, // Name is PascalCase
     pub edit: HashMap<LitStr, FeagiRequestMessage<2>>,
     pub delete: HashMap<LitStr, FeagiRequestMessage<3>>,
     pub patch: HashMap<LitStr, FeagiRequestMessage<4>>,
@@ -66,42 +66,88 @@ pub struct FeagiMessageCategory {
 
 impl FeagiMessageCategory {
 
-    pub fn generate_rust_feagi_category_group(&self, coupled_type: syn::Type) -> proc_macro2::TokenStream {
+    pub fn generate_rust_feagi_category_group(&self) -> proc_macro2::TokenStream {
 
         // We arent going to use struct template here because these use generics
 
         let mut properties = proc_macro2::TokenStream::new();
 
-        fn append_to_properties<const FEAGI_MESSAGE_METHOD: u8>(
-            properties: &mut  proc_macro2::TokenStream,
-            messages: &HashMap<LitStr, FeagiRequestMessage<FEAGI_MESSAGE_METHOD>>,
-            coupled_type: &syn::Type
-        ) {
-            for (name, request) in messages {
-                let message_struct_name = format_ident!("{}", name.value());
-                let message_field_name = format_ident!("{}", name.value().to_snake_case());
-                let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
-                let description = &request.description;
+        // NOTE: Yes, this is repetitive, unfortunantely rustrover is stupid and will not accept
+        // the below blocks to be wrapped in a function for some reason
+        
+        for (name, request) in &self.read {
+            let message_struct_name = format_ident!("{}", name.value());
+            let message_field_name = format_ident!("{}", name.value().to_snake_case());
+            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
+            let description = &request.description;
 
-                properties.extend(quote!{
+            properties.extend(quote!{
                     ##[doc(#description)]
-                    pub #message_field_name: (#message_path_name, #coupled_type),
+                    pub #message_field_name: (#message_path_name, T),
                 });
-            }
         }
 
-        append_to_properties::<0>(&mut properties, &self.read, &coupled_type);
-        append_to_properties::<1>(&mut properties, &self.create, &coupled_type);
-        append_to_properties::<2>(&mut properties, &self.edit, &coupled_type);
-        append_to_properties::<3>(&mut properties, &self.delete, &coupled_type);
-        append_to_properties::<4>(&mut properties, &self.patch, &coupled_type);
+        for (name, request) in &self.create {
+            let message_struct_name = format_ident!("{}", name.value());
+            let message_field_name = format_ident!("{}", name.value().to_snake_case());
+            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
+            let description = &request.description;
 
-        
+            properties.extend(quote!{
+                    ##[doc(#description)]
+                    pub #message_field_name: (#message_path_name, T),
+                });
+        }
 
+        for (name, request) in &self.edit {
+            let message_struct_name = format_ident!("{}", name.value());
+            let message_field_name = format_ident!("{}", name.value().to_snake_case());
+            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
+            let description = &request.description;
 
+            properties.extend(quote!{
+                    ##[doc(#description)]
+                    pub #message_field_name: (#message_path_name, T),
+                });
+        }
 
+        for (name, request) in &self.delete {
+            let message_struct_name = format_ident!("{}", name.value());
+            let message_field_name = format_ident!("{}", name.value().to_snake_case());
+            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
+            let description = &request.description;
 
-todo!()
+            properties.extend(quote!{
+                    ##[doc(#description)]
+                    pub #message_field_name: (#message_path_name, T),
+                });
+        }
+
+        for (name, request) in &self.patch {
+            let message_struct_name = format_ident!("{}", name.value());
+            let message_field_name = format_ident!("{}", name.value().to_snake_case());
+            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
+            let description = &request.description;
+
+            properties.extend(quote!{
+                    ##[doc(#description)]
+                    pub #message_field_name: (#message_path_name, T),
+                });
+        };
+
+        let struct_name = format_ident!("{}FeagiRequestMessageCategoryMappings", &self.category_name.value().to_pascal_case());
+        let docs = &self.category_description;
+
+        quote! {
+            ##[doc(#docs)]
+            pub struct #struct_name<T> {
+                #properties
+            }
+
+            impl<T> FeagiRequestMessageCategoryMappings<T> for #struct_name<T> {}
+        }
+
+        // TODO implement clone depending on T implementing Clone
 
     }
 
