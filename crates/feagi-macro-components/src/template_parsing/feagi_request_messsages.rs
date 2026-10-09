@@ -67,25 +67,42 @@ pub struct FeagiMessageCategory {
 impl FeagiMessageCategory {
 
     pub fn generate_rust_feagi_category_group(&self, coupled_type: syn::Type) -> proc_macro2::TokenStream {
-        
+
         // We arent going to use struct template here because these use generics
-        
+
         let mut properties = proc_macro2::TokenStream::new();
-        for (name, request) in &self.read {
-            let message_struct_name = format_ident!("{}", name.value());
-            let message_field_name = format_ident!("{}", name.value().to_snake_case());
-            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
-            let description = request.description;
-            
-            properties.extend(quote!{
-                ##[doc(#description)]
-                pub #message_field_name: (#message_path_name, #coupled_type),
-            });
-            
-        };
+
+        fn append_to_properties<const FEAGI_MESSAGE_METHOD: u8>(
+            properties: &mut  proc_macro2::TokenStream,
+            messages: &HashMap<LitStr, FeagiRequestMessage<FEAGI_MESSAGE_METHOD>>,
+            coupled_type: &syn::Type
+        ) {
+            for (name, request) in messages {
+                let message_struct_name = format_ident!("{}", name.value());
+                let message_field_name = format_ident!("{}", name.value().to_snake_case());
+                let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
+                let description = &request.description;
+
+                properties.extend(quote!{
+                    ##[doc(#description)]
+                    pub #message_field_name: (#message_path_name, #coupled_type),
+                });
+            }
+        }
+
+        append_to_properties::<0>(&mut properties, &self.read, &coupled_type);
+        append_to_properties::<1>(&mut properties, &self.create, &coupled_type);
+        append_to_properties::<2>(&mut properties, &self.edit, &coupled_type);
+        append_to_properties::<3>(&mut properties, &self.delete, &coupled_type);
+        append_to_properties::<4>(&mut properties, &self.patch, &coupled_type);
+
         
-        
-        
+
+
+
+
+todo!()
+
     }
 
     /// Create the specification data, feagi messages, and response structs for all internal categorized feagi messages
@@ -740,11 +757,11 @@ pub struct FeagiRequestMessagePath<const METHOD_U8: FeagiRequestMessageU8> {
 }
 
 impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
-    
+
     pub fn get_rust_struct_name(name_base: &syn::Ident) -> syn::Ident {
         format_ident!("{}{}{}", FeagiRequestMessageMethod::from_u8(METHOD).as_str(), name_base, "FeagiMessagePath")
     }
-    
+
     pub fn full_message_path(&self, category: &LitStr) -> LitStr {
         let path = self.as_lit_str();
         LitStr::new(&format!("{}/{}", category.value(), path.value()), Span::call_site())
