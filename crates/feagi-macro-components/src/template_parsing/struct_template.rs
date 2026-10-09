@@ -35,7 +35,7 @@ impl StructTemplate {
 
         if let Some(comment) = description {
             stream.extend(quote! {
-                #[doc(#comment)]
+                ##[doc(#comment)]
             })
         };
 
@@ -51,11 +51,11 @@ impl StructTemplate {
             if let Some(comment) = optional_comment {
                 properties.extend(quote! {
                     ##[doc(#comment)]
-                    #name: property_type,
+                    #name: #property_type,
                 })
             } else {
                 properties.extend(quote! {
-                    #name: property_type,
+                    #name: #property_type,
                 })
             }
         }

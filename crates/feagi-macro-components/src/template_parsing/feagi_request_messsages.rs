@@ -529,7 +529,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             queryable: present_name(&queryables, method_str, "FeagiMessageQueryables"),
             payload: present_name(&self.payload, method_str, "FeagiMessagePayload"),
             response: present_name(&self.response, method_str,"FeagiMessageResponse"),
-            message: named("method_str", "FeagiMessage"),
+            message: named(method_str, "FeagiMessage"),
         }
     }
 
