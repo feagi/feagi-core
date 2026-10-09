@@ -650,6 +650,7 @@ name = "feagi-basis"
 version = "0.1.1"
 dependencies = [
  "ahash",
+ "feagi-basis-proc-common",
  "half",
  "heapless",
  "paste",

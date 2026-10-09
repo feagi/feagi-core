@@ -1,5 +1,7 @@
 //! Common data types and generic structs used around FEAGI.
 
+pub extern crate feagi_basis_proc_common;
+
 pub mod prelude {
     pub use super::quantization::prelude::*;
     pub use super::collections::prelude::*;

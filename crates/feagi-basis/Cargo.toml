@@ -34,6 +34,8 @@ rayon = [
 
 
 [dependencies]
+feagi-basis-proc-common = {path = "feagi-basis-proc-common"}
+
 # Root Crates
 # NONE! THIS CRATE MUST NOT DEPEND ON OTHER FEAGI ROOT CRATES
 

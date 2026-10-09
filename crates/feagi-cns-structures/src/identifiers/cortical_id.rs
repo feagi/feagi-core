@@ -10,6 +10,7 @@ pub const CORTICAL_ID_BASE_64_BYTE_COUNT: usize = 12; // Assumes padding
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CorticalID(u64);
 
+/*
 impl GenericID<u64> for CorticalID {
     const MAX_URL_PARAMETER_LENGTH: usize = CORTICAL_ID_BASE_64_BYTE_COUNT;
 
@@ -41,6 +42,8 @@ impl GenericID<u64> for CorticalID {
     }
 }
 
+
+ */
 impl Display for CorticalID {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         todo!()
