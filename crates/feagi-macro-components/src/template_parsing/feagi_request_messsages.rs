@@ -5,6 +5,7 @@ use crate::templates::Unparse;
 use proc_macro2::Span;
 use quote::{format_ident, quote, TokenStreamExt};
 use std::collections::HashMap;
+use heck::ToSnakeCase;
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, LitStr, Token, Type};
 use crate::template_parsing::message_path_element::MessagePathElement;
@@ -63,12 +64,107 @@ pub struct FeagiMessageCategory {
     pub patch: HashMap<LitStr, FeagiRequestMessage<4>>,
 }
 
-// TODO endpoint logic needs to separate get / put / etc on the endpoint level for zenoh
-
 impl FeagiMessageCategory {
 
+    pub fn generate_rust_feagi_category_group(&self, coupled_type: syn::Type) -> proc_macro2::TokenStream {
+        
+        // We arent going to use struct template here because these use generics
+        
+        let mut properties = proc_macro2::TokenStream::new();
+        for (name, request) in &self.read {
+            let message_struct_name = format_ident!("{}", name.value());
+            let message_field_name = format_ident!("{}", name.value().to_snake_case());
+            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
+            let description = request.description;
+            
+            properties.extend(quote!{
+                ##[doc(#description)]
+                pub #message_field_name: (#message_path_name, #coupled_type),
+            });
+            
+        };
+        
+        
+        
+    }
 
+    /// Create the specification data, feagi messages, and response structs for all internal categorized feagi messages
+    pub fn generate_rust_structs_for_all_messages(&self) -> proc_macro2::TokenStream {
+        let mut output = proc_macro2::TokenStream::new();
 
+        for read in &self.read {
+            let read_name = format_ident!("{}", read.0.value());
+            let request_message = read.1;
+            let struct_names = request_message.generate_feagi_message_struct_names(read_name);
+            output.extend(request_message.generate_feagi_message_structs(struct_names));
+        };
+
+        for create in &self.create {
+            let create_name = format_ident!("{}", create.0.value());
+            let request_message = create.1;
+            let struct_names = request_message.generate_feagi_message_struct_names(create_name);
+            output.extend(request_message.generate_feagi_message_structs(struct_names));
+        };
+
+        for edit in &self.edit {
+            let edit_name = format_ident!("{}", edit.0.value());
+            let request_message = edit.1;
+            let struct_names = request_message.generate_feagi_message_struct_names(edit_name);
+            output.extend(request_message.generate_feagi_message_structs(struct_names));
+        };
+
+        for delete in &self.delete {
+            let delete_name = format_ident!("{}", delete.0.value());
+            let request_message = delete.1;
+            let struct_names = request_message.generate_feagi_message_struct_names(delete_name);
+            output.extend(request_message.generate_feagi_message_structs(struct_names));
+        };
+
+        for patch in &self.patch {
+            let patch_name = format_ident!("{}", patch.0.value());
+            let request_message = patch.1;
+            let struct_names = request_message.generate_feagi_message_struct_names(patch_name);
+            output.extend(request_message.generate_feagi_message_structs(struct_names));
+        };
+
+        output
+    }
+
+    /// Create the categorized names of the feagi request messages from all internal feagi request messages
+    pub fn create_categorized_rust_struct_names(&self) -> FeagiMessageRustStructNamesCategorized {
+        let mut output = FeagiMessageRustStructNamesCategorized::new_empty();
+
+        for (message_name, message) in &self.read {
+            let message_name = format_ident!("{}", message_name.value());
+            let message_names = message.generate_feagi_message_struct_names(message_name);
+            output.read.push(message_names);
+        };
+
+        for (message_name, message) in &self.create {
+            let message_name = format_ident!("{}", message_name.value());
+            let message_names = message.generate_feagi_message_struct_names(message_name);
+            output.create.push(message_names);
+        };
+
+        for (message_name, message) in &self.edit {
+            let message_name = format_ident!("{}", message_name.value());
+            let message_names = message.generate_feagi_message_struct_names(message_name);
+            output.edit.push(message_names);
+        };
+
+        for (message_name, message) in &self.delete {
+            let message_name = format_ident!("{}", message_name.value());
+            let message_names = message.generate_feagi_message_struct_names(message_name);
+            output.delete.push(message_names);
+        };
+
+        for (message_name, message) in &self.patch {
+            let message_name = format_ident!("{}", message_name.value());
+            let message_names = message.generate_feagi_message_struct_names(message_name);
+            output.patch.push(message_names);
+        };
+        output
+    }
 }
 
 impl Parse for FeagiMessageCategory {
@@ -363,7 +459,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
         
         FeagiRequestMessageRustStructNames {
             method_base_title: named(method_str, ""),
-            path: named(method_str, "FeagiMessagePath"),
+            path: FeagiRequestMessagePath::<METHOD_TYPE_U8>::get_rust_struct_name(&name_base),
             parameter: present_name(&parameters, method_str, "FeagiMessageParameters"),
             queryable: present_name(&queryables, method_str, "FeagiMessageQueryables"),
             payload: present_name(&self.payload, method_str, "FeagiMessagePayload"),
@@ -372,6 +468,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
         }
     }
 
+    /// Generate the Specification structs, the feagi request message struct, and the response struct (if valid)
     pub fn generate_feagi_message_structs(&self, struct_names: FeagiRequestMessageRustStructNames) -> proc_macro2::TokenStream {
         let mut output: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
         let FeagiRequestMessageRustStructNames {
@@ -643,6 +740,11 @@ pub struct FeagiRequestMessagePath<const METHOD_U8: FeagiRequestMessageU8> {
 }
 
 impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
+    
+    pub fn get_rust_struct_name(name_base: &syn::Ident) -> syn::Ident {
+        format_ident!("{}{}{}", FeagiRequestMessageMethod::from_u8(METHOD).as_str(), name_base, "FeagiMessagePath")
+    }
+    
     pub fn full_message_path(&self, category: &LitStr) -> LitStr {
         let path = self.as_lit_str();
         LitStr::new(&format!("{}/{}", category.value(), path.value()), Span::call_site())
