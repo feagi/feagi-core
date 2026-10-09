@@ -1,3 +1,4 @@
+use quote::quote;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
 use syn::{LitStr, Token};
 
@@ -40,6 +41,28 @@ pub fn prepend_to_lit_str(prefix: &str, given: &LitStr) -> LitStr {
 pub fn append_to_lit_str(given: &LitStr, postfix: &str) -> LitStr {
     let combined_value = format!("{}{}", given.value(), postfix);
     LitStr::new(&combined_value, given.span())
+}
+
+/// Visibility written onto generated Rust items.
+#[derive(Clone, Copy)]
+pub enum RustVisibility {
+    /// `pub`
+    Public,
+    /// `pub(crate)`
+    PubCrate,
+    /// No visibility keyword. The item is private to its parent module.
+    Private,
+}
+
+impl RustVisibility {
+    /// Emits `pub`, `pub(crate)`, or an empty stream for [`RustVisibility::Private`].
+    pub fn to_token_stream(self) -> proc_macro2::TokenStream {
+        match self {
+            RustVisibility::Public => quote!(pub),
+            RustVisibility::PubCrate => quote!(pub(crate)),
+            RustVisibility::Private => quote!(),
+        }
+    }
 }
 
 //endregion

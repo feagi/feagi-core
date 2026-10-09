@@ -3,6 +3,7 @@ use proc_macro2::{Ident};
 use quote::quote;
 use syn::{braced, LitStr, Token, Type};
 use syn::parse::{Parse, ParseStream};
+use crate::common::RustVisibility;
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::templates::Unparse;
 
@@ -28,7 +29,7 @@ impl StructTemplate {
     }
 
     /// Outputs a token stream that generates this definition as a struct, with name, optional comment, visibility, and derives
-    pub fn generate_rust_struct(&self, struct_name: Ident, description: Option<LitStr>, derives: &Vec<Ident>, visibility: syn::Visibility) -> proc_macro2::TokenStream {
+    pub fn generate_rust_struct(&self, struct_name: Ident, description: Option<LitStr>, derives: &Vec<Ident>, visibility: RustVisibility) -> proc_macro2::TokenStream {
         let mut stream = proc_macro2::TokenStream::new();
 
 
@@ -60,6 +61,7 @@ impl StructTemplate {
         }
 
 
+        let visibility = visibility.to_token_stream();
         stream.extend(quote! {
             #visibility #struct_name
             {
@@ -95,6 +97,10 @@ impl StructTemplate {
 
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    pub fn get_map(&self) -> &HashMap<Ident, (Type, Option<LitStr>)> {
+        &self.0
     }
 }
 
