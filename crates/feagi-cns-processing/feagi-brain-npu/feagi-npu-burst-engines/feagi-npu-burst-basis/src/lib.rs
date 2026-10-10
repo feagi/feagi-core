@@ -1,5 +1,6 @@
 //! Defines core structs needed for composable and non-composable burst engines
 
+/*
 pub mod errors;
 pub mod burst_phases;
 pub use non_composable::NonComposableBurstEngineSpawner;
@@ -32,3 +33,6 @@ mod non_composable; // manages npu sealing inside
 #[cfg(feature = "alloc")]
 mod composable;  // manages npu sealing inside
 
+
+
+ */

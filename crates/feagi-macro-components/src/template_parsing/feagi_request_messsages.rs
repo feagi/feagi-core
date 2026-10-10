@@ -82,7 +82,7 @@ impl FeagiMessageCategory {
             let description = &request.description;
 
             properties.extend(quote!{
-                    ##[doc(#description)]
+                    #[doc = #description]
                     pub #message_field_name: (#message_path_name, T),
                 });
         }
@@ -94,7 +94,7 @@ impl FeagiMessageCategory {
             let description = &request.description;
 
             properties.extend(quote!{
-                    ##[doc(#description)]
+                    #[doc = #description]
                     pub #message_field_name: (#message_path_name, T),
                 });
         }
@@ -106,7 +106,7 @@ impl FeagiMessageCategory {
             let description = &request.description;
 
             properties.extend(quote!{
-                    ##[doc(#description)]
+                    #[doc = #description]
                     pub #message_field_name: (#message_path_name, T),
                 });
         }
@@ -118,7 +118,7 @@ impl FeagiMessageCategory {
             let description = &request.description;
 
             properties.extend(quote!{
-                    ##[doc(#description)]
+                    #[doc = #description]
                     pub #message_field_name: (#message_path_name, T),
                 });
         }
@@ -130,7 +130,7 @@ impl FeagiMessageCategory {
             let description = &request.description;
 
             properties.extend(quote!{
-                    ##[doc(#description)]
+                    #[doc = #description]
                     pub #message_field_name: (#message_path_name, T),
                 });
         };
@@ -139,7 +139,7 @@ impl FeagiMessageCategory {
         let docs = &self.category_description;
 
         quote! {
-            ##[doc(#docs)]
+            #[doc = #docs]
             pub struct #struct_name<T> {
                 #properties
             }
@@ -436,12 +436,12 @@ impl FeagiMessageRustStructNamesCategorized {
 
         quote! {
 
-            ##[derive(Debug, Clone)]
+            #[derive(Debug, Clone)]
             pub enum #request_enum_name {
                 #request_enum_variants
             }
 
-            ##[derive(Debug, Clone)]
+            #[derive(Debug, Clone)]
             pub enum #response_enum_name {
                 #response_enum_variants
             }
@@ -536,28 +536,27 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
     /// Generate the Specification structs, the feagi request message struct, and the response struct (if valid)
     pub fn generate_feagi_message_structs(&self, struct_names: FeagiRequestMessageRustStructNames) -> proc_macro2::TokenStream {
         let mut output: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
-        let specification_derives = vec![format_ident!("{}", "Clone"), format_ident!("{}", "Debug"), format_ident!("{}", "Serialize"), format_ident!("{}", "DeserializeOwned")];
-        
+        let specification_derives = vec![format_ident!("{}", "Clone"), format_ident!("{}", "Debug"), format_ident!("{}", "Serialize"), format_ident!("{}", "Deserialize")];
+
         let tokens_message_path = self.path.generate_feagi_message_path_struct_and_impls(&struct_names.path, &struct_names.message); // TODO add root route
         output.extend(tokens_message_path);
 
         let mut all_request_fields = StructTemplate::new_empty();
 
-        let method_type_str = FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).as_str();
+        /// Names were already prefixed with the method in `generate_feagi_message_struct_names`.
+        fn generated_name(name: &Option<syn::Ident>, role: &str) -> syn::Ident {
+            name.clone().unwrap_or_else(|| panic!("non-empty {role} template has a struct name"))
+        }
 
-        
-
-        let (parameter_type, parameter_message_field_constructor, parameter_message_field_deconstructor) = {
+        let (parameter_type, parameter_message_field_constructor, parameter_value) = {
             // Struct is parsed from path itself
             let mut struct_template = self.path.as_parameter_struct_template();
             if struct_template.is_empty() {
-                let mut deconstructor = proc_macro2::TokenStream::new();
-                deconstructor.extend(quote!{ Self::Parameters: (), }); // For the trait impl, the type is a unit type
-                (unit_type(), proc_macro2::TokenStream::new(), proc_macro2::TokenStream::new()) // return the unit type if there is no parameters
+                (unit_type(), proc_macro2::TokenStream::new(), quote!(()))
             } else {
                 struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
 
-                let struct_name = format_ident!("{}{}{}", method_type_str, &struct_names.method_base_title, "FeagiMessageParameters");
+                let struct_name = generated_name(&struct_names.parameter, "parameter");
 
                 // Add fields to total field vector, field_name_tokens
                 let mut field_name_tokens = proc_macro2::TokenStream::new();
@@ -582,23 +581,21 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                     impl FeagiMessageParameters for #struct_name {}
                 });
 
-                // Export Strict ident name as a type
-                (syn::parse_quote!(#struct_name), field_name_tokens, deconstructor_tokens)
+                let value = quote! { Self::Parameters { #deconstructor_tokens } };
+                (syn::parse_quote!(#struct_name), field_name_tokens, value)
             }
         };
 
 
-        let (queryable_type, queryable_message_field_constructor, queryable_message_field_deconstructor) = {
+        let (queryable_type, queryable_message_field_constructor, queryable_value) = {
             // Struct is parsed from path itself
             let mut struct_template = self.path.as_queryable_struct_template();
             if struct_template.is_empty() {
-                let mut deconstructor = proc_macro2::TokenStream::new();
-                deconstructor.extend(quote!{ Self::Queryables: (), }); // For the trait impl, the type is a unit type
-                (unit_type(), proc_macro2::TokenStream::new(), proc_macro2::TokenStream::new()) // return the unit type if there is no parameters
+                (unit_type(), proc_macro2::TokenStream::new(), quote!(()))
             } else {
                 struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
 
-                let struct_name = format_ident!("{}{}{}", method_type_str, &struct_names.method_base_title, "FeagiMessageQueryables");
+                let struct_name = generated_name(&struct_names.queryable, "queryable");
 
                 // Add fields to total field vector, field_name_tokens
                 let mut field_name_tokens = proc_macro2::TokenStream::new();
@@ -606,7 +603,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                 for (field_name, (field_type, maybe_field_docs)) in struct_template.get_map() {
                     all_request_fields.insert_property(field_name.clone(), field_type.clone(), maybe_field_docs.clone());
                     field_name_tokens.extend(quote!{
-                        #field_name: queryable.#field_name,
+                        #field_name: queryables.#field_name,
                     });
                     deconstructor_tokens.extend(quote!{
                         #field_name: self.#field_name,
@@ -623,25 +620,23 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                     impl FeagiMessageQueryables for #struct_name {}
                 });
 
-                // Export Strict ident name as a type
-                (syn::parse_quote!(#struct_name), field_name_tokens, deconstructor_tokens)
+                let value = quote! { Self::Queryables { #deconstructor_tokens } };
+                (syn::parse_quote!(#struct_name), field_name_tokens, value)
             }
         };
 
         // NOTE: since we do validation that theres no payload with the READ METHOD, we can always trust
         // that this will return empty / NULL in those cases
 
-        let (payload_type, payload_message_field_constructor, payload_message_field_deconstructor) = {
+        let (payload_type, payload_message_field_constructor, payload_value) = {
             // Struct is seperate
             let mut struct_template = self.payload.clone();
             if struct_template.is_empty() {
-                let mut deconstructor = proc_macro2::TokenStream::new();
-                deconstructor.extend(quote!{ Self::Payload (), }); // For the trait impl, the type is a unit type
-                (unit_type(), proc_macro2::TokenStream::new(), proc_macro2::TokenStream::new()) // return the unit type if there is no parameters
+                (unit_type(), proc_macro2::TokenStream::new(), quote!(()))
             } else {
                 struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
 
-                let struct_name = format_ident!("{}{}{}", method_type_str, &struct_names.method_base_title, "FeagiMessagePayload");
+                let struct_name = generated_name(&struct_names.payload, "payload");
 
                 // Add fields to total field vector, field_name_tokens
                 let mut field_name_tokens = proc_macro2::TokenStream::new();
@@ -666,49 +661,41 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                     impl FeagiMessagePayload for #struct_name {}
                 });
 
-                // Export Strict ident name as a type
-                (syn::parse_quote!(#struct_name), field_name_tokens, deconstructor_tokens)
+                let value = quote! { Self::Payload { #deconstructor_tokens } };
+                (syn::parse_quote!(#struct_name), field_name_tokens, value)
             }
         };
 
         let response_type = {
-            // Struct is separate
+            // Struct is separate. Response fields stay off the request struct.
             let mut struct_template = self.response.clone();
             if struct_template.is_empty() {
-                unit_type() // return the unit type if there is no parameters
+                unit_type()
             } else {
                 struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
 
-                let struct_name = format_ident!("{}{}{}", method_type_str, &struct_names.method_base_title, "FeagiMessageResponse");
+                let struct_name = generated_name(&struct_names.response, "response");
 
-                // Add fields to total field vector
-                for (field_name, (field_type, maybe_field_docs)) in struct_template.get_map() {
-                    all_request_fields.insert_property(field_name.clone(), field_type.clone(), maybe_field_docs.clone());
-                }
-
-                // Add Struct
                 output.extend(struct_template.generate_rust_struct(
                     struct_name.clone(), None, &specification_derives, RustVisibility::Public
                 ));
 
-                // Add Trait impl
                 output.extend(quote! {
-                    impl FeagiMessagePayload for #struct_name {}
+                    impl FeagiMessageResponse for #struct_name {}
                 });
 
-                // Export Strict ident name as a type
                 syn::parse_quote!(#struct_name)
             }
         };
 
         // Generate Feagi Message Struct Directly
-        let feagi_message_name = format_ident!("{}{}{}", method_type_str, &struct_names.method_base_title, "FeagiMessage");
+        let feagi_message_name = struct_names.message.clone();
         let feagi_message_derives = vec![format_ident!("{}", "Clone"), format_ident!("{}", "Debug")]; // doesn't need serialization
         let feagi_message_tokens = all_request_fields.generate_rust_struct(
             feagi_message_name.clone(), Some(self.description.clone()), &feagi_message_derives, RustVisibility::Public
         );
         output.extend(feagi_message_tokens);
-        
+
         // Feagi Message impl
         let mut new_arguments = proc_macro2::TokenStream::new(); // arguments for new func
         let mut new_members = proc_macro2::TokenStream::new(); // parameters in new func (matches field names of struct)
@@ -716,7 +703,6 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             new_arguments.extend(quote!{ #field_name: #field_type, });
             new_members.extend(quote!{ #field_name, });
         }
-        
 
         output.extend(quote! {
 
@@ -728,14 +714,16 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                 }
             }
         });
-        
-        // Feagi Message trait impls
-        
+
+        // An empty specification is `()` and contributes no fields, so name the unused binding.
+        let consume_parameters = if parameter_message_field_constructor.is_empty() { quote!(let _ = parameters;) } else { quote!() };
+        let consume_queryables = if queryable_message_field_constructor.is_empty() { quote!(let _ = queryables;) } else { quote!() };
+        let consume_payload = if payload_message_field_constructor.is_empty() { quote!(let _ = payload;) } else { quote!() };
+        let consume_self = if all_request_fields.is_empty() { quote!(let _ = self;) } else { quote!() };
+
         let path_type = &struct_names.path;
-        
-        
-        
-       output.extend(quote!{
+
+        output.extend(quote!{
 
             impl FeagiMessage for #feagi_message_name {
                 type Path = #path_type;
@@ -744,23 +732,27 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                 type Payload = #payload_type;
 
                 fn from_message_data(parameters: Self::Parameters, queryables: Self::Queryables, payload: Self::Payload) -> Self {
-                   Self {
-                       #parameter_message_field_constructor
-                       #queryable_message_field_constructor
-                       #payload_message_field_constructor
-                   }
+                    #consume_parameters
+                    #consume_queryables
+                    #consume_payload
+                    Self {
+                        #parameter_message_field_constructor
+                        #queryable_message_field_constructor
+                        #payload_message_field_constructor
+                    }
                 }
 
                 fn to_message_data(self) -> (Self::Parameters, Self::Queryables, Self::Payload) {
+                    #consume_self
                     (
-                        Self::Parameters { #parameter_message_field_deconstructor },
-                        Self::Queryables { #queryable_message_field_deconstructor },
-                        Self::Payload { #payload_message_field_deconstructor },
+                        #parameter_value,
+                        #queryable_value,
+                        #payload_value,
                     )
                 }
             }
 
-            impl FeagiMessageWithResponse for #feagi_message_name {
+            impl FeagiRequestMessage for #feagi_message_name {
                 type Response = #response_type;
             }
 
@@ -912,15 +904,21 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
         let mut output = proc_macro2::TokenStream::new();
         let elements: Vec<proc_macro2::TokenStream> = self.leaf.iter().map(MessagePathElement::as_rust_message_path_element_enum).collect();
 
+        let method_name = format_ident!("{}", FeagiRequestMessageMethod::from_u8(METHOD).as_str());
+
         output.extend(quote! {
 
-            ##[derive(Clone, Copy, Debug)]
+            #[derive(Clone, Copy, Debug)]
             pub struct #full_struct_name;
 
             impl FeagiMessagePath for #full_struct_name {
                 const PATH: &'static [MessagePathElement] = &[ #( #elements )* ];
 
                 type Message = #name_of_message_struct;
+            }
+
+            impl FeagiRequestMessagePath for #full_struct_name {
+                const METHOD: FeagiMessageRequestMethod = FeagiMessageRequestMethod::#method_name;
             }
         });
 
@@ -1159,7 +1157,7 @@ impl FeagiRequestMessageMethod {
     pub const fn as_str(&self) -> &'static str {
         match self {
             FeagiRequestMessageMethod::Read => {"Read"}
-            FeagiRequestMessageMethod::Create => {"Crate"}
+            FeagiRequestMessageMethod::Create => {"Create"}
             FeagiRequestMessageMethod::Edit => {"Edit"}
             FeagiRequestMessageMethod::Delete => {"Delete"}
             FeagiRequestMessageMethod::Patch => {"Patch"}

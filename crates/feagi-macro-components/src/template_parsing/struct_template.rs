@@ -35,14 +35,14 @@ impl StructTemplate {
 
         if let Some(comment) = description {
             stream.extend(quote! {
-                ##[doc(#comment)]
+                #[doc = #comment]
             })
         };
 
         if !derives.is_empty()
         {
             stream.extend(quote! {
-                ##[derive( #( #derives ),* )]
+                #[derive( #( #derives ),* )]
             })
         };
 
@@ -50,7 +50,7 @@ impl StructTemplate {
         for (name, (property_type, optional_comment)) in &self.0 {
             if let Some(comment) = optional_comment {
                 properties.extend(quote! {
-                    ##[doc(#comment)]
+                    #[doc = #comment]
                     #name: #property_type,
                 })
             } else {
@@ -63,7 +63,7 @@ impl StructTemplate {
 
         let visibility = visibility.to_token_stream();
         stream.extend(quote! {
-            #visibility #struct_name
+            #visibility struct #struct_name
             {
                 #properties
             }

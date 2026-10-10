@@ -10,6 +10,7 @@ pub struct FeagiDesignServer {
     system_configuration: ()
 }
 
+/*
 impl FeagiDesignServer {
     
     pub fn launch_server_thread(/*TODO config*/) -> std::thread::JoinHandle<()> {
@@ -21,7 +22,7 @@ impl FeagiDesignServer {
             system_configuration: (),
         };
         
-        let handle = std::thread::spawn(feagi_server_loop);
+        let handle = std::thread::spawn( );
 
         handle
     }
@@ -35,8 +36,11 @@ impl FeagiDesignServer {
 
 
 
+
 fn feagi_server_loop(mut server: FeagiDesignServer) -> () {
     loop {
         server.server_loop()
     }
 }
+
+ */

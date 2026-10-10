@@ -795,7 +795,15 @@ version = "0.1.1"
 name = "feagi-runtimes"
 version = "0.1.1"
 dependencies = [
+ "ahash",
  "feagi-basis",
+ "feagi-transport",
+ "heapless",
+ "paste",
+ "serde",
+ "serde_json",
+ "thingbuf",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

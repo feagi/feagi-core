@@ -12,13 +12,29 @@ description = "Root library for holding common patterns of feagi runtimes / exec
 
 [features]
 
+std = [
+    "alloc",
+    "thiserror/std", "serde/std", "serde_json/std", "ahash/std", "thingbuf/std",
+]
 
+alloc = [
+    "serde/alloc", "serde_json/alloc", "thingbuf/alloc", "heapless/alloc",
+]
 
 [dependencies]
 
 # FEAGI Root Crates
 feagi-basis = {path = "../feagi-basis"}
+feagi-transport = {path = "../feagi-transport"}
 
+# External Crates
+thiserror = {workspace = true}
+paste = { workspace = true }
+ahash = { workspace = true, features = ["serde"]}
+serde = { workspace = true, features = ["derive"]}
+serde_json = { workspace = true, optional = true}
+thingbuf = {workspace = true, features = ["static"]} # TODO review features
+heapless = {workspace = true}
 
 [lints]
 workspace = true

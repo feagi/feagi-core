@@ -28,17 +28,14 @@ pub trait FeagiMessageResponse: Clone + core::fmt::Debug
     // All members of this struct need to be 'pub MessageElementSerializable'!
 }
 
-/// Used in place of when Parameters / Queryables / Payload is empty (or must be empty)
-#[derive(Debug, Clone, ::serde::Serialize, ::serde::Deserialize)]
-pub struct NullMessageSpecification;
+// Empty generated specifications use the unit type.
+impl FeagiMessageParameters for () {}
 
-impl FeagiMessageParameters for NullMessageSpecification {}
+impl FeagiMessageQueryables for () {}
 
-impl FeagiMessageQueryables for NullMessageSpecification {}
+impl FeagiMessagePayload for () {}
 
-impl FeagiMessagePayload for NullMessageSpecification {}
-
-impl FeagiMessageResponse for NullMessageSpecification {}
+impl FeagiMessageResponse for () {}
 
 
 
