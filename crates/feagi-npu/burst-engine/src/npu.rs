@@ -1499,6 +1499,109 @@ impl<
         }
     }
 
+    /// Memory-neuron ids currently mapped into `cortical_idx` for propagation.
+    ///
+    /// These ids live outside neuron storage. Associative synapses address them
+    /// directly, so a reset must discover them from the mapping rather than from
+    /// the dense neuron array.
+    pub fn dynamic_memory_neuron_ids_in_area(&self, cortical_idx: u32) -> Vec<u32> {
+        let Some(cortical_id) = self.cortical_id_for_index(cortical_idx) else {
+            return Vec::new();
+        };
+        let engine = self.propagation_engine.read().unwrap();
+        let mut ids: Vec<u32> = engine
+            .neuron_to_area
+            .iter()
+            .filter_map(|(neuron_id, mapped)| {
+                if neuron_id.0 >= MEMORY_NEURON_ID_START && *mapped == cortical_id {
+                    Some(neuron_id.0)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// Remove propagation mappings for memory neurons in one cortical area.
+    ///
+    /// Returns how many mappings were removed. Without this, a leftover mapping
+    /// lets a surviving or recreated associative synapse place that id back into
+    /// the area's fire candidate list.
+    pub fn forget_dynamic_memory_neuron_mappings(&mut self, cortical_idx: u32) -> usize {
+        let ids = self.dynamic_memory_neuron_ids_in_area(cortical_idx);
+        if ids.is_empty() {
+            return 0;
+        }
+        let mut engine = self.propagation_engine.write().unwrap();
+        for neuron_id in &ids {
+            engine.neuron_to_area.remove(&NeuronId(*neuron_id));
+        }
+        ids.len()
+    }
+
+    /// Drop STDP and episodic firing history, staged injections, and queued fires
+    /// for one cortical area.
+    ///
+    /// `neuron_ids` are the memory and storage ids whose pending PSP and candidate
+    /// rows must not survive the reset. The tracked ledger windows stay in place.
+    pub fn clear_memory_area_activation_records(&mut self, cortical_idx: u32, neuron_ids: &[u32]) {
+        let ids: AHashSet<u32> = neuron_ids.iter().copied().collect();
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures
+            .fire_ledger
+            .clear_recorded_activity(cortical_idx);
+        fire_structures
+            .episodic_memory_fire_ledger
+            .clear_recorded_activity(cortical_idx);
+        fire_structures
+            .current_fire_queue
+            .remove_cortical_area(cortical_idx);
+        fire_structures
+            .previous_fire_queue
+            .remove_cortical_area(cortical_idx);
+        fire_structures
+            .pending_memory_injections
+            .retain(|(_, area_idx, _, _)| *area_idx != cortical_idx);
+        fire_structures
+            .pending_replay_injections
+            .retain(|replay| replay.twin_area_idx != cortical_idx);
+        fire_structures
+            .last_fcl_snapshot
+            .retain(|(neuron_id, _)| !ids.contains(&neuron_id.0));
+        for neuron_id in &ids {
+            fire_structures
+                .fire_candidate_list
+                .remove_candidate(NeuronId(*neuron_id));
+            fire_structures
+                .sparse_memory_associative_lif
+                .remove(neuron_id);
+            fire_structures
+                .memory_associative_fcl_input
+                .remove(neuron_id);
+        }
+        fire_structures
+            .memory_candidate_cortical_idx
+            .retain(|neuron_id, area_idx| *area_idx != cortical_idx && !ids.contains(neuron_id));
+        let remaining_candidates: AHashSet<u32> = fire_structures
+            .memory_candidate_cortical_idx
+            .keys()
+            .copied()
+            .collect();
+        fire_structures
+            .memory_candidate_fire_kind
+            .retain(|neuron_id, _| remaining_candidates.contains(neuron_id));
+        fire_structures
+            .synaptic_arrival_schedule
+            .remove_pending_for_neuron_targets(&ids);
+    }
+
+    fn cortical_id_for_index(&self, cortical_idx: u32) -> Option<CorticalID> {
+        let area_name = self.get_cortical_area_name(cortical_idx)?;
+        CorticalID::try_from_base_64(&area_name).ok()
+    }
+
     /// Remove a synapse by source and target
     ///
     /// Remove a synapse by source and target
@@ -7883,6 +7986,88 @@ mod tests {
         }
         let fs = npu.fire_structures.lock().unwrap();
         assert!(fs.fire_candidate_list.get(n_id).is_none());
+    }
+
+    #[test]
+    fn test_clear_memory_area_activation_records_drops_history_and_mappings() {
+        use crate::fire_structures::{FireQueue, FiringNeuron, FIRE_KIND_STDP_ELIGIBLE};
+        use feagi_npu_neural::types::NeuronId;
+        use feagi_structures::genomic::cortical_area::CorticalID;
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 8,
+            );
+        let memory_id = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+        let other_id = CorticalID::try_from_bytes(b"mmem0002").unwrap();
+        npu.register_cortical_area(20, memory_id.as_base_64());
+        npu.register_cortical_area(21, other_id.as_base_64());
+        npu.configure_fire_ledger_window(20, 4).unwrap();
+        npu.configure_fire_ledger_window(21, 4).unwrap();
+        npu.configure_episodic_memory_fire_ledger_window(20, 4)
+            .unwrap();
+
+        let memory_neuron = 50_000_000u32;
+        let other_memory_neuron = 50_000_001u32;
+        npu.register_dynamic_neuron_mapping(memory_neuron, memory_id);
+        npu.register_dynamic_neuron_mapping(other_memory_neuron, other_id);
+        npu.inject_memory_neuron_to_fcl(memory_neuron, 20, 1.5);
+
+        {
+            let mut fs = npu.fire_structures.lock().unwrap();
+            let mut queue = FireQueue::new();
+            queue.add_neuron(FiringNeuron {
+                neuron_id: NeuronId(memory_neuron),
+                membrane_potential: 1.5,
+                cortical_idx: 20,
+                x: 0,
+                y: 0,
+                z: 0,
+                fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+            });
+            queue.add_neuron(FiringNeuron {
+                neuron_id: NeuronId(other_memory_neuron),
+                membrane_potential: 1.5,
+                cortical_idx: 21,
+                x: 0,
+                y: 0,
+                z: 0,
+                fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+            });
+            fs.fire_ledger.archive_burst(1, &queue).unwrap();
+            fs.episodic_memory_fire_ledger
+                .archive_burst(1, &queue)
+                .unwrap();
+            fs.current_fire_queue.add_neuron(FiringNeuron {
+                neuron_id: NeuronId(memory_neuron),
+                membrane_potential: 1.5,
+                cortical_idx: 20,
+                x: 0,
+                y: 0,
+                z: 0,
+                fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+            });
+        }
+
+        npu.clear_memory_area_activation_records(20, &[memory_neuron]);
+        assert_eq!(npu.forget_dynamic_memory_neuron_mappings(20), 1);
+
+        let cleared = npu.get_fire_ledger_dense_window_bitmaps(20, 1, 1).unwrap();
+        assert!(cleared[0].1.is_empty());
+        let kept = npu.get_fire_ledger_dense_window_bitmaps(21, 1, 1).unwrap();
+        assert!(kept[0].1.contains(other_memory_neuron));
+        let episodic = npu
+            .get_episodic_memory_fire_ledger_dense_window_bitmaps(20, 1, 1)
+            .unwrap();
+        assert!(episodic[0].1.is_empty());
+        assert!(npu.dynamic_memory_neuron_ids_in_area(20).is_empty());
+        assert_eq!(
+            npu.dynamic_memory_neuron_ids_in_area(21),
+            vec![other_memory_neuron]
+        );
+        let fs = npu.fire_structures.lock().unwrap();
+        assert!(fs.pending_memory_injections.is_empty());
+        assert!(fs.current_fire_queue.get_area_neurons(20).is_none());
     }
 
     #[test]

@@ -2500,6 +2500,11 @@ impl PlasticityService {
 
     /// Reset (delete) all memory neurons and their synapses in a cortical area.
     ///
+    /// Also drops the records that would let those synapses come back: propagation
+    /// mappings for the memory neuron ids, STDP and episodic fire history for the
+    /// area, staged injections, and queued plasticity commands. Incoming and
+    /// outgoing associative edges are included.
+    ///
     /// Returns the number of memory neurons deleted. Interconnect and other
     /// non-memory areas are left untouched: cortical reset clears their runtime
     /// state separately, and deleting their synapses holds the NPU lock in the
@@ -2535,23 +2540,47 @@ impl PlasticityService {
             cortical_idx
         );
 
-        // Delete associative and ordinary synapses on these memory neurons and on any
-        // storage neurons that live in the same cortical area (LTM bridge twins).
+        // Delete associative and ordinary synapses on these memory neurons, on any
+        // memory ids still mapped into the area, and on storage neurons that live
+        // in the same cortical area (LTM bridge twins).
         {
             let mut npu_lock = self.npu.lock().unwrap();
             let mut synapse_endpoints = memory_neuron_ids.clone();
-            synapse_endpoints.extend(npu_lock.get_neurons_in_cortical_area(cortical_idx));
+            let mut seen: AHashSet<u32> = synapse_endpoints.iter().copied().collect();
+            for neuron_id in npu_lock.get_neurons_in_cortical_area(cortical_idx) {
+                if seen.insert(neuron_id) {
+                    synapse_endpoints.push(neuron_id);
+                }
+            }
+            for neuron_id in npu_lock.dynamic_memory_neuron_ids_in_area(cortical_idx) {
+                if seen.insert(neuron_id) {
+                    synapse_endpoints.push(neuron_id);
+                }
+            }
             if !synapse_endpoints.is_empty() {
                 let scrub_ids: AHashSet<u32> = synapse_endpoints.iter().copied().collect();
                 npu_lock.scrub_synaptic_arrival_schedule_for_neuron_targets(&scrub_ids);
                 npu_lock.remove_synapses_touching_neuron_ids(&synapse_endpoints);
             }
-            if !memory_neuron_ids.is_empty() {
-                npu_lock.clear_memory_replay_frames(&memory_neuron_ids);
-                npu_lock.clear_sparse_memory_associative_state(&memory_neuron_ids);
+            let memory_ids: Vec<u32> = synapse_endpoints
+                .iter()
+                .copied()
+                .filter(|neuron_id| *neuron_id >= crate::neuron_id_manager::MEMORY_NEURON_ID_START)
+                .collect();
+            if !memory_ids.is_empty() {
+                npu_lock.clear_memory_replay_frames(&memory_ids);
             }
+            // Fire history has to go in the same lock as synapse deletion. The next
+            // burst's associative STDP reads this window and would otherwise recreate
+            // incoming and outgoing synapses onto the ids we just removed.
+            npu_lock.clear_memory_area_activation_records(cortical_idx, &synapse_endpoints);
+            npu_lock.forget_dynamic_memory_neuron_mappings(cortical_idx);
         }
         self.pattern_detector.forget_area(cortical_idx);
+        self.command_queue
+            .lock()
+            .unwrap()
+            .retain(|command| !command_targets_area(command, cortical_idx));
 
         // Delete the memory neurons themselves so the next pattern allocates a new one.
         let reset_count = {
@@ -3022,6 +3051,15 @@ mod tests {
             assert_eq!(npu.get_incoming_synapses(memory_neuron_id).len(), 1);
         }
 
+        service.enqueue_commands_for_test(vec![PlasticityCommand::InjectMemoryNeuronToFCL {
+            neuron_id: memory_neuron_id,
+            area_idx: 100,
+            membrane_potential: 1.0,
+            pattern_hash: 1,
+            is_reactivation: true,
+            replay_frames: Vec::new(),
+        }]);
+
         let reset_count = service.reset_memory_neurons_in_area(100);
         assert_eq!(reset_count, 3);
         assert!(
@@ -3033,6 +3071,10 @@ mod tests {
                 .is_empty(),
             "reset must delete associative synapses onto the memory neuron"
         );
+        assert!(
+            service.command_queue.lock().unwrap().is_empty(),
+            "reset must drop queued injections for the memory area"
+        );
 
         let runtime = service.memory_cortical_area_runtime_info(100);
         assert_eq!(runtime.active_memory_neuron_count(), 0);
@@ -3042,6 +3084,131 @@ mod tests {
                 .unwrap_or(0),
             0
         );
+    }
+
+    #[test]
+    fn reset_deletes_incoming_and_outgoing_associative_synapses() {
+        use feagi_structures::genomic::cortical_area::CorticalID;
+
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 32, 64, 8).unwrap(),
+            "plasticity-associative-reset-test-npu",
+        ));
+        let service = PlasticityService::new(
+            PlasticityConfig::default(),
+            create_memory_stats_cache(),
+            Arc::clone(&npu),
+        );
+        let memory_id = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+        let downstream_id = CorticalID::try_from_bytes(b"csrc0001").unwrap();
+        let memory_area = 100u32;
+        let downstream_area = 8u32;
+        service.register_memory_area(
+            memory_area,
+            memory_id.as_base_64(),
+            1,
+            vec![downstream_area],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
+        let (memory_neuron_id, downstream_neuron, orphan_id) = {
+            let mut guard = npu.lock().unwrap();
+            guard.register_cortical_area(memory_area, memory_id.as_base_64());
+            guard.register_cortical_area(downstream_area, downstream_id.as_base_64());
+            let downstream = guard
+                .add_neuron(
+                    1.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    0,
+                    0,
+                    false,
+                    downstream_area,
+                    0,
+                    0,
+                    0,
+                )
+                .expect("downstream neuron");
+            let mut array = service.memory_neuron_array.lock().unwrap();
+            let lifecycle = MemoryNeuronLifecycleConfig::default();
+            array
+                .create_memory_neuron(11, memory_area, 0, &lifecycle)
+                .expect("memory neuron");
+            drop(array);
+            let memory_neuron_id = service
+                .memory_neuron_array
+                .lock()
+                .unwrap()
+                .get_active_neurons_by_area(memory_area)[0];
+            let orphan_id = 50_000_099u32;
+            guard.register_dynamic_neuron_mapping(memory_neuron_id, memory_id);
+            guard.register_dynamic_neuron_mapping(orphan_id, memory_id);
+            let weight = feagi_npu_neural::types::SynapticWeight(900.0);
+            let psp = feagi_npu_neural::types::SynapticPsp(500.0);
+            let excitatory = feagi_npu_neural::types::SynapseType::Excitatory;
+            let associative = feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
+            guard
+                .add_synapse(
+                    feagi_npu_neural::types::NeuronId(7),
+                    feagi_npu_neural::types::NeuronId(memory_neuron_id),
+                    weight,
+                    psp,
+                    excitatory,
+                    associative,
+                    1,
+                )
+                .expect("incoming associative synapse");
+            guard
+                .add_synapse(
+                    feagi_npu_neural::types::NeuronId(memory_neuron_id),
+                    downstream,
+                    weight,
+                    psp,
+                    excitatory,
+                    associative,
+                    1,
+                )
+                .expect("outgoing associative synapse");
+            guard
+                .add_synapse(
+                    feagi_npu_neural::types::NeuronId(9),
+                    feagi_npu_neural::types::NeuronId(orphan_id),
+                    weight,
+                    psp,
+                    excitatory,
+                    associative,
+                    1,
+                )
+                .expect("orphan associative synapse");
+            guard.rebuild_synapse_index();
+            (memory_neuron_id, downstream.0, orphan_id)
+        };
+
+        assert_eq!(service.reset_memory_neurons_in_area(memory_area), 1);
+        let guard = npu.lock().unwrap();
+        assert!(
+            guard.get_incoming_synapses(memory_neuron_id).is_empty(),
+            "incoming associative synapses must be deleted"
+        );
+        assert!(
+            guard.get_outgoing_synapses(memory_neuron_id).is_empty(),
+            "outgoing associative synapses must be deleted"
+        );
+        assert!(
+            guard.get_incoming_synapses(downstream_neuron).is_empty(),
+            "downstream neuron must lose the synapse from the reset memory area"
+        );
+        assert!(
+            guard.get_incoming_synapses(orphan_id).is_empty(),
+            "mapped memory ids that are no longer in the array must lose their synapses"
+        );
+        assert!(guard
+            .dynamic_memory_neuron_ids_in_area(memory_area)
+            .is_empty());
     }
 
     #[test]

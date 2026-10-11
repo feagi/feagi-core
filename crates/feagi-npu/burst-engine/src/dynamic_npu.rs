@@ -702,6 +702,21 @@ where
         dispatch_mut!(self, clear_sparse_memory_associative_state(neuron_ids));
     }
 
+    pub fn dynamic_memory_neuron_ids_in_area(&self, cortical_idx: u32) -> Vec<u32> {
+        dispatch!(self, dynamic_memory_neuron_ids_in_area(cortical_idx))
+    }
+
+    pub fn forget_dynamic_memory_neuron_mappings(&mut self, cortical_idx: u32) -> usize {
+        dispatch_mut!(self, forget_dynamic_memory_neuron_mappings(cortical_idx))
+    }
+
+    pub fn clear_memory_area_activation_records(&mut self, cortical_idx: u32, neuron_ids: &[u32]) {
+        dispatch_mut!(
+            self,
+            clear_memory_area_activation_records(cortical_idx, neuron_ids)
+        );
+    }
+
     pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
         dispatch_mut!(self, remove_synapse(source, target))
     }
