@@ -51,7 +51,7 @@ impl Unparse for GroupedRequestResponseCategoryTemplate {
         let categories = self.generator.unparse();
         quote! {
             group_name: #group_name,
-            Categories: #categories,
+            categories: #categories,
         }
     }
 }

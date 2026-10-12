@@ -738,6 +738,7 @@ name = "feagi-interop"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
+ "feagi-interop-proc",
  "paste",
  "picoserve",
  "serde",
