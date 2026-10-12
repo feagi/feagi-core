@@ -2,7 +2,6 @@
 //! that context here. We can however have the base names as input, and go from there
 
 use crate::common::parse_property_colon_member;
-use crate::template_parsing::struct_template::StructTemplate;
 use crate::templates::Unparse;
 use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro2::{Ident, TokenStream};
@@ -111,6 +110,13 @@ impl Unparse for GroupedRequestResponseCategoryRustStructGenerator {
 }
 
 impl GroupedRequestResponseCategoryRustStructGenerator {
+    /// Categories in template order.
+    ///
+    /// The snake_case form of each name is the category template macro to invoke.
+    pub fn categories(&self) -> &[GroupedRequestResponseCategoryRustStructNames] {
+        &self.categories
+    }
+
     pub fn generate_generic_with_field_name_categories_and_of_type(&self, struct_name: &Ident) -> proc_macro2::TokenStream {
         // TODO pub / private, derives
 
@@ -156,6 +162,13 @@ impl GroupedRequestResponseCategoryRustStructNames {
         let value = self.base_category_pascal_name.to_string();
         let value = value.to_snake_case();
         format_ident!("{}", value)
+    }
+
+    /// Template macro exported for this category.
+    ///
+    /// This is the snake_case category ident, which is the `exported_macro_name` for that category.
+    pub fn template_macro_name(&self) -> Ident {
+        self.snake()
     }
 
     /// The name of the enum request struct

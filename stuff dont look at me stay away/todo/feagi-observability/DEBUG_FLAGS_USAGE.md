@@ -124,7 +124,7 @@ FEAGI_DEBUG=all ./feagi
 - `feagi-io`
 - `feagi-transports`
 - `feagi-agent`
-- `feagi-state-manager`
+- `feagi-state`
 - `feagi-plasticity`
 - `feagi-connectome-serialization`
 

@@ -17,7 +17,7 @@ pub fn parse_property_colon_member<FieldIdent: Parse, FieldType: Parse>(buffer: 
     buffer.parse::<FieldIdent>()?;
     buffer.parse::<Token![:]>()?;
     let output = buffer.parse::<FieldType>()?;
-    parse_optional_comma(&buffer)?;
+    parse_optional_comma(buffer)?;
     Ok(output)
 }
 

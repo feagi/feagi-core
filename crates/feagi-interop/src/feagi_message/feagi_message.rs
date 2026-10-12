@@ -1,7 +1,6 @@
 use crate::feagi_message::feagi_message_path::{FeagiMessagePath, FeagiRequestMessagePath};
 use crate::feagi_message::feagi_message_specifications::{FeagiMessageParameters, FeagiMessagePayload, FeagiMessageQueryables, FeagiMessageResponse};
 
-
 /// Represents all the data needed for a specific FEAGI Message, as individual fields
 pub trait FeagiMessage: Sized + Clone + core::fmt::Debug {
     type Path: FeagiMessagePath; // Reverse matches the Message field inside
@@ -22,7 +21,7 @@ pub trait FeagiMessage: Sized + Clone + core::fmt::Debug {
 pub trait FeagiRequestMessage: FeagiMessage<Path: FeagiRequestMessagePath> {
     /// The response struct we expect (could be null type potentially)
     type Response: FeagiMessageResponse;
-    
+
     /// The type of request method being used
     const METHOD: FeagiMessageRequestMethod = Self::Path::METHOD;
 
@@ -32,7 +31,6 @@ pub trait FeagiRequestMessage: FeagiMessage<Path: FeagiRequestMessagePath> {
     // NOTE: Generated struct should NOT include response members
 }
 
-
 /// Defines what type of method (REST equivilent) a FEAGI Request message is using
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
@@ -41,16 +39,15 @@ pub enum FeagiMessageRequestMethod {
     Create = 1,
     Edit = 2,
     Delete = 3,
-    Patch = 4
+    Patch = 4,
 }
 
 impl FeagiMessageRequestMethod {
-    
     /// Returns true if a payload is allowed
     pub const fn is_payload_allowed(&self) -> bool {
-        match self { 
+        match self {
             Self::Read => false,
-            _ => true
+            _ => true,
         }
     }
 }

@@ -1,56 +1,52 @@
+mod open_api_category;
 
+use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
 use feagi_macro_components::template_parsing::feagi_messages::request_response::feagi_request_messsages::FeagiMessageCategory;
-use heck::ToPascalCase;
-use quote::{format_ident, quote};
+use feagi_macro_components::templates::TemplateRoot;
+use proc_macro2::TokenStream;
+use quote::quote;
 
-//region Grouped Categorized Request Messages
-// This is defined in the macro-components crate, we just have some specific uses here
-
-
-
-
+/// Expands one category template into a const `CategoryApi` expression.
+///
+/// Invoke it through the category template macro:
+/// `template_design_server_system_requests!(from_template_make_open_api_category_data)`.
+/// `CategoryApi`, `OperationApi`, `Schema`, and the other OpenAPI types must be in scope.
 #[proc_macro]
-pub fn from_template_make_open_api_json_generator_function(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use feagi_macro_components::templates::TemplateRoot;
-    use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
-    let res = TemplateRoot::<GroupedRequestResponseCategoryTemplate>::parse_generator_input_macro(input.into());
-    match res {
-        Err(e) => {
-            e.to_compile_error().into()
-        }
-        Ok(s) => {
-
-            // NOTE: assume the openapi generator struct has imported locally, as is all else.
-            // Do not be concerned with pathing imports
-
-
-            quote! {
-
-                pub const fn generate_open_api_str() -> &'static str {
-
-                    // Steps:
-                    // iterate over s, this function should be able to reference the macros by name of each category , that within this function can unroll to become needed information.
-                    // It may be required to have to write addiotonal macros that unroll those tempaltes to produce struct data that is needed here
-
-                    // this function then should parse those structs, feeding them into the open_api struct
-                    // the struct may need to be modified to work in a const context
-
-                    // The open_api struct should then output the const str, which is emitted here
-
-
-                }
-
-
-
-            }
-
-
-        }
+pub fn from_template_make_open_api_category_data(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    match TemplateRoot::<FeagiMessageCategory>::parse_generator_input_macro(input.into()) {
+        Err(error) => error.to_compile_error().into(),
+        Ok(category) => open_api_category::category_api_tokens(&category).into(),
     }
-
-
 }
 
+/// Expands a grouped category template into `generate_open_api_str`.
+///
+/// Each category ident is called in snake_case, which is that category's template macro.
+/// Those macros, `from_template_make_open_api_category_data`, `CategoryApi`, and
+/// `OpenApiDocument` must be in scope at the call site.
+#[proc_macro]
+pub fn from_template_make_open_api_json_generator_function(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    match TemplateRoot::<GroupedRequestResponseCategoryTemplate>::parse_generator_input_macro(input.into()) {
+        Err(error) => error.to_compile_error().into(),
+        Ok(group) => open_api_function_tokens(&group).into(),
+    }
+}
 
-
-//endregion
+/// Const function tokens for one grouped category template.
+fn open_api_function_tokens(group: &GroupedRequestResponseCategoryTemplate) -> TokenStream {
+    let calls = group.generator.categories().iter().map(|category| {
+        let macro_name = category.template_macro_name();
+        quote! { #macro_name!(from_template_make_open_api_category_data) }
+    });
+    quote! {
+        pub const fn generate_open_api_str() -> &'static str {
+            const CATEGORIES: &[CategoryApi] = &[
+                #( #calls, )*
+            ];
+            const DOCUMENT: OpenApiDocument = OpenApiDocument::from_categories(CATEGORIES);
+            const JSON_LEN: usize = DOCUMENT.json_len();
+            const JSON_BYTES: [u8; JSON_LEN] = DOCUMENT.write_json();
+            OpenApiDocument::json_str(&JSON_BYTES)
+        }
+    }
+}

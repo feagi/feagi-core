@@ -1,5 +1,5 @@
 [package]
-name = "feagi-interop-basis"
+name = "feagi-state"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
-description = "Common code used throughout feagi-interop crates"
 
 [dependencies]
+
+[lints]
+workspace = true

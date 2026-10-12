@@ -1,27 +1,25 @@
 use core::net::SocketAddr;
 
-// TODO 
+// TODO
 
 pub struct FeagiTransportConfig {
     #[cfg(feature = "transport_rest")]
     web_server_bind: Option<SocketAddr>,
-    #[cfg(feature = "transport_rest_swagger")]
+    #[cfg(feature = "swagger_web_ui")]
     expose_swagger_docs: bool,
 }
 
 impl FeagiTransportConfig {
-
     #[cfg(feature = "transport_rest")]
-    pub fn set_rest_endpoint(&mut self, bind: Option<SocketAddr>)
-    {
-        #[cfg(feature = "transport_rest_swagger")]
+    pub fn set_rest_endpoint(&mut self, bind: Option<SocketAddr>) {
+        #[cfg(feature = "swagger_web_ui")]
         if bind.is_none() {
             self.expose_swagger_docs = false
         }
         self.web_server_bind = bind
     }
 
-    #[cfg(feature = "transport_rest_swagger")]
+    #[cfg(feature = "swagger_web_ui")]
     pub fn set_swagger_enabled(&mut self, enable_swagger: bool) {
         self.expose_swagger_docs = enable_swagger
     }
@@ -29,7 +27,6 @@ impl FeagiTransportConfig {
     // TODO enable websocket
 
     // TODO Enable other stuff
-
 
     /*
 

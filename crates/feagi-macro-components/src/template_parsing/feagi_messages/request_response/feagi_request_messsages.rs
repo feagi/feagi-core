@@ -880,6 +880,11 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
         LitStr::new(&string_out, Span::call_site())
     }
 
+    /// Path and query elements in template order.
+    pub fn elements(&self) -> &[MessagePathElement] {
+        &self.leaf
+    }
+
     /// Outputs the parameters as a StructTemplate (No comments)
     pub fn as_parameter_struct_template(&self) -> StructTemplate {
         let mut output = StructTemplate::new_empty();

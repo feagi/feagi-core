@@ -27,11 +27,13 @@ transport_rest = [
     "picoserve"
 ]
 
-transport_rest_swagger = [
+transport_ws = []
+
+transport_quic = []
+
+swagger_web_ui = [
     "transport_rest"
 ]
-
-transport_ws = []
 
 # TODO other transports, compression, auth?
 
@@ -44,7 +46,7 @@ thiserror = {workspace = true}
 paste = {workspace = true}
 serde = { workspace = true, features = ["derive"] }
 serde_json = {workspace = true, features = []}
-zenoh = {workspace = true, features = ["default", "unstable", "internal", "plugins", "runtime_plugins"]}
+zenoh = {workspace = true, features = ["default", "unstable", "internal"]}
 picoserve = {workspace = true, optional = true}
 
 

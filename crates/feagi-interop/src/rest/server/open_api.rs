@@ -1,397 +1,125 @@
-use serde::Serialize;
-use std::collections::BTreeMap;
+//! Const OpenAPI 3.0.3
 
 
-const FEAGI_INFO: Info = Info {
-    title: "FEAGI",
-    version: "0.0.0", // TODO package var?
-    description: "Feagi Server Swagger API Docs",
-};
+const EMPTY_FIELDS: &[ObjectField] = &[];
+const EMPTY_REQUIRED: &[&str] = &[];
+const FEAGI_INFO_TITLE: &str = "FEAGI";
+const FEAGI_INFO_VERSION: &str = "0.0.0"; // TODO package var?
+const FEAGI_INFO_DESCRIPTION: &str = "Feagi Server Swagger API Docs";
 const OPENAPI_VERSION: &str = "3.0.3";
+const SUCCESS_DESCRIPTION: &str = "Successful response";
 
+//region Document input
 
-//region OpenApiDocument
-
-/// OpenAPI document
-#[derive(Clone, Debug, Serialize)]
-pub struct OpenApiDocument {
-    openapi: &'static str,
-    /// Document title, version, description
-    pub info: Info,
-    /// Document-level tags
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub tags: Vec<Tag>,
-    paths: BTreeMap<String, PathItem>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    components: Option<Components>,
+/// One request category, produced by a category template macro.
+#[derive(Clone, Copy, Debug)]
+pub struct CategoryApi {
+    name: &'static str,
+    description: &'static str,
+    operations: &'static [OperationApi],
 }
 
-impl OpenApiDocument {
-
-    /// Creates an empty document
-    pub fn new() -> Self {
+impl CategoryApi {
+    /// `operations` is the const list of endpoints in this category.
+    pub const fn new(name: &'static str, description: &'static str, operations: &'static [OperationApi]) -> Self {
         Self {
-            openapi: OPENAPI_VERSION,
-            info: FEAGI_INFO,
-            tags: Vec::new(),
-            paths: BTreeMap::new(),
-            components: None,
-        }
-    }
-
-    /// Registers a tag used to categorize operations
-    pub fn add_tag(&mut self, tag: Tag) -> &mut Self {
-        if let Some(existing) = self.tags.iter_mut().find(|existing| existing.name == tag.name) {
-            *existing = tag;
-        } else {
-            self.tags.push(tag);
-        }
-        self
-    }
-
-    /// Registers a named schema under `components.schemas`
-    pub fn add_schema(&mut self, name: impl Into<String>, schema: Schema) -> &mut Self {
-        self.components
-            .get_or_insert_with(Components::default)
-            .schemas
-            .insert(name.into(), schema);
-        self
-    }
-
-    /// Registers the schema produced by `source`
-    pub fn add_schema_for(&mut self, source: &impl OpenApiSchema) -> &mut Self {
-        self.add_schema(source.schema_name(), source.open_api_schema())
-    }
-
-    /// Adds a GET operation. GET has no body
-    pub fn add_get(&mut self, endpoint: GetEndpoint) -> &mut Self {
-        self.add_operation(
-            HttpMethod::Get,
-            endpoint.path,
-            endpoint.description,
-            endpoint.tags,
-            endpoint.query_parameters,
-            endpoint.responses,
-            None,
-        )
-    }
-
-    /// Adds a POST operation
-    pub fn add_post(&mut self, endpoint: PayloadEndpoint) -> &mut Self {
-        self.add_operation(
-            HttpMethod::Post,
-            endpoint.path,
-            endpoint.description,
-            endpoint.tags,
-            endpoint.query_parameters,
-            endpoint.responses,
-            endpoint.request_body,
-        )
-    }
-
-    /// Adds a PUT operation
-    pub fn add_put(&mut self, endpoint: PayloadEndpoint) -> &mut Self {
-        self.add_operation(
-            HttpMethod::Put,
-            endpoint.path,
-            endpoint.description,
-            endpoint.tags,
-            endpoint.query_parameters,
-            endpoint.responses,
-            endpoint.request_body,
-        )
-    }
-
-    /// Adds a DELETE operation
-    pub fn add_delete(&mut self, endpoint: PayloadEndpoint) -> &mut Self {
-        self.add_operation(
-            HttpMethod::Delete,
-            endpoint.path,
-            endpoint.description,
-            endpoint.tags,
-            endpoint.query_parameters,
-            endpoint.responses,
-            endpoint.request_body,
-        )
-    }
-
-    /// Adds a PATCH operation
-    pub fn add_patch(&mut self, endpoint: PayloadEndpoint) -> &mut Self {
-        self.add_operation(
-            HttpMethod::Patch,
-            endpoint.path,
-            endpoint.description,
-            endpoint.tags,
-            endpoint.query_parameters,
-            endpoint.responses,
-            endpoint.request_body,
-        )
-    }
-
-    pub fn to_json(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string(self)
-    }
-
-    pub fn to_json_pretty(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(self)
-    }
-
-    /// Inserts one operation, creating the path item on first use
-    fn add_operation(
-        &mut self,
-        method: HttpMethod,
-        path: Vec<PathSegment>,
-        description: Option<String>,
-        tags: Vec<String>,
-        query_parameters: Vec<QueryParameter>,
-        responses: BTreeMap<String, ResponseObject>,
-        request_body: Option<RequestBody>,
-    ) -> &mut Self {
-        let (path_key, mut parameters) = compile_path(path);
-        parameters.extend(query_parameters.into_iter().map(Parameter::query));
-        let operation = Operation {
-            tags,
+            name,
             description,
-            parameters,
-            request_body,
-            responses,
-        };
-
-        let item = self.paths.entry(path_key).or_default();
-        match method {
-            HttpMethod::Get => item.get = Some(operation),
-            HttpMethod::Post => item.post = Some(operation),
-            HttpMethod::Put => item.put = Some(operation),
-            HttpMethod::Delete => item.delete = Some(operation),
-            HttpMethod::Patch => item.patch = Some(operation),
+            operations,
         }
-        self
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct Info {
-    pub title: &'static str,
-    pub version: &'static str,
-    pub description: &'static str,
+/// One endpoint inside a [`CategoryApi`].
+#[derive(Clone, Copy, Debug)]
+pub struct OperationApi {
+    method: HttpMethod,
+    path: &'static [PathSegment],
+    description: &'static str,
+    query: &'static [QueryParameter],
+    body: Option<&'static Schema>,
+    response: Option<&'static Schema>,
+    tag: &'static str, // aka category
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
-struct Components {
-    schemas: BTreeMap<String, Schema>,
-}
-
-//endregion
-
-//region Tag
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct Tag {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-
-impl Tag {
-    pub fn new(name: impl Into<String>) -> Self {
+impl OperationApi {
+    /// `path` includes the category base path. `body` and `response` are omitted with `None`.
+    pub const fn new(
+        method: HttpMethod,
+        path: &'static [PathSegment],
+        description: &'static str,
+        query: &'static [QueryParameter],
+        body: Option<&'static Schema>,
+        response: Option<&'static Schema>,
+        tag: &'static str,
+    ) -> Self {
         Self {
-            name: name.into(),
-            description: None,
+            method,
+            path,
+            description,
+            query,
+            body,
+            response,
+            tag,
         }
     }
 }
 
-//endregion
+/// HTTP method written into the path item.
+///
+/// Read is GET, Create is PUT, Edit is POST, Delete is DELETE, and Patch is PATCH.
+#[derive(Clone, Copy, Debug)]
+#[repr(u8)]
+pub enum HttpMethod {
+    Get = 0,
+    Post = 1,
+    Put = 2,
+    Delete = 3,
+    Patch = 4,
+}
 
-//region Path
-
-/// One piece of a URL path
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One piece of a URL path.
+#[derive(Clone, Copy, Debug)]
 pub enum PathSegment {
-    /// A fixed segment, such as `neurons`. Do not include `/`
-    Literal(String),
-    /// A `{name}` path parameter
+    /// A fixed segment, such as `neurons`. Do not include `/`.
+    Literal(&'static str),
+    /// A `{name}` path parameter.
     Parameter(PathParameter),
 }
 
-/// A path parameter
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A path parameter.
+#[derive(Clone, Copy, Debug)]
 pub struct PathParameter {
-    /// Parameter name, without braces. Written into the path as `{name}`
-    pub name: String,
-    pub description: Option<String>,
-    pub schema: Schema,
+    name: &'static str,
+    description: Option<&'static str>,
+    schema: &'static Schema,
 }
 
 impl PathParameter {
-    pub fn new(name: impl Into<String>, schema: Schema) -> Self {
+    /// `name` is written into the path as `{name}`. Path parameters are required.
+    pub const fn new(name: &'static str, description: Option<&'static str>, schema: &'static Schema) -> Self {
+        Self { name, description, schema }
+    }
+}
+
+/// A URL query parameter.
+#[derive(Clone, Copy, Debug)]
+pub struct QueryParameter {
+    name: &'static str,
+    description: Option<&'static str>,
+    required: bool,
+    schema: &'static Schema,
+}
+
+impl QueryParameter {
+    /// Creates a query parameter. `required` is false for `Option` values from the template.
+    pub const fn new(name: &'static str, description: Option<&'static str>, required: bool, schema: &'static Schema) -> Self {
         Self {
-            name: name.into(),
-            description: None,
+            name,
+            description,
+            required,
             schema,
         }
-    }
-}
-
-//endregion
-
-//region Query Parameter
-
-/// A URL query parameter
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct QueryParameter {
-    pub name: String,
-    pub description: Option<String>,
-    pub required: bool,
-    pub schema: Schema,
-}
-
-//endregion
-
-//region Request Body
-
-/// JSON request body
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct RequestBody {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    pub required: bool,
-    content: JsonContent,
-}
-
-impl RequestBody {
-    /// Creates a required `application/json` body
-    pub fn json(schema: Schema) -> Self {
-        Self {
-            description: None,
-            required: true,
-            content: JsonContent::new(schema),
-        }
-    }
-}
-
-//endregion
-
-/// `content` object with a single JSON media type
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-struct JsonContent {
-    #[serde(rename = "application/json")]
-    json: JsonMediaSchema,
-}
-
-impl JsonContent {
-    fn new(schema: Schema) -> Self {
-        Self {
-            json: JsonMediaSchema { schema },
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-struct JsonMediaSchema {
-    schema: Schema,
-}
-
-//region Response
-
-/// One HTTP response. The status code becomes the OpenAPI responses key
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ResponseSpec {
-    pub status_code: u16,
-    pub description: String,
-    /// JSON body schema. `None` omits `content`
-    pub schema: Option<Schema>,
-}
-
-impl ResponseSpec {
-    pub fn new(status_code: u16, description: impl Into<String>) -> Self {
-        Self {
-            status_code,
-            description: description.into(),
-            schema: None,
-        }
-    }
-
-    pub fn json(status_code: u16, description: impl Into<String>, schema: Schema) -> Self {
-        Self {
-            status_code,
-            description: description.into(),
-            schema: Some(schema),
-        }
-    }
-
-    fn into_object(self) -> ResponseObject {
-        ResponseObject {
-            description: self.description,
-            content: self.schema.map(JsonContent::new),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-struct ResponseObject {
-    description: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    content: Option<JsonContent>,
-}
-
-//endregion
-
-//region Endpoints
-
-/// GET operation. There is no request-body method on this type
-#[derive(Clone, Debug)]
-pub struct GetEndpoint {
-    pub path: Vec<PathSegment>,
-    pub description: Option<String>,
-    pub tags: Vec<String>,
-    pub query_parameters: Vec<QueryParameter>,
-    responses: BTreeMap<String, ResponseObject>,
-}
-
-impl GetEndpoint {
-    pub fn new(path: Vec<PathSegment>) -> Self {
-        Self {
-            path,
-            description: None,
-            tags: Vec::new(),
-            query_parameters: Vec::new(),
-            responses: BTreeMap::new(),
-        }
-    }
-
-    pub fn response(mut self, response: ResponseSpec) -> Self {
-        upsert_response(&mut self.responses, response);
-        self
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PayloadEndpoint {
-    pub path: Vec<PathSegment>,
-    pub description: Option<String>,
-    pub tags: Vec<String>,
-    pub query_parameters: Vec<QueryParameter>,
-    pub request_body: Option<RequestBody>,
-    responses: BTreeMap<String, ResponseObject>,
-}
-
-impl PayloadEndpoint {
-    pub fn new(path: Vec<PathSegment>) -> Self {
-        Self {
-            path,
-            description: None,
-            tags: Vec::new(),
-            query_parameters: Vec::new(),
-            request_body: None,
-            responses: BTreeMap::new(),
-        }
-    }
-
-    /// Adds a response
-    pub fn response(mut self, response: ResponseSpec) -> Self {
-        upsert_response(&mut self.responses, response);
-        self
     }
 }
 
@@ -399,273 +127,526 @@ impl PayloadEndpoint {
 
 //region Schema
 
-/// A type that can produce the OpenAPI schema registered for it
-pub trait OpenApiSchema {
-    /// Component name under components.schemas
-    fn schema_name(&self) -> &str;
-
-    /// OpenAPI schema for this object
-    fn open_api_schema(&self) -> Schema;
-}
-
-/// A JSON schema used
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+/// JSON schema stored in the const document.
+#[derive(Clone, Copy, Debug)]
 pub struct Schema {
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     json_type: Option<&'static str>,
-    #[serde(rename = "$ref", skip_serializing_if = "Option::is_none")]
-    reference: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    items: Option<Box<Schema>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    properties: Option<BTreeMap<String, Schema>>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    required: Vec<String>,
-    /// OpenAPI 3.0 ignores keywords beside `$ref`, so a described reference
-    /// stores the pointer here
-    #[serde(rename = "allOf", skip_serializing_if = "Option::is_none")]
-    all_of: Option<Vec<SchemaPointer>>,
+    description: Option<&'static str>,
+    items: Option<&'static Schema>,
+    properties: &'static [ObjectField],
+    required: &'static [&'static str],
 }
 
 impl Schema {
-    /// Boolean schema with no description
-    pub fn boolean() -> Self {
-        Self::primitive("boolean")
+    /// Boolean schema.
+    pub const fn boolean(description: Option<&'static str>) -> Self {
+        Self::primitive("boolean", description)
     }
 
-    /// Integer schema with no description
-    pub fn integer() -> Self {
-        Self::primitive("integer")
+    /// Integer schema.
+    pub const fn integer(description: Option<&'static str>) -> Self {
+        Self::primitive("integer", description)
     }
 
-    /// Number schema with no description
-    pub fn number() -> Self {
-        Self::primitive("number")
+    /// Number schema.
+    pub const fn number(description: Option<&'static str>) -> Self {
+        Self::primitive("number", description)
     }
 
-    /// String schema with no description
-    pub fn string() -> Self {
-        Self::primitive("string")
+    /// String schema.
+    pub const fn string(description: Option<&'static str>) -> Self {
+        Self::primitive("string", description)
     }
 
-    /// Array schema whose elements use `items`
-    pub fn array(items: Schema) -> Self {
+    /// Array schema whose elements use `items`.
+    pub const fn array(description: Option<&'static str>, items: &'static Schema) -> Self {
         Self {
-            items: Some(Box::new(items)),
-            ..Self::primitive("array")
+            items: Some(items),
+            ..Self::primitive("array", description)
         }
     }
 
-    /// Object schema. Field documentation lives on each field's schema, or
-    /// on [`ObjectField::description`]
-    pub fn object(fields: Vec<ObjectField>) -> Self {
-        let mut properties = BTreeMap::new();
-        let mut required = Vec::new();
-        for field in fields {
-            if field.required {
-                required.push(field.name.clone());
-            }
-            properties.insert(field.name, field.schema);
-        }
+    /// Object schema. Field documentation lives on each field schema.
+    pub const fn object(description: Option<&'static str>, properties: &'static [ObjectField], required: &'static [&'static str]) -> Self {
         Self {
-            properties: Some(properties),
+            properties,
             required,
-            ..Self::primitive("object")
+            ..Self::primitive("object", description)
         }
     }
 
-    /// Reference to a named component schema
-    pub fn reference(name: impl Into<String>) -> Self {
-        Self {
-            reference: Some(schema_pointer(&name.into())),
-            ..Self::empty()
-        }
+    /// Object schema for a Rust type this generator does not map to a JSON primitive.
+    pub const fn opaque(description: Option<&'static str>) -> Self {
+        Self::object(description, EMPTY_FIELDS, EMPTY_REQUIRED)
     }
 
-    /// Sets the description on this schema
-    pub fn with_description(mut self, description: impl Into<String>) -> Self {
-        if let Some(pointer) = self.reference.take() {
-            self.all_of = Some(vec![SchemaPointer { pointer }]);
-        }
-        self.description = Some(description.into());
-        self
-    }
-
-    fn primitive(json_type: &'static str) -> Self {
+    const fn primitive(json_type: &'static str, description: Option<&'static str>) -> Self {
         Self {
             json_type: Some(json_type),
-            ..Self::empty()
-        }
-    }
-
-    fn empty() -> Self {
-        Self {
-            json_type: None,
-            reference: None,
-            description: None,
+            description,
             items: None,
-            properties: None,
-            required: Vec::new(),
-            all_of: None,
+            properties: EMPTY_FIELDS,
+            required: EMPTY_REQUIRED,
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-struct SchemaPointer {
-    #[serde(rename = "$ref")]
-    pointer: String,
-}
-
-/// One property of an object schema
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One property of an object schema.
+#[derive(Clone, Copy, Debug)]
 pub struct ObjectField {
-    pub name: String,
-    pub required: bool,
-    pub schema: Schema,
+    name: &'static str,
+    schema: &'static Schema,
 }
 
 impl ObjectField {
-    pub fn required(name: impl Into<String>, schema: Schema) -> Self {
-        Self {
-            name: name.into(),
-            required: true,
-            schema,
-        }
-    }
-
-    pub fn optional(name: impl Into<String>, schema: Schema) -> Self {
-        Self {
-            name: name.into(),
-            required: false,
-            schema,
-        }
-    }
-
-    pub fn description(mut self, description: impl Into<String>) -> Self {
-        self.schema = self.schema.with_description(description);
-        self
+    /// `schema` is the const schema for this property.
+    pub const fn new(name: &'static str, schema: &'static Schema) -> Self {
+        Self { name, schema }
     }
 }
 
 //endregion
 
-//region Internal
+//region OpenApiDocument
 
+/// OpenAPI document assembled from const category data.
 #[derive(Clone, Copy, Debug)]
-enum HttpMethod {
-    Get,
-    Post,
-    Put,
-    Delete,
-    Patch,
+pub struct OpenApiDocument {
+    categories: &'static [CategoryApi],
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-enum ParameterLocation {
-    #[serde(rename = "path")]
-    Path,
-    #[serde(rename = "query")]
-    Query,
-}
+impl OpenApiDocument {
+    /// Stores the categories that the JSON writer walks.
+    pub const fn from_categories(categories: &'static [CategoryApi]) -> Self {
+        Self { categories }
+    }
 
-#[derive(Clone, Debug, Default, Serialize)]
-struct PathItem {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    get: Option<Operation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    post: Option<Operation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    put: Option<Operation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    delete: Option<Operation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    patch: Option<Operation>,
-}
+    /// Number of UTF-8 bytes `write_json` will produce.
+    pub const fn json_len(&self) -> usize {
+        let mut dummy = [0u8; 0];
+        let mut writer = JsonWriter {
+            buf: &mut dummy,
+            pos: 0,
+            counting: true,
+        };
+        self.emit(&mut writer);
+        writer.pos
+    }
 
-#[derive(Clone, Debug, Serialize)]
-struct Operation {
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    tags: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    parameters: Vec<Parameter>,
-    #[serde(rename = "requestBody", skip_serializing_if = "Option::is_none")]
-    request_body: Option<RequestBody>,
-    responses: BTreeMap<String, ResponseObject>,
-}
+    /// Writes the document into a buffer of length [`Self::json_len`].
+    pub const fn write_json<const N: usize>(&self) -> [u8; N] {
+        let mut buf = [0u8; N];
+        let mut writer = JsonWriter {
+            buf: &mut buf,
+            pos: 0,
+            counting: false,
+        };
+        self.emit(&mut writer);
+        if writer.pos != N {
+            panic!("OpenAPI JSON byte length did not match json_len");
+        }
+        buf
+    }
 
-/// A parameter stored on an operation, including ones taken from the path
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-struct Parameter {
-    name: String,
-    #[serde(rename = "in")]
-    location: ParameterLocation,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<String>,
-    required: bool,
-    schema: Schema,
-}
-
-impl Parameter {
-    fn query(parameter: QueryParameter) -> Self {
-        Self {
-            name: parameter.name,
-            location: ParameterLocation::Query,
-            description: parameter.description,
-            required: parameter.required,
-            schema: parameter.schema,
+    /// Interprets a buffer previously filled by [`Self::write_json`] as JSON text.
+    pub const fn json_str(bytes: &'static [u8]) -> &'static str {
+        match core::str::from_utf8(bytes) {
+            Ok(text) => text,
+            Err(_) => panic!("OpenAPI JSON is not valid UTF-8"),
         }
     }
-}
 
-/// Replaces a response with the same status code, or inserts it
-fn upsert_response(responses: &mut BTreeMap<String, ResponseObject>, response: ResponseSpec) {
-    responses.insert(response.status_code.to_string(), response.into_object());
-}
 
-fn compile_path(segments: Vec<PathSegment>) -> (String, Vec<Parameter>) {
-    if segments.is_empty() {
-        return ("/".to_string(), Vec::new());
+    const fn emit(&self, writer: &mut JsonWriter) {
+        writer.push_byte(b'{');
+        writer.push_str("\"openapi\":");
+        writer.push_json_string(OPENAPI_VERSION);
+        writer.push_str(",\"info\":{\"title\":");
+        writer.push_json_string(FEAGI_INFO_TITLE);
+        writer.push_str(",\"version\":");
+        writer.push_json_string(FEAGI_INFO_VERSION);
+        writer.push_str(",\"description\":");
+        writer.push_json_string(FEAGI_INFO_DESCRIPTION);
+        writer.push_byte(b'}');
+        self.emit_tags(writer);
+        self.emit_paths(writer);
+        writer.push_byte(b'}');
     }
 
-    let mut path = String::new();
-    let mut parameters = Vec::new();
-    for segment in segments {
-        path.push('/');
-        match segment {
-            PathSegment::Literal(literal) => path.push_str(&literal),
-            PathSegment::Parameter(parameter) => {
-                path.push('{');
-                path.push_str(&parameter.name);
-                path.push('}');
-                parameters.push(Parameter {
-                    name: parameter.name,
-                    location: ParameterLocation::Path,
-                    description: parameter.description,
-                    required: true,
-                    schema: parameter.schema,
-                });
+    const fn emit_tags(&self, writer: &mut JsonWriter) {
+        if self.categories.is_empty() {
+            return;
+        }
+        writer.push_str(",\"tags\":[");
+        let mut index = 0;
+        while index < self.categories.len() {
+            if index > 0 {
+                writer.push_byte(b',');
             }
+            let category = &self.categories[index];
+            writer.push_str("{\"name\":");
+            writer.push_json_string(category.name);
+            writer.push_str(",\"description\":");
+            writer.push_json_string(category.description);
+            writer.push_byte(b'}');
+            index += 1;
         }
+        writer.push_byte(b']');
     }
-    (path, parameters)
+
+    const fn emit_paths(&self, writer: &mut JsonWriter) {
+        writer.push_str(",\"paths\":{");
+        let mut wrote_path = false;
+        let mut cat_index = 0;
+        while cat_index < self.categories.len() {
+            let operations = self.categories[cat_index].operations;
+            let mut op_index = 0;
+            while op_index < operations.len() {
+                if self.is_first_path(cat_index, op_index) {
+                    if wrote_path {
+                        writer.push_byte(b',');
+                    }
+                    wrote_path = true;
+                    self.emit_one_path(writer, operations[op_index].path);
+                }
+                op_index += 1;
+            }
+            cat_index += 1;
+        }
+        writer.push_byte(b'}');
+    }
+
+    const fn is_first_path(&self, cat_index: usize, op_index: usize) -> bool {
+        let path = self.categories[cat_index].operations[op_index].path;
+        let mut earlier_cat = 0;
+        while earlier_cat <= cat_index {
+            let operations = self.categories[earlier_cat].operations;
+            let limit = if earlier_cat == cat_index { op_index } else { operations.len() };
+            let mut earlier_op = 0;
+            while earlier_op < limit {
+                if paths_equal(operations[earlier_op].path, path) {
+                    return false;
+                }
+                earlier_op += 1;
+            }
+            earlier_cat += 1;
+        }
+        true
+    }
+
+    const fn emit_one_path(&self, writer: &mut JsonWriter, path: &'static [PathSegment]) {
+        push_path_string(writer, path);
+        writer.push_byte(b':');
+        writer.push_byte(b'{');
+        let mut wrote = false;
+        wrote = self.emit_method_if_present(writer, path, HttpMethod::Get, "get", wrote);
+        wrote = self.emit_method_if_present(writer, path, HttpMethod::Post, "post", wrote);
+        wrote = self.emit_method_if_present(writer, path, HttpMethod::Put, "put", wrote);
+        wrote = self.emit_method_if_present(writer, path, HttpMethod::Delete, "delete", wrote);
+        let _ = self.emit_method_if_present(writer, path, HttpMethod::Patch, "patch", wrote);
+        writer.push_byte(b'}');
+    }
+
+    const fn emit_method_if_present(
+        &self,
+        writer: &mut JsonWriter,
+        path: &'static [PathSegment],
+        method: HttpMethod,
+        key: &str,
+        wrote: bool,
+    ) -> bool {
+        let mut cat_index = 0;
+        while cat_index < self.categories.len() {
+            let operations = self.categories[cat_index].operations;
+            let mut op_index = 0;
+            while op_index < operations.len() {
+                let operation = &operations[op_index];
+                if method_eq(operation.method, method) && paths_equal(operation.path, path) {
+                    if wrote {
+                        writer.push_byte(b',');
+                    }
+                    writer.push_json_string(key);
+                    writer.push_byte(b':');
+                    emit_operation(writer, operation);
+                    return true;
+                }
+                op_index += 1;
+            }
+            cat_index += 1;
+        }
+        wrote
+    }
 }
 
+const fn emit_operation(writer: &mut JsonWriter, operation: &OperationApi) {
+    writer.push_str("{\"tags\":[");
+    writer.push_json_string(operation.tag);
+    writer.push_str("],\"description\":");
+    writer.push_json_string(operation.description);
+    if operation_has_parameters(operation) {
+        writer.push_str(",\"parameters\":[");
+        let mut wrote = false;
+        let mut index = 0;
+        while index < operation.path.len() {
+            if let PathSegment::Parameter(parameter) = operation.path[index] {
+                if wrote {
+                    writer.push_byte(b',');
+                }
+                wrote = true;
+                emit_parameter(writer, parameter.name, "path", parameter.description, true, parameter.schema);
+            }
+            index += 1;
+        }
+        index = 0;
+        while index < operation.query.len() {
+            if wrote {
+                writer.push_byte(b',');
+            }
+            wrote = true;
+            let parameter = &operation.query[index];
+            emit_parameter(
+                writer,
+                parameter.name,
+                "query",
+                parameter.description,
+                parameter.required,
+                parameter.schema,
+            );
+            index += 1;
+        }
+        writer.push_byte(b']');
+    }
+    if let Some(body) = operation.body {
+        writer.push_str(",\"requestBody\":{\"required\":true,\"content\":{\"application/json\":{\"schema\":");
+        emit_schema(writer, body);
+        writer.push_str("}}}");
+    }
+    writer.push_str(",\"responses\":{\"200\":{\"description\":");
+    writer.push_json_string(SUCCESS_DESCRIPTION);
+    if let Some(response) = operation.response {
+        writer.push_str(",\"content\":{\"application/json\":{\"schema\":");
+        emit_schema(writer, response);
+        writer.push_str("}}");
+    }
+    writer.push_str("}}}");
+}
 
-fn schema_pointer(name: &str) -> String {
-    let mut reference = String::from("#/components/schemas/");
-    for character in name.chars() {
-        match character {
-            '~' => reference.push_str("~0"),
-            '/' => reference.push_str("~1"),
-            other => reference.push(other),
+const fn operation_has_parameters(operation: &OperationApi) -> bool {
+    if !operation.query.is_empty() {
+        return true;
+    }
+    let mut index = 0;
+    while index < operation.path.len() {
+        if let PathSegment::Parameter(_) = operation.path[index] {
+            return true;
+        }
+        index += 1;
+    }
+    false
+}
+
+const fn emit_parameter(writer: &mut JsonWriter, name: &str, location: &str, description: Option<&str>, required: bool, schema: &Schema) {
+    writer.push_str("{\"name\":");
+    writer.push_json_string(name);
+    writer.push_str(",\"in\":");
+    writer.push_json_string(location);
+    if let Some(description) = description {
+        writer.push_str(",\"description\":");
+        writer.push_json_string(description);
+    }
+    writer.push_str(",\"required\":");
+    if required {
+        writer.push_str("true");
+    } else {
+        writer.push_str("false");
+    }
+    writer.push_str(",\"schema\":");
+    emit_schema(writer, schema);
+    writer.push_byte(b'}');
+}
+
+const fn emit_schema(writer: &mut JsonWriter, schema: &Schema) {
+    writer.push_byte(b'{');
+    let mut wrote = false;
+    if let Some(json_type) = schema.json_type {
+        writer.push_str("\"type\":");
+        writer.push_json_string(json_type);
+        wrote = true;
+    }
+    if let Some(description) = schema.description {
+        if wrote {
+            writer.push_byte(b',');
+        }
+        writer.push_str("\"description\":");
+        writer.push_json_string(description);
+        wrote = true;
+    }
+    if let Some(items) = schema.items {
+        if wrote {
+            writer.push_byte(b',');
+        }
+        writer.push_str("\"items\":");
+        emit_schema(writer, items);
+        wrote = true;
+    }
+    if !schema.properties.is_empty() {
+        if wrote {
+            writer.push_byte(b',');
+        }
+        writer.push_str("\"properties\":{");
+        let mut index = 0;
+        while index < schema.properties.len() {
+            if index > 0 {
+                writer.push_byte(b',');
+            }
+            let field = &schema.properties[index];
+            writer.push_json_string(field.name);
+            writer.push_byte(b':');
+            emit_schema(writer, field.schema);
+            index += 1;
+        }
+        writer.push_byte(b'}');
+        wrote = true;
+    }
+    if !schema.required.is_empty() {
+        if wrote {
+            writer.push_byte(b',');
+        }
+        writer.push_str("\"required\":[");
+        let mut index = 0;
+        while index < schema.required.len() {
+            if index > 0 {
+                writer.push_byte(b',');
+            }
+            writer.push_json_string(schema.required[index]);
+            index += 1;
+        }
+        writer.push_byte(b']');
+    }
+    writer.push_byte(b'}');
+}
+
+const fn method_eq(left: HttpMethod, right: HttpMethod) -> bool {
+    (left as u8) == (right as u8)
+}
+
+const fn paths_equal(left: &[PathSegment], right: &[PathSegment]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut index = 0;
+    while index < left.len() {
+        if !segment_eq(&left[index], &right[index]) {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
+
+const fn segment_eq(left: &PathSegment, right: &PathSegment) -> bool {
+    match (left, right) {
+        (PathSegment::Literal(left), PathSegment::Literal(right)) => str_eq(left, right),
+        (PathSegment::Parameter(left), PathSegment::Parameter(right)) => str_eq(left.name, right.name),
+        _ => false,
+    }
+}
+
+const fn str_eq(left: &str, right: &str) -> bool {
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut index = 0;
+    while index < left.len() {
+        if left[index] != right[index] {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
+
+const fn push_path_string(writer: &mut JsonWriter, segments: &[PathSegment]) {
+    writer.push_byte(b'"');
+    if segments.is_empty() {
+        writer.push_byte(b'/');
+    } else {
+        let mut index = 0;
+        while index < segments.len() {
+            writer.push_byte(b'/');
+            match segments[index] {
+                PathSegment::Literal(text) => writer.push_escaped(text),
+                PathSegment::Parameter(parameter) => {
+                    writer.push_byte(b'{');
+                    writer.push_escaped(parameter.name);
+                    writer.push_byte(b'}');
+                }
+            }
+            index += 1;
         }
     }
-    reference
+    writer.push_byte(b'"');
+}
+
+//endregion
+
+//region JSON writer
+
+struct JsonWriter<'a> {
+    buf: &'a mut [u8],
+    pos: usize,
+    counting: bool,
+}
+
+impl JsonWriter<'_> {
+    const fn push_byte(&mut self, byte: u8) {
+        if !self.counting {
+            self.buf[self.pos] = byte;
+        }
+        self.pos += 1;
+    }
+
+    const fn push_str(&mut self, text: &str) {
+        let bytes = text.as_bytes();
+        let mut index = 0;
+        while index < bytes.len() {
+            self.push_byte(bytes[index]);
+            index += 1;
+        }
+    }
+
+    const fn push_json_string(&mut self, text: &str) {
+        self.push_byte(b'"');
+        self.push_escaped(text);
+        self.push_byte(b'"');
+    }
+
+    const fn push_escaped(&mut self, text: &str) {
+        let bytes = text.as_bytes();
+        let mut index = 0;
+        while index < bytes.len() {
+            let byte = bytes[index];
+            match byte {
+                b'"' => self.push_str("\\\""),
+                b'\\' => self.push_str("\\\\"),
+                b'\n' => self.push_str("\\n"),
+                b'\r' => self.push_str("\\r"),
+                b'\t' => self.push_str("\\t"),
+                byte if byte < 0x20 => self.push_control(byte),
+                byte => self.push_byte(byte),
+            }
+            index += 1;
+        }
+    }
+
+    const fn push_control(&mut self, byte: u8) {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        self.push_str("\\u00");
+        self.push_byte(HEX[(byte >> 4) as usize]);
+        self.push_byte(HEX[(byte & 0x0f) as usize]);
+    }
 }
 
 //endregion
