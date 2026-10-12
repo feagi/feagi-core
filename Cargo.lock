@@ -305,6 +305,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-sha1"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d8a42181e0652c2997ae4d217f25b63c5337a52fd2279736e97b832fa0a3cff"
+
+[[package]]
 name = "const_format"
 version = "0.2.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -602,6 +608,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
+name = "embedded-io"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
+
+[[package]]
+name = "embedded-io-async"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2564b9f813c544241430e147d8bc454815ef9ac998878d30cc3055449f7fd4c0"
+dependencies = [
+ "embedded-io",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -652,7 +673,7 @@ dependencies = [
  "ahash",
  "feagi-basis-proc-common",
  "half",
- "heapless",
+ "heapless 0.9.3",
  "paste",
  "rayon",
  "serde",
@@ -708,7 +729,7 @@ dependencies = [
  "base64 0.23.1",
  "feagi-basis",
  "half",
- "heapless",
+ "heapless 0.9.3",
  "serde",
  "thiserror 2.0.21",
 ]
@@ -720,6 +741,37 @@ dependencies = [
  "feagi-basis",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "feagi-interop"
+version = "0.1.1"
+dependencies = [
+ "paste",
+ "picoserve",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "zenoh",
+]
+
+[[package]]
+name = "feagi-interop-agent"
+version = "0.1.1"
+
+[[package]]
+name = "feagi-interop-basis"
+version = "0.1.1"
+
+[[package]]
+name = "feagi-interop-transport"
+version = "0.1.1"
+dependencies = [
+ "paste",
+ "serde",
+ "serde_json",
+ "tokio",
+ "zenoh",
 ]
 
 [[package]]
@@ -738,7 +790,7 @@ version = "0.1.1"
 dependencies = [
  "feagi-basis",
  "feagi-brain-models",
- "heapless",
+ "heapless 0.9.3",
  "paste",
  "serde",
 ]
@@ -752,7 +804,7 @@ dependencies = [
  "feagi-npu-burst-basis",
  "feagi-npu-burst-esp32",
  "feagi-npu-burst-rayon",
- "heapless",
+ "heapless 0.9.3",
  "paste",
 ]
 
@@ -763,7 +815,7 @@ dependencies = [
  "feagi-basis",
  "feagi-brain-models",
  "feagi-npu-burst-basis",
- "heapless",
+ "heapless 0.9.3",
  "paste",
  "serde",
 ]
@@ -777,7 +829,7 @@ dependencies = [
  "feagi-brain-models",
  "feagi-npu-burst-basis",
  "half",
- "heapless",
+ "heapless 0.9.3",
  "paste",
  "rayon",
  "serde",
@@ -797,24 +849,13 @@ version = "0.1.1"
 dependencies = [
  "ahash",
  "feagi-basis",
- "feagi-transport",
- "heapless",
+ "feagi-interop",
+ "heapless 0.9.3",
  "paste",
  "serde",
  "serde_json",
  "thingbuf",
  "thiserror 2.0.21",
-]
-
-[[package]]
-name = "feagi-transport"
-version = "0.1.1"
-dependencies = [
- "paste",
- "serde",
- "serde_json",
- "tokio",
- "zenoh",
 ]
 
 [[package]]
@@ -1087,6 +1128,17 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash 0.2.0",
+]
+
+[[package]]
+name = "heapless"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
+dependencies = [
+ "hash32",
+ "serde",
+ "stable_deref_trait",
 ]
 
 [[package]]
@@ -1946,6 +1998,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "picoserve"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59fb416fcd483bf1db5aa8d90506aa6967b9d0128e2646a929538d24d117433e"
+dependencies = [
+ "const-sha1",
+ "embedded-io-async",
+ "futures-util",
+ "heapless 0.8.0",
+ "heapless 0.9.3",
+ "picoserve_derive",
+ "pin-project",
+ "ryu",
+ "serde",
+ "serde-json-core",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "picoserve_derive"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "981b69aa2731710212ac4582c3adc5832e8559d34ec810c318fe73273b05ccfe"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2603,6 +2685,17 @@ checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
  "serde_derive",
+]
+
+[[package]]
+name = "serde-json-core"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b81787e655bd59cecadc91f7b6b8651330b2be6c33246039a65e5cd6f4e0828"
+dependencies = [
+ "heapless 0.8.0",
+ "ryu",
+ "serde",
 ]
 
 [[package]]

@@ -25,7 +25,7 @@ alloc = [
 
 # FEAGI Root Crates
 feagi-basis = {path = "../feagi-basis"}
-feagi-transport = {path = "../feagi-transport"}
+feagi-interop = {path = "../feagi-interop" }
 
 # External Crates
 thiserror = {workspace = true}

@@ -274,6 +274,7 @@ impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStoreMut> ParData<QI, S> {
         self.as_ptr() as *mut S::Elem
     }
 
+    #[allow(clippy::mut_from_ref)]
     /// Returns a mutable reference to the element at `index` through a shared
     /// `&self`, enabling parallel mutation of multiple indices. MUST NOT WRITE TO THE SAME
     /// INDEX IN PARALLEL!

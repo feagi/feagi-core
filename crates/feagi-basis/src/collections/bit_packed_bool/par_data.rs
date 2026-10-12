@@ -230,6 +230,7 @@ where
         self.as_word_ptr() as *mut S::Elem
     }
 
+    #[allow(clippy::mut_from_ref)]
     /// Returns a mutable reference to the word at `word_index` through shared `&self`.
     /// MUST NOT WRITE TO THE SAME WORD IN PARALLEL!
     pub unsafe fn get_word_mut_par(&self, word_index: QWord) -> &mut S::Elem {
