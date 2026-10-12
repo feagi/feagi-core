@@ -8,6 +8,33 @@ use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{LitStr, Type};
 
+//region Feagi Request Message Path Specification Struct Names
+
+/// Contains the rust struct name generated from a FeagiRequestMessagePath.
+/// Whether parameter or queryable structs are actually emitted is decided by
+/// [`FeagiRequestMessagePath`], which holds the path-element context.
+#[derive(Clone)]
+pub struct FeagiRequestMessagePathRustStructNames {
+    pub base_name: syn::Ident,
+    pub method: FeagiRequestMessageMethod,
+}
+
+impl FeagiRequestMessagePathRustStructNames {
+
+    /// Build the name set from the message title and HTTP-equivalent method.
+    pub fn new(base_name: syn::Ident, method: FeagiRequestMessageMethod) -> Self {
+        Self { base_name, method }
+    }
+
+    pub fn feagi_message_path_struct_name(&self) -> syn::Ident {
+        format_ident!("{}{}{}", self.method.as_str(), self.base_name, "FeagiRequestMessagePath")
+    }
+}
+
+//endregion
+
+//region Feagi Request Message Path
+
 /// Parses over a single string to get the pathing out, with the formatting:
 /// "static_1/static_2/:parameter_1<ParameterType1>/static_3?query_1<QueryType1>&query_2<QueryType2>"
 pub struct FeagiRequestMessagePath<const METHOD_U8: FeagiRequestMessageU8> {
@@ -15,12 +42,24 @@ pub struct FeagiRequestMessagePath<const METHOD_U8: FeagiRequestMessageU8> {
 }
 
 impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
-    pub fn get_rust_struct_name(name_base: &syn::Ident) -> syn::Ident {
-        format_ident!(
-            "{}{}{}",
-            FeagiRequestMessageMethod::from_u8(METHOD).as_str(),
+
+    /// Whether this path defines a parameter struct.
+    pub fn is_parameter_struct_generated(&self) -> bool {
+        !self.as_parameter_struct_template().is_empty()
+    }
+
+    /// Whether this path defines a queryable struct.
+    pub fn is_queryable_struct_generated(&self) -> bool {
+        !self.as_queryable_struct_template().is_empty()
+    }
+
+    /// Struct names this path will generate. Existence of each named struct
+    /// is queried from this path, not from the name set.
+    pub fn calculate_feagi_message_path_struct_names(&self, name_base: syn::Ident) -> FeagiRequestMessagePathRustStructNames {
+        let _ = self;
+        FeagiRequestMessagePathRustStructNames::new(
             name_base,
-            "FeagiMessagePath"
+            FeagiRequestMessageMethod::from_u8(METHOD),
         )
     }
 
@@ -74,12 +113,13 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
     /// Generate the FeagiMessagePath impl struct rust code for this path
     pub fn generate_feagi_message_path_struct_and_impls(
         &self,
-        full_struct_name: &syn::Ident,
+        path_struct_names: &FeagiRequestMessagePathRustStructNames,
         name_of_message_struct: &syn::Ident,
     ) -> proc_macro2::TokenStream {
         let mut output = proc_macro2::TokenStream::new();
         let elements: Vec<proc_macro2::TokenStream> = self.leaf.iter().map(MessagePathElement::as_rust_message_path_element_enum).collect();
 
+        let full_struct_name = path_struct_names.feagi_message_path_struct_name();
         let method_name = format_ident!("{}", FeagiRequestMessageMethod::from_u8(METHOD).as_str());
 
         output.extend(quote! {
@@ -117,6 +157,8 @@ impl<const METHOD: FeagiRequestMessageU8> Unparse for FeagiRequestMessagePath<ME
         quote! { #string_out }
     }
 }
+
+//endregion
 
 //region Internal
 

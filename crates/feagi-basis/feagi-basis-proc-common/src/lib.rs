@@ -1,7 +1,5 @@
 use feagi_macro_components::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategory;
 use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
-use heck::ToPascalCase;
-use quote::format_ident;
 //region Templates
 
 //region Feagi Request Messaging
@@ -24,7 +22,7 @@ pub fn from_template_make_request_message_structs(input: proc_macro::TokenStream
             e.to_compile_error().into()
         }
         Ok(s) => {
-            s.generate_rust_structs_for_all_messages().into()
+            s.generate_rust_specification_structs_for_all_messages().into()
         }
     }
 }
@@ -38,11 +36,7 @@ pub fn from_template_make_request_message_categorized_enum(input: proc_macro::To
             e.to_compile_error().into()
         }
         Ok(s) => {
-            let names = s.create_categorized_rust_struct_names();
-            let request_enum_name = format_ident!("{}Requests", s.category_name.value().to_pascal_case());
-            let response_enum_name = format_ident!("{}Responses", s.category_name.value().to_pascal_case());
-            
-            names.generate_rust_request_response_enums_for_category(request_enum_name, response_enum_name).into()
+            s.generate_rust_request_response_enums_for_category().into()
         }
     }
 }

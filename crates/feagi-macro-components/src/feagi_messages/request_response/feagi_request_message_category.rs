@@ -1,5 +1,4 @@
 use crate::common::{parse_optional_comma, parse_property_colon_member};
-use crate::feagi_messages::request_response::feagi_request_message_path::FeagiRequestMessagePath;
 use crate::templates::Unparse;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
@@ -7,8 +6,8 @@ use std::collections::HashMap;
 use heck::{ToPascalCase, ToSnakeCase};
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, LitStr, Token};
-use crate::feagi_messages::request_response::common_structs::FeagiRequestMessageMethod;
-use crate::feagi_messages::request_response::feagi_request_message::{FeagiRequestMessage, FeagiRequestMessageRustStructNames};
+use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
+use crate::feagi_messages::request_response::feagi_request_message::FeagiRequestMessage;
 
 mod kw {
     syn::custom_keyword!(category_name);
@@ -22,131 +21,39 @@ mod kw {
     syn::custom_keyword!(patch);
 }
 
-/// Contains the names of the structs across all feagi messages in a feagi message category
-pub struct FeagiRequestMessageCategoryStructNames {
-    pub read: Vec<FeagiRequestMessageRustStructNames>,
-    pub create: Vec<FeagiRequestMessageRustStructNames>,
-    pub edit: Vec<FeagiRequestMessageRustStructNames>,
-    pub delete: Vec<FeagiRequestMessageRustStructNames>,
-    pub patch: Vec<FeagiRequestMessageRustStructNames>,
+//region Feagi Request Message Category Specification Struct Names
+
+/// Contains the names of the rust structs that a category itself produces.
+/// Child message names come from [`FeagiRequestMessage`], which holds those messages.
+#[derive(Clone)]
+pub struct FeagiRequestMessageCategoryRustStructNames {
+    pub base_name: syn::Ident,
 }
 
-impl FeagiRequestMessageCategoryStructNames {
-    pub fn new_empty() -> Self {
-        Self {
-            read: Vec::new(),
-            create: Vec::new(),
-            edit: Vec::new(),
-            delete: Vec::new(),
-            patch: Vec::new(),
-        }
+impl FeagiRequestMessageCategoryRustStructNames {
+
+    /// Build the name set from the category title.
+    pub fn new(base_name: syn::Ident) -> Self {
+        Self { base_name }
     }
 
-    pub fn get_by_method(&self, method: &FeagiRequestMessageMethod) -> &[FeagiRequestMessageRustStructNames] {
-        match method {
-            FeagiRequestMessageMethod::Read => self.read.as_slice(),
-            FeagiRequestMessageMethod::Create => self.create.as_slice(),
-            FeagiRequestMessageMethod::Edit => self.edit.as_slice(),
-            FeagiRequestMessageMethod::Delete => self.delete.as_slice(),
-            FeagiRequestMessageMethod::Patch => self.patch.as_slice(),
-        }
+    pub fn category_mappings_struct_name(&self) -> syn::Ident {
+        format_ident!("{}FeagiRequestMessageCategoryMappings", self.base_name)
     }
 
-    pub fn get_by_method_mut(&mut self, method: &FeagiRequestMessageMethod) -> &mut Vec<FeagiRequestMessageRustStructNames> {
-        match method {
-            FeagiRequestMessageMethod::Read => &mut self.read,
-            FeagiRequestMessageMethod::Create => &mut self.create,
-            FeagiRequestMessageMethod::Edit => &mut self.edit,
-            FeagiRequestMessageMethod::Delete => &mut self.delete,
-            FeagiRequestMessageMethod::Patch => &mut self.patch,
-        }
+    pub fn request_enum_name(&self) -> syn::Ident {
+        format_ident!("{}Requests", self.base_name)
     }
 
-    /// Generate the rust enums that contain all the Requests with their Feagi Request Messages, and the Responses with their response datas
-    pub fn generate_rust_request_response_enums_for_category(
-        &self,
-        request_enum_name: syn::Ident,
-        response_enum_name: syn::Ident,
-    ) -> proc_macro2::TokenStream {
-        let names = self.flatten_all_name_structs();
-
-        let mut request_enum_variants = proc_macro2::TokenStream::new();
-        let mut response_enum_variants = proc_macro2::TokenStream::new();
-        let mut intos = proc_macro2::TokenStream::new();
-
-        for name in &names {
-            let base_name = name.method_base_title.clone();
-            let message_name = name.message.clone();
-            let maybe_response_name = name.response.clone();
-
-            request_enum_variants.extend(quote! {
-                #base_name(#message_name),
-            });
-
-            intos.extend(quote! {
-                impl Into<#request_enum_name> for #message_name {
-                    fn into(self) -> #request_enum_name {
-                        #request_enum_name::#base_name(self)
-                    }
-                }
-            });
-
-            if let Some(response_name) = maybe_response_name {
-                response_enum_variants.extend(quote! {
-                    #base_name(#response_name),
-                });
-
-                intos.extend(quote! {
-                    impl Into<#response_enum_name> for #response_name {
-                        fn into(self) -> #response_enum_name {
-                            #response_enum_name::#base_name(self)
-                        }
-                    }
-                });
-            } else {
-                response_enum_variants.extend(quote! {
-                    #base_name,
-                });
-            }
-        }
-
-        quote! {
-
-            #[derive(Debug, Clone)]
-            pub enum #request_enum_name {
-                #request_enum_variants
-            }
-
-            #[derive(Debug, Clone)]
-            pub enum #response_enum_name {
-                #response_enum_variants
-            }
-
-        }
-    }
-
-    /// Gets the names of all message structs and the optional response names
-    fn flatten_all_name_structs(&self) -> Vec<FeagiRequestMessageRustStructNames> {
-        let mut all_names: Vec<FeagiRequestMessageRustStructNames> = Vec::new();
-        for structs in &self.read {
-            all_names.push(structs.clone());
-        }
-        for names in &self.create {
-            all_names.push(names.clone());
-        }
-        for names in &self.edit {
-            all_names.push(names.clone());
-        }
-        for names in &self.delete {
-            all_names.push(names.clone());
-        }
-        for names in &self.patch {
-            all_names.push(names.clone());
-        }
-        all_names
+    pub fn response_enum_name(&self) -> syn::Ident {
+        format_ident!("{}Responses", self.base_name)
     }
 }
 
+//endregion
+
+
+//region Feagi Request Message Category
 
 /// Holds all messages of a given category.  Formatted as the following:
 /// category_name: "category_name",
@@ -182,165 +89,170 @@ pub struct FeagiRequestMessageCategory {
 }
 
 impl FeagiRequestMessageCategory {
-    pub fn generate_rust_feagi_category_group(&self) -> proc_macro2::TokenStream {
-        // We arent going to use struct template here because these use generics
 
-        let mut properties = proc_macro2::TokenStream::new();
-
-        // NOTE: Yes, this is repetitive, unfortunantely rustrover is stupid and will not accept
-        // the below blocks to be wrapped in a function for some reason
-
-        for (name, request) in &self.read {
-            let message_struct_name = format_ident!("{}", name.value());
-            let message_field_name = format_ident!("{}", name.value().to_snake_case());
-            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
-            let description = &request.description;
-
-            properties.extend(quote! {
-                #[doc = #description]
-                pub #message_field_name: (#message_path_name, T),
-            });
-        }
-
-        for (name, request) in &self.create {
-            let message_struct_name = format_ident!("{}", name.value());
-            let message_field_name = format_ident!("{}", name.value().to_snake_case());
-            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
-            let description = &request.description;
-
-            properties.extend(quote! {
-                #[doc = #description]
-                pub #message_field_name: (#message_path_name, T),
-            });
-        }
-
-        for (name, request) in &self.edit {
-            let message_struct_name = format_ident!("{}", name.value());
-            let message_field_name = format_ident!("{}", name.value().to_snake_case());
-            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
-            let description = &request.description;
-
-            properties.extend(quote! {
-                #[doc = #description]
-                pub #message_field_name: (#message_path_name, T),
-            });
-        }
-
-        for (name, request) in &self.delete {
-            let message_struct_name = format_ident!("{}", name.value());
-            let message_field_name = format_ident!("{}", name.value().to_snake_case());
-            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
-            let description = &request.description;
-
-            properties.extend(quote! {
-                #[doc = #description]
-                pub #message_field_name: (#message_path_name, T),
-            });
-        }
-
-        for (name, request) in &self.patch {
-            let message_struct_name = format_ident!("{}", name.value());
-            let message_field_name = format_ident!("{}", name.value().to_snake_case());
-            let message_path_name = FeagiRequestMessagePath::<0>::get_rust_struct_name(&message_struct_name);
-            let description = &request.description;
-
-            properties.extend(quote! {
-                #[doc = #description]
-                pub #message_field_name: (#message_path_name, T),
-            });
-        }
-
-        let struct_name = format_ident!("{}FeagiRequestMessageCategoryMappings", &self.category_name.value().to_pascal_case());
-        let docs = &self.category_description;
-
-        quote! {
-            #[doc = #docs]
-            pub struct #struct_name<T> {
-                #properties
-            }
-
-            impl<T> FeagiRequestMessageCategoryMappings<T> for #struct_name<T> {}
-        }
-
-        // TODO implement clone depending on T implementing Clone
+    /// Struct names this category will generate. Child message names are queried
+    /// from the messages this category holds, not from the category name set.
+    pub fn calculate_feagi_category_struct_names(&self) -> FeagiRequestMessageCategoryRustStructNames {
+        FeagiRequestMessageCategoryRustStructNames::new(
+            format_ident!("{}", self.category_name.value().to_pascal_case()),
+        )
     }
 
     /// Create the specification data, feagi messages, and response structs for all internal categorized feagi messages
-    pub fn generate_rust_structs_for_all_messages(&self) -> proc_macro2::TokenStream {
+    pub fn generate_rust_specification_structs_for_all_messages(&self) -> proc_macro2::TokenStream {
         let mut output = proc_macro2::TokenStream::new();
 
         for read in &self.read {
             let read_name = format_ident!("{}", read.0.value());
             let request_message = read.1;
-            let struct_names = request_message.generate_feagi_message_struct_names(read_name);
+            let struct_names = request_message.calculate_feagi_message_struct_names(read_name);
             output.extend(request_message.generate_rust_specification_and_request_and_response_structs(struct_names));
         }
 
         for create in &self.create {
             let create_name = format_ident!("{}", create.0.value());
             let request_message = create.1;
-            let struct_names = request_message.generate_feagi_message_struct_names(create_name);
+            let struct_names = request_message.calculate_feagi_message_struct_names(create_name);
             output.extend(request_message.generate_rust_specification_and_request_and_response_structs(struct_names));
         }
 
         for edit in &self.edit {
             let edit_name = format_ident!("{}", edit.0.value());
             let request_message = edit.1;
-            let struct_names = request_message.generate_feagi_message_struct_names(edit_name);
+            let struct_names = request_message.calculate_feagi_message_struct_names(edit_name);
             output.extend(request_message.generate_rust_specification_and_request_and_response_structs(struct_names));
         }
 
         for delete in &self.delete {
             let delete_name = format_ident!("{}", delete.0.value());
             let request_message = delete.1;
-            let struct_names = request_message.generate_feagi_message_struct_names(delete_name);
+            let struct_names = request_message.calculate_feagi_message_struct_names(delete_name);
             output.extend(request_message.generate_rust_specification_and_request_and_response_structs(struct_names));
         }
 
         for patch in &self.patch {
             let patch_name = format_ident!("{}", patch.0.value());
             let request_message = patch.1;
-            let struct_names = request_message.generate_feagi_message_struct_names(patch_name);
+            let struct_names = request_message.calculate_feagi_message_struct_names(patch_name);
             output.extend(request_message.generate_rust_specification_and_request_and_response_structs(struct_names));
         }
 
         output
     }
 
-    /// Create the categorized names of the feagi request messages from all internal feagi request messages
-    pub fn create_categorized_rust_struct_names(&self) -> FeagiRequestMessageCategoryStructNames {
-        let mut output = FeagiRequestMessageCategoryStructNames::new_empty();
+    /// Generate the rust enums that contain all the Requests with their Feagi Request Messages, and the Responses with their response datas.
+    /// Variant existence and payload types come from the messages this category holds.
+    pub fn generate_rust_request_response_enums_for_category(&self) -> proc_macro2::TokenStream {
+        let category_names = self.calculate_feagi_category_struct_names();
+        let request_enum_name = category_names.request_enum_name();
+        let response_enum_name = category_names.response_enum_name();
 
-        for (message_name, message) in &self.read {
-            let message_name = format_ident!("{}", message_name.value());
-            let message_names = message.generate_feagi_message_struct_names(message_name);
-            output.read.push(message_names);
-        }
+        let mut request_enum_variants = proc_macro2::TokenStream::new();
+        let mut response_enum_variants = proc_macro2::TokenStream::new();
+        let mut intos = proc_macro2::TokenStream::new();
 
-        for (message_name, message) in &self.create {
-            let message_name = format_ident!("{}", message_name.value());
-            let message_names = message.generate_feagi_message_struct_names(message_name);
-            output.create.push(message_names);
-        }
+        Self::extend_request_response_enum_variants(
+            &self.read,
+            &request_enum_name,
+            &response_enum_name,
+            &mut request_enum_variants,
+            &mut response_enum_variants,
+            &mut intos,
+        );
+        Self::extend_request_response_enum_variants(
+            &self.create,
+            &request_enum_name,
+            &response_enum_name,
+            &mut request_enum_variants,
+            &mut response_enum_variants,
+            &mut intos,
+        );
+        Self::extend_request_response_enum_variants(
+            &self.edit,
+            &request_enum_name,
+            &response_enum_name,
+            &mut request_enum_variants,
+            &mut response_enum_variants,
+            &mut intos,
+        );
+        Self::extend_request_response_enum_variants(
+            &self.delete,
+            &request_enum_name,
+            &response_enum_name,
+            &mut request_enum_variants,
+            &mut response_enum_variants,
+            &mut intos,
+        );
+        Self::extend_request_response_enum_variants(
+            &self.patch,
+            &request_enum_name,
+            &response_enum_name,
+            &mut request_enum_variants,
+            &mut response_enum_variants,
+            &mut intos,
+        );
 
-        for (message_name, message) in &self.edit {
-            let message_name = format_ident!("{}", message_name.value());
-            let message_names = message.generate_feagi_message_struct_names(message_name);
-            output.edit.push(message_names);
-        }
+        quote! {
 
-        for (message_name, message) in &self.delete {
-            let message_name = format_ident!("{}", message_name.value());
-            let message_names = message.generate_feagi_message_struct_names(message_name);
-            output.delete.push(message_names);
-        }
+            #[derive(Debug, Clone)]
+            pub enum #request_enum_name {
+                #request_enum_variants
+            }
 
-        for (message_name, message) in &self.patch {
-            let message_name = format_ident!("{}", message_name.value());
-            let message_names = message.generate_feagi_message_struct_names(message_name);
-            output.patch.push(message_names);
+            #[derive(Debug, Clone)]
+            pub enum #response_enum_name {
+                #response_enum_variants
+            }
+
+            #intos
         }
-        output
+    }
+
+    fn extend_request_response_enum_variants<const METHOD: FeagiRequestMessageU8>(
+        messages: &HashMap<LitStr, FeagiRequestMessage<METHOD>>,
+        request_enum_name: &syn::Ident,
+        response_enum_name: &syn::Ident,
+        request_enum_variants: &mut proc_macro2::TokenStream,
+        response_enum_variants: &mut proc_macro2::TokenStream,
+        intos: &mut proc_macro2::TokenStream,
+    ) {
+        let method = FeagiRequestMessageMethod::from_u8(METHOD);
+        for (title, message) in messages {
+            let message_names = message.calculate_feagi_message_struct_names(format_ident!("{}", title.value()));
+            let variant_name = format_ident!("{}{}", method.as_str(), message_names.base_name);
+            let message_struct_name = message_names.feagi_message_response_struct_name();
+
+            request_enum_variants.extend(quote! {
+                #variant_name(#message_struct_name),
+            });
+
+            intos.extend(quote! {
+                impl Into<#request_enum_name> for #message_struct_name {
+                    fn into(self) -> #request_enum_name {
+                        #request_enum_name::#variant_name(self)
+                    }
+                }
+            });
+
+            if message.is_response_struct_generated() {
+                let response_name = message_names.feagi_message_response_specification_struct_name();
+                response_enum_variants.extend(quote! {
+                    #variant_name(#response_name),
+                });
+
+                intos.extend(quote! {
+                    impl Into<#response_enum_name> for #response_name {
+                        fn into(self) -> #response_enum_name {
+                            #response_enum_name::#variant_name(self)
+                        }
+                    }
+                });
+            } else {
+                response_enum_variants.extend(quote! {
+                    #variant_name,
+                });
+            }
+        }
     }
 }
 
@@ -459,3 +371,5 @@ impl Unparse for FeagiRequestMessageCategory {
         stream
     }
 }
+
+//endregion

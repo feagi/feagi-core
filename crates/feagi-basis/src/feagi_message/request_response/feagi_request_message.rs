@@ -5,8 +5,10 @@ use crate::feagi_message::request_response::feagi_request_message_specifications
 
 /// In the case of a request type message, a response is expected
 pub trait FeagiRequestMessage: FeagiMessage<Path: FeagiRequestMessagePath> {
-    /// The response struct we expect (could be null type potentially)
-    type Response: FeagiMessageResponse;
+    /// The response struct we expect (could be unit type potentially)
+    type ResponseData: FeagiMessageResponse;
+    /// The Response error type we expect (could be the unit type potentially)
+    type ResponseCustomError: core::fmt::Debug + Sized + Send;
 
     /// The type of request method being used
     const METHOD: FeagiMessageRequestMethod = Self::Path::METHOD;
