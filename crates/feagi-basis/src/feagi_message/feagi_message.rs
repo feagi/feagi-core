@@ -17,4 +17,4 @@ pub trait FeagiMessage: Sized + Clone + core::fmt::Debug {
     // NOTE: Generated struct should have the members across all specifications accessible as pub
 }
 
-// TODO zenoh level rety policy, priority. Implement as consts in the trait with defaults
+// TODO zenoh level retry policy, priority. Implement as consts in the trait with defaults

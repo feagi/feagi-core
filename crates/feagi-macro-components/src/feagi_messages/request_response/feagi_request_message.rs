@@ -92,6 +92,7 @@ pub struct FeagiRequestMessage<const METHOD_TYPE_U8: FeagiRequestMessageU8> {
     pub description: LitStr,
     pub payload: StructTemplate,
     pub response: StructTemplate,
+    pub custom_response_error: Option<syn::Ident>
 }
 
 impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYPE_U8> {
@@ -398,6 +399,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Parse for FeagiRequestMessage<
             description,
             payload,
             response,
+            custom_response_error: None, // TODO
         })
     }
 }
@@ -410,6 +412,8 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Unparse for FeagiRequestMessag
         let description = &self.description;
         let payload = self.payload.unparse();
         let response = self.response.unparse();
+        
+        // TODO unparse error type
 
         if !FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).had_no_payload() {
             quote! {
