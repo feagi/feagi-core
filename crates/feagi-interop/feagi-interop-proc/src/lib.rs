@@ -1,10 +1,11 @@
 mod open_api_category;
 
+use feagi_macro_components::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategory;
 use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
-use feagi_macro_components::template_parsing::feagi_messages::request_response::feagi_request_messsages::FeagiMessageCategory;
 use feagi_macro_components::templates::TemplateRoot;
 use proc_macro2::TokenStream;
 use quote::quote;
+
 
 /// Expands one category template into a const `CategoryApi` expression.
 ///
@@ -13,7 +14,7 @@ use quote::quote;
 /// `CategoryApi`, `OperationApi`, `Schema`, and the other OpenAPI types must be in scope.
 #[proc_macro]
 pub fn from_template_make_open_api_category_data(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    match TemplateRoot::<FeagiMessageCategory>::parse_generator_input_macro(input.into()) {
+    match TemplateRoot::<FeagiRequestMessageCategory>::parse_generator_input_macro(input.into()) {
         Err(error) => error.to_compile_error().into(),
         Ok(category) => open_api_category::category_api_tokens(&category).into(),
     }

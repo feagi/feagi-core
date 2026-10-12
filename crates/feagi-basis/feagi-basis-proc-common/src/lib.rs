@@ -1,7 +1,7 @@
-use feagi_macro_components::template_parsing::feagi_messages::request_response::feagi_request_messsages::FeagiMessageCategory;
+use feagi_macro_components::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategory;
+use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
 use heck::ToPascalCase;
 use quote::format_ident;
-use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
 //region Templates
 
 //region Feagi Request Messaging
@@ -11,14 +11,14 @@ use feagi_macro_components::template_parsing::feagi_messages::request_response::
 #[proc_macro]
 pub fn define_template_categorized_requests(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     use feagi_macro_components::templates::TemplateRoot;
-    TemplateRoot::<FeagiMessageCategory>::parse_template_and_generate_generator_input_macro(input.into()).into()
+    TemplateRoot::<FeagiRequestMessageCategory>::parse_template_and_generate_generator_input_macro(input.into()).into()
     
 }
 
 #[proc_macro]
 pub fn from_template_make_request_message_structs(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     use feagi_macro_components::templates::TemplateRoot;
-    let res = TemplateRoot::<FeagiMessageCategory>::parse_generator_input_macro(input.into());
+    let res = TemplateRoot::<FeagiRequestMessageCategory>::parse_generator_input_macro(input.into());
     match res {
         Err(e) => {
             e.to_compile_error().into()
@@ -32,7 +32,7 @@ pub fn from_template_make_request_message_structs(input: proc_macro::TokenStream
 #[proc_macro]
 pub fn from_template_make_request_message_categorized_enum(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     use feagi_macro_components::templates::TemplateRoot;
-    let res = TemplateRoot::<FeagiMessageCategory>::parse_generator_input_macro(input.into());
+    let res = TemplateRoot::<FeagiRequestMessageCategory>::parse_generator_input_macro(input.into());
     match res {
         Err(e) => {
             e.to_compile_error().into()
@@ -54,15 +54,15 @@ pub fn from_template_make_request_message_categorized_enum(input: proc_macro::To
 /// Define all the categories of requests
 #[proc_macro]
 pub fn define_template_request_categories(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use feagi_macro_components::templates::TemplateRoot;
     use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
+    use feagi_macro_components::templates::TemplateRoot;
     TemplateRoot::<GroupedRequestResponseCategoryTemplate>::parse_template_and_generate_generator_input_macro(input.into()).into()
 }
 
 #[proc_macro]
 pub fn from_template_define_generic_struct_of_category_fields(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use feagi_macro_components::templates::TemplateRoot;
     use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
+    use feagi_macro_components::templates::TemplateRoot;
     let res = TemplateRoot::<GroupedRequestResponseCategoryTemplate>::parse_generator_input_macro(input.into());
     match res {
         Err(e) => {

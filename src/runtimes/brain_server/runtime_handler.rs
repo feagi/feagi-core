@@ -7,6 +7,17 @@ impl FeagiBrainServer {
 
     pub async fn new(network_configuration: InteropConfig, npu_configuration: ()) -> Self {
         
+        
+        
+        
+        // TODO macro gen request endpoints with channels in and out function exporters
+        
+        // TODO macro gen the category based endpoint mappings with request makers. Recieve processor structs are seperate
+        
+        
+        
+        
+        
     }
 
 

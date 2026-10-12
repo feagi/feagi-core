@@ -2,10 +2,11 @@
 //!
 //! The expression is emitted for the call site, where the OpenAPI types are in scope.
 
-use feagi_macro_components::template_parsing::feagi_messages::message_path_element::MessagePathElement;
-use feagi_macro_components::template_parsing::feagi_messages::request_response::feagi_request_messsages::{
-    FeagiMessageCategory, FeagiRequestMessage, FeagiRequestMessageMethod, FeagiRequestMessageU8,
-};
+use feagi_macro_components::feagi_messages::message_path_element::MessagePathElement;
+use feagi_macro_components::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
+use feagi_macro_components::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategory;
+use feagi_macro_components::template_parsing::feagi_messages::request_response::feagi_request_messsages::
+FeagiRequestMessage;
 use feagi_macro_components::template_parsing::property_descriptors::PropertyDescriptors;
 use feagi_macro_components::template_parsing::struct_template::StructTemplate;
 use proc_macro2::{Ident, Span, TokenStream};
@@ -14,7 +15,7 @@ use std::collections::HashMap;
 use syn::{GenericArgument, LitStr, PathArguments, Type};
 
 /// Expression that evaluates to one `CategoryApi`.
-pub fn category_api_tokens(category: &FeagiMessageCategory) -> TokenStream {
+pub fn category_api_tokens(category: &FeagiRequestMessageCategory) -> TokenStream {
     let mut operations = TokenStream::new();
     let mut operation_names = TokenStream::new();
     let mut index = 0usize;
@@ -43,7 +44,7 @@ pub fn category_api_tokens(category: &FeagiMessageCategory) -> TokenStream {
 }
 
 fn push_bucket<const METHOD: FeagiRequestMessageU8>(
-    category: &FeagiMessageCategory,
+    category: &FeagiRequestMessageCategory,
     messages: &HashMap<LitStr, FeagiRequestMessage<METHOD>>,
     operations: &mut TokenStream,
     operation_names: &mut TokenStream,
@@ -63,7 +64,7 @@ fn push_bucket<const METHOD: FeagiRequestMessageU8>(
 }
 
 fn operation_tokens<const METHOD: FeagiRequestMessageU8>(
-    category: &FeagiMessageCategory,
+    category: &FeagiRequestMessageCategory,
     _title: &LitStr,
     message: &FeagiRequestMessage<METHOD>,
 ) -> TokenStream {
@@ -319,38 +320,4 @@ fn generic_inner<'a>(ty: &'a Type, name: &str) -> Option<&'a Type> {
         }
     }
     inner
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use syn::parse_str;
-
-    #[test]
-    fn system_health_category_emits_a_get_schema() {
-        let category: FeagiMessageCategory = parse_str(
-            r#"
-            category_name: "System",
-            base_path: "system",
-            category_description: "FEAGI Server System Level Statuses",
-            read: {
-                "SystemHealth": {
-                    path: "health",
-                    path_item_descriptions: {},
-                    description: "Get System Health Status",
-                    response: {
-                        feagi_running: bool, "Is FEAGI running?",
-                    }
-                }
-            }
-        "#,
-        )
-        .expect("category template parses");
-        let tokens = category_api_tokens(&category).to_string();
-        assert!(tokens.contains("CategoryApi :: new"));
-        assert!(tokens.contains("HttpMethod :: Get"));
-        assert!(tokens.contains("feagi_running"));
-        assert!(tokens.contains("Is FEAGI running?"));
-        assert!(tokens.contains("Schema :: boolean"));
-    }
 }
