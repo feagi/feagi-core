@@ -1,7 +1,7 @@
 //! This library contains the core shared types / traits used by burst engines, and the various
 //! burst engines themselves (feature gated)
 
-
+/*
 pub mod npu_sealed {
     //pub use feagi_npu_burst_core::npu_sealed::*;
 
@@ -32,3 +32,6 @@ mod enclosed_non_composable_burst_engine;
 #[cfg(feature = "alloc")]
 mod enclosed_composable_burst_engine;
 mod burst_engine_package;
+
+
+ */

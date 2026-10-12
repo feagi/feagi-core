@@ -92,6 +92,7 @@ members = [
 
     "crates/feagi-interop",
     "crates/feagi-interop/feagi-interop-basis",
+    "crates/feagi-interop/feagi-interop-proc",
     "crates/feagi-interop/feagi-interop-agent",
     "crates/feagi-interop/feagi-interop-transport",
 

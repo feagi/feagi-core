@@ -1,0 +1,7 @@
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum FeagiRestServerError {
+    #[error("Server failed to parse data!")]
+    ServerIncomingDataParseFailure
+}

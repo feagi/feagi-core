@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use proc_macro2::{Ident};
-use quote::{quote, TokenStreamExt};
-use syn::{braced, Lit, LitStr, Token};
-use syn::parse::{Parse, ParseStream};
 use crate::templates::Unparse;
+use proc_macro2::Ident;
+use quote::{quote, TokenStreamExt};
+use std::collections::HashMap;
+use syn::parse::{Parse, ParseStream};
+use syn::{braced, Lit, LitStr, Token};
 
 /// Allows adding comments to a given property
 pub struct PropertyDescriptors(HashMap<Ident, LitStr>);
@@ -17,7 +17,6 @@ impl PropertyDescriptors {
         self.0.iter()
     }
 }
-
 
 impl Parse for PropertyDescriptors {
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -51,8 +50,5 @@ impl Unparse for PropertyDescriptors {
                 #stream
             }
         }
-
     }
 }
-
-

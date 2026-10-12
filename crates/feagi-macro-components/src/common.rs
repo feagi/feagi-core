@@ -1,7 +1,7 @@
 use quote::quote;
 use syn::parse::{Parse, ParseBuffer, ParseStream};
-use syn::{token, LitStr, Token, Type, TypeTuple};
 use syn::punctuated::Punctuated;
+use syn::{token, LitStr, Token, Type, TypeTuple};
 //region Parsing
 
 /// If a comma exists, parse it. If not, dont die

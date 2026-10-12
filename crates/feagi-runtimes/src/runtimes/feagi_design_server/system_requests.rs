@@ -1,8 +1,10 @@
 use serde::{Serialize, Deserialize};
 use feagi_basis::feagi_basis_proc_common::{define_template_categorized_requests, from_template_make_request_message_categorized_enum, from_template_make_request_message_structs};
-use feagi_transport::feagi_message::feagi_message::{FeagiMessage, FeagiMessageRequestMethod, FeagiRequestMessage};
-use feagi_transport::feagi_message::feagi_message_path::{FeagiMessagePath, FeagiRequestMessagePath, MessagePathElement};
-use feagi_transport::feagi_message::feagi_message_specifications::FeagiMessageResponse;
+use feagi_interop::feagi_message::feagi_message::{FeagiMessage, FeagiMessageRequestMethod, FeagiRequestMessage};
+use feagi_interop::feagi_message::feagi_message_path::{FeagiMessagePath, FeagiRequestMessagePath, MessagePathElement};
+use feagi_interop::feagi_message::feagi_message_specifications::FeagiMessageResponse;
+
+// TODO this is for the 'server' system. Later we will seperate this a bit better
 
 define_template_categorized_requests! {
     exported_macro_name: template_design_server_system_requests,

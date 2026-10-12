@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-use proc_macro2::{Ident};
-use quote::quote;
-use syn::{braced, LitStr, Token, Type};
-use syn::parse::{Parse, ParseStream};
 use crate::common::RustVisibility;
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::templates::Unparse;
+use proc_macro2::Ident;
+use quote::quote;
+use std::collections::HashMap;
+use syn::parse::{Parse, ParseStream};
+use syn::{braced, LitStr, Token, Type};
 
 /// Struct fields as `field_name: Type`, with an optional description string.
 ///
@@ -18,20 +18,24 @@ use crate::templates::Unparse;
 pub struct StructTemplate(HashMap<Ident, (Type, Option<LitStr>)>);
 
 impl StructTemplate {
-    
     pub fn new_empty() -> Self {
         Self(HashMap::new())
     }
-    
+
     /// Returns the type and optional description registered for `field`.
     pub fn try_get_field(&self, field: &Ident) -> Option<&(Type, Option<LitStr>)> {
         self.0.get(field)
     }
 
     /// Outputs a token stream that generates this definition as a struct, with name, optional comment, visibility, and derives
-    pub fn generate_rust_struct(&self, struct_name: Ident, description: Option<LitStr>, derives: &Vec<Ident>, visibility: RustVisibility) -> proc_macro2::TokenStream {
+    pub fn generate_rust_struct(
+        &self,
+        struct_name: Ident,
+        description: Option<LitStr>,
+        derives: &Vec<Ident>,
+        visibility: RustVisibility,
+    ) -> proc_macro2::TokenStream {
         let mut stream = proc_macro2::TokenStream::new();
-
 
         if let Some(comment) = description {
             stream.extend(quote! {
@@ -39,8 +43,7 @@ impl StructTemplate {
             })
         };
 
-        if !derives.is_empty()
-        {
+        if !derives.is_empty() {
             stream.extend(quote! {
                 #[derive( #( #derives ),* )]
             })
@@ -59,7 +62,6 @@ impl StructTemplate {
                 })
             }
         }
-
 
         let visibility = visibility.to_token_stream();
         stream.extend(quote! {
@@ -90,7 +92,7 @@ impl StructTemplate {
             }
         }
     }
-    
+
     pub fn insert_property(&mut self, property_name: Ident, property_type: Type, property_description: Option<LitStr>) {
         self.0.insert(property_name, (property_type, property_description));
     }

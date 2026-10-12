@@ -1,5 +1,5 @@
-use syn::{LitStr, Type};
 use quote::quote;
+use syn::{LitStr, Type};
 
 /// A singular element of a MessagePath or RequestMessagePath
 pub enum MessagePathElement {
@@ -26,18 +26,17 @@ impl MessagePathElement {
 
         match self {
             MessagePathElement::StaticPath(s) => {
-                output.extend(quote!{ MessagePathElement::StaticPath(#s), });
+                output.extend(quote! { MessagePathElement::StaticPath(#s), });
                 output
             }
             MessagePathElement::ParameterOfName(s, _) => {
-                output.extend(quote!{ MessagePathElement::ParameterOfName(#s), });
+                output.extend(quote! { MessagePathElement::ParameterOfName(#s), });
                 output
             }
             MessagePathElement::QueryableOfName(s, _) => {
-                output.extend(quote!{ MessagePathElement::QueryableOfName(#s), });
+                output.extend(quote! { MessagePathElement::QueryableOfName(#s), });
                 output
             }
         }
-
     }
 }

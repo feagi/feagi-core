@@ -1,4 +1,3 @@
-pub mod feagi_request_messsages;
-pub mod struct_template;
+pub mod feagi_messages;
 pub mod property_descriptors;
-pub mod message_path_element;
+pub mod struct_template;

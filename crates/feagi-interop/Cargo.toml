@@ -36,7 +36,8 @@ transport_ws = []
 # TODO other transports, compression, auth?
 
 [dependencies]
-
+# Internal Crates
+feagi-basis = {path = "../feagi-basis"}
 
 # External Crates
 thiserror = {workspace = true}

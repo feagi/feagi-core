@@ -747,6 +747,7 @@ dependencies = [
 name = "feagi-interop"
 version = "0.1.1"
 dependencies = [
+ "feagi-basis",
  "paste",
  "picoserve",
  "serde",
@@ -762,6 +763,17 @@ version = "0.1.1"
 [[package]]
 name = "feagi-interop-basis"
 version = "0.1.1"
+
+[[package]]
+name = "feagi-interop-proc"
+version = "0.1.1"
+dependencies = [
+ "feagi-macro-components",
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
+]
 
 [[package]]
 name = "feagi-interop-transport"

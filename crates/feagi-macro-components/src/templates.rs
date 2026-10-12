@@ -5,7 +5,6 @@ use syn::{braced, Token};
 mod kw {
     syn::custom_keyword!(exported_macro_name);
     syn::custom_keyword!(template);
-
 }
 
 /// A template fragment that can be parsed from tokens and re-emitted as the same DSL.
@@ -26,10 +25,9 @@ pub trait GeneratorFromTemplate<T: Unparse> {
     }
 }
 
-
 pub struct TemplateRoot<T: Unparse> {
     pub macro_name: syn::Ident,
-    pub generated_template: T
+    pub generated_template: T,
 }
 
 impl<T: Unparse> TemplateRoot<T> {
@@ -63,7 +61,6 @@ impl<T: Unparse> TemplateRoot<T> {
 
 impl<T: Unparse> Parse for TemplateRoot<T> {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-
         input.parse::<kw::exported_macro_name>()?;
         input.parse::<Token![:]>()?;
         let macro_name: syn::Ident = input.parse()?;
@@ -76,8 +73,7 @@ impl<T: Unparse> Parse for TemplateRoot<T> {
         let generated_template: T = struct_stream.parse()?;
         Ok(Self {
             macro_name,
-            generated_template
+            generated_template,
         })
-
     }
 }
