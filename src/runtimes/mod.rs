@@ -1,6 +1,6 @@
 
 #[cfg(feature = "std")]
-pub mod design_server;
+pub mod brain_server;
 
 
 pub use runtime_handler::RuntimeHandler;

@@ -32,15 +32,6 @@ default = [
     "std",
 ]
 
-# Default setup for a computer running a Feagi Brain Server
-default_usecase_server_std = [
-    "std",
-    "feagi-brain-server",
-    "feagi-server-requests-rest"
-]
-
-
-
 std = [
     "alloc",
     "serde/std", "serde_json/std",
@@ -51,23 +42,33 @@ alloc = [
     "serde/alloc", "serde/derive", "serde_json/alloc",
 ]
 
-# Functionality for FEAGI to run as a brain server
-feagi-brain-server = [
+### Runtimes are default implementations ###
 
+runtime_feagi_design_server = [
+    "rest_swagger_ui"
 ]
 
+### Extensions of functionality ###
 
-feagi-server-requests-rest = [
-    "feagi-brain-server",
+rest_server = []
 
+rest_open_api = [
+    "rest_server"
+]
+
+rest_swagger_ui = [
+    "rest_open_api"
 ]
 
 # TODO
 
 
 [dependencies]
-# FEAGI
+# FEAGI (Always)
 feagi-basis = {path = "crates/feagi-basis"}
+feagi-interop = {path = "crates/feagi-interop"}
+
+# Feagi (Sometimes)
 
 # External (always)
 serde = {workspace = true, default-features = false}
@@ -100,9 +101,6 @@ members = [
     "crates/feagi-pns-structures",
 
     "crates/feagi-pns-processing",
-
-    "crates/feagi-runtimes",
-
 
     "crates/feagi-cns-structures/feagi-brain-models",
     "crates/feagi-cns-processing/feagi-brain-npu",

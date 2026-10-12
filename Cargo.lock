@@ -729,6 +729,7 @@ name = "feagi-core"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
+ "feagi-interop",
  "serde",
  "serde_json",
 ]
@@ -827,21 +828,6 @@ version = "0.1.1"
 [[package]]
 name = "feagi-pns-structures"
 version = "0.1.1"
-
-[[package]]
-name = "feagi-runtimes"
-version = "0.1.1"
-dependencies = [
- "ahash",
- "feagi-basis",
- "feagi-interop",
- "heapless 0.9.3",
- "paste",
- "serde",
- "serde_json",
- "thingbuf",
- "thiserror 2.0.21",
-]
 
 [[package]]
 name = "find-msvc-tools"
