@@ -22,16 +22,12 @@ pub struct GroupedRequestResponseCategoryTemplate {
 /// Expected pattern:
 /// {
 ///     group_name: GroupName,
-///     categories: [
-///        category_name,
-///     ]
+///     categories: {
+///        category_name: macro_name
+///     }
 /// }
 
 impl Parse for GroupedRequestResponseCategoryTemplate {
-    /// Parse `group_name: GroupName, Categories: [ category_name, ... ]`.
-    ///
-    /// The braces shown on the struct are the template block. `TemplateRoot` consumes that
-    /// block before this parser runs, matching the other request templates.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let group_name = parse_property_colon_member::<kw::group_name, Ident>(input)?;
         let generator = parse_property_colon_member::<kw::categories, GroupedRequestResponseCategoryRustStructGenerator>(input)?;
@@ -67,20 +63,16 @@ pub struct GroupedRequestResponseCategoryRustStructGenerator {
 }
 
 /// Expected pattern:
-/// [
-///     category_name,
-/// ]
+/// categories: {
+///    category_name: macro_name
+/// }
 impl Parse for GroupedRequestResponseCategoryRustStructGenerator {
-    /// Parse `[ category_name, ... ]` into PascalCase category names.
-    ///
-    /// Names that normalize to the same PascalCase ident are rejected, since they would
-    /// generate the same struct field.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let entries;
         bracketed!(entries in input);
         let mut categories: Vec<GroupedRequestResponseCategoryRustStructNames> = Vec::new();
         while !entries.is_empty() {
-            let name: Ident = entries.parse()?;
+            let name: Ident = parse_property_colon_member::<kw::group_name, syn::Ident>(&input)?;
             let span = name.span();
             let category = GroupedRequestResponseCategoryRustStructNames::new(name);
             let normalized = category.pascal().to_string();
@@ -140,15 +132,17 @@ impl GroupedRequestResponseCategoryRustStructGenerator {
 
 pub struct GroupedRequestResponseCategoryRustStructNames {
     base_category_pascal_name: Ident,
+    template_macro_name: Ident
 }
 
 impl GroupedRequestResponseCategoryRustStructNames {
     /// Creates a new instance, enforcing pascal casing
-    pub fn new(base_name: Ident) -> Self {
+    pub fn new(base_name: Ident, template_macro_name: Ident) -> Self {
         let value = base_name.to_string();
         let pascal = value.to_pascal_case();
         Self {
             base_category_pascal_name: format_ident!("{}", pascal),
+            template_macro_name
         }
     }
 
@@ -168,7 +162,7 @@ impl GroupedRequestResponseCategoryRustStructNames {
     ///
     /// This is the snake_case category ident, which is the `exported_macro_name` for that category.
     pub fn template_macro_name(&self) -> Ident {
-        self.snake()
+        self.template_macro_name.clone()
     }
 
     /// The name of the enum request struct
