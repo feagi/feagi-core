@@ -402,12 +402,8 @@ pub fn subset_runtime_genome_for_region_branch(
     let branch_set: HashSet<String> = branch_ids.iter().cloned().collect();
 
     let mut kept_cortical = cortical_ids_in_branch(genome, &branch_ids);
-    let classifiers = classifiers_for_exported_branch(
-        genome,
-        &branch_set,
-        &mut kept_cortical,
-        root_region_id,
-    );
+    let classifiers =
+        classifiers_for_exported_branch(genome, &branch_set, &mut kept_cortical, root_region_id);
     let modulators = modulators_for_kept_areas(genome, &mut kept_cortical);
 
     let mut cortical_areas: HashMap<CorticalID, CorticalArea> = HashMap::new();
@@ -827,10 +823,9 @@ mod tests {
             CorticalAreaType::Memory(MemoryCorticalType::Memory),
         )
         .expect("kernel memory");
-        kernel_mem.properties.insert(
-            "classifier_role".to_string(),
-            json!("kernel_memory"),
-        );
+        kernel_mem
+            .properties
+            .insert("classifier_role".to_string(), json!("kernel_memory"));
         genome
             .brain_regions
             .get_mut(&child_key)
@@ -864,7 +859,8 @@ mod tests {
             },
         );
 
-        let exported = subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
+        let exported =
+            subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
         let classifier = exported
             .classifiers
             .get("clf-1")
@@ -909,7 +905,8 @@ mod tests {
             },
         );
 
-        let exported = subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
+        let exported =
+            subset_runtime_genome_for_region_branch(&genome, &child_key).expect("subset");
         assert!(exported.classifiers.is_empty());
     }
 }

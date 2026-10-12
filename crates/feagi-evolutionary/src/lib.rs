@@ -33,6 +33,7 @@ feagi-evo (Genotype)        feagi-bdu (Phenotype)
 
 - `genome` - Genome I/O and validation
 - `evaluation` - `GenomeEvaluation` records: fitness + genome-only lineage (ADR-016)
+- `circuit` - `CircuitObjectiveSpec`: circuit-level objectives and boundary resolution
 - `evolution` - Evolution operators (future)
 - `fitness` - Fitness evaluation (future)
 - `population` - Population management (future)
@@ -46,6 +47,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Core modules
 mod amalgamation_remap;
+pub mod circuit;
 pub mod converter_flat;
 pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
