@@ -31,8 +31,12 @@ transport_ws = []
 
 transport_quic = []
 
-swagger_web_ui = [
+open_api_endpoint = [
     "transport_rest"
+]
+
+swagger_web_ui = [
+    "open_api_endpoint"
 ]
 
 # TODO other transports, compression, auth?
@@ -43,6 +47,7 @@ feagi-basis = {path = "../feagi-basis"}
 
 # External Crates
 thiserror = {workspace = true}
+thingbuf = {workspace = true}
 paste = {workspace = true}
 serde = { workspace = true, features = ["derive"] }
 serde_json = {workspace = true, features = []}

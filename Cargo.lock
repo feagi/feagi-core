@@ -742,6 +742,7 @@ dependencies = [
  "picoserve",
  "serde",
  "serde_json",
+ "thingbuf",
  "thiserror 2.0.21",
  "zenoh",
 ]

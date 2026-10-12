@@ -11,7 +11,7 @@ use syn::{bracketed, Token};
 
 mod kw {
     syn::custom_keyword!(group_name);
-    syn::custom_keyword!(Categories);
+    syn::custom_keyword!(categories);
 }
 
 pub struct GroupedRequestResponseCategoryTemplate {
@@ -22,7 +22,7 @@ pub struct GroupedRequestResponseCategoryTemplate {
 /// Expected pattern:
 /// {
 ///     group_name: GroupName,
-///     Categories: [
+///     categories: [
 ///        category_name,
 ///     ]
 /// }
@@ -34,7 +34,7 @@ impl Parse for GroupedRequestResponseCategoryTemplate {
     /// block before this parser runs, matching the other request templates.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let group_name = parse_property_colon_member::<kw::group_name, Ident>(input)?;
-        let generator = parse_property_colon_member::<kw::Categories, GroupedRequestResponseCategoryRustStructGenerator>(input)?;
+        let generator = parse_property_colon_member::<kw::categories, GroupedRequestResponseCategoryRustStructGenerator>(input)?;
 
         if !input.is_empty() {
             return Err(input.error("unexpected tokens in grouped request response category"));

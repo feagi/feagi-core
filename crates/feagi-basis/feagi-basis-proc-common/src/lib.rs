@@ -51,6 +51,7 @@ pub fn from_template_make_request_message_categorized_enum(input: proc_macro::To
 
 //region Feagi Request Messaging Categorization
 
+/// Define all the categories of requests
 #[proc_macro]
 pub fn define_template_request_categories(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     use feagi_macro_components::templates::TemplateRoot;
