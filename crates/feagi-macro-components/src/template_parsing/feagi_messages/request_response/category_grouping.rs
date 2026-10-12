@@ -7,7 +7,7 @@ use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{bracketed, Token};
+use syn::{braced, Token};
 
 mod kw {
     syn::custom_keyword!(group_name);
@@ -41,7 +41,7 @@ impl Parse for GroupedRequestResponseCategoryTemplate {
 }
 
 impl Unparse for GroupedRequestResponseCategoryTemplate {
-    /// Re-emit `group_name` and `Categories` so the template can be parsed again.
+    /// Re-emit `group_name` and `categories` so the template can be parsed again.
     fn unparse(&self) -> TokenStream {
         let group_name = &self.group_name;
         let categories = self.generator.unparse();
@@ -67,17 +67,28 @@ pub struct GroupedRequestResponseCategoryRustStructGenerator {
 ///    category_name: macro_name
 /// }
 impl Parse for GroupedRequestResponseCategoryRustStructGenerator {
+    /// Parse `{ category_name: macro_name, ... }` into PascalCase category names and their template macros.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let entries;
-        bracketed!(entries in input);
+        braced!(entries in input);
         let mut categories: Vec<GroupedRequestResponseCategoryRustStructNames> = Vec::new();
         while !entries.is_empty() {
-            let name: Ident = parse_property_colon_member::<kw::group_name, syn::Ident>(&input)?;
+            let name: Ident = entries.parse()?;
             let span = name.span();
-            let category = GroupedRequestResponseCategoryRustStructNames::new(name);
+            entries.parse::<Token![:]>()?;
+            let macro_name: Ident = entries.parse()?;
+            let macro_span = macro_name.span();
+            let category = GroupedRequestResponseCategoryRustStructNames::new(name, macro_name);
             let normalized = category.pascal().to_string();
             if categories.iter().any(|existing| existing.pascal().to_string() == normalized) {
                 return Err(syn::Error::new(span, format!("duplicate category name `{normalized}`")));
+            }
+            let macro_normalized = category.template_macro_name().to_string();
+            if categories
+                .iter()
+                .any(|existing| existing.template_macro_name().to_string() == macro_normalized)
+            {
+                return Err(syn::Error::new(macro_span, format!("duplicate template macro name `{macro_normalized}`")));
             }
             categories.push(category);
             if entries.is_empty() {
@@ -90,21 +101,23 @@ impl Parse for GroupedRequestResponseCategoryRustStructGenerator {
 }
 
 impl Unparse for GroupedRequestResponseCategoryRustStructGenerator {
-    /// Re-emit `[ CategoryName, ... ]` so the list can be parsed again.
+    /// Re-emit `{ CategoryName: macro_name, ... }` so the map can be parsed again.
     fn unparse(&self) -> TokenStream {
-        let names = self.categories.iter().map(GroupedRequestResponseCategoryRustStructNames::pascal);
+        let entries = self.categories.iter().map(|category| {
+            let name = category.pascal();
+            let macro_name = category.template_macro_name();
+            quote!(#name: #macro_name,)
+        });
         quote! {
-            [
-                #( #names, )*
-            ]
+            {
+                #( #entries )*
+            }
         }
     }
 }
 
 impl GroupedRequestResponseCategoryRustStructGenerator {
-    /// Categories in template order.
-    ///
-    /// The snake_case form of each name is the category template macro to invoke.
+    /// Categories in template order. Each one carries its template macro name.
     pub fn categories(&self) -> &[GroupedRequestResponseCategoryRustStructNames] {
         &self.categories
     }
@@ -132,7 +145,7 @@ impl GroupedRequestResponseCategoryRustStructGenerator {
 
 pub struct GroupedRequestResponseCategoryRustStructNames {
     base_category_pascal_name: Ident,
-    template_macro_name: Ident
+    template_macro_name: Ident,
 }
 
 impl GroupedRequestResponseCategoryRustStructNames {
@@ -142,7 +155,7 @@ impl GroupedRequestResponseCategoryRustStructNames {
         let pascal = value.to_pascal_case();
         Self {
             base_category_pascal_name: format_ident!("{}", pascal),
-            template_macro_name
+            template_macro_name,
         }
     }
 
@@ -158,9 +171,7 @@ impl GroupedRequestResponseCategoryRustStructNames {
         format_ident!("{}", value)
     }
 
-    /// Template macro exported for this category.
-    ///
-    /// This is the snake_case category ident, which is the `exported_macro_name` for that category.
+    /// Template macro named beside this category in the template.
     pub fn template_macro_name(&self) -> Ident {
         self.template_macro_name.clone()
     }

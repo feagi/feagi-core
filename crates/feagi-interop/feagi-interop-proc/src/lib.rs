@@ -21,7 +21,7 @@ pub fn from_template_make_open_api_category_data(input: proc_macro::TokenStream)
 
 /// Expands a grouped category template into `generate_open_api_str`.
 ///
-/// Each category ident is called in snake_case, which is that category's template macro.
+/// Each category is expanded through the template macro named beside it.
 /// Those macros, `from_template_make_open_api_category_data`, `CategoryApi`, and
 /// `OpenApiDocument` must be in scope at the call site.
 #[proc_macro]

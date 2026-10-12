@@ -844,20 +844,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-state"
-version = "0.1.1"
-dependencies = [
- "ahash",
- "feagi-basis",
- "heapless 0.9.3",
- "paste",
- "serde",
- "serde_json",
- "thingbuf",
- "thiserror 2.0.21",
-]
-
-[[package]]
 name = "find-msvc-tools"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -6,10 +6,8 @@ use feagi_basis::feagi_message::request_response::feagi_request_message::{FeagiM
 use feagi_basis::feagi_message::request_response::feagi_request_message_path::FeagiRequestMessagePath;
 use feagi_basis::feagi_message::request_response::feagi_request_message_specifications::FeagiMessageResponse;
 
-// TODO this is for the 'server' system. Later we will separate this a bit better
-
 define_template_categorized_requests! {
-    exported_macro_name: template_design_server_system_requests,
+    exported_macro_name: template_runtime_system_requests,
     template: {
         category_name: "System",
         base_path: "system",
@@ -27,7 +25,7 @@ define_template_categorized_requests! {
     }
 }
 
-template_design_server_system_requests!(from_template_make_request_message_structs);
 
-template_design_server_system_requests!(from_template_make_request_message_categorized_enum);
+template_runtime_system_requests!(from_template_make_request_message_structs);
 
+template_runtime_system_requests!(from_template_make_request_message_categorized_enum);
