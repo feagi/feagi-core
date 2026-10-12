@@ -10,6 +10,18 @@ homepage.workspace = true
 documentation.workspace = true
 
 [dependencies]
+# FEAGI Root Crates
+feagi-basis = {path = "../feagi-basis"}
+
+# External Crates
+thiserror = {workspace = true}
+paste = { workspace = true }
+ahash = { workspace = true, features = ["serde"]}
+serde = { workspace = true, features = ["derive"]}
+serde_json = { workspace = true, optional = true}
+thingbuf = {workspace = true, features = ["static"]} # TODO review features
+heapless = {workspace = true}
+
 
 [lints]
 workspace = true
