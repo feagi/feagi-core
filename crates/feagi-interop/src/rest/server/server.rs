@@ -1,59 +1,60 @@
-use crate::error::FeagiInteropError;
 use picoserve::Router;
-use std::thread::JoinHandle;
+use feagi_basis::generic_thread_worker::{GenericThreadWorker, GenericThreadWorkerCommand, GenericThreadWorkerSpawner};
+use crate::error::FeagiInteropError;
+
 
 pub struct RestServer {
-    join_handle: JoinHandle<Result<(), FeagiRestServerError>>,
-    command_channel: RequestChannelPooled,
+    #[cfg(feature = "std")]
+    worker: GenericThreadWorker
+    // TODO no std
 }
 
 impl RestServer {
     #[cfg(feature = "std")]
-    pub async fn new_server<RestEndpoints>(socket_address: core::net::SocketAddr) -> Result<Self, FeagiInteropError> {
-        let (requester, responder) = create_requester_and_responder_pooled::<RestServerCommands, (), 1, false>(1);
+    pub async fn start_rest_server<RestEndpoints>(socket_address: core::net::SocketAddr) -> Result<Self, FeagiInteropError> {
+        let worker = GenericThreadWorker::new_and_start(
+            RestServerThreadSpawner {socket_address}
+        )?;
+        Self { worker }
+    }
+}
 
-        static CONFIG: picoserve::Config = picoserve::Config::const_default().close_connection_after_response();
+
+#[cfg(feature = "std")]
+struct RestServerThreadSpawner {
+    pub socket_address: core::net::SocketAddr
+}
+
+#[cfg(feature = "std")]
+impl GenericThreadWorkerSpawner for RestServerThreadSpawner {
+    type ThreadSpawnError = FeagiInteropError;
+
+    fn spawn_thread_worker(
+        self,
+        command_receiver: thingbuf::mpsc::Receiver<GenericThreadWorkerCommand<CustomCommand>>
+    ) -> Result<std::thread::JoinHandle<FinalResult>, Self::ThreadSpawnError> {
 
         let socket = std::net::TcpListener::bind(socket_address).map_err(|_| FeagiInteropError::FailedToBindSocket)?;
 
+        static CONFIG: picoserve::Config = picoserve::Config::const_default().close_connection_after_response();
         let mut router = picoserve::Router::new().with_state();
 
-        /*
-        #[cfg(feature = "transport_rest_swagger")]
-        {
-            router.route("/", picoserve::routing::get(async || ))
-        }
+        // TODO Open API, SWAGGER
 
-         */
-
-        // TODO add routes for Rest Endpoints (macro)
+        // TODO state
 
         let handle = std::thread::spawn(loop_rest_server(socket, router));
-
-        Ok(Self {
-            join_handle: handle,
-            command_channel: requester,
-        })
+        Ok(handle)
     }
-
-    // TODO no-std variant
-
-    // TODO Stop command
-}
-
-#[repr(u8)]
-#[derive(Clone, Copy, Debug)]
-enum RestServerCommands {
-    Start, // is this ever used?
-    Stop,  // TODO others?
-           // TODO implement this, right now the socket check is blocking so we dont check the loop
 }
 
 #[cfg(feature = "std")]
 async fn loop_rest_server<RestEndpoints>(socket: std::net::TcpListener, router: Router) -> Result<(), FeagiRestServerError> {
     loop {
         match socket.accept() {
-            Ok((stream, client_socket)) => match picoserve::Server::serve(client_socket, router) {},
+            Ok((stream, client_socket)) => match picoserve::Server::serve(client_socket, router) {
+
+            },
             Err(_) => return Err(FeagiRestServerError::ServerParseFailure), // TODO ????
         }
     }
