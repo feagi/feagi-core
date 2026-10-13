@@ -1,4 +1,4 @@
-use feagi_basis::generic_thread_worker::GenericThreadWorker;
+use feagi_basis::threading::generic_thread_worker::GenericThreadWorker;
 use feagi_interop::interop_config::InteropConfig;
 
 pub struct FeagiBrainServer(GenericThreadWorker);

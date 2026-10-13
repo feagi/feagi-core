@@ -23,8 +23,6 @@ pub mod channel;
 pub mod neurons;
 pub mod voxels;
 pub mod feagi_message;
-#[cfg(feature = "std")]
-pub mod generic_thread_worker;
 pub mod capabilities;
 pub mod byte_id;
 // TODO future UI work, may need its own crate? or maybe not

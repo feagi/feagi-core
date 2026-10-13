@@ -1,7 +1,7 @@
 use thingbuf::mpsc::{Receiver, Sender};
 use crate::channel::channel_error::ChannelError;
 use crate::channel::recycling::{Recyclable, RecyclableRecyclePolicy};
-use crate::threading::BlockingPool;
+use crate::collections::generic_collections::blocking_pool::BlockingPool;
 
 type OneShot<Request, Response> = (Request, Sender<Response, RecyclableRecyclePolicy<Response>>);
 
