@@ -661,6 +661,7 @@ name = "feagi-basis"
 version = "0.1.1"
 dependencies = [
  "ahash",
+ "base64 0.23.1",
  "feagi-basis-proc-common",
  "half",
  "heapless 0.9.3",
