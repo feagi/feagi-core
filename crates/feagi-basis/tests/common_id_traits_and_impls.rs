@@ -1,10 +1,11 @@
 use feagi_basis::base_64_id;
-use feagi_basis::common_id_traits_and_impls::{padded_url_safe_base64_len, Base64EncodedByteID, ByteID};
+use feagi_basis::common_id_traits_and_impls::{padded_url_safe_base64_len, Base64EncodedByteID, Base64EncodedByteIdError, ByteID};
+use feagi_basis::feagi_message::feagi_message_element::MessageElementSerializable;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct RawId<const N: usize>([u8; N]);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reject;
 
 impl core::fmt::Display for Reject {
@@ -14,6 +15,50 @@ impl core::fmt::Display for Reject {
 }
 
 impl core::error::Error for Reject {}
+
+impl<const N: usize> core::fmt::Display for RawId<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        for byte in &self.0 {
+            write!(f, "{byte:02x}")?;
+        }
+        Ok(())
+    }
+}
+
+impl<const N: usize> serde::Serialize for RawId<N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeTuple;
+        let mut tuple = serializer.serialize_tuple(N)?;
+        for byte in &self.0 {
+            tuple.serialize_element(byte)?;
+        }
+        tuple.end()
+    }
+}
+
+impl<'de, const N: usize> serde::Deserialize<'de> for RawId<N> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct RawIdVisitor<const N: usize>;
+
+        impl<'de, const N: usize> serde::de::Visitor<'de> for RawIdVisitor<N> {
+            type Value = RawId<N>;
+
+            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(formatter, "an array of {N} bytes")
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let mut bytes = [0u8; N];
+                for (index, byte) in bytes.iter_mut().enumerate() {
+                    *byte = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(index, &self))?;
+                }
+                Ok(RawId(bytes))
+            }
+        }
+
+        deserializer.deserialize_tuple(N, RawIdVisitor::<N>)
+    }
+}
 
 impl<const N: usize> ByteID<N> for RawId<N> {
     type DeserializationError = Reject;
@@ -36,9 +81,19 @@ macro_rules! assert_roundtrip {
     ($n:literal, $bytes:expr) => {{
         let bytes: [u8; $n] = $bytes;
         let encoded = Base64EncodedByteID::<RawId<$n>, $n, { padded_url_safe_base64_len($n) }>::from(RawId(bytes));
-        assert_eq!(encoded.try_into_id().expect("canonical encoding").0, bytes);
+        let parsed =
+            Base64EncodedByteID::<RawId<$n>, $n, { padded_url_safe_base64_len($n) }>::try_from_str(encoded.as_str()).expect("canonical text parses");
+        assert_eq!(parsed.as_str(), encoded.as_str());
+        assert_eq!(parsed.to_string(), encoded.as_str());
+        assert_eq!(encoded.to_id().0, bytes);
+        assert_eq!(parsed.to_id().0, bytes);
+        let from_str: Base64EncodedByteID<RawId<$n>, $n, { padded_url_safe_base64_len($n) }> = encoded.as_str().parse().expect("FromStr");
+        assert_eq!(from_str.as_str(), encoded.as_str());
+        require_message_element::<Base64EncodedByteID<RawId<$n>, $n, { padded_url_safe_base64_len($n) }>>();
     }};
 }
+
+fn require_message_element<T: MessageElementSerializable>() {}
 
 fn patterned<const N: usize>() -> [u8; N] {
     let mut bytes = [0u8; N];
@@ -77,13 +132,53 @@ fn encode_and_decode_roundtrip() {
 
 #[test]
 fn id_rejection_is_returned() {
-    // `From` only reads the bytes. Validation happens in `try_into_id`.
-    let encoded = Base64EncodedByteID::<RawId<1>, 1, 4>::from(RawId([0xA5]));
-    assert_eq!(encoded.try_into_id(), Err(Reject));
+    let rejected = Base64EncodedByteID::<RawId<1>, 1, 4>::from(RawId([0xA5]));
+    assert!(matches!(
+        Base64EncodedByteID::<RawId<1>, 1, 4>::try_from_str(rejected.as_str()),
+        Err(Base64EncodedByteIdError::Id(Reject))
+    ));
 }
 
-#[derive(Debug, PartialEq)]
+#[test]
+fn try_from_str_rejects_wrong_length_alphabet_and_width() {
+    type Encoded = Base64EncodedByteID<RawId<3>, 3, 4>;
+    assert!(matches!(
+        Encoded::try_from_str("AA"),
+        Err(Base64EncodedByteIdError::WrongLength { actual: 2, expected: 4 })
+    ));
+    assert!(matches!(Encoded::try_from_str("!!!!"), Err(Base64EncodedByteIdError::InvalidEncoding)));
+    // "AA==" is the 1-byte encoding of 0x00. It is 4 characters, but not a 3-byte ID.
+    assert!(matches!(Encoded::try_from_str("AA=="), Err(Base64EncodedByteIdError::InvalidEncoding)));
+}
+
+#[test]
+fn try_from_heapless_parses_the_same_text() {
+    let encoded = Base64EncodedByteID::<RawId<1>, 1, 4>::from(RawId([0xFF]));
+    let stored: heapless::String<8> = heapless::String::try_from(encoded.as_str()).expect("4 chars fit in 8");
+    let parsed = Base64EncodedByteID::<RawId<1>, 1, 4>::try_from_heapless(&stored).expect("heapless text");
+    assert_eq!(parsed.to_id().0, [0xFF]);
+    let parsed = Base64EncodedByteID::<RawId<1>, 1, 4>::try_from(stored.as_str()).expect("str try_from");
+    assert_eq!(parsed.as_str(), encoded.as_str());
+}
+
+#[test]
+fn serde_roundtrip_uses_the_base64_text() {
+    let encoded = Base64EncodedByteID::<RawId<2>, 2, 4>::from(RawId([0xFB, 0xEF]));
+    let json = serde_json::to_string(&encoded).expect("serialize");
+    assert_eq!(json, format!("\"{}\"", encoded.as_str()));
+    let parsed: Base64EncodedByteID<RawId<2>, 2, 4> = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(parsed.to_id().0, [0xFB, 0xEF]);
+    assert!(serde_json::from_str::<Base64EncodedByteID<RawId<2>, 2, 4>>("\"AA==\"").is_err());
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct MacroId([u8; 4]);
+
+impl core::fmt::Display for MacroId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:02x}{:02x}{:02x}{:02x}", self.0[0], self.0[1], self.0[2], self.0[3])
+    }
+}
 
 impl ByteID<4> for MacroId {
     type DeserializationError = Reject;
@@ -103,5 +198,5 @@ base_64_id!(MacroId, 4);
 fn macro_alias_uses_the_padded_length() {
     let bytes = [9u8, 8, 7, 6];
     let encoded = Base64EncodedMacroId::from(MacroId(bytes));
-    assert_eq!(encoded.try_into_id().expect("macro alias roundtrip").0, bytes);
+    assert_eq!(encoded.to_id().0, bytes);
 }

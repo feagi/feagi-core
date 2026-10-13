@@ -1,6 +1,10 @@
 //! Common traits and extensions used throughout IDs in the Feagi Crates
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 use base64::Engine;
+use thiserror::Error;
 
 // TODO use more optimized base64 encoding / decoding engines via cfg flags
 
@@ -9,8 +13,9 @@ use base64::Engine;
 //region ByteID
 
 /// An ID in feagi that is internally a fixed array of bytes
-pub trait ByteID<const NUMBER_OF_BYTES: usize>: Sized + Clone + core::hash::Hash
-+ core::fmt::Debug + core::fmt::Display + serde::Serialize + serde::de::DeserializeOwned {
+pub trait ByteID<const NUMBER_OF_BYTES: usize>:
+    Sized + Clone + core::hash::Hash + core::fmt::Debug + core::fmt::Display + serde::Serialize + serde::de::DeserializeOwned
+{
     type DeserializationError: core::error::Error;
 
     /// Get the bytes of the encoding ID
@@ -36,6 +41,22 @@ macro_rules! base_64_id {
     };
 }
 
+/// Failure to parse a [`Base64EncodedByteID`] from text.
+#[derive(Debug, Error)]
+pub enum Base64EncodedByteIdError<E: core::error::Error> {
+    /// The text was not the padded URL-safe length for this ID.
+    #[error("base64 ID text length {actual} did not match padded length {expected}")]
+    WrongLength { actual: usize, expected: usize },
+
+    /// The text was not a canonical padded URL-safe encoding of this ID's byte length.
+    #[error("base64 ID text was not a canonical padded URL-safe encoding of this ID")]
+    InvalidEncoding,
+
+    /// The decoded bytes were not a valid ID and failed the ID's internal check
+    #[error(transparent)]
+    Id(#[from] E),
+}
+
 #[derive(Debug, Clone, Hash)]
 pub struct Base64EncodedByteID<
     ID: ByteID<NUMBER_OF_SOURCE_BYTES>,
@@ -55,17 +76,58 @@ impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, co
         "NUMBER_BASE_64_BYTES must be padded_url_safe_base64_len(NUMBER_OF_SOURCE_BYTES)"
     );
 
+    /// Borrow the padded URL-safe base64 text.
+    pub fn as_str(&self) -> &str {
+        self.base_64_encoded_str.as_str()
+    }
+
+    /// Parse a padded URL-safe base64 ID.
+    ///
+    /// The text must be the canonical encoding of exactly `NUMBER_OF_SOURCE_BYTES` bytes,
+    /// and those bytes must be a valid `ID`.
+    pub fn try_from_str(text: &str) -> Result<Self, Base64EncodedByteIdError<ID::DeserializationError>> {
+        let _ = Self::BASE64_LEN_MATCHES_SOURCE;
+        if text.len() != NUMBER_BASE_64_BYTES {
+            return Err(Base64EncodedByteIdError::WrongLength {
+                actual: text.len(),
+                expected: NUMBER_BASE_64_BYTES,
+            });
+        }
+
+        let mut decoded = [0u8; NUMBER_OF_SOURCE_BYTES];
+        let decoded_len = base64::prelude::BASE64_URL_SAFE
+            .decode_slice(text.as_bytes(), &mut decoded)
+            .map_err(|_| Base64EncodedByteIdError::InvalidEncoding)?;
+        // A string of the padded length can still decode to fewer bytes (for example "AA=="
+        // is 4 characters, the same width as a 3-byte ID). Only an exact decode is canonical.
+        if decoded_len != NUMBER_OF_SOURCE_BYTES {
+            return Err(Base64EncodedByteIdError::InvalidEncoding);
+        }
+
+        // Validate that the bytes are fine for that struct
+        ID::try_from_id_bytes(decoded)?;
+
+        let base_64_encoded_str = heapless::String::try_from(text).unwrap_or_else(|_| panic!("text length was checked against NUMBER_BASE_64_BYTES"));
+        Ok(Self {
+            base_64_encoded_str,
+            _p: core::marker::PhantomData,
+        })
+    }
+
+    /// Parse a [`heapless::String`] holding a padded URL-safe base64 ID.
+    pub fn try_from_heapless<const CAP: usize>(text: &heapless::String<CAP>) -> Result<Self, Base64EncodedByteIdError<ID::DeserializationError>> {
+        Self::try_from_str(text.as_str())
+    }
+
     /// Decode this URL-safe base64 ID back into `ID`
-    pub fn try_into_id(self) -> Result<ID, ID::DeserializationError> {
+    pub fn to_id(&self) -> ID {
         let _ = Self::BASE64_LEN_MATCHES_SOURCE;
 
-        let bytes = self.base_64_encoded_str.as_bytes();
         let mut arr = [0u8; NUMBER_OF_SOURCE_BYTES];
-        // The stored text is a canonical encoding of exactly NUMBER_OF_SOURCE_BYTES, so this fills `arr`.
-        _ = base64::prelude::BASE64_URL_SAFE
-            .decode_slice(bytes, &mut arr)
-            .unwrap_or_else(|_| panic!("Base64EncodedByteID could not be decoded as padded URL-safe base64 of NUMBER_OF_SOURCE_BYTES"));
-        ID::try_from_id_bytes(arr)
+        base64::prelude::BASE64_URL_SAFE
+            .decode_slice(self.base_64_encoded_str.as_bytes(), &mut arr)
+            .expect("stored base64 ID is canonical");
+        ID::try_from_id_bytes(arr).expect("stored base64 ID is a valid ID")
     }
 }
 
@@ -87,6 +149,95 @@ impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, co
             base_64_encoded_str: unsafe { heapless::String::from_utf8_unchecked(vec) },
             _p: core::marker::PhantomData,
         }
+    }
+}
+
+impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> core::str::FromStr
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+{
+    type Err = Base64EncodedByteIdError<ID::DeserializationError>;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::try_from_str(text)
+    }
+}
+
+impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize>
+    crate::feagi_message::feagi_message_element::MessageElementSerializable for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+{
+}
+
+impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> TryFrom<&str>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+{
+    type Error = Base64EncodedByteIdError<ID::DeserializationError>;
+
+    fn try_from(text: &str) -> Result<Self, Self::Error> {
+        Self::try_from_str(text)
+    }
+}
+
+impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize, const CAP: usize>
+    TryFrom<&heapless::String<CAP>> for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+{
+    type Error = Base64EncodedByteIdError<ID::DeserializationError>;
+
+    fn try_from(text: &heapless::String<CAP>) -> Result<Self, Self::Error> {
+        Self::try_from_heapless(text)
+    }
+}
+
+impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> core::convert::AsRef<str>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+{
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> core::fmt::Display
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> serde::Serialize
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+impl<'de, ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> serde::Deserialize<'de>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct EncodedIdVisitor<ID, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize>(core::marker::PhantomData<ID>);
+
+        impl<'de, ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> serde::de::Visitor<'de>
+            for EncodedIdVisitor<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+        {
+            type Value = Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>;
+
+            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                formatter.write_str("a padded URL-safe base64 ID")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                Base64EncodedByteID::try_from_str(value).map_err(E::custom)
+            }
+
+            // Owned input cannot be borrowed. Copying it needs an allocator.
+            #[cfg(feature = "alloc")]
+            fn visit_string<E: serde::de::Error>(self, value: alloc::string::String) -> Result<Self::Value, E> {
+                self.visit_str(&value)
+            }
+        }
+
+        deserializer.deserialize_str(EncodedIdVisitor(core::marker::PhantomData))
     }
 }
 
