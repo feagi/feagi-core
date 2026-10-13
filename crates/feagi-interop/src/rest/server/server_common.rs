@@ -8,12 +8,12 @@ pub const HTTP_BUFFER_LEN: usize = 2048;
 /// Builds the static routes for the server.
 pub fn build_router_with_routes() -> picoserve::Router<impl picoserve::routing::PathRouter> {
     use picoserve::routing::PathRouter;
-    
-    
+
+
     //region Predefined Route Builders
 
     #[cfg(feature = "open_api_endpoint")]
-    fn route_open_api<R: PathRouter>(router: picoserve::Router<R>) 
+    fn route_open_api<R: PathRouter>(router: picoserve::Router<R>)
         -> picoserve::Router<impl PathRouter>
     {
         use picoserve::response::File;
@@ -21,7 +21,7 @@ pub fn build_router_with_routes() -> picoserve::Router<impl picoserve::routing::
 
         /// Generated OpenAPI json
         const OPEN_API_JSON: &str = {
-            use super::open_api::OpenApiDocument;
+            use super::open_api_builder::OpenApiDocument;
 
             const DOCUMENT: OpenApiDocument = OpenApiDocument::from_categories(&[]);
             const JSON_LEN: usize = DOCUMENT.json_len();
@@ -39,10 +39,14 @@ pub fn build_router_with_routes() -> picoserve::Router<impl picoserve::routing::
 
     /// Serves the Swagger UI page and the CSS and JS files it loads beside that page.
     #[cfg(feature = "swagger_web_ui")]
-    fn route_swagger_ui<R: PathRouter>(router: picoserve::Router<R>) 
+    fn route_swagger_ui<R: PathRouter>(router: picoserve::Router<R>)
         -> picoserve::Router<impl PathRouter>
     {
-        use super::swagger::{CSS, HTML, JS};
+        pub const HTML: &str = include_str!("../../../resources_swagger/feagi-server.html");
+        pub const CSS: &[u8] = include_bytes!("../../../resources_swagger/swagger-ui.css");
+        pub const JS: &[u8] = include_bytes!("../../../resources_swagger/swagger-ui-bundle.js");
+        // TODO CDN link on our cloud for deployments where we cannot fit the above data in the library
+        
         use picoserve::response::File;
         use picoserve::routing::get_service;
 
