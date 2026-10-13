@@ -36,7 +36,7 @@ pub const fn padded_url_safe_base64_len(source_bytes: usize) -> usize {
 macro_rules! base_64_id {
     ($id_name:ident, $number_of_bytes:expr) => {
         paste::paste!{
-            pub type [<Base64Encoded $id_name>] = Base64EncodedByteID<$id_name, $number_of_bytes, { $crate::common_id_traits_and_impls::padded_url_safe_base64_len($number_of_bytes) }>;
+            pub type [<Base64Encoded $id_name>] = Base64EncodedByteID<$id_name, $number_of_bytes, { $crate::byte_id::padded_url_safe_base64_len($number_of_bytes) }>;
         }
     };
 }
@@ -79,6 +79,20 @@ impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, co
     /// Borrow the padded URL-safe base64 text.
     pub fn as_str(&self) -> &str {
         self.base_64_encoded_str.as_str()
+    }
+
+    /// Write the padded URL-safe base64 form of `id` into `f`.
+    ///
+    /// A concrete ID knows both lengths, so `Display` can call `Base64EncodedMyId::fmt_id(self, f)`.
+    pub fn fmt_id(id: &ID, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let _ = Self::BASE64_LEN_MATCHES_SOURCE;
+        let mut arr = [0u8; NUMBER_BASE_64_BYTES];
+        // NUMBER_BASE_64_BYTES is the padded length, so this write fills `arr` with ASCII.
+        _ = base64::prelude::BASE64_URL_SAFE
+            .encode_slice(id.get_id_bytes(), &mut arr)
+            .unwrap_or_else(|_| panic!("Failed to encode base64 ID into NUMBER_BASE_64_BYTES"));
+        let text = core::str::from_utf8(&arr).expect("base64 alphabet is ASCII");
+        f.write_str(text)
     }
 
     /// Parse a padded URL-safe base64 ID.

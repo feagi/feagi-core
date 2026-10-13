@@ -1,5 +1,5 @@
 use feagi_basis::base_64_id;
-use feagi_basis::common_id_traits_and_impls::{padded_url_safe_base64_len, Base64EncodedByteID, Base64EncodedByteIdError, ByteID};
+use feagi_basis::byte_id::{padded_url_safe_base64_len, Base64EncodedByteID, Base64EncodedByteIdError, ByteID};
 use feagi_basis::feagi_message::feagi_message_element::MessageElementSerializable;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -159,6 +159,20 @@ fn try_from_heapless_parses_the_same_text() {
     assert_eq!(parsed.to_id().0, [0xFF]);
     let parsed = Base64EncodedByteID::<RawId<1>, 1, 4>::try_from(stored.as_str()).expect("str try_from");
     assert_eq!(parsed.as_str(), encoded.as_str());
+}
+
+#[test]
+fn fmt_id_is_the_display_text() {
+    struct Show(RawId<1>);
+    impl core::fmt::Display for Show {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            Base64EncodedByteID::<RawId<1>, 1, 4>::fmt_id(&self.0, f)
+        }
+    }
+
+    let id = RawId([0xFF]);
+    let encoded = Base64EncodedByteID::<RawId<1>, 1, 4>::from(id.clone());
+    assert_eq!(Show(id).to_string(), encoded.as_str());
 }
 
 #[test]

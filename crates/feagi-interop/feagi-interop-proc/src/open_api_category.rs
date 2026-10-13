@@ -5,14 +5,13 @@
 use feagi_macro_components::feagi_messages::message_path_element::MessagePathElement;
 use feagi_macro_components::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
 use feagi_macro_components::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategory;
-use feagi_macro_components::template_parsing::feagi_messages::request_response::feagi_request_messsages::
-FeagiRequestMessage;
 use feagi_macro_components::template_parsing::property_descriptors::PropertyDescriptors;
 use feagi_macro_components::template_parsing::struct_template::StructTemplate;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::HashMap;
 use syn::{GenericArgument, LitStr, PathArguments, Type};
+use feagi_macro_components::feagi_messages::request_response::feagi_request_message::FeagiRequestMessage;
 
 /// Expression that evaluates to one `CategoryApi`.
 pub fn category_api_tokens(category: &FeagiRequestMessageCategory) -> TokenStream {

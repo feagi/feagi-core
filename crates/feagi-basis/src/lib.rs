@@ -26,7 +26,7 @@ pub mod feagi_message;
 #[cfg(feature = "std")]
 pub mod generic_thread_worker;
 pub mod capabilities;
-pub mod common_id_traits_and_impls;
+pub mod byte_id;
 // TODO future UI work, may need its own crate? or maybe not
 //pub mod ui_parameters;
 
