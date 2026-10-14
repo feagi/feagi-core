@@ -5,18 +5,18 @@ use thiserror::Error;
 
 pub const NUMBER_OF_BYTES: usize = 8;
 
-/// Unique session tracker of an agent registered to FEAGI
+/// Unique session tracker of an embodiment registered to FEAGI
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct AgentID([u8; NUMBER_OF_BYTES]);
+pub struct EmbodimentID([u8; NUMBER_OF_BYTES]);
 
-impl Display for AgentID {
+impl Display for EmbodimentID {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        Base64EncodedAgentID::fmt_id(&self, f)
+        Base64EncodedEmbodimentID::fmt_id(&self, f)
     }
 }
 
-impl ByteID<NUMBER_OF_BYTES> for AgentID {
-    type DeserializationError = AgentIDError;
+impl ByteID<NUMBER_OF_BYTES> for EmbodimentID {
+    type DeserializationError = EmbodimentIDError;
 
     fn get_id_bytes(&self) -> &[u8; NUMBER_OF_BYTES] {
         &self.0
@@ -29,8 +29,9 @@ impl ByteID<NUMBER_OF_BYTES> for AgentID {
 }
 
 #[derive(Debug, Error)]
-pub enum AgentIDError {
-    // TODO
+pub enum EmbodimentIDError {
+    #[error("No decoding error possible as there are no rules")]
+    None
 }
 
-base_64_id!(AgentID, 8);
+base_64_id!(EmbodimentID, 8);

@@ -1,4 +1,4 @@
-pub mod agent;
+pub mod embodiment;
 
 pub mod error;
 
