@@ -3,14 +3,14 @@
 // TODO Add FeagiDisplay, FeagiDebug traits, and force them here
 
 use half::{bf16, f16};
-use serde::{Serialize};
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 /// Common base for all quantizable types
 #[doc(hidden)]
 pub trait QuantizedElementBase:
-    Copy + Clone + Send + Sync + Default + core::fmt::Debug + core::fmt::Display
-    + core::cmp::PartialEq + core::cmp::PartialOrd + Sized + Serialize + DeserializeOwned + 'static
+Copy + Clone + Send + Sync + Default + core::fmt::Debug + core::fmt::Display
++ core::cmp::PartialEq + core::cmp::PartialOrd + Sized + Serialize + DeserializeOwned + 'static
 {
     const QUANT_ZERO: Self;
     const QUANT_ONE: Self;

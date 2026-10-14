@@ -7,7 +7,8 @@ pub enum SpatialContextError {
     InvalidSpatialIndex,
     #[error("Attempted to create a dimensions value with a zero sized axis")]
     DimensionsCannotBeZero,
-    #[error("Attempted to convert spatial data to another quantization but a value would not fit in the target quantization")]
+    #[error("Attempted to convert spatial data to another quantization but a value would not fit in the target quantization"
+    )]
     SpatialQuantizationOutOfRange,
     #[error(transparent)]
     InvalidSpatialQuantization(#[from] DataValueQuantizationError),

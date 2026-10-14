@@ -3,15 +3,15 @@
 //! worker over a feagi request / response channel. The worker owns the responding half and must
 //! keep answering notifications, replying to `Stop` before it exits.
 
-use core::marker::PhantomData;
 use crate::parallelism::feagi_channel::channel_error::FeagiRequestError;
 use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
-use crate::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequester, ReplySlot, RequestSlot};
-use crate::parallelism::feagi_worker::notifications::{FeagiWorkerNotification, FeagiWorkerReply};
 #[cfg(feature = "alloc")]
 use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiverDynamic, FeagiChannelSenderDynamic};
 #[cfg(feature = "alloc")]
 use crate::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiReplySenderDynamic, FeagiRequestResponseDynamicBuilder, FeagiResponderDynamic};
+use crate::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequester, ReplySlot, RequestSlot};
+use crate::parallelism::feagi_worker::notifications::{FeagiWorkerNotification, FeagiWorkerReply};
+use core::marker::PhantomData;
 
 //region Spawner
 
@@ -97,7 +97,7 @@ FeagiWorkerHandle<CustomNotification, CustomReply, RequestSender, ReplySender, R
 /// `async_process_next` / `try_process_next` methods
 #[cfg(feature = "alloc")]
 pub type FeagiWorkerNotificationsDynamic<CustomNotification, CustomReply> =
-    FeagiResponderDynamic<FeagiWorkerNotification<CustomNotification>, FeagiWorkerReply<CustomReply>>;
+FeagiResponderDynamic<FeagiWorkerNotification<CustomNotification>, FeagiWorkerReply<CustomReply>>;
 
 /// Worker handle using heap allocated notification channels
 #[cfg(feature = "alloc")]
@@ -122,7 +122,7 @@ impl<CustomNotification, CustomReply, BackendHandle> FeagiWorkerHandleDynamic<Cu
         create_body: impl FnOnce(FeagiWorkerNotificationsDynamic<CustomNotification, CustomReply>) -> Body,
     ) -> Result<Self, Spawner::SpawnError>
     where
-        Spawner: FeagiWorkerSpawner<Body, BackendHandle = BackendHandle>,
+        Spawner: FeagiWorkerSpawner<Body, BackendHandle=BackendHandle>,
     {
         let (notifier, notifications) = FeagiRequestResponseDynamicBuilder::new(notification_queue_capacity).create();
         let backend_handle = spawner.spawn_worker(create_body(notifications))?;

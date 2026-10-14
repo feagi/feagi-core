@@ -1,7 +1,7 @@
+use crate::quantization::quantizable::data_value_quantization_error::DataValueQuantizationError;
+use crate::quantization::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use crate::quantization::quantizable::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
-use crate::quantization::quantizable::data_value_quantization_error::DataValueQuantizationError;
 
 /// Shared unsigned-percentage semantics for both [`PercentageUnsigned`] and wrapped newtypes.
 ///
@@ -9,23 +9,23 @@ use crate::quantization::quantizable::data_value_quantization_error::DataValueQu
 /// [`PercentageUnsigned`] or a wrapped newtype implementing
 /// [`QuantizedUnsignedPercentageWrappedTrait`].
 pub trait QuantizedUnsignedPercentageTrait:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + Default
-    + core::fmt::Debug
-    + core::fmt::Display
-    + core::cmp::PartialEq
-    + core::cmp::PartialOrd
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + Sized
-    + Serialize
-    + DeserializeOwned
-    + 'static
+Copy
++ Clone
++ Send
++ Sync
++ Default
++ core::fmt::Debug
++ core::fmt::Display
++ core::cmp::PartialEq
++ core::cmp::PartialOrd
++ core::ops::Mul<Output=Self>
++ core::ops::Div<Output=Self>
++ core::ops::MulAssign
++ core::ops::DivAssign
++ Sized
++ Serialize
++ DeserializeOwned
++ 'static
 {
     /// The underlying decimal quantization type this percentage stores.
     type DecimalQuant: QuantizedDecimalTrait;
@@ -149,10 +149,10 @@ impl<D: QuantizedDecimalTrait> core::fmt::Display for PercentageUnsigned<D> {
 /// Wrapper-specific behaviour is limited to [`Self::new`] and [`Self::dewrap`]; arithmetic and
 /// conversion semantics come from [`QuantizedUnsignedPercentageTrait`].
 pub trait QuantizedUnsignedPercentageWrappedTrait:
-    QuantizedUnsignedPercentageTrait
-    + From<PercentageUnsigned<Self::Quant>>
-    + AsRef<PercentageUnsigned<Self::Quant>>
-    + AsMut<PercentageUnsigned<Self::Quant>>
+QuantizedUnsignedPercentageTrait
++ From<PercentageUnsigned<Self::Quant>>
++ AsRef<PercentageUnsigned<Self::Quant>>
++ AsMut<PercentageUnsigned<Self::Quant>>
 {
     /// The underlying unwrapped decimal quantization type.
     type Quant: QuantizedDecimalUnwrappedTrait;

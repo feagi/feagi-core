@@ -14,9 +14,9 @@ pub enum FeagiChannelSendError {
 impl<T> From<thingbuf::mpsc::errors::TrySendError<T>> for FeagiChannelSendError {
     fn from(value: thingbuf::mpsc::errors::TrySendError<T>) -> Self {
         match value {
-            thingbuf::mpsc::errors::TrySendError::Full(_) => {FeagiChannelSendError::ChannelFull}
-            thingbuf::mpsc::errors::TrySendError::Closed(_) => {FeagiChannelSendError::ChannelClosed}
-            _ => {unreachable!("Invalid send channel error!")}
+            thingbuf::mpsc::errors::TrySendError::Full(_) => { FeagiChannelSendError::ChannelFull }
+            thingbuf::mpsc::errors::TrySendError::Closed(_) => { FeagiChannelSendError::ChannelClosed }
+            _ => { unreachable!("Invalid send channel error!") }
         }
     }
 }
@@ -30,9 +30,9 @@ impl<T> From<thingbuf::mpsc::errors::Closed<T>> for FeagiChannelSendError {
 impl<T> From<thingbuf::mpsc::errors::SendTimeoutError<T>> for FeagiChannelSendError {
     fn from(value: thingbuf::mpsc::errors::SendTimeoutError<T>) -> Self {
         match value {
-            thingbuf::mpsc::errors::SendTimeoutError::Timeout(_) => {FeagiChannelSendError::ChannelFullAfterExceedingTimeout}
-            thingbuf::mpsc::errors::SendTimeoutError::Closed(_) => {FeagiChannelSendError::ChannelClosed}
-            _ => {unreachable!("Invalid send channel error!")}
+            thingbuf::mpsc::errors::SendTimeoutError::Timeout(_) => { FeagiChannelSendError::ChannelFullAfterExceedingTimeout }
+            thingbuf::mpsc::errors::SendTimeoutError::Closed(_) => { FeagiChannelSendError::ChannelClosed }
+            _ => { unreachable!("Invalid send channel error!") }
         }
     }
 }
@@ -53,9 +53,9 @@ pub enum FeagiChannelReceiveError {
 impl From<thingbuf::mpsc::errors::TryRecvError> for FeagiChannelReceiveError {
     fn from(value: thingbuf::mpsc::errors::TryRecvError) -> Self {
         match value {
-            thingbuf::mpsc::errors::TryRecvError::Empty => {FeagiChannelReceiveError::ChannelEmpty}
-            thingbuf::mpsc::errors::TryRecvError::Closed => {FeagiChannelReceiveError::ChannelClosed}
-            _ => {unreachable!("Invalid receive channel error!")}
+            thingbuf::mpsc::errors::TryRecvError::Empty => { FeagiChannelReceiveError::ChannelEmpty }
+            thingbuf::mpsc::errors::TryRecvError::Closed => { FeagiChannelReceiveError::ChannelClosed }
+            _ => { unreachable!("Invalid receive channel error!") }
         }
     }
 }
@@ -63,9 +63,9 @@ impl From<thingbuf::mpsc::errors::TryRecvError> for FeagiChannelReceiveError {
 impl From<thingbuf::mpsc::errors::RecvTimeoutError> for FeagiChannelReceiveError {
     fn from(value: thingbuf::mpsc::errors::RecvTimeoutError) -> Self {
         match value {
-            thingbuf::mpsc::errors::RecvTimeoutError::Timeout => {FeagiChannelReceiveError::ChannelEmptyAfterExceedingTimeout}
-            thingbuf::mpsc::errors::RecvTimeoutError::Closed => {FeagiChannelReceiveError::ChannelClosed}
-            _ => {unreachable!("Invalid receive channel error!")}
+            thingbuf::mpsc::errors::RecvTimeoutError::Timeout => { FeagiChannelReceiveError::ChannelEmptyAfterExceedingTimeout }
+            thingbuf::mpsc::errors::RecvTimeoutError::Closed => { FeagiChannelReceiveError::ChannelClosed }
+            _ => { unreachable!("Invalid receive channel error!") }
         }
     }
 }

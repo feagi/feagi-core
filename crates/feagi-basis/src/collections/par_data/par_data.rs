@@ -1,8 +1,8 @@
+use super::ParDataError;
+use crate::quantization::prelude::*;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
 use serde::{Deserialize, Serialize};
-use crate::quantization::prelude::*;
-use super::ParDataError;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParData<QI, S> {
@@ -46,11 +46,12 @@ pub trait ParDataStoreMut: ParDataStore {
 /// A `ParDataStoreMut` that can be resized.
 pub trait ParDataStoreResizable: ParDataStoreMut {
     fn new_from_element_default(number_elements: usize) -> Self
-    where Self::Elem: Default;
+    where
+        Self::Elem: Default;
 
     fn new_from_element_clonable(number_elements: usize, source: Self::Elem) -> Self
-    where Self::Elem: Clone;
-
+    where
+        Self::Elem: Clone;
 }
 
 #[cfg(feature = "alloc")]
@@ -72,7 +73,7 @@ impl<D> ParDataStoreMut for Vec<D> {
 impl<D> ParDataStoreResizable for Vec<D> {
     fn new_from_element_default(number_elements: usize) -> Self
     where
-        Self::Elem: Default
+        Self::Elem: Default,
     {
         let mut out = Vec::with_capacity(number_elements);
         out.resize_with(number_elements, Self::Elem::default);
@@ -81,7 +82,7 @@ impl<D> ParDataStoreResizable for Vec<D> {
 
     fn new_from_element_clonable(number_elements: usize, source: Self::Elem) -> Self
     where
-        Self::Elem: Clone
+        Self::Elem: Clone,
     {
         vec![source; number_elements]
     }
@@ -170,7 +171,6 @@ impl<QI, S: Default> Default for ParData<QI, S> {
 
 /// Shared behaviour
 impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStore> ParData<QI, S> {
-
     /// Number of elements
     pub fn len(&self) -> usize {
         self.data.store_as_slice().len()
@@ -238,7 +238,6 @@ impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStore> ParData<QI, S> {
 
 /// mutable
 impl<QI: QuantizedUnsignedIntegerTrait, S: ParDataStoreMut> ParData<QI, S> {
-
     /// Mutably borrows the element at `index`, or `None` if out of bounds.
     pub fn get_mut(&mut self, index: QI) -> Option<&mut S::Elem> {
         self.data.store_as_mut_slice().get_mut(index.quant_to_usize())

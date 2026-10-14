@@ -1,4 +1,3 @@
-
 /// The enum type that messages of a category can convert into
 pub trait FeagiRequestMessageCategoryEnum {}
 
@@ -6,7 +5,6 @@ pub trait FeagiRequestMessageCategoryEnum {}
 pub trait FeagiRequestMessageCategory {
     type CategoryEnum: FeagiRequestMessageCategoryEnum;
 }
-
 
 
 /// Represents a struct with pub fields corresponding to a tuple of `FeagiCategoryGroup` that represent

@@ -1,10 +1,10 @@
+use super::BitBatchParDataError;
+use crate::collections::bit_packed_bool::bit_batch_word::BitBatchWord;
+use crate::collections::par_data::par_data::{ParDataStore, ParDataStoreMut};
+use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, Range};
 use serde::{Deserialize, Serialize};
-use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
-use crate::collections::bit_packed_bool::bit_batch_word::BitBatchWord;
-use crate::collections::par_data::par_data::{ParDataStore, ParDataStoreMut};
-use super::BitBatchParDataError;
 
 /// Bit-packed bools held as words of `S`, addressed by word index `QWord` or bool index `QBit`.
 ///

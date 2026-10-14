@@ -1,8 +1,8 @@
-use std::marker::PhantomData;
-use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
 use crate::collections::prelude::{SpatialCoordinate, SpatialDimensions};
 use crate::collections::spatial_helpers::axis_order::{AxisOrder, AxisOrderArray};
 use crate::collections::spatial_helpers::SpatialStride;
+use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
+use std::marker::PhantomData;
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, ::serde::Serialize)]
 #[serde(bound(
@@ -18,7 +18,7 @@ where
     #[serde(skip)]
     stride: SpatialStride<NUM_DIMS>,
     #[serde(skip)]
-    _p: core::marker::PhantomData<AxisOrderType>
+    _p: core::marker::PhantomData<AxisOrderType>,
 }
 
 impl<QDims, AxisOrderType, const NUM_DIMS: usize> SpatialHelper<QDims, AxisOrderType, NUM_DIMS>
@@ -30,7 +30,10 @@ where
         let axis_order = AxisOrderType::AXIS_ORDER_ARRAY;
         let stride = SpatialStride::new_stride(&dimensions, &axis_order);
         Self {
-            dimensions, axis_order, stride, _p: PhantomData
+            dimensions,
+            axis_order,
+            stride,
+            _p: PhantomData,
         }
     }
 
@@ -55,11 +58,11 @@ where
     ) -> QLinear {
         self.stride.coordinate_to_linear(coordinate)
     }
-    
+
     pub fn get_dimensions(&self) -> &SpatialDimensions<QDims, NUM_DIMS> {
         &self.dimensions
     }
-    
+
     pub fn get_axis_order_array(&self) -> &AxisOrderArray<NUM_DIMS> {
         &self.axis_order
     }
@@ -75,7 +78,7 @@ where
 {
     dimensions: SpatialDimensions<QDims, NUM_DIMS>,
     #[serde(skip)]
-    _p: PhantomData<AxisOrderType>
+    _p: PhantomData<AxisOrderType>,
 }
 impl<'de, QDims, AxisOrderType, const NUM_DIMS: usize> ::serde::Deserialize<'de>
 for SpatialHelper<QDims, AxisOrderType, NUM_DIMS>

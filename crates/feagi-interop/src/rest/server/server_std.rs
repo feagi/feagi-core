@@ -98,7 +98,7 @@ async fn run_rest_server(listener: std::net::TcpListener, notifications: RestSer
 
 const JSON_CONTENT_TYPE: &str = "application/json";
 
-const HEALTH_CHECK_JSON: &str = r#"{"genome_availability":true,"brain_readiness":true,"genome_validity":true,"feagi_session":1,"genome_num":1,"burst_engine":true,"simulation_timestep":0.05,"influxdb_availability":false,"neuron_count_max":0,"synapse_count_max":0,"neuron_count":0,"synapse_count":0}"#;
+const HEALTH_CHECK_JSON: &str = r#"{"genome_availability":true,"brain_readiness":true,"genome_validity":true,"genome_loading":false,"feagi_session":1,"genome_num":1,"burst_engine":true,"simulation_timestep":0.05,"influxdb_availability":false,"neuron_count_max":0,"synapse_count_max":0,"neuron_count":0,"synapse_count":0}"#;
 
 /// Brain Visualizer reads this body with `String.to_float()`, so the body is a JSON number.
 const SIMULATION_TIMESTEP_JSON: &str = "0.05";
@@ -130,6 +130,9 @@ const IPU_TYPES_JSON: &str = "{}";
 const OPU_TYPES_JSON: &str = "{}";
 
 const AGENT_CAPABILITIES_JSON: &str = "{}";
+
+/// Genome load reads this as an array. An empty array means no classifiers.
+const CLASSIFIERS_JSON: &str = "[]";
 
 
 fn route_brain_visualizer_startup<R: picoserve::routing::PathRouter>(
@@ -171,6 +174,7 @@ fn route_brain_visualizer_startup<R: picoserve::routing::PathRouter>(
             get_service(json_file(PLASTICITY_QUEUE_DEPTH_JSON)),
         )
         .route("/v1/agent/capabilities/all", get_service(json_file(AGENT_CAPABILITIES_JSON)))
+        .route("/v1/cortical_area/classifiers", get_service(json_file(CLASSIFIERS_JSON)))
 }
 
 //endregion

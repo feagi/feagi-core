@@ -6,7 +6,7 @@ pub trait FeagiMessagePath: Sized + Clone + Copy + core::fmt::Debug {
     const PATH: &'static [MessagePathElement];
 
     /// The message data struct that is relevant
-    type Message: FeagiMessage<Path = Self>;
+    type Message: FeagiMessage<Path=Self>;
 }
 
 /// Individual path segment

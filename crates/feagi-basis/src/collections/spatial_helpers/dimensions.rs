@@ -1,6 +1,6 @@
 use super::SpatialHelperError;
-use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
 use crate::collections::spatial_context::spatial_context_error::SpatialContextError;
+use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
 
 /// Generic owned dimensions value for an N-dimensional index space.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]
@@ -17,10 +17,10 @@ impl<QI: QuantizedUnsignedIntegerTrait, const NUM_DIMS: usize> SpatialDimensions
         }
         Ok(Self { data })
     }
-    
+
     pub fn new_dimensions_from_usize(data: [usize; NUM_DIMS]) -> Result<Self, SpatialHelperError> {
         let data_in: [QI; NUM_DIMS] = data.map(|e| QI::quant_try_from_usize(e).unwrap()); // TODO Error Handling
-        Self::new_dimensions(data_in)        
+        Self::new_dimensions(data_in)
     }
 
     /// Borrow dimensions as a fixed-size slice.

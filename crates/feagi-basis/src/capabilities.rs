@@ -1,7 +1,5 @@
-
 // NOTE: Do not make this a u8! Instead, we may make this representable as some other uint manually
 // down the line
-
 
 pub enum FeagiCapabilities {
     /// Processes neuron data in bursts
@@ -11,10 +9,8 @@ pub enum FeagiCapabilities {
     /// Can visualize neuron firing data for developers
     VisualizationConsumer,
     /// Can take in SenoriMotor Data
-    SensoriMotorSink
-
+    SensoriMotorSink,
 }
-
 
 
 // TODO for some of these, nest a uint bitflag for additional capabilities

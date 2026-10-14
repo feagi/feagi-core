@@ -1,8 +1,8 @@
 //! Runs feagi workers on their own std threads.
 
-use core::future::Future;
 use crate::parallelism::block_on_thread;
 use crate::parallelism::feagi_worker::feagi_worker::FeagiWorkerSpawner;
+use core::future::Future;
 
 /// Spawns each worker on a new std thread and runs it there with `block_on_thread`
 ///
@@ -14,7 +14,7 @@ pub struct FeagiStdThreadSpawner;
 impl<Body, BodyFuture> FeagiWorkerSpawner<Body> for FeagiStdThreadSpawner
 where
     Body: FnOnce() -> BodyFuture + Send + 'static,
-    BodyFuture: Future<Output = ()>,
+    BodyFuture: Future<Output=()>,
 {
     type BackendHandle = std::thread::JoinHandle<()>;
     type SpawnError = std::io::Error;

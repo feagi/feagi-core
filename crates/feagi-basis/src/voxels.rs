@@ -1,9 +1,9 @@
-use serde::de::DeserializeOwned;
-use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer};
 use crate::collections::par_data::par_data::ParDataStore;
 use crate::collections::par_data::spatial::SpatialParDataOwning;
 use crate::collections::spatial_helpers::axis_order::AxisOrderIncrementing;
 use crate::prelude::{QuantizedDecimalUnwrappedTrait, QuantizedUnsignedIntegerUnwrappedTrait, SpatialCoordinate, SpatialDimensions};
+use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_unsigned_integer};
+use serde::de::DeserializeOwned;
 
 create_wrapped_quantized_decimal!(
     /// Represents the Membrane Potential of the neuron(s) in a voxel. Most of the time, each

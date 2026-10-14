@@ -3,13 +3,13 @@
 
 // TODO Equal check with epsilon
 
+use crate::quantization::prelude::{QuantizedSignedIntegerTrait, QuantizedUnsignedIntegerTrait};
+use crate::quantization::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 use crate::quantization::quantizable::quantization_level_packing::QuantizationLevelPacking;
 use crate::quantization::quantizable::{PercentageUnsigned, QuantizedElementBase, QuantizedUnsignedPercentageTrait};
 use half::{bf16, f16};
-use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
-use crate::quantization::prelude::{QuantizedSignedIntegerTrait, QuantizedUnsignedIntegerTrait};
-use crate::quantization::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
+use serde::{Deserialize, Serialize};
 
 /// Represents a value that is represented as a decimal number, main backbone for computations
 #[repr(u8)]
@@ -60,18 +60,18 @@ impl QuantizationLevelPacking for DecimalQuantizationLevel {
 /// Note: because the underlying types are floats, `Eq`, `Ord`, and `Hash` are intentionally not
 /// required.
 pub trait QuantizedDecimalTrait:
-    QuantizedElementBase
-    + core::cmp::PartialOrd
-    + core::ops::Add<Output = Self>
-    + core::ops::Sub<Output = Self>
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::AddAssign
-    + core::ops::SubAssign
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + core::iter::Sum
-    + core::iter::Product
+QuantizedElementBase
++ core::cmp::PartialOrd
++ core::ops::Add<Output=Self>
++ core::ops::Sub<Output=Self>
++ core::ops::Mul<Output=Self>
++ core::ops::Div<Output=Self>
++ core::ops::AddAssign
++ core::ops::SubAssign
++ core::ops::MulAssign
++ core::ops::DivAssign
++ core::iter::Sum
++ core::iter::Product
 {
     /// Defines the quantization type. Is simply Self for unwrapped, but for wrapped is the quant type.
     /// This allows universal compatibility checking between wrapped and unwrapped that the quantization level
@@ -79,7 +79,7 @@ pub trait QuantizedDecimalTrait:
     type QuantType: QuantizedDecimalUnwrappedTrait;
 
     const LEVEL: DecimalQuantizationLevel;
-    
+
     const QUANT_NEGATIVE_ONE: Self;
 
     fn quant_clamp(&self, min: Self, max: Self) -> Self;
@@ -101,7 +101,7 @@ pub trait QuantizedDecimalTrait:
     fn from_quantized_unsigned_integer<FromQuant: QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self;
 
     fn from_quantized_signed_integer<FromQuant: QuantizedSignedIntegerTrait>(value: FromQuant) -> Self;
-    
+
     /// Converts to a decimal of another quantization.
     fn to_quantization<ToQuant: QuantizedDecimalTrait>(self) -> ToQuant {
         ToQuant::from_quantization(self)
@@ -115,7 +115,7 @@ pub trait QuantizedDecimalTrait:
     fn scale_by_same_quant_unsigned_percentage(self, p: &PercentageUnsigned<Self>) -> Self {
         self * QuantizedUnsignedPercentageTrait::get_decimal(*p)
     }
-    
+
     /// Gets the reciprocal
     fn reciprocal(self) -> Self {
         Self::QUANT_ONE / self
@@ -363,7 +363,7 @@ pub trait QuantizedDecimalWrappedTrait: QuantizedDecimalTrait + From<Self::Quant
 ///
 /// These enums hide the generic wrapped decimal type behind concrete variants
 /// (`F16`, `BF16`, `F32`, `F64`, `StorageF8`) while preserving wrapper-family semantics.
-pub trait WrappedQuantizedDecimalEnum: 
+pub trait WrappedQuantizedDecimalEnum:
 Copy + Clone + Send + Sync
 + core::fmt::Debug + core::cmp::PartialEq
 + Serialize + DeserializeOwned

@@ -1,6 +1,6 @@
 //! Random temp stuff, will be moved elsewhere eventually
 
-pub const FEAGI_STARTUP_BANNER: &'static str =r#"
+pub const FEAGI_STARTUP_BANNER: &'static str = r#"
 ╔════════════════════════════════════════════════════════════════╗
 ║                                                                ║
 ║   ███████╗███████╗ █████╗  ██████╗ ██╗                         ║

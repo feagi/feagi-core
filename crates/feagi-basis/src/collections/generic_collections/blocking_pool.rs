@@ -6,17 +6,16 @@ pub struct BlockingPool<T, const N: usize> (
 );
 
 impl<T, const N: usize> BlockingPool<T, N> {
-
     /// Creates new pool
     pub const fn new(initial: heapless::Vec<T, N>) -> Self {
         Self(std::sync::Mutex::new(initial))
     }
-    
+
     /// Briefly locks the internal to try to remove an item. Returns none if empty
     pub fn take_item(&mut self) -> Option<T> {
         let vec = &mut self.0.lock();
         if let Ok(mg) = vec {
-            return mg.pop()
+            return mg.pop();
         }
         // given we relock the mutex instantly without control of whatever thread is using this,
         // Any mutex poisoning implies something has already gone catastrophically wrong anyways
@@ -27,7 +26,7 @@ impl<T, const N: usize> BlockingPool<T, N> {
     pub fn return_item(&mut self, item: T) -> Result<(), T> {
         let vec = &mut self.0.lock();
         if let Ok(mg) = vec {
-            return mg.push(item)
+            return mg.push(item);
         }
         // given we relock the mutex instantly without control of whatever thread is using this,
         // Any mutex poisoning implies something has already gone catastrophically wrong anyways
@@ -38,7 +37,8 @@ impl<T, const N: usize> BlockingPool<T, N> {
 unsafe impl<T, const N: usize> Send for BlockingPool<T, N> where T: Send {}
 
 impl<T, const N: usize> Clone for BlockingPool<T, N>
-where T: Clone
+where
+    T: Clone,
 {
     fn clone(&self) -> Self {
         let vec = self.0.lock().unwrap();

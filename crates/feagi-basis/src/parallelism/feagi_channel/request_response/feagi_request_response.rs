@@ -1,12 +1,12 @@
 //! Request / response over feagi channels
 
-use core::marker::PhantomData;
-use core::ops::DerefMut;
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiRequestError};
-use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
-use crate::parallelism::feagi_channel::recycling::Recyclable;
 #[cfg(feature = "alloc")]
 use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelDynamicBuilder, FeagiChannelReceiverDynamic, FeagiChannelSenderDynamic};
+use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
+use crate::parallelism::feagi_channel::recycling::Recyclable;
+use core::marker::PhantomData;
+use core::ops::DerefMut;
 
 /// Marks a type that builds feagi requester / responder pairs
 pub trait FeagiRequestResponseBuilder<Request: Recyclable, Response: Recyclable> {
@@ -271,7 +271,7 @@ where
     /// is cancelled or panics, dropping the reply guard still publishes the slot, so the requester
     /// receives `ResponderDroppedRequest` instead of waiting forever
     async fn respond_in_place<Processor>(
-        mut slot: impl DerefMut<Target = RequestSlot<Request, ReplySender>>,
+        mut slot: impl DerefMut<Target=RequestSlot<Request, ReplySender>>,
         processor: Processor,
     )
     where

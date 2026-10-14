@@ -1,7 +1,7 @@
-use crate::quantization::prelude::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 use crate::collections::spatial_helpers::axis_order::AxisOrderArray;
 use crate::collections::spatial_helpers::coordinate::SpatialCoordinate;
 use crate::collections::spatial_helpers::dimensions::SpatialDimensions;
+use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
 
 /// Generic owned stride value for an N-dimensional index space. This can use usize since we do
 /// not actually serialize this, we skip it
@@ -36,7 +36,7 @@ impl<const NUM_DIMS: usize> SpatialStride<NUM_DIMS> {
     (
         &mut self,
         dims: &SpatialDimensions<QI, NUM_DIMS>,
-        axis_order: &AxisOrderArray<NUM_DIMS>
+        axis_order: &AxisOrderArray<NUM_DIMS>,
     ) {
         *self = Self::new_stride(dims, axis_order);
     }

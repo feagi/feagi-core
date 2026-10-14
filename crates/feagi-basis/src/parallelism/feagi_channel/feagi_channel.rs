@@ -1,6 +1,6 @@
-use core::ops::DerefMut;
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelSendError};
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
+use core::ops::DerefMut;
 
 // NOTE: Yes this is a bit repetitive over Thingbuf, but lets keep the upstream consistent
 
@@ -11,7 +11,9 @@ pub trait FeagiChannelSender<T: Recyclable> {
     /// Guard over a claimed slot, written in place. The slot is published to the receiver when
     /// the guard drops, even if nothing was written, so keep it short-lived and never hold it
     /// across an await point
-    type SendGuard<'a>: DerefMut<Target = T> where Self: 'a;
+    type SendGuard<'a>: DerefMut<Target=T>
+    where
+        Self: 'a;
 
     /// Waits for capacity, then sends. The value is dropped if the channel is closed
     async fn async_send(&self, value: T) -> Result<(), FeagiChannelSendError>;
@@ -38,7 +40,9 @@ pub trait FeagiChannelReceiver<T: Recyclable> {
     /// Guard over a received slot, read in place. The slot is released back to the channel
     /// for recycling when the guard drops, so keep it short-lived and never hold it across an
     /// await point
-    type RecvGuard<'a>: DerefMut<Target = T> where Self: 'a;
+    type RecvGuard<'a>: DerefMut<Target=T>
+    where
+        Self: 'a;
 
     /// Waits for the next value. Errors with `ChannelClosed` once every sender is gone and the
     /// channel is drained
@@ -105,7 +109,9 @@ impl<T: Recyclable + 'static, const CAPACITY: usize> FeagiChannelBuilder<T> for 
 pub struct FeagiChannelSenderStatic<T: Recyclable + 'static>(thingbuf::mpsc::StaticSender<T, RecyclableRecyclePolicy<T>>);
 
 impl<T: Recyclable + 'static> FeagiChannelSender<T> for FeagiChannelSenderStatic<T> {
-    type SendGuard<'a> = thingbuf::mpsc::SendRef<'a, T> where Self: 'a;
+    type SendGuard<'a> = thingbuf::mpsc::SendRef<'a, T>
+    where
+        Self: 'a;
 
     async fn async_send(&self, value: T) -> Result<(), FeagiChannelSendError> {
         self.0.send(value).await.map_err(|e| e.into())
@@ -147,7 +153,9 @@ impl<T: Recyclable + 'static> FeagiChannelSender<T> for FeagiChannelSenderStatic
 pub struct FeagiChannelReceiverStatic<T: Recyclable + 'static>(thingbuf::mpsc::StaticReceiver<T, RecyclableRecyclePolicy<T>>);
 
 impl<T: Recyclable + 'static> FeagiChannelReceiver<T> for FeagiChannelReceiverStatic<T> {
-    type RecvGuard<'a> = thingbuf::mpsc::RecvRef<'a, T> where Self: 'a;
+    type RecvGuard<'a> = thingbuf::mpsc::RecvRef<'a, T>
+    where
+        Self: 'a;
 
     async fn async_recv(&self) -> Result<T, FeagiChannelReceiveError> {
         self.0.recv().await.ok_or(FeagiChannelReceiveError::ChannelClosed)
@@ -237,7 +245,9 @@ impl<T: Recyclable> Clone for FeagiChannelSenderDynamic<T> {
 
 #[cfg(feature = "alloc")]
 impl<T: Recyclable> FeagiChannelSender<T> for FeagiChannelSenderDynamic<T> {
-    type SendGuard<'a> = thingbuf::mpsc::SendRef<'a, T> where Self: 'a;
+    type SendGuard<'a> = thingbuf::mpsc::SendRef<'a, T>
+    where
+        Self: 'a;
 
     async fn async_send(&self, value: T) -> Result<(), FeagiChannelSendError> {
         self.0.send(value).await.map_err(|e| e.into())
@@ -281,7 +291,9 @@ pub struct FeagiChannelReceiverDynamic<T: Recyclable>(thingbuf::mpsc::Receiver<T
 
 #[cfg(feature = "alloc")]
 impl<T: Recyclable> FeagiChannelReceiver<T> for FeagiChannelReceiverDynamic<T> {
-    type RecvGuard<'a> = thingbuf::mpsc::RecvRef<'a, T> where Self: 'a;
+    type RecvGuard<'a> = thingbuf::mpsc::RecvRef<'a, T>
+    where
+        Self: 'a;
 
     async fn async_recv(&self) -> Result<T, FeagiChannelReceiveError> {
         self.0.recv().await.ok_or(FeagiChannelReceiveError::ChannelClosed)

@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum GenericRequestResponseError<E: core::fmt::Debug + Sized + Send = ()> {
@@ -12,7 +12,7 @@ pub enum GenericRequestResponseError<E: core::fmt::Debug + Sized + Send = ()> {
     #[error("Request channel is currently closed! Has the program crashed?")]
     RequestChannelIsClosed,
     #[error(transparent)]
-    Custom(E)
+    Custom(E),
 }
 
 unsafe impl<E: core::fmt::Debug + Sized + Send> Send for GenericRequestResponseError<E> {}

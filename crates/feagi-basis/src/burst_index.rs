@@ -7,10 +7,8 @@ create_wrapped_quantized_unsigned_integer!(
 );
 
 impl<Q: QuantizedUnsignedIntegerUnwrappedTrait> BurstIndex<Q> {
-    
     /// Calculates the halfway point to the max quant value. Needed to know when to rollover
     pub fn halfway_point() -> Self {
         BurstIndex::new(Q::QUANT_MAX / (Q::QUANT_ONE + Q::QUANT_ONE))
     }
-    
 }

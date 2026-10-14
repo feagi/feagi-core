@@ -3,10 +3,10 @@
 pub extern crate feagi_basis_proc_common;
 
 pub mod prelude {
-    pub use super::quantization::prelude::*;
+    pub use super::burst_index::BurstIndex;
     pub use super::collections::prelude::*;
     pub use super::feagi_basis_error::FeagiBasisError;
-    pub use super::burst_index::BurstIndex;
+    pub use super::quantization::prelude::*;
 }
 
 pub mod quantization;

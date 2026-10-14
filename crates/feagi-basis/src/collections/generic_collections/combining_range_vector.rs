@@ -1,6 +1,6 @@
 use crate::common_struct_patterns::feagi_index_range_manager_error::{FeagiIndexRangeManagerError, FeagiIndexRangeVectorFailedMerge};
-use core::ops::Range;
 use crate::quantization::quantizable::QuantizedUnsignedIntegerTrait;
+use core::ops::Range;
 
 // TODO this may be too ultra specific and may need to eb dropped
 

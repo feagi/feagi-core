@@ -1,5 +1,3 @@
-
-
 /// Easier way to mark an item itself as recyclable, for use with the `RecyclableRecycler`
 pub trait Recyclable {
     fn new_for_recycler() -> Self;
@@ -17,7 +15,7 @@ impl<T: Recyclable, E: core::error::Error> Recyclable for Result<T, E> {
 
     fn recycle_self(&mut self) {
         match self {
-            Ok(t) => {t.recycle_self()}
+            Ok(t) => { t.recycle_self() }
             Err(e) => {} // skip
         }
     }
@@ -26,11 +24,15 @@ impl<T: Recyclable, E: core::error::Error> Recyclable for Result<T, E> {
 /// Generic recycler policy for all items implementing `Recyclable'
 #[derive(Clone, Debug, Default)]
 pub struct RecyclableRecyclePolicy<T>
-where T: Recyclable
-{_p: core::marker::PhantomData<T>}
+where
+    T: Recyclable,
+{
+    _p: core::marker::PhantomData<T>,
+}
 
 impl<T> RecyclableRecyclePolicy<T>
-where T: Recyclable
+where
+    T: Recyclable,
 {
     pub const NEW: Self = RecyclableRecyclePolicy {
         _p: core::marker::PhantomData
@@ -44,7 +46,8 @@ where T: Recyclable
 }
 
 impl<T> thingbuf::Recycle<T> for RecyclableRecyclePolicy<T>
-where T: Recyclable
+where
+    T: Recyclable,
 {
     fn new_element(&self) -> T {
         T::new_for_recycler()

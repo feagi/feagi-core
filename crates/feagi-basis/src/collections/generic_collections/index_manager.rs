@@ -1,5 +1,5 @@
-use crate::quantization::quantizable::QuantizedUnsignedIntegerTrait;
 use crate::collections::generic_collections::feagi_index_organizer_error::GenericCollectionError;
+use crate::quantization::quantizable::QuantizedUnsignedIntegerTrait;
 
 pub struct IndexManager<Q: QuantizedUnsignedIntegerTrait> {
     minimum_index: Q,

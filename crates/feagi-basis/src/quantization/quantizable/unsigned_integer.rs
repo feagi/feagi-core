@@ -1,7 +1,7 @@
-use crate::quantization::quantizable::{QuantizationLevelPacking, QuantizedElementBase};
-use serde::{Deserialize, Serialize};
 use crate::quantization::quantizable::base_traits::sealed::QuantizedUnwrappedSeal;
 use crate::quantization::quantizable::data_value_quantization_error::DataValueQuantizationError;
+use crate::quantization::quantizable::{QuantizationLevelPacking, QuantizedElementBase};
+use serde::{Deserialize, Serialize};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -48,31 +48,31 @@ impl QuantizationLevelPacking for UnsignedIntegerQuantizationLevel {
 /// (`u8`, `u16`, …) or a wrapped newtype implementing
 /// [`QuantizedUnsignedIntegerWrappedTrait`].
 pub trait QuantizedUnsignedIntegerTrait:
-    QuantizedElementBase
-    + core::cmp::Ord
-    + core::cmp::Eq
-    + core::hash::Hash
-    + Serialize
-    + core::ops::Add<Output = Self>
-    + core::ops::Sub<Output = Self>
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::Rem<Output = Self>
-    + core::ops::AddAssign
-    + core::ops::SubAssign
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + core::ops::RemAssign
-    + core::ops::BitAnd<Output = Self>
-    + core::ops::BitOr<Output = Self>
-    + core::ops::BitXor<Output = Self>
-    + core::ops::Shl<Output = Self>
-    + core::ops::Shr<Output = Self>
-    + core::ops::BitAndAssign
-    + core::ops::BitOrAssign
-    + core::ops::BitXorAssign
-    + core::iter::Sum
-    + core::iter::Product
+QuantizedElementBase
++ core::cmp::Ord
++ core::cmp::Eq
++ core::hash::Hash
++ Serialize
++ core::ops::Add<Output=Self>
++ core::ops::Sub<Output=Self>
++ core::ops::Mul<Output=Self>
++ core::ops::Div<Output=Self>
++ core::ops::Rem<Output=Self>
++ core::ops::AddAssign
++ core::ops::SubAssign
++ core::ops::MulAssign
++ core::ops::DivAssign
++ core::ops::RemAssign
++ core::ops::BitAnd<Output=Self>
++ core::ops::BitOr<Output=Self>
++ core::ops::BitXor<Output=Self>
++ core::ops::Shl<Output=Self>
++ core::ops::Shr<Output=Self>
++ core::ops::BitAndAssign
++ core::ops::BitOrAssign
++ core::ops::BitXorAssign
++ core::iter::Sum
++ core::iter::Product
 {
     /// Defines the quantization type. Is simply Self for unwrapped, but for wrapped is the quant type.
     /// This allows universal compatibility checking between wrapped and unwrapped that the quantization level
@@ -578,7 +578,7 @@ impl UnsignedIntegerEnum {
 /// also supply the `Self`-typed constants. Arithmetic, bit, and iterator semantics come from
 /// [`QuantizedUnsignedIntegerTrait`].
 pub trait QuantizedUnsignedIntegerWrappedTrait:
-    QuantizedUnsignedIntegerTrait + From<Self::QuantType> + AsRef<Self::QuantType> + AsMut<Self::QuantType>
+QuantizedUnsignedIntegerTrait + From<Self::QuantType> + AsRef<Self::QuantType> + AsMut<Self::QuantType>
 {
     /// The quantization level of the underlying value.
     const LEVEL: UnsignedIntegerQuantizationLevel = <Self::QuantType as QuantizedUnsignedIntegerTrait>::LEVEL;
@@ -611,7 +611,7 @@ pub trait QuantizedUnsignedIntegerWrappedTrait:
 /// These enums hide the generic quantized wrapper type behind concrete variants
 /// (`U8`, `U16`, `U32`, `U64`) while preserving the wrapper family semantics.
 pub trait WrappedQuantizedUnsignedIntegerEnum:
-    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
+Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + core::cmp::Eq + core::hash::Hash + Sized + 'static
 {
     fn get_level(&self) -> UnsignedIntegerQuantizationLevel;
 
