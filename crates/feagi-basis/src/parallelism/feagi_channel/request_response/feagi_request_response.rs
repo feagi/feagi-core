@@ -172,10 +172,41 @@ where
 //region Responder
 
 /// Receives requests from any number of requesters and replies to each one
+///
+/// When dropped, every request still queued is answered as not responded, so no requester is left
+/// waiting on a responder that no longer exists
 // NOTE: Do NOT allow this to be clonable! There is exactly one responder per request channel
-pub struct FeagiResponder<Request, Response, RequestReceiver, ReplySender> {
+pub struct FeagiResponder<Request, Response, RequestReceiver, ReplySender>
+where
+    Request: Recyclable,
+    Response: Recyclable,
+    RequestReceiver: FeagiChannelReceiver<RequestSlot<Request, ReplySender>>,
+    ReplySender: FeagiChannelSender<ReplySlot<Response>>,
+{
     request_receiver: RequestReceiver,
     _types: PhantomData<fn(Request, ReplySender) -> Response>,
+}
+
+impl<Request, Response, RequestReceiver, ReplySender> Drop for FeagiResponder<Request, Response, RequestReceiver, ReplySender>
+where
+    Request: Recyclable,
+    Response: Recyclable,
+    RequestReceiver: FeagiChannelReceiver<RequestSlot<Request, ReplySender>>,
+    ReplySender: FeagiChannelSender<ReplySlot<Response>>,
+{
+    // A request published after this drain finishes but before the receiver is dropped is not
+    // answered. thingbuf receivers cannot close the channel ahead of their own drop
+    fn drop(&mut self) {
+        while let Ok(mut slot) = self.request_receiver.try_recv_ref() {
+            let Some(reply_sender) = slot.reply_sender.take() else {
+                continue;
+            };
+            if let Ok(mut reply) = reply_sender.try_send_ref() {
+                reply.sequence = slot.sequence;
+                reply.status = ReplyStatus::NotResponded;
+            };
+        }
+    }
 }
 
 impl<Request, Response, RequestReceiver, ReplySender> FeagiResponder<Request, Response, RequestReceiver, ReplySender>

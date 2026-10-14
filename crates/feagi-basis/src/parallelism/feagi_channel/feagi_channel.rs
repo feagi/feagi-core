@@ -59,8 +59,11 @@ pub trait FeagiChannelReceiver<T: Recyclable> {
     fn is_empty(&self) -> bool;
     /// True if no more items can be sent until this receiver takes some
     fn is_full(&self) -> bool;
-    /// True if every sender has been dropped. Items already queued can still be received
-    fn is_closed(&self) -> bool;
+    // TODO: Disabled because thingbuf 0.1.6 `Receiver::is_closed` reports closed while one sender
+    // is still alive (it checks `tx_count <= 1`, but the count starts at 1 for the first sender).
+    // Restore once thingbuf is fixed or patched. Receiving still reports `ChannelClosed` correctly
+    // /// True if every sender has been dropped. Items already queued can still be received
+    // fn is_closed(&self) -> bool;
 }
 
 /// Marks a type that builds feagi channels carrying T
@@ -73,6 +76,9 @@ pub trait FeagiChannelBuilder<T: Recyclable> {
 
 //region Static Channels
 
+// TODO: Disabled until thingbuf can construct a StaticChannel with a custom recycle policy.
+// thingbuf 0.1.6 only provides `StaticChannel::new()` for its default policy
+/*
 pub struct FeagiChannelStaticBuilder<T: Recyclable + 'static, const CAPACITY: usize> (thingbuf::mpsc::StaticChannel<T, CAPACITY, RecyclableRecyclePolicy<T>>);
 
 impl<T: Recyclable + 'static, const CAPACITY: usize> FeagiChannelStaticBuilder<T, CAPACITY> {
@@ -94,6 +100,7 @@ impl<T: Recyclable + 'static, const CAPACITY: usize> FeagiChannelBuilder<T> for 
     type Sender = FeagiChannelSenderStatic<T>;
     type Receiver = FeagiChannelReceiverStatic<T>;
 }
+*/
 
 pub struct FeagiChannelSenderStatic<T: Recyclable + 'static>(thingbuf::mpsc::StaticSender<T, RecyclableRecyclePolicy<T>>);
 
@@ -178,9 +185,10 @@ impl<T: Recyclable + 'static> FeagiChannelReceiver<T> for FeagiChannelReceiverSt
         self.0.remaining() == 0
     }
 
-    fn is_closed(&self) -> bool {
-        self.0.is_closed()
-    }
+    // TODO: Disabled, see `FeagiChannelReceiver`
+    // fn is_closed(&self) -> bool {
+    //     self.0.is_closed()
+    // }
 }
 
 //endregion
@@ -311,9 +319,10 @@ impl<T: Recyclable> FeagiChannelReceiver<T> for FeagiChannelReceiverDynamic<T> {
         self.0.remaining() == 0
     }
 
-    fn is_closed(&self) -> bool {
-        self.0.is_closed()
-    }
+    // TODO: Disabled, see `FeagiChannelReceiver`
+    // fn is_closed(&self) -> bool {
+    //     self.0.is_closed()
+    // }
 }
 
 //endregion
