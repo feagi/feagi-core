@@ -1,7 +1,7 @@
 //! REST server routes on std
 
-use crate::rest::server::error::FeagiRestServerError;
-use crate::rest::server::server_common::{build_router_with_routes, FeagiRestServerWorker, HTTP_BUFFER_LEN};
+use crate::transport::rest::server::error::FeagiRestServerError;
+use crate::transport::rest::server::server_common::{build_router_with_routes, FeagiRestServerWorker, HTTP_BUFFER_LEN};
 use core::future::Future;
 use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::{FeagiWorkerHandleDynamic, FeagiWorkerNotificationsDynamic};
@@ -133,7 +133,6 @@ const AGENT_CAPABILITIES_JSON: &str = "{}";
 
 /// Genome load reads this as an array. An empty array means no classifiers.
 const CLASSIFIERS_JSON: &str = "[]";
-
 
 fn route_brain_visualizer_startup<R: picoserve::routing::PathRouter>(
     router: picoserve::Router<R>,

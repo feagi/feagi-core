@@ -1,5 +1,5 @@
 #[cfg(feature = "transport_rest")]
-use crate::rest::server::error::FeagiRestServerError;
+use crate::transport::rest::server::error::FeagiRestServerError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

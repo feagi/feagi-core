@@ -7,5 +7,4 @@ pub mod interop_config;
 pub mod interop_peer;
 pub mod interop_request_requester;
 pub mod interop_request_responder;
-#[cfg(feature = "transport_rest")]
-pub mod rest;
+pub mod transport;

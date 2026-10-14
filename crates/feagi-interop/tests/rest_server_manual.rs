@@ -12,8 +12,8 @@ use std::io::BufRead;
 use std::net::{SocketAddr, TcpStream};
 
 use feagi_basis::parallelism::block_on_thread;
-use feagi_interop::rest::server::server_common::FeagiRestServerWorker;
-use feagi_interop::rest::server::server_std::{RestServer, RestServerStartParameters};
+use feagi_interop::transport::rest::server::server_common::FeagiRestServerWorker;
+use feagi_interop::transport::rest::server::server_std::{RestServer, RestServerStartParameters};
 
 /// HTTP address Brain Visualizer connects to on launch.
 const LISTEN_ADDRESS: &str = "127.0.0.1:8000";
