@@ -17,12 +17,12 @@ description = "Root library extending Zenoh for use in FEAGI as a transport medi
 std = [
     "alloc",
     "thiserror/std", "thingbuf/std", "base64/std", "serde/std",
-    "serde_json/std", "picoserve/alloc"
+    "serde_json/std", "picoserve/std"
 ]
 
 alloc = [
     "thingbuf/alloc", "base64/alloc", "serde/alloc",
-    "serde_json/alloc", "picoserve/std"
+    "serde_json/alloc", "picoserve/alloc"
 ]
 
 transport_rest = [
@@ -63,7 +63,7 @@ zenoh = {workspace = true, optional = true, features = ["default", "unstable", "
 
 # Optionally Used
 serde_json = {workspace = true, optional = true}
-picoserve = {workspace = true, optional = true,}
+picoserve = {workspace = true, optional = true}
 
 
 

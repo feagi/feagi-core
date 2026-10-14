@@ -11,7 +11,7 @@ pub mod prelude {
 
 pub mod quantization;
 pub mod collections;
-pub mod threading;
+pub mod parallelism;
 
 pub use feagi_basis_error::FeagiBasisError;
 
@@ -19,7 +19,6 @@ pub use burst_index::{BurstIndex, BurstIndexEnum};
 mod feagi_basis_error;
 mod burst_index;
 pub mod misc;
-pub mod channel;
 pub mod neurons;
 pub mod voxels;
 pub mod feagi_message;

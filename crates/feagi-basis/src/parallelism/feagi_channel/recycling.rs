@@ -23,20 +23,6 @@ impl<T: Recyclable, E: core::error::Error> Recyclable for Result<T, E> {
     }
 }
 
-/// For recycling Oneshots
-impl<Request: Recyclable, Response: Recyclable> Recyclable for (Request, thingbuf::mpsc::Sender<Response, RecyclableRecyclePolicy::<Response>>) {
-    fn new_for_recycler() -> Self {
-        let (s, _r) =
-            thingbuf::mpsc::with_recycle(1, RecyclableRecyclePolicy::<Response>::new());
-        (Request::new_for_recycler(), s)
-    }
-
-    fn recycle_self(&mut self) {
-        self.0.recycle_self();
-        // TODO anything to do here with the sender?
-    }
-}
-
 /// Generic recycler policy for all items implementing `Recyclable'
 #[derive(Clone, Debug, Default)]
 pub struct RecyclableRecyclePolicy<T>

@@ -1,7 +1,6 @@
 use crate::collections::generic_collections::feagi_index_organizer_error::GenericCollectionError;
 use crate::collections::CollectionsError;
 use crate::quantization::QuantizationError;
-use crate::threading::ThreadingError;
 use thiserror::Error;
 
 /// The root error for the Basis crate.
@@ -16,6 +15,4 @@ pub enum FeagiBasisError {
     Quantization(#[from] QuantizationError),
     #[error(transparent)]
     Collections(#[from] CollectionsError),
-    #[error(transparent)]
-    ThreadMessaging(#[from] ThreadingError),
 }

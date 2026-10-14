@@ -2,8 +2,8 @@
 
 use core::marker::PhantomData;
 use core::future::Future;
-use feagi_basis::threading::generic_thread_worker::{GenericThreadWorker, GenericThreadWorkerNotification, GenericThreadWorkerSpawner};
-use feagi_basis::threading::block_on_thread;
+use feagi_basis::parallelism::generic_thread_worker::{GenericThreadWorker, GenericThreadWorkerNotification, GenericThreadWorkerSpawner};
+use feagi_basis::parallelism::block_on_thread;
 use crate::rest::server::error::FeagiRestServerError;
 use crate::rest::server::server_common::{build_router_with_routes, HTTP_BUFFER_LEN};
 

@@ -1,9 +1,9 @@
 //! Systems (largely) common to both STD and Embassy
 
 
+
 /// Request read buffer. Response bodies are written from their static slices.
 pub const HTTP_BUFFER_LEN: usize = 2048;
-
 
 /// Builds the static routes for the server.
 pub fn build_router_with_routes() -> picoserve::Router<impl picoserve::routing::PathRouter> {

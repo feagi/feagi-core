@@ -7,7 +7,7 @@ use core::task::{Context, Poll};
 /// `Pending` yields and polls again; a correct socket impl does not stay there.
 pub fn block_on_thread<F: Future>(future: F) -> F::Output {
     let mut future = core::pin::pin!(future);
-    let waker = std::task::Waker::noop();
+    let waker = core::task::Waker::noop();
     let mut context = Context::from_waker(&waker);
     loop {
         match future.as_mut().poll(&mut context) {

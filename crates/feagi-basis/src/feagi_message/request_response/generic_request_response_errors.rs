@@ -1,5 +1,5 @@
 use thiserror::Error;
-use crate::channel::recycling::Recyclable;
+use crate::parallelism::feagi_channel::recycling::Recyclable;
 
 #[derive(Error, Debug)]
 pub enum GenericRequestResponseError<E: core::fmt::Debug + Sized + Send = ()> {
