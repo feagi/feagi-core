@@ -23,7 +23,7 @@ pub mod neurons;
 pub mod voxels;
 pub mod feagi_message;
 pub mod capabilities;
-pub mod byte_id;
+pub mod identifiers;
 // TODO future UI work, may need its own crate? or maybe not
 //pub mod ui_parameters;
 

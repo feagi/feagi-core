@@ -36,7 +36,7 @@ pub const fn padded_url_safe_base64_len(source_bytes: usize) -> usize {
 macro_rules! base_64_id {
     ($id_name:ident, $number_of_bytes:expr) => {
         paste::paste!{
-            pub type [<Base64Encoded $id_name>] = Base64EncodedByteID<$id_name, $number_of_bytes, { $crate::byte_id::padded_url_safe_base64_len($number_of_bytes) }>;
+            pub type [<Base64Encoded $id_name>] = Base64EncodedByteID<$id_name, $number_of_bytes, { $crate::identifiers::byte_id::padded_url_safe_base64_len($number_of_bytes) }>;
         }
     };
 }

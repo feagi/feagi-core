@@ -1,6 +1,6 @@
 use feagi_basis::base_64_id;
-use feagi_basis::byte_id::{padded_url_safe_base64_len, Base64EncodedByteID, Base64EncodedByteIdError, ByteID};
 use feagi_basis::feagi_message::feagi_message_element::MessageElementSerializable;
+use feagi_basis::identifiers::byte_id::{padded_url_safe_base64_len, Base64EncodedByteID, Base64EncodedByteIdError, ByteID};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct RawId<const N: usize>([u8; N]);

@@ -518,6 +518,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "delegate"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "780eb241654bf097afb00fc5f054a09b687dad862e485fdcf8399bb056565370"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -662,6 +673,7 @@ version = "0.1.1"
 dependencies = [
  "ahash",
  "base64 0.23.1",
+ "delegate",
  "feagi-basis-proc-common",
  "half",
  "heapless 0.9.3",
@@ -672,6 +684,7 @@ dependencies = [
  "serde_json",
  "thingbuf",
  "thiserror 2.0.21",
+ "uuid",
 ]
 
 [[package]]
@@ -3496,6 +3509,7 @@ checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
+ "serde_core",
  "wasm-bindgen",
 ]
 

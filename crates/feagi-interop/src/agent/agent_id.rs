@@ -1,6 +1,6 @@
 use core::fmt::{Display, Formatter};
 use feagi_basis::base_64_id;
-use feagi_basis::byte_id::{Base64EncodedByteID, ByteID};
+use feagi_basis::identifiers::byte_id::{Base64EncodedByteID, ByteID};
 use thiserror::Error;
 
 pub const NUMBER_OF_BYTES: usize = 8;

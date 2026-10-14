@@ -16,6 +16,7 @@ description = "Root library extending Zenoh for use in FEAGI as a transport medi
 
 std = [
     "alloc",
+    "zenoh",
     "thiserror/std", "thingbuf/std", "base64/std", "serde/std",
     "serde_json/std", "picoserve/std"
 ]
