@@ -3,8 +3,6 @@ pub mod feagi_channel;
 pub mod feagi_worker;
 
 #[cfg(feature = "std")]
-pub mod generic_thread_worker;
-#[cfg(feature = "std")]
 pub use block_on_thread::block_on_thread;
 
 

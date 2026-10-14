@@ -1,6 +1,5 @@
 //! Const OpenAPI 3.0.3
 
-
 const EMPTY_FIELDS: &[ObjectField] = &[];
 const EMPTY_REQUIRED: &[&str] = &[];
 const FEAGI_INFO_TITLE: &str = "FEAGI";
@@ -255,7 +254,6 @@ impl OpenApiDocument {
             Err(_) => panic!("OpenAPI JSON is not valid UTF-8"),
         }
     }
-
 
     const fn emit(&self, writer: &mut JsonWriter) {
         writer.push_byte(b'{');

@@ -1,80 +1,84 @@
 //! REST server routes on std
 
-use core::marker::PhantomData;
-use core::future::Future;
-use feagi_basis::parallelism::generic_thread_worker::{GenericThreadWorker, GenericThreadWorkerNotification, GenericThreadWorkerSpawner};
-use feagi_basis::parallelism::block_on_thread;
 use crate::rest::server::error::FeagiRestServerError;
-use crate::rest::server::server_common::{build_router_with_routes, HTTP_BUFFER_LEN};
-
-type RequestPathDefinition = ();
-
+use crate::rest::server::server_common::{build_router_with_routes, FeagiRestServerWorker, HTTP_BUFFER_LEN};
+use core::future::Future;
+use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
+use feagi_basis::parallelism::feagi_worker::feagi_worker::{FeagiWorkerHandleDynamic, FeagiWorkerNotificationsDynamic};
+use feagi_basis::parallelism::feagi_worker::notifications::{FeagiWorkerNotification, FeagiWorkerReply};
+use feagi_basis::parallelism::feagi_worker::std_thread_spawner::FeagiStdThreadSpawner;
 
 /// One request per TCP connection, matching a single accept loop on this thread.
 static CONFIG: picoserve::Config = picoserve::Config::const_default().close_connection_after_response();
 
+/// Notifications queued for the server worker. Only `Stop` is ever sent
+const NOTIFICATION_QUEUE_CAPACITY: usize = 1;
+
+/// The server worker takes no custom notifications and gives no custom replies
+type RestServerWorkerHandle = FeagiWorkerHandleDynamic<(), (), std::thread::JoinHandle<()>>;
+type RestServerNotifications = FeagiWorkerNotificationsDynamic<(), ()>;
+
 /// HTTP server for the OpenAPI document and, when enabled, the Swagger UI.
 pub struct RestServer {
-    worker: GenericThreadWorker,
+    worker: RestServerWorkerHandle,
 }
 
-impl RestServer {
-    /// Binds `socket_address` and starts the listener thread.
-    pub async fn start_rest_server(socket_address: core::net::SocketAddr) -> Result<Self, FeagiRestServerError> {
-        let worker = GenericThreadWorker::new_and_start(RestServerThreadSpawner {
-            socket_address,
-            _routes: PhantomData::<RequestPathDefinition>,
-        })?;
+/// What the std REST server needs to start
+pub struct RestServerStartParameters {
+    pub socket_address: core::net::SocketAddr,
+}
+
+impl FeagiRestServerWorker for RestServer {
+    type StartParameters = RestServerStartParameters;
+
+    /// Binds `socket_address` on the calling thread, then starts the listener thread.
+    fn start_rest_server(parameters: Self::StartParameters) -> Result<Self, FeagiRestServerError> {
+        let listener = std::net::TcpListener::bind(parameters.socket_address).map_err(|_| FeagiRestServerError::FailedToBindToSocket)?;
+        let worker = RestServerWorkerHandle::start(&FeagiStdThreadSpawner, NOTIFICATION_QUEUE_CAPACITY, |notifications| {
+            move || run_rest_server(listener, notifications)
+        })
+        .map_err(|_| FeagiRestServerError::FailedToStartWorker)?;
         Ok(Self { worker })
     }
 
-    /// Asks the listener thread to stop after the current connection, then joins it.
+    /// Asks the listener thread to stop after the current connection, waits for it to
+    /// acknowledge, then joins it.
     ///
     /// A stop sent while the thread is blocked in `accept` is observed when that call returns.
-    pub async fn stop_rest_server(self) {
-        self.worker.stop_thread().await
+    async fn stop_rest_server(mut self) -> Result<(), FeagiRestServerError> {
+        self.worker.stop().await?;
+        self.worker.join().map_err(|_| FeagiRestServerError::WorkerPanicked)
     }
 }
 
-struct RestServerThreadSpawner {
-    socket_address: core::net::SocketAddr,
-    _routes: PhantomData<RequestPathDefinition>,
-}
+/// Accepts one connection at a time and serves it to completion. Checks for notifications
+/// before each accept, and exits after acknowledging `Stop` or once the handle is dropped.
+async fn run_rest_server(listener: std::net::TcpListener, notifications: RestServerNotifications) {
+    let router = route_brain_visualizer_startup(build_router_with_routes());
+    let mut running = true;
 
-impl GenericThreadWorkerSpawner for RestServerThreadSpawner {
-    type ThreadSpawnError = FeagiRestServerError;
-
-    fn spawn_thread_worker(
-        self,
-        command_receiver: thingbuf::mpsc::Receiver<GenericThreadWorkerNotification<()>>,
-    ) -> Result<std::thread::JoinHandle<()>, Self::ThreadSpawnError> {
-        let listener = std::net::TcpListener::bind(self.socket_address).map_err(|_| FeagiRestServerError::FailedToBindToSocket)?;
-
-        let handle = std::thread::spawn(move || {
-            let _routes = self._routes;
-            run_rest_server(listener, command_receiver);
-        });
-        Ok(handle)
-    }
-}
-
-/// Accepts one connection at a time and serves it to completion.
-fn run_rest_server(listener: std::net::TcpListener, command_receiver: thingbuf::mpsc::Receiver<GenericThreadWorkerNotification<()>>) {
-
-    let router = build_router_with_routes();
-
-    loop {
-
-        let notification: GenericThreadWorkerNotification<()> = command_receiver.try_recv().into();
-        match notification {
-            GenericThreadWorkerNotification::Nothing => {} // do nothing
-            GenericThreadWorkerNotification::Custom(_) => {} // No custom commands defined, so ignore this
-            GenericThreadWorkerNotification::Stop => {break;}
-            GenericThreadWorkerNotification::ChannelClosed => {break;}
+    while running {
+        let notification_result = notifications
+            .try_process_next(async |notification| match notification {
+                FeagiWorkerNotification::Stop => {
+                    running = false;
+                    FeagiWorkerReply::Acknowledged
+                }
+                // No custom notifications are defined
+                FeagiWorkerNotification::Custom(()) | FeagiWorkerNotification::Nothing => FeagiWorkerReply::Nothing,
+            })
+            .await;
+        match notification_result {
+            Ok(()) | Err(FeagiChannelReceiveError::ChannelEmpty) => {}
+            // The handle was dropped, nothing can stop this worker anymore
+            Err(_) => break,
+        }
+        if !running {
+            break;
         }
 
         let (stream, _peer) = match listener.accept() {
-            Ok((stream, _peer )) => (stream, _peer),
+            Ok((stream, _peer)) => (stream, _peer),
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue, // try again
             Err(_error) => break,
         };
@@ -86,9 +90,90 @@ fn run_rest_server(listener: std::net::TcpListener, command_receiver: thingbuf::
         let mut http_buffer = [0u8; HTTP_BUFFER_LEN];
         let serve = picoserve::Server::custom(&router, StdThreadTimer, &CONFIG, &mut http_buffer).serve(socket);
         // One failed request does not stop the listener.
-        let _serve_result = block_on_thread(serve);
+        let _serve_result = serve.await;
     }
 }
+
+//region patching
+
+const JSON_CONTENT_TYPE: &str = "application/json";
+
+const HEALTH_CHECK_JSON: &str = r#"{"genome_availability":true,"brain_readiness":true,"genome_validity":true,"feagi_session":1,"genome_num":1,"burst_engine":true,"simulation_timestep":0.05,"influxdb_availability":false,"neuron_count_max":0,"synapse_count_max":0,"neuron_count":0,"synapse_count":0}"#;
+
+/// Brain Visualizer reads this body with `String.to_float()`, so the body is a JSON number.
+const SIMULATION_TIMESTEP_JSON: &str = "0.05";
+
+/// Brain Visualizer reads this body with `String.to_int()`, so the body is a JSON number.
+const VISUALIZATION_SKIP_RATE_JSON: &str = "1";
+
+/// Brain Visualizer reads this body with `String.to_int()`, so the body is a JSON number.
+const VISUALIZATION_SUPPRESSION_THRESHOLD_JSON: &str = "1";
+
+/// Brain Visualizer reads this body with `String.to_int()`, so the body is a JSON number.
+const PLASTICITY_QUEUE_DEPTH_JSON: &str = "1";
+
+const CONNECTION_INFO_JSON: &str =
+    r#"{"websocket":{"enabled":true,"host":"127.0.0.1","endpoints":{"registration":"ws://127.0.0.1:9050","visualization":"ws://127.0.0.1:9050"}}}"#;
+
+const CORTICAL_AREA_GEOMETRY_JSON: &str = "{}";
+
+const MORPHOLOGIES_JSON: &str = "{}";
+
+const CORTICAL_MAP_DETAILED_JSON: &str = "{}";
+
+/// One root region and no cortical areas. `parent_region_id` null marks the root.
+const REGIONS_MEMBERS_JSON: &str =
+    r#"{"root":{"title":"root","coordinate_2d":[0,0],"coordinate_3d":[0,0,0],"regions":[],"areas":[],"parent_region_id":null}}"#;
+
+const IPU_TYPES_JSON: &str = "{}";
+
+const OPU_TYPES_JSON: &str = "{}";
+
+const AGENT_CAPABILITIES_JSON: &str = "{}";
+
+
+fn route_brain_visualizer_startup<R: picoserve::routing::PathRouter>(
+    router: picoserve::Router<R>,
+) -> picoserve::Router<impl picoserve::routing::PathRouter> {
+    use picoserve::response::File;
+    use picoserve::routing::get_service;
+
+    fn json_file(body: &'static str) -> File {
+        File::with_content_type(JSON_CONTENT_TYPE, body.as_bytes())
+    }
+
+    router
+        .route("/v1/system/health_check", get_service(json_file(HEALTH_CHECK_JSON)))
+        .route("/v1/burst_engine/simulation_timestep", get_service(json_file(SIMULATION_TIMESTEP_JSON)))
+        .route("/v1/network/connection_info", get_service(json_file(CONNECTION_INFO_JSON)))
+        .route(
+            "/v1/cortical_area/cortical_area/geometry",
+            get_service(json_file(CORTICAL_AREA_GEOMETRY_JSON)),
+        )
+        .route("/v1/morphology/morphologies", get_service(json_file(MORPHOLOGIES_JSON)))
+        .route(
+            "/v1/cortical_area/cortical_map_detailed",
+            get_service(json_file(CORTICAL_MAP_DETAILED_JSON)),
+        )
+        .route("/v1/region/regions_members", get_service(json_file(REGIONS_MEMBERS_JSON)))
+        .route("/v1/cortical_area/ipu/types", get_service(json_file(IPU_TYPES_JSON)))
+        .route("/v1/cortical_area/opu/types", get_service(json_file(OPU_TYPES_JSON)))
+        .route(
+            "/v1/system/cortical_area_visualization_skip_rate",
+            get_service(json_file(VISUALIZATION_SKIP_RATE_JSON)),
+        )
+        .route(
+            "/v1/system/cortical_area_visualization_suppression_threshold",
+            get_service(json_file(VISUALIZATION_SUPPRESSION_THRESHOLD_JSON)),
+        )
+        .route(
+            "/v1/neuroplasticity/plasticity_queue_depth",
+            get_service(json_file(PLASTICITY_QUEUE_DEPTH_JSON)),
+        )
+        .route("/v1/agent/capabilities/all", get_service(json_file(AGENT_CAPABILITIES_JSON)))
+}
+
+//endregion
 
 //region Internal Members
 
@@ -182,7 +267,11 @@ impl picoserve::io::Socket<StdThreadRuntime> for StdThreadSocket {
         )
     }
 
-    async fn abort<T: picoserve::Timer<StdThreadRuntime>>(self, _timeouts: &picoserve::Timeouts, _timer: &T) -> Result<(), picoserve::Error<Self::Error>> {
+    async fn abort<T: picoserve::Timer<StdThreadRuntime>>(
+        self,
+        _timeouts: &picoserve::Timeouts,
+        _timer: &T,
+    ) -> Result<(), picoserve::Error<Self::Error>> {
         retry_interrupted(|| self.read.shutdown(std::net::Shutdown::Both)).map_err(|error| picoserve::Error::Write(StdThreadIoError(error)))
     }
 
@@ -251,9 +340,6 @@ impl picoserve::io::Write for StdThreadWriteHalf<'_> {
     }
 }
 
-
 //endregion
 
 //endregion
-
-

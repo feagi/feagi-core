@@ -1,4 +1,4 @@
-use core::net::{IpAddr, SocketAddr, Ipv4Addr};
+use core::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 // TODO Server VS Client binding
 
@@ -18,7 +18,6 @@ pub struct InteropConfig {
 }
 
 impl InteropConfig {
-    
     pub fn new_no_config() -> Self {
         Self {
             #[cfg(feature = "transport_rest")]
@@ -29,7 +28,7 @@ impl InteropConfig {
             quic_bind: None,
         }
     }
-    
+
     #[cfg(feature = "transport_rest")]
     pub fn set_rest_server(&mut self, addr: Option<SocketAddr>) -> &mut Self {
         self.rest_server_bind = addr;

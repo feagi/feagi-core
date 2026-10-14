@@ -1,7 +1,7 @@
-use feagi_basis::parallelism::generic_thread_worker::GenericThreadWorker;
+
 use feagi_interop::interop_config::InteropConfig;
 
-pub struct FeagiBrainServer(GenericThreadWorker);
+pub struct FeagiBrainServer();
 
 impl FeagiBrainServer {
 
@@ -16,7 +16,7 @@ impl FeagiBrainServer {
         
         
         
-        
+        todo!()
         
     }
 

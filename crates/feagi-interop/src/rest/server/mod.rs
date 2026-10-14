@@ -6,9 +6,7 @@
 pub mod error;
 pub mod server_common;
 
-#[cfg(feature = "std")]
-pub mod server_std;
 #[cfg(feature = "open_api_endpoint")]
 pub mod open_api_builder;
-pub mod launch_server;
-
+#[cfg(feature = "std")]
+pub mod server_std;
