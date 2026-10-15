@@ -34,26 +34,26 @@ rayon = [
 
 
 [dependencies]
-feagi-basis-proc-common = {path = "feagi-basis-proc-common"}
+feagi-basis-proc-common = { path = "feagi-basis-proc-common" }
 
 # Root Crates
 # NONE! THIS CRATE MUST NOT DEPEND ON OTHER FEAGI ROOT CRATES
 
 # External crates
-thiserror = {workspace = true}
-base64 = {workspace = true}
+thiserror = { workspace = true }
+base64 = { workspace = true }
 paste = { workspace = true }
-delegate = {workspace = true}
-ahash = { workspace = true, features = ["serde"]}
-serde = { workspace = true, features = ["derive"]}
+delegate = { workspace = true }
+ahash = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
 serde_arrays = { workspace = true }
-heapless = {workspace = true}
-thingbuf = {workspace = true, features = ["static"]} # TODO review features
+heapless = { workspace = true }
+thingbuf = { workspace = true, features = ["static"] } # TODO review features
 half = { workspace = true, default-features = false, features = ["serde"] }
-uuid = {workspace = true, default-features = false, features = ["serde"]}
+uuid = { workspace = true, default-features = false, features = ["serde"] }
 
-serde_json = { workspace = true, optional = true}
-rayon = { workspace = true, optional = true}
+serde_json = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
 
 
 [dev-dependencies]

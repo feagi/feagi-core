@@ -10,7 +10,6 @@ use feagi_macro_components::template_parsing::feagi_messages::request_response::
 pub fn define_template_categorized_requests(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     use feagi_macro_components::templates::TemplateRoot;
     TemplateRoot::<FeagiRequestMessageCategory>::parse_template_and_generate_generator_input_macro(input.into()).into()
-    
 }
 
 #[proc_macro]

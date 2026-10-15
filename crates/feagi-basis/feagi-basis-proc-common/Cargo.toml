@@ -14,13 +14,13 @@ description = "Common procedural macros used throughout FEAGI Core"
 proc-macro = true
 
 [dependencies]
-feagi-macro-components = {path = "../../feagi-macro-components"}
+feagi-macro-components = { path = "../../feagi-macro-components" }
 
 # External Crates]
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true }
-heck = {workspace = true}
+heck = { workspace = true }
 
 [lints]
 workspace = true

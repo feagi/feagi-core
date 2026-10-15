@@ -1,4 +1,4 @@
-use core::net::{IpAddr, Ipv4Addr, SocketAddr};
+use core::net::SocketAddr;
 
 // TODO Server VS Client binding
 

@@ -54,7 +54,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for RestServerBuilderStd {
     /// Binds `socket_address` on the calling thread and makes it non-blocking, then starts the
     /// listener thread
     fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs)
-        -> Result<(RestServerWorker, Self::BuildOutputs), Self::BuildError> {
+                    -> Result<(RestServerWorker, Self::BuildOutputs), Self::BuildError> {
         let listener = std::net::TcpListener::bind(self.socket_address).map_err(|_| FeagiRestServerError::FailedToBindToSocket)?;
         listener.set_nonblocking(true).map_err(|_| FeagiRestServerError::FailedToConfigureSocket)?;
         let (requester, requests) = FeagiRequestResponseDynamicBuilder::new(REQUEST_QUEUE_CAPACITY).create();
@@ -211,7 +211,7 @@ struct StdThreadRuntime;
 struct StdThreadTimer;
 
 impl picoserve::time::Timer<StdThreadRuntime> for StdThreadTimer {
-    fn delay(&self, _duration: picoserve::time::Duration) -> impl Future<Output = ()> {
+    fn delay(&self, _duration: picoserve::time::Duration) -> impl Future<Output=()> {
         core::future::pending()
     }
 }

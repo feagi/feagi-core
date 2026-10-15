@@ -8,9 +8,9 @@ use crate::parallelism::feagi_channel::channel_error::{FeagiChannelSendError, Fe
 use crate::parallelism::feagi_channel::request_response::feagi_request_response::FeagiRequester;
 use crate::parallelism::feagi_worker::feagi_worker_builder::WorkerChannelImplementation;
 use crate::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
-use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
 #[cfg(feature = "std")]
 use crate::parallelism::feagi_worker::worker_spawner_implementation::FeagiStdThreadSpawner;
+use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
 
 /// Runs some task separately depending on context. Runs on another thread in std, and on
 /// another task in embassy. THe interface is generally uniform irrespective of being in
@@ -50,7 +50,7 @@ where
         >,
         handle: SpawnerImplementation::WorkerInternalHandle,
     ) -> Self {
-        Self {request_maker, handle, stopped: false}
+        Self { request_maker, handle, stopped: false }
     }
 
     /// Sends a custom request and awaits for the worker's reply
@@ -60,7 +60,7 @@ where
         self.refuse_if_stopped()?;
         self.request_maker.make_request(FeagiWorkerRequest::Custom(request)).await
     }
-    
+
     /// Tells the worker to stop and waits until it has acknowledged. The worker exits after
     /// replying, so it may still be finishing when this returns
     ///
@@ -79,9 +79,6 @@ where
         }
         Ok(())
     }
-    
-    
-    
 }
 
 #[cfg(feature = "std")]

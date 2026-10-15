@@ -1,6 +1,6 @@
+use crate::identifiers::byte_id::ByteID;
 use delegate::delegate;
 use thiserror::Error;
-use crate::identifiers::byte_id::ByteID;
 // TODO common macro block
 
 #[macro_export]
@@ -104,6 +104,4 @@ pub trait WrappedUuid: ByteID<16> {
 }
 
 #[derive(Error, Debug)]
-pub enum UuidDeserializationError {
-
-}
+pub enum UuidDeserializationError {}

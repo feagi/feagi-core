@@ -14,7 +14,7 @@ description = "Various structures used to describe the structure and state of th
 
 std = [
     "alloc",
-    "serde/std", "base64/std", "thiserror/std", "half/std"
+    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std"
 ]
 
 alloc = [
@@ -34,6 +34,7 @@ half = {workspace = true, features = ["serde"]}
 serde = {workspace = true, default-features = false, features = ["derive"]}
 base64 = {workspace = true, default-features = false}
 heapless = {workspace = true, default-features = false, features = ["serde"]}
+uuid = {workspace = true, features = ["serde"]}
 
 [lints]
 workspace = true

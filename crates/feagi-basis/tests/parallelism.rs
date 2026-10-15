@@ -12,9 +12,9 @@ use feagi_basis::parallelism::feagi_channel::channel_error::{FeagiChannelReceive
 use feagi_basis::parallelism::feagi_channel::feagi_channel::{FeagiChannelDynamicBuilder, FeagiChannelReceiver, FeagiChannelReceiverDynamic, FeagiChannelSender, FeagiChannelSenderDynamic};
 use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
 use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequestResponseDynamicBuilder, FeagiRequesterDynamic, FeagiResponderDynamic};
-use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, FeagiWorkerChannelsDynamic};
+use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::{FeagiStdThreadSpawner, FeagiWorkerSpawnError};
 
 //region Helpers
@@ -624,7 +624,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DoublingWorkerBuilder {
     type BuildError = FeagiWorkerSpawnError;
 
     fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs)
-        -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
+                    -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
         let (requester, responder) = worker_request_channel(self.request_queue_capacity);
         let handle = spawner.spawn_worker(move || doubling_worker(responder))?;
         Ok((FeagiWorker::new(requester, handle), ()))
@@ -649,7 +649,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
     type BuildError = FeagiWorkerSpawnError;
 
     fn build_worker(self, spawner: &FeagiStdThreadSpawner, event_sender: Self::BuildInputs)
-        -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
+                    -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
         let (requester, responder) = worker_request_channel(1);
         let handle = spawner.spawn_worker(move || async move {
             let mut running = true;
@@ -691,7 +691,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ExitingWorkerBuilder {
     type BuildError = FeagiWorkerSpawnError;
 
     fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs)
-        -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
+                    -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
         let (requester, responder) = worker_request_channel(1);
         let handle = spawner.spawn_worker(move || async move { drop(responder) })?;
         Ok((FeagiWorker::new(requester, handle), ()))

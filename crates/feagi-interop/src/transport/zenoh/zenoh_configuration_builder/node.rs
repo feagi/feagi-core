@@ -148,10 +148,9 @@ impl ZenohNodeBuilder {
     {
         let json = self.build_json5()?;
         zenoh::Config::from_json5(json.as_str()).map_err(
-            | _ | ZenohConfigBuildError::Json5(json)
+            |_| ZenohConfigBuildError::Json5(json)
         )
     }
-
 }
 
 fn validate_endpoint_list(endpoints: &[ZenohEndpointEntry]) -> Result<(), ZenohConfigBuildError> {

@@ -1,10 +1,10 @@
 use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
-use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response::feagi_request_response::{ReplySlot, RequestSlot};
 #[cfg(feature = "alloc")]
 use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiverDynamic, FeagiChannelSenderDynamic};
+use crate::parallelism::feagi_channel::recycling::Recyclable;
 #[cfg(feature = "alloc")]
 use crate::parallelism::feagi_channel::request_response::feagi_request_response::FeagiReplySenderDynamic;
+use crate::parallelism::feagi_channel::request_response::feagi_request_response::{ReplySlot, RequestSlot};
 use crate::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
 
@@ -28,7 +28,7 @@ pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
 
     /// Consume self to build the FeagiWorker
     fn build_worker(self, spawner: &Spawner, inputs: Self::BuildInputs)
-        -> Result<(FeagiWorker<Spawner, Self::Channels, Self::CustomRequest, Self::CustomResponse>, Self::BuildOutputs), Self::BuildError>;
+                    -> Result<(FeagiWorker<Spawner, Self::Channels, Self::CustomRequest, Self::CustomResponse>, Self::BuildOutputs), Self::BuildError>;
 
     /// Create needed channel pairings. Done first so different workers can be aligned before
     /// building them
@@ -41,7 +41,7 @@ pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
 pub trait WorkerChannelImplementation {
     /// Sends requests, each carrying a copy of the requester's reply sender
     type RequestSender<Request: Recyclable, Response: Recyclable>:
-        FeagiChannelSender<RequestSlot<Request, Self::ReplySender<Response>>>;
+    FeagiChannelSender<RequestSlot<Request, Self::ReplySender<Response>>>;
     /// Sends replies back to the requester. Cloned into every request
     type ReplySender<Response: Recyclable>: FeagiChannelSender<ReplySlot<Response>> + Clone;
     /// Receives replies on the requester's side
@@ -58,7 +58,7 @@ pub struct FeagiWorkerChannelsDynamic;
 #[cfg(feature = "alloc")]
 impl WorkerChannelImplementation for FeagiWorkerChannelsDynamic {
     type RequestSender<Request: Recyclable, Response: Recyclable> =
-        FeagiChannelSenderDynamic<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>;
+    FeagiChannelSenderDynamic<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>;
     type ReplySender<Response: Recyclable> = FeagiReplySenderDynamic<Response>;
     type ReplyReceiver<Response: Recyclable> = FeagiChannelReceiverDynamic<ReplySlot<Response>>;
 }
