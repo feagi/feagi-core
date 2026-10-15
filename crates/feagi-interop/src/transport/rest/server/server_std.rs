@@ -5,7 +5,7 @@ use crate::transport::rest::server::server_common::{build_router_with_routes, Fe
 use core::future::Future;
 use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::{FeagiWorkerHandleDynamic, FeagiWorkerNotificationsDynamic};
-use feagi_basis::parallelism::feagi_worker::notifications::{FeagiWorkerNotification, FeagiWorkerReply};
+use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerCommand, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::std_thread_spawner::FeagiStdThreadSpawner;
 
 /// One request per TCP connection, matching a single accept loop on this thread.
@@ -60,12 +60,12 @@ async fn run_rest_server(listener: std::net::TcpListener, notifications: RestSer
     while running {
         let notification_result = notifications
             .try_process_next(async |notification| match notification {
-                FeagiWorkerNotification::Stop => {
+                FeagiWorkerCommand::Stop => {
                     running = false;
-                    FeagiWorkerReply::Acknowledged
+                    FeagiWorkerResponse::Acknowledged
                 }
                 // No custom notifications are defined
-                FeagiWorkerNotification::Custom(()) | FeagiWorkerNotification::Nothing => FeagiWorkerReply::Nothing,
+                FeagiWorkerCommand::Custom(()) | FeagiWorkerCommand::Nothing => FeagiWorkerResponse::Nothing,
             })
             .await;
         match notification_result {

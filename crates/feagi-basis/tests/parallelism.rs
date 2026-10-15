@@ -13,7 +13,7 @@ use feagi_basis::parallelism::feagi_channel::feagi_channel::{FeagiChannelDynamic
 use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
 use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::FeagiRequestResponseDynamicBuilder;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::{FeagiWorkerHandleDynamic, FeagiWorkerNotificationsDynamic, FeagiWorkerSpawner};
-use feagi_basis::parallelism::feagi_worker::notifications::{FeagiWorkerNotification, FeagiWorkerReply};
+use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerCommand, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::std_thread_spawner::FeagiStdThreadSpawner;
 
 //region Helpers
@@ -68,12 +68,12 @@ async fn doubling_worker(notifications: FeagiWorkerNotificationsDynamic<u32, u32
     let mut running = true;
     while running {
         let result = notifications.async_process_next(async |notification| match notification {
-            FeagiWorkerNotification::Stop => {
+            FeagiWorkerCommand::Stop => {
                 running = false;
-                FeagiWorkerReply::Acknowledged
+                FeagiWorkerResponse::Acknowledged
             }
-            FeagiWorkerNotification::Custom(value) => FeagiWorkerReply::Custom(value * 2),
-            FeagiWorkerNotification::Nothing => FeagiWorkerReply::Nothing,
+            FeagiWorkerCommand::Custom(value) => FeagiWorkerResponse::Custom(value * 2),
+            FeagiWorkerCommand::Nothing => FeagiWorkerResponse::Nothing,
         }).await;
         if result.is_err() {
             break;
@@ -481,7 +481,7 @@ fn worker_answers_custom_notifications_then_stops() {
 
     block_on_thread(async {
         for value in 0..50u32 {
-            assert!(matches!(handle.notify(value).await.unwrap(), FeagiWorkerReply::Custom(doubled) if doubled == value * 2));
+            assert!(matches!(handle.notify(value).await.unwrap(), FeagiWorkerResponse::Custom(doubled) if doubled == value * 2));
         }
         handle.stop().await.unwrap();
     });
@@ -517,15 +517,15 @@ fn worker_can_send_to_additional_channels() {
             let mut running = true;
             while running {
                 let result = notifications.async_process_next(async |notification| match notification {
-                    FeagiWorkerNotification::Stop => {
+                    FeagiWorkerCommand::Stop => {
                         running = false;
-                        FeagiWorkerReply::Acknowledged
+                        FeagiWorkerResponse::Acknowledged
                     }
-                    FeagiWorkerNotification::Custom(value) => {
+                    FeagiWorkerCommand::Custom(value) => {
                         event_sender.async_send(Number(u64::from(value))).await.unwrap();
-                        FeagiWorkerReply::Acknowledged
+                        FeagiWorkerResponse::Acknowledged
                     }
-                    FeagiWorkerNotification::Nothing => FeagiWorkerReply::Nothing,
+                    FeagiWorkerCommand::Nothing => FeagiWorkerResponse::Nothing,
                 }).await;
                 if result.is_err() {
                     break;
@@ -558,14 +558,14 @@ fn worker_can_spawn_and_stop_a_child_worker() {
             while running {
                 // Custom notifications are forwarded to the child, Stop stops the child first
                 let result = notifications.async_process_next(async |notification| match notification {
-                    FeagiWorkerNotification::Stop => {
+                    FeagiWorkerCommand::Stop => {
                         child.stop().await.unwrap();
                         child_stopped_in_parent.fetch_add(1, Ordering::SeqCst);
                         running = false;
-                        FeagiWorkerReply::Acknowledged
+                        FeagiWorkerResponse::Acknowledged
                     }
-                    FeagiWorkerNotification::Custom(value) => child.notify(value).await.unwrap(),
-                    FeagiWorkerNotification::Nothing => FeagiWorkerReply::Nothing,
+                    FeagiWorkerCommand::Custom(value) => child.notify(value).await.unwrap(),
+                    FeagiWorkerCommand::Nothing => FeagiWorkerResponse::Nothing,
                 }).await;
                 if result.is_err() {
                     break;
@@ -576,7 +576,7 @@ fn worker_can_spawn_and_stop_a_child_worker() {
     }).unwrap();
 
     block_on_thread(async {
-        assert!(matches!(parent.notify(21).await.unwrap(), FeagiWorkerReply::Custom(42)));
+        assert!(matches!(parent.notify(21).await.unwrap(), FeagiWorkerResponse::Custom(42)));
         parent.stop().await.unwrap();
     });
     parent.join().unwrap();

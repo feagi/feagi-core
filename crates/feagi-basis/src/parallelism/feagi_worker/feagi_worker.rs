@@ -1,3 +1,69 @@
+use crate::parallelism::feagi_channel::channel_error::FeagiRequestError;
+use crate::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequester};
+use crate::parallelism::feagi_worker::feagi_worker_builder::WorkerSpawnerImplementation;
+use crate::parallelism::feagi_worker::worker_requests::{FeagiWorkerResponse, FeagiWorkerRequest};
+
+/// Runs some task separately depending on context. Runs on another thread in std, and on
+/// another task in embassy. THe interface is generally uniform irrespective of being in
+/// std or no-std modes
+pub struct FeagiWorker<InternalImplementation, CustomCommandRequest, CustomCommandResponse>
+where
+    InternalImplementation: WorkerSpawnerImplementation,
+{
+    request_maker: FeagiRequester<
+        FeagiWorkerRequest<FeagiWorkerRequest<CustomCommandRequest>>,
+        FeagiWorkerResponse<FeagiWorkerResponse<CustomCommandResponse>>,
+        InternalImplementation::RequestSender,
+        InternalImplementation::ReplySender,
+        InternalImplementation::ReplyReceive
+    >,
+    handle: InternalImplementation::WorkerInternalHandle,
+}
+
+impl<InternalImplementation, CustomCommandRequest, CustomCommandResponse> 
+FeagiWorker<InternalImplementation, CustomCommandRequest, CustomCommandResponse>
+where 
+    InternalImplementation: WorkerSpawnerImplementation,
+{
+    
+    pub(crate) fn new(
+        request_maker: FeagiRequester<
+            FeagiWorkerRequest<FeagiWorkerRequest<CustomCommandRequest>>,
+            FeagiWorkerResponse<FeagiWorkerResponse<CustomCommandResponse>>,
+            InternalImplementation::RequestSender,
+            InternalImplementation::ReplySender,
+            InternalImplementation::ReplyReceive
+        >,
+        handle: InternalImplementation::WorkerInternalHandle,
+    ) -> Self {
+        Self {request_maker, handle}
+    }
+
+    /// Sends a custom request and awaits for the worker's reply
+    pub async fn make_request(&mut self, request: CustomCommandRequest) -> Result<FeagiWorkerResponse<CustomCommandResponse>, FeagiRequestError> {
+        self.request_maker.make_request(FeagiWorkerRequest::Custom(request)).await
+    }
+    
+    /// Tells the worker to stop and waits until it has acknowledged. The worker exits after
+    /// replying, so it may still be finishing when this returns
+    ///
+    /// Errors with `RequestNotSent` if the worker has already exited
+    pub async fn stop(&mut self) -> Result<(), FeagiRequestError> {
+        self.request_maker.make_request(FeagiWorkerRequest::Stop).await?;
+        Ok(())
+    }
+    
+    
+    
+}
+
+
+
+
+
+
+
+/*
 //! A worker is a long running body of code, run in parallel by some backend (a std thread, an
 //! embassy task, ...). Its parent holds a `FeagiWorkerHandle`, which sends notifications to the
 //! worker over a feagi request / response channel. The worker owns the responding half and must
@@ -131,3 +197,6 @@ impl<CustomNotification, CustomReply, BackendHandle> FeagiWorkerHandleDynamic<Cu
 }
 
 //endregion
+
+
+ */
