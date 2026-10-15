@@ -28,6 +28,7 @@ alloc = [
 feagi-basis = {path = "../feagi-basis"}
 
 # External Crates
+paste = {workspace = true}
 thiserror = {workspace = true, default-features = false}
 half = {workspace = true, features = ["serde"]}
 serde = {workspace = true, default-features = false, features = ["derive"]}

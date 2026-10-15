@@ -734,6 +734,7 @@ dependencies = [
  "feagi-basis",
  "half",
  "heapless 0.9.3",
+ "paste",
  "serde",
  "thiserror 2.0.21",
 ]
