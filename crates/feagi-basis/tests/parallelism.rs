@@ -718,6 +718,7 @@ fn built_worker_answers_custom_requests_then_stops() {
         assert!(matches!(worker.make_request(1).await, Err(FeagiRequestError::RequestNotSent(FeagiChannelSendError::ChannelClosed))));
         assert!(matches!(worker.stop().await, Err(FeagiRequestError::RequestNotSent(FeagiChannelSendError::ChannelClosed))));
     });
+    worker.join().unwrap();
 }
 
 #[test]
@@ -731,6 +732,7 @@ fn built_worker_sends_on_its_required_channel_pair() {
         worker.make_request(4).await.unwrap();
         worker.stop().await.unwrap();
     });
+    worker.join().unwrap();
     assert_eq!(event_receiver.try_recv().unwrap(), Number(3));
     assert_eq!(event_receiver.try_recv().unwrap(), Number(4));
 }

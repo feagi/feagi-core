@@ -9,6 +9,8 @@ use crate::parallelism::feagi_channel::request_response::feagi_request_response:
 use crate::parallelism::feagi_worker::feagi_worker_builder::WorkerChannelImplementation;
 use crate::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
 use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
+#[cfg(feature = "std")]
+use crate::parallelism::feagi_worker::worker_spawner_implementation::FeagiStdThreadSpawner;
 
 /// Runs some task separately depending on context. Runs on another thread in std, and on
 /// another task in embassy. THe interface is generally uniform irrespective of being in
@@ -80,6 +82,22 @@ where
     
     
     
+}
+
+#[cfg(feature = "std")]
+impl<ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
+FeagiWorker<FeagiStdThreadSpawner, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
+where
+    ChannelImplementation: WorkerChannelImplementation,
+{
+    /// Blocks until the worker's thread exits. Errors with the panic payload if it panicked
+    ///
+    /// The request channel is dropped first, so a worker that exits once its channel closes
+    /// is not left waiting on this handle
+    pub fn join(self) -> std::thread::Result<()> {
+        drop(self.request_maker);
+        self.handle.join()
+    }
 }
 
 

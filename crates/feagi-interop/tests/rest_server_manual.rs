@@ -3,17 +3,19 @@
 //! Run with:
 //! `cargo test -p feagi-interop --features std,swagger_web_ui --test rest_server_manual -- --ignored --nocapture`
 //!
-//! Press Enter to stop the server cleanly through `stop_rest_server`, or Ctrl+C to end the
+//! Press Enter to stop the server cleanly through the worker's `stop` and `join`, or Ctrl+C to end the
 //! process. The server binds `127.0.0.1:8000`, the HTTP port Brain Visualizer uses by default.
 
 #![cfg(all(feature = "std", feature = "transport_rest"))]
 
 use std::io::BufRead;
-use std::net::{SocketAddr, TcpStream};
+use std::net::SocketAddr;
 
 use feagi_basis::parallelism::block_on_thread;
-use feagi_interop::transport::rest::server::server_common::FeagiRestServerWorker;
-use feagi_interop::transport::rest::server::server_std::{RestServer, RestServerStartParameters};
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_interop::transport::rest::server::server_common::RestServerBuilder;
+use feagi_interop::transport::rest::server::server_std::RestServerBuilderStd;
 
 /// HTTP address Brain Visualizer connects to on launch.
 const LISTEN_ADDRESS: &str = "127.0.0.1:8000";
@@ -49,15 +51,15 @@ fn wait_for_enter() {
 #[ignore = "manual: serves until stopped by hand"]
 fn rest_server_runs_until_stopped_manually() {
     let address = listen_address();
-    let server = RestServer::start_rest_server(RestServerStartParameters { socket_address: address }).expect("REST server failed to start");
+    let (mut server, ()) = RestServerBuilderStd::new(address)
+        .build_worker(&FeagiStdThreadSpawner, ())
+        .expect("REST server failed to start");
     print_routes(address);
 
     wait_for_enter();
 
     println!("Stopping REST server...");
-    let stopper = std::thread::spawn(move || block_on_thread(server.stop_rest_server()));
-    // The worker only sees the stop after its blocking accept returns, so wake it with one connection
-    let _ = TcpStream::connect(address);
-    stopper.join().expect("stop thread panicked").expect("REST server failed to stop");
+    block_on_thread(server.stop()).expect("REST server failed to acknowledge stopping");
+    server.join().expect("REST server worker panicked");
     println!("REST server stopped.");
 }

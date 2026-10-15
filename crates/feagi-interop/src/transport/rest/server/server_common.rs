@@ -1,23 +1,15 @@
 //! Systems (largely) common to both STD and Embassy
 
-use crate::transport::rest::server::error::FeagiRestServerError;
-
 /// Request read buffer. Response bodies are written from their static slices.
 pub const HTTP_BUFFER_LEN: usize = 2048;
 
-/// Starts and stops the REST server worker. Implemented once per platform
-///
-/// Each platform needs different values to start (a socket address on std, a spawner and network
-/// stack on embassy), so those are grouped in `StartParameters`
-pub trait FeagiRestServerWorker: Sized {
-    /// Platform specific values needed to start the server
-    type StartParameters;
-
-    /// Binds the listener and starts serving in its own worker
-    fn start_rest_server(parameters: Self::StartParameters) -> Result<Self, FeagiRestServerError>;
-
-    /// Asks the worker to stop, waits for it to acknowledge, then waits for it to exit
-    async fn stop_rest_server(self) -> Result<(), FeagiRestServerError>;
+/// Builds a REST server worker. Implemented once per backend (std threads, embassy), each also
+/// implementing `FeagiWorkerBuilder` for its spawner. Backend specific settings are set on the
+/// implementing struct after construction
+pub trait RestServerBuilder: Sized {
+    /// Creates a builder that will serve on `socket_address`, with backend defaults for
+    /// everything else
+    fn new(socket_address: core::net::SocketAddr) -> Self;
 }
 
 /// Builds the static routes for the server.

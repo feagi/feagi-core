@@ -1,76 +1,92 @@
 //! REST server routes on std
 
 use crate::transport::rest::server::error::FeagiRestServerError;
-use crate::transport::rest::server::server_common::{build_router_with_routes, FeagiRestServerWorker, HTTP_BUFFER_LEN};
+use crate::transport::rest::server::server_common::{build_router_with_routes, RestServerBuilder, HTTP_BUFFER_LEN};
 use core::future::Future;
 use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
-use feagi_basis::parallelism::feagi_worker::feagi_worker::{FeagiWorkerHandleDynamic, FeagiWorkerNotificationsDynamic};
-use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerCommand, FeagiWorkerResponse};
-use feagi_basis::parallelism::feagi_worker::std_thread_spawner::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequestResponseDynamicBuilder, FeagiResponderDynamic};
+use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, FeagiWorkerChannelsDynamic};
+use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiStdThreadSpawner;
 
 /// One request per TCP connection, matching a single accept loop on this thread.
 static CONFIG: picoserve::Config = picoserve::Config::const_default().close_connection_after_response();
 
-/// Notifications queued for the server worker. Only `Stop` is ever sent
-const NOTIFICATION_QUEUE_CAPACITY: usize = 1;
+/// Requests queued for the server worker. Only `Stop` is ever sent
+const REQUEST_QUEUE_CAPACITY: usize = 1;
 
-/// The server worker takes no custom notifications and gives no custom replies
-type RestServerWorkerHandle = FeagiWorkerHandleDynamic<(), (), std::thread::JoinHandle<()>>;
-type RestServerNotifications = FeagiWorkerNotificationsDynamic<(), ()>;
+/// Default for `RestServerBuilderStd::accept_poll_interval`
+const DEFAULT_ACCEPT_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
 
-/// HTTP server for the OpenAPI document and, when enabled, the Swagger UI.
-pub struct RestServer {
-    worker: RestServerWorkerHandle,
+type RestServerRequests = FeagiResponderDynamic<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>;
+
+pub type RestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiWorkerChannelsDynamic, (), ()>;
+
+/// Builds an HTTP server for the OpenAPI document and, when enabled, the Swagger UI, running on
+/// its own std thread. Create it with `RestServerBuilder::new`
+pub struct RestServerBuilderStd {
+    socket_address: core::net::SocketAddr,
+    /// How long the idle listener sleeps between checks for a connection or a request. Bounds
+    /// how late a new connection is accepted and how long a `stop` waits while no connection is
+    /// open. Shorter intervals wake the thread more often while idle
+    pub accept_poll_interval: std::time::Duration,
 }
 
-/// What the std REST server needs to start
-pub struct RestServerStartParameters {
-    pub socket_address: core::net::SocketAddr,
-}
-
-impl FeagiRestServerWorker for RestServer {
-    type StartParameters = RestServerStartParameters;
-
-    /// Binds `socket_address` on the calling thread, then starts the listener thread.
-    fn start_rest_server(parameters: Self::StartParameters) -> Result<Self, FeagiRestServerError> {
-        let listener = std::net::TcpListener::bind(parameters.socket_address).map_err(|_| FeagiRestServerError::FailedToBindToSocket)?;
-        let worker = RestServerWorkerHandle::start(&FeagiStdThreadSpawner, NOTIFICATION_QUEUE_CAPACITY, |notifications| {
-            move || run_rest_server(listener, notifications)
-        })
-        .map_err(|_| FeagiRestServerError::FailedToStartWorker)?;
-        Ok(Self { worker })
-    }
-
-    /// Asks the listener thread to stop after the current connection, waits for it to
-    /// acknowledge, then joins it.
-    ///
-    /// A stop sent while the thread is blocked in `accept` is observed when that call returns.
-    async fn stop_rest_server(mut self) -> Result<(), FeagiRestServerError> {
-        self.worker.stop().await?;
-        self.worker.join().map_err(|_| FeagiRestServerError::WorkerPanicked)
+impl RestServerBuilder for RestServerBuilderStd {
+    fn new(socket_address: core::net::SocketAddr) -> Self {
+        RestServerBuilderStd {
+            socket_address,
+            accept_poll_interval: DEFAULT_ACCEPT_POLL_INTERVAL,
+        }
     }
 }
 
-/// Accepts one connection at a time and serves it to completion. Checks for notifications
-/// before each accept, and exits after acknowledging `Stop` or once the handle is dropped.
-async fn run_rest_server(listener: std::net::TcpListener, notifications: RestServerNotifications) {
+impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for RestServerBuilderStd {
+    type Channels = FeagiWorkerChannelsDynamic;
+    type BuildInputs = ();
+    type BuildOutputs = ();
+    type RequiredChannelPairs = ();
+    type CustomRequest = ();
+    type CustomResponse = ();
+    type BuildError = FeagiRestServerError;
+
+    /// Binds `socket_address` on the calling thread and makes it non-blocking, then starts the
+    /// listener thread
+    fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs)
+        -> Result<(RestServerWorker, Self::BuildOutputs), Self::BuildError> {
+        let listener = std::net::TcpListener::bind(self.socket_address).map_err(|_| FeagiRestServerError::FailedToBindToSocket)?;
+        listener.set_nonblocking(true).map_err(|_| FeagiRestServerError::FailedToConfigureSocket)?;
+        let (requester, requests) = FeagiRequestResponseDynamicBuilder::new(REQUEST_QUEUE_CAPACITY).create();
+        let accept_poll_interval = self.accept_poll_interval;
+        let handle = spawner.spawn_worker(move || run_rest_server(listener, requests, accept_poll_interval))?;
+        Ok((FeagiWorker::new(requester, handle), ()))
+    }
+
+    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {}
+}
+
+/// Accepts one connection at a time and serves it to completion. Checks for requests before
+/// each accept attempt, sleeping `accept_poll_interval` when no connection is waiting. Exits
+/// after acknowledging `Stop` or once the worker handle is dropped.
+async fn run_rest_server(listener: std::net::TcpListener, requests: RestServerRequests, accept_poll_interval: std::time::Duration) {
     let router = route_brain_visualizer_startup(build_router_with_routes());
     let mut running = true;
 
     while running {
-        let notification_result = notifications
-            .try_process_next(async |notification| match notification {
-                FeagiWorkerCommand::Stop => {
+        let request_result = requests
+            .try_process_next(async |request| match request {
+                FeagiWorkerRequest::Stop => {
                     running = false;
                     FeagiWorkerResponse::Acknowledged
                 }
-                // No custom notifications are defined
-                FeagiWorkerCommand::Custom(()) | FeagiWorkerCommand::Nothing => FeagiWorkerResponse::Nothing,
+                // No custom requests are defined
+                FeagiWorkerRequest::Custom(()) | FeagiWorkerRequest::Nothing => FeagiWorkerResponse::Nothing,
             })
             .await;
-        match notification_result {
+        match request_result {
             Ok(()) | Err(FeagiChannelReceiveError::ChannelEmpty) => {}
-            // The handle was dropped, nothing can stop this worker anymore
+            // The worker handle was dropped, nothing can stop this worker anymore
             Err(_) => break,
         }
         if !running {
@@ -79,6 +95,10 @@ async fn run_rest_server(listener: std::net::TcpListener, notifications: RestSer
 
         let (stream, _peer) = match listener.accept() {
             Ok((stream, _peer)) => (stream, _peer),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(accept_poll_interval);
+                continue;
+            }
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue, // try again
             Err(_error) => break,
         };
@@ -245,10 +265,13 @@ struct StdThreadSocket {
 }
 
 impl StdThreadSocket {
-    /// Clones `stream` so the two halves can block independently, and arms its deadlines.
+    /// Makes `stream` blocking, clones it so the two halves can block independently, and arms
+    /// its deadlines. Accepted streams can inherit non-blocking mode from the listener on some
+    /// platforms, so blocking mode is set explicitly
     ///
     /// Returns `None` when the socket cannot be configured. The caller drops that connection.
     fn from_accepted(stream: std::net::TcpStream) -> Option<Self> {
+        stream.set_nonblocking(false).ok()?;
         let read_timeout = std::time::Duration::from_millis(CONFIG.timeouts.read_request.as_millis());
         let write_timeout = std::time::Duration::from_millis(CONFIG.timeouts.write.as_millis());
         stream.set_read_timeout(Some(read_timeout)).ok()?;
