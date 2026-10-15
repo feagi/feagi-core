@@ -1,4 +1,4 @@
-use crate::identifiers::cortical_id::CorticalID;
+use crate::identifiers::cortical_areas::CorticalID;
 use crate::identifiers::genome_identifier_error::GenomeIdentifierError;
 
 /// Core cortical_area area types for fundamental brain functions.

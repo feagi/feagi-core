@@ -1,5 +1,6 @@
 use feagi_basis::feagi_message::feagi_message_element::MessageElementSerializable;
 use feagi_basis::identifiers::byte_id::{Base64EncodedByteID, Base64EncodedByteIdError, ByteID};
+use feagi_basis::create_wrapped_uuid;
 use feagi_basis::impl_byte_array_id;
 use feagi_basis::impl_byte_array_id_random;
 
@@ -253,4 +254,15 @@ impl_byte_array_id_random!(RandomId, 8);
 fn new_random_returns_the_declared_length() {
     let id = RandomId::new_random();
     assert_eq!(id.into_id_bytes().len(), 8);
+}
+
+create_wrapped_uuid!(
+    /// Documented UUID wrapper.
+    DocumentedUuidId,
+    v4
+);
+
+#[test]
+fn create_wrapped_uuid_accepts_a_doc_comment() {
+    let _documented = DocumentedUuidId::new;
 }

@@ -1,4 +1,5 @@
-pub mod brain_region_id;
-pub mod cortical_id;
+pub mod brain_regions;
+pub mod cortical_areas;
 pub mod cortical_type;
 pub mod genome_identifier_error;
+pub mod mappings;

@@ -12,13 +12,28 @@ pub use uuid::{Builder, Uuid, Version};
 /// [`ByteID`](crate::identifiers::byte_id::ByteID) for 16 bytes,
 /// [`Display`](core::fmt::Display) as padded URL-safe base64, and the `Base64EncodedName` alias.
 ///
+/// Doc comments and other attributes written before the name are copied onto the struct:
+///
+/// ```text
+/// create_wrapped_uuid!(
+///     /// Docs for the generated struct.
+///     Name,
+///     v4
+/// );
+/// ```
+///
 /// `Name::new` returns `Some` only when the UUID version matches. v4 also adds
 /// `new_random` (std) and `new_with_rng`. v7 adds `new_now` (std).
 #[macro_export]
 macro_rules! create_wrapped_uuid {
-    ($struct_name:ident, v4) => {
+    (
+        $(#[$meta:meta])*
+        $struct_name:ident, v4
+    ) => {
         $crate::create_wrapped_uuid! {
-            @common $struct_name, $crate::identifiers::uuid::Version::Random,
+            @common
+            $(#[$meta])*
+            $struct_name, $crate::identifiers::uuid::Version::Random,
             {
                 /// Builds an ID from a new random v4 UUID.
                 #[cfg(feature = "std")]
@@ -40,9 +55,14 @@ macro_rules! create_wrapped_uuid {
         }
     };
 
-    ($struct_name:ident, v7) => {
+    (
+        $(#[$meta:meta])*
+        $struct_name:ident, v7
+    ) => {
         $crate::create_wrapped_uuid! {
-            @common $struct_name, $crate::identifiers::uuid::Version::SortRand,
+            @common
+            $(#[$meta])*
+            $struct_name, $crate::identifiers::uuid::Version::SortRand,
             {
                 /// Builds an ID from a new time-ordered v7 UUID.
                 #[cfg(feature = "std")]
@@ -55,7 +75,12 @@ macro_rules! create_wrapped_uuid {
         }
     };
 
-    (@common $struct_name:ident, $version:path, { $($constructors:tt)* }) => {
+    (
+        @common
+        $(#[$meta:meta])*
+        $struct_name:ident, $version:path, { $($constructors:tt)* }
+    ) => {
+        $(#[$meta])*
         #[derive(Copy, Clone, Debug, Hash, ::serde::Serialize, ::serde::Deserialize)]
         pub struct $struct_name($crate::identifiers::uuid::Uuid);
 
