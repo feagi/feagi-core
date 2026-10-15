@@ -9,12 +9,13 @@ use std::time::Duration;
 
 use feagi_basis::parallelism::block_on_thread;
 use feagi_basis::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelSendError, FeagiRequestError};
-use feagi_basis::parallelism::feagi_channel::feagi_channel::{FeagiChannelDynamicBuilder, FeagiChannelReceiver, FeagiChannelSender};
+use feagi_basis::parallelism::feagi_channel::feagi_channel::{FeagiChannelDynamicBuilder, FeagiChannelReceiver, FeagiChannelReceiverDynamic, FeagiChannelSender, FeagiChannelSenderDynamic};
 use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
-use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::FeagiRequestResponseDynamicBuilder;
-use feagi_basis::parallelism::feagi_worker::feagi_worker::{FeagiWorkerHandleDynamic, FeagiWorkerNotificationsDynamic, FeagiWorkerSpawner};
-use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerCommand, FeagiWorkerResponse};
-use feagi_basis::parallelism::feagi_worker::std_thread_spawner::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequestResponseDynamicBuilder, FeagiRequesterDynamic, FeagiResponderDynamic};
+use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, FeagiWorkerChannelsDynamic};
+use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::{FeagiStdThreadSpawner, FeagiWorkerSpawnError};
 
 //region Helpers
 
@@ -63,17 +64,27 @@ fn poll_once<F: Future>(future: F) -> Poll<F::Output> {
     future.as_mut().poll(&mut Context::from_waker(Waker::noop()))
 }
 
-/// Worker body that doubles custom notifications and stops on `Stop`
-async fn doubling_worker(notifications: FeagiWorkerNotificationsDynamic<u32, u32>) {
+/// Parent side of a test worker's request channel
+type WorkerRequester = FeagiRequesterDynamic<FeagiWorkerRequest<u32>, FeagiWorkerResponse<u32>>;
+/// Worker side of a test worker's request channel
+type WorkerResponder = FeagiResponderDynamic<FeagiWorkerRequest<u32>, FeagiWorkerResponse<u32>>;
+
+/// Creates the request channel between a test worker and its parent
+fn worker_request_channel(capacity: usize) -> (WorkerRequester, WorkerResponder) {
+    FeagiRequestResponseDynamicBuilder::new(capacity).create()
+}
+
+/// Worker body that doubles custom requests and stops on `Stop`
+async fn doubling_worker(requests: WorkerResponder) {
     let mut running = true;
     while running {
-        let result = notifications.async_process_next(async |notification| match notification {
-            FeagiWorkerCommand::Stop => {
+        let result = requests.async_process_next(async |request| match request {
+            FeagiWorkerRequest::Stop => {
                 running = false;
                 FeagiWorkerResponse::Acknowledged
             }
-            FeagiWorkerCommand::Custom(value) => FeagiWorkerResponse::Custom(value * 2),
-            FeagiWorkerCommand::Nothing => FeagiWorkerResponse::Nothing,
+            FeagiWorkerRequest::Custom(value) => FeagiWorkerResponse::Custom(value * 2),
+            FeagiWorkerRequest::Nothing => FeagiWorkerResponse::Nothing,
         }).await;
         if result.is_err() {
             break;
@@ -459,7 +470,25 @@ fn request_from_dropped_requester_is_skipped() {
 
 //endregion
 
-//region Workers
+//region Worker Requests
+
+#[test]
+fn worker_request_and_response_start_and_recycle_as_nothing() {
+    assert!(matches!(<FeagiWorkerRequest<u32> as Recyclable>::new_for_recycler(), FeagiWorkerRequest::Nothing));
+    assert!(matches!(<FeagiWorkerResponse<u32> as Recyclable>::new_for_recycler(), FeagiWorkerResponse::Nothing));
+
+    let mut request = FeagiWorkerRequest::Custom(5u32);
+    request.recycle_self();
+    assert!(matches!(request, FeagiWorkerRequest::Nothing));
+
+    let mut response = FeagiWorkerResponse::Custom(5u32);
+    response.recycle_self();
+    assert!(matches!(response, FeagiWorkerResponse::Nothing));
+}
+
+//endregion
+
+//region Std Thread Spawner
 
 #[test]
 fn std_thread_spawner_runs_body_on_its_own_thread() {
@@ -474,113 +503,242 @@ fn std_thread_spawner_runs_body_on_its_own_thread() {
 }
 
 #[test]
-fn worker_answers_custom_notifications_then_stops() {
-    let mut handle = FeagiWorkerHandleDynamic::<u32, u32, _>::start(&FeagiStdThreadSpawner, 2, |notifications| {
-        move || doubling_worker(notifications)
-    }).unwrap();
+fn std_thread_spawner_join_reports_body_panic() {
+    let join_handle = FeagiStdThreadSpawner.spawn_worker(|| async { panic!("worker failed") }).unwrap();
+    assert!(join_handle.join().is_err());
+}
+
+#[test]
+fn spawned_worker_answers_custom_requests_then_acknowledges_stop() {
+    let (mut requester, responder) = worker_request_channel(2);
+    let join_handle = FeagiStdThreadSpawner.spawn_worker(move || doubling_worker(responder)).unwrap();
 
     block_on_thread(async {
         for value in 0..50u32 {
-            assert!(matches!(handle.notify(value).await.unwrap(), FeagiWorkerResponse::Custom(doubled) if doubled == value * 2));
+            let response = requester.make_request(FeagiWorkerRequest::Custom(value)).await.unwrap();
+            assert!(matches!(response, FeagiWorkerResponse::Custom(doubled) if doubled == value * 2));
         }
-        handle.stop().await.unwrap();
+        let response = requester.make_request(FeagiWorkerRequest::Stop).await.unwrap();
+        assert!(matches!(response, FeagiWorkerResponse::Acknowledged));
     });
-    handle.join().unwrap();
+    join_handle.join().unwrap();
 }
 
 #[test]
-fn stop_after_worker_exited_errors() {
-    let mut handle = FeagiWorkerHandleDynamic::<u32, u32, _>::start(&FeagiStdThreadSpawner, 1, |notifications| {
-        move || async move { drop(notifications) }
-    }).unwrap();
-    std::thread::sleep(Duration::from_millis(50));
-    assert!(matches!(block_on_thread(handle.stop()), Err(FeagiRequestError::RequestNotSent(_))));
-    handle.join().unwrap();
+fn request_after_worker_exited_errors() {
+    let (mut requester, responder) = worker_request_channel(1);
+    let join_handle = FeagiStdThreadSpawner.spawn_worker(move || async move { drop(responder) }).unwrap();
+    join_handle.join().unwrap();
+    let result = block_on_thread(requester.make_request(FeagiWorkerRequest::Stop));
+    assert!(matches!(result, Err(FeagiRequestError::RequestNotSent(_))));
 }
 
 #[test]
-fn join_reports_worker_panic() {
-    let handle = FeagiWorkerHandleDynamic::<u32, u32, _>::start(&FeagiStdThreadSpawner, 1, |notifications| {
-        move || async move {
-            let _notifications = notifications;
-            panic!("worker failed");
-        }
-    }).unwrap();
-    assert!(handle.join().is_err());
-}
-
-#[test]
-fn worker_can_send_to_additional_channels() {
+fn spawned_worker_can_send_to_additional_channels() {
     let (event_sender, event_receiver) = FeagiChannelDynamicBuilder::<Number>::new(4).create_channels();
-    let mut handle = FeagiWorkerHandleDynamic::<u32, (), _>::start(&FeagiStdThreadSpawner, 1, |notifications| {
-        move || async move {
-            let mut running = true;
-            while running {
-                let result = notifications.async_process_next(async |notification| match notification {
-                    FeagiWorkerCommand::Stop => {
-                        running = false;
-                        FeagiWorkerResponse::Acknowledged
-                    }
-                    FeagiWorkerCommand::Custom(value) => {
-                        event_sender.async_send(Number(u64::from(value))).await.unwrap();
-                        FeagiWorkerResponse::Acknowledged
-                    }
-                    FeagiWorkerCommand::Nothing => FeagiWorkerResponse::Nothing,
-                }).await;
-                if result.is_err() {
-                    break;
+    let (mut requester, responder) = worker_request_channel(1);
+    let join_handle = FeagiStdThreadSpawner.spawn_worker(move || async move {
+        let mut running = true;
+        while running {
+            let result = responder.async_process_next(async |request| match request {
+                FeagiWorkerRequest::Stop => {
+                    running = false;
+                    FeagiWorkerResponse::Acknowledged
                 }
+                FeagiWorkerRequest::Custom(value) => {
+                    event_sender.async_send(Number(u64::from(value))).await.unwrap();
+                    FeagiWorkerResponse::Acknowledged
+                }
+                FeagiWorkerRequest::Nothing => FeagiWorkerResponse::Nothing,
+            }).await;
+            if result.is_err() {
+                break;
             }
         }
     }).unwrap();
 
     block_on_thread(async {
-        handle.notify(3).await.unwrap();
-        handle.notify(4).await.unwrap();
-        handle.stop().await.unwrap();
+        requester.make_request(FeagiWorkerRequest::Custom(3)).await.unwrap();
+        requester.make_request(FeagiWorkerRequest::Custom(4)).await.unwrap();
+        requester.make_request(FeagiWorkerRequest::Stop).await.unwrap();
     });
-    handle.join().unwrap();
+    join_handle.join().unwrap();
     assert_eq!(event_receiver.try_recv().unwrap(), Number(3));
     assert_eq!(event_receiver.try_recv().unwrap(), Number(4));
 }
 
 #[test]
-fn worker_can_spawn_and_stop_a_child_worker() {
+fn spawned_worker_can_spawn_and_stop_a_child_worker() {
     let child_stopped = Arc::new(AtomicU32::new(0));
     let child_stopped_in_parent = child_stopped.clone();
-    let mut parent = FeagiWorkerHandleDynamic::<u32, u32, _>::start(&FeagiStdThreadSpawner, 1, |notifications| {
-        move || async move {
-            let mut child = FeagiWorkerHandleDynamic::<u32, u32, _>::start(&FeagiStdThreadSpawner, 1, |child_notifications| {
-                move || doubling_worker(child_notifications)
-            }).unwrap();
+    let (mut parent_requester, parent_responder) = worker_request_channel(1);
+    let parent_join_handle = FeagiStdThreadSpawner.spawn_worker(move || async move {
+        let (mut child_requester, child_responder) = worker_request_channel(1);
+        let child_join_handle = FeagiStdThreadSpawner.spawn_worker(move || doubling_worker(child_responder)).unwrap();
 
+        let mut running = true;
+        while running {
+            // Custom requests are forwarded to the child, Stop stops the child first
+            let result = parent_responder.async_process_next(async |request| match request {
+                FeagiWorkerRequest::Stop => {
+                    child_requester.make_request(FeagiWorkerRequest::Stop).await.unwrap();
+                    child_stopped_in_parent.fetch_add(1, Ordering::SeqCst);
+                    running = false;
+                    FeagiWorkerResponse::Acknowledged
+                }
+                FeagiWorkerRequest::Custom(value) => child_requester.make_request(FeagiWorkerRequest::Custom(value)).await.unwrap(),
+                FeagiWorkerRequest::Nothing => FeagiWorkerResponse::Nothing,
+            }).await;
+            if result.is_err() {
+                break;
+            }
+        }
+        child_join_handle.join().unwrap();
+    }).unwrap();
+
+    block_on_thread(async {
+        let response = parent_requester.make_request(FeagiWorkerRequest::Custom(21)).await.unwrap();
+        assert!(matches!(response, FeagiWorkerResponse::Custom(42)));
+        parent_requester.make_request(FeagiWorkerRequest::Stop).await.unwrap();
+    });
+    parent_join_handle.join().unwrap();
+    assert_eq!(child_stopped.load(Ordering::SeqCst), 1);
+}
+
+//endregion
+
+//region Worker Builder
+
+/// Builds a worker that doubles custom requests, with no extra channels
+struct DoublingWorkerBuilder {
+    request_queue_capacity: usize,
+}
+
+impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DoublingWorkerBuilder {
+    type Channels = FeagiWorkerChannelsDynamic;
+    type BuildInputs = ();
+    type BuildOutputs = ();
+    type RequiredChannelPairs = ();
+    type CustomRequest = u32;
+    type CustomResponse = u32;
+    type BuildError = FeagiWorkerSpawnError;
+
+    fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs)
+        -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
+        let (requester, responder) = worker_request_channel(self.request_queue_capacity);
+        let handle = spawner.spawn_worker(move || doubling_worker(responder))?;
+        Ok((FeagiWorker::new(requester, handle), ()))
+    }
+
+    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {}
+}
+
+/// Builds a worker that publishes each custom request onto an outgoing event channel. The
+/// channel pair is created first, the worker gets the sender and the caller keeps the receiver
+struct EventWorkerBuilder {
+    event_queue_capacity: usize,
+}
+
+impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
+    type Channels = FeagiWorkerChannelsDynamic;
+    type BuildInputs = FeagiChannelSenderDynamic<Number>;
+    type BuildOutputs = ();
+    type RequiredChannelPairs = (FeagiChannelSenderDynamic<Number>, FeagiChannelReceiverDynamic<Number>);
+    type CustomRequest = u32;
+    type CustomResponse = u32;
+    type BuildError = FeagiWorkerSpawnError;
+
+    fn build_worker(self, spawner: &FeagiStdThreadSpawner, event_sender: Self::BuildInputs)
+        -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
+        let (requester, responder) = worker_request_channel(1);
+        let handle = spawner.spawn_worker(move || async move {
             let mut running = true;
             while running {
-                // Custom notifications are forwarded to the child, Stop stops the child first
-                let result = notifications.async_process_next(async |notification| match notification {
-                    FeagiWorkerCommand::Stop => {
-                        child.stop().await.unwrap();
-                        child_stopped_in_parent.fetch_add(1, Ordering::SeqCst);
+                let result = responder.async_process_next(async |request| match request {
+                    FeagiWorkerRequest::Stop => {
                         running = false;
                         FeagiWorkerResponse::Acknowledged
                     }
-                    FeagiWorkerCommand::Custom(value) => child.notify(value).await.unwrap(),
-                    FeagiWorkerCommand::Nothing => FeagiWorkerResponse::Nothing,
+                    FeagiWorkerRequest::Custom(value) => {
+                        event_sender.async_send(Number(u64::from(value))).await.unwrap();
+                        FeagiWorkerResponse::Acknowledged
+                    }
+                    FeagiWorkerRequest::Nothing => FeagiWorkerResponse::Nothing,
                 }).await;
                 if result.is_err() {
                     break;
                 }
             }
-            child.join().unwrap();
-        }
-    }).unwrap();
+        })?;
+        Ok((FeagiWorker::new(requester, handle), ()))
+    }
+
+    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {
+        FeagiChannelDynamicBuilder::new(self.event_queue_capacity).create_channels()
+    }
+}
+
+/// Builds a worker that exits immediately without answering anything
+struct ExitingWorkerBuilder;
+
+impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ExitingWorkerBuilder {
+    type Channels = FeagiWorkerChannelsDynamic;
+    type BuildInputs = ();
+    type BuildOutputs = ();
+    type RequiredChannelPairs = ();
+    type CustomRequest = u32;
+    type CustomResponse = u32;
+    type BuildError = FeagiWorkerSpawnError;
+
+    fn build_worker(self, spawner: &FeagiStdThreadSpawner, _inputs: Self::BuildInputs)
+        -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
+        let (requester, responder) = worker_request_channel(1);
+        let handle = spawner.spawn_worker(move || async move { drop(responder) })?;
+        Ok((FeagiWorker::new(requester, handle), ()))
+    }
+
+    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {}
+}
+
+#[test]
+fn built_worker_answers_custom_requests_then_stops() {
+    let builder = DoublingWorkerBuilder { request_queue_capacity: 2 };
+    builder.spawn_required_channel_pairs();
+    let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, ()).unwrap();
 
     block_on_thread(async {
-        assert!(matches!(parent.notify(21).await.unwrap(), FeagiWorkerResponse::Custom(42)));
-        parent.stop().await.unwrap();
+        for value in 0..50u32 {
+            let response = worker.make_request(value).await.unwrap();
+            assert!(matches!(response, FeagiWorkerResponse::Custom(doubled) if doubled == value * 2));
+        }
+        worker.stop().await.unwrap();
+        // The worker exited after acknowledging, so further requests fail
+        assert!(worker.make_request(1).await.is_err());
     });
-    parent.join().unwrap();
-    assert_eq!(child_stopped.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn built_worker_sends_on_its_required_channel_pair() {
+    let builder = EventWorkerBuilder { event_queue_capacity: 4 };
+    let (event_sender, event_receiver) = builder.spawn_required_channel_pairs();
+    let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, event_sender).unwrap();
+
+    block_on_thread(async {
+        worker.make_request(3).await.unwrap();
+        worker.make_request(4).await.unwrap();
+        worker.stop().await.unwrap();
+    });
+    assert_eq!(event_receiver.try_recv().unwrap(), Number(3));
+    assert_eq!(event_receiver.try_recv().unwrap(), Number(4));
+}
+
+#[test]
+fn stopping_an_exited_built_worker_errors() {
+    let (mut worker, ()) = ExitingWorkerBuilder.build_worker(&FeagiStdThreadSpawner, ()).unwrap();
+    // Depending on timing the request is either rejected outright or drained unanswered when the
+    // worker's responder drops. Both must surface as errors rather than hanging
+    let result = block_on_thread(worker.stop());
+    assert!(matches!(result, Err(FeagiRequestError::RequestNotSent(_)) | Err(FeagiRequestError::ResponderDroppedRequest)));
 }
 
 //endregion

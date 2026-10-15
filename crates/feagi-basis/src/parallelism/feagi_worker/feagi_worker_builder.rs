@@ -1,7 +1,17 @@
+use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
+use crate::parallelism::feagi_channel::recycling::Recyclable;
+use crate::parallelism::feagi_channel::request_response::feagi_request_response::{ReplySlot, RequestSlot};
+#[cfg(feature = "alloc")]
+use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiverDynamic, FeagiChannelSenderDynamic};
+#[cfg(feature = "alloc")]
+use crate::parallelism::feagi_channel::request_response::feagi_request_response::FeagiReplySenderDynamic;
 use crate::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
 
 /// Handles the construction of various 'FeagiWorker' types
 pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
+    /// Which channel types (heap allocated, static) the built worker uses for its requests
+    type Channels: WorkerChannelImplementation;
     /// What the builder needs to build the worker, including any incoming request receiver
     /// channels from `spawn_required_channel_pairs`
     type BuildInputs;
@@ -18,7 +28,7 @@ pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
 
     /// Consume self to build the FeagiWorker
     fn build_worker(self, spawner: &Spawner, inputs: Self::BuildInputs)
-        -> Result<(FeagiWorker<Spawner, Self::CustomRequest, Self::CustomResponse>, Self::BuildOutputs), Self::BuildError>;
+        -> Result<(FeagiWorker<Spawner, Self::Channels, Self::CustomRequest, Self::CustomResponse>, Self::BuildOutputs), Self::BuildError>;
 
     /// Create needed channel pairings. Done first so different workers can be aligned before
     /// building them
@@ -26,16 +36,54 @@ pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
 }
 
 
-
-/// How a worker is spawned within an API (std threads, embassy). NOT specific per worker but
-/// rather backend implementation
-pub trait WorkerSpawnerImplementation {
-    // TODO a way to spawn threads for std or be assigned as task from embassy, possibly via subtype?
-
-    type WorkerInternalHandle;
-    type RequestSender;
-    type ReplySender;
-    type ReplyReceive;
+/// Which channel types a worker uses to receive requests and send replies (heap allocated,
+/// static)
+pub trait WorkerChannelImplementation {
+    /// Sends requests, each carrying a copy of the requester's reply sender
+    type RequestSender<Request: Recyclable, Response: Recyclable>:
+        FeagiChannelSender<RequestSlot<Request, Self::ReplySender<Response>>>;
+    /// Sends replies back to the requester. Cloned into every request
+    type ReplySender<Response: Recyclable>: FeagiChannelSender<ReplySlot<Response>> + Clone;
+    /// Receives replies on the requester's side
+    type ReplyReceiver<Response: Recyclable>: FeagiChannelReceiver<ReplySlot<Response>>;
 }
+
+//region Dynamic Channels
+
+/// Workers use heap allocated channels, matching `FeagiRequestResponseDynamicBuilder`
+#[cfg(feature = "alloc")]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FeagiWorkerChannelsDynamic;
+
+#[cfg(feature = "alloc")]
+impl WorkerChannelImplementation for FeagiWorkerChannelsDynamic {
+    type RequestSender<Request: Recyclable, Response: Recyclable> =
+        FeagiChannelSenderDynamic<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>;
+    type ReplySender<Response: Recyclable> = FeagiReplySenderDynamic<Response>;
+    type ReplyReceiver<Response: Recyclable> = FeagiChannelReceiverDynamic<ReplySlot<Response>>;
+}
+
+//endregion
+
+//region Static Channels
+
+// TODO: Disabled until thingbuf is forked / patched. thingbuf 0.1.6 only implements `Clone` for
+// `StaticSender` with its default recycle policy, so `FeagiChannelSenderStatic` cannot satisfy
+// the `ReplySender: Clone` bound. The static channel types also require `'static` items, so the
+// GAT bounds above will need `Request: 'static` / `Response: 'static` added when this is enabled
+/*
+/// Workers use statically allocated channels
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FeagiWorkerChannelsStatic;
+
+impl WorkerChannelImplementation for FeagiWorkerChannelsStatic {
+    type RequestSender<Request: Recyclable, Response: Recyclable> =
+        FeagiChannelSenderStatic<RequestSlot<Request, FeagiChannelSenderStatic<ReplySlot<Response>>>>;
+    type ReplySender<Response: Recyclable> = FeagiChannelSenderStatic<ReplySlot<Response>>;
+    type ReplyReceiver<Response: Recyclable> = FeagiChannelReceiverStatic<ReplySlot<Response>>;
+}
+*/
+
+//endregion
 
 

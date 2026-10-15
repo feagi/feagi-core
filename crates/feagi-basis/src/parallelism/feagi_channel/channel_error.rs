@@ -27,6 +27,8 @@ impl<T> From<thingbuf::mpsc::errors::Closed<T>> for FeagiChannelSendError {
     }
 }
 
+// thingbuf only provides timeout errors with its std feature
+#[cfg(feature = "std")]
 impl<T> From<thingbuf::mpsc::errors::SendTimeoutError<T>> for FeagiChannelSendError {
     fn from(value: thingbuf::mpsc::errors::SendTimeoutError<T>) -> Self {
         match value {
@@ -60,6 +62,8 @@ impl From<thingbuf::mpsc::errors::TryRecvError> for FeagiChannelReceiveError {
     }
 }
 
+// thingbuf only provides timeout errors with its std feature
+#[cfg(feature = "std")]
 impl From<thingbuf::mpsc::errors::RecvTimeoutError> for FeagiChannelReceiveError {
     fn from(value: thingbuf::mpsc::errors::RecvTimeoutError) -> Self {
         match value {

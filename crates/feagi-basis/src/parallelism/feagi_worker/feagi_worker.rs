@@ -1,40 +1,44 @@
 use crate::parallelism::feagi_channel::channel_error::FeagiRequestError;
-use crate::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequester};
-use crate::parallelism::feagi_worker::feagi_worker_builder::WorkerSpawnerImplementation;
-use crate::parallelism::feagi_worker::worker_requests::{FeagiWorkerResponse, FeagiWorkerRequest};
+use crate::parallelism::feagi_channel::request_response::feagi_request_response::FeagiRequester;
+use crate::parallelism::feagi_worker::feagi_worker_builder::WorkerChannelImplementation;
+use crate::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
+use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
 
 /// Runs some task separately depending on context. Runs on another thread in std, and on
 /// another task in embassy. THe interface is generally uniform irrespective of being in
 /// std or no-std modes
-pub struct FeagiWorker<InternalImplementation, CustomCommandRequest, CustomCommandResponse>
+pub struct FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
 where
-    InternalImplementation: WorkerSpawnerImplementation,
+    SpawnerImplementation: WorkerSpawnerImplementation,
+    ChannelImplementation: WorkerChannelImplementation,
 {
     request_maker: FeagiRequester<
-        FeagiWorkerRequest<FeagiWorkerRequest<CustomCommandRequest>>,
-        FeagiWorkerResponse<FeagiWorkerResponse<CustomCommandResponse>>,
-        InternalImplementation::RequestSender,
-        InternalImplementation::ReplySender,
-        InternalImplementation::ReplyReceive
+        FeagiWorkerRequest<CustomCommandRequest>,
+        FeagiWorkerResponse<CustomCommandResponse>,
+        ChannelImplementation::RequestSender<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>>,
+        ChannelImplementation::ReplySender<FeagiWorkerResponse<CustomCommandResponse>>,
+        ChannelImplementation::ReplyReceiver<FeagiWorkerResponse<CustomCommandResponse>>
     >,
-    handle: InternalImplementation::WorkerInternalHandle,
+    handle: SpawnerImplementation::WorkerInternalHandle,
 }
 
-impl<InternalImplementation, CustomCommandRequest, CustomCommandResponse> 
-FeagiWorker<InternalImplementation, CustomCommandRequest, CustomCommandResponse>
-where 
-    InternalImplementation: WorkerSpawnerImplementation,
+impl<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
+FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
+where
+    SpawnerImplementation: WorkerSpawnerImplementation,
+    ChannelImplementation: WorkerChannelImplementation,
 {
-    
-    pub(crate) fn new(
+    /// Meant be called by `FeagiWorkerBuilder::build_worker` implementations, spawns a new
+    /// (running) worker
+    pub fn new(
         request_maker: FeagiRequester<
-            FeagiWorkerRequest<FeagiWorkerRequest<CustomCommandRequest>>,
-            FeagiWorkerResponse<FeagiWorkerResponse<CustomCommandResponse>>,
-            InternalImplementation::RequestSender,
-            InternalImplementation::ReplySender,
-            InternalImplementation::ReplyReceive
+            FeagiWorkerRequest<CustomCommandRequest>,
+            FeagiWorkerResponse<CustomCommandResponse>,
+            ChannelImplementation::RequestSender<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>>,
+            ChannelImplementation::ReplySender<FeagiWorkerResponse<CustomCommandResponse>>,
+            ChannelImplementation::ReplyReceiver<FeagiWorkerResponse<CustomCommandResponse>>
         >,
-        handle: InternalImplementation::WorkerInternalHandle,
+        handle: SpawnerImplementation::WorkerInternalHandle,
     ) -> Self {
         Self {request_maker, handle}
     }
