@@ -15,11 +15,10 @@ impl<const NUM_DIMS: usize> AxisOrder<NUM_DIMS> for AxisOrderIncrementing<NUM_DI
         while i < NUM_DIMS as u8 {
             out[i as usize] = i;
             i = i + 1;
-        };
+        }
         AxisOrderArray { data: out }
     };
 }
-
 
 /// Starts with the last index and goes backwards (z -> y -> x ...)
 #[derive(Debug, PartialEq, Hash, Clone, ::serde::Serialize, ::serde::Deserialize)]
@@ -36,7 +35,6 @@ impl<const NUM_DIMS: usize> AxisOrder<NUM_DIMS> for AxisOrderDecrementing<NUM_DI
         AxisOrderArray { data: out }
     };
 }
-
 
 /// The actual axis order used for indexing calculations
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, ::serde::Serialize, ::serde::Deserialize)]

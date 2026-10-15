@@ -11,7 +11,7 @@ pub trait FeagiChannelSender<T: Recyclable> {
     /// Guard over a claimed slot, written in place. The slot is published to the receiver when
     /// the guard drops, even if nothing was written, so keep it short-lived and never hold it
     /// across an await point
-    type SendGuard<'a>: DerefMut<Target=T>
+    type SendGuard<'a>: DerefMut<Target = T>
     where
         Self: 'a;
 
@@ -40,7 +40,7 @@ pub trait FeagiChannelReceiver<T: Recyclable> {
     /// Guard over a received slot, read in place. The slot is released back to the channel
     /// for recycling when the guard drops, so keep it short-lived and never hold it across an
     /// await point
-    type RecvGuard<'a>: DerefMut<Target=T>
+    type RecvGuard<'a>: DerefMut<Target = T>
     where
         Self: 'a;
 
@@ -109,7 +109,8 @@ impl<T: Recyclable + 'static, const CAPACITY: usize> FeagiChannelBuilder<T> for 
 pub struct FeagiChannelSenderStatic<T: Recyclable + 'static>(thingbuf::mpsc::StaticSender<T, RecyclableRecyclePolicy<T>>);
 
 impl<T: Recyclable + 'static> FeagiChannelSender<T> for FeagiChannelSenderStatic<T> {
-    type SendGuard<'a> = thingbuf::mpsc::SendRef<'a, T>
+    type SendGuard<'a>
+        = thingbuf::mpsc::SendRef<'a, T>
     where
         Self: 'a;
 
@@ -153,7 +154,8 @@ impl<T: Recyclable + 'static> FeagiChannelSender<T> for FeagiChannelSenderStatic
 pub struct FeagiChannelReceiverStatic<T: Recyclable + 'static>(thingbuf::mpsc::StaticReceiver<T, RecyclableRecyclePolicy<T>>);
 
 impl<T: Recyclable + 'static> FeagiChannelReceiver<T> for FeagiChannelReceiverStatic<T> {
-    type RecvGuard<'a> = thingbuf::mpsc::RecvRef<'a, T>
+    type RecvGuard<'a>
+        = thingbuf::mpsc::RecvRef<'a, T>
     where
         Self: 'a;
 
@@ -245,7 +247,8 @@ impl<T: Recyclable> Clone for FeagiChannelSenderDynamic<T> {
 
 #[cfg(feature = "alloc")]
 impl<T: Recyclable> FeagiChannelSender<T> for FeagiChannelSenderDynamic<T> {
-    type SendGuard<'a> = thingbuf::mpsc::SendRef<'a, T>
+    type SendGuard<'a>
+        = thingbuf::mpsc::SendRef<'a, T>
     where
         Self: 'a;
 
@@ -291,7 +294,8 @@ pub struct FeagiChannelReceiverDynamic<T: Recyclable>(thingbuf::mpsc::Receiver<T
 
 #[cfg(feature = "alloc")]
 impl<T: Recyclable> FeagiChannelReceiver<T> for FeagiChannelReceiverDynamic<T> {
-    type RecvGuard<'a> = thingbuf::mpsc::RecvRef<'a, T>
+    type RecvGuard<'a>
+        = thingbuf::mpsc::RecvRef<'a, T>
     where
         Self: 'a;
 

@@ -50,6 +50,8 @@ impl<Q: QuantizedUnsignedIntegerTrait> IndexManager<Q> {
             self.skipped_indexes.swap_remove(index);
         }
 
-        Err(GenericCollectionError::IndexManagerIndex { index: index.quant_to_usize() })
+        Err(GenericCollectionError::IndexManagerIndex {
+            index: index.quant_to_usize(),
+        })
     }
 }

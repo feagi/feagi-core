@@ -5,7 +5,3 @@ pub enum GenomeIdentifierError {
     #[error("Unable to parse {0} ID from Bytes!")]
     CannotParseFromBytes(&'static str),
 }
-
-
-
-

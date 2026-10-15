@@ -1,12 +1,12 @@
-use quote::{format_ident, quote};
-use syn::{braced, LitStr};
-use syn::parse::{Parse, ParseStream};
 use crate::common::{parse_property_colon_member, unit_type, RustVisibility};
 use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
 use crate::feagi_messages::request_response::feagi_request_message_path::{FeagiRequestMessagePath, FeagiRequestMessagePathRustStructNames};
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::template_parsing::struct_template::StructTemplate;
 use crate::templates::Unparse;
+use quote::{format_ident, quote};
+use syn::parse::{Parse, ParseStream};
+use syn::{braced, LitStr};
 
 mod kw {
     syn::custom_keyword!(path);
@@ -28,7 +28,6 @@ pub struct FeagiRequestMessageRustStructNames {
 }
 
 impl FeagiRequestMessageRustStructNames {
-
     /// Build the name set from the message title and HTTP-equivalent method.
     pub fn new(base_name: syn::Ident, method: FeagiRequestMessageMethod) -> Self {
         Self { base_name, method }
@@ -37,7 +36,7 @@ impl FeagiRequestMessageRustStructNames {
     pub fn feagi_message_response_struct_name(&self) -> syn::Ident {
         self.with_prefix_method_and_given_suffix("FeagiRequestMessage")
     }
-    
+
     pub fn path_struct_names(&self) -> FeagiRequestMessagePathRustStructNames {
         FeagiRequestMessagePathRustStructNames::new(self.base_name.clone(), self.method.clone())
     }
@@ -45,7 +44,7 @@ impl FeagiRequestMessageRustStructNames {
     pub fn feagi_message_response_path_struct_name(&self) -> syn::Ident {
         self.path_struct_names().feagi_message_path_struct_name()
     }
-    
+
     pub fn feagi_message_parameter_specification_struct_name(&self) -> syn::Ident {
         self.with_prefix_method_and_given_suffix("FeagiRequestMessageParameters")
     }
@@ -61,9 +60,9 @@ impl FeagiRequestMessageRustStructNames {
     pub fn feagi_message_response_specification_struct_name(&self) -> syn::Ident {
         self.with_prefix_method_and_given_suffix("FeagiRequestMessageResponse")
     }
-    
+
     fn with_prefix_method_and_given_suffix(&self, suffix: &str) -> syn::Ident {
-        format_ident!("{}{}{}", self.method.as_str() , self.base_name, suffix)
+        format_ident!("{}{}{}", self.method.as_str(), self.base_name, suffix)
     }
 }
 
@@ -92,11 +91,10 @@ pub struct FeagiRequestMessage<const METHOD_TYPE_U8: FeagiRequestMessageU8> {
     pub description: LitStr,
     pub payload: StructTemplate,
     pub response: StructTemplate,
-    pub custom_response_error: Option<syn::Ident>
+    pub custom_response_error: Option<syn::Ident>,
 }
 
 impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYPE_U8> {
-
     /// Whether this message's path defines a parameter struct.
     pub fn is_parameter_struct_generated(&self) -> bool {
         self.path.is_parameter_struct_generated()
@@ -121,14 +119,14 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
     /// is queried from this message, not from the name set.
     pub fn calculate_feagi_message_struct_names(&self, name_base: syn::Ident) -> FeagiRequestMessageRustStructNames {
         let _ = self;
-        FeagiRequestMessageRustStructNames::new(
-            name_base,
-            FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8),
-        )
+        FeagiRequestMessageRustStructNames::new(name_base, FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8))
     }
 
     /// Generate the Specification structs, the feagi request message struct, and the response struct (if valid)
-    pub fn generate_rust_specification_and_request_and_response_structs(&self, feagi_message_specification_struct_names: FeagiRequestMessageRustStructNames) -> proc_macro2::TokenStream {
+    pub fn generate_rust_specification_and_request_and_response_structs(
+        &self,
+        feagi_message_specification_struct_names: FeagiRequestMessageRustStructNames,
+    ) -> proc_macro2::TokenStream {
         let mut output: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
         let specification_derives = vec![
             format_ident!("{}", "Clone"),
@@ -137,11 +135,10 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             format_ident!("{}", "Deserialize"),
         ];
 
-        let tokens_message_path = self
-            .path
-            .generate_feagi_message_path_struct_and_impls(
-                &feagi_message_specification_struct_names.path_struct_names(),
-                &feagi_message_specification_struct_names.feagi_message_response_struct_name()); // TODO add root route
+        let tokens_message_path = self.path.generate_feagi_message_path_struct_and_impls(
+            &feagi_message_specification_struct_names.path_struct_names(),
+            &feagi_message_specification_struct_names.feagi_message_response_struct_name(),
+        ); // TODO add root route
         output.extend(tokens_message_path);
 
         let mut all_request_fields = StructTemplate::new_empty();
@@ -412,7 +409,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Unparse for FeagiRequestMessag
         let description = &self.description;
         let payload = self.payload.unparse();
         let response = self.response.unparse();
-        
+
         // TODO unparse error type
 
         if !FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).had_no_payload() {

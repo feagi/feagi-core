@@ -8,54 +8,170 @@ use thiserror::Error;
 
 // TODO use more optimized base64 encoding / decoding engines via cfg flags
 
-// TODO General ID trait? We need to be cautious of byte IDs vs UUIDs (should we?)
+/// Defines a fixed-byte ID tuple struct and its standard surface.
+///
+/// The generated struct is `Name([u8; N])` with `Debug`, `Clone`, `Copy`, `PartialEq`,
+/// `Eq`, `Hash`, `serde::Serialize`, and `serde::Deserialize`. The macro also adds:
+///
+/// - `from_bytes_const`, which wraps the bytes and does not run a deserialization check
+/// - [`ByteID`], including `try_from_id_bytes`
+/// - `Base64EncodedName`, the padded URL-safe base64 alias
+/// - [`core::fmt::Display`] as that same base64 text
+///
+/// ```text
+/// impl_byte_array_id!(
+///     /// Docs for the generated struct.
+///     pub MyId,
+///     8
+/// );
+/// impl_byte_array_id!(pub MyId, 8, MyIdError, try_my_id_from_bytes);
+/// ```
+///
+/// Without a check function, `try_from_id_bytes` returns `Ok(Self(bytes))` and
+/// `DeserializationError` is [`core::convert::Infallible`], which cannot be constructed.
+/// Pass an error type only together with `try_my_id_from_bytes`:
+/// `fn([u8; N]) -> Result<MyId, MyIdError>`.
+#[macro_export]
+macro_rules! impl_byte_array_id {
+    (
+        $(#[$meta:meta])*
+        $vis:vis $id_name:ident,
+        $number_of_bytes:expr
+    ) => {
+        $crate::impl_byte_array_id! {
+            @body
+            $(#[$meta])*
+            $vis $id_name,
+            $number_of_bytes,
+            ::core::convert::Infallible
+        }
+    };
 
-//region ByteID
+    (
+        $(#[$meta:meta])*
+        $vis:vis $id_name:ident,
+        $number_of_bytes:expr,
+        $error_ty:ty,
+        $try_from_id_bytes:path
+    ) => {
+        $crate::impl_byte_array_id! {
+            @body
+            $(#[$meta])*
+            $vis $id_name,
+            $number_of_bytes,
+            $error_ty,
+            $try_from_id_bytes
+        }
+    };
+
+    (
+        @body
+        $(#[$meta:meta])*
+        $vis:vis $id_name:ident,
+        $number_of_bytes:expr,
+        $error_ty:ty
+        $(, $try_from_id_bytes:path)?
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ::serde::Serialize, ::serde::Deserialize)]
+        $vis struct $id_name([u8; $number_of_bytes]);
+
+        impl $id_name {
+            /// Wraps `bytes` as this ID.
+            ///
+            /// This does not run deserialization checks, so it can be called from const context.
+            /// Checks belong in `ByteID::try_from_id_bytes`, which base64 parsing also uses.
+            pub const fn from_bytes_const(bytes: [u8; $number_of_bytes]) -> Self {
+                Self(bytes)
+            }
+        }
+
+        impl $crate::identifiers::byte_id::ByteID<$number_of_bytes> for $id_name {
+            type DeserializationError = $error_ty;
+
+            fn get_id_bytes(&self) -> &[u8; $number_of_bytes] {
+                &self.0
+            }
+
+            fn into_id_bytes(self) -> [u8; $number_of_bytes] {
+                self.0
+            }
+
+            fn try_from_id_bytes(
+                bytes: [u8; $number_of_bytes],
+            ) -> Result<Self, Self::DeserializationError> {
+                $crate::impl_byte_array_id!(@try_from $id_name, bytes $(, $try_from_id_bytes)?)
+            }
+        }
+
+        paste::paste! {
+            pub type [<Base64Encoded $id_name>] = $crate::identifiers::byte_id::Base64EncodedByteID<
+                $id_name,
+                $number_of_bytes,
+                { ($number_of_bytes + 2) / 3 * 4 },
+            >;
+
+            impl core::fmt::Display for $id_name {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    [<Base64Encoded $id_name>]::fmt_id(self, f)
+                }
+            }
+        }
+    };
+
+    (@try_from $id_name:ident, $bytes:ident) => {
+        Ok($id_name($bytes))
+    };
+
+    (@try_from $id_name:ident, $bytes:ident, $try_from_id_bytes:path) => {
+        $try_from_id_bytes($bytes)
+    };
+}
+
+/// Adds a `std`-only `new_random` constructor to a fixed-byte ID.
+///
+/// The struct must already have `from_bytes_const`. [`impl_byte_array_id!`] generates that.
+///
+/// ```text
+/// impl_byte_array_id_random!(MyId, 8);
+/// ```
+///
+/// `new_random` is compiled only when the crate's `std` feature is enabled. Random bytes
+/// come from [`rand`] and are wrapped with `from_bytes_const`.
+#[macro_export]
+macro_rules! impl_byte_array_id_random {
+    ($id_name:ident, $number_of_bytes:expr) => {
+        impl $id_name {
+            /// Builds an ID from random bytes.
+            ///
+            /// The bytes are not passed through `ByteID::try_from_id_bytes`.
+            #[cfg(feature = "std")]
+            pub fn new_random() -> Self {
+                let mut bytes = [0u8; $number_of_bytes];
+                rand::fill(&mut bytes[..]);
+                Self::from_bytes_const(bytes)
+            }
+        }
+    };
+}
 
 /// An ID in feagi that is internally a fixed array of bytes
 pub trait ByteID<const NUMBER_OF_BYTES: usize>:
-Sized + Clone + core::hash::Hash + core::fmt::Debug + core::fmt::Display + serde::Serialize + serde::de::DeserializeOwned
+    Sized + Clone + core::hash::Hash + core::fmt::Debug + core::fmt::Display + serde::Serialize + serde::de::DeserializeOwned
 {
     type DeserializationError: core::error::Error;
 
     /// Get the bytes of the encoding ID
     fn get_id_bytes(&self) -> &[u8; NUMBER_OF_BYTES];
 
+    /// Return the inner byte array, consuming self
+    fn into_id_bytes(self) -> [u8; NUMBER_OF_BYTES];
+
     /// Try to parse the given bytes into the ID here
     fn try_from_id_bytes(bytes: [u8; NUMBER_OF_BYTES]) -> Result<Self, Self::DeserializationError>;
 }
 
-//region Base64 encode decode
-
-/// Byte length of a padded URL-safe base64 encoding of `source_bytes` bytes.
-pub const fn padded_url_safe_base64_len(source_bytes: usize) -> usize {
-    (source_bytes + 2) / 3 * 4
-}
-
-#[macro_export]
-macro_rules! base_64_id {
-    ($id_name:ident, $number_of_bytes:expr) => {
-        paste::paste!{
-            pub type [<Base64Encoded $id_name>] = Base64EncodedByteID<$id_name, $number_of_bytes, { $crate::identifiers::byte_id::padded_url_safe_base64_len($number_of_bytes) }>;
-        }
-    };
-}
-
-/// Failure to parse a [`Base64EncodedByteID`] from text.
-#[derive(Debug, Error)]
-pub enum Base64EncodedByteIdError<E: core::error::Error> {
-    /// The text was not the padded URL-safe length for this ID.
-    #[error("base64 ID text length {actual} did not match padded length {expected}")]
-    WrongLength { actual: usize, expected: usize },
-
-    /// The text was not a canonical padded URL-safe encoding of this ID's byte length.
-    #[error("base64 ID text was not a canonical padded URL-safe encoding of this ID")]
-    InvalidEncoding,
-
-    /// The decoded bytes were not a valid ID and failed the ID's internal check
-    #[error(transparent)]
-    Id(#[from] E),
-}
+//region Base64ByteId
 
 #[derive(Debug, Clone, Hash)]
 pub struct Base64EncodedByteID<
@@ -68,12 +184,14 @@ pub struct Base64EncodedByteID<
 }
 
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize>
-Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+    Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
-    /// Fails when the two length consts disagree
+    /// Fails when the two length consts disagree.
+    ///
+    /// Padded URL-safe base64 uses 4 characters for every 3 source bytes, rounded up.
     const BASE64_LEN_MATCHES_SOURCE: () = assert!(
-        NUMBER_BASE_64_BYTES == padded_url_safe_base64_len(NUMBER_OF_SOURCE_BYTES),
-        "NUMBER_BASE_64_BYTES must be padded_url_safe_base64_len(NUMBER_OF_SOURCE_BYTES)"
+        NUMBER_BASE_64_BYTES == (NUMBER_OF_SOURCE_BYTES + 2) / 3 * 4,
+        "NUMBER_BASE_64_BYTES must be the padded URL-safe base64 length of NUMBER_OF_SOURCE_BYTES"
     );
 
     /// Borrow the padded URL-safe base64 text.
@@ -146,7 +264,7 @@ Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 }
 
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> From<ID>
-for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
     fn from(value: ID) -> Self {
         let _ = Self::BASE64_LEN_MATCHES_SOURCE;
@@ -167,7 +285,7 @@ for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 }
 
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> core::str::FromStr
-for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
     type Err = Base64EncodedByteIdError<ID::DeserializationError>;
 
@@ -177,11 +295,13 @@ for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 }
 
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize>
-crate::feagi_message::feagi_message_element::MessageElementSerializable for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
-{}
+    crate::feagi_message::feagi_message_element::MessageElementSerializable
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+{
+}
 
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> TryFrom<&str>
-for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
     type Error = Base64EncodedByteIdError<ID::DeserializationError>;
 
@@ -191,7 +311,7 @@ for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 }
 
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize, const CAP: usize>
-TryFrom<&heapless::String<CAP>> for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+    TryFrom<&heapless::String<CAP>> for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
     type Error = Base64EncodedByteIdError<ID::DeserializationError>;
 
@@ -201,7 +321,7 @@ TryFrom<&heapless::String<CAP>> for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYT
 }
 
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> core::convert::AsRef<str>
-for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
     fn as_ref(&self) -> &str {
         self.as_str()
@@ -209,7 +329,7 @@ for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 }
 
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> core::fmt::Display
-for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
@@ -217,7 +337,7 @@ for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 }
 
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> serde::Serialize
-for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self.as_str())
@@ -225,13 +345,13 @@ for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 }
 
 impl<'de, ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> serde::Deserialize<'de>
-for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct EncodedIdVisitor<ID, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize>(core::marker::PhantomData<ID>);
 
         impl<'de, ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> serde::de::Visitor<'de>
-        for EncodedIdVisitor<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
+            for EncodedIdVisitor<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
         {
             type Value = Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>;
 
@@ -254,6 +374,20 @@ for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
     }
 }
 
-//endregion
+/// Failure to parse a [`Base64EncodedByteID`] from text.
+#[derive(Debug, Error)]
+pub enum Base64EncodedByteIdError<E: core::error::Error> {
+    /// The text was not the padded URL-safe length for this ID.
+    #[error("base64 ID text length {actual} did not match padded length {expected}")]
+    WrongLength { actual: usize, expected: usize }, // TODO make this a u8 (u16?)
+
+    /// The text was not a canonical padded URL-safe encoding of this ID's byte length.
+    #[error("base64 ID text was not a canonical padded URL-safe encoding of this ID")]
+    InvalidEncoding,
+
+    /// The decoded bytes were not a valid ID and failed the ID's internal check
+    #[error(transparent)]
+    Id(#[from] E),
+}
 
 //endregion

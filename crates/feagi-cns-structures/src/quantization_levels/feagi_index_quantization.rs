@@ -1,12 +1,10 @@
 use core::hash::Hash;
-use serde::{Deserialize, Serialize};
 use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
-
+use serde::{Deserialize, Serialize};
 
 /// The quantization level that is for structures that must be of the same quantization across
 /// all burst engines in the Neural Processing Unit
-pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq
-+ Eq + core::fmt::Debug + Sync + Send + 'static  {
+pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq + Eq + core::fmt::Debug + Sync + Send + 'static {
     const LEVEL: FeagiIndexQuantizationLevel;
 
     /// Defines the quantization of the  burst index.
@@ -45,7 +43,6 @@ pub trait FeagiIndexQuantization: Clone + Copy + Hash + PartialEq
     /// Max (theoretical) number of synapse aggregator slots per burst engine. Only relevant for parallel engines
     const MAX_SYNAPSE_AGGREGATOR_COUNT: usize = Self::SynapseAggregatorIndexCountQuant::QUANT_MAX_USIZE;
 }
-
 
 /// The quantization level that is for structures that must be of the same quantization across
 /// all burst engines in the Neural Processing Unit as an Enum
@@ -90,7 +87,6 @@ impl FeagiIndexQuantization for FeagiIndexQuantizationLow {
     type SynapseAggregatorIndexCountQuant = u16;
 }
 
-
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct FeagiIndexQuantizationMini;
 
@@ -104,5 +100,3 @@ impl FeagiIndexQuantization for FeagiIndexQuantizationMini {
     type SynapseIndexCountQuant = u16;
     type SynapseAggregatorIndexCountQuant = u16;
 }
-
-

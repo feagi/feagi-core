@@ -6,7 +6,6 @@ use feagi_macro_components::templates::TemplateRoot;
 use proc_macro2::TokenStream;
 use quote::quote;
 
-
 /// Expands one category template into a const `CategoryApi` expression.
 ///
 /// Invoke it through the category template macro:

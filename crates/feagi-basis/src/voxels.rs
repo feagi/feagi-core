@@ -38,19 +38,17 @@ create_wrapped_quantized_unsigned_integer!(
 );
 
 /// Defines the voxel dimensions of a voxel cortical area
-pub type CorticalAreaVoxelCoordinates<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-SpatialCoordinate<CorticalAreaVoxelCoordinateAxisPosition<QI>, 3>;
+pub type CorticalAreaVoxelCoordinates<QI: QuantizedUnsignedIntegerUnwrappedTrait> = SpatialCoordinate<CorticalAreaVoxelCoordinateAxisPosition<QI>, 3>;
 
 /// Defines the voxel dimensions of a voxel cortical area
-pub type CorticalAreaVoxelDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-SpatialDimensions<CorticalAreaVoxelCoordinateAxisPosition<QI>, 3>;
+pub type CorticalAreaVoxelDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait> = SpatialDimensions<CorticalAreaVoxelCoordinateAxisPosition<QI>, 3>;
 
 /// A collection of Cortical Area Voxels that owns all its inner fields, using default incrementing
 /// indexing
 pub type CorticalAreaVoxels<
     QI: QuantizedUnsignedIntegerUnwrappedTrait,
     QP: QuantizedDecimalUnwrappedTrait,
-    S: ParDataStore + DeserializeOwned + 'static
+    S: ParDataStore + DeserializeOwned + 'static,
 > = SpatialParDataOwning<
     CorticalAreaVoxelLinearIndex<QI>,
     CorticalAreaVoxelCoordinates<QI>,
@@ -58,7 +56,7 @@ pub type CorticalAreaVoxels<
     AxisOrderIncrementing<3>,
     S,
     CorticalAreaVoxelPotential<QP>,
-    3
+    3,
 >;
 
 //endregion

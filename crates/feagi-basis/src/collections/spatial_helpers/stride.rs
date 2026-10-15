@@ -12,11 +12,7 @@ pub struct SpatialStride<const NUM_DIMS: usize> {
 
 impl<const NUM_DIMS: usize> SpatialStride<NUM_DIMS> {
     /// Create a new stride from dimensions and axis order.
-    pub fn new_stride<QI: QuantizedUnsignedIntegerTrait>
-    (
-        dims: &SpatialDimensions<QI, NUM_DIMS>,
-        axis_order: &AxisOrderArray<NUM_DIMS>,
-    ) -> Self {
+    pub fn new_stride<QI: QuantizedUnsignedIntegerTrait>(dims: &SpatialDimensions<QI, NUM_DIMS>, axis_order: &AxisOrderArray<NUM_DIMS>) -> Self {
         let mut stride_data = [0usize; NUM_DIMS];
         let mut next_stride = 1usize;
 
@@ -32,8 +28,7 @@ impl<const NUM_DIMS: usize> SpatialStride<NUM_DIMS> {
     }
 
     /// Given changes to dimensions and axis order, update this stride.
-    pub fn update_stride<QI: QuantizedUnsignedIntegerTrait>
-    (
+    pub fn update_stride<QI: QuantizedUnsignedIntegerTrait>(
         &mut self,
         dims: &SpatialDimensions<QI, NUM_DIMS>,
         axis_order: &AxisOrderArray<NUM_DIMS>,
@@ -42,10 +37,7 @@ impl<const NUM_DIMS: usize> SpatialStride<NUM_DIMS> {
     }
 
     /// Convert from coordinate to linear index.
-    pub fn coordinate_to_linear<
-        QLinear: QuantizedUnsignedIntegerTrait,
-        QCoords: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    >(
+    pub fn coordinate_to_linear<QLinear: QuantizedUnsignedIntegerTrait, QCoords: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>>(
         &self,
         coordinate: &SpatialCoordinate<QCoords, NUM_DIMS>,
     ) -> QLinear {
@@ -61,8 +53,8 @@ impl<const NUM_DIMS: usize> SpatialStride<NUM_DIMS> {
     /// Convert from linear index to coordinate.
     pub fn linear_to_coordinate<
         QLinear: QuantizedUnsignedIntegerTrait,
-        QCoords: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-        QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+        QCoords: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
+        QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     >(
         &self,
         linear_index: QLinear,

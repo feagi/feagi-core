@@ -111,7 +111,8 @@ where
         self.make_request_in_place(
             |slot_request| *slot_request = request,
             |slot_response| core::mem::replace(slot_response, Response::new_for_recycler()),
-        ).await
+        )
+        .await
     }
 
     /// Writes a request directly into the channel slot with `write_request`, waits for the
@@ -270,10 +271,7 @@ where
     /// The reply slot is claimed before processing and marked as not responded. If `processor`
     /// is cancelled or panics, dropping the reply guard still publishes the slot, so the requester
     /// receives `ResponderDroppedRequest` instead of waiting forever
-    async fn respond_in_place<Processor>(
-        mut slot: impl DerefMut<Target=RequestSlot<Request, ReplySender>>,
-        processor: Processor,
-    )
+    async fn respond_in_place<Processor>(mut slot: impl DerefMut<Target = RequestSlot<Request, ReplySender>>, processor: Processor)
     where
         Processor: AsyncFnOnce(&mut Request, &mut Response),
     {
@@ -353,8 +351,7 @@ impl<Request: Recyclable, Response: Recyclable> FeagiRequestResponseDynamicBuild
     /// Creates a new, independent requester and responder. Clone the requester for more
     /// requesters to the same responder
     pub fn create(&self) -> (FeagiRequesterDynamic<Request, Response>, FeagiResponderDynamic<Request, Response>) {
-        let (request_sender, request_receiver) =
-            FeagiChannelDynamicBuilder::new(self.request_queue_capacity).create_channels();
+        let (request_sender, request_receiver) = FeagiChannelDynamicBuilder::new(self.request_queue_capacity).create_channels();
         (
             FeagiRequesterDynamic::new_with_reply_channel(request_sender),
             FeagiResponderDynamic::new(request_receiver),
@@ -363,7 +360,9 @@ impl<Request: Recyclable, Response: Recyclable> FeagiRequestResponseDynamicBuild
 }
 
 #[cfg(feature = "alloc")]
-impl<Request: Recyclable, Response: Recyclable> FeagiRequestResponseBuilder<Request, Response> for FeagiRequestResponseDynamicBuilder<Request, Response> {
+impl<Request: Recyclable, Response: Recyclable> FeagiRequestResponseBuilder<Request, Response>
+    for FeagiRequestResponseDynamicBuilder<Request, Response>
+{
     type Requester = FeagiRequesterDynamic<Request, Response>;
     type Responder = FeagiResponderDynamic<Request, Response>;
 }
@@ -371,9 +370,7 @@ impl<Request: Recyclable, Response: Recyclable> FeagiRequestResponseBuilder<Requ
 #[cfg(feature = "alloc")]
 impl<Request: Recyclable, Response: Recyclable> FeagiRequesterDynamic<Request, Response> {
     /// Creates a requester with a newly allocated reply channel of capacity 1
-    fn new_with_reply_channel(
-        request_sender: FeagiChannelSenderDynamic<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>,
-    ) -> Self {
+    fn new_with_reply_channel(request_sender: FeagiChannelSenderDynamic<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>) -> Self {
         let (reply_sender, reply_receiver) = FeagiChannelDynamicBuilder::new(1).create_channels();
         FeagiRequester::new(request_sender, reply_sender, reply_receiver)
     }

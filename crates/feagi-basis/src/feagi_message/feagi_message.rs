@@ -1,5 +1,7 @@
 use crate::feagi_message::feagi_message_path::FeagiMessagePath;
-use crate::feagi_message::request_response::feagi_request_message_specifications::{FeagiMessageParameters, FeagiMessagePayload, FeagiMessageQueryables};
+use crate::feagi_message::request_response::feagi_request_message_specifications::{
+    FeagiMessageParameters, FeagiMessagePayload, FeagiMessageQueryables,
+};
 
 /// Represents all the data needed for a specific FEAGI Message, as individual fields
 pub trait FeagiMessage: Sized + Clone + core::fmt::Debug {

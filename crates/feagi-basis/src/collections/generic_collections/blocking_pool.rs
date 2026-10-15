@@ -1,9 +1,7 @@
 /// A pool that has limited items and that can be accessed by multiple threads at once. Does this
 /// with an internal mutex, but the lock time is so short it should not be a practical issue.
 /// Last In First Out (Stack)
-pub struct BlockingPool<T, const N: usize> (
-    std::sync::Mutex<heapless::Vec<T, N>>
-);
+pub struct BlockingPool<T, const N: usize>(std::sync::Mutex<heapless::Vec<T, N>>);
 
 impl<T, const N: usize> BlockingPool<T, N> {
     /// Creates new pool

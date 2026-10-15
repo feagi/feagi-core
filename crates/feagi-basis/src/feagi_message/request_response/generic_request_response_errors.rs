@@ -26,4 +26,3 @@ impl<E: core::fmt::Debug + Sized + Send> Recyclable for GenericRequestResponseEr
         // Nothing!
     }
 }
-

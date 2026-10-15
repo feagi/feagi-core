@@ -9,11 +9,11 @@ pub mod npu_sealed {
     #[cfg(feature = "alloc")]
     pub use super::enclosed_composable_burst_engine::{EnclosedComposableBurstEngine, ComposableEngineToEnclosedComposable};
     pub use super::burst_engine_package::{BurstEnginePackage, EnclosedEngine};
-    
+
     pub mod data_interface_set {
         pub use super::super::data_interface_set::*;
     }
-    
+
 }
 
 //region Specific Burst Engine Sets

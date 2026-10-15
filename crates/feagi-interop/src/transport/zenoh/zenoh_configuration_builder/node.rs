@@ -144,12 +144,9 @@ impl ZenohNodeBuilder {
 
     /// Actually export the config for Zenoh
     #[cfg(all(feature = "serde_json", feature = "std"))] // no-std zenoh is another crate
-    pub fn to_zenoh_config(&self) -> Result<zenoh::Config, ZenohConfigBuildError>
-    {
+    pub fn to_zenoh_config(&self) -> Result<zenoh::Config, ZenohConfigBuildError> {
         let json = self.build_json5()?;
-        zenoh::Config::from_json5(json.as_str()).map_err(
-            |_| ZenohConfigBuildError::Json5(json)
-        )
+        zenoh::Config::from_json5(json.as_str()).map_err(|_| ZenohConfigBuildError::Json5(json))
     }
 }
 

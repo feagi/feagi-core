@@ -33,7 +33,11 @@ pub type BitBatchParDataHeaplessVec<QWord, QBit, Word, const N: usize> = BitBatc
 impl<QWord, QBit, S> BitBatchParData<QWord, QBit, S> {
     /// Wraps a backing store and its valid-bool count, tagging it with `QWord`.
     pub const fn from_store(words: S, number_valid_bools: QBit) -> Self {
-        Self { words, valid_bools: number_valid_bools, _marker: PhantomData }
+        Self {
+            words,
+            valid_bools: number_valid_bools,
+            _marker: PhantomData,
+        }
     }
 
     /// Consumes the wrapper, returning the backing store.
@@ -56,7 +60,7 @@ impl<QWord, QBit, S> BitBatchParData<QWord, QBit, S> {
 impl<QWord, QBit, S> BitBatchParData<QWord, QBit, S>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
     S: ParDataStore,
     S::Elem: BitBatchWord,
 {
@@ -92,7 +96,7 @@ where
             return None;
         }
         Some(QWord::quant_from_usize_unchecked(
-            bool_index.quant_to_usize() >> <S::Elem as BitBatchWord>::BIT_SHIFT_DISTANCE
+            bool_index.quant_to_usize() >> <S::Elem as BitBatchWord>::BIT_SHIFT_DISTANCE,
         ))
     }
 
@@ -132,8 +136,7 @@ where
     /// Calculates the number of words needed to hold a given number of bits
     /// while also ensuring a byte alignment (32, 64, 128, etc.).
     pub fn word_length_with_padding(number_bools: QBit) -> QWord {
-        let needs_padding = (
-            number_bools.quant_to_usize() & <S::Elem as BitBatchWord>::LOWER_BYTE_COUNT_BIT_MASK.quant_to_usize()) > 0;
+        let needs_padding = (number_bools.quant_to_usize() & <S::Elem as BitBatchWord>::LOWER_BYTE_COUNT_BIT_MASK.quant_to_usize()) > 0;
         let word_count = number_bools.quant_to_usize() >> <S::Elem as BitBatchWord>::BIT_SHIFT_DISTANCE as usize;
         if needs_padding {
             QWord::quant_from_usize_unchecked(word_count + 1)
@@ -173,8 +176,7 @@ where
     /// Tries to get the holding word index, ignoring padding or internal data sizes
     pub unsafe fn get_word_index_from_bool_index_unchecked(&self, bool_index: QBit) -> QWord {
         debug_assert!(bool_index < self.number_valid_bools());
-        QWord::quant_from_usize_unchecked(
-            bool_index.quant_to_usize() >> <S::Elem as BitBatchWord>::BIT_SHIFT_DISTANCE)
+        QWord::quant_from_usize_unchecked(bool_index.quant_to_usize() >> <S::Elem as BitBatchWord>::BIT_SHIFT_DISTANCE)
     }
 
     /// Gets the bool without checking any bounds or padding
@@ -201,7 +203,7 @@ where
 impl<QWord, QBit, S> BitBatchParData<QWord, QBit, S>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
     S: ParDataStoreMut,
     S::Elem: BitBatchWord,
 {
@@ -325,7 +327,7 @@ where
 impl<QWord, QBit, Word> BitBatchParData<QWord, QBit, Vec<Word>>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Builds a padded word vector for `number_valid_bools`, with every word set to `initial_word`.
@@ -352,7 +354,7 @@ where
 impl<'a, QWord, QBit, Word> BitBatchParData<QWord, QBit, &'a [Word]>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Wraps an existing shared bit-packed slice and valid-bool count.
@@ -373,7 +375,7 @@ where
 impl<'a, QWord, QBit, Word> BitBatchParData<QWord, QBit, &'a mut [Word]>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Wraps an existing mutable bit-packed slice and valid-bool count.
@@ -399,7 +401,7 @@ where
 impl<QWord, QBit, Word, const N: usize> BitBatchParData<QWord, QBit, [Word; N]>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Builds a fixed-size array where each word is `initial_word`.
@@ -426,7 +428,7 @@ where
 impl<QWord, QBit, Word, const N: usize> BitBatchParData<QWord, QBit, ::heapless::Vec<Word, N>>
 where
     QWord: QuantizedUnsignedIntegerTrait,
-    QBit: QuantizedUnsignedIntegerTrait<QuantType=QWord::QuantType>,
+    QBit: QuantizedUnsignedIntegerTrait<QuantType = QWord::QuantType>,
     Word: BitBatchWord,
 {
     /// Builds a capacity-`N` heapless vector with each word set to `initial_word`.

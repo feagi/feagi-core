@@ -7,8 +7,7 @@ mod spatial_indexing_error;
 
 pub mod axis_order;
 
-mod dimensions;
-mod stride;
 mod coordinate;
+mod dimensions;
 pub mod spatial_index_context;
-
+mod stride;

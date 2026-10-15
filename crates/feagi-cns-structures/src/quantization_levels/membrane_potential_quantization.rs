@@ -1,16 +1,15 @@
 use core::hash::Hash;
+use feagi_basis::prelude::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
+use feagi_basis::quantization::quantizable::DecimalQuantizationLevel;
 use half::{bf16, f16};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use feagi_basis::prelude::{QuantizedDecimalTrait, QuantizedDecimalUnwrappedTrait};
-use feagi_basis::quantization::quantizable::DecimalQuantizationLevel;
 
 /// Defines the quantization of the neuron potential for a specific cortical area. All cortical
 /// areas must have this property. This quantization is set per cortical area, and
 /// is controlled by the Neuron Model Quantization state, although this cortical level neuron
 /// potential quantization has discrete steps that must be followed.
-pub trait MembranePotentialQuantization: Clone + Copy + PartialEq
-+ core::fmt::Debug + Serialize + DeserializeOwned + Sync + Send + 'static {
+pub trait MembranePotentialQuantization: Clone + Copy + PartialEq + core::fmt::Debug + Serialize + DeserializeOwned + Sync + Send + 'static {
     /// Defines the quantization of the membrane potential of a neuron within a cortical area.
     type MembranePotentialQuant: QuantizedDecimalUnwrappedTrait; // TODO wrap this actually
 

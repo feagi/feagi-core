@@ -1,5 +1,8 @@
 use feagi_basis::quantization::prelude::*;
-use feagi_basis::quantization::quantizable::{DecimalQuantizationLevel, QuantizedUnsignedPercentageTrait, SignedIntegerQuantizationLevel, UnsignedIntegerQuantizationLevel, WrappedQuantizedDecimalEnum};
+use feagi_basis::quantization::quantizable::{
+    DecimalQuantizationLevel, QuantizedUnsignedPercentageTrait, SignedIntegerQuantizationLevel, UnsignedIntegerQuantizationLevel,
+    WrappedQuantizedDecimalEnum,
+};
 
 create_wrapped_quantized_unsigned_integer!(pub TestUnsignedWrap);
 create_wrapped_quantized_signed_integer!(pub TestSignedWrap);

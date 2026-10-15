@@ -5,9 +5,7 @@ use crate::quantization::prelude::QuantizedUnsignedIntegerTrait;
 use std::marker::PhantomData;
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, ::serde::Serialize)]
-#[serde(bound(
-    serialize = "QDims: ::serde::Serialize",
-))]
+#[serde(bound(serialize = "QDims: ::serde::Serialize",))]
 pub struct SpatialHelper<QDims, AxisOrderType, const NUM_DIMS: usize>
 where
     QDims: QuantizedUnsignedIntegerTrait,
@@ -39,8 +37,8 @@ where
 
     /// Convert from linear index to coordinate.
     pub fn linear_to_coordinate<
-        QLinear: QuantizedUnsignedIntegerTrait<QuantType=QDims::QuantType>,
-        QCoords: QuantizedUnsignedIntegerTrait<QuantType=QDims::QuantType>,
+        QLinear: QuantizedUnsignedIntegerTrait<QuantType = QDims::QuantType>,
+        QCoords: QuantizedUnsignedIntegerTrait<QuantType = QDims::QuantType>,
     >(
         &self,
         linear_index: QLinear,
@@ -50,8 +48,8 @@ where
 
     /// Convert from coordinate to linear index .
     pub fn coordinate_to_linear<
-        QLinear: QuantizedUnsignedIntegerTrait<QuantType=QDims::QuantType>,
-        QCoords: QuantizedUnsignedIntegerTrait<QuantType=QDims::QuantType>,
+        QLinear: QuantizedUnsignedIntegerTrait<QuantType = QDims::QuantType>,
+        QCoords: QuantizedUnsignedIntegerTrait<QuantType = QDims::QuantType>,
     >(
         &self,
         coordinate: &SpatialCoordinate<QCoords, NUM_DIMS>,
@@ -80,8 +78,7 @@ where
     #[serde(skip)]
     _p: PhantomData<AxisOrderType>,
 }
-impl<'de, QDims, AxisOrderType, const NUM_DIMS: usize> ::serde::Deserialize<'de>
-for SpatialHelper<QDims, AxisOrderType, NUM_DIMS>
+impl<'de, QDims, AxisOrderType, const NUM_DIMS: usize> ::serde::Deserialize<'de> for SpatialHelper<QDims, AxisOrderType, NUM_DIMS>
 where
     QDims: QuantizedUnsignedIntegerTrait,
     AxisOrderType: AxisOrder<NUM_DIMS>,

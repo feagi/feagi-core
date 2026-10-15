@@ -28,21 +28,16 @@ create_wrapped_quantized_unsigned_integer!(
 //region Linear Collections
 
 /// Membrane potentials of the neurons in one cortical area, in the backing store `Store`.
-pub type CorticalAreaNeuronData<QI, Store> =
-ParData<CorticalAreaNeuronLocalIndex<QI>, Store>;
+pub type CorticalAreaNeuronData<QI, Store> = ParData<CorticalAreaNeuronLocalIndex<QI>, Store>;
 
 #[cfg(feature = "alloc")]
-pub type CorticalAreaNeuronDataVector<QI, QP> =
-ParData<CorticalAreaNeuronLocalIndex<QI>, Vec<CorticalAreaNeuronPotential<QP>>>;
+pub type CorticalAreaNeuronDataVector<QI, QP> = ParData<CorticalAreaNeuronLocalIndex<QI>, Vec<CorticalAreaNeuronPotential<QP>>>;
 
-pub type CorticalAreaNeuronDataArray<QI, QP, const N: usize> =
-ParData<CorticalAreaNeuronLocalIndex<QI>, [CorticalAreaNeuronPotential<QP>; N]>;
+pub type CorticalAreaNeuronDataArray<QI, QP, const N: usize> = ParData<CorticalAreaNeuronLocalIndex<QI>, [CorticalAreaNeuronPotential<QP>; N]>;
 
-pub type CorticalAreaNeuronDataSlice<'a, QI, QP> =
-ParData<CorticalAreaNeuronLocalIndex<QI>, &'a [CorticalAreaNeuronPotential<QP>]>;
+pub type CorticalAreaNeuronDataSlice<'a, QI, QP> = ParData<CorticalAreaNeuronLocalIndex<QI>, &'a [CorticalAreaNeuronPotential<QP>]>;
 
-pub type CorticalAreaNeuronDataSliceMut<'a, QI, QP> =
-ParData<CorticalAreaNeuronLocalIndex<QI>, &'a mut [CorticalAreaNeuronPotential<QP>]>;
+pub type CorticalAreaNeuronDataSliceMut<'a, QI, QP> = ParData<CorticalAreaNeuronLocalIndex<QI>, &'a mut [CorticalAreaNeuronPotential<QP>]>;
 
 //endregion
 
@@ -57,19 +52,18 @@ create_wrapped_quantized_unsigned_integer!(
 
 /// Defines the 4D coordinates of a dimensional neuron
 pub type DimensionalCorticalAreaNeuronCoordinates<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-SpatialCoordinate<DimensionalCorticalAreaNeuronAxisPosition<QI>, 4>;
+    SpatialCoordinate<DimensionalCorticalAreaNeuronAxisPosition<QI>, 4>;
 
 /// Defines the 4D dimensions of a dimensional cortical area
 pub type DimensionalCorticalAreaDimensions<QI: QuantizedUnsignedIntegerUnwrappedTrait> =
-SpatialDimensions<DimensionalCorticalAreaNeuronAxisPosition<QI>, 4>;
-
+    SpatialDimensions<DimensionalCorticalAreaNeuronAxisPosition<QI>, 4>;
 
 /// A collection of dimensional neuron potentials that owns all its inner fields, using default
 /// incrementing indexing
 pub type DimensionalCorticalAreaPotentials<
     QI: QuantizedUnsignedIntegerUnwrappedTrait,
     QP: QuantizedDecimalUnwrappedTrait,
-    S: ParDataStore + DeserializeOwned + 'static
+    S: ParDataStore + DeserializeOwned + 'static,
 > = SpatialParDataOwning<
     DimensionalCorticalAreaNeuronAxisPosition<QI>,
     DimensionalCorticalAreaNeuronCoordinates<QI>,
@@ -77,8 +71,7 @@ pub type DimensionalCorticalAreaPotentials<
     AxisOrderIncrementing<3>,
     S,
     CorticalAreaNeuronPotential<QP>,
-    3
+    3,
 >;
 
 //endregion
-

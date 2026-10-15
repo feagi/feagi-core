@@ -24,9 +24,7 @@ pub enum CoreCorticalType {
 }
 
 impl CoreCorticalType {
-    pub(crate) fn try_from_cortical_id_bytes_type_unchecked(
-        cortical_id_bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH],
-    ) -> Result<CoreCorticalType, GenomeIdentifierError> {
+    pub(crate) fn try_from_cortical_id_bytes_type_unchecked(cortical_id_bytes: &[u8; 8]) -> Result<CoreCorticalType, GenomeIdentifierError> {
         match cortical_id_bytes {
             b"___death" => Ok(CoreCorticalType::Death),
             b"___power" => Ok(CoreCorticalType::Power),
@@ -41,13 +39,13 @@ impl CoreCorticalType {
 
     pub fn to_cortical_id(&self) -> CorticalID {
         match self {
-            Self::Death => CorticalID::from_bytes_const(*b"___death" ),
-            Self::Power => CorticalID::from_bytes_const(*b"___power" ),
-            Self::Fatigue => CorticalID::from_bytes_const(*b"___fatig" ),
-            Self::Pain => CorticalID::from_bytes_const(*b"___pain_" ),
+            Self::Death => CorticalID::from_bytes_const(*b"___death"),
+            Self::Power => CorticalID::from_bytes_const(*b"___power"),
+            Self::Fatigue => CorticalID::from_bytes_const(*b"___fatig"),
+            Self::Pain => CorticalID::from_bytes_const(*b"___pain_"),
             Self::Pleasure => CorticalID::from_bytes_const(*b"___pleas"),
-            Self::Fear => CorticalID::from_bytes_const(*b"___fear_" ),
-            Self::Hope => CorticalID::from_bytes_const(*b"___hope_" ),
+            Self::Fear => CorticalID::from_bytes_const(*b"___fear_"),
+            Self::Hope => CorticalID::from_bytes_const(*b"___hope_"),
         }
     }
 }

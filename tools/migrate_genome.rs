@@ -57,14 +57,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let genome_json: serde_json::Value = serde_json::from_str(&genome_json_str)?;
 
     // Get genome metadata
-    let genome_id = genome_json
-        .get("genome_id")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
-    let version = genome_json
-        .get("version")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
+    let genome_id = genome_json.get("genome_id").and_then(|v| v.as_str()).unwrap_or("unknown");
+    let version = genome_json.get("version").and_then(|v| v.as_str()).unwrap_or("unknown");
 
     println!("   Genome ID: {}", genome_id);
     println!("   Version:   {}", version);
@@ -74,10 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🔄 Migrating cortical IDs...");
     let migration_result = feagi_evolutionary::migrate_genome(&genome_json)?;
 
-    println!(
-        "   ✅ Migrated {} cortical IDs",
-        migration_result.cortical_ids_migrated
-    );
+    println!("   ✅ Migrated {} cortical IDs", migration_result.cortical_ids_migrated);
     println!();
 
     // Show ID mappings
@@ -107,16 +98,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         genome_obj.insert("version".to_string(), serde_json::json!("2.2"));
 
         // Add migration metadata
-        let mut description = genome_obj
-            .get("genome_description")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
+        let mut description = genome_obj.get("genome_description").and_then(|v| v.as_str()).unwrap_or("").to_string();
         description.push_str(" [Migrated to new cortical ID format v2.2]");
-        genome_obj.insert(
-            "genome_description".to_string(),
-            serde_json::json!(description),
-        );
+        genome_obj.insert("genome_description".to_string(), serde_json::json!(description));
     }
 
     // Save migrated genome

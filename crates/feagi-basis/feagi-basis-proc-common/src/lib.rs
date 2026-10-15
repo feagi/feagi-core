@@ -17,12 +17,8 @@ pub fn from_template_make_request_message_structs(input: proc_macro::TokenStream
     use feagi_macro_components::templates::TemplateRoot;
     let res = TemplateRoot::<FeagiRequestMessageCategory>::parse_generator_input_macro(input.into());
     match res {
-        Err(e) => {
-            e.to_compile_error().into()
-        }
-        Ok(s) => {
-            s.generate_rust_specification_structs_for_all_messages().into()
-        }
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.generate_rust_specification_structs_for_all_messages().into(),
     }
 }
 
@@ -31,12 +27,8 @@ pub fn from_template_make_request_message_categorized_enum(input: proc_macro::To
     use feagi_macro_components::templates::TemplateRoot;
     let res = TemplateRoot::<FeagiRequestMessageCategory>::parse_generator_input_macro(input.into());
     match res {
-        Err(e) => {
-            e.to_compile_error().into()
-        }
-        Ok(s) => {
-            s.generate_rust_request_response_enums_for_category().into()
-        }
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.generate_rust_request_response_enums_for_category().into(),
     }
 }
 
@@ -58,15 +50,10 @@ pub fn from_template_define_generic_struct_of_category_fields(input: proc_macro:
     use feagi_macro_components::templates::TemplateRoot;
     let res = TemplateRoot::<GroupedRequestResponseCategoryTemplate>::parse_generator_input_macro(input.into());
     match res {
-        Err(e) => {
-            e.to_compile_error().into()
-        }
-        Ok(s) => {
-            s.generate_generic_with_field_name_categories_and_of_type().into()
-        }
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.generate_generic_with_field_name_categories_and_of_type().into(),
     }
 }
-
 
 //endregion
 

@@ -25,7 +25,7 @@ where
         FeagiWorkerResponse<CustomCommandResponse>,
         ChannelImplementation::RequestSender<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>>,
         ChannelImplementation::ReplySender<FeagiWorkerResponse<CustomCommandResponse>>,
-        ChannelImplementation::ReplyReceiver<FeagiWorkerResponse<CustomCommandResponse>>
+        ChannelImplementation::ReplyReceiver<FeagiWorkerResponse<CustomCommandResponse>>,
     >,
     handle: SpawnerImplementation::WorkerInternalHandle,
     /// Set once the worker has acknowledged `stop`. Later requests are refused without sending
@@ -33,7 +33,7 @@ where
 }
 
 impl<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
-FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
+    FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
 where
     SpawnerImplementation: WorkerSpawnerImplementation,
     ChannelImplementation: WorkerChannelImplementation,
@@ -46,11 +46,15 @@ where
             FeagiWorkerResponse<CustomCommandResponse>,
             ChannelImplementation::RequestSender<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>>,
             ChannelImplementation::ReplySender<FeagiWorkerResponse<CustomCommandResponse>>,
-            ChannelImplementation::ReplyReceiver<FeagiWorkerResponse<CustomCommandResponse>>
+            ChannelImplementation::ReplyReceiver<FeagiWorkerResponse<CustomCommandResponse>>,
         >,
         handle: SpawnerImplementation::WorkerInternalHandle,
     ) -> Self {
-        Self { request_maker, handle, stopped: false }
+        Self {
+            request_maker,
+            handle,
+            stopped: false,
+        }
     }
 
     /// Sends a custom request and awaits for the worker's reply
@@ -83,7 +87,7 @@ where
 
 #[cfg(feature = "std")]
 impl<ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
-FeagiWorker<FeagiStdThreadSpawner, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
+    FeagiWorker<FeagiStdThreadSpawner, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
 where
     ChannelImplementation: WorkerChannelImplementation,
 {
@@ -96,12 +100,6 @@ where
         self.handle.join()
     }
 }
-
-
-
-
-
-
 
 /*
 //! A worker is a long running body of code, run in parallel by some backend (a std thread, an

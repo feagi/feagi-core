@@ -2,7 +2,6 @@ use crate::feagi_message::feagi_message::FeagiMessage;
 use crate::feagi_message::request_response::feagi_request_message_path::FeagiRequestMessagePath;
 use crate::feagi_message::request_response::feagi_request_message_specifications::FeagiMessageResponse;
 
-
 /// In the case of a request type message, a response is expected
 pub trait FeagiRequestMessage: FeagiMessage<Path: FeagiRequestMessagePath> {
     /// The response struct we expect (could be unit type potentially)

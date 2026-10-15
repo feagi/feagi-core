@@ -23,7 +23,6 @@ impl<CustomRequest> Recyclable for FeagiWorkerRequest<CustomRequest> {
     }
 }
 
-
 /// A worker's reply to a request
 pub enum FeagiWorkerResponse<CustomReply> {
     /// No reply content. Also the value of an unused channel slot

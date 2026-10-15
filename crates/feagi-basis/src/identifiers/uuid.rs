@@ -1,94 +1,117 @@
 use crate::identifiers::byte_id::ByteID;
-use delegate::delegate;
 use thiserror::Error;
-// TODO common macro block
 
+#[doc(hidden)]
+pub use uuid::{Builder, Uuid, Version};
+
+/// Generates a version-checked UUID wrapper.
+///
+/// `create_wrapped_uuid!(Name, v4)` or `create_wrapped_uuid!(Name, v7)` defines
+/// `Name` around a `uuid::Uuid`, with `Copy`, `Clone`, `Debug`, `Hash`, `Serialize`,
+/// and `Deserialize`. The expansion implements [`WrappedUuid`](crate::identifiers::uuid::WrappedUuid),
+/// [`ByteID`](crate::identifiers::byte_id::ByteID) for 16 bytes,
+/// [`Display`](core::fmt::Display) as padded URL-safe base64, and the `Base64EncodedName` alias.
+///
+/// `Name::new` returns `Some` only when the UUID version matches. v4 also adds
+/// `new_random` (std) and `new_with_rng`. v7 adds `new_now` (std).
 #[macro_export]
 macro_rules! create_wrapped_uuid {
     ($struct_name:ident, v4) => {
-        #[derive(Copy, Clone, Debug, Hash, serde::Serialize, serde::Deserialize)]
-        pub struct $struct_name(uuid::Uuid);
+        $crate::create_wrapped_uuid! {
+            @common $struct_name, $crate::identifiers::uuid::Version::Random,
+            {
+                /// Builds an ID from a new random v4 UUID.
+                #[cfg(feature = "std")]
+                pub fn new_random() -> Self {
+                    Self($crate::identifiers::uuid::Uuid::new_v4())
+                }
 
-        impl $struct_name {
-
-            #[cfg(feature = "std")]
-            pub fn new_std() -> Self {
-                Self(uuid::Uuid::new_v4())
-            }
-
-            pub fn new_with_rng<E: core::error::Error>
-            (mut fill_random: impl FnMut(&mut [u8]) -> Result<(), E>)
-             -> Result<Self, E> {
-                let mut bytes = [0u8; 16];
-                fill_random(&mut bytes)?;
-                Ok(Self(
-                    uuid::Builder::from_random_bytes(bytes).into_uuid()
-                ))
-            }
-        }
-
-        impl WrappedUuid for $struct_name {
-            fn as_uuid(&self) -> &uuid::Uuid {
-                &self.0
-            }
-
-            fn into_uuid(&elf) -> uuid::Uuid {
-                self.0
+                /// Builds an ID from 16 bytes filled by `fill_random`.
+                pub fn new_with_rng<E: ::core::error::Error>(
+                    mut fill_random: impl FnMut(&mut [u8]) -> Result<(), E>,
+                ) -> Result<Self, E> {
+                    let mut bytes = [0u8; 16];
+                    fill_random(&mut bytes)?;
+                    Ok(Self(
+                        $crate::identifiers::uuid::Builder::from_random_bytes(bytes).into_uuid()
+                    ))
+                }
             }
         }
-
-        impl ByteID<16> for $struct_name {
-            type DeserializationError: core::error::Error;
-
-            fn get_id_bytes(&self) -> &[u8; NUMBER_OF_BYTES] {
-                self.as_uuid().as_bytes();
-            }
-
-            fn try_from_id_bytes(bytes: [u8; NUMBER_OF_BYTES]) -> Result<Self, Self::DeserializationError> {
-                todo!()
-            }
-        }
-
-        base_64_id!($struct_name, 16);
     };
 
     ($struct_name:ident, v7) => {
-        #[derive(Copy, Clone, Debug, Hash, serde::Serialize, serde::Deserialize)]
-        pub struct $struct_name(uuid::Uuid);
+        $crate::create_wrapped_uuid! {
+            @common $struct_name, $crate::identifiers::uuid::Version::SortRand,
+            {
+                /// Builds an ID from a new time-ordered v7 UUID.
+                #[cfg(feature = "std")]
+                pub fn new_now() -> Self {
+                    Self($crate::identifiers::uuid::Uuid::now_v7())
+                }
+
+                // TODO no-std safe block
+            }
+        }
+    };
+
+    (@common $struct_name:ident, $version:path, { $($constructors:tt)* }) => {
+        #[derive(Copy, Clone, Debug, Hash, ::serde::Serialize, ::serde::Deserialize)]
+        pub struct $struct_name($crate::identifiers::uuid::Uuid);
 
         impl $struct_name {
-            #[cfg(feature = "std")]
-            pub fn new_now() -> Self {
-                Self(uuid::Uuid::now_v7())
+            /// Wraps `uuid` when its version matches this ID.
+            pub const fn new(uuid: $crate::identifiers::uuid::Uuid) -> Option<Self> {
+                match uuid.get_version() {
+                    Some($version) => Some(Self(uuid)),
+                    _ => None,
+                }
             }
 
-            // TODO no-std safe block
-
+            $($constructors)*
         }
 
-        impl WrappedUuid for $struct_name {
-            fn as_uuid(&self) -> &uuid::Uuid {
+        impl $crate::identifiers::uuid::WrappedUuid for $struct_name {
+            fn as_uuid(&self) -> &$crate::identifiers::uuid::Uuid {
                 &self.0
             }
 
-            fn into_uuid(&elf) -> uuid::Uuid {
+            fn into_uuid(self) -> $crate::identifiers::uuid::Uuid {
                 self.0
             }
         }
 
-        impl ByteID<16> for $struct_name {
-            type DeserializationError: core::error::Error;
+        impl $crate::identifiers::byte_id::ByteID<16> for $struct_name {
+            type DeserializationError = $crate::identifiers::uuid::UuidDeserializationError;
 
-            fn get_id_bytes(&self) -> &[u8; NUMBER_OF_BYTES] {
-                self.as_uuid().as_bytes();
+            fn get_id_bytes(&self) -> &[u8; 16] {
+                self.0.as_bytes()
             }
 
-            fn try_from_id_bytes(bytes: [u8; NUMBER_OF_BYTES]) -> Result<Self, Self::DeserializationError> {
+            fn into_id_bytes(self) -> [u8; 16] {
+                self.0.into_bytes()
+            }
+
+            fn try_from_id_bytes(
+                _bytes: [u8; 16],
+            ) -> Result<Self, Self::DeserializationError> {
                 todo!()
             }
         }
 
-        base_64_id!($struct_name, 16);
+        paste::paste! {
+            pub type [<Base64Encoded $struct_name>] = $crate::identifiers::byte_id::Base64EncodedByteID<
+                $struct_name,
+                16,
+                { (16 + 2) / 3 * 4 },
+            >;
+
+            impl ::core::fmt::Display for $struct_name {
+                fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                    [<Base64Encoded $struct_name>]::fmt_id(self, f)
+                }
+            }
+        }
     };
 }
 

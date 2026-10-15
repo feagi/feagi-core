@@ -3,13 +3,13 @@
 //! with there being a tradeoff between memory usage and precision/representable range.
 
 mod base_traits;
+mod data_value_quantization_error;
 mod decimal;
 mod quantization_level_packing;
 mod signed_integer;
 mod signed_percentage;
 mod unsigned_integer;
 mod unsigned_percentage;
-mod data_value_quantization_error;
 
 pub use data_value_quantization_error::DataValueQuantizationError;
 

@@ -40,7 +40,7 @@ impl FeagiStdThreadSpawner {
     pub fn spawn_worker<Body, BodyFuture>(&self, body: Body) -> Result<std::thread::JoinHandle<()>, FeagiWorkerSpawnError>
     where
         Body: FnOnce() -> BodyFuture + Send + 'static,
-        BodyFuture: core::future::Future<Output=()>,
+        BodyFuture: core::future::Future<Output = ()>,
     {
         std::thread::Builder::new()
             .spawn(move || crate::parallelism::block_on_thread(body()))

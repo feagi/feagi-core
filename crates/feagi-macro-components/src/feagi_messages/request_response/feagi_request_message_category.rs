@@ -1,13 +1,13 @@
 use crate::common::{parse_optional_comma, parse_property_colon_member};
+use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
+use crate::feagi_messages::request_response::feagi_request_message::FeagiRequestMessage;
 use crate::templates::Unparse;
+use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use std::collections::HashMap;
-use heck::{ToPascalCase, ToSnakeCase};
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, LitStr, Token};
-use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
-use crate::feagi_messages::request_response::feagi_request_message::FeagiRequestMessage;
 
 mod kw {
     syn::custom_keyword!(category_name);
@@ -31,7 +31,6 @@ pub struct FeagiRequestMessageCategoryRustStructNames {
 }
 
 impl FeagiRequestMessageCategoryRustStructNames {
-
     /// Build the name set from the category title.
     pub fn new(base_name: syn::Ident) -> Self {
         Self { base_name }
@@ -51,7 +50,6 @@ impl FeagiRequestMessageCategoryRustStructNames {
 }
 
 //endregion
-
 
 //region Feagi Request Message Category
 
@@ -89,13 +87,10 @@ pub struct FeagiRequestMessageCategory {
 }
 
 impl FeagiRequestMessageCategory {
-
     /// Struct names this category will generate. Child message names are queried
     /// from the messages this category holds, not from the category name set.
     pub fn calculate_feagi_category_struct_names(&self) -> FeagiRequestMessageCategoryRustStructNames {
-        FeagiRequestMessageCategoryRustStructNames::new(
-            format_ident!("{}", self.category_name.value().to_pascal_case()),
-        )
+        FeagiRequestMessageCategoryRustStructNames::new(format_ident!("{}", self.category_name.value().to_pascal_case()))
     }
 
     /// Create the specification data, feagi messages, and response structs for all internal categorized feagi messages

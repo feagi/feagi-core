@@ -2,9 +2,9 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 /// The uint used as the packing for each BitBatchCollection Struct for holding the bits
-pub trait BitBatchWord: Sized + Clone + Copy + core::fmt::Debug + core::hash::Hash
-+ Send + Sync
-+ Serialize + DeserializeOwned + sealed::BitBatchWordSealing {
+pub trait BitBatchWord:
+    Sized + Clone + Copy + core::fmt::Debug + core::hash::Hash + Send + Sync + Serialize + DeserializeOwned + sealed::BitBatchWordSealing
+{
     /// How many bits can this uint contain?
     const NUMBER_BITS: u8 = (size_of::<Self>() as u8) * 8u8;
 
@@ -12,8 +12,7 @@ pub trait BitBatchWord: Sized + Clone + Copy + core::fmt::Debug + core::hash::Ha
     const NUMBER_BYTES: u8 = size_of::<Self>() as u8;
 
     /// Enum Representing this trait
-    const BIT_BATCH_WORD_SIZE: BitBatchWordSize =
-        BitBatchWordSize::get_size_from_byte_count(Self::NUMBER_BYTES);
+    const BIT_BATCH_WORD_SIZE: BitBatchWordSize = BitBatchWordSize::get_size_from_byte_count(Self::NUMBER_BYTES);
 
     /// Amount to right-shift a bool index by to get the index of its holding word,
     const BIT_SHIFT_DISTANCE: u8 = Self::NUMBER_BITS.trailing_zeros() as u8;
@@ -51,7 +50,6 @@ pub trait BitBatchWord: Sized + Clone + Copy + core::fmt::Debug + core::hash::Ha
         }
     }
 }
-
 
 impl sealed::BitBatchWordSealing for u8 {}
 impl BitBatchWord for u8 {
@@ -110,7 +108,6 @@ impl BitBatchWord for u64 {
     }
 }
 
-
 /// Defines the number of bits per word, and is used to determine byte padding distance
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -129,7 +126,7 @@ impl BitBatchWordSize {
             2 => BitBatchWordSize::U16,
             4 => BitBatchWordSize::U32,
             8 => BitBatchWordSize::U64,
-            _ => panic!("Invalid byte count!")
+            _ => panic!("Invalid byte count!"),
         }
     }
 
@@ -142,7 +139,6 @@ impl BitBatchWordSize {
         }
     }
 }
-
 
 mod sealed {
     /// Marker trait to prevent impl `BitBatchWord` to other structs

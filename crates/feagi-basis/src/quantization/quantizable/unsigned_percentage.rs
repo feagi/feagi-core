@@ -9,23 +9,23 @@ use serde::{Deserialize, Serialize};
 /// [`PercentageUnsigned`] or a wrapped newtype implementing
 /// [`QuantizedUnsignedPercentageWrappedTrait`].
 pub trait QuantizedUnsignedPercentageTrait:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::fmt::Debug
-+ core::fmt::Display
-+ core::cmp::PartialEq
-+ core::cmp::PartialOrd
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ Sized
-+ Serialize
-+ DeserializeOwned
-+ 'static
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + Default
+    + core::fmt::Debug
+    + core::fmt::Display
+    + core::cmp::PartialEq
+    + core::cmp::PartialOrd
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + Sized
+    + Serialize
+    + DeserializeOwned
+    + 'static
 {
     /// The underlying decimal quantization type this percentage stores.
     type DecimalQuant: QuantizedDecimalTrait;
@@ -55,7 +55,6 @@ Copy
 
 /// Marker trait for unwrapped [`QuantizedUnsignedPercentageTrait`] values.
 pub trait QuantizedUnsignedPercentageUnwrappedTrait: QuantizedUnsignedPercentageTrait {}
-
 
 /// Internally uses a quantized decimal, but exposes methods to treat the value as a percentage
 /// from 0–100% (0.0–1.0).
@@ -149,10 +148,10 @@ impl<D: QuantizedDecimalTrait> core::fmt::Display for PercentageUnsigned<D> {
 /// Wrapper-specific behaviour is limited to [`Self::new`] and [`Self::dewrap`]; arithmetic and
 /// conversion semantics come from [`QuantizedUnsignedPercentageTrait`].
 pub trait QuantizedUnsignedPercentageWrappedTrait:
-QuantizedUnsignedPercentageTrait
-+ From<PercentageUnsigned<Self::Quant>>
-+ AsRef<PercentageUnsigned<Self::Quant>>
-+ AsMut<PercentageUnsigned<Self::Quant>>
+    QuantizedUnsignedPercentageTrait
+    + From<PercentageUnsigned<Self::Quant>>
+    + AsRef<PercentageUnsigned<Self::Quant>>
+    + AsMut<PercentageUnsigned<Self::Quant>>
 {
     /// The underlying unwrapped decimal quantization type.
     type Quant: QuantizedDecimalUnwrappedTrait;

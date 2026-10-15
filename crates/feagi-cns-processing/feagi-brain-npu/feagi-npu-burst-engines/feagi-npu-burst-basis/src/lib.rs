@@ -11,8 +11,8 @@ pub use composable::ComposableBurstEngineSpawner;
 pub mod npu_sealed {
 
     pub use super::burst_phase_output::BurstPhaseOutput;
-    
-    
+
+
     #[cfg(feature = "alloc")]
     pub mod composable {
         pub use super::super::composable::npu_sealed::*;

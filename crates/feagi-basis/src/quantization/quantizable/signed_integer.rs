@@ -48,23 +48,23 @@ impl QuantizationLevelPacking for SignedIntegerQuantizationLevel {
 /// (`i8`, `i16`, …) or a wrapped newtype implementing
 /// [`QuantizedSignedIntegerWrappedTrait`].
 pub trait QuantizedSignedIntegerTrait:
-QuantizedElementBase
-+ core::cmp::Ord
-+ core::cmp::Eq
-+ core::hash::Hash
-+ Serialize
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::Rem<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::ops::RemAssign
-+ core::iter::Sum
-+ core::iter::Product
+    QuantizedElementBase
+    + core::cmp::Ord
+    + core::cmp::Eq
+    + core::hash::Hash
+    + Serialize
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::Rem<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + core::ops::RemAssign
+    + core::iter::Sum
+    + core::iter::Product
 {
     /// Defines the quantization type. Is simply Self for unwrapped, but for wrapped is the quant type.
     /// This allows universal compatibility checking between wrapped and unwrapped that the quantization level
@@ -331,7 +331,6 @@ impl QuantizedUnwrappedSeal for i16 {}
 
 impl QuantizedSignedIntegerUnwrappedTrait for i16 {}
 
-
 impl QuantizedSignedIntegerTrait for i32 {
     type QuantType = Self;
     const LEVEL: SignedIntegerQuantizationLevel = SignedIntegerQuantizationLevel::I32;
@@ -594,7 +593,7 @@ fn signed_value_fits_quant<Quant: QuantizedSignedIntegerTrait>(value: isize) -> 
 /// also supply the `Self`-typed constants. Arithmetic and iterator semantics come from
 /// [`QuantizedSignedIntegerTrait`].
 pub trait QuantizedSignedIntegerWrappedTrait:
-QuantizedSignedIntegerTrait + From<Self::QuantType> + AsRef<Self::QuantType> + AsMut<Self::QuantType>
+    QuantizedSignedIntegerTrait + From<Self::QuantType> + AsRef<Self::QuantType> + AsMut<Self::QuantType>
 {
     /// The quantization level of the underlying value.
     const LEVEL: SignedIntegerQuantizationLevel = <Self::QuantType as QuantizedSignedIntegerTrait>::LEVEL;
@@ -625,11 +624,18 @@ QuantizedSignedIntegerTrait + From<Self::QuantType> + AsRef<Self::QuantType> + A
 /// These enums hide the generic quantized wrapper type behind concrete variants
 /// (`I8`, `I16`, `I32`, `I64`) while preserving the wrapper family semantics.
 pub trait WrappedQuantizedSignedIntegerEnum:
-Copy + Clone + Send + Sync
-+ core::fmt::Debug + core::cmp::PartialEq
-+ core::cmp::Eq + core::hash::Hash
-+ Serialize + DeserializeOwned
-+ Sized + 'static
+    Copy
+    + Clone
+    + Send
+    + Sync
+    + core::fmt::Debug
+    + core::cmp::PartialEq
+    + core::cmp::Eq
+    + core::hash::Hash
+    + Serialize
+    + DeserializeOwned
+    + Sized
+    + 'static
 {
     fn get_level(&self) -> SignedIntegerQuantizationLevel;
 

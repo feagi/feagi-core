@@ -678,6 +678,7 @@ dependencies = [
  "half",
  "heapless 0.9.3",
  "paste",
+ "rand 0.10.3",
  "rayon",
  "serde",
  "serde_arrays",
@@ -2254,6 +2255,7 @@ dependencies = [
  "chacha20",
  "getrandom 0.4.3",
  "rand_core 0.10.1",
+ "serde",
 ]
 
 [[package]]

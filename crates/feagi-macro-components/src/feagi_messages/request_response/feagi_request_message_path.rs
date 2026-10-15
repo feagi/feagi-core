@@ -20,7 +20,6 @@ pub struct FeagiRequestMessagePathRustStructNames {
 }
 
 impl FeagiRequestMessagePathRustStructNames {
-
     /// Build the name set from the message title and HTTP-equivalent method.
     pub fn new(base_name: syn::Ident, method: FeagiRequestMessageMethod) -> Self {
         Self { base_name, method }
@@ -42,7 +41,6 @@ pub struct FeagiRequestMessagePath<const METHOD_U8: FeagiRequestMessageU8> {
 }
 
 impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
-
     /// Whether this path defines a parameter struct.
     pub fn is_parameter_struct_generated(&self) -> bool {
         !self.as_parameter_struct_template().is_empty()
@@ -57,10 +55,7 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
     /// is queried from this path, not from the name set.
     pub fn calculate_feagi_message_path_struct_names(&self, name_base: syn::Ident) -> FeagiRequestMessagePathRustStructNames {
         let _ = self;
-        FeagiRequestMessagePathRustStructNames::new(
-            name_base,
-            FeagiRequestMessageMethod::from_u8(METHOD),
-        )
+        FeagiRequestMessagePathRustStructNames::new(name_base, FeagiRequestMessageMethod::from_u8(METHOD))
     }
 
     pub fn full_message_path(&self, category: &LitStr) -> LitStr {

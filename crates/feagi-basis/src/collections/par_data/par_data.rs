@@ -88,7 +88,6 @@ impl<D> ParDataStoreResizable for Vec<D> {
     }
 }
 
-
 impl<D, const N: usize> ParDataStore for [D; N] {
     type Elem = D;
     fn store_as_slice(&self) -> &[D] {
@@ -493,4 +492,3 @@ impl<QI, D, const N: usize> From<[D; N]> for ParData<QI, ::heapless::Vec<D, N>> 
 }
 
 //endregion
-

@@ -2,6 +2,6 @@
 //! changing the structures via external tools (BV). This is the main backend used when designing
 //! FEAGI Genomes
 
-pub mod system_requests;
-pub mod runtime_handler;
 pub mod request_endpoint_grouping;
+pub mod runtime_handler;
+pub mod system_requests;

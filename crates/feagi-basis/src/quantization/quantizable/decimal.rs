@@ -60,18 +60,18 @@ impl QuantizationLevelPacking for DecimalQuantizationLevel {
 /// Note: because the underlying types are floats, `Eq`, `Ord`, and `Hash` are intentionally not
 /// required.
 pub trait QuantizedDecimalTrait:
-QuantizedElementBase
-+ core::cmp::PartialOrd
-+ core::ops::Add<Output=Self>
-+ core::ops::Sub<Output=Self>
-+ core::ops::Mul<Output=Self>
-+ core::ops::Div<Output=Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::iter::Sum
-+ core::iter::Product
+    QuantizedElementBase
+    + core::cmp::PartialOrd
+    + core::ops::Add<Output = Self>
+    + core::ops::Sub<Output = Self>
+    + core::ops::Mul<Output = Self>
+    + core::ops::Div<Output = Self>
+    + core::ops::AddAssign
+    + core::ops::SubAssign
+    + core::ops::MulAssign
+    + core::ops::DivAssign
+    + core::iter::Sum
+    + core::iter::Product
 {
     /// Defines the quantization type. Is simply Self for unwrapped, but for wrapped is the quant type.
     /// This allows universal compatibility checking between wrapped and unwrapped that the quantization level
@@ -364,10 +364,8 @@ pub trait QuantizedDecimalWrappedTrait: QuantizedDecimalTrait + From<Self::Quant
 /// These enums hide the generic wrapped decimal type behind concrete variants
 /// (`F16`, `BF16`, `F32`, `F64`, `StorageF8`) while preserving wrapper-family semantics.
 pub trait WrappedQuantizedDecimalEnum:
-Copy + Clone + Send + Sync
-+ core::fmt::Debug + core::cmp::PartialEq
-+ Serialize + DeserializeOwned
-+ Sized + 'static {
+    Copy + Clone + Send + Sync + core::fmt::Debug + core::cmp::PartialEq + Serialize + DeserializeOwned + Sized + 'static
+{
     fn get_level(&self) -> DecimalQuantizationLevel;
 
     fn into_quant<Quant: QuantizedDecimalUnwrappedTrait>(self) -> Quant;
@@ -460,11 +458,11 @@ macro_rules! create_wrapped_quantized_decimal {
             ) -> Self {
                 Self::const_new(Q::from_quantization(value))
             }
-            
+
             fn from_quantized_unsigned_integer<FromQuant: $crate::quantization::quantizable::QuantizedUnsignedIntegerTrait>(value: FromQuant) -> Self {
                 Self::const_new(Q::from_quantized_unsigned_integer(value))
             }
-        
+
             fn from_quantized_signed_integer<FromQuant: $crate::quantization::quantizable::QuantizedSignedIntegerTrait>(value: FromQuant) -> Self {
                 Self::const_new(Q::from_quantized_signed_integer(value))
             }

@@ -5,7 +5,6 @@ feagi_basis::quantization::create_wrapped_quantized_unsigned_integer!(pub TestLi
 feagi_basis::quantization::create_wrapped_quantized_unsigned_integer!(pub TestLinearCount);
 feagi_basis::quantization::create_wrapped_quantized_signed_integer!(pub TestSignedAxis);
 
-
 create_wrapped_unsigned_integer_spatial_coordinate!(
     pub TestCoord3,
     3,

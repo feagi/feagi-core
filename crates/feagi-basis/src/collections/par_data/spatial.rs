@@ -13,8 +13,8 @@ use std::marker::PhantomData;
 pub trait SpatialParDataTrait<QLinear, QCoord, QDims, AxisOrderType, S, const NUM_DIMS: usize>: Sized
 where
     QLinear: QuantizedUnsignedIntegerTrait,
-    QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+    QCoord: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
+    QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     AxisOrderType: AxisOrder<NUM_DIMS> + 'static,
     S: ParDataStore,
 {
@@ -65,9 +65,7 @@ where
         self.get_linear_mut(&linear)
     }
 
-
     //endregion
-
 
     //endregion
 }
@@ -77,24 +75,23 @@ where
 pub struct SpatialParDataOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
-    QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+    QCoord: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
+    QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     AxisOrderType: AxisOrder<NUM_DIMS>,
-    S: ParDataStore<Elem=D> + DeserializeOwned + 'static,
+    S: ParDataStore<Elem = D> + DeserializeOwned + 'static,
 {
     context: SpatialHelper<QDims, AxisOrderType, NUM_DIMS>,
     data: S,
     _p: core::marker::PhantomData<(QLinear, QCoord)>,
 }
 
-impl<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize>
-SpatialParDataOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, NUM_DIMS>
+impl<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize> SpatialParDataOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, NUM_DIMS>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
-    QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+    QCoord: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
+    QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     AxisOrderType: AxisOrder<NUM_DIMS>,
-    S: ParDataStore<Elem=D> + DeserializeOwned + 'static,
+    S: ParDataStore<Elem = D> + DeserializeOwned + 'static,
 {
     pub fn new(dimensions: SpatialDimensions<QDims, NUM_DIMS>, data: S) -> Result<Self, SpatialHelperError> {
         if dimensions.spatial_element_count() != data.len() {
@@ -137,15 +134,14 @@ where
     }
 }
 
-impl<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize>
-SpatialParDataTrait<QLinear, QCoord, QDims, AxisOrderType, S, NUM_DIMS> for
-SpatialParDataOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, NUM_DIMS>
+impl<QLinear, QCoord, QDims, AxisOrderType, S, D, const NUM_DIMS: usize> SpatialParDataTrait<QLinear, QCoord, QDims, AxisOrderType, S, NUM_DIMS>
+    for SpatialParDataOwning<QLinear, QCoord, QDims, AxisOrderType, S, D, NUM_DIMS>
 where
     QLinear: QuantizedUnsignedIntegerTrait,
-    QCoord: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
-    QDims: QuantizedUnsignedIntegerTrait<QuantType=QLinear::QuantType>,
+    QCoord: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
+    QDims: QuantizedUnsignedIntegerTrait<QuantType = QLinear::QuantType>,
     AxisOrderType: AxisOrder<NUM_DIMS> + 'static,
-    S: ParDataStore<Elem=D> + DeserializeOwned + 'static,
+    S: ParDataStore<Elem = D> + DeserializeOwned + 'static,
 {
     fn data_as_slice(&self) -> &[S::Elem] {
         self.data.store_as_slice()

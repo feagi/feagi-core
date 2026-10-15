@@ -1,8 +1,6 @@
 use core::ops::{IndexMut, Range};
 
-use feagi_basis::collections::par_data::par_data::{
-    ParData, ParDataArray, ParDataSlice, ParDataSliceMut,
-};
+use feagi_basis::collections::par_data::par_data::{ParData, ParDataArray, ParDataSlice, ParDataSliceMut};
 use feagi_basis::quantization::prelude::QuantizedUnsignedIntegerTrait;
 
 feagi_basis::quantization::create_wrapped_quantized_unsigned_integer!(pub TestQuant);
@@ -13,10 +11,7 @@ fn idx(value: usize) -> Idx {
     Idx::quant_from_usize_unchecked(value)
 }
 
-fn assert_subslice_elements<D: Copy + PartialEq + core::fmt::Debug>(
-    view: &ParDataSlice<'_, Idx, D>,
-    expected: &[D],
-) {
+fn assert_subslice_elements<D: Copy + PartialEq + core::fmt::Debug>(view: &ParDataSlice<'_, Idx, D>, expected: &[D]) {
     assert_eq!(view.len(), expected.len());
     assert_eq!(view.iter().copied().collect::<Vec<_>>(), expected);
     for (i, expected_value) in expected.iter().copied().enumerate() {
@@ -41,10 +36,7 @@ fn array_backend_new_uniform_and_from_array_match_store() {
 #[test]
 fn array_backend_subslice_and_subslice_mut_preserve_element_data() {
     let data = ParDataArray::<Idx, i16, 5>::from_array([10, 20, 30, 40, 50]);
-    let range = Range {
-        start: idx(1),
-        end: idx(4),
-    };
+    let range = Range { start: idx(1), end: idx(4) };
 
     let view = data.subslice(range.clone()).expect("in-bounds subslice");
     assert_subslice_elements(&view, &[20, 30, 40]);
@@ -78,10 +70,7 @@ fn shared_slice_backend_subslice_from_parent_array_view() {
     let data = ParDataArray::<Idx, u64, 4>::from_array([100, 200, 300, 400]);
     let parent_slice = data.as_data_slice();
     let view = parent_slice
-        .subslice(Range {
-            start: idx(2),
-            end: idx(4),
-        })
+        .subslice(Range { start: idx(2), end: idx(4) })
         .expect("subslice of slice view");
     assert_subslice_elements(&view, &[300, 400]);
 }
@@ -106,12 +95,7 @@ fn mutable_slice_backend_roundtrip_and_reborrow() {
 fn mutable_slice_backend_subslice_mut_updates_backing_only_in_range() {
     let mut backing = [1i32, 2, 3, 4, 5];
     let mut view = ParDataSliceMut::<Idx, i32>::from_slice_mut(&mut backing);
-    let mut sub = view
-        .subslice_mut(Range {
-            start: idx(1),
-            end: idx(4),
-        })
-        .expect("valid mut subslice");
+    let mut sub = view.subslice_mut(Range { start: idx(1), end: idx(4) }).expect("valid mut subslice");
     assert_eq!(sub.iter().copied().collect::<Vec<_>>(), vec![2, 3, 4]);
     sub.iter_mut().enumerate().for_each(|(i, slot)| *slot = (i as i32 + 1) * 10);
     assert_eq!(backing, [1, 10, 20, 30, 5]);
@@ -148,24 +132,14 @@ mod vector_backend {
         assert_eq!(data.into_vec(), vec![10, 20, 30, 40, 99, 99]);
 
         let data = ParDataVector::<Idx, u16>::from_vec(vec![10, 20, 30, 40]);
-        let view = data
-            .subslice(Range {
-                start: idx(1),
-                end: idx(3),
-            })
-            .expect("vector subslice");
+        let view = data.subslice(Range { start: idx(1), end: idx(3) }).expect("vector subslice");
         assert_subslice_elements(&view, &[20, 30]);
     }
 
     #[test]
     fn vector_backend_subslice_mut_and_clone_to_vector() {
         let mut data = ParDataVector::<Idx, i32>::from_vec(vec![1, 2, 3, 4]);
-        let mut sub = data
-            .subslice_mut(Range {
-                start: idx(0),
-                end: idx(2),
-            })
-            .expect("mut subslice");
+        let mut sub = data.subslice_mut(Range { start: idx(0), end: idx(2) }).expect("mut subslice");
         sub.set(idx(1), -1).unwrap();
         assert_eq!(data.clone_to_vector().into_vec(), vec![1, -1, 3, 4]);
     }
@@ -190,12 +164,7 @@ mod heapless_backend {
     #[test]
     fn heapless_backend_subslice_matches_element_range() {
         let data = ParDataHeaplessVec::<Idx, i32, 4>::from_array([5, 6, 7, 8]);
-        let view = data
-            .subslice(Range {
-                start: idx(1),
-                end: idx(3),
-            })
-            .expect("heapless subslice");
+        let view = data.subslice(Range { start: idx(1), end: idx(3) }).expect("heapless subslice");
         assert_subslice_elements(&view, &[6, 7]);
     }
 }

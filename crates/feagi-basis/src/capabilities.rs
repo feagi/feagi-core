@@ -12,7 +12,6 @@ pub enum FeagiCapabilities {
     SensoriMotorSink,
 }
 
-
 // TODO for some of these, nest a uint bitflag for additional capabilities
 
 // TODO actually lets just move the whole thing to a bitflag set struct with a nested enum

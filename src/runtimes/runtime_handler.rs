@@ -1,5 +1,1 @@
-
-
-pub trait RuntimeHandler {
-    
-}
+pub trait RuntimeHandler {}

@@ -10,17 +10,16 @@ pub mod prelude {
 }
 
 pub use crate::{
-    create_wrapped_signed_integer_spatial, create_wrapped_unsigned_integer_spatial_coordinate,
-    create_wrapped_unsigned_integer_spatial_data, create_wrapped_unsigned_integer_spatial_dimensions,
+    create_wrapped_signed_integer_spatial, create_wrapped_unsigned_integer_spatial_coordinate, create_wrapped_unsigned_integer_spatial_data,
+    create_wrapped_unsigned_integer_spatial_dimensions,
 };
 
-pub mod par_data;
 pub mod bit_packed_bool;
-pub mod spatial_helpers;
+pub mod par_data;
 pub mod spatial_context;
+pub mod spatial_helpers;
 
 mod collections_error;
 pub mod generic_collections;
 
 pub use collections_error::CollectionsError;
-

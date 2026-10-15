@@ -1,9 +1,7 @@
 use core::ops::Range;
 
 use feagi_basis::collections::bit_packed_bool::bit_batch_word::{BitBatchWord, BitBatchWordSize};
-use feagi_basis::collections::bit_packed_bool::par_data::{
-    BitBatchParDataArray, BitBatchParDataSlice, BitBatchParDataSliceMut,
-};
+use feagi_basis::collections::bit_packed_bool::par_data::{BitBatchParDataArray, BitBatchParDataSlice, BitBatchParDataSliceMut};
 use feagi_basis::quantization::prelude::QuantizedUnsignedIntegerTrait;
 
 //region BitBatchWord
@@ -14,10 +12,7 @@ fn bit_batch_word_u8_constants_and_size_enum() {
     assert_eq!(u8::NUMBER_BYTES, 1);
     assert_eq!(u8::BIT_SHIFT_DISTANCE, 3);
     assert_eq!(u8::BIT_BATCH_WORD_SIZE.get_as_number_bytes(), 1);
-    assert_eq!(
-        BitBatchWordSize::get_size_from_byte_count(1).get_as_number_bytes(),
-        1
-    );
+    assert_eq!(BitBatchWordSize::get_size_from_byte_count(1).get_as_number_bytes(), 1);
     assert_eq!(BitBatchWordSize::U8.get_as_number_bytes(), 1);
 }
 
@@ -39,10 +34,7 @@ fn bit_batch_word_u16_u32_u64_constants() {
 #[test]
 fn bit_batch_word_size_maps_all_supported_byte_counts() {
     for bytes in [1u8, 2, 4, 8] {
-        assert_eq!(
-            BitBatchWordSize::get_size_from_byte_count(bytes).get_as_number_bytes(),
-            bytes
-        );
+        assert_eq!(BitBatchWordSize::get_size_from_byte_count(bytes).get_as_number_bytes(), bytes);
     }
 }
 
@@ -93,16 +85,9 @@ fn quant_word(value: usize) -> WordIdx {
     WordIdx::quant_from_usize_unchecked(value)
 }
 
-fn assert_word_subslice(
-    view: &BitBatchParDataSlice<'_, WordIdx, BoolIdx, u32>,
-    expected_words: &[u32],
-    expected_valid_bools: usize,
-) {
+fn assert_word_subslice(view: &BitBatchParDataSlice<'_, WordIdx, BoolIdx, u32>, expected_words: &[u32], expected_valid_bools: usize) {
     assert_eq!(view.len().quant_to_usize(), expected_words.len());
-    assert_eq!(
-        view.number_valid_bools().quant_to_usize(),
-        expected_valid_bools
-    );
+    assert_eq!(view.number_valid_bools().quant_to_usize(), expected_valid_bools);
     for (i, expected) in expected_words.iter().enumerate() {
         assert_eq!(view.get_word(quant_word(i)), Some(expected));
     }
@@ -148,8 +133,7 @@ fn array_backend_subslice_words_valid_bools_and_bool_access() {
 #[test]
 fn array_backend_subslice_mut_updates_parent_words() {
     let words = [1u32, 2u32, 3u32];
-    let mut data =
-        BitBatchParDataArray::<WordIdx, BoolIdx, u32, 3>::from_array(words, quant_usize(90));
+    let mut data = BitBatchParDataArray::<WordIdx, BoolIdx, u32, 3>::from_array(words, quant_usize(90));
     let expected_valid = data.number_valid_bools_for_word_range(1, 3).quant_to_usize();
     let mut view = data
         .subslice_mut(Range {
@@ -202,9 +186,7 @@ fn mutable_slice_backend_new_reborrow_and_bool_mutation() {
     let mut data = BitBatchParDataSliceMut::<WordIdx, BoolIdx, u32>::new(&mut words, quant_usize(40));
 
     assert_eq!(data.set_word(quant_word(0), 0xFFFF_FFFF), Some(0));
-    data.get_word_from_bool_index_mut(quant_usize(5))
-        .expect("bool in range")
-        .set_bit(5, true);
+    data.get_word_from_bool_index_mut(quant_usize(5)).expect("bool in range").set_bit(5, true);
     assert_eq!(data.get_bool(quant_usize(5)), Some(true));
 
     let reborrowed = data.reborrow();
@@ -240,18 +222,15 @@ fn get_word_bit_index_uses_lower_mask_for_u32_words() {
 #[test]
 fn word_length_with_padding_matches_ceil_div_for_u32_words() {
     assert_eq!(
-        BitBatchParDataArray::<WordIdx, BoolIdx, u32, 1>::word_length_with_padding(quant_usize(0))
-            .quant_to_usize(),
+        BitBatchParDataArray::<WordIdx, BoolIdx, u32, 1>::word_length_with_padding(quant_usize(0)).quant_to_usize(),
         0
     );
     assert_eq!(
-        BitBatchParDataArray::<WordIdx, BoolIdx, u32, 1>::word_length_with_padding(quant_usize(32))
-            .quant_to_usize(),
+        BitBatchParDataArray::<WordIdx, BoolIdx, u32, 1>::word_length_with_padding(quant_usize(32)).quant_to_usize(),
         1
     );
     assert_eq!(
-        BitBatchParDataArray::<WordIdx, BoolIdx, u32, 1>::word_length_with_padding(quant_usize(33))
-            .quant_to_usize(),
+        BitBatchParDataArray::<WordIdx, BoolIdx, u32, 1>::word_length_with_padding(quant_usize(33)).quant_to_usize(),
         2
     );
 }
@@ -259,18 +238,9 @@ fn word_length_with_padding_matches_ceil_div_for_u32_words() {
 #[test]
 fn number_valid_bools_for_word_range_clamps_to_collection_bounds() {
     let data = BitBatchParDataArray::<WordIdx, BoolIdx, u32, 3>::new_uniform(0, quant_usize(70));
-    assert_eq!(
-        data.number_valid_bools_for_word_range(0, 1).quant_to_usize(),
-        32
-    );
-    assert_eq!(
-        data.number_valid_bools_for_word_range(1, 3).quant_to_usize(),
-        38
-    );
-    assert_eq!(
-        data.number_valid_bools_for_word_range(2, 3).quant_to_usize(),
-        6
-    );
+    assert_eq!(data.number_valid_bools_for_word_range(0, 1).quant_to_usize(), 32);
+    assert_eq!(data.number_valid_bools_for_word_range(1, 3).quant_to_usize(), 38);
+    assert_eq!(data.number_valid_bools_for_word_range(2, 3).quant_to_usize(), 6);
 }
 
 #[cfg(feature = "alloc")]
@@ -292,8 +262,7 @@ mod vector_backend {
 
     #[test]
     fn vector_backend_subslice_words_and_valid_bools() {
-        let wrapped =
-            BitBatchParDataVector::<WordIdx, BoolIdx, u32>::from_vec(vec![10, 20, 30, 40], quant_usize(100));
+        let wrapped = BitBatchParDataVector::<WordIdx, BoolIdx, u32>::from_vec(vec![10, 20, 30, 40], quant_usize(100));
         let view = wrapped
             .subslice(Range {
                 start: quant_word(1),
@@ -305,8 +274,7 @@ mod vector_backend {
 
     #[test]
     fn vector_backend_subslice_mut_updates_backing_vector() {
-        let mut wrapped =
-            BitBatchParDataVector::<WordIdx, BoolIdx, u32>::from_vec(vec![1, 2, 3], quant_usize(64));
+        let mut wrapped = BitBatchParDataVector::<WordIdx, BoolIdx, u32>::from_vec(vec![1, 2, 3], quant_usize(64));
         let mut sub = wrapped
             .subslice_mut(Range {
                 start: quant_word(0),
@@ -325,24 +293,17 @@ mod heapless_backend {
 
     #[test]
     fn heapless_backend_new_uniform_and_from_array_store() {
-        let uniform =
-            BitBatchParDataHeaplessVec::<WordIdx, BoolIdx, u32, 2>::new_uniform(0xABCD, quant_usize(50));
+        let uniform = BitBatchParDataHeaplessVec::<WordIdx, BoolIdx, u32, 2>::new_uniform(0xABCD, quant_usize(50));
         assert_eq!(uniform.len().quant_to_usize(), 2);
         assert_eq!(uniform.store(), &[0xABCD, 0xABCD]);
 
-        let wrapped = BitBatchParDataHeaplessVec::<WordIdx, BoolIdx, u32, 3>::from_array(
-            [1, 2, 3],
-            quant_usize(70),
-        );
+        let wrapped = BitBatchParDataHeaplessVec::<WordIdx, BoolIdx, u32, 3>::from_array([1, 2, 3], quant_usize(70));
         assert_eq!(wrapped.into_store().into_array(), Ok([1, 2, 3]));
     }
 
     #[test]
     fn heapless_backend_subslice_matches_word_range_and_valid_bools() {
-        let data = BitBatchParDataHeaplessVec::<WordIdx, BoolIdx, u32, 4>::from_array(
-            [10, 20, 30, 40],
-            quant_usize(100),
-        );
+        let data = BitBatchParDataHeaplessVec::<WordIdx, BoolIdx, u32, 4>::from_array([10, 20, 30, 40], quant_usize(100));
         let view = data
             .subslice(Range {
                 start: quant_word(1),

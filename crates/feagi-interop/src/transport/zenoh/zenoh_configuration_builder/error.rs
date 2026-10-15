@@ -22,8 +22,7 @@ pub enum ZenohConfigBuildError {
     #[error("tx queue `{queue}` size is {value}; Zenoh accepts 1 through 16")]
     QueueSize { queue: &'static str, value: u8 },
     /// `transport.link.protocols` was an empty list.
-    #[error("the link protocol list is empty; leave protocols unset to allow every supported protocol"
-    )]
+    #[error("the link protocol list is empty; leave protocols unset to allow every supported protocol")]
     EmptyProtocolList,
     /// `batch_size` was 0.
     #[error("link tx batch_size must be at least 1 byte")]

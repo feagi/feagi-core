@@ -15,7 +15,7 @@ impl<T: Recyclable, E: core::error::Error> Recyclable for Result<T, E> {
 
     fn recycle_self(&mut self) {
         match self {
-            Ok(t) => { t.recycle_self() }
+            Ok(t) => t.recycle_self(),
             Err(e) => {} // skip
         }
     }
@@ -35,13 +35,11 @@ where
     T: Recyclable,
 {
     pub const NEW: Self = RecyclableRecyclePolicy {
-        _p: core::marker::PhantomData
+        _p: core::marker::PhantomData,
     };
 
     pub fn new() -> Self {
-        Self {
-            _p: Default::default()
-        }
+        Self { _p: Default::default() }
     }
 }
 
