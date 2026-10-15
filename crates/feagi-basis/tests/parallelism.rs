@@ -712,8 +712,11 @@ fn built_worker_answers_custom_requests_then_stops() {
             assert!(matches!(response, FeagiWorkerResponse::Custom(doubled) if doubled == value * 2));
         }
         worker.stop().await.unwrap();
-        // The worker exited after acknowledging, so further requests fail
-        assert!(worker.make_request(1).await.is_err());
+        // TODO: These are refused by `FeagiWorker` itself to avoid the request / response drain
+        // race (see the top of feagi_worker.rs). Once that race is fixed, they should also fail
+        // when sent to the exited worker, and can be checked that way
+        assert!(matches!(worker.make_request(1).await, Err(FeagiRequestError::RequestNotSent(FeagiChannelSendError::ChannelClosed))));
+        assert!(matches!(worker.stop().await, Err(FeagiRequestError::RequestNotSent(FeagiChannelSendError::ChannelClosed))));
     });
 }
 
@@ -735,6 +738,9 @@ fn built_worker_sends_on_its_required_channel_pair() {
 #[test]
 fn stopping_an_exited_built_worker_errors() {
     let (mut worker, ()) = ExitingWorkerBuilder.build_worker(&FeagiStdThreadSpawner, ()).unwrap();
+    // TODO: Can rarely hang. The worker was never stopped, so `FeagiWorker` cannot refuse the
+    // request itself and the request / response drain race applies (see the top of
+    // feagi_worker.rs). Fix with the race
     // Depending on timing the request is either rejected outright or drained unanswered when the
     // worker's responder drops. Both must surface as errors rather than hanging
     let result = block_on_thread(worker.stop());

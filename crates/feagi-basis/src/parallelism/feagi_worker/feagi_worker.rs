@@ -1,4 +1,10 @@
-use crate::parallelism::feagi_channel::channel_error::FeagiRequestError;
+// TODO: `FeagiWorker` refuses requests after an acknowledged `stop` only to avoid a race in
+// request / response: a request published after the responder's drop has drained its queue, but
+// before its receiver is dropped, is never answered and its requester waits forever. This still
+// affects workers that exit on their own without being stopped. Fix properly once thingbuf is
+// forked so receivers can close the channel before draining
+
+use crate::parallelism::feagi_channel::channel_error::{FeagiChannelSendError, FeagiRequestError};
 use crate::parallelism::feagi_channel::request_response::feagi_request_response::FeagiRequester;
 use crate::parallelism::feagi_worker::feagi_worker_builder::WorkerChannelImplementation;
 use crate::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
@@ -20,6 +26,8 @@ where
         ChannelImplementation::ReplyReceiver<FeagiWorkerResponse<CustomCommandResponse>>
     >,
     handle: SpawnerImplementation::WorkerInternalHandle,
+    /// Set once the worker has acknowledged `stop`. Later requests are refused without sending
+    stopped: bool,
 }
 
 impl<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
@@ -40,20 +48,33 @@ where
         >,
         handle: SpawnerImplementation::WorkerInternalHandle,
     ) -> Self {
-        Self {request_maker, handle}
+        Self {request_maker, handle, stopped: false}
     }
 
     /// Sends a custom request and awaits for the worker's reply
+    ///
+    /// Errors with `RequestNotSent` if the worker has been stopped or has already exited
     pub async fn make_request(&mut self, request: CustomCommandRequest) -> Result<FeagiWorkerResponse<CustomCommandResponse>, FeagiRequestError> {
+        self.refuse_if_stopped()?;
         self.request_maker.make_request(FeagiWorkerRequest::Custom(request)).await
     }
     
     /// Tells the worker to stop and waits until it has acknowledged. The worker exits after
     /// replying, so it may still be finishing when this returns
     ///
-    /// Errors with `RequestNotSent` if the worker has already exited
+    /// Errors with `RequestNotSent` if the worker has been stopped or has already exited
     pub async fn stop(&mut self) -> Result<(), FeagiRequestError> {
+        self.refuse_if_stopped()?;
         self.request_maker.make_request(FeagiWorkerRequest::Stop).await?;
+        self.stopped = true;
+        Ok(())
+    }
+
+    /// Errors the same way as a request to an exited worker, if `stop` was acknowledged
+    fn refuse_if_stopped(&self) -> Result<(), FeagiRequestError> {
+        if self.stopped {
+            return Err(FeagiRequestError::RequestNotSent(FeagiChannelSendError::ChannelClosed));
+        }
         Ok(())
     }
     
