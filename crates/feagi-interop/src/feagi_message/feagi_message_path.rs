@@ -15,6 +15,7 @@ pub trait FeagiMessagePath {
 notes:
 
 split up requests going into categories
+morphology -> uuid since sharable
 
 
  */
