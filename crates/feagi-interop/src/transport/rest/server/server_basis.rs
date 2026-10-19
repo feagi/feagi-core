@@ -87,9 +87,53 @@ pub mod path_builder {
     use picoserve::routing::{get, PathDescription, PathRouter, parse_path_segment, ParsePathSegment};
     use feagi_basis::feagi_message::feagi_message_components::{MessageQueryables, FeagiMessageParameterFieldSerializable};
     use feagi_basis::feagi_message::feagi_message_path::{FeagiRequestMessagePath, PathParameterElement};
+    use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryChannelRouter;
+    use feagi_basis::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
+    use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
+    use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequester, ReplySlot, RequestSlot};
     use feagi_interop_proc::generate_into_picoserve_path_impls;
 
-    // TODO move this to the build_router_with_routes function directly
+    pub(crate) struct PicoServeRequestCategoryChannelRouter<Cat, Request, Response, ReplySender, RequestSender, ReplyReceiver>
+    where
+        Cat: RequestCategoryChannelRouter<Request, Response, ReplySender, RequestSender, ReplyReceiver>,
+        Request: Recyclable,
+        Response: Recyclable,
+        ReplySender: FeagiChannelSender<ReplySlot<Response>> + Clone,
+        RequestSender: FeagiChannelSender<RequestSlot<Request, ReplySender>>,
+        ReplyReceiver: FeagiChannelReceiver<ReplySlot<Response>>
+    {
+        requester: FeagiRequester<
+            Request, Response,
+            RequestSender, ReplySender, ReplyReceiver
+        >,
+        _p: core::marker::PhantomData<Cat>
+    }
+
+    impl<Cat, Request, Response, ReplySender, RequestSender, ReplyReceiver> PicoServeRequestCategoryChannelRouter<Cat, Request, Response, ReplySender, RequestSender, ReplyReceiver>
+    where
+        Cat: RequestCategoryChannelRouter<Request, Response, ReplySender, RequestSender, ReplyReceiver>,
+        Request: Recyclable,
+        Response: Recyclable,
+        ReplySender: FeagiChannelSender<ReplySlot<Response>> + Clone,
+        RequestSender: FeagiChannelSender<RequestSlot<Request, ReplySender>>,
+        ReplyReceiver: FeagiChannelReceiver<ReplySlot<Response>>
+    {
+
+        pub fn new(requester: FeagiRequester<Request, Response, RequestSender, ReplySender, ReplyReceiver>) -> Self {
+            Self {requester, _p: core::marker::PhantomData}
+        }
+
+        pub fn unwrap_requester(self) -> FeagiRequester<Request, Response, RequestSender, ReplySender, ReplyReceiver> {
+            self.requester
+        }
+
+        pub fn apply_routes<R>(router: picoserve::Router<R>) where R: PathRouter {
+
+        }
+    }
+
+    //region Individual Messages
+
     /// Adds a path to the picoserve router. Needs the queryables specifically.
     ///
     /// The path's type tuple is converted to a picoserve path description through
@@ -115,7 +159,6 @@ pub mod path_builder {
             get(async || "test_response"), // TODO queryables
         )
     }
-
 
     /// Converts a single FEAGI path element into its picoserve path-segment type.
     trait IntoPicoserveSegment {
@@ -159,6 +202,8 @@ pub mod path_builder {
 
     // One `IntoPicoservePath` impl per tuple arity
     generate_into_picoserve_path_impls!();
+
+    //endregion
 }
 
 
