@@ -37,7 +37,7 @@ create_wrapped_quantized_unsigned_integer!(
     pub CorticalAreaVoxelCoordinateAxisPosition
 );
 
-/// Defines the voxel dimensions of a voxel cortical area
+/// Defines the position of a voxel in a voxel cortical area
 pub type CorticalAreaVoxelCoordinates<QI: QuantizedUnsignedIntegerUnwrappedTrait> = SpatialCoordinate<CorticalAreaVoxelCoordinateAxisPosition<QI>, 3>;
 
 /// Defines the voxel dimensions of a voxel cortical area

@@ -4,7 +4,7 @@
 //! in the actual routing generation
 
 pub mod error;
-pub mod server_common;
+pub mod server_basis;
 
 #[cfg(feature = "open_api_endpoint")]
 pub mod open_api_builder;

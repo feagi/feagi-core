@@ -1,7 +1,7 @@
-use feagi_basis::prelude::FeagiIndexQuantization;
 use crate::cortical_area::components::neuron_layout::NeuronLayout;
 use crate::cortical_area::extendable_components::cortical_area_dynamics::CorticalAreaDynamics;
 use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
+use feagi_basis::prelude::FeagiIndexQuantization;
 
 /// Describes a cortical area model with all its dynamics
 pub trait CorticalAreaModel<FIQ, CAQ>:
@@ -14,6 +14,6 @@ where
 
     /// The implementation of the dynamics, and the data it requires
     type CorticalAreaDynamics: CorticalAreaDynamics<FIQ, Self::NeuronLayout, CAQ>;
-    
+
     type CorticalAreaModelWriter; // TODO
 }

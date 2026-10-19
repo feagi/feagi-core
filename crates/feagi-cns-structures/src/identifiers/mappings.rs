@@ -1,6 +1,6 @@
-use feagi_basis::{impl_byte_array_id, impl_byte_array_id_random};
 use crate::identifiers::cortical_areas::{CorticalID, FauxCorticalID};
 use crate::identifiers::genome_identifier_error::GenomeIdentifierError;
+use feagi_basis::{impl_byte_array_id, impl_byte_array_id_random};
 
 impl_byte_array_id!(
     /// Specifies a unique synapse mapping rule that describes the pattern of how synapses are
@@ -26,13 +26,12 @@ impl_byte_array_id_random!(MappingEntryID, 8);
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
 pub struct MappingID {
     pub source: CorticalID,
-    pub destination: CorticalID
+    pub destination: CorticalID,
 }
 
 impl MappingID {
-
     pub const fn new(source: CorticalID, destination: CorticalID) -> Self {
-        Self {source, destination}
+        Self { source, destination }
     }
 
     pub fn get_source(&self) -> &CorticalID {
@@ -54,16 +53,15 @@ impl MappingID {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
 pub struct FauxMappingID {
     source: Option<FauxCorticalID>,
-    destination: Option<FauxCorticalID>
+    destination: Option<FauxCorticalID>,
 }
 
 impl FauxMappingID {
-
     pub fn new(source: Option<FauxCorticalID>, destination: Option<FauxCorticalID>) -> Result<Self, GenomeIdentifierError> {
         if source.is_none() && destination.is_none() {
-            return Err(GenomeIdentifierError::InvalidFauxStruct("Source and Destination Cortical IDs cannot both be null!"))
+            return Err(GenomeIdentifierError::InvalidFauxStruct("Source and Destination Cortical IDs cannot both be null!"));
         }
-        Ok(Self {source, destination})
+        Ok(Self { source, destination })
     }
 
     pub fn get_source(&self) -> &Option<FauxCorticalID> {

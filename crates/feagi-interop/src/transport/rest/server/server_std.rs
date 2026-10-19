@@ -1,7 +1,7 @@
 //! REST server routes on std
 
 use crate::transport::rest::server::error::FeagiRestServerError;
-use crate::transport::rest::server::server_common::{build_router_with_routes, RestServerBuilder, HTTP_BUFFER_LEN};
+use crate::transport::rest::server::server_basis::{build_router_with_routes, RestServerWorkerBuilder, HTTP_BUFFER_LEN};
 use core::future::Future;
 use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequestResponseDynamicBuilder, FeagiResponderDynamic};
@@ -33,7 +33,7 @@ pub struct RestServerBuilderStd {
     pub accept_poll_interval: std::time::Duration,
 }
 
-impl RestServerBuilder for RestServerBuilderStd {
+impl RestServerWorkerBuilder for RestServerBuilderStd {
     fn new(socket_address: core::net::SocketAddr) -> Self {
         RestServerBuilderStd {
             socket_address,
@@ -74,8 +74,9 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for RestServerBuilderStd {
 /// Accepts one connection at a time and serves it to completion. Checks for requests before
 /// each accept attempt, sleeping `accept_poll_interval` when no connection is waiting. Exits
 /// after acknowledging `Stop` or once the worker handle is dropped.
-async fn run_rest_server(listener: std::net::TcpListener, requests: RestServerRequests, accept_poll_interval: std::time::Duration) {
-    let router = route_brain_visualizer_startup(build_router_with_routes());
+async fn run_rest_server<>(listener: std::net::TcpListener, requests: RestServerRequests, accept_poll_interval: std::time::Duration) {
+    let router = RestServerBuilderStd::build_router_with_routes::<>();
+    let router = route_brain_visualizer_startup(router);
     let mut running = true;
 
     while running {

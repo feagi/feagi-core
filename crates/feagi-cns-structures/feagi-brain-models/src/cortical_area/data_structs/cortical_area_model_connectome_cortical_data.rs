@@ -1,7 +1,7 @@
-use feagi_basis::feagi_neuron::single_area_collections::neurons::CorticalAreaNeuronPotential;
 use crate::cortical_area::data_structs::cortical_area_flags::CorticalAreaFlags;
 use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
 use crate::cortical_area::extendable_components::cortical_model_data_field::CorticalModelDataField;
+use feagi_basis::feagi_neuron::single_area_collections::neurons::CorticalAreaNeuronPotential;
 
 pub struct CorticalAreaModelConnectomeCorticalData<CAQ, CorticalDataProperties, CorticalDataInternal, CorticalDataScratch>
 where
@@ -46,6 +46,6 @@ where
     /// given data must be an immut ref!
     pub fn get_parameters_for_neuron_dynamics(&self) -> (&CorticalDataProperties, &CorticalDataInternal, &CorticalDataScratch)
     {
-        ( &self.cortical_data_properties, &self.cortical_data_internal, &self.cortical_data_scratch)
+        (&self.cortical_data_properties, &self.cortical_data_internal, &self.cortical_data_scratch)
     }
 }

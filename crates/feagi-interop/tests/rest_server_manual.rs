@@ -14,7 +14,7 @@ use std::net::SocketAddr;
 use feagi_basis::parallelism::block_on_thread;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
 use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiStdThreadSpawner;
-use feagi_interop::transport::rest::server::server_common::RestServerBuilder;
+use feagi_interop::transport::rest::server::server_basis::RestServerWorkerBuilder;
 use feagi_interop::transport::rest::server::server_std::RestServerBuilderStd;
 
 /// HTTP address Brain Visualizer connects to on launch.

@@ -30,10 +30,10 @@ alloc = [
 # Sibling Crates
 
 # Root Crates
-feagi-basis = {path = "../../feagi-basis" }
+feagi-basis = { path = "../../feagi-basis" }
 
 # External Crates
-paste = {workspace = true}
-half = {workspace = true}
+paste = { workspace = true }
+half = { workspace = true }
 serde = { workspace = true, optional = true }
 

@@ -12,7 +12,6 @@ create_wrapped_quantized_decimal!(
 );
 
 impl<Q: QuantizedDecimalUnwrappedTrait> InverseOutgoingConnectionCount<Q> {
-    
     /// Defines a new inverse count from a number of connections uint. If 0 is supplied, it rounds 
     /// up to one
     pub fn new_from_count<FIQ: FeagiIndexQuantization>(number_connections: FIQ::SynapseIndexCountQuant) -> Self {

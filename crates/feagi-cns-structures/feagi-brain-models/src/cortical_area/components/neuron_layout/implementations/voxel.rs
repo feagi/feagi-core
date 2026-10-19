@@ -1,7 +1,7 @@
-use serde::Serialize;
+use crate::cortical_area::components::neuron_layout::NeuronLayout;
 use feagi_basis::feagi_neuron::single_area_collections::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
 use feagi_basis::prelude::*;
-use crate::cortical_area::components::neuron_layout::NeuronLayout;
+use serde::Serialize;
 
 /// Defines that the neurons are laid out in xyzd (depth) order linearly in a dense fashion
 #[derive(Clone, Serialize)]
@@ -24,11 +24,11 @@ impl<FIQ: FeagiIndexQuantization> NeuronLayout<FIQ> for NeuronLayoutVoxel<FIQ> {
     }
 
     fn get_neuron_layout_context(
-        &self, 
-        neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>
+        &self,
+        neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>,
     ) -> Self::PerNeuronContext {
         todo!()
-        
+
         //let neuron_index = neuron_index.deref().into();
         //self.cortical_dimensions.linear_index_to_coordinate_unchecked(neuron_index)
     }

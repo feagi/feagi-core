@@ -25,16 +25,16 @@ alloc = [
 
 [dependencies]
 # Workspace Crates
-feagi-basis = {path = "../feagi-basis"}
+feagi-basis = { path = "../feagi-basis" }
 
 # External Crates
-paste = {workspace = true}
-thiserror = {workspace = true, default-features = false}
-half = {workspace = true, features = ["serde"]}
-serde = {workspace = true, default-features = false, features = ["derive"]}
-base64 = {workspace = true, default-features = false}
-heapless = {workspace = true, default-features = false, features = ["serde"]}
-uuid = {workspace = true, features = ["serde"]}
+paste = { workspace = true }
+thiserror = { workspace = true, default-features = false }
+half = { workspace = true, features = ["serde"] }
+serde = { workspace = true, default-features = false, features = ["derive"] }
+base64 = { workspace = true, default-features = false }
+heapless = { workspace = true, default-features = false, features = ["serde"] }
+uuid = { workspace = true, features = ["serde"] }
 
 [lints]
 workspace = true

@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use feagi_basis::feagi_neuron::single_area_collections::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use feagi_basis::prelude::*;
+use serde::{Deserialize, Serialize};
 
 /// Root trait for defining Neuron Layout
 pub trait NeuronLayout<FIQ: FeagiIndexQuantization>: Clone + Serialize + Sized
@@ -15,7 +15,7 @@ pub trait NeuronLayout<FIQ: FeagiIndexQuantization>: Clone + Serialize + Sized
 
     /// Gets the (max) number of neurons that this layout encloses
     fn get_neuron_count(&self) -> CorticalAreaNeuronCount<FIQ::NeuronIndexQuant>;
-    
+
     fn get_cortical_layout_context(&self) -> &Self::CorticalContext;
 
     fn get_neuron_layout_context(&self, neuron_index: &CorticalAreaNeuronLocalIndex<FIQ::NeuronIndexQuant>) -> Self::PerNeuronContext;

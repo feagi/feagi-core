@@ -1,4 +1,3 @@
-
 /// Within a single byte, stores various boolean flags about the configuration of post potential
 /// neuron behavior, such as overrides of firing behavior and logic. It also carries a single
 /// final result bit for if the neuron is firing, which is used to retain this context between
@@ -7,7 +6,7 @@ pub struct PerNeuronFlags(u8);
 
 impl PerNeuronFlags {
     // Free flags for 0, 1, 2, 3, 4
-    
+
     const MASK_PROBE_IS_PRESSING_FIRE: u8 = 5;
     const MASK_PROBE_IS_REPRESSING_FIRE: u8 = 6;
     const MASK_IS_FIRING_RESULT: u8 = 7;
@@ -17,7 +16,7 @@ impl PerNeuronFlags {
     pub fn force_fire(&mut self) {
         self.turn_on_bit(Self::MASK_IS_FIRING_RESULT);
     }
-    
+
     /// If set to true, any firing output from the neuron will be ignored and the neuron will always
     /// fire
     pub fn set_probe_is_pressing_fire(&mut self, probe_pressing_fire: bool) {

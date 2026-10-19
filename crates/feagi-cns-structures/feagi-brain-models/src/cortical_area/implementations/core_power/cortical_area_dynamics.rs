@@ -4,11 +4,11 @@ use crate::cortical_area::parameters::body::dynamics::components::data::NullData
 use crate::cortical_area::parameters::body::dynamics::components::mp_driven_psp_configurability::MPDrivenPSPForcedOff;
 use crate::cortical_area::parameters::body::dynamics::components::quantization::quantization::CorticalAreaQuantization;
 use crate::cortical_area::parameters::body::dynamics::cortical_area_dynamics::{CorticalAreaDynamics, NeuronDynamicsOutput};
-use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::wrapped_indexes::BurstIndex;
 use feagi_data::feagi_data_neuron::neurons::wrapped_types::{CorticalAreaNeuronLocalIndex, CorticalNeuronPotential};
-use std::marker::PhantomData;
+use feagi_data::feagi_data_neuron::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::feagi_data_neuron::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use std::marker::PhantomData;
 
 /// Simply fires every burst lol
 pub struct CorePowerCorticalAreaDynamics<FIQ, NL, CAMQ>
@@ -21,7 +21,7 @@ where
 }
 
 impl<FIQ, CAMQ> CorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>
-    for CorePowerCorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>
+for CorePowerCorticalAreaDynamics<FIQ, NeuronLayoutVoxel<FIQ>, CAMQ>
 where
     FIQ: FeagiIndexQuantization,
     CAMQ: CorticalAreaQuantization,
@@ -32,7 +32,7 @@ where
     type CorticalDataShared = NullData<CAMQ>;
     type NeuronDataProperties = NullData<CAMQ>;
     type NeuronDataInternal = NullData<CAMQ>;
-    
+
     const HAS_CORTICAL_DYNAMICS_PROCESSING: bool = false;
     const HAS_NEURON_DYNAMICS_PROCESSING: bool = true;
 
@@ -42,9 +42,7 @@ where
         cortical_internal: &mut Self::CorticalDataInternal,
         cortical_shared: &mut Self::CorticalDataShared,
         layout_context: &NeuronLayoutVoxel<FIQ>,
-    ) -> () {
-        
-    }
+    ) -> () {}
 
     fn process_neuron_dynamics(
         _: &CorticalNeuronPotential<<CAMQ as MembranePotentialQuantization>::MembranePotentialQuant>,

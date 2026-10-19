@@ -5,7 +5,7 @@ use feagi_basis::prelude::*;
 /// Common root trait shared by all Neuron Model Quantizations. This trait should be extended
 /// by the given neuron model to add any quantization parameters for their given data
 pub trait CorticalAreaQuantization: MembranePotentialQuantization {
-    
+
     // /// All quantizations used by a given cortical model quantization level. Useful for validating
     // /// device compatibility. This will also be extended in extensions of this trait
     // const USED_DECIMAL_QUANTIZATION_LEVELS: &'static [DecimalQuantizationLevel]; // Don't include a default, as we then forget about it
