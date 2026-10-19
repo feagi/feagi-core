@@ -158,6 +158,27 @@ pub async fn get_regions_members(
                     })
                     .unwrap_or_default();
 
+                // Deleted areas can linger in these lists. Brain Visualizer resolves every
+                // input id to a cortical area, so only current members are returned.
+                let members: std::collections::HashSet<&str> =
+                    region.cortical_areas.iter().map(String::as_str).collect();
+                let inputs: Vec<String> = inputs
+                    .into_iter()
+                    .filter(|id| members.contains(id.as_str()))
+                    .collect();
+                let outputs: Vec<String> = outputs
+                    .into_iter()
+                    .filter(|id| members.contains(id.as_str()))
+                    .collect();
+                let designated_inputs: Vec<String> = designated_inputs
+                    .into_iter()
+                    .filter(|id| members.contains(id.as_str()))
+                    .collect();
+                let designated_outputs: Vec<String> = designated_outputs
+                    .into_iter()
+                    .filter(|id| members.contains(id.as_str()))
+                    .collect();
+
                 trace!(
                     target: "feagi-api",
                     "Inputs: {} areas, Outputs: {} areas, designated_in: {}, designated_out: {}",

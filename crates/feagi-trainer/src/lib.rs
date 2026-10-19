@@ -11,6 +11,7 @@
 //! selectors and run execution (behind a runtime abstraction, remote/ZMQ first) land next.
 
 pub mod adapters;
+pub mod balance_feet;
 pub mod binding;
 pub mod contracts;
 pub mod control;
@@ -20,6 +21,8 @@ pub mod executor_stream;
 pub mod metrics;
 pub mod planned_samples;
 pub mod plugins;
+pub mod pole_balance;
+pub mod reach_hold;
 pub mod run_config;
 pub mod samplers;
 pub mod stats;

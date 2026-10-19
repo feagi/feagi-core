@@ -1348,6 +1348,8 @@ impl ConnectomeManager {
         }
 
         // Union in declared interface lists so export/import and pre-wired regions show IO without edges.
+        // Ids that are no longer region members are dropped from the stored designated lists too.
+        let mut pruned_designated: HashMap<String, (Vec<String>, Vec<String>)> = HashMap::new();
         for rid in &region_ids {
             let Some(region) = self.brain_regions.get_region(rid) else {
                 continue;
@@ -1362,18 +1364,34 @@ impl ConnectomeManager {
                     .properties
                     .get(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY),
             )?;
+            // A deleted area can remain in designated_inputs. Only current members are region IO.
+            let mut kept_in: Vec<String> = Vec::new();
+            let mut kept_out: Vec<String> = Vec::new();
             for id in in_ids {
+                if !region.contains_area(&id) {
+                    continue;
+                }
+                let b64 = id.as_base_64();
                 inputs_by_region
                     .entry(rid.clone())
                     .or_default()
-                    .insert(id.as_base_64());
+                    .insert(b64.clone());
+                kept_in.push(b64);
             }
             for id in out_ids {
+                if !region.contains_area(&id) {
+                    continue;
+                }
+                let b64 = id.as_base_64();
                 outputs_by_region
                     .entry(rid.clone())
                     .or_default()
-                    .insert(id.as_base_64());
+                    .insert(b64.clone());
+                kept_out.push(b64);
             }
+            kept_in.sort();
+            kept_out.sort();
+            pruned_designated.insert(rid.clone(), (kept_in, kept_out));
         }
 
         let mut computed: HashMap<String, (Vec<String>, Vec<String>)> = HashMap::new();
@@ -1413,6 +1431,27 @@ impl ConnectomeManager {
                 region
                     .properties
                     .insert("outputs".to_string(), serde_json::json!(outputs.clone()));
+            }
+
+            if let Some((kept_in, kept_out)) = pruned_designated.remove(&rid) {
+                if region
+                    .properties
+                    .contains_key(crate::region_io_designation::DESIGNATED_INPUTS_KEY)
+                {
+                    region.properties.insert(
+                        crate::region_io_designation::DESIGNATED_INPUTS_KEY.to_string(),
+                        serde_json::json!(kept_in),
+                    );
+                }
+                if region
+                    .properties
+                    .contains_key(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY)
+                {
+                    region.properties.insert(
+                        crate::region_io_designation::DESIGNATED_OUTPUTS_KEY.to_string(),
+                        serde_json::json!(kept_out),
+                    );
+                }
             }
 
             computed.insert(rid, (inputs, outputs));
@@ -11964,6 +12003,81 @@ mod tests {
             hash_after_remove, hash_after_clear,
             "removing a classifier must change classifiers_hash"
         );
+    }
+
+    #[test]
+    fn stale_designated_input_is_dropped_from_region_io() {
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        let root_id = RegionID::new();
+        let child_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let child_key = child_id.to_string();
+        manager
+            .add_brain_region(
+                BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap(),
+                None,
+            )
+            .unwrap();
+        manager
+            .add_brain_region(
+                BrainRegion::new(child_id, "Child".to_string(), RegionType::Undefined).unwrap(),
+                Some(root_key.clone()),
+            )
+            .unwrap();
+
+        let member_id = CorticalID::try_from_bytes(b"cmember1").unwrap();
+        let stale_id = CorticalID::try_from_bytes(b"cstale01").unwrap();
+        let mut member = CorticalArea::new(
+            member_id,
+            0,
+            "member".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        member.properties.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(child_key.clone()),
+        );
+        manager.add_cortical_area(member).unwrap();
+
+        {
+            let child = manager
+                .brain_regions
+                .get_region_mut(&child_key)
+                .expect("child region");
+            child.properties.insert(
+                "designated_inputs".to_string(),
+                serde_json::json!([member_id.as_base_64(), stale_id.as_base_64()]),
+            );
+        }
+
+        let io = manager.recompute_brain_region_io_registry().unwrap();
+        let child_inputs = &io.get(&child_key).expect("child region io").0;
+        assert!(
+            child_inputs.contains(&member_id.as_base_64()),
+            "a designated member must stay a region input; got {child_inputs:?}"
+        );
+        assert!(
+            !child_inputs.contains(&stale_id.as_base_64()),
+            "a designated id that is not a member must not become a region input; got {child_inputs:?}"
+        );
+        let stored = manager
+            .brain_regions
+            .get_region(&child_key)
+            .expect("child region")
+            .properties
+            .get("designated_inputs")
+            .and_then(|value| value.as_array())
+            .expect("designated_inputs");
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].as_str(), Some(member_id.as_base_64().as_str()));
     }
 
     #[test]

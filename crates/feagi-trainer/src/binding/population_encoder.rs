@@ -169,14 +169,16 @@ impl PopulationEncoder {
         Ok(arrays)
     }
 
-    /// Shared core: encodes features onto Misc IPU unit 0.
+    /// Encodes features onto one Miscellaneous IPU unit.
     ///
     /// Value scheme writes each feature as graded P at `(x, 0, 0)`. Population scheme
-    /// maps `[0, 1]` onto Z and writes P = 1.0.
-    fn encode_features(
+    /// maps `[0, 1]` onto Z and writes P = 1.0. Snapshot training uses unit 0.
+    /// Balance and pole goals use the unit reserved for that area name.
+    pub fn encode_features_on_unit(
         &self,
         features: &[f64],
         profile: &EncoderBindingProfile,
+        unit: u16,
     ) -> Result<CorticalMappedXYZPNeuronVoxels, TrainerError> {
         if features.len() != profile.channels as usize {
             return Err(TrainerError::Config(format!(
@@ -227,8 +229,17 @@ impl PopulationEncoder {
             }
         };
         let mut frame = CorticalMappedXYZPNeuronVoxels::new();
-        frame.insert(Self::target_cortical_id(), arrays);
+        frame.insert(Self::misc_cortical_id(unit), arrays);
         Ok(frame)
+    }
+
+    /// Snapshot path. Writes Miscellaneous IPU unit 0.
+    fn encode_features(
+        &self,
+        features: &[f64],
+        profile: &EncoderBindingProfile,
+    ) -> Result<CorticalMappedXYZPNeuronVoxels, TrainerError> {
+        self.encode_features_on_unit(features, profile, SNAPSHOT_MISC_UNIT)
     }
 }
 
@@ -312,6 +323,22 @@ mod tests {
             segmentation_teacher: None,
             segmented_vision: None,
         }
+    }
+
+    #[test]
+    fn value_scheme_writes_the_requested_misc_unit() {
+        let encoder = PopulationEncoder::new();
+        let mut bound = profile(3, 1);
+        bound.scheme = EncodingScheme::Value;
+        let frame = encoder
+            .encode_features_on_unit(&[0.25, 0.0, 0.5], &bound, 2)
+            .expect("encode");
+        assert!(frame
+            .get_neurons_of(&PopulationEncoder::misc_cortical_id(2))
+            .is_some());
+        assert!(frame
+            .get_neurons_of(&PopulationEncoder::target_cortical_id())
+            .is_none());
     }
 
     #[test]
