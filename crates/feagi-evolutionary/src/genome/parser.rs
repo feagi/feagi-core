@@ -75,6 +75,9 @@ pub struct ParsedGenome {
     /// Raw neuron morphologies (for later processing)
     pub neuron_morphologies: HashMap<String, Value>,
 
+    /// Raw modulator instances (for later processing)
+    pub modulators: HashMap<String, Value>,
+
     /// Raw physiology data (for later processing)
     pub physiology: Option<Value>,
 
@@ -102,6 +105,8 @@ pub struct RawGenome {
     pub classifiers: HashMap<String, RawClassifier>,
     #[serde(default)]
     pub neuron_morphologies: HashMap<String, Value>,
+    #[serde(default)]
+    pub modulators: HashMap<String, Value>,
     #[serde(default)]
     pub physiology: Option<Value>,
     /// Root brain region ID (UUID string) - for O(1) root lookup
@@ -475,6 +480,7 @@ impl GenomeParser {
             brain_regions,
             classifiers,
             neuron_morphologies: raw.neuron_morphologies,
+            modulators: raw.modulators,
             physiology: raw.physiology,
             change_history: raw.change_history,
         })

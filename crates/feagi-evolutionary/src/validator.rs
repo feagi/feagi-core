@@ -757,6 +757,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),
@@ -790,6 +791,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "abc123".to_string(),
@@ -954,6 +956,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),

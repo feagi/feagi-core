@@ -18,6 +18,7 @@ macro_rules! match_bytes_by_cortical_type {
 
         brain_input => $brain_input:block,
         brain_output => $brain_output:block,
+        modulator => $modulator:block,
         invalid => $invalid:block,
     ) => {
         match $cortical_id_bytes[0] {
@@ -26,6 +27,7 @@ macro_rules! match_bytes_by_cortical_type {
             b'_' => $core,
             b'i' => $brain_input,
             b'o' => $brain_output,
+            b'g' => $modulator,
             _ => $invalid,
         }
     };
@@ -63,6 +65,9 @@ impl CorticalID {
             },
             brain_output => {
                 // TODO more checks
+                Ok(CorticalID {bytes: *bytes})
+            },
+            modulator => {
                 Ok(CorticalID {bytes: *bytes})
             },
             invalid => {
@@ -109,10 +114,26 @@ impl CorticalID {
             b'M' => b'm',
             b'I' => b'i',
             b'O' => b'o',
-            b'c' | b'm' | b'_' | b'i' | b'o' => bytes[0],
+            b'G' => b'g',
+            b'c' | b'm' | b'_' | b'i' | b'o' | b'g' => bytes[0],
             _ => b'c',
         };
         Self::try_from_bytes(&bytes)
+    }
+
+    /// Cortical id for a modulator driver area.
+    ///
+    /// Prefix byte `g` marks the modulator area type. `serial` is stored in the
+    /// last four bytes so each instance can own a distinct driver.
+    pub fn modulator_driver(serial: u32) -> Self {
+        let mut bytes = *b"g_______";
+        bytes[4..8].copy_from_slice(&serial.to_le_bytes());
+        CorticalID { bytes }
+    }
+
+    /// True when this id uses the modulator driver prefix.
+    pub fn is_modulator_driver(&self) -> bool {
+        self.bytes[0] == b'g'
     }
     //endregion
 
@@ -167,6 +188,9 @@ impl CorticalID {
             },
             brain_output => {
                 Ok(CorticalAreaType::BrainOutput(self.extract_io_data_flag()?))
+            },
+            modulator => {
+                Ok(CorticalAreaType::Modulator)
             },
             invalid => {
                 Err(FeagiDataError::InternalError("Attempted to convert an invalid cortical ID instantiated object to cortical type!".into()))

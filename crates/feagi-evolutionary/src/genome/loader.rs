@@ -344,9 +344,9 @@ mod tests {
 
         let (_genome, report) = load_genome_with_report(json).unwrap();
         assert_eq!(report.from_version.as_u32(), 2);
-        assert_eq!(report.to_version.as_u32(), 3);
-        assert_eq!(report.migrators_applied, vec!["v2_to_v3"]);
-        // V3Validator is a placeholder today; clean report expected.
+        assert_eq!(report.to_version.as_u32(), 4);
+        assert_eq!(report.migrators_applied, vec!["v2_to_v3", "v3_to_v4"]);
+        // V4Validator is a placeholder today; clean report expected.
         assert!(report.is_blocking_clean());
     }
 

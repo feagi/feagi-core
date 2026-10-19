@@ -647,6 +647,14 @@ impl ConnectomeServiceImpl {
         self.burst_runner = Some(burst_runner);
     }
 
+    /// Drop published activity that still belongs to the previous brain.
+    fn clear_published_activity(&self) {
+        if let Some(ref burst_runner) = self.burst_runner {
+            burst_runner.read().clear_cached_fire_queue();
+        }
+        feagi_npu_burst_engine::BurstTaps::instance().clear();
+    }
+
     /// Refresh cortical_id cache in burst runner
     fn refresh_burst_runner_cache(&self) {
         if let Some(ref burst_runner) = self.burst_runner {
@@ -3329,6 +3337,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         }
         self.record_connectome_as_genome_load();
         self.refresh_burst_runner_cache();
+        self.clear_published_activity();
 
         Ok(())
     }
@@ -4431,6 +4440,21 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    /// Connectome import rebuilds via neuroembryogenesis, which requires an attached NPU.
+    fn connectome_manager_for_import_tests() -> ConnectomeManager {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000_000, 10_000_000, 10)
+            .expect("Failed to create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(npu),
+            "connectome-import-test-npu",
+        ));
+        ConnectomeManager::new_for_testing_with_npu(dyn_npu)
+    }
+
     #[test]
     fn empty_mapping_deletes_destination_key_and_prunes_container() -> ServiceResult<()> {
         let mut props: HashMap<String, serde_json::Value> = HashMap::new();
@@ -4546,6 +4570,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -4607,6 +4632,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -4757,6 +4783,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies,
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -4869,6 +4896,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies,
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -4989,6 +5017,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -5092,6 +5121,7 @@ mod tests {
             brain_regions: HashMap::from([(region_key.clone(), region.clone())]),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -5111,6 +5141,10 @@ mod tests {
                 .expect("brain region should be addable");
             mgr.add_cortical_area(area)
                 .expect("cortical area should be addable");
+        }
+        {
+            let mgr = connectome.read();
+            mgr.refresh_all_connectome_hashes();
         }
 
         let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
@@ -5227,6 +5261,7 @@ mod tests {
             ]),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -5616,6 +5651,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -5953,6 +5989,7 @@ mod tests {
             brain_regions,
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -6139,6 +6176,7 @@ mod tests {
             brain_regions,
             classifiers,
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -6274,6 +6312,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -6286,9 +6325,7 @@ mod tests {
         };
         let genome_json = feagi_evolutionary::save_genome_to_json(&genome).unwrap();
 
-        let connectome = Arc::new(RwLock::new(
-            feagi_brain_development::ConnectomeManager::new_for_testing(),
-        ));
+        let connectome = Arc::new(RwLock::new(connectome_manager_for_import_tests()));
         let current_genome = Arc::new(RwLock::new(None));
         let mut svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
         let genome_load_counter = Arc::new(RwLock::new(0));
@@ -6421,6 +6458,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -6621,6 +6659,7 @@ mod tests {
             brain_regions: HashMap::from([(region_id.clone(), region)]),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -6951,6 +6990,7 @@ mod tests {
             brain_regions: HashMap::from([(region_id.clone(), region)]),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
@@ -7705,6 +7745,7 @@ mod tests {
             brain_regions: HashMap::from([(incoming_id.clone(), incoming)]),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),

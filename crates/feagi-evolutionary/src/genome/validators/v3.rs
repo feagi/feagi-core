@@ -18,7 +18,7 @@
 use serde_json::Value;
 
 use super::{ValidationReport, Validator};
-use crate::genome::schema::{GenomeSchemaVersion, CURRENT_SCHEMA_VERSION};
+use crate::genome::schema::GenomeSchemaVersion;
 
 /// Validator for the latest schema version.
 ///
@@ -34,11 +34,11 @@ impl V3Validator {
 
 impl Validator for V3Validator {
     fn schema_version(&self) -> GenomeSchemaVersion {
-        CURRENT_SCHEMA_VERSION
+        GenomeSchemaVersion(3)
     }
 
     fn validate(&self, _genome: &Value) -> ValidationReport {
-        ValidationReport::new(CURRENT_SCHEMA_VERSION)
+        ValidationReport::new(GenomeSchemaVersion(3))
     }
 }
 
@@ -50,7 +50,7 @@ mod tests {
     #[test]
     fn reports_current_schema_version() {
         let v = V3Validator::new();
-        assert_eq!(v.schema_version(), CURRENT_SCHEMA_VERSION);
+        assert_eq!(v.schema_version(), GenomeSchemaVersion(3));
     }
 
     #[test]
@@ -62,6 +62,6 @@ mod tests {
         let v = V3Validator::new();
         let report = v.validate(&json!({ "anything": "goes" }));
         assert!(report.is_clean());
-        assert_eq!(report.schema_version, Some(CURRENT_SCHEMA_VERSION));
+        assert_eq!(report.schema_version, Some(GenomeSchemaVersion(3)));
     }
 }

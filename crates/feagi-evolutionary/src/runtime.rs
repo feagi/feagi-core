@@ -37,6 +37,9 @@ pub struct RuntimeGenome {
     /// Morphology registry
     pub morphologies: MorphologyRegistry,
 
+    /// Modulator instances. Each instance owns one driver cortical area.
+    pub modulators: crate::modulators::ModulatorRegistry,
+
     /// Physiology configuration
     pub physiology: PhysiologyConfig,
 
@@ -586,6 +589,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::from([("clf".to_string(), classifier)]),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),

@@ -373,6 +373,17 @@ pub trait SynapseStorage: Send + Sync {
     /// Mutable eligibility traces slice (R-STDP). See [`SynapseStorage::eligibility_traces`].
     fn eligibility_traces_mut(&mut self) -> &mut [f32];
 
+    /// Modulation group per synapse. Empty means the column is not allocated.
+    fn modulation_groups(&self) -> &[u16] {
+        &[]
+    }
+
+    /// Allocate the modulation-group column when the first synaptic modulator is used.
+    fn ensure_modulation_groups(&mut self) {}
+
+    /// Write one synapse's modulation group. No-op until the column is allocated.
+    fn set_modulation_group(&mut self, _index: usize, _group: u16) {}
+
     // === Metadata ===
 
     /// Number of synapses currently stored

@@ -144,6 +144,26 @@ impl FireLedger {
         self.tracked.remove(&cortical_idx).is_some()
     }
 
+    /// Empty recorded spikes for one tracked area without dropping its window.
+    ///
+    /// The area stays tracked so later bursts still archive dense frames. Memory
+    /// reset uses this so a plasticity window cannot treat deleted neurons as
+    /// recent co-activation and rebuild their synapses.
+    pub fn clear_recorded_activity(&mut self, cortical_idx: u32) -> bool {
+        let Some(hist) = self.tracked.get_mut(&cortical_idx) else {
+            return false;
+        };
+        for (_, bitmap) in hist.frames.iter_mut() {
+            bitmap.clear();
+        }
+        if let Some(mp_ring) = self.mp_history.get_mut(&cortical_idx) {
+            for (_, potentials) in mp_ring.iter_mut() {
+                potentials.clear();
+            }
+        }
+        true
+    }
+
     /// Get the tracked window size for a cortical area.
     pub fn get_tracked_window(&self, cortical_idx: u32) -> Result<usize, FireLedgerError> {
         self.tracked
@@ -572,5 +592,44 @@ mod tests {
 
         let err = ledger.get_dense_window_mp(1, 1, 1).unwrap_err();
         assert!(matches!(err, FireLedgerError::AreaNotTracked { .. }));
+    }
+
+    #[test]
+    fn test_clear_recorded_activity_keeps_the_window_and_drops_ids() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 4).unwrap();
+        ledger.track_area(2, 4).unwrap();
+        ledger.enable_mp_archival(1).unwrap();
+
+        let mut both = FireQueue::new();
+        both.add_neuron(FiringNeuron {
+            neuron_id: NeuronId(50_000_000),
+            membrane_potential: 4.0,
+            cortical_idx: 1,
+            x: 0,
+            y: 0,
+            z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+        });
+        both.add_neuron(FiringNeuron {
+            neuron_id: NeuronId(7),
+            membrane_potential: 1.0,
+            cortical_idx: 2,
+            x: 0,
+            y: 0,
+            z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+        });
+        ledger.archive_burst(1, &both).unwrap();
+
+        assert!(ledger.clear_recorded_activity(1));
+        let cleared = ledger.get_dense_window_bitmaps(1, 1, 1).unwrap();
+        assert!(cleared[0].1.is_empty(), "reset area history must be empty");
+        let mp = ledger.get_dense_window_mp(1, 1, 1).unwrap();
+        assert!(mp[0].1.is_empty());
+        assert_eq!(ledger.get_tracked_window(1).unwrap(), 4);
+        let other = ledger.get_dense_window_bitmaps(2, 1, 1).unwrap();
+        assert!(other[0].1.contains(7));
+        assert!(!ledger.clear_recorded_activity(99));
     }
 }

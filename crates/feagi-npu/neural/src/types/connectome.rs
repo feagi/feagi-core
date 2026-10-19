@@ -259,6 +259,14 @@ pub struct SerializableSynapseArray {
     /// R-STDP eligibility traces. Omitted in older snapshots.
     #[serde(default)]
     pub eligibility_traces: Vec<f32>,
+
+    /// Modulation group per synapse.
+    ///
+    /// Schema v1 bincode is positional and immutable. This field is omitted
+    /// from that layout. Connectome I/O stores non-zero groups in metadata
+    /// tag `synapse_modulation_groups_v1`.
+    #[serde(skip)]
+    pub modulation_groups: Vec<u16>,
 }
 
 #[cfg(feature = "std")]
@@ -277,6 +285,7 @@ impl Default for SerializableSynapseArray {
             source_index: AHashMap::new(),
             edge_flags: Vec::new(),
             eligibility_traces: Vec::new(),
+            modulation_groups: Vec::new(),
         }
     }
 }
@@ -298,6 +307,7 @@ impl SerializableSynapseArray {
             source_index: AHashMap::new(),
             edge_flags: std::vec::from_elem(0, capacity),
             eligibility_traces: std::vec::from_elem(0.0, capacity),
+            modulation_groups: Vec::new(),
         }
     }
 }
@@ -1182,6 +1192,14 @@ fn copy_synapse_range(
         }
         if s < src.eligibility_traces.len() {
             dst.eligibility_traces[d] = src.eligibility_traces[s];
+        }
+        if !src.modulation_groups.is_empty() {
+            if dst.modulation_groups.len() < dst.count.max(d + 1) {
+                dst.modulation_groups.resize(dst.count.max(d + 1), 0);
+            }
+            if s < src.modulation_groups.len() {
+                dst.modulation_groups[d] = src.modulation_groups[s];
+            }
         }
     }
 }

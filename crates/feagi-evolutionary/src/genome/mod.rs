@@ -44,7 +44,7 @@ pub use loader::{
 };
 pub use migration::{
     ChainRegistry, ChainResult, ChainRunner, MigrationError, MigrationStepDiagnostics, Migrator,
-    V2ToV3Migrator,
+    V2ToV3Migrator, V3ToV4Migrator,
 };
 pub use migrator::{map_old_id_to_new, migrate_genome, MigrationResult};
 pub use normalizers::{NormalizationDiagnostics, Normalizer, V3Normalizer};
@@ -59,7 +59,7 @@ pub use schema::{
     detect_schema_version, GenomeSchemaVersion, CURRENT_SCHEMA_VERSION, MIN_SCHEMA_VERSION,
 };
 pub use signatures::generate_signatures;
-pub use validators::{V3Validator, ValidationReport, Validator};
+pub use validators::{V3Validator, V4Validator, ValidationReport, Validator};
 
 /// Build the canonical chain registry: the **full** migrator chain, all
 /// normalizers, and all validators known to this crate.
@@ -81,10 +81,15 @@ pub fn default_chain_registry() -> ChainRegistry {
         .expect("V2ToV3Migrator is well-formed; this expect is the registry contract violation we want to crash on");
 
     registry
+        .register_migrator(Box::new(V3ToV4Migrator::new()))
+        .expect("V3ToV4Migrator is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
         .register_normalizer(Box::new(V3Normalizer::new()))
         .expect("V3Normalizer is well-formed; this expect is the registry contract violation we want to crash on");
 
     registry.register_validator(Box::new(V3Validator::new()));
+    registry.register_validator(Box::new(V4Validator::new()));
 
     registry
 }

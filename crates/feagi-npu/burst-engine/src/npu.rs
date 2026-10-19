@@ -36,6 +36,7 @@ use crate::fire_structures::{
     FireQueue, FiringNeuron, FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE,
 };
 use crate::fq_sampler::{FQSampler, SamplingMode};
+use crate::modulator_engine::ModulatorEngine;
 use crate::neural_dynamics::*;
 use crate::rate_modulated_leak::RateModulatedLeakRegistry;
 use crate::sparse_memory_lif::{
@@ -215,6 +216,8 @@ pub struct StdpMappingParams {
     /// Classifier reward training commits pain and pleasure per scanning instance.
     /// The generic end-of-burst R-STDP update does not also move these synapses.
     pub instance_reward: bool,
+    /// Synaptic modulator group stamped onto this mapping's synapses. `0` means none.
+    pub modulation_group: u16,
 }
 
 impl Default for StdpMappingParams {
@@ -235,6 +238,7 @@ impl Default for StdpMappingParams {
             max_weight: f32::INFINITY,
             plasticity_eta: 1.0,
             instance_reward: false,
+            modulation_group: 0,
         }
     }
 }
@@ -386,6 +390,8 @@ pub struct RustNPU<
     memory_neuron_longterm_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
     /// @cursor:critical-path — only allocated when at least one cortical area enables rate-modulated leak.
     rate_modulated_leak: std::sync::Mutex<RateModulatedLeakRegistry>,
+    /// @cursor:critical-path — idle when no modulator bindings and no spike trains are registered.
+    modulator_engine: std::sync::Mutex<ModulatorEngine>,
 
     /// Conditional gate configurations: maps (src_cortical_idx, dst_cortical_idx) to
     /// the gate cortical area index. Used to check the fire queue each burst and compute
@@ -573,6 +579,7 @@ impl<
             memory_neuron_assoc_predicate: std::sync::RwLock::new(None),
             memory_neuron_longterm_predicate: std::sync::RwLock::new(None),
             rate_modulated_leak: std::sync::Mutex::new(RateModulatedLeakRegistry::default()),
+            modulator_engine: std::sync::Mutex::new(ModulatorEngine::default()),
             gate_configs: std::sync::RwLock::new(AHashMap::new()),
         })
     }
@@ -1490,6 +1497,109 @@ impl<
                 .memory_associative_fcl_input
                 .remove(neuron_id);
         }
+    }
+
+    /// Memory-neuron ids currently mapped into `cortical_idx` for propagation.
+    ///
+    /// These ids live outside neuron storage. Associative synapses address them
+    /// directly, so a reset must discover them from the mapping rather than from
+    /// the dense neuron array.
+    pub fn dynamic_memory_neuron_ids_in_area(&self, cortical_idx: u32) -> Vec<u32> {
+        let Some(cortical_id) = self.cortical_id_for_index(cortical_idx) else {
+            return Vec::new();
+        };
+        let engine = self.propagation_engine.read().unwrap();
+        let mut ids: Vec<u32> = engine
+            .neuron_to_area
+            .iter()
+            .filter_map(|(neuron_id, mapped)| {
+                if neuron_id.0 >= MEMORY_NEURON_ID_START && *mapped == cortical_id {
+                    Some(neuron_id.0)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// Remove propagation mappings for memory neurons in one cortical area.
+    ///
+    /// Returns how many mappings were removed. Without this, a leftover mapping
+    /// lets a surviving or recreated associative synapse place that id back into
+    /// the area's fire candidate list.
+    pub fn forget_dynamic_memory_neuron_mappings(&mut self, cortical_idx: u32) -> usize {
+        let ids = self.dynamic_memory_neuron_ids_in_area(cortical_idx);
+        if ids.is_empty() {
+            return 0;
+        }
+        let mut engine = self.propagation_engine.write().unwrap();
+        for neuron_id in &ids {
+            engine.neuron_to_area.remove(&NeuronId(*neuron_id));
+        }
+        ids.len()
+    }
+
+    /// Drop STDP and episodic firing history, staged injections, and queued fires
+    /// for one cortical area.
+    ///
+    /// `neuron_ids` are the memory and storage ids whose pending PSP and candidate
+    /// rows must not survive the reset. The tracked ledger windows stay in place.
+    pub fn clear_memory_area_activation_records(&mut self, cortical_idx: u32, neuron_ids: &[u32]) {
+        let ids: AHashSet<u32> = neuron_ids.iter().copied().collect();
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures
+            .fire_ledger
+            .clear_recorded_activity(cortical_idx);
+        fire_structures
+            .episodic_memory_fire_ledger
+            .clear_recorded_activity(cortical_idx);
+        fire_structures
+            .current_fire_queue
+            .remove_cortical_area(cortical_idx);
+        fire_structures
+            .previous_fire_queue
+            .remove_cortical_area(cortical_idx);
+        fire_structures
+            .pending_memory_injections
+            .retain(|(_, area_idx, _, _)| *area_idx != cortical_idx);
+        fire_structures
+            .pending_replay_injections
+            .retain(|replay| replay.twin_area_idx != cortical_idx);
+        fire_structures
+            .last_fcl_snapshot
+            .retain(|(neuron_id, _)| !ids.contains(&neuron_id.0));
+        for neuron_id in &ids {
+            fire_structures
+                .fire_candidate_list
+                .remove_candidate(NeuronId(*neuron_id));
+            fire_structures
+                .sparse_memory_associative_lif
+                .remove(neuron_id);
+            fire_structures
+                .memory_associative_fcl_input
+                .remove(neuron_id);
+        }
+        fire_structures
+            .memory_candidate_cortical_idx
+            .retain(|neuron_id, area_idx| *area_idx != cortical_idx && !ids.contains(neuron_id));
+        let remaining_candidates: AHashSet<u32> = fire_structures
+            .memory_candidate_cortical_idx
+            .keys()
+            .copied()
+            .collect();
+        fire_structures
+            .memory_candidate_fire_kind
+            .retain(|neuron_id, _| remaining_candidates.contains(neuron_id));
+        fire_structures
+            .synaptic_arrival_schedule
+            .remove_pending_for_neuron_targets(&ids);
+    }
+
+    fn cortical_id_for_index(&self, cortical_idx: u32) -> Option<CorticalID> {
+        let area_name = self.get_cortical_area_name(cortical_idx)?;
+        CorticalID::try_from_base_64(&area_name).ok()
     }
 
     /// Remove a synapse by source and target
@@ -2558,6 +2668,17 @@ impl<
                 .collect();
             finish_burst_refractory_period(&mut *neuron_storage, &fired_this_burst);
         }
+        if let Ok(mut modulators) = self.modulator_engine.lock() {
+            if !modulators.spike_train_idle() {
+                let scheduled = modulators
+                    .advance_spike_trains(&mut *neuron_storage, &dynamics_result.fire_queue);
+                for (neuron_id, potential) in scheduled {
+                    fire_structures
+                        .pending_authoritative_fq
+                        .push((NeuronId(neuron_id), potential));
+                }
+            }
+        }
         let phase2_duration = phase2_start.elapsed();
 
         if let Some(area_idx) = trace_fcl_cortical_idx_for_logging() {
@@ -2686,6 +2807,16 @@ impl<
 
         {
             // Phase 3.6: opt-in homeostatic leak (cold path; no-op if registry is empty)
+            if let Ok(modulators) = self.modulator_engine.lock() {
+                if !modulators.is_idle() {
+                    drop(modulators);
+                    if let (Ok(modulators), Ok(mut ns)) =
+                        (self.modulator_engine.lock(), self.neuron_storage.write())
+                    {
+                        modulators.restore_homeostatic_leak_baselines(&mut *ns);
+                    }
+                }
+            }
             if let (Ok(mut rml), Ok(mut ns)) =
                 (self.rate_modulated_leak.lock(), self.neuron_storage.write())
             {
@@ -2695,6 +2826,24 @@ impl<
                         &fire_structures.fire_ledger,
                         ns.leak_coefficients_mut(),
                     );
+                }
+            }
+            if let (Ok(mut modulators), Ok(mut ns)) =
+                (self.modulator_engine.lock(), self.neuron_storage.write())
+            {
+                if !modulators.is_idle() {
+                    modulators.commit_burst(&mut *ns, &dynamics_result.fire_queue);
+                    let factors = modulators.transmission_factors();
+                    let active = modulators.transmission_active();
+                    drop(modulators);
+                    drop(ns);
+                    if let Ok(mut propagation) = self.propagation_engine.write() {
+                        if active {
+                            propagation.set_transmission_factors(factors);
+                        } else {
+                            propagation.clear_transmission_factors();
+                        }
+                    }
                 }
             }
         }
@@ -3520,6 +3669,7 @@ impl<
             source_index,
             edge_flags: synapse_storage.edge_flags().to_vec(),
             eligibility_traces: synapse_storage.eligibility_traces().to_vec(),
+            modulation_groups: synapse_storage.modulation_groups().to_vec(),
         };
         drop(synapse_storage); // Release lock
 
@@ -3710,6 +3860,19 @@ impl<
             };
 
             self.add_synapses_batch(sources, targets, weights, psps, types, edge_flags, delays)?;
+            if !snapshot.synapses.modulation_groups.is_empty() {
+                let mut synapse_storage = self.synapse_storage.write().unwrap();
+                synapse_storage.ensure_modulation_groups();
+                for (index, group) in snapshot
+                    .synapses
+                    .modulation_groups
+                    .iter()
+                    .take(s)
+                    .enumerate()
+                {
+                    synapse_storage.set_modulation_group(index, *group);
+                }
+            }
 
             if snapshot.synapses.eligibility_traces.len() == s {
                 let mut storage = self.synapse_storage.write().unwrap();
@@ -4207,6 +4370,76 @@ impl<
         }
 
         updated_count
+    }
+
+    /// Replace the modulator instances the burst engine evaluates.
+    pub fn set_modulator_bindings(&self, bindings: Vec<crate::modulator_engine::ModulatorBinding>) {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .set_bindings(bindings);
+    }
+
+    /// Area cortical index to neuromodulator instance ids.
+    pub fn set_modulator_area_subscriptions(&self, subscriptions: AHashMap<u32, Vec<String>>) {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .set_area_subscriptions(subscriptions);
+    }
+
+    /// Cortical indices whose neurons run the spike-train state machine.
+    pub fn set_spike_train_areas(&self, areas: AHashSet<u32>) {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .set_spike_train_areas(areas);
+    }
+
+    /// Cortical indices where homeostatic leak writes the modulator baseline.
+    pub fn set_homeostatic_leak_areas(&self, areas: AHashSet<u32>) {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .set_homeostatic_leak_areas(areas);
+    }
+
+    /// Allocate or reuse a synaptic modulation group for these instance ids.
+    pub fn allocate_modulation_group(&self, instance_ids: &[String]) -> u16 {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .allocate_group(instance_ids)
+    }
+
+    /// Authored full-strength reward of a driver area, if that driver is a Reward instance.
+    pub fn authored_reward_signal(&self, driver_cortical_idx: u32) -> Option<f32> {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .authored_reward_signal(driver_cortical_idx)
+    }
+
+    /// Re-read one area parameter as the baseline and reapply the active factor.
+    pub fn rebase_modulated_area_param(
+        &self,
+        cortical_idx: u32,
+        kind: feagi_structures::genomic::ModulatorKind,
+    ) {
+        if let (Ok(mut engine), Ok(mut storage)) =
+            (self.modulator_engine.lock(), self.neuron_storage.write())
+        {
+            engine.rebase_area_param(&mut *storage, cortical_idx, kind);
+        }
+    }
+
+    /// Restore and free baselines that no longer have a subscription.
+    pub fn release_unused_modulator_baselines(&self) {
+        if let (Ok(mut engine), Ok(mut storage)) =
+            (self.modulator_engine.lock(), self.neuron_storage.write())
+        {
+            engine.release_unused_baselines(&mut *storage);
+        }
     }
 
     /// (Re)register or clear rate-modulated leak for a cortical area. See `neural/docs/rate_modulated_leak.md`.
@@ -5197,6 +5430,26 @@ impl<
     /// internal index used by get_outgoing_synapses() and synaptic propagation.
     ///
     /// Without calling this, newly created synapses will be invisible to queries!
+    pub fn synapse_count(&self) -> usize {
+        self.synapse_storage
+            .read()
+            .expect("synapse storage lock")
+            .count()
+    }
+
+    /// Stamp `group` onto synapses in `[start, end)`. Group 0 leaves them unmarked.
+    pub fn stamp_synapse_modulation_group(&self, start: usize, end: usize, group: u16) {
+        if group == 0 || start >= end {
+            return;
+        }
+        let mut storage = self.synapse_storage.write().expect("synapse storage lock");
+        storage.ensure_modulation_groups();
+        let end = end.min(storage.count());
+        for index in start..end {
+            storage.set_modulation_group(index, group);
+        }
+    }
+
     pub fn rebuild_synapse_index(&mut self) {
         let synapse_storage = self.synapse_storage.read().unwrap();
         let mut prop_engine = self.propagation_engine.write().unwrap();
@@ -5478,37 +5731,6 @@ impl<
         false
     }
 
-    /// Firing density of `cortical_area` at `burst_timestep`, in `[0.0, 1.0]`.
-    ///
-    /// Defined as `fired_neurons_in_burst / total_neurons_in_area`. Used by R-STDP to compute
-    /// the reward signal `R(t) = density(reward_source) - density(punishment_source)`.
-    /// Returns 0.0 if the area is untracked, has no neurons, or insufficient history.
-    fn activity_density(
-        &self,
-        cortical_area: u32,
-        burst_timestep: u64,
-        fire_ledger: &crate::fire_ledger::FireLedger,
-        neuron_storage: &R::NeuronStorage<T>,
-    ) -> f32 {
-        let total_neurons = neuron_storage.get_neuron_count(cortical_area);
-        if total_neurons == 0 {
-            return 0.0;
-        }
-        let window = match fire_ledger.get_dense_window_bitmaps(cortical_area, burst_timestep, 1) {
-            Ok(w) => w,
-            Err(_) => return 0.0,
-        };
-        let Some((_, bitmap)) = window.into_iter().next() else {
-            return 0.0;
-        };
-        // bitmap.cardinality() can exceed total_neurons if memory neurons are tracked, so clamp.
-        let fired = bitmap
-            .iter()
-            .filter(|&id| id < MEMORY_NEURON_ID_START)
-            .count();
-        (fired as f32 / total_neurons as f32).clamp(0.0, 1.0)
-    }
-
     fn apply_stdp_updates_for_burst(
         &self,
         burst_timestep: u64,
@@ -5683,47 +5905,27 @@ impl<
         //   2. if co-fire across the plasticity window:                e_ij += delta_plus
         //      else if uncorrelated firing across the window:          e_ij -= delta_minus
         //   3. w_ij += R(t) * e_ij        (clamp at 0 on negative deltas)
+        let modulators = self
+            .modulator_engine
+            .lock()
+            .map_err(|_| FeagiError::RuntimeError("modulator engine lock poisoned".to_string()))?;
         let reward_signals: AHashMap<CorticalMappingKey, f32> = {
-            let neuron_storage = self.neuron_storage.read().unwrap();
-            // Pre-compute R(t) per mapping. STDP mappings always get R=1. R-STDP mappings sample
-            // current-burst firing density of their reward / punishment source areas. Mappings
-            // with `Off` plasticity_mode are filtered out at registration; defensively skip here.
             let mut reward_signals: AHashMap<CorticalMappingKey, f32> =
                 AHashMap::with_capacity(mappings.len());
             for (key, params) in &mappings {
                 let r = match params.plasticity_mode {
                     PlasticityMode::Off => continue,
-                    PlasticityMode::Stdp => 1.0_f32,
+                    PlasticityMode::Stdp => modulators.learning_factor(params.modulation_group),
                     PlasticityMode::RStdp => {
-                        let pleasure = params
-                            .reward_source_area
-                            .map(|area| {
-                                self.activity_density(
-                                    area,
-                                    burst_timestep,
-                                    fire_ledger,
-                                    &neuron_storage,
-                                )
-                            })
-                            .unwrap_or(0.0);
-                        let pain = params
-                            .punishment_source_area
-                            .map(|area| {
-                                self.activity_density(
-                                    area,
-                                    burst_timestep,
-                                    fire_ledger,
-                                    &neuron_storage,
-                                )
-                            })
-                            .unwrap_or(0.0);
-                        pleasure - pain
+                        modulators.reward_for_group(params.modulation_group)
+                            * modulators.learning_factor(params.modulation_group)
                     }
                 };
                 reward_signals.insert(*key, r);
             }
             reward_signals
         };
+        drop(modulators);
 
         {
             let neuron_storage = self.neuron_storage.read().unwrap();
@@ -6736,11 +6938,22 @@ mod tests {
             1,
         )
         .unwrap();
+        npu.configure_fire_ledger_window(3, 4).unwrap();
+        npu.configure_episodic_memory_fire_ledger_window(3, 4)
+            .unwrap();
         npu.process_burst().unwrap();
 
         assert!(npu.get_neuron_count() > 0);
         assert!(npu.get_synapse_count() > 0);
         assert!(npu.get_burst_count() > 0);
+        assert_eq!(npu.get_all_fire_ledger_configs(), vec![(3, 4)]);
+        assert_eq!(
+            npu.get_all_episodic_memory_fire_ledger_configs(),
+            vec![(3, 4)]
+        );
+        assert!(npu
+            .get_fire_ledger_dense_window_bitmaps(3, npu.get_burst_count(), 1)
+            .is_ok());
 
         npu.reset_for_new_genome().unwrap();
 
@@ -6749,6 +6962,9 @@ mod tests {
         assert_eq!(npu.get_burst_count(), 0);
         assert!(npu.get_neurons_in_cortical_area(3).is_empty());
         assert!(npu.get_neurons_in_cortical_area(4).is_empty());
+        assert!(npu.get_all_fire_ledger_configs().is_empty());
+        assert!(npu.get_all_episodic_memory_fire_ledger_configs().is_empty());
+        assert!(npu.get_fire_ledger_dense_window_bitmaps(3, 1, 1).is_err());
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -7770,6 +7986,88 @@ mod tests {
         }
         let fs = npu.fire_structures.lock().unwrap();
         assert!(fs.fire_candidate_list.get(n_id).is_none());
+    }
+
+    #[test]
+    fn test_clear_memory_area_activation_records_drops_history_and_mappings() {
+        use crate::fire_structures::{FireQueue, FiringNeuron, FIRE_KIND_STDP_ELIGIBLE};
+        use feagi_npu_neural::types::NeuronId;
+        use feagi_structures::genomic::cortical_area::CorticalID;
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 8,
+            );
+        let memory_id = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+        let other_id = CorticalID::try_from_bytes(b"mmem0002").unwrap();
+        npu.register_cortical_area(20, memory_id.as_base_64());
+        npu.register_cortical_area(21, other_id.as_base_64());
+        npu.configure_fire_ledger_window(20, 4).unwrap();
+        npu.configure_fire_ledger_window(21, 4).unwrap();
+        npu.configure_episodic_memory_fire_ledger_window(20, 4)
+            .unwrap();
+
+        let memory_neuron = 50_000_000u32;
+        let other_memory_neuron = 50_000_001u32;
+        npu.register_dynamic_neuron_mapping(memory_neuron, memory_id);
+        npu.register_dynamic_neuron_mapping(other_memory_neuron, other_id);
+        npu.inject_memory_neuron_to_fcl(memory_neuron, 20, 1.5);
+
+        {
+            let mut fs = npu.fire_structures.lock().unwrap();
+            let mut queue = FireQueue::new();
+            queue.add_neuron(FiringNeuron {
+                neuron_id: NeuronId(memory_neuron),
+                membrane_potential: 1.5,
+                cortical_idx: 20,
+                x: 0,
+                y: 0,
+                z: 0,
+                fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+            });
+            queue.add_neuron(FiringNeuron {
+                neuron_id: NeuronId(other_memory_neuron),
+                membrane_potential: 1.5,
+                cortical_idx: 21,
+                x: 0,
+                y: 0,
+                z: 0,
+                fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+            });
+            fs.fire_ledger.archive_burst(1, &queue).unwrap();
+            fs.episodic_memory_fire_ledger
+                .archive_burst(1, &queue)
+                .unwrap();
+            fs.current_fire_queue.add_neuron(FiringNeuron {
+                neuron_id: NeuronId(memory_neuron),
+                membrane_potential: 1.5,
+                cortical_idx: 20,
+                x: 0,
+                y: 0,
+                z: 0,
+                fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+            });
+        }
+
+        npu.clear_memory_area_activation_records(20, &[memory_neuron]);
+        assert_eq!(npu.forget_dynamic_memory_neuron_mappings(20), 1);
+
+        let cleared = npu.get_fire_ledger_dense_window_bitmaps(20, 1, 1).unwrap();
+        assert!(cleared[0].1.is_empty());
+        let kept = npu.get_fire_ledger_dense_window_bitmaps(21, 1, 1).unwrap();
+        assert!(kept[0].1.contains(other_memory_neuron));
+        let episodic = npu
+            .get_episodic_memory_fire_ledger_dense_window_bitmaps(20, 1, 1)
+            .unwrap();
+        assert!(episodic[0].1.is_empty());
+        assert!(npu.dynamic_memory_neuron_ids_in_area(20).is_empty());
+        assert_eq!(
+            npu.dynamic_memory_neuron_ids_in_area(21),
+            vec![other_memory_neuron]
+        );
+        let fs = npu.fire_structures.lock().unwrap();
+        assert!(fs.pending_memory_injections.is_empty());
+        assert!(fs.current_fire_queue.get_area_neurons(20).is_none());
     }
 
     #[test]

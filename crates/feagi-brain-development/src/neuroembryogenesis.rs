@@ -585,6 +585,7 @@ impl Neuroembryogenesis {
                         CorticalAreaType::BrainOutput(_) => "OPU",
                         CorticalAreaType::Memory(_) => "MEMORY",
                         CorticalAreaType::Custom(_) => "CUSTOM",
+                        CorticalAreaType::Modulator => "MODULATOR",
                     }
                 } else {
                     // Fallback to cortical_group property or area_type
@@ -600,6 +601,7 @@ impl Neuroembryogenesis {
                         Some("CORE") => "CORE",
                         Some("MEMORY") => "MEMORY",
                         Some("CUSTOM") => "CUSTOM",
+                        Some("MODULATOR") => "MODULATOR",
                         _ => "CUSTOM", // Default fallback
                     }
                 };
@@ -645,7 +647,7 @@ impl Neuroembryogenesis {
                         opu_areas.push(*area_id);
                         auto_outputs.push(*area_id);
                     }
-                    "CORE" => {
+                    "CORE" | "MODULATOR" => {
                         core_areas.push(*area_id);
                     }
                     "MEMORY" | "CUSTOM" => {
@@ -1182,6 +1184,9 @@ impl Neuroembryogenesis {
         info!(target: "feagi-bdu","  Expected innate synapses from genome: {}", expected_synapses);
 
         self.rebuild_memory_twin_mappings_from_genome(genome)?;
+        self.connectome_manager
+            .write()
+            .sync_modulators_from_genome(genome)?;
 
         let mut total_synapses_created = 0;
         let total_areas = genome.cortical_areas.len();
@@ -1422,12 +1427,13 @@ impl Neuroembryogenesis {
                 let Some(rule_array) = rules.as_array() else {
                     continue;
                 };
-                let has_replay = rule_array.iter().any(|rule| {
-                    rule.get("morphology_id")
-                        .and_then(|v| v.as_str())
-                        .is_some_and(|id| id == "memory_replay")
+                let has_twin_recall = rule_array.iter().any(|rule| {
+                    matches!(
+                        rule.get("morphology_id").and_then(|v| v.as_str()),
+                        Some("memory_replay") | Some("episodic_memory")
+                    )
                 });
-                if !has_replay {
+                if !has_twin_recall {
                     continue;
                 }
 
@@ -1446,6 +1452,17 @@ impl Neuroembryogenesis {
                 let Some(twin_area) = genome.cortical_areas.get(&dst_id) else {
                     continue;
                 };
+                let owned_by_this_memory = twin_area
+                    .properties
+                    .get("memory_twin_for")
+                    .and_then(|v| v.as_str())
+                    == Some(memory_id.as_base_64().as_str());
+                let legacy_replay = rule_array.iter().any(|rule| {
+                    rule.get("morphology_id").and_then(|v| v.as_str()) == Some("memory_replay")
+                });
+                if !legacy_replay && !owned_by_this_memory {
+                    continue;
+                }
                 let Some(upstream_id_str) = twin_area
                     .properties
                     .get("memory_twin_of")
@@ -1799,6 +1816,18 @@ mod tests {
     fn test_development_from_minimal_genome() {
         ConnectomeManager::reset_for_testing(); // Ensure clean state
         let manager = ConnectomeManager::instance();
+        {
+            let runtime = feagi_npu_runtime::StdRuntime;
+            let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
+            let npu_result =
+                feagi_npu_burst_engine::RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10)
+                    .expect("Failed to create NPU");
+            let npu = std::sync::Arc::new(feagi_npu_burst_engine::TracingMutex::new(
+                feagi_npu_burst_engine::DynamicNPU::F32(npu_result),
+                "minimal-genome-test-npu",
+            ));
+            manager.write().set_npu(npu);
+        }
         let mut neuro = Neuroembryogenesis::new(manager.clone());
 
         // Create a minimal genome with one cortical area

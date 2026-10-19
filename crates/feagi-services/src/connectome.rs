@@ -34,10 +34,19 @@ use thiserror::Error;
 /// Metadata tag holding associative class-channel weights outside schema v1 bincode.
 const LTM_CLASS_CHANNEL_WEIGHTS_TAG: &str = "ltm_class_channel_weights_v1";
 
+/// Metadata tag holding per-synapse modulation groups outside schema v1 bincode.
+const SYNAPSE_MODULATION_GROUPS_TAG: &str = "synapse_modulation_groups_v1";
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ClassChannelWeightRecord {
     neuron_id: u32,
     weights: Vec<(u32, f32)>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ModulationGroupRecord {
+    index: u64,
+    group: u16,
 }
 
 /// Connectome I/O errors
@@ -134,6 +143,7 @@ fn write_connectome_to_writer<W: Write>(
     let mut export_snapshot = snapshot.clone();
     crate::brain_artifact::embed_manifest_for_current_export(&mut export_snapshot)?;
     persist_class_channel_weights_for_schema_v1(&mut export_snapshot)?;
+    persist_modulation_groups_for_schema_v1(&mut export_snapshot)?;
     let manifest = crate::brain_artifact::encoded_manifest(&export_snapshot)?;
     let manifest_bytes = manifest.as_bytes();
     let manifest_len = u32::try_from(manifest_bytes.len()).map_err(|_| {
@@ -285,6 +295,7 @@ fn load_connectome_from_reader<R: Read>(reader: &mut R) -> Result<ConnectomeSnap
     let mut snapshot: ConnectomeSnapshot =
         bincode::deserialize(&data).map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
     restore_class_channel_weights_for_schema_v1(&mut snapshot)?;
+    restore_modulation_groups_for_schema_v1(&mut snapshot)?;
 
     if let Some(envelope_manifest) = envelope_manifest {
         let snapshot_manifest = crate::brain_artifact::encoded_manifest(&snapshot)?;
@@ -390,6 +401,71 @@ fn restore_class_channel_weights_for_schema_v1(snapshot: &mut ConnectomeSnapshot
     Ok(())
 }
 
+fn persist_modulation_groups_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    let records: Vec<ModulationGroupRecord> = snapshot
+        .synapses
+        .modulation_groups
+        .iter()
+        .enumerate()
+        .filter(|(_, group)| **group != 0)
+        .map(|(index, group)| ModulationGroupRecord {
+            index: index as u64,
+            group: *group,
+        })
+        .collect();
+    if records.is_empty() {
+        snapshot.metadata.tags.remove(SYNAPSE_MODULATION_GROUPS_TAG);
+        return Ok(());
+    }
+    let encoded = serde_json::to_string(&records).map_err(|error| {
+        ConnectomeError::Serialization(format!(
+            "failed to encode synapse modulation groups: {error}"
+        ))
+    })?;
+    snapshot
+        .metadata
+        .tags
+        .insert(SYNAPSE_MODULATION_GROUPS_TAG.to_string(), encoded);
+    Ok(())
+}
+
+fn restore_modulation_groups_for_schema_v1(snapshot: &mut ConnectomeSnapshot) -> Result<()> {
+    let Some(encoded) = snapshot.metadata.tags.get(SYNAPSE_MODULATION_GROUPS_TAG) else {
+        return Ok(());
+    };
+    let records: Vec<ModulationGroupRecord> = serde_json::from_str(encoded).map_err(|error| {
+        ConnectomeError::BrainArtifact(format!("synapse modulation groups tag is invalid: {error}"))
+    })?;
+    let count = snapshot.synapses.count;
+    let mut groups = vec![0u16; count];
+    for record in records {
+        if record.group == 0 {
+            return Err(ConnectomeError::BrainArtifact(
+                "synapse modulation group 0 is not stored".to_string(),
+            ));
+        }
+        let index = usize::try_from(record.index).map_err(|_| {
+            ConnectomeError::BrainArtifact(format!(
+                "synapse modulation group index {} does not fit this platform",
+                record.index
+            ))
+        })?;
+        if index >= count {
+            return Err(ConnectomeError::BrainArtifact(format!(
+                "synapse modulation group index {index} is outside synapse count {count}"
+            )));
+        }
+        if groups[index] != 0 {
+            return Err(ConnectomeError::BrainArtifact(format!(
+                "duplicate synapse modulation group at index {index}"
+            )));
+        }
+        groups[index] = record.group;
+    }
+    snapshot.synapses.modulation_groups = groups;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -398,7 +474,79 @@ mod tests {
         SerializableNeuronArray, SerializableNeuronReference, SerializableSemanticSynapse,
         SerializableSynapseArray,
     };
+    use serde::Serialize;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn pre_modulator_synapse_layout_deserializes() {
+        #[derive(Serialize)]
+        struct LegacySynapseArray {
+            count: usize,
+            capacity: usize,
+            source_neurons: Vec<u32>,
+            target_neurons: Vec<u32>,
+            weights: Vec<f32>,
+            postsynaptic_potentials: Vec<f32>,
+            types: Vec<u8>,
+            delay_bursts: Vec<u8>,
+            valid_mask: Vec<bool>,
+            source_index: ahash::AHashMap<u32, Vec<usize>>,
+            edge_flags: Vec<u8>,
+            eligibility_traces: Vec<f32>,
+        }
+
+        let legacy = LegacySynapseArray {
+            count: 1,
+            capacity: 1,
+            source_neurons: vec![1],
+            target_neurons: vec![2],
+            weights: vec![0.5],
+            postsynaptic_potentials: vec![1.0],
+            types: vec![0],
+            delay_bursts: vec![1],
+            valid_mask: vec![true],
+            source_index: ahash::AHashMap::new(),
+            edge_flags: vec![0],
+            eligibility_traces: vec![0.0],
+        };
+        let bytes = bincode::serialize(&legacy).unwrap();
+        let loaded: SerializableSynapseArray = bincode::deserialize(&bytes).unwrap();
+        assert_eq!(loaded.count, 1);
+        assert!(loaded.modulation_groups.is_empty());
+    }
+
+    #[test]
+    fn modulation_groups_roundtrip_outside_schema_v1_layout() {
+        let mut snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray {
+                count: 2,
+                ..SerializableSynapseArray::default()
+            },
+            cortical_area_names: ahash::AHashMap::new(),
+            burst_count: 3,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        };
+        snapshot.synapses.modulation_groups = vec![0, 4];
+        let bytes = save_connectome_to_bytes(&snapshot).unwrap();
+        let loaded = load_connectome_from_bytes(&bytes).unwrap();
+        assert_eq!(loaded.synapses.modulation_groups, vec![0, 4]);
+        assert!(loaded
+            .metadata
+            .tags
+            .contains_key(SYNAPSE_MODULATION_GROUPS_TAG));
+    }
 
     #[test]
     fn test_save_load_roundtrip() {

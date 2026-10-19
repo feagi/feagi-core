@@ -226,6 +226,41 @@ impl GenomeService for LoadOnlyGenomeService {
     ) -> ServiceResult<Vec<CorticalAreaInfo>> {
         Err(ServiceError::NotImplemented("create".to_string()))
     }
+    async fn list_modulator_types(&self) -> ServiceResult<Vec<String>> {
+        Ok(Vec::new())
+    }
+    async fn list_modulators(&self) -> ServiceResult<serde_json::Value> {
+        Ok(serde_json::json!({}))
+    }
+    async fn get_modulator(&self, id: &str) -> ServiceResult<serde_json::Value> {
+        Err(ServiceError::NotFound {
+            resource: "modulator".to_string(),
+            id: id.to_string(),
+        })
+    }
+    async fn create_modulator(
+        &self,
+        _id: String,
+        _write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<serde_json::Value> {
+        Err(ServiceError::NotImplemented("create modulator".to_string()))
+    }
+    async fn update_modulator(
+        &self,
+        _id: &str,
+        _write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<serde_json::Value> {
+        Err(ServiceError::NotImplemented("update modulator".to_string()))
+    }
+    async fn rename_modulator(&self, _old_id: &str, _new_id: String) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented("rename modulator".to_string()))
+    }
+    async fn modulator_usage(&self, _id: &str) -> ServiceResult<serde_json::Value> {
+        Ok(serde_json::json!({ "areas": [], "mappings": [] }))
+    }
+    async fn delete_modulator(&self, _id: &str, _force: bool) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented("delete modulator".to_string()))
+    }
 }
 
 #[tokio::test]

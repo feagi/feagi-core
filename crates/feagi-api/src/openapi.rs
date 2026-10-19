@@ -176,6 +176,15 @@ use crate::{
         crate::endpoints::cortical_area::post_mapping_restrictions_between_areas,
         crate::endpoints::cortical_area::put_coord_3d,
 
+        crate::endpoints::modulator::get_modulator_types,
+        crate::endpoints::modulator::get_modulators,
+        crate::endpoints::modulator::get_modulator,
+        crate::endpoints::modulator::post_modulator,
+        crate::endpoints::modulator::put_modulator,
+        crate::endpoints::modulator::put_rename_modulator,
+        crate::endpoints::modulator::get_modulator_usage,
+        crate::endpoints::modulator::delete_modulator,
+
         // Morphology endpoints
         crate::endpoints::morphology::get_morphology_list,
         crate::endpoints::morphology::get_morphology_types,

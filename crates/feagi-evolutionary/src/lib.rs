@@ -33,6 +33,7 @@ feagi-evo (Genotype)        feagi-bdu (Phenotype)
 
 - `genome` - Genome I/O and validation
 - `evaluation` - `GenomeEvaluation` records: fitness + genome-only lineage (ADR-016)
+- `circuit` - `CircuitObjectiveSpec`: circuit-level objectives and boundary resolution
 - `evolution` - Evolution operators (future)
 - `fitness` - Fitness evaluation (future)
 - `population` - Population management (future)
@@ -46,12 +47,14 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Core modules
 mod amalgamation_remap;
+pub mod circuit;
 pub mod converter_flat;
 pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
 pub mod cortical_type_parser;
 pub mod evaluation;
 pub mod genome;
+pub mod modulators;
 pub mod plasticity_detector;
 pub mod random;
 pub mod runtime;
@@ -85,6 +88,10 @@ pub use genome::{
     GenomeArtifactCodec, GenomeArtifactEncoding, GenomeParser, GenomeSaver,
     JsonGenomeArtifactCodec, MigrationResult, ParsedGenome, GENOME_ARTIFACT_EXTENSION,
     GENOME_ARTIFACT_MEDIA_TYPE,
+};
+pub use modulators::{
+    driver_locked_properties, driver_locked_property_names, parse_modulator_registry,
+    ModulatorInstance, ModulatorRegistry, ModulatorWrite,
 };
 pub use plasticity_detector::{
     extract_memory_properties, genome_has_plasticity, validate_memory_mp_properties,

@@ -205,6 +205,18 @@ type NeuronData = (
     bool,
 );
 
+fn rule_modulator_ids(rule_obj: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
+    rule_obj
+        .get("modulators")
+        .and_then(|value| value.as_array())
+        .map(|list| {
+            list.iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 impl ConnectomeManager {
     fn get_mapping_rules_for_destination<'a>(
         mapping_dst: &'a serde_json::Map<String, serde_json::Value>,
@@ -954,8 +966,8 @@ impl ConnectomeManager {
         self.cortical_areas.insert(cortical_id, area);
 
         // Update region membership (source of truth for region->areas listing).
-        // Root stays reserved for core, IPU, and OPU. Custom and memory areas that
-        // arrive with a root parent are rejected instead of being stored there.
+        // Root stays reserved for core, IPU, OPU, and modulator drivers. Custom and
+        // memory areas that arrive with a root parent are rejected.
         if let Some(region_id) = parent_region_id {
             let joining_root = self.get_root_region_id().as_deref() == Some(region_id.as_str());
             let blocked_from_root = joining_root
@@ -968,7 +980,7 @@ impl ConnectomeManager {
                 self.cortical_id_to_idx.remove(&cortical_id);
                 self.cortical_idx_to_id.remove(&cortical_idx);
                 return Err(BduError::InvalidArea(format!(
-                    "Cortical area {} cannot join root; root is reserved for core, IPU, and OPU areas",
+                    "Cortical area {} cannot join root; root is reserved for core, IPU, OPU, and modulator areas",
                     cortical_id.as_base_64()
                 )));
             }
@@ -1336,6 +1348,8 @@ impl ConnectomeManager {
         }
 
         // Union in declared interface lists so export/import and pre-wired regions show IO without edges.
+        // Ids that are no longer region members are dropped from the stored designated lists too.
+        let mut pruned_designated: HashMap<String, (Vec<String>, Vec<String>)> = HashMap::new();
         for rid in &region_ids {
             let Some(region) = self.brain_regions.get_region(rid) else {
                 continue;
@@ -1350,18 +1364,34 @@ impl ConnectomeManager {
                     .properties
                     .get(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY),
             )?;
+            // A deleted area can remain in designated_inputs. Only current members are region IO.
+            let mut kept_in: Vec<String> = Vec::new();
+            let mut kept_out: Vec<String> = Vec::new();
             for id in in_ids {
+                if !region.contains_area(&id) {
+                    continue;
+                }
+                let b64 = id.as_base_64();
                 inputs_by_region
                     .entry(rid.clone())
                     .or_default()
-                    .insert(id.as_base_64());
+                    .insert(b64.clone());
+                kept_in.push(b64);
             }
             for id in out_ids {
+                if !region.contains_area(&id) {
+                    continue;
+                }
+                let b64 = id.as_base_64();
                 outputs_by_region
                     .entry(rid.clone())
                     .or_default()
-                    .insert(id.as_base_64());
+                    .insert(b64.clone());
+                kept_out.push(b64);
             }
+            kept_in.sort();
+            kept_out.sort();
+            pruned_designated.insert(rid.clone(), (kept_in, kept_out));
         }
 
         let mut computed: HashMap<String, (Vec<String>, Vec<String>)> = HashMap::new();
@@ -1401,6 +1431,27 @@ impl ConnectomeManager {
                 region
                     .properties
                     .insert("outputs".to_string(), serde_json::json!(outputs.clone()));
+            }
+
+            if let Some((kept_in, kept_out)) = pruned_designated.remove(&rid) {
+                if region
+                    .properties
+                    .contains_key(crate::region_io_designation::DESIGNATED_INPUTS_KEY)
+                {
+                    region.properties.insert(
+                        crate::region_io_designation::DESIGNATED_INPUTS_KEY.to_string(),
+                        serde_json::json!(kept_in),
+                    );
+                }
+                if region
+                    .properties
+                    .contains_key(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY)
+                {
+                    region.properties.insert(
+                        crate::region_io_designation::DESIGNATED_OUTPUTS_KEY.to_string(),
+                        serde_json::json!(kept_out),
+                    );
+                }
             }
 
             computed.insert(rid, (inputs, outputs));
@@ -1585,13 +1636,14 @@ impl ConnectomeManager {
             .is_some_and(Self::area_may_join_root)
     }
 
-    /// Root membership is only legal for core, IPU, and OPU areas.
+    /// Root membership is legal for core, IPU, OPU, and modulator driver areas.
     fn area_may_join_root(area: &CorticalArea) -> bool {
         matches!(
             area.cortical_type,
             CorticalAreaType::Core(_)
                 | CorticalAreaType::BrainInput(_)
                 | CorticalAreaType::BrainOutput(_)
+                | CorticalAreaType::Modulator
         )
     }
 
@@ -2210,7 +2262,7 @@ impl ConnectomeManager {
             if let Some(existing) = indexed_twin {
                 if self.twin_is_classifier_stamp(&existing) {
                     self.assign_generated_twin_region(&existing, upstream_area_id, memory_area_id)?;
-                    self.ensure_memory_replay_mapping(memory_area_id, &existing)?;
+                    self.ensure_memory_twin_episodic_mapping(memory_area_id, &existing)?;
                     register_replay_mapping(self, &existing)?;
                     self.refresh_cortical_mappings_hash();
                     return Ok(existing);
@@ -2227,7 +2279,7 @@ impl ConnectomeManager {
 
         if let Some(existing) = indexed_twin {
             self.assign_generated_twin_region(&existing, upstream_area_id, memory_area_id)?;
-            self.ensure_memory_replay_mapping(memory_area_id, &existing)?;
+            self.ensure_memory_twin_episodic_mapping(memory_area_id, &existing)?;
             register_replay_mapping(self, &existing)?;
             self.refresh_cortical_mappings_hash();
             return Ok(existing);
@@ -2267,7 +2319,7 @@ impl ConnectomeManager {
             }
             self.set_memory_twin_mapping(memory_area_id, upstream_area_id, &twin_id);
             self.assign_generated_twin_region(&twin_id, upstream_area_id, memory_area_id)?;
-            self.ensure_memory_replay_mapping(memory_area_id, &twin_id)?;
+            self.ensure_memory_twin_episodic_mapping(memory_area_id, &twin_id)?;
             register_replay_mapping(self, &twin_id)?;
             self.refresh_cortical_mappings_hash();
             return Ok(twin_id);
@@ -2301,7 +2353,7 @@ impl ConnectomeManager {
             let _ = self.teardown_owned_memory_twin_for_mapping(memory_area_id, upstream_area_id);
             return Err(error);
         }
-        self.ensure_memory_replay_mapping(memory_area_id, &twin_id)?;
+        self.ensure_memory_twin_episodic_mapping(memory_area_id, &twin_id)?;
         register_replay_mapping(self, &twin_id)?;
         self.refresh_cortical_mappings_hash();
         Ok(twin_id)
@@ -2683,17 +2735,22 @@ impl ConnectomeManager {
         Ok(())
     }
 
-    fn ensure_memory_replay_mapping(
+    /// Write the generated memory-to-twin edge as episodic memory.
+    ///
+    /// This is the recall path onto the twin created from an episodic mapping into
+    /// the memory area. It is not an associative STDP mapping. A legacy
+    /// `memory_replay` rule on the same pair is replaced.
+    fn ensure_memory_twin_episodic_mapping(
         &mut self,
         memory_area_id: &CorticalID,
         twin_id: &CorticalID,
     ) -> BduResult<()> {
-        if !self.morphology_registry.contains("memory_replay") {
+        if !self.morphology_registry.contains("episodic_memory") {
             feagi_evolutionary::add_core_morphologies(&mut self.morphology_registry);
         }
         self.refresh_morphologies_hash();
         let mapping_data = vec![serde_json::json!({
-            "morphology_id": "memory_replay",
+            "morphology_id": "episodic_memory",
             "morphology_scalar": [1, 1, 1],
             "postSynapticCurrent_multiplier": 1,
             "plasticity_flag": false,
@@ -3427,7 +3484,8 @@ impl ConnectomeManager {
     /// Enforce the directed memory retrieval contract for outbound memory mappings.
     ///
     /// A memory area can connect to a non-memory area only through associative plasticity,
-    /// except for its server-managed `memory_replay` edge to one of its replay twins.
+    /// except for its generated episodic edge to one of its own replay twins. A legacy
+    /// `memory_replay` rule on that same twin is still accepted until it is rewritten.
     /// Associative rules start without physical synapses; the NPU creates directed synapses
     /// only when source and destination neurons co-fire within the configured plasticity window.
     pub fn validate_memory_outbound_mapping_contract(
@@ -3461,16 +3519,20 @@ impl ConnectomeManager {
                         .and_then(|rule_array| rule_array.first())
                         .and_then(|value| value.as_str())
                 });
-            let is_replay_edge_to_own_twin = morphology_id == Some("memory_replay")
-                && dst_area
-                    .properties
-                    .get("memory_twin_for")
-                    .and_then(|value| value.as_str())
-                    == Some(src_area_id.as_base_64().as_str());
-            if morphology_id != Some("associative_memory") && !is_replay_edge_to_own_twin {
+            let owns_destination_twin = dst_area
+                .properties
+                .get("memory_twin_for")
+                .and_then(|value| value.as_str())
+                == Some(src_area_id.as_base_64().as_str());
+            let is_generated_twin_recall = owns_destination_twin
+                && matches!(
+                    morphology_id,
+                    Some("episodic_memory") | Some("memory_replay")
+                );
+            if morphology_id != Some("associative_memory") && !is_generated_twin_recall {
                 return Err(BduError::InvalidMorphology(format!(
                     "Memory-to-non-memory mapping {} -> {} only supports associative_memory \
-                     (or memory_replay to its own twin)",
+                     (or episodic_memory to its own twin)",
                     src_area_id, dst_area_id
                 )));
             }
@@ -3933,6 +3995,91 @@ impl ConnectomeManager {
 
     /// Register STDP mapping parameters for a plastic rule
     #[allow(clippy::too_many_arguments)]
+    /// Push genome modulator instances, area subscriptions, and spike-train areas into the NPU.
+    pub fn sync_modulators_from_genome(
+        &self,
+        genome: &feagi_evolutionary::RuntimeGenome,
+    ) -> BduResult<()> {
+        let npu = self
+            .npu
+            .as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        let mut bindings = Vec::new();
+        for (instance_id, instance) in genome.modulators.iter() {
+            let driver_cortical_idx = *self
+                .cortical_id_to_idx
+                .get(&instance.driver_cortical_id)
+                .ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "modulator '{}' driver area {} is not in the connectome",
+                        instance_id, instance.driver_cortical_id
+                    ))
+                })?;
+            let full_scale_potential = if instance.graded {
+                instance.full_scale_potential.ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "graded modulator '{}' is missing full_scale_potential",
+                        instance_id
+                    ))
+                })?
+            } else {
+                0.0
+            };
+            bindings.push(feagi_npu_burst_engine::modulator_engine::ModulatorBinding {
+                instance_id: instance_id.clone(),
+                kind: instance.kind,
+                magnitude_percent: instance.magnitude_percent,
+                graded: instance.graded,
+                full_scale_potential,
+                driver_cortical_idx,
+            });
+        }
+        let mut area_subscriptions = ahash::AHashMap::new();
+        let mut spike_train_areas = ahash::AHashSet::new();
+        let mut homeostatic_leak_areas = ahash::AHashSet::new();
+        for (cortical_id, area) in &genome.cortical_areas {
+            let Some(cortical_idx) = self.cortical_id_to_idx.get(cortical_id).copied() else {
+                continue;
+            };
+            if area
+                .properties
+                .get("spike_train")
+                .and_then(|value| value.as_bool())
+                == Some(true)
+            {
+                spike_train_areas.insert(cortical_idx);
+            }
+            if let Some(value) = area.properties.get("rate_modulated_leak") {
+                if feagi_npu_burst_engine::rate_modulated_leak::RateModulatedLeakConfig::parse_from_cortical_property(value).is_some()
+                {
+                    homeostatic_leak_areas.insert(cortical_idx);
+                }
+            }
+            if let Some(list) = area
+                .properties
+                .get("modulators")
+                .and_then(|value| value.as_array())
+            {
+                let ids: Vec<String> = list
+                    .iter()
+                    .filter_map(|value| value.as_str().map(str::to_string))
+                    .collect();
+                if !ids.is_empty() {
+                    area_subscriptions.insert(cortical_idx, ids);
+                }
+            }
+        }
+        let npu = npu.lock().map_err(|err| {
+            BduError::Internal(format!("Failed to lock NPU for modulators: {err}"))
+        })?;
+        npu.set_modulator_bindings(bindings);
+        npu.set_modulator_area_subscriptions(area_subscriptions);
+        npu.set_spike_train_areas(spike_train_areas);
+        npu.set_homeostatic_leak_areas(homeostatic_leak_areas);
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn register_stdp_mapping_for_rule(
         npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         src_area_id: &CorticalID,
@@ -4209,6 +4356,17 @@ impl ConnectomeManager {
             max_weight,
             plasticity_eta,
             instance_reward,
+            modulation_group: {
+                let ids = rule_modulator_ids(rule_obj);
+                let group = npu_lock.allocate_modulation_group(&ids);
+                if !ids.is_empty() && group == 0 {
+                    return Err(BduError::Internal(format!(
+                        "mapping {} -> {} lists modulators that are not synaptic instances",
+                        src_area_id, dst_area_id
+                    )));
+                }
+                group
+            },
         };
 
         npu_lock
@@ -4527,6 +4685,20 @@ impl ConnectomeManager {
                     return Err(e);
                 }
             };
+            if let Some(rule_obj) = rule.as_object() {
+                let ids = rule_modulator_ids(rule_obj);
+                if !ids.is_empty() && synapse_count > 0 {
+                    let npu_lock = npu_arc.lock().map_err(|_| {
+                        crate::types::BduError::Internal(
+                            "Failed to lock NPU to stamp modulation groups".to_string(),
+                        )
+                    })?;
+                    let group = npu_lock.allocate_modulation_group(&ids);
+                    let end = npu_lock.synapse_count();
+                    let start = end.saturating_sub(synapse_count);
+                    npu_lock.stamp_synapse_modulation_group(start, end, group);
+                }
+            }
             total_synapses += synapse_count;
             tracing::debug!(
                 target: "feagi-bdu",
@@ -5559,13 +5731,14 @@ impl ConnectomeManager {
 
     /// Rebuild `memory_twin_areas` from existing twins and episodic mappings.
     ///
-    /// Connectome import copies twin cortical areas and `memory_replay` rules but
+    /// Connectome import copies twin cortical areas and the memory-to-twin rule but
     /// often omits the reverse index on the memory area. NPU rebind, twin
     /// diagnostics, and replay injection all key off that index, so recall cannot
     /// target the saved twin neurons until it is restored.
     ///
     /// Existing twins are re-indexed in place. Synapses are not regenerated when
-    /// a `memory_replay` mapping is already present.
+    /// an episodic memory-to-twin mapping is already present. A legacy
+    /// `memory_replay` rule is rewritten to `episodic_memory`.
     pub fn rebuild_memory_twin_mappings(&mut self) -> BduResult<usize> {
         self.purge_classifier_auto_twins()?;
         let jobs = self.collect_memory_twin_rebuild_jobs()?;
@@ -5644,7 +5817,7 @@ impl ConnectomeManager {
                 continue;
             };
             for (dst_b64, rules) in dstmap {
-                if !Self::mapping_rules_use_morphology(rules, "memory_replay") {
+                if !Self::mapping_is_generated_twin_recall(rules) {
                     continue;
                 }
                 let twin_id = match CorticalID::try_from_base_64(dst_b64) {
@@ -5654,6 +5827,16 @@ impl ConnectomeManager {
                 let Some(twin_area) = self.cortical_areas.get(&twin_id) else {
                     continue;
                 };
+                let owned_by_this_memory = twin_area
+                    .properties
+                    .get("memory_twin_for")
+                    .and_then(|value| value.as_str())
+                    == Some(memory_id.as_base_64().as_str());
+                if Self::mapping_rules_use_morphology(rules, "episodic_memory")
+                    && !owned_by_this_memory
+                {
+                    continue;
+                }
                 let Some(upstream_b64) = twin_area
                     .properties
                     .get("memory_twin_of")
@@ -5820,9 +6003,9 @@ impl ConnectomeManager {
             .and_then(|area| area.properties.get("cortical_mapping_dst"))
             .and_then(|value| value.as_object())
             .and_then(|map| map.get(&twin_id.as_base_64()))
-            .is_some_and(|rules| Self::mapping_rules_use_morphology(rules, "memory_replay"));
+            .is_some_and(|rules| Self::mapping_rules_use_morphology(rules, "episodic_memory"));
         if !has_replay {
-            self.ensure_memory_replay_mapping(memory_area_id, twin_id)?;
+            self.ensure_memory_twin_episodic_mapping(memory_area_id, twin_id)?;
         }
         self.assign_generated_twin_region(twin_id, upstream_area_id, memory_area_id)?;
         Ok(())
@@ -5835,6 +6018,15 @@ impl ConnectomeManager {
                 .get("is_mem_type")
                 .and_then(|value| value.as_bool())
                 == Some(true)
+    }
+
+    /// True for the generated memory-to-twin recall rule.
+    ///
+    /// New twins use `episodic_memory`. Genomes saved before that change still
+    /// carry `memory_replay` on the same edge.
+    fn mapping_is_generated_twin_recall(rules: &serde_json::Value) -> bool {
+        Self::mapping_rules_use_morphology(rules, "episodic_memory")
+            || Self::mapping_rules_use_morphology(rules, "memory_replay")
     }
 
     fn mapping_rules_use_morphology(rules: &serde_json::Value, morphology_id: &str) -> bool {
@@ -9848,6 +10040,60 @@ mod tests {
         assert!(manager.is_initialized());
     }
 
+    /// Modulator drivers are root members. Custom areas stay blocked from root.
+    #[test]
+    fn modulator_driver_may_join_root() {
+        use feagi_structures::genomic::brain_regions::RegionID;
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        let root = BrainRegion::new(
+            RegionID::new(),
+            "root".to_string(),
+            crate::models::RegionType::Undefined,
+        )
+        .unwrap();
+        let root_id = root.region_id.to_string();
+        manager.add_brain_region(root, None).expect("root region");
+
+        let driver = CorticalID::modulator_driver(1);
+        let mut area = CorticalArea::new(
+            driver,
+            0,
+            "reward_1".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Modulator,
+        )
+        .unwrap();
+        area.properties.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(root_id.clone()),
+        );
+        manager
+            .add_cortical_area(area)
+            .expect("modulator driver belongs in the root region");
+        assert!(manager.has_cortical_area(&driver));
+
+        let custom_id = CorticalID::try_from_bytes(b"crootblk").unwrap();
+        let mut custom = CorticalArea::new(
+            custom_id,
+            0,
+            "custom".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        custom
+            .properties
+            .insert("parent_region_id".to_string(), serde_json::json!(root_id));
+        let rejected = manager.add_cortical_area(custom);
+        assert!(
+            rejected.is_err(),
+            "custom areas remain blocked from the root region"
+        );
+    }
+
     #[test]
     fn refresh_all_connectome_hashes_publishes_mappings() {
         use feagi_structures::genomic::cortical_area::{
@@ -10978,12 +11224,15 @@ mod tests {
             .and_then(|map| map.get(&twin_id.as_base_64()))
             .and_then(|v| v.as_array())
             .expect("Missing memory replay mapping for twin area");
-        let uses_replay = mapping.iter().any(|rule| {
+        let uses_episodic = mapping.iter().any(|rule| {
             rule.get("morphology_id")
                 .and_then(|v| v.as_str())
-                .is_some_and(|id| id == "memory_replay")
+                .is_some_and(|id| id == "episodic_memory")
         });
-        assert!(uses_replay, "Expected memory_replay mapping for twin area");
+        assert!(
+            uses_episodic,
+            "Expected episodic_memory mapping from memory to its twin"
+        );
 
         let twin_area = manager.get_cortical_area(&twin_id).unwrap();
         assert!(matches!(
@@ -11624,12 +11873,15 @@ mod tests {
             .and_then(|map| map.get(&twin_id.as_base_64()))
             .and_then(|v| v.as_array())
             .expect("Missing memory replay mapping for twin area");
-        let uses_replay = replay_map.iter().any(|rule| {
+        let uses_episodic = replay_map.iter().any(|rule| {
             rule.get("morphology_id")
                 .and_then(|v| v.as_str())
-                .is_some_and(|id| id == "memory_replay")
+                .is_some_and(|id| id == "episodic_memory")
         });
-        assert!(uses_replay, "Expected memory_replay mapping for twin area");
+        assert!(
+            uses_episodic,
+            "Expected episodic_memory mapping from memory to its twin"
+        );
 
         let twin_area = manager.get_cortical_area(&twin_id).unwrap();
         assert_eq!(
@@ -11751,6 +12003,81 @@ mod tests {
             hash_after_remove, hash_after_clear,
             "removing a classifier must change classifiers_hash"
         );
+    }
+
+    #[test]
+    fn stale_designated_input_is_dropped_from_region_io() {
+        use feagi_structures::genomic::brain_regions::{RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+
+        let mut manager = ConnectomeManager::new_for_testing();
+        let root_id = RegionID::new();
+        let child_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let child_key = child_id.to_string();
+        manager
+            .add_brain_region(
+                BrainRegion::new(root_id, "Root".to_string(), RegionType::Undefined).unwrap(),
+                None,
+            )
+            .unwrap();
+        manager
+            .add_brain_region(
+                BrainRegion::new(child_id, "Child".to_string(), RegionType::Undefined).unwrap(),
+                Some(root_key.clone()),
+            )
+            .unwrap();
+
+        let member_id = CorticalID::try_from_bytes(b"cmember1").unwrap();
+        let stale_id = CorticalID::try_from_bytes(b"cstale01").unwrap();
+        let mut member = CorticalArea::new(
+            member_id,
+            0,
+            "member".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        member.properties.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(child_key.clone()),
+        );
+        manager.add_cortical_area(member).unwrap();
+
+        {
+            let child = manager
+                .brain_regions
+                .get_region_mut(&child_key)
+                .expect("child region");
+            child.properties.insert(
+                "designated_inputs".to_string(),
+                serde_json::json!([member_id.as_base_64(), stale_id.as_base_64()]),
+            );
+        }
+
+        let io = manager.recompute_brain_region_io_registry().unwrap();
+        let child_inputs = &io.get(&child_key).expect("child region io").0;
+        assert!(
+            child_inputs.contains(&member_id.as_base_64()),
+            "a designated member must stay a region input; got {child_inputs:?}"
+        );
+        assert!(
+            !child_inputs.contains(&stale_id.as_base_64()),
+            "a designated id that is not a member must not become a region input; got {child_inputs:?}"
+        );
+        let stored = manager
+            .brain_regions
+            .get_region(&child_key)
+            .expect("child region")
+            .properties
+            .get("designated_inputs")
+            .and_then(|value| value.as_array())
+            .expect("designated_inputs");
+        assert_eq!(stored.len(), 1);
+        assert_eq!(stored[0].as_str(), Some(member_id.as_base_64().as_str()));
     }
 
     #[test]
@@ -12504,6 +12831,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),
@@ -12753,6 +13081,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),

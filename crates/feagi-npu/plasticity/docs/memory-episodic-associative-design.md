@@ -39,6 +39,7 @@ This document records agreed **architecture and behavior** for episodic (pattern
 ## 4. Memory → downstream (memory as source)
 
 - When a **memory** area connects **out** to another area (interconnect, **another memory** area, core, IPU, OPU), the **only** plastic option for that **associative** story is **STDP** (directional mapping from genome/morphology).
+- An interconnect (or other non-memory area) mapped into memory with **episodic memory** auto-creates a replay twin. The generated edge from that memory area to its own twin is **episodic memory**, not associative memory. It carries no STDP synapses. Recall still injects the stored pattern onto the twin. A genome that still has `memory_replay` on that edge is rewritten to `episodic_memory` when the twin is repaired. Scan twins do not get this edge.
 - Memory areas are **1×1×1**; long-term memory neurons (per lifecycle rules) can participate in building/strengthening/weakening synapses toward the destination per STDP rules (first co-activation can create the edge; then LTP/LTD as defined).
 - Lifecycle order each burst: promote short-term neurons whose lifespan is at or above `longterm_mem_threshold`, then create or reactivate from the detected pattern (a repeat adds `lifespan_growth_rate`), then age by one every short-term neuron not created or reactivated this burst. `init_lifespan` is the number of later bursts a neuron survives unseen.
 
@@ -159,3 +160,4 @@ If **both** episodic activation and associative (LIF) integration would affect t
 | 2026-09-29 | §12: kernel-mode class area must be 1×1×n so twin z matches the input class. |
 | 2026-10-01 | §4: aging runs after pattern matching and skips neurons matched this burst. §12: genome load restores classifier-required rules; kernel encode and field scan share one edge. |
 | 2026-09-29 | §12: class maps are one layer. Scanner `class_count`; mask and twins are field_x×field_y×1 with class as potential `(class_id + 1) / class_count`; one winner per pixel written with exact-potential force-fire; twins forward via `mp_driven_psp`. |
+| 2026-10-09 | §4: the auto memory-to-twin edge is `episodic_memory`. Legacy `memory_replay` on that edge is rewritten on repair. |

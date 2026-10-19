@@ -93,6 +93,27 @@ jobs:
     - name: Run Clippy
       run: cargo clippy --workspace --lib --tests -- -D warnings
 
+    - name: License policy (cargo-deny)
+      uses: EmbarkStudios/cargo-deny-action@v2
+      with:
+        command: check licenses
+
+    - name: Third-party notices and per-crate Apache license
+      run: |
+        set -euo pipefail
+        python3 scripts/generate_third_party_notices.py --self-check
+        python3 scripts/generate_third_party_notices.py \
+          --manifest Cargo.toml \
+          --output THIRD_PARTY_NOTICES.txt \
+          --check
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
+          [ -f "${crate_dir}/Cargo.toml" ] || continue
+          if ! cmp -s LICENSE "${crate_dir}/LICENSE"; then
+            echo "ERROR: ${crate_dir}/LICENSE is missing or differs from the workspace Apache-2.0 license"
+            exit 1
+          fi
+        done
+
     - name: Run tests (lib)
       run: cargo test --workspace --lib --verbose
 

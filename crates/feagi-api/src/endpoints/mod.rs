@@ -16,6 +16,7 @@ pub mod genome; // ✅ COMPLETE - /v1/genome/* (5 endpoints)
 pub mod genome_changes; // /v1/genome/changes* (change ledger)
 pub mod input; // ✅ COMPLETE - /v1/input/* (2 endpoints)
 pub mod insight; // ✅ COMPLETE - /v1/insight/* (4 endpoints)
+pub mod modulator; // /v1/modulator/*
 pub mod monitoring; // ✅ COMPLETE - /v1/monitoring/* (3 endpoints)
 pub mod morphology; // ✅ COMPLETE - /v1/morphology/* (9 endpoints)
 pub mod network;

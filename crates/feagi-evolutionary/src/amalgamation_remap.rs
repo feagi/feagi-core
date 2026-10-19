@@ -252,6 +252,7 @@ mod tests {
             brain_regions: HashMap::new(),
             classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: String::new(),
@@ -353,6 +354,7 @@ mod tests {
             brain_regions,
             classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: String::new(),

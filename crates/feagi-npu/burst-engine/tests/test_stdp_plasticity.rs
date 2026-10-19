@@ -80,6 +80,7 @@ fn stdp_params(
         max_weight: f32::INFINITY,
         plasticity_eta: 1.0,
         instance_reward: false,
+        modulation_group: 0,
     }
 }
 

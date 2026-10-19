@@ -97,6 +97,7 @@ pub mod neural_dynamics;
 pub mod tracing_mutex;
 // Neuron models moved to feagi-neural::models (Phase 2b)
 pub mod dynamic_npu;
+pub mod modulator_engine;
 pub mod npu;
 pub mod output_rate_gate;
 pub mod parameter_update_queue;

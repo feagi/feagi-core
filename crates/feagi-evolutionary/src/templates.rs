@@ -254,6 +254,7 @@ pub fn create_minimal_genome(genome_id: String, genome_title: String) -> Runtime
         brain_regions: HashMap::new(),
         classifiers: HashMap::new(),
         morphologies: MorphologyRegistry::new(),
+        modulators: crate::modulators::ModulatorRegistry::new(),
         physiology: PhysiologyConfig::default(),
         signatures: GenomeSignatures {
             genome: String::new(),

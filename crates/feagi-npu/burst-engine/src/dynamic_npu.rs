@@ -702,6 +702,21 @@ where
         dispatch_mut!(self, clear_sparse_memory_associative_state(neuron_ids));
     }
 
+    pub fn dynamic_memory_neuron_ids_in_area(&self, cortical_idx: u32) -> Vec<u32> {
+        dispatch!(self, dynamic_memory_neuron_ids_in_area(cortical_idx))
+    }
+
+    pub fn forget_dynamic_memory_neuron_mappings(&mut self, cortical_idx: u32) -> usize {
+        dispatch_mut!(self, forget_dynamic_memory_neuron_mappings(cortical_idx))
+    }
+
+    pub fn clear_memory_area_activation_records(&mut self, cortical_idx: u32, neuron_ids: &[u32]) {
+        dispatch_mut!(
+            self,
+            clear_memory_area_activation_records(cortical_idx, neuron_ids)
+        );
+    }
+
     pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
         dispatch_mut!(self, remove_synapse(source, target))
     }
@@ -740,6 +755,41 @@ where
 
     pub fn rebuild_synapse_index(&mut self) {
         dispatch_mut!(self, rebuild_synapse_index())
+    }
+
+    pub fn set_modulator_bindings(&self, bindings: Vec<crate::modulator_engine::ModulatorBinding>) {
+        dispatch!(self, set_modulator_bindings(bindings))
+    }
+
+    pub fn set_modulator_area_subscriptions(
+        &self,
+        subscriptions: ahash::AHashMap<u32, Vec<String>>,
+    ) {
+        dispatch!(self, set_modulator_area_subscriptions(subscriptions))
+    }
+
+    pub fn set_spike_train_areas(&self, areas: ahash::AHashSet<u32>) {
+        dispatch!(self, set_spike_train_areas(areas))
+    }
+
+    pub fn set_homeostatic_leak_areas(&self, areas: ahash::AHashSet<u32>) {
+        dispatch!(self, set_homeostatic_leak_areas(areas))
+    }
+
+    pub fn allocate_modulation_group(&self, instance_ids: &[String]) -> u16 {
+        dispatch!(self, allocate_modulation_group(instance_ids))
+    }
+
+    pub fn authored_reward_signal(&self, driver_cortical_idx: u32) -> Option<f32> {
+        dispatch!(self, authored_reward_signal(driver_cortical_idx))
+    }
+
+    pub fn stamp_synapse_modulation_group(&self, start: usize, end: usize, group: u16) {
+        dispatch!(self, stamp_synapse_modulation_group(start, end, group))
+    }
+
+    pub fn synapse_count(&self) -> usize {
+        dispatch!(self, synapse_count())
     }
 
     /// Rebuild power neuron cache (useful after major structural changes)

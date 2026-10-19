@@ -18,12 +18,14 @@
 //! observe weight evolution without invoking the bidirectional synapse-creation path.
 
 use feagi_npu_burst_engine::backend::CPUBackend;
+use feagi_npu_burst_engine::modulator_engine::ModulatorBinding;
 use feagi_npu_burst_engine::npu::{PlasticityMode, StdpMappingParams};
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
+use feagi_structures::genomic::ModulatorKind;
 
 type RstdpTestNetwork = (
     RustNPU<StdRuntime, f32, CPUBackend>,
@@ -94,6 +96,27 @@ fn create_rstdp_network() -> RstdpTestNetwork {
     npu.configure_fire_ledger_window(12, 1).unwrap();
     npu.configure_fire_ledger_window(13, 1).unwrap();
 
+    npu.set_modulator_bindings(vec![
+        ModulatorBinding {
+            instance_id: "pleasure".to_string(),
+            kind: ModulatorKind::Reward,
+            magnitude_percent: 100.0,
+            graded: false,
+            full_scale_potential: 1.0,
+            driver_cortical_idx: 12,
+        },
+        ModulatorBinding {
+            instance_id: "pain".to_string(),
+            kind: ModulatorKind::Reward,
+            magnitude_percent: -100.0,
+            graded: false,
+            full_scale_potential: 1.0,
+            driver_cortical_idx: 13,
+        },
+    ]);
+    let group = npu.allocate_modulation_group(&["pleasure".to_string(), "pain".to_string()]);
+    assert_eq!(group, 1, "reward group id is stable for these tests");
+
     (npu, src, dst, reward, pain)
 }
 
@@ -120,6 +143,7 @@ fn rstdp_params(
         max_weight: f32::INFINITY,
         plasticity_eta: 1.0,
         instance_reward: false,
+        modulation_group: 1,
     }
 }
 
@@ -201,6 +225,15 @@ fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse()
     );
     npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0), (reward, 128.0)]);
     npu.process_burst().unwrap();
+    // Reward from the previous burst is active now; co-fire again so synthesis sees it.
+    npu.inject_memory_neuron_to_fcl_with_kind(
+        second_source_memory_neuron.0,
+        10,
+        2.0,
+        feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE,
+    );
+    npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0)]);
+    npu.process_burst().unwrap();
 
     let initial_weight = synapse_weight(&npu, second_source_memory_neuron);
     assert!(
@@ -215,6 +248,14 @@ fn test_associative_rstdp_synthesizes_and_updates_memory_to_non_memory_synapse()
         feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE,
     );
     npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0), (reward, 128.0)]);
+    npu.process_burst().unwrap();
+    npu.inject_memory_neuron_to_fcl_with_kind(
+        source_memory_neuron.0,
+        10,
+        2.0,
+        feagi_npu_burst_engine::fire_structures::FIRE_KIND_STDP_ELIGIBLE,
+    );
+    npu.inject_sensory_with_potentials(&[(destination_neuron, 128.0)]);
     npu.process_burst().unwrap();
 
     let updated_weight = synapse_weight(&npu, second_source_memory_neuron);
@@ -287,8 +328,9 @@ fn test_rstdp_delayed_reward_commits_weight() {
         "burst 1: trace builds but no reward yet"
     );
 
-    // Burst 2: reward fires; src/dst silent. Trace has decayed once but is still positive.
+    // Burst 2 stores the reward. Burst 3 commits it after a second decay.
     npu.inject_sensory_with_potentials(&[(reward, 128.0)]);
+    npu.process_burst().unwrap();
     npu.process_burst().unwrap();
 
     let w_after = synapse_weight(&npu, src[0]);
@@ -301,7 +343,8 @@ fn test_rstdp_delayed_reward_commits_weight() {
     // Sanity: commit cannot exceed delta_plus * R (R = 1.0 with single reward neuron firing).
     // delta_plus = plasticity_constant * ltp_multiplier = 4 * 2 = 8. Decay over 1 burst at
     // tau=10 leaves trace ≈ 8 * exp(-1/10) ≈ 7.24. So expected delta ≈ 7.24, weight ≈ 12.24.
-    let expected_delta = 8.0_f32 * (-1.0_f32 / decay_bursts as f32).exp();
+    // Reward fired on burst 2 is visible to STDP on burst 3, so the trace decays twice.
+    let expected_delta = 8.0_f32 * (-2.0_f32 / decay_bursts as f32).exp();
     let observed_delta = w_after - 5.0;
     assert!(
         (observed_delta - expected_delta).abs() < 0.1,
@@ -327,9 +370,10 @@ fn test_rstdp_plasticity_eta_scales_weight_commit() {
     npu.process_burst().unwrap();
     npu.inject_sensory_with_potentials(&[(reward, 128.0)]);
     npu.process_burst().unwrap();
+    npu.process_burst().unwrap();
 
     let w_eta = synapse_weight(&npu, src[0]) - 5.0;
-    let expected_full = 8.0_f32 * (-1.0_f32 / decay_bursts as f32).exp();
+    let expected_full = 8.0_f32 * (-2.0_f32 / decay_bursts as f32).exp();
     assert!(
         (w_eta - 0.5 * expected_full).abs() < 0.1,
         "eta=0.5 should halve the weight delta; got {}, expected ~{}",
@@ -354,6 +398,7 @@ fn test_rstdp_punishment_drives_negative_weight_change() {
 
     // Burst 2: pain fires. R(t) = 0 - 1.0 = -1.0; trace is positive → negative weight delta.
     npu.inject_sensory_with_potentials(&[(pain, 128.0)]);
+    npu.process_burst().unwrap();
     npu.process_burst().unwrap();
 
     let w_after = synapse_weight(&npu, src[0]);
@@ -381,6 +426,7 @@ fn test_rstdp_balanced_reward_and_punishment_zero_change() {
 
     // Burst 2: equal reward and pain density (both 1-neuron areas, both fire fully).
     npu.inject_sensory_with_potentials(&[(reward, 128.0), (pain, 128.0)]);
+    npu.process_burst().unwrap();
     npu.process_burst().unwrap();
 
     assert_eq!(
@@ -411,6 +457,7 @@ fn test_rstdp_trace_decay_reduces_late_commit() {
 
         // Apply reward.
         npu.inject_sensory_with_potentials(&[(reward, 128.0)]);
+        npu.process_burst().unwrap();
         npu.process_burst().unwrap();
 
         synapse_weight(&npu, src[0]) - 5.0
@@ -577,6 +624,7 @@ fn test_rstdp_max_weight_infinity_preserves_legacy_growth() {
     npu.process_burst().unwrap();
     npu.inject_sensory_with_potentials(&[(reward, 128.0)]);
     npu.process_burst().unwrap();
+    npu.process_burst().unwrap();
 
     let w_after = synapse_weight(&npu, src[0]);
     assert!(
@@ -586,8 +634,8 @@ fn test_rstdp_max_weight_infinity_preserves_legacy_growth() {
     );
 
     // Same expected_delta computation as test_rstdp_delayed_reward_commits_weight (delta_plus
-    // = 4 * 2 = 8, one burst of decay at tau=10).
-    let expected_delta = 8.0_f32 * (-1.0_f32 / 10.0_f32).exp();
+    // = 4 * 2 = 8, two bursts of decay at tau=10).
+    let expected_delta = 8.0_f32 * (-2.0_f32 / 10.0_f32).exp();
     let observed_delta = w_after - 5.0;
     assert!(
         (observed_delta - expected_delta).abs() < 0.1,
