@@ -9,4 +9,3 @@ pub mod interop_request_requester;
 pub mod interop_request_responder;
 pub mod transport;
 pub mod common_messages;
-pub mod feagi_message;

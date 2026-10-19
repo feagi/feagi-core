@@ -20,6 +20,7 @@ mod burst_index;
 pub mod capabilities;
 mod feagi_basis_error;
 pub mod feagi_message;
+//pub mod feagi_message_prev;
 pub mod identifiers;
 pub mod misc;
 pub mod neurons;

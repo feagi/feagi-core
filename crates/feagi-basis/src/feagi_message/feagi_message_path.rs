@@ -1,28 +1,43 @@
-use crate::feagi_message::feagi_message::FeagiMessage;
 
-/// Represents the actual path that a message takes
-pub trait FeagiMessagePath: Sized + Clone + Copy + core::fmt::Debug {
-    /// The actual path of the message
-    const PATH: &'static [MessagePathElement];
 
-    /// The message data struct that is relevant
-    type Message: FeagiMessage<Path = Self>;
+// TODO Feature Gating
+
+/// Represents the path (and the configurations of it) for a feagi message to take. Zero Sized,
+/// ergo has no internal fields
+pub trait FeagiMessagePath {
+    /// The actual types of each path element
+    type TypesTuple; // (&static, &str, P1, P1)
+
+    /// Just the Configurables as a tuple, needed to make the path instantiation functions inputs
+    type ConfigurablesTuple;
+
+    /// The Parameter types as a tuple, needed to make the path instantiation functions inputs
+    type ParametersTuple;
+
+    fn as_path_parser_tuple(configurables: Self::ConfigurablesTuple) -> Self::TypesTuple;
+}
+/// Request Response paths may be used by pico, and thus needs some of its own logic
+pub trait FeagiRequestMessagePath: FeagiMessagePath {
+
 }
 
-/// Individual path segment
-#[derive(Debug, Copy, Clone)]
-pub enum MessagePathElement {
-    StaticPath(&'static str),
-    ParameterOfName(&'static str),
-    QueryableOfName(&'static str),
+/// The allowed types for the tuple of FeagiMessagePath
+pub mod path_element_type {
+    use crate::feagi_message::feagi_message_components::FeagiMessageParameterFieldSerializable;
+
+    /// Constant parts of a path that are constant (at least by compile time)
+    pub type PathStaticElement = &'static str;
+
+    /// A part of a path that is configurable only at the path instantiation
+    pub type PathConfigurableElement<'a> = &'a str;
+
+
+    pub type PathParameterElement<Par: FeagiMessageParameterFieldSerializable> = Par;
 }
 
-impl MessagePathElement {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            MessagePathElement::StaticPath(s) => s,
-            MessagePathElement::ParameterOfName(s) => s,
-            MessagePathElement::QueryableOfName(s) => s,
-        }
-    }
-}
+
+
+
+
+
+

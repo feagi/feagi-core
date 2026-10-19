@@ -3,6 +3,9 @@
 /// Request read buffer. Response bodies are written from their static slices.
 pub const HTTP_BUFFER_LEN: usize = 2048;
 
+
+
+
 /// Builds a REST server worker. Implemented once per backend (std threads, embassy), each also
 /// implementing `FeagiWorkerBuilder` for its spawner. Backend specific settings are set on the
 /// implementing struct after construction
@@ -76,6 +79,31 @@ pub trait RestServerWorkerBuilder<>: Sized {
         // TODO Main routes
 
         router
+    }
+}
+
+
+pub mod path_builder {
+    use picoserve::routing::{get, PathRouter};
+    use feagi_basis::feagi_message::feagi_message_components::MessageQueryables;
+    use feagi_basis::feagi_message::feagi_message_path::FeagiRequestMessagePath;
+    use crate::transport::path_tuple::FeagiMessagePathTupleConverter;
+
+    // TODO move this to the build_router_with_routes function directly
+    /// Adds a path to the picoserver router. Needs the queryables specifically
+    pub fn add_request_path_to_pico_serve_router<R: PathRouter, Path: FeagiRequestMessagePath, Q: MessageQueryables>(
+        router: picoserve::Router<R>,
+        path_configurables: Path::ConfigurablesTuple,
+        message_queryables: Q
+    )
+        -> picoserve::Router<impl PathRouter>  {
+        let tuple_path = Path::as_path_parser_tuple(path_configurables);
+        let picoserve_tuple = FeagiMessagePathTupleConverter::as_path_parameters::<Path::TypesTuple>(tuple_path);
+        router.route(
+            picoserve_tuple,
+            get(async  || "test_response") // TODO queryables
+        )
+
     }
 }
 

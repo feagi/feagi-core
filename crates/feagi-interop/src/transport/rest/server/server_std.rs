@@ -1,7 +1,7 @@
 //! REST server routes on std
 
 use crate::transport::rest::server::error::FeagiRestServerError;
-use crate::transport::rest::server::server_basis::{build_router_with_routes, RestServerWorkerBuilder, HTTP_BUFFER_LEN};
+use crate::transport::rest::server::server_basis::{RestServerWorkerBuilder, HTTP_BUFFER_LEN};
 use core::future::Future;
 use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequestResponseDynamicBuilder, FeagiResponderDynamic};

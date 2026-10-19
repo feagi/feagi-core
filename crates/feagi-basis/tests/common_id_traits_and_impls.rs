@@ -1,4 +1,3 @@
-use feagi_basis::feagi_message::feagi_message_element::MessageElementSerializable;
 use feagi_basis::identifiers::byte_id::{Base64EncodedByteID, Base64EncodedByteIdError, ByteID};
 use feagi_basis::create_wrapped_uuid;
 use feagi_basis::impl_byte_array_id;
@@ -97,8 +96,6 @@ macro_rules! assert_roundtrip {
         require_message_element::<Base64EncodedByteID<RawId<$n>, $n, { ($n + 2) / 3 * 4 }>>();
     }};
 }
-
-fn require_message_element<T: MessageElementSerializable>() {}
 
 fn patterned<const N: usize>() -> [u8; N] {
     let mut bytes = [0u8; N];

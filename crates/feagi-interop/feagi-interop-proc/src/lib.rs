@@ -1,10 +1,19 @@
 mod open_api_category;
+mod path_tuple_generator;
 
 use feagi_macro_components::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategory;
 use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
 use feagi_macro_components::templates::TemplateRoot;
 use proc_macro2::TokenStream;
 use quote::quote;
+
+#[proc_macro]
+/// Builds `BuiltFeagiMessagePathTuple` impls for tuples of &str and generic parameters.
+pub fn generate_built_feagi_message_path_impls(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    path_tuple_generator::path_tuple_impl_generator()
+}
+
+//region OpenAPI
 
 /// Expands one category template into a const `CategoryApi` expression.
 ///
@@ -50,3 +59,5 @@ fn open_api_function_tokens(group: &GroupedRequestResponseCategoryTemplate) -> T
         }
     }
 }
+
+//endregion

@@ -28,7 +28,7 @@ impl FeagiRequestMessage for HealthCheckMessageRequest {
     fn compose(
         parameters: Self::Descriptor::Parameters,
         queryables: Self::Descriptor::Queryables,
-        payload: Self::Descriptor::Payload) -> Self {
+        payload: Self::Descriptor::RequestPayload) -> Self {
 
         // no data!
         Self
@@ -38,7 +38,7 @@ impl FeagiRequestMessage for HealthCheckMessageRequest {
         -> (
             Self::Descriptor::Parameters,
             Self::Descriptor::Queryables,
-            Self::Descriptor::Payload)
+            Self::Descriptor::RequestPayload)
     {
         ((),(),())
     }
@@ -54,8 +54,8 @@ impl FeagiRequestMessageDescriptor for HealthCheckMessageRequestDescriptor {
     type Parameters = ();
     type Queryables = ();
 
-    type Payload = ();
-    type Response = HealthCheckResponse;
+    type RequestPayload = ();
+    type ResponsePayload = HealthCheckResponse;
 
     type ResponseError = ();
 }
