@@ -84,27 +84,81 @@ pub trait RestServerWorkerBuilder<>: Sized {
 
 
 pub mod path_builder {
-    use picoserve::routing::{get, PathRouter};
-    use feagi_basis::feagi_message::feagi_message_components::MessageQueryables;
-    use feagi_basis::feagi_message::feagi_message_path::FeagiRequestMessagePath;
-    use crate::transport::path_tuple::FeagiMessagePathTupleConverter;
+    use picoserve::routing::{get, PathDescription, PathRouter, parse_path_segment, ParsePathSegment};
+    use feagi_basis::feagi_message::feagi_message_components::{MessageQueryables, FeagiMessageParameterFieldSerializable};
+    use feagi_basis::feagi_message::feagi_message_path::{FeagiRequestMessagePath, PathParameterElement};
+    use feagi_interop_proc::generate_into_picoserve_path_impls;
 
     // TODO move this to the build_router_with_routes function directly
-    /// Adds a path to the picoserver router. Needs the queryables specifically
-    pub fn add_request_path_to_pico_serve_router<R: PathRouter, Path: FeagiRequestMessagePath, Q: MessageQueryables>(
+    /// Adds a path to the picoserve router. Needs the queryables specifically.
+    ///
+    /// The path's type tuple is converted to a picoserve path description through
+    /// [`IntoPicoservePath`]. The `NewPathParameters = ()` bound matches the
+    /// current zero-argument placeholder handler and will be generalised once
+    /// parameter/queryable handling is implemented.
+    pub fn add_request_path_to_pico_serve_router<R, Path, Q>(
         router: picoserve::Router<R>,
         path_configurables: Path::ConfigurablesTuple,
-        message_queryables: Q
-    )
-        -> picoserve::Router<impl PathRouter>  {
+        message_queryables: Q,
+    ) -> picoserve::Router<impl PathRouter>
+    where
+        R: PathRouter,
+        Path: FeagiRequestMessagePath,
+        Path::TypesTuple: IntoPicoservePath,
+        <Path::TypesTuple as IntoPicoservePath>::Output: PathDescription<(), NewPathParameters = ()>,
+        Q: MessageQueryables,
+    {
         let tuple_path = Path::as_path_parser_tuple(path_configurables);
-        let picoserve_tuple = FeagiMessagePathTupleConverter::as_path_parameters::<Path::TypesTuple>(tuple_path);
+        let picoserve_tuple = tuple_path.into_picoserve_path();
         router.route(
             picoserve_tuple,
-            get(async  || "test_response") // TODO queryables
+            get(async || "test_response"), // TODO queryables
         )
-
     }
+
+
+    /// Converts a single FEAGI path element into its picoserve path-segment type.
+    trait IntoPicoserveSegment {
+        /// The picoserve segment type this element becomes.
+        type Output;
+
+        /// Produce the picoserve segment for this element.
+        fn into_picoserve_segment(self) -> Self::Output;
+    }
+
+    /// A static or configured segment maps straight through as a literal match.
+    impl<'a> IntoPicoserveSegment for &'a str {
+        type Output = &'a str;
+
+        #[inline]
+        fn into_picoserve_segment(self) -> Self::Output {
+            self
+        }
+    }
+
+    /// A typed parameter becomes a `ParsePathSegment<Par>`, which picoserve parses
+    /// from the URL segment using `Par: FromStr`
+    impl<Par: FeagiMessageParameterFieldSerializable> IntoPicoserveSegment for PathParameterElement<Par> {
+        type Output = ParsePathSegment<Par>;
+
+        #[inline]
+        fn into_picoserve_segment(self) -> Self::Output {
+            parse_path_segment::<Par>()
+        }
+    }
+
+    /// Converts a whole FEAGI path tuple into the picoserve path-description tuple
+    /// accepted by `Router::route`. Per-arity impls are macro-generated.
+    trait IntoPicoservePath {
+        /// The picoserve path-description tuple produced from `Self`.
+        type Output;
+
+        /// Produce the picoserve path description for this tuple.
+        fn into_picoserve_path(self) -> Self::Output;
+    }
+
+    // One `IntoPicoservePath` impl per tuple arity
+    generate_into_picoserve_path_impls!();
 }
 
 

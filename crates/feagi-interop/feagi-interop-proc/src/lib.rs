@@ -8,8 +8,8 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 #[proc_macro]
-/// Builds `BuiltFeagiMessagePathTuple` impls for tuples of &str and generic parameters.
-pub fn generate_built_feagi_message_path_impls(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+/// Builds `IntoPicoservePath` impls, one per path-tuple arity.
+pub fn generate_into_picoserve_path_impls(_input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     path_tuple_generator::path_tuple_impl_generator()
 }
 
