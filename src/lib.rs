@@ -5,7 +5,8 @@
 // properly expose internals
 
 pub mod runtimes;
-pub mod workers;
+pub mod wokr;
 pub mod rt;
+pub mod workers;
 
 pub extern crate feagi_basis;

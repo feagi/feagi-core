@@ -294,12 +294,6 @@ impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, co
     }
 }
 
-impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize>
-    crate::feagi_message::feagi_message_element::MessageElementSerializable
-    for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
-{
-}
-
 impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, const NUMBER_BASE_64_BYTES: usize> TryFrom<&str>
     for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
