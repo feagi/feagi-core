@@ -288,24 +288,19 @@ pub struct BrainRegionInfo {
     pub properties: HashMap<String, serde_json::Value>,
 }
 
-/// First-class genome classifier assembly (not a region).
+/// First-class genome classifier. Its areas live in the circuit region
+/// named by `parent_region_id`. That circuit may sit under root.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassifierInfo {
     pub classifier_id: String,
     pub name: String,
     pub parent_region_id: String,
     pub coordinates_3d: [i32; 3],
-    pub training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode,
-    pub kernel_area_id: Option<String>,
-    pub class_area_id: Option<String>,
-    pub mask_area_id: Option<String>,
-    /// Scanner-mode class count (mask and twin potentials encode `(class_id + 1) / class_count`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub class_count: Option<u32>,
-    pub kernel_size: Option<[u32; 3]>,
-    pub fields: Vec<feagi_structures::genomic::classifiers::ClassifierField>,
-    pub kernel_memory_id: String,
+    pub sample_area_ids: Vec<String>,
+    pub class_bindings: Vec<feagi_structures::genomic::classifiers::ClassifierClassBinding>,
+    pub sample_memory_id: String,
     pub class_memory_id: String,
+    pub error_area_id: String,
     #[serde(default)]
     pub reward_training: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -330,15 +325,11 @@ impl From<feagi_structures::genomic::classifiers::Classifier> for ClassifierInfo
             name: classifier.name,
             parent_region_id: classifier.parent_region_id,
             coordinates_3d: classifier.coordinates_3d,
-            training_mode: classifier.training_mode,
-            kernel_area_id: classifier.kernel_area_id,
-            class_area_id: classifier.class_area_id,
-            mask_area_id: classifier.mask_area_id,
-            class_count: classifier.class_count,
-            kernel_size: classifier.kernel_size,
-            fields: classifier.fields,
-            kernel_memory_id: classifier.kernel_memory_id,
+            sample_area_ids: classifier.sample_area_ids,
+            class_bindings: classifier.class_bindings,
+            sample_memory_id: classifier.sample_memory_id,
             class_memory_id: classifier.class_memory_id,
+            error_area_id: classifier.error_area_id,
             reward_training: classifier.reward_training,
             answer_feedback_area_id: classifier.answer_feedback_area_id,
             pain_area_id: classifier.pain_area_id,

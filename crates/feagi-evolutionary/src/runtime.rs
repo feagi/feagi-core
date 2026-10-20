@@ -59,15 +59,14 @@ pub struct RuntimeGenome {
 impl RuntimeGenome {
     /// Add every rule a classifier requires that its mapping lists lack.
     ///
-    /// The classifier record is authoritative for its own edges. Kernel encode
-    /// (`episodic_memory`) and field scan (`episodic_scan`) can share one edge, and
-    /// each is required on its own. Existing rules are left as they are.
+    /// The classifier record is authoritative for its sample, class, and
+    /// associative edges. Existing rules are left as they are.
     /// Returns the number of rules added.
     pub fn apply_classifier_required_mappings(&mut self) -> usize {
         let mut added = 0usize;
         for classifier in self.classifiers.values() {
             let Some(associative_window) =
-                CorticalID::try_from_base_64(&classifier.kernel_memory_id)
+                CorticalID::try_from_base_64(&classifier.sample_memory_id)
                     .ok()
                     .and_then(|id| self.cortical_areas.get(&id))
                     .and_then(|area| crate::extract_memory_properties(&area.properties))
@@ -504,10 +503,8 @@ mod tests {
         assert!(registry.get("test_morph").is_some());
     }
 
-    fn classifier_genome(kernel_to_kmem_rules: Vec<serde_json::Value>) -> RuntimeGenome {
-        use feagi_structures::genomic::classifiers::{
-            Classifier, ClassifierField, ClassifierTrainingMode,
-        };
+    fn classifier_genome(sample_to_memory_rules: Vec<serde_json::Value>) -> RuntimeGenome {
+        use feagi_structures::genomic::classifiers::Classifier;
         use feagi_structures::genomic::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, CustomCorticalType, MemoryCorticalType,
         };
@@ -535,14 +532,14 @@ mod tests {
             }
             area
         };
-        let mut kernel = area("Y01OSVNUX9w=", false);
-        kernel.properties.insert(
+        let mut sample = area("Y01OSVNUX9w=", false);
+        sample.properties.insert(
             "cortical_mapping_dst".to_string(),
-            serde_json::json!({ "bU1OSVNUXx8=": kernel_to_kmem_rules }),
+            serde_json::json!({ "bU1OSVNUXx8=": sample_to_memory_rules }),
         );
         let mut cortical_areas = HashMap::new();
         for a in [
-            kernel,
+            sample,
             area("Y01OSVNUX+E=", false),
             area("Y01OSVNUX8Y=", false),
             area("bU1OSVNUXx8=", true),
@@ -555,18 +552,16 @@ mod tests {
             name: "clf".to_string(),
             parent_region_id: "region".to_string(),
             coordinates_3d: [0, 0, 0],
-            training_mode: ClassifierTrainingMode::Kernel,
-            kernel_area_id: Some("Y01OSVNUX9w=".to_string()),
-            class_area_id: Some("Y01OSVNUX+E=".to_string()),
-            mask_area_id: None,
-            class_count: None,
-            kernel_size: None,
-            fields: vec![ClassifierField {
-                field_area_id: "Y01OSVNUX9w=".to_string(),
-                scan_twin_id: "Y01OSVNUX8Y=".to_string(),
-            }],
-            kernel_memory_id: "bU1OSVNUXx8=".to_string(),
+            sample_area_ids: vec!["Y01OSVNUX9w=".to_string()],
+            class_bindings: vec![
+                feagi_structures::genomic::classifiers::ClassifierClassBinding {
+                    class_area_id: "Y01OSVNUX+E=".to_string(),
+                    class_output_area_id: "Y01OSVNUX8Y=".to_string(),
+                },
+            ],
+            sample_memory_id: "bU1OSVNUXx8=".to_string(),
             class_memory_id: "bU1OSVNUXyA=".to_string(),
+            error_area_id: "err".to_string(),
             reward_training: false,
             answer_feedback_area_id: None,
             pain_area_id: None,
@@ -618,18 +613,19 @@ mod tests {
     }
 
     #[test]
-    fn scan_only_kernel_edge_regains_episodic_memory() {
+    fn missing_classifier_edges_are_restored() {
         use feagi_structures::genomic::classifiers::classifier_mapping_rule;
-        let mut genome = classifier_genome(vec![classifier_mapping_rule("episodic_scan", 2)]);
+        let mut genome = classifier_genome(vec![classifier_mapping_rule("classifier_sample", 2)]);
 
         let added = genome.apply_classifier_required_mappings();
 
-        let kernel_edge = morphologies(&genome, "Y01OSVNUX9w=", "bU1OSVNUXx8=");
-        assert!(kernel_edge.contains(&"episodic_scan".to_string()));
-        assert!(kernel_edge.contains(&"episodic_memory".to_string()));
+        assert_eq!(
+            morphologies(&genome, "Y01OSVNUX9w=", "bU1OSVNUXx8="),
+            vec!["classifier_sample".to_string()]
+        );
         assert_eq!(
             morphologies(&genome, "Y01OSVNUX+E=", "bU1OSVNUXyA="),
-            vec!["episodic_memory".to_string()]
+            vec!["classifier_class".to_string()]
         );
         let assoc = morphologies(&genome, "bU1OSVNUXx8=", "bU1OSVNUXyA=");
         assert_eq!(assoc, vec!["associative_memory".to_string()]);
@@ -637,16 +633,13 @@ mod tests {
             [&CorticalID::try_from_base_64("bU1OSVNUXx8=").unwrap()]
             .properties["cortical_mapping_dst"]["bU1OSVNUXyA="][0];
         assert_eq!(assoc_rule["plasticity_window"], serde_json::json!(2));
-        assert_eq!(added, 3);
+        assert_eq!(added, 2);
     }
 
     #[test]
     fn complete_classifier_edges_are_left_unchanged() {
         use feagi_structures::genomic::classifiers::classifier_mapping_rule;
-        let mut genome = classifier_genome(vec![
-            classifier_mapping_rule("episodic_memory", 2),
-            classifier_mapping_rule("episodic_scan", 2),
-        ]);
+        let mut genome = classifier_genome(vec![classifier_mapping_rule("classifier_sample", 2)]);
         genome.apply_classifier_required_mappings();
         let before = genome.cortical_areas.clone();
 

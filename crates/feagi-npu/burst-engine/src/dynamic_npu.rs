@@ -1255,6 +1255,14 @@ where
         }
     }
 
+    /// Replace classifier error watches on the active NPU.
+    pub fn set_classifier_error_watches(&self, watches: Vec<crate::npu::ClassifierErrorWatch>) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.set_classifier_error_watches(watches),
+            DynamicNPUGeneric::INT8(npu) => npu.set_classifier_error_watches(watches),
+        }
+    }
+
     /// Remove the replay target owned by one memory/upstream cortical-area pair.
     ///
     /// Returns `true` when a runtime replay route was present.

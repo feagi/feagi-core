@@ -908,19 +908,16 @@ mod tests {
                 name: "demo".to_string(),
                 parent_region_id: "missing".to_string(),
                 coordinates_3d: [0, 0, 0],
-                training_mode:
-                    feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
-                kernel_area_id: None,
-                class_area_id: None,
-                mask_area_id: None,
-                class_count: None,
-                kernel_size: None,
-                fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
-                    field_area_id: "cfield".to_string(),
-                    scan_twin_id: "cscan1".to_string(),
-                }],
-                kernel_memory_id: "mkmem1".to_string(),
+                sample_area_ids: Vec::new(),
+                class_bindings: vec![
+                    feagi_structures::genomic::classifiers::ClassifierClassBinding {
+                        class_area_id: "cclass".to_string(),
+                        class_output_area_id: "cout1".to_string(),
+                    },
+                ],
+                sample_memory_id: "msmem1".to_string(),
                 class_memory_id: "mcmem1".to_string(),
+                error_area_id: "cerr1".to_string(),
                 reward_training: false,
                 answer_feedback_area_id: None,
                 pain_area_id: None,

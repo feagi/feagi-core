@@ -179,6 +179,26 @@ fn classifier_areas_allowed_in_region(
     accepted
 }
 
+fn copy_live_designated_io(
+    manager: &ConnectomeManager,
+    region: &mut feagi_structures::genomic::BrainRegion,
+    region_id: &str,
+) {
+    let Some(live) = manager.get_brain_region(region_id) else {
+        return;
+    };
+    for key in ["designated_inputs", "designated_outputs"] {
+        match live.properties.get(key) {
+            Some(value) => {
+                region.properties.insert(key.to_string(), value.clone());
+            }
+            None => {
+                region.properties.remove(key);
+            }
+        }
+    }
+}
+
 fn frame_handling_label(frame: FrameChangeHandling) -> &'static str {
     match frame {
         FrameChangeHandling::Absolute => "Absolute",
@@ -1045,21 +1065,27 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     continue;
                 }
                 let mut detached = classifier.clone();
-                if let Some(field_area_id) = detached.detach_twin(&deleted_id_base64) {
+                if let Some(class_area_id) = detached
+                    .binding_for_output(&deleted_id_base64)
+                    .map(|binding| binding.class_area_id.clone())
+                {
                     let _ = manager
-                        .remove_memory_twin_mapping(&detached.kernel_memory_id, &field_area_id);
-                    detached_scans.push((field_area_id, detached.kernel_memory_id.clone()));
+                        .remove_memory_twin_mapping(&detached.class_memory_id, &class_area_id);
+                    detached.detach_class(&class_area_id);
+                    detached_scans.push((class_area_id, detached.class_memory_id.clone()));
                     manager.upsert_classifier(detached);
                 }
             }
             let classifiers = manager.list_classifiers();
             for classifier in classifiers.values() {
-                if let Some(binding) = classifier.binding_for_field(&deleted_id_base64) {
+                if let Some(binding) = classifier.binding_for_class(&deleted_id_base64) {
                     let _ = manager.remove_memory_twin_mapping(
-                        &classifier.kernel_memory_id,
+                        &classifier.class_memory_id,
                         &deleted_id_base64,
                     );
-                    siblings.push(binding.scan_twin_id.clone());
+                    if !binding.class_output_area_id.is_empty() {
+                        siblings.push(binding.class_output_area_id.clone());
+                    }
                 }
             }
             manager.clear_classifier_inputs_for_area(&deleted_id_base64);
@@ -2828,15 +2854,23 @@ impl ConnectomeService for ConnectomeServiceImpl {
             manager
                 .update_cortical_mapping(&src_id, &dst_id, normalized_mapping_data.clone())
                 .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
+            let previous_morphology = existing_mapping
+                .as_ref()
+                .and_then(|rules| rules.first())
+                .and_then(|rule| rule.get("morphology_id"))
+                .and_then(|value| value.as_str())
+                .unwrap_or("")
+                .to_string();
             let mapping_morphology = normalized_mapping_data
                 .first()
                 .and_then(|rule| rule.get("morphology_id"))
                 .and_then(|value| value.as_str())
-                .unwrap_or("");
-            manager.apply_classifier_mapping_change(
+                .unwrap_or(previous_morphology.as_str())
+                .to_string();
+            let removed_class_outputs = manager.apply_classifier_mapping_change(
                 &src_id.as_base_64(),
                 &dst_id.as_base_64(),
-                mapping_morphology,
+                &mapping_morphology,
                 normalized_mapping_data.is_empty(),
             );
 
@@ -2858,7 +2892,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 synapse_count
             );
 
-            (synapse_count, region_io)
+            (synapse_count, region_io, removed_class_outputs)
         };
 
         // Refresh burst-runner caches so newly created twin areas are visualized immediately.
@@ -2868,6 +2902,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Persist updated region IO into RuntimeGenome so genome save/export stays consistent.
         if let Some(genome) = self.current_genome.write().as_mut() {
             genome.classifiers = self.connectome.read().list_classifiers();
+            for output_id in &region_io.2 {
+                if let Ok(cortical_id) = CorticalID::try_from_base_64(output_id) {
+                    genome.cortical_areas.remove(&cortical_id);
+                    for region in genome.brain_regions.values_mut() {
+                        region.remove_area(&cortical_id);
+                    }
+                }
+            }
             if let Some(twin_id) = removed_owned_twin_id {
                 genome.cortical_areas.remove(&twin_id);
                 for region in genome.brain_regions.values_mut() {
@@ -2914,6 +2956,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         "Region '{}' not found in RuntimeGenome while persisting IO registry",
                         region_id
                     );
+                }
+            }
+            {
+                let manager = self.connectome.read();
+                let region_ids: Vec<String> = genome.brain_regions.keys().cloned().collect();
+                for region_id in region_ids {
+                    if let Some(region) = genome.brain_regions.get_mut(&region_id) {
+                        copy_live_designated_io(&manager, region, &region_id);
+                    }
                 }
             }
 
@@ -3008,7 +3059,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
             }
             manager.upsert_classifier(classifier.clone());
-            manager.reconfigure_classifier_scan(&classifier.kernel_memory_id);
+            manager.reconfigure_classifier_scan(&classifier.sample_memory_id);
             let region_io = manager.recompute_brain_region_io_registry().map_err(|e| {
                 ServiceError::Backend(format!(
                     "Failed to recompute region IO after classifier upsert: {}",
@@ -3051,6 +3102,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         region
                             .properties
                             .insert("outputs".to_string(), serde_json::json!(outputs));
+                    }
+                }
+            }
+            {
+                let manager = self.connectome.read();
+                let region_ids: Vec<String> = genome.brain_regions.keys().cloned().collect();
+                for region_id in region_ids {
+                    if let Some(region) = genome.brain_regions.get_mut(&region_id) {
+                        copy_live_designated_io(&manager, region, &region_id);
                     }
                 }
             }
@@ -3140,8 +3200,20 @@ impl ConnectomeService for ConnectomeServiceImpl {
         if let Some(genome) = self.current_genome.write().as_mut() {
             genome.classifiers.remove(classifier_id);
         }
+        let circuit_region_id = classifier.parent_region_id.clone();
+        let delete_circuit = {
+            let manager = self.connectome.read();
+            manager
+                .get_brain_region(&circuit_region_id)
+                .and_then(|region| region.properties.get("classifier_circuit"))
+                .and_then(|value| value.as_bool())
+                == Some(true)
+        };
         for area_id in classifier.owned_area_ids() {
             self.delete_cortical_area(&area_id).await?;
+        }
+        if delete_circuit {
+            self.delete_brain_region(&circuit_region_id).await?;
         }
         Ok(())
     }
@@ -6063,7 +6135,7 @@ mod tests {
             SerializableSynapseArray,
         };
         use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
-        use feagi_structures::genomic::classifiers::{Classifier, ClassifierField};
+        use feagi_structures::genomic::classifiers::Classifier;
         use feagi_structures::genomic::cortical_area::{
             CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
             MemoryCorticalType,
@@ -6125,17 +6197,10 @@ mod tests {
             name: "Checker".to_string(),
             parent_region_id: region_key.clone(),
             coordinates_3d: [45, 15, 0],
-            training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
-            kernel_area_id: Some(kernel_id.as_base_64()),
-            class_area_id: Some(class_id.as_base_64()),
-            mask_area_id: None,
-            class_count: None,
-            kernel_size: None,
-            fields: vec![ClassifierField {
-                field_area_id: field_id.as_base_64(),
-                scan_twin_id: twin_id.as_base_64(),
-            }],
-            kernel_memory_id: kernel_mem_id.as_base_64(),
+            sample_area_ids: Vec::new(),
+            class_bindings: Vec::new(),
+            sample_memory_id: kernel_mem_id.as_base_64(),
+            error_area_id: "cerr0001".to_string(),
             class_memory_id: class_mem_id.as_base_64(),
             reward_training: false,
             answer_feedback_area_id: None,
@@ -6220,38 +6285,25 @@ mod tests {
                 .get_classifier("clf-import")
                 .expect("classifier registry restored");
             assert_eq!(restored.class_memory_id, class_mem_id.as_base_64());
-            assert_eq!(
-                restored.fields[0].scan_twin_id,
-                twin_id.as_base_64(),
-                "field scan twin must survive connectome import"
-            );
-            assert_eq!(
-                restored.training_mode,
-                feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
-                "a connectome saved before scanner mode reloads as kernel training"
-            );
-            assert!(restored.mask_area_id.is_none());
-            assert!(restored.kernel_size.is_none());
+            assert_eq!(restored.sample_memory_id, kernel_mem_id.as_base_64());
+            assert_eq!(restored.error_area_id, "cerr0001");
             let kernel_mem = manager
                 .get_cortical_area(&kernel_mem_id)
-                .expect("kernel memory area");
+                .expect("sample memory area");
             assert_eq!(
                 kernel_mem
                     .properties
                     .get("classifier_role")
                     .and_then(|value| value.as_str()),
-                Some("kernel_memory")
+                Some("sample_memory")
             );
-            let twins = kernel_mem
-                .properties
-                .get("memory_twin_areas")
-                .and_then(|value| value.as_object())
-                .expect("field scan twin projected onto kernel memory");
             assert_eq!(
-                twins
-                    .get(&field_id.as_base_64())
-                    .and_then(|value| value.as_str()),
-                Some(twin_id.as_base_64().as_str())
+                kernel_mem
+                    .properties
+                    .get("memory_twin_areas")
+                    .and_then(|value| value.as_object())
+                    .map(|twins| twins.len()),
+                Some(0)
             );
             let class_mem = manager
                 .get_cortical_area(&class_mem_id)
