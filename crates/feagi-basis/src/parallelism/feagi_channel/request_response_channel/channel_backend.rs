@@ -1,6 +1,6 @@
 use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response_channel::basis::{ReplySlot, RequestSlot};
+use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, RequestSlot};
 
 /// Which channel types (heap allocated, static) a requester / responder pair is built from. All
 /// four are always of the same kind, so this is implemented by a zero sized marker per kind

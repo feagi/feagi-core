@@ -1,7 +1,6 @@
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 
 
-
 /// Contents of one request channel slot
 pub struct RequestSlot<Request, ReplySender> {
     pub(crate) sequence: u32,

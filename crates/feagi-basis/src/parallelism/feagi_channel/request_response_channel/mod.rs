@@ -1,4 +1,4 @@
-pub mod basis;
+pub mod shared_structs;
 pub mod implementations;
 
 pub use requester::FeagiRequester;

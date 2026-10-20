@@ -1,6 +1,6 @@
 use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
-use crate::parallelism::feagi_channel::request_response_channel::basis::{ReplySlot, RequestSlot};
+use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, RequestSlot};
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::requester::FeagiRequester;
 use crate::parallelism::feagi_channel::request_response_channel::responder::FeagiResponder;

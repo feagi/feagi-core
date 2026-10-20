@@ -1,5 +1,7 @@
 //! REST server routes on std
 
+// TODO allow reconfiguring poll rate as a config var?
+
 use core::future::Future;
 use core::marker::PhantomData;
 use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryGroupChannelRouter;
