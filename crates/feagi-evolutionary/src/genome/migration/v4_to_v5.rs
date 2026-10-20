@@ -20,6 +20,7 @@ use std::collections::BTreeSet;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use serde_json::{json, Map, Value};
 
+use crate::genome::migration::membership::fold_region_membership_into_cortical_areas;
 use crate::genome::migration::{MigrationError, MigrationStepDiagnostics, Migrator};
 use crate::genome::schema::GenomeSchemaVersion;
 
@@ -376,7 +377,10 @@ fn append_region_area(root: &mut Map<String, Value>, region_id: &str, area_id: &
     let Some(region) = regions.get_mut(region_id).and_then(|v| v.as_object_mut()) else {
         return;
     };
-    crate::genome::parser::fold_region_membership_into_cortical_areas(region);
+    let fold = fold_region_membership_into_cortical_areas(region);
+    if let Some(note) = fold.data_loss_note(region_id) {
+        tracing::warn!(target: "feagi-evo", "[GENOME-MIGRATE] v4_to_v5: {}", note);
+    }
     let areas = region
         .entry("cortical_areas".to_string())
         .or_insert_with(|| json!([]));

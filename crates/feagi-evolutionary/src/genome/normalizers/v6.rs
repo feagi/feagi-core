@@ -11,8 +11,8 @@
 use serde_json::Value;
 
 use super::{NormalizationDiagnostics, Normalizer};
+use crate::genome::migration::membership::fold_genome_region_membership;
 use crate::genome::migration::MigrationError;
-use crate::genome::parser::fold_genome_region_membership;
 use crate::genome::schema::GenomeSchemaVersion;
 
 /// Normalizer for schema v6.
@@ -36,11 +36,15 @@ impl Normalizer for V6Normalizer {
 
     fn normalize(&self, genome: &mut Value) -> Result<NormalizationDiagnostics, MigrationError> {
         let mut diag = NormalizationDiagnostics::new(GenomeSchemaVersion(6));
-        let folded = fold_genome_region_membership(genome);
-        if folded > 0 {
+        let outcome = fold_genome_region_membership(genome);
+        if outcome.folded > 0 {
             diag.record(format!(
-                "folded legacy areas into cortical_areas on {folded} brain regions"
+                "folded legacy areas into cortical_areas on {} brain regions",
+                outcome.folded
             ));
+        }
+        for note in outcome.data_loss {
+            diag.record(note);
         }
         Ok(diag)
     }
@@ -81,6 +85,23 @@ mod tests {
         assert_eq!(
             genome["brain_regions"]["root"]["cortical_areas"],
             json!(["_death", "_power"])
+        );
+    }
+
+    #[test]
+    fn records_a_diagnostic_when_non_array_cortical_areas_is_replaced() {
+        let mut genome = json!({
+            "genome_schema_version": 6,
+            "brain_regions": {
+                "root": { "areas": ["_power"], "cortical_areas": {"bad": true} }
+            }
+        });
+        let diag = V6Normalizer::new().normalize(&mut genome).unwrap();
+        assert_eq!(diag.transformations.len(), 2);
+        assert!(diag.transformations[1].contains("replaced non-array cortical_areas"));
+        assert_eq!(
+            genome["brain_regions"]["root"]["cortical_areas"],
+            json!(["_power"])
         );
     }
 }

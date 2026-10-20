@@ -238,20 +238,6 @@ fn run_default_chain(mut hierarchical_json: Value) -> EvoResult<(Value, ChainRes
         tracing::debug!(target: "feagi-evo", "[GENOME-LOAD] advisory: {}", warning);
     }
 
-    // Representation invariant for every schema version: membership is stored
-    // only as `cortical_areas`. v5_to_v6 performs the same fold when the
-    // document is older. Already-current documents that still carry `areas`
-    // are folded here so a re-saved connectome does not keep the legacy key.
-    let folded_regions =
-        crate::genome::parser::fold_genome_region_membership(&mut hierarchical_json);
-    if folded_regions > 0 {
-        tracing::info!(
-            target: "feagi-evo",
-            "[GENOME-LOAD] Folded legacy areas into cortical_areas on {} brain regions",
-            folded_regions
-        );
-    }
-
     // Policy: validator errors are reports, not exceptions. Log at warn
     // so operators see them without the library deciding the recovery
     // path. Consumers inspect `ChainResult.blocking_errors` via

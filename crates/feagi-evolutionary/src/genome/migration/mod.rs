@@ -23,6 +23,7 @@ use crate::genome::schema::GenomeSchemaVersion;
 use crate::genome::validators::{ValidationReport, Validator};
 
 pub mod chain;
+pub mod membership;
 pub mod v2_to_v3;
 pub mod v3_to_v4;
 pub mod v4_to_v5;

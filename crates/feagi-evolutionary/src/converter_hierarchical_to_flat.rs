@@ -180,7 +180,13 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
                 }
             }
 
-            crate::genome::parser::fold_region_membership_into_cortical_areas(&mut props);
+            let fold =
+                crate::genome::migration::membership::fold_region_membership_into_cortical_areas(
+                    &mut props,
+                );
+            if let Some(note) = fold.data_loss_note(region_id) {
+                tracing::warn!(target: "feagi-evo", "[GENOME-SAVE] {}", note);
+            }
             region_data = props;
         }
 

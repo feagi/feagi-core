@@ -45,6 +45,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
 
+use crate::genome::migration::membership::fold_genome_region_membership;
 use crate::types::{EvoError, EvoResult};
 use feagi_structures::genomic::brain_regions::RegionID;
 use feagi_structures::genomic::classifiers::Classifier;
@@ -362,58 +363,6 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     }
 }
 
-/// Move a brain region's legacy `areas` list onto `cortical_areas`.
-///
-/// New genome and connectome saves write only `cortical_areas`. Documents that
-/// still have `areas`, or both keys, are converted here. When both lists are
-/// present, `cortical_areas` keeps its order and ids that appear only in
-/// `areas` are appended. Returns true when the region object changed.
-pub fn fold_region_membership_into_cortical_areas(
-    region: &mut serde_json::Map<String, Value>,
-) -> bool {
-    let Some(legacy) = region.remove("areas") else {
-        return false;
-    };
-    let Some(legacy_ids) = legacy.as_array().cloned() else {
-        return true;
-    };
-    let membership = region
-        .entry("cortical_areas".to_string())
-        .or_insert_with(|| Value::Array(Vec::new()));
-    let Some(canonical) = membership.as_array_mut() else {
-        *membership = Value::Array(legacy_ids);
-        return true;
-    };
-    for id in legacy_ids {
-        if !canonical.iter().any(|existing| existing == &id) {
-            canonical.push(id);
-        }
-    }
-    true
-}
-
-/// Fold every brain region's legacy `areas` key into `cortical_areas`.
-///
-/// Returns the number of region objects that changed.
-pub fn fold_genome_region_membership(genome: &mut Value) -> usize {
-    let Some(regions) = genome
-        .get_mut("brain_regions")
-        .and_then(|value| value.as_object_mut())
-    else {
-        return 0;
-    };
-    let mut changed = 0usize;
-    for region in regions.values_mut() {
-        let Some(region) = region.as_object_mut() else {
-            continue;
-        };
-        if fold_region_membership_into_cortical_areas(region) {
-            changed += 1;
-        }
-    }
-    changed
-}
-
 /// Genome parser
 pub struct GenomeParser;
 
@@ -472,7 +421,9 @@ impl GenomeParser {
         // still has both keys.
         let mut genome_value: Value = serde_json::from_str(json_str)
             .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
-        fold_genome_region_membership(&mut genome_value);
+        for note in fold_genome_region_membership(&mut genome_value).data_loss {
+            warn!(target: "feagi-evo", "[GENOME-PARSE] {}", note);
+        }
         let raw: RawGenome = serde_json::from_value(genome_value)
             .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
 
@@ -1037,7 +988,6 @@ impl GenomeParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn parse_folds_legacy_areas_into_cortical_areas() {
@@ -1075,87 +1025,6 @@ mod tests {
             .collect();
         assert!(ids.contains(&string_to_cortical_id("_power").unwrap().as_base_64()));
         assert!(ids.contains(&string_to_cortical_id("_death").unwrap().as_base_64()));
-    }
-
-    #[test]
-    fn fold_keeps_cortical_areas_order_and_appends_legacy_only_ids() {
-        let mut region = serde_json::Map::new();
-        region.insert("areas".to_string(), json!(["_power", "_death", "_power"]));
-        region.insert("cortical_areas".to_string(), json!(["_death", "_death"]));
-
-        assert!(fold_region_membership_into_cortical_areas(&mut region));
-        assert!(region.get("areas").is_none());
-        assert_eq!(
-            region.get("cortical_areas"),
-            Some(&json!(["_death", "_death", "_power"]))
-        );
-    }
-
-    #[test]
-    fn fold_moves_an_areas_only_list() {
-        let mut region = serde_json::Map::new();
-        region.insert("areas".to_string(), json!(["_power"]));
-
-        assert!(fold_region_membership_into_cortical_areas(&mut region));
-        assert!(region.get("areas").is_none());
-        assert_eq!(region.get("cortical_areas"), Some(&json!(["_power"])));
-    }
-
-    #[test]
-    fn fold_leaves_a_cortical_areas_only_region_unchanged() {
-        let mut region = serde_json::Map::new();
-        region.insert("cortical_areas".to_string(), json!(["_death"]));
-
-        assert!(!fold_region_membership_into_cortical_areas(&mut region));
-        assert_eq!(region.get("cortical_areas"), Some(&json!(["_death"])));
-    }
-
-    #[test]
-    fn fold_drops_a_non_array_areas_value() {
-        let mut region = serde_json::Map::new();
-        region.insert("areas".to_string(), json!("_power"));
-        region.insert("cortical_areas".to_string(), json!(["_death"]));
-
-        assert!(fold_region_membership_into_cortical_areas(&mut region));
-        assert!(region.get("areas").is_none());
-        assert_eq!(region.get("cortical_areas"), Some(&json!(["_death"])));
-    }
-
-    #[test]
-    fn fold_replaces_a_non_array_cortical_areas_value_with_the_legacy_list() {
-        let mut region = serde_json::Map::new();
-        region.insert("areas".to_string(), json!(["_power"]));
-        region.insert("cortical_areas".to_string(), json!({"bad": true}));
-
-        assert!(fold_region_membership_into_cortical_areas(&mut region));
-        assert!(region.get("areas").is_none());
-        assert_eq!(region.get("cortical_areas"), Some(&json!(["_power"])));
-    }
-
-    #[test]
-    fn fold_drops_an_empty_areas_list_without_adding_members() {
-        let mut region = serde_json::Map::new();
-        region.insert("areas".to_string(), json!([]));
-        region.insert("cortical_areas".to_string(), json!(["_death"]));
-
-        assert!(fold_region_membership_into_cortical_areas(&mut region));
-        assert!(region.get("areas").is_none());
-        assert_eq!(region.get("cortical_areas"), Some(&json!(["_death"])));
-    }
-
-    #[test]
-    fn fold_genome_skips_missing_regions_and_non_objects() {
-        assert_eq!(fold_genome_region_membership(&mut json!({})), 0);
-        let mut genome = json!({
-            "brain_regions": {
-                "root": { "areas": [] },
-                "note": "not a region"
-            }
-        });
-        assert_eq!(fold_genome_region_membership(&mut genome), 1);
-        assert!(genome["brain_regions"]["root"].get("areas").is_none());
-        assert_eq!(genome["brain_regions"]["root"]["cortical_areas"], json!([]));
-        assert_eq!(genome["brain_regions"]["note"], json!("not a region"));
     }
 
     #[test]

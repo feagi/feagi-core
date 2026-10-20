@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use serde_json::{json, Map, Value};
 
+use crate::genome::migration::membership::fold_region_membership_into_cortical_areas;
 use crate::genome::migration::{MigrationError, MigrationStepDiagnostics, Migrator};
 use crate::genome::schema::GenomeSchemaVersion;
 
@@ -348,7 +349,10 @@ fn add_drivers_to_root(root: &mut Map<String, Value>, driver_ids: &[String]) {
     let Some(region) = regions.get_mut(&root_id).and_then(|v| v.as_object_mut()) else {
         return;
     };
-    crate::genome::parser::fold_region_membership_into_cortical_areas(region);
+    let fold = fold_region_membership_into_cortical_areas(region);
+    if let Some(note) = fold.data_loss_note(&root_id) {
+        tracing::warn!(target: "feagi-evo", "[GENOME-MIGRATE] v3_to_v4: {}", note);
+    }
     let areas = region.entry("cortical_areas").or_insert_with(|| json!([]));
     let Some(areas) = areas.as_array_mut() else {
         return;

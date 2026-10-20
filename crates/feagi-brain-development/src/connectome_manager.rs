@@ -6228,11 +6228,8 @@ impl ConnectomeManager {
                 let Some(twin_area) = self.cortical_areas.get(&twin_id) else {
                     continue;
                 };
-                let owned_by_this_memory = twin_area
-                    .properties
-                    .get("memory_twin_for")
-                    .and_then(|value| value.as_str())
-                    == Some(memory_id.as_base_64().as_str());
+                let owned_by_this_memory =
+                    Self::memory_owns_twin(memory_id, twin_area, &self.cortical_areas);
                 if Self::mapping_rules_use_morphology(rules, "episodic_memory")
                     && !owned_by_this_memory
                 {
@@ -6360,7 +6357,41 @@ impl ConnectomeManager {
         Ok(jobs)
     }
 
-    fn restore_memory_twin_index(
+    /// True when `memory_id` owns `twin_area` as its recall twin.
+    ///
+    /// Genomes persist `memory_twin_of` (`twinrf-t`) but not `memory_twin_for`, so a
+    /// reloaded twin has no owner field. In that case the memory owns the twin when
+    /// the twin's upstream feeds that memory through `episodic_memory`.
+    pub(crate) fn memory_owns_twin(
+        memory_id: &CorticalID,
+        twin_area: &CorticalArea,
+        areas: &HashMap<CorticalID, CorticalArea>,
+    ) -> bool {
+        let memory_b64 = memory_id.as_base_64();
+        if let Some(owner) = twin_area
+            .properties
+            .get("memory_twin_for")
+            .and_then(|value| value.as_str())
+        {
+            return owner == memory_b64;
+        }
+        let Some(upstream_id) = twin_area
+            .properties
+            .get("memory_twin_of")
+            .and_then(|value| value.as_str())
+            .and_then(|b64| CorticalID::try_from_base_64(b64).ok())
+        else {
+            return false;
+        };
+        areas
+            .get(&upstream_id)
+            .and_then(|upstream| upstream.properties.get("cortical_mapping_dst"))
+            .and_then(|value| value.as_object())
+            .and_then(|dstmap| dstmap.get(&memory_b64))
+            .is_some_and(|rules| Self::mapping_rules_use_morphology(rules, "episodic_memory"))
+    }
+
+    pub(crate) fn restore_memory_twin_index(
         &mut self,
         memory_area_id: &CorticalID,
         upstream_area_id: &CorticalID,
@@ -11981,6 +12012,102 @@ mod tests {
             error.to_string().contains("1x1xn"),
             "unexpected error: {error}"
         );
+    }
+
+    /// A reloaded genome keeps `memory_twin_of` but not `memory_twin_for`.
+    /// The saved twin must still be indexed and bound for NPU replay.
+    #[test]
+    fn reloaded_twin_without_owner_field_is_bound_for_replay() {
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10)
+            .expect("Failed to create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+
+        let src_id = CorticalID::try_from_bytes(b"csrc0009").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmem0009").unwrap();
+        // Not the hash-derived twin id, as in a genome saved by an older build.
+        let twin_id = CorticalID::try_from_bytes(b"ctwin009").unwrap();
+        let custom = |id: CorticalID, name: &str| {
+            CorticalArea::new(
+                id,
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap()
+        };
+
+        let mut src_area = custom(src_id, "source");
+        src_area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ mem_id.as_base_64(): [{ "morphology_id": "episodic_memory" }] }),
+        );
+        let mut mem_area = CorticalArea::new(
+            mem_id,
+            0,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem_area
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem_area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ twin_id.as_base_64(): [{ "morphology_id": "episodic_memory" }] }),
+        );
+        let mut twin_area = custom(twin_id, "source_twin");
+        twin_area.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(src_id.as_base_64()),
+        );
+
+        manager.add_cortical_area(src_area).unwrap();
+        manager.add_cortical_area(mem_area).unwrap();
+        manager.add_cortical_area(twin_area).unwrap();
+
+        manager.rebuild_memory_twin_mappings().unwrap();
+        manager.rebind_memory_twin_mappings_to_npu().unwrap();
+
+        let indexed = manager
+            .get_cortical_area(&mem_id)
+            .unwrap()
+            .properties
+            .get("memory_twin_areas")
+            .and_then(|v| v.get(src_id.as_base_64()))
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string);
+        assert_eq!(
+            indexed.as_deref(),
+            Some(twin_id.as_base_64().as_str()),
+            "the saved twin must be indexed, not replaced"
+        );
+
+        let mem_idx = manager.get_cortical_idx(&mem_id).unwrap();
+        let src_idx = manager.get_cortical_idx(&src_id).unwrap();
+        let twin_idx = manager.get_cortical_idx(&twin_id).unwrap();
+        let bound = dyn_npu
+            .lock()
+            .unwrap()
+            .get_memory_twin_mapping(mem_idx, src_idx)
+            .map(|(idx, _)| idx);
+        assert_eq!(bound, Some(twin_idx), "NPU replay must target the saved twin");
     }
 
     #[test]

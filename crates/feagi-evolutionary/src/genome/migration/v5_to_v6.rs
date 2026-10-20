@@ -10,8 +10,8 @@
 
 use serde_json::Value;
 
+use crate::genome::migration::membership::fold_genome_region_membership;
 use crate::genome::migration::{MigrationError, MigrationStepDiagnostics, Migrator};
-use crate::genome::parser::fold_genome_region_membership;
 use crate::genome::schema::GenomeSchemaVersion;
 
 /// Advances a hierarchical genome from schema v5 to schema v6.
@@ -39,13 +39,17 @@ impl Migrator for V5ToV6Migrator {
 
     fn migrate(&self, genome: &mut Value) -> Result<MigrationStepDiagnostics, MigrationError> {
         let mut diag = MigrationStepDiagnostics::new(self.from_version(), self.to_version());
-        let folded = fold_genome_region_membership(genome);
-        if folded == 0 {
+        let outcome = fold_genome_region_membership(genome);
+        if outcome.folded == 0 {
             diag.record("brain region membership already uses cortical_areas");
         } else {
             diag.record(format!(
-                "folded legacy areas into cortical_areas on {folded} brain regions"
+                "folded legacy areas into cortical_areas on {} brain regions",
+                outcome.folded
             ));
+        }
+        for note in outcome.data_loss {
+            diag.record(note);
         }
         Ok(diag)
     }
@@ -90,6 +94,24 @@ mod tests {
         assert_eq!(
             genome["brain_regions"]["root"]["cortical_areas"],
             json!(["_death", "_power"])
+        );
+    }
+
+    #[test]
+    fn records_a_diagnostic_when_a_non_array_membership_value_is_dropped() {
+        let mut genome = json!({
+            "genome_schema_version": 5,
+            "brain_regions": {
+                "root": { "areas": "_power", "cortical_areas": ["_death"] }
+            }
+        });
+        let diag = V5ToV6Migrator::new().migrate(&mut genome).unwrap();
+        assert_eq!(diag.transformations.len(), 2);
+        assert!(diag.transformations[1].contains("root"));
+        assert!(diag.transformations[1].contains("not an array"));
+        assert_eq!(
+            genome["brain_regions"]["root"]["cortical_areas"],
+            json!(["_death"])
         );
     }
 }
