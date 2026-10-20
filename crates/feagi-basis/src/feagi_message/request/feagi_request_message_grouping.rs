@@ -1,4 +1,4 @@
-use crate::feagi_message::feagi_request_message::FeagiRequestMessageDescriptor;
+use crate::feagi_message::request::feagi_request_descriptor::FeagiRequestMessageDescriptor;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 

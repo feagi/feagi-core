@@ -1,6 +1,5 @@
-//! For being able to request a response. Used by both Zenoh and Picoserve
-
-pub mod feagi_request_message_path;
 pub mod feagi_request_message;
-pub mod feagi_response_message;
-pub mod feagi_response_error;
+pub mod feagi_request_response_payloads;
+pub mod feagi_request_descriptor;
+pub mod feagi_request_message_category;
+pub mod feagi_request_message_grouping;

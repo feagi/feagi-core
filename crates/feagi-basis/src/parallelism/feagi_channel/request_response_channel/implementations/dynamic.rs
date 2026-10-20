@@ -1,4 +1,4 @@
-use crate::feagi_message::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
+use crate::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
 use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, RequestSlot};
