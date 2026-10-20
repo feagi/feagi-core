@@ -20,9 +20,11 @@ use crate::genome::schema::GenomeSchemaVersion;
 
 pub mod v3;
 pub mod v4;
+pub mod v5;
 
 pub use v3::V3Validator;
 pub use v4::V4Validator;
+pub use v5::V5Validator;
 
 /// Outcome of running a single validator against a genome.
 ///

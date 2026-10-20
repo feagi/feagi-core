@@ -4203,7 +4203,7 @@ mod classifier_mapping_rule_tests {
         assert_eq!(params.dimensions, (1, 1, 10));
         assert_eq!(params.position, (10, 20, 30));
         let properties = params.properties.expect("class output properties");
-        assert!(properties.get("scan_twin").is_none());
+        assert!(!properties.contains_key("scan_twin"));
         assert_eq!(
             properties.get("burst_engine_active"),
             Some(&serde_json::json!(true))

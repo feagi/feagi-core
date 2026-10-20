@@ -1,7 +1,7 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Blocking validator for schema v4.
+//! Validator for schema v4.
 //!
 //! Checks the modulator section and spike-train constraints. Structural checks
 //! that already run on `RuntimeGenome` stay in `crate::validator`.

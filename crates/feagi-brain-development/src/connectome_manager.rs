@@ -12128,9 +12128,7 @@ mod tests {
             properties: HashMap::new(),
         };
         manager.upsert_classifier(classifier.clone());
-        let hash_after_upsert = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_classifiers_hash();
+        let hash_after_upsert = manager.compute_classifiers_hash();
         assert_ne!(hash_after_upsert, 0, "upsert must publish classifiers_hash");
         let ignored = manager.apply_classifier_mapping_change(
             "cfield",
@@ -12153,9 +12151,7 @@ mod tests {
         assert!(updated.is_empty());
         classifier = manager.get_classifier("clf-1").cloned().unwrap();
         assert_eq!(classifier.sample_area_ids, vec!["csamp1".to_string()]);
-        let hash_after_kernel_bind = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_classifiers_hash();
+        let hash_after_kernel_bind = manager.compute_classifiers_hash();
         assert_ne!(
             hash_after_kernel_bind, hash_after_upsert,
             "binding a classifier input must change classifiers_hash"
@@ -12467,13 +12463,9 @@ mod tests {
         assert!(classifier.class_bindings.is_empty());
         assert!(manager.classifiers_owning_area("cfield").is_empty());
         assert_eq!(manager.classifiers_owning_area("mkmem1").len(), 1);
-        let hash_after_clear = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_classifiers_hash();
+        let hash_after_clear = manager.compute_classifiers_hash();
         manager.remove_classifier("clf-1");
-        let hash_after_remove = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_classifiers_hash();
+        let hash_after_remove = manager.compute_classifiers_hash();
         assert_ne!(
             hash_after_remove, hash_after_clear,
             "removing a classifier must change classifiers_hash"
