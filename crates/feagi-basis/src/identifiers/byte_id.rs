@@ -334,8 +334,8 @@ impl<ID: ByteID<NUMBER_OF_SOURCE_BYTES>, const NUMBER_OF_SOURCE_BYTES: usize, co
     crate::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameterElement
     for Base64EncodedByteID<ID, NUMBER_OF_SOURCE_BYTES, NUMBER_BASE_64_BYTES>
 {
-    fn to_str_slice(&self) -> &str {
-        self.as_str()
+    fn write_path_segment<W: core::fmt::Write>(&self, out: &mut W) -> core::fmt::Result {
+        out.write_str(self.as_str())
     }
 }
 

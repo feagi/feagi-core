@@ -1,23 +1,24 @@
 
 /// The first step for a message path, allows parsing in the configrables as a first step
 pub trait FeagiMessagePath: 'static {
-    
+
     /// A flat tuple with &'static str for static path components, `FeagiMessagePathConfigurables`
-    /// to be overwritten by configurables, and `FeagiMessagePathParameters` wrapped by 
+    /// to be overwritten by configurables, and `FeagiMessagePathParameters` wrapped by
     /// `MessagePathSlotElement`
     type FullMessagePathBaseTuple;
-    
+
     /// A struct of `FeagiMessagePathConfigurablesElement` instances
     type Configurables: configurables::FeagiMessagePathConfigurables;
 
     /// A struct of `FeagiMessagePathParameterElement` instances used in this path.
     type Parameters: parameters::FeagiMessagePathParameters;
 
-    /// The flat tuple representation of the path where &str is the defined parts and 
+    /// The flat tuple representation of the path containing types of &str where we have defined
+    /// elements of the path (either statically or from parsed configurables) and
     /// `MessagePathSlotElement` defines the various Parameters that must be parsed dynamically
     type SlottedParameterMessagePath;
 
-    /// Applies the configurables to `FullMessagePathBaseTuple` such that we get 
+    /// Applies the configurables to `FullMessagePathBaseTuple` such that we get
     /// `SlottedParameterMessagePath`
     fn to_slotted_parameter_message_path(self, configurables: &Self::Configurables) -> &Self::SlottedParameterMessagePath;
 }
@@ -31,6 +32,9 @@ pub mod configurables {
     pub trait FeagiMessagePathConfigurables {
         // Composed of pub fields of `FeagiMessagePathStaticElement`
     }
+
+    // Categories without any configurables use the unit type
+    impl FeagiMessagePathConfigurables for () {}
 
 
     /// Defines something that can be serialized to become part of the message path statically.
@@ -70,18 +74,38 @@ pub mod parameters {
         // Composed of pub fields of `FeagiMessagePathParameterElement`
     }
 
+    // Messages without any path parameters use the unit type
+    impl FeagiMessagePathParameters for () {}
+
     /// Something that can be serialized to become part of the message path dynamically as
     /// a parameter.
-    pub trait FeagiMessagePathParameterElement: core::str::FromStr + core::fmt::Debug 
+    pub trait FeagiMessagePathParameterElement: core::str::FromStr + core::fmt::Debug
     + serde::Serialize + serde::de::DeserializeOwned
     {
-        fn to_str_slice(&self) -> &str;
+        /// Writes this parameter as its path segment. What is written must parse back into the
+        /// same value through `FromStr`
+        fn write_path_segment<W: core::fmt::Write>(&self, out: &mut W) -> core::fmt::Result;
     }
+
+    /// Primitives are written as they display, which `FromStr` parses back
+    macro_rules! impl_parameter_element_by_display {
+        ($($element_type:ty),*) => {
+            $(
+                impl FeagiMessagePathParameterElement for $element_type {
+                    fn write_path_segment<W: core::fmt::Write>(&self, out: &mut W) -> core::fmt::Result {
+                        write!(out, "{self}")
+                    }
+                }
+            )*
+        };
+    }
+
+    impl_parameter_element_by_display!(bool, char, u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64);
 
     #[cfg(feature = "alloc")]
     impl FeagiMessagePathParameterElement for String {
-        fn to_str_slice(&self) -> &str {
-            self.as_str()
+        fn write_path_segment<W: core::fmt::Write>(&self, out: &mut W) -> core::fmt::Result {
+            out.write_str(self.as_str())
         }
     }
 

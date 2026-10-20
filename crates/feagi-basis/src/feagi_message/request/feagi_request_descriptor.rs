@@ -13,10 +13,14 @@ pub trait FeagiRequestMessageDescriptor {
     const METHOD: FeagiMessageEnum = Self::Method::METHOD;
 
     /// The message associated with this descriptor
-    type Message: FeagiRequestMessage<Descriptor=Self>;
+    type Message: FeagiRequestMessage<Descriptor=Self, DescriptorParameters=Self::Parameters>;
 
-    /// Defines the path that this Feagi Message Takes
-    type MessagePath: FeagiMessagePath;
+    /// Defines the path that this Feagi Message Takes. Its parameters are this message's, and
+    /// its configurables are those of the message's category
+    type MessagePath: FeagiMessagePath<
+        Parameters = Self::Parameters,
+        Configurables = <Self::Category as FeagiRequestCategory>::Configurables,
+    >;
 
     /// The request method as a type
     type Method: RequestMethodType;
@@ -46,7 +50,10 @@ pub trait FeagiRequestMessageDescriptor {
     /// back if it holds a response to some other message
     fn try_from_category_response(
         response: <Self::Category as FeagiRequestCategory>::ResponseEnum,
-    ) -> Result<Result<Self::ResponsePayload, Self::ResponseError>, <Self::Category as FeagiRequestCategory>::ResponseEnum>;
+    ) -> Result<
+        Result<Self::ResponsePayload, Self::ResponseError>,
+        <Self::Category as FeagiRequestCategory>::ResponseEnum
+    >;
 
     // This struct should be zero sized, no fields!
 }
@@ -65,9 +72,9 @@ pub enum FeagiMessageEnum {
 }
 
 impl FeagiMessageEnum {
-    /// Returns true if a request payload is allowed (Mainly relevant for REST)
-    pub const fn is_request_payload_allowed(&self) -> bool {
-        !matches!(self, Self::Read)
+    /// Returns true if a request payload is in the URL (only for rest GET requests)
+    pub const fn is_payload_in_url(&self) -> bool {
+        matches!(self, Self::Read)
     }
 }
 
