@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use feagi_basis::parallelism::block_on_thread;
-use feagi_basis::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelSendError, FeagiRequestError};
+use feagi_basis::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelTransmitError, FeagiRequestError};
 use feagi_basis::parallelism::feagi_channel::feagi_channel::{FeagiChannelAllocBuilder, FeagiChannelReceiver, FeagiChannelSender};
 use feagi_basis::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{
@@ -159,8 +159,8 @@ fn dynamic_channel_helpers_track_queue_state() {
 fn dynamic_channel_try_send_errors_when_full() {
     let (sender, _receiver) = FeagiChannelAllocBuilder::<Number>::new(1).create_channels();
     FeagiChannelSender::try_send(&sender, Number(1)).unwrap();
-    assert!(matches!(FeagiChannelSender::try_send(&sender, Number(2)), Err(FeagiChannelSendError::ChannelFull)));
-    assert!(matches!(FeagiChannelSender::try_send_ref(&sender), Err(FeagiChannelSendError::ChannelFull)));
+    assert!(matches!(FeagiChannelSender::try_send(&sender, Number(2)), Err(FeagiChannelTransmitError::ChannelFull)));
+    assert!(matches!(FeagiChannelSender::try_send_ref(&sender), Err(FeagiChannelTransmitError::ChannelFull)));
 }
 
 #[test]
@@ -174,11 +174,11 @@ fn dynamic_channel_try_recv_errors_when_empty() {
 fn dynamic_channel_send_errors_once_receiver_dropped() {
     let (sender, receiver) = FeagiChannelAllocBuilder::<Number>::new(2).create_channels();
     drop(receiver);
-    assert!(matches!(FeagiChannelSender::try_send(&sender, Number(1)), Err(FeagiChannelSendError::ChannelClosed)));
-    assert!(matches!(FeagiChannelSender::try_send_ref(&sender), Err(FeagiChannelSendError::ChannelClosed)));
+    assert!(matches!(FeagiChannelSender::try_send(&sender, Number(1)), Err(FeagiChannelTransmitError::ChannelClosed)));
+    assert!(matches!(FeagiChannelSender::try_send_ref(&sender), Err(FeagiChannelTransmitError::ChannelClosed)));
     assert!(matches!(
         block_on_thread(sender.async_send(Number(1))),
-        Err(FeagiChannelSendError::ChannelClosed)
+        Err(FeagiChannelTransmitError::ChannelClosed)
     ));
 }
 
@@ -775,11 +775,11 @@ fn built_worker_answers_custom_requests_then_stops() {
         // when sent to the exited worker, and can be checked that way
         assert!(matches!(
             worker.make_request(1).await,
-            Err(FeagiRequestError::RequestNotSent(FeagiChannelSendError::ChannelClosed))
+            Err(FeagiRequestError::RequestNotSent(FeagiChannelTransmitError::ChannelClosed))
         ));
         assert!(matches!(
             worker.stop().await,
-            Err(FeagiRequestError::RequestNotSent(FeagiChannelSendError::ChannelClosed))
+            Err(FeagiRequestError::RequestNotSent(FeagiChannelTransmitError::ChannelClosed))
         ));
     });
     worker.join().unwrap();

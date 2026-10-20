@@ -4,7 +4,7 @@
 // affects workers that exit on their own without being stopped. Fix properly once thingbuf is
 // forked so receivers can close the channel before draining
 
-use crate::parallelism::feagi_channel::channel_error::{FeagiChannelSendError, FeagiRequestError};
+use crate::parallelism::feagi_channel::channel_error::{FeagiChannelTransmitError, FeagiRequestError};
 use crate::parallelism::feagi_channel::request_response::feagi_request_response::FeagiRequester;
 use crate::parallelism::feagi_worker::feagi_worker_builder::WorkerChannelImplementation;
 use crate::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
@@ -79,7 +79,7 @@ where
     /// Errors the same way as a request to an exited worker, if `stop` was acknowledged
     fn refuse_if_stopped(&self) -> Result<(), FeagiRequestError> {
         if self.stopped {
-            return Err(FeagiRequestError::RequestNotSent(FeagiChannelSendError::ChannelClosed));
+            return Err(FeagiRequestError::RequestNotSent(FeagiChannelTransmitError::ChannelClosed));
         }
         Ok(())
     }

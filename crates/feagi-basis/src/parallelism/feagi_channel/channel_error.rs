@@ -1,8 +1,8 @@
 use thiserror::Error;
 
-/// The sender failed to send data. The data that was tried to be sent is dropped
+/// The transmitter failed to transmit data. The data that was tried to be sent is dropped
 #[derive(Debug, Error)]
-pub enum FeagiChannelSendError {
+pub enum FeagiChannelTransmitError {
     #[error("Feagi channel is closed, receiver likely terminated unexpectedly!")]
     ChannelClosed,
     #[error("Feagi channel is full, receiver is likely unresponsive!")]
@@ -11,33 +11,33 @@ pub enum FeagiChannelSendError {
     ChannelFullAfterExceedingTimeout,
 }
 
-impl<T> From<thingbuf::mpsc::errors::TrySendError<T>> for FeagiChannelSendError {
+impl<T> From<thingbuf::mpsc::errors::TrySendError<T>> for FeagiChannelTransmitError {
     fn from(value: thingbuf::mpsc::errors::TrySendError<T>) -> Self {
         match value {
-            thingbuf::mpsc::errors::TrySendError::Full(_) => FeagiChannelSendError::ChannelFull,
-            thingbuf::mpsc::errors::TrySendError::Closed(_) => FeagiChannelSendError::ChannelClosed,
+            thingbuf::mpsc::errors::TrySendError::Full(_) => FeagiChannelTransmitError::ChannelFull,
+            thingbuf::mpsc::errors::TrySendError::Closed(_) => FeagiChannelTransmitError::ChannelClosed,
             _ => {
-                unreachable!("Invalid send channel error!")
+                unreachable!("Invalid transmitter channel error!")
             }
         }
     }
 }
 
-impl<T> From<thingbuf::mpsc::errors::Closed<T>> for FeagiChannelSendError {
+impl<T> From<thingbuf::mpsc::errors::Closed<T>> for FeagiChannelTransmitError {
     fn from(_value: thingbuf::mpsc::errors::Closed<T>) -> Self {
-        FeagiChannelSendError::ChannelClosed
+        FeagiChannelTransmitError::ChannelClosed
     }
 }
 
 // thingbuf only provides timeout errors with its std feature
 #[cfg(feature = "std")]
-impl<T> From<thingbuf::mpsc::errors::SendTimeoutError<T>> for FeagiChannelSendError {
+impl<T> From<thingbuf::mpsc::errors::SendTimeoutError<T>> for FeagiChannelTransmitError {
     fn from(value: thingbuf::mpsc::errors::SendTimeoutError<T>) -> Self {
         match value {
-            thingbuf::mpsc::errors::SendTimeoutError::Timeout(_) => FeagiChannelSendError::ChannelFullAfterExceedingTimeout,
-            thingbuf::mpsc::errors::SendTimeoutError::Closed(_) => FeagiChannelSendError::ChannelClosed,
+            thingbuf::mpsc::errors::SendTimeoutError::Timeout(_) => FeagiChannelTransmitError::ChannelFullAfterExceedingTimeout,
+            thingbuf::mpsc::errors::SendTimeoutError::Closed(_) => FeagiChannelTransmitError::ChannelClosed,
             _ => {
-                unreachable!("Invalid send channel error!")
+                unreachable!("Invalid transmitter channel error!")
             }
         }
     }
@@ -49,7 +49,7 @@ impl<T> From<thingbuf::mpsc::errors::SendTimeoutError<T>> for FeagiChannelSendEr
 pub enum FeagiChannelReceiveError {
     #[error("Feagi channel is empty. This is not an error")]
     ChannelEmpty,
-    #[error("Feagi channel is closed, sender likely terminated unexpectedly!")]
+    #[error("Feagi channel is closed, transmitter likely terminated unexpectedly!")]
     ChannelClosed,
     #[error("Feagi channel is empty even after awaiting!")]
     ChannelEmptyAfterExceedingTimeout,
@@ -85,7 +85,7 @@ impl From<thingbuf::mpsc::errors::RecvTimeoutError> for FeagiChannelReceiveError
 #[derive(Debug, Error)]
 pub enum FeagiRequestError {
     #[error("Feagi request could not be sent: {0}")]
-    RequestNotSent(#[from] FeagiChannelSendError),
+    RequestNotSent(#[from] FeagiChannelTransmitError),
     #[error("Feagi reply could not be received: {0}")]
     ReplyNotReceived(#[from] FeagiChannelReceiveError),
     #[error("Feagi responder dropped the request without responding!")]
