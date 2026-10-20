@@ -78,7 +78,9 @@ fn operation_tokens<const METHOD: FeagiRequestMessageU8>(
         segments.extend(quote!(PathSegment::Literal(#segment),));
     }
 
-    let mut query_items = TokenStream::new();
+    // TODO Read messages send their payload as the URL query, so its fields belong here. Left
+    // empty until OpenAPI is built from the traits
+    let query_items = TokenStream::new();
     for element in message.path.elements() {
         match element {
             MessagePathElement::StaticPath(text) => {
@@ -98,19 +100,6 @@ fn operation_tokens<const METHOD: FeagiRequestMessageU8>(
                 });
                 segments.extend(quote! {
                     PathSegment::Parameter(PathParameter::new(#name, #description, &#const_name)),
-                });
-                schema_index += 1;
-            }
-            MessagePathElement::QueryableOfName(name, ty) => {
-                let const_name = format_ident!("QUERY_SCHEMA_{schema_index}");
-                let (inner, required) = peel_option(ty);
-                let schema = schema_value_tokens(inner, None);
-                let description = description_tokens(lookup_doc(&message.path_item_descriptions, name));
-                prelude.extend(quote! {
-                    const #const_name: Schema = #schema;
-                });
-                query_items.extend(quote! {
-                    QueryParameter::new(#name, #description, #required, &#const_name),
                 });
                 schema_index += 1;
             }

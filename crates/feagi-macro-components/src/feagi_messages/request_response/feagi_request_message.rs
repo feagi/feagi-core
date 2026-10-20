@@ -52,10 +52,6 @@ impl FeagiRequestMessageRustStructNames {
         self.with_prefix_method_and_given_suffix("FeagiRequestMessageParameters")
     }
 
-    pub fn feagi_message_queryable_specification_struct_name(&self) -> syn::Ident {
-        self.with_prefix_method_and_given_suffix("FeagiRequestMessageQueryables")
-    }
-
     pub fn feagi_message_payload_specification_struct_name(&self) -> syn::Ident {
         self.with_prefix_method_and_given_suffix("FeagiRequestMessagePayload")
     }
@@ -85,7 +81,7 @@ impl FeagiRequestMessageRustStructNames {
 ///     },
 ///     description: "Description String",
 ///     alloc_only: true,                  (optional, defaults to false)
-///     payload: {                         (optional, not allowed for Read messages)
+///     payload: {                         (optional, Read messages send it as the URL query in REST)
 ///         property_name: Type, "optional_comment",
 ///     },
 ///     response: {                        (optional)
@@ -110,11 +106,6 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
     /// Whether this message's path defines a parameter struct.
     pub fn is_parameter_struct_generated(&self) -> bool {
         self.path.is_parameter_struct_generated()
-    }
-
-    /// Whether this message's path defines a queryable struct.
-    pub fn is_queryable_struct_generated(&self) -> bool {
-        self.path.is_queryable_struct_generated()
     }
 
     /// Whether this message defines a payload struct.
@@ -153,11 +144,10 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
     /// message struct, and the descriptor of this message
     pub fn generate_rust_message_items(&self, names: &FeagiRequestMessageRustStructNames, category: &FeagiRequestMessageCategoryContext) -> proc_macro2::TokenStream {
         let basis = basis_path();
-        let components = quote!(#basis::feagi_message::feagi_message_components);
+        let request_module = quote!(#basis::feagi_message::request);
+        let payloads = quote!(#request_module::feagi_request_response_payloads);
         let specification_derives = serde_data_derive_attributes();
         let mut output = proc_macro2::TokenStream::new();
-
-        output.extend(self.path.generate_feagi_message_path_struct_and_impls(&names.path_struct_names(), category));
 
         // Every field of the message, from all of its request specifications
         let mut all_request_fields = StructTemplate::new_empty();
@@ -203,25 +193,19 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
         let parameters = generate_specification(
             self.path.as_parameter_struct_template(),
             names.feagi_message_parameter_specification_struct_name(),
-            quote!(#components::MessageParameters),
+            quote!(#basis::feagi_message::feagi_message_path::parameters::FeagiMessagePathParameters),
             format_ident!("parameters"),
             &mut output,
         );
-        let queryables = generate_specification(
-            self.path.as_queryable_struct_template(),
-            names.feagi_message_queryable_specification_struct_name(),
-            quote!(#components::MessageQueryables),
-            format_ident!("queryables"),
-            &mut output,
-        );
-        // Read messages are validated to have no payload, so this is always `()` for them
         let payload = generate_specification(
             self.payload.clone(),
             names.feagi_message_payload_specification_struct_name(),
-            quote!(#components::MessagePayload),
+            quote!(#payloads::FeagiRequestPayload),
             format_ident!("request_payload"),
             &mut output,
         );
+
+        output.extend(self.path.generate_feagi_message_path_struct_and_impls(&names.path_struct_names(), &parameters.type_name, category));
 
         if self.is_response_struct_generated() {
             let mut template = self.response.clone();
@@ -229,7 +213,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             let struct_name = names.feagi_message_response_specification_struct_name();
             output.extend(template.generate_rust_struct(struct_name.clone(), None, specification_derives.clone(), RustVisibility::Public));
             output.extend(quote! {
-                impl #basis::feagi_message::feagi_response_message::FeagiResponsePayload for #struct_name {}
+                impl #payloads::FeagiResponsePayload for #struct_name {}
             });
         }
 
@@ -249,13 +233,10 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
         let consume_self = if all_request_fields.is_empty() { quote!(let _ = self;) } else { quote!() };
 
         let descriptor_name = names.feagi_message_descriptor_struct_name();
-        let (parameters_type, queryables_type, payload_type) = (&parameters.type_name, &queryables.type_name, &payload.type_name);
-        let (consume_parameters, consume_queryables, consume_payload) =
-            (&parameters.consume_argument, &queryables.consume_argument, &payload.consume_argument);
-        let (compose_parameters, compose_queryables, compose_payload) =
-            (&parameters.compose_fields, &queryables.compose_fields, &payload.compose_fields);
-        let (decompose_parameters, decompose_queryables, decompose_payload) =
-            (&parameters.decompose_value, &queryables.decompose_value, &payload.decompose_value);
+        let (parameters_type, payload_type) = (&parameters.type_name, &payload.type_name);
+        let (consume_parameters, consume_payload) = (&parameters.consume_argument, &payload.consume_argument);
+        let (compose_parameters, compose_payload) = (&parameters.compose_fields, &payload.compose_fields);
+        let (decompose_parameters, decompose_payload) = (&parameters.decompose_value, &payload.decompose_value);
 
         output.extend(quote! {
             impl #message_name {
@@ -264,26 +245,23 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                 }
             }
 
-            impl #basis::feagi_message::feagi_request_message::FeagiRequestMessage for #message_name {
+            impl #request_module::feagi_request_message::FeagiRequestMessage for #message_name {
                 type Descriptor = #descriptor_name;
                 type DescriptorParameters = #parameters_type;
-                type DescriptorQueryables = #queryables_type;
                 type DescriptorRequestPayload = #payload_type;
 
-                fn compose(parameters: Self::DescriptorParameters, queryables: Self::DescriptorQueryables, request_payload: Self::DescriptorRequestPayload) -> Self {
+                fn compose(parameters: Self::DescriptorParameters, request_payload: Self::DescriptorRequestPayload) -> Self {
                     #consume_parameters
-                    #consume_queryables
                     #consume_payload
                     Self {
                         #compose_parameters
-                        #compose_queryables
                         #compose_payload
                     }
                 }
 
-                fn decompose(self) -> (Self::DescriptorParameters, Self::DescriptorQueryables, Self::DescriptorRequestPayload) {
+                fn decompose(self) -> (Self::DescriptorParameters, Self::DescriptorRequestPayload) {
                     #consume_self
-                    (#decompose_parameters, #decompose_queryables, #decompose_payload)
+                    (#decompose_parameters, #decompose_payload)
                 }
             }
         });
@@ -297,18 +275,19 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
         let request_enum = &category.request_enum_name;
         let response_enum = &category.response_enum_name;
         let variant = names.category_enum_variant_name();
+        let method_marker = format_ident!("{}", FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).marker_type_name());
 
         output.extend(quote! {
             #[doc = #description]
             #[derive(Clone, Copy, Debug)]
             pub struct #descriptor_name;
 
-            impl #basis::feagi_message::feagi_request_message::FeagiRequestMessageDescriptor for #descriptor_name {
+            impl #request_module::feagi_request_descriptor::FeagiRequestMessageDescriptor for #descriptor_name {
                 const MESSAGE_DESCRIPTION: &'static str = #description;
                 type Message = #message_name;
                 type MessagePath = #path_name;
+                type Method = #request_module::feagi_request_descriptor::#method_marker;
                 type Parameters = #parameters_type;
-                type Queryables = #queryables_type;
                 type RequestPayload = #payload_type;
                 type ResponsePayload = #response_payload_type;
                 type ResponseError = #response_error_type;
@@ -337,7 +316,7 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
     }
 }
 
-/// How one request specification (parameters, queryables, payload) is wired into the message
+/// How one request specification (parameters, payload) is wired into the message
 struct Specification {
     /// The specification struct, or `()` when it has no fields
     type_name: syn::Type,
@@ -406,9 +385,6 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Parse for FeagiRequestMessage<
             } else if lookahead.peek(kw::payload) {
                 members.parse::<kw::payload>()?;
                 members.parse::<Token![:]>()?;
-                if FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).had_no_payload() {
-                    return Err(syn::Error::new(span, "Read messages cannot have a payload"));
-                }
                 set_once(&mut payload, members.parse()?, "payload", span)?;
             } else if lookahead.peek(kw::response) {
                 members.parse::<kw::response>()?;

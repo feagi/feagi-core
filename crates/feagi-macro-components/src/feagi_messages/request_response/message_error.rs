@@ -29,7 +29,7 @@ impl MessageErrorTemplate {
     pub fn error_type(&self, generated_name: &Ident) -> proc_macro2::TokenStream {
         let basis = basis_path();
         match self {
-            MessageErrorTemplate::Default => quote!(#basis::feagi_message::feagi_response_message::FeagiUnexpectedError),
+            MessageErrorTemplate::Default => quote!(#basis::feagi_message::request::feagi_request_response_payloads::FeagiUnexpectedError),
             MessageErrorTemplate::Variants(_) => quote!(#generated_name),
             MessageErrorTemplate::Explicit(error_type) => quote!(#error_type),
         }
@@ -70,7 +70,7 @@ impl MessageErrorTemplate {
 
             impl ::core::error::Error for #generated_name {}
 
-            impl #basis::feagi_message::feagi_response_message::FeagiMessageError for #generated_name {}
+            impl #basis::feagi_message::request::feagi_request_response_payloads::FeagiMessageError for #generated_name {}
         }
     }
 }

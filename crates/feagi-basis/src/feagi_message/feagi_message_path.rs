@@ -1,26 +1,38 @@
 
-/// The first step for a message path, allows parsing in the configrables as a first step
+/// The path a message takes. Zero sized, the path is described entirely by its types and
+/// associated items, for parsers in zenoh / picoserve / open-api to generate what they need
 pub trait FeagiMessagePath: 'static {
 
-    /// A flat tuple with &'static str for static path components, `FeagiMessagePathConfigurables`
-    /// to be overwritten by configurables, and `FeagiMessagePathParameters` wrapped by
-    /// `MessagePathSlotElement`
-    type FullMessagePathBaseTuple;
-
-    /// A struct of `FeagiMessagePathConfigurablesElement` instances
+    /// A struct of `FeagiMessagePathStaticElement` instances, shared by the category
     type Configurables: configurables::FeagiMessagePathConfigurables;
 
     /// A struct of `FeagiMessagePathParameterElement` instances used in this path.
     type Parameters: parameters::FeagiMessagePathParameters;
 
-    /// The flat tuple representation of the path containing types of &str where we have defined
-    /// elements of the path (either statically or from parsed configurables) and
-    /// `MessagePathSlotElement` defines the various Parameters that must be parsed dynamically
+    /// A flat tuple of the whole path as known at compile time: &'static str for static path
+    /// components, `ConfigurableSlot` where a configurable goes, and `MessagePathSlotElement`
+    /// where a parameter goes
+    type FullMessagePathBaseTuple;
+
+    /// The whole path as known at compile time. Usable in const code (open-api)
+    const FULL_MESSAGE_PATH: Self::FullMessagePathBaseTuple;
+
+    /// The flat tuple representation of the path once configurables are applied: &'static str
+    /// for static path components and configurable values, and `MessagePathSlotElement` for the
+    /// parameters that must be parsed dynamically
     type SlottedParameterMessagePath;
 
-    /// Applies the configurables to `FullMessagePathBaseTuple` such that we get
-    /// `SlottedParameterMessagePath`
-    fn to_slotted_parameter_message_path(self, configurables: &Self::Configurables) -> &Self::SlottedParameterMessagePath;
+    /// Applies the configurables to `FULL_MESSAGE_PATH`, giving `SlottedParameterMessagePath`.
+    /// Configurables are set once and live as long as the program, hence `'static`
+    fn to_slotted_parameter_message_path(configurables: &'static Self::Configurables) -> Self::SlottedParameterMessagePath;
+
+    /// Writes the concrete path for a request with the given `parameters`, segments separated by
+    /// `/`. Used by the requesting side (zenoh keys, REST client URLs)
+    fn write_message_path<W: core::fmt::Write>(
+        configurables: &Self::Configurables,
+        parameters: &Self::Parameters,
+        out: &mut W,
+    ) -> core::fmt::Result;
 }
 
 
@@ -60,6 +72,20 @@ pub mod configurables {
     impl FeagiMessagePathStaticElement for String {
         fn to_str_slice(&self) -> &str {
             self.as_str()
+        }
+    }
+
+    /// Where a configurable goes in `FeagiMessagePath::FULL_MESSAGE_PATH`. Its value is only known
+    /// at runtime, so only its name is held
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct ConfigurableSlot {
+        /// Name of the configurable, as its field in the category's configurables struct
+        pub name: &'static str,
+    }
+
+    impl ConfigurableSlot {
+        pub const fn new(name: &'static str) -> Self {
+            Self { name }
         }
     }
 }
@@ -111,17 +137,22 @@ pub mod parameters {
 
     //region Path Parameter Slot
 
-    /// A path parameter slot carrying only its type `Par`. Used for building stuff via the
-    /// type system
-    pub struct MessagePathSlotElement<Par: FeagiMessagePathParameterElement>(
-        core::marker::PhantomData<Par>,
-    );
+    /// A path parameter slot carrying its name and type `Par`, but no value. Used for building
+    /// stuff via the type system
+    pub struct MessagePathSlotElement<Par: FeagiMessagePathParameterElement> {
+        /// Name of the parameter, as its field in the message's parameters struct
+        pub name: &'static str,
+        _parameter: core::marker::PhantomData<Par>,
+    }
 
     impl<Par: FeagiMessagePathParameterElement> MessagePathSlotElement<Par> {
-        /// Create a parameter slot marker for type `Par`.
+        /// Create a parameter slot marker named `name` for type `Par`.
         #[inline]
-        pub const fn new() -> Self {
-            Self(core::marker::PhantomData)
+        pub const fn new(name: &'static str) -> Self {
+            Self {
+                name,
+                _parameter: core::marker::PhantomData,
+            }
         }
     }
 
@@ -137,7 +168,7 @@ pub mod parameters {
 
     impl<Par: FeagiMessagePathParameterElement> core::fmt::Debug for MessagePathSlotElement<Par> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            f.debug_struct("FeagiMessagePathParameterElement").finish()
+            f.debug_struct("MessagePathSlotElement").field("name", &self.name).finish()
         }
     }
 

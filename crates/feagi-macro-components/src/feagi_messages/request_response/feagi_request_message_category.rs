@@ -125,7 +125,7 @@ impl FeagiRequestMessageCategory {
             configurables_struct_name: names.configurables_struct_name(),
             request_enum_name: names.request_enum_name(),
             response_enum_name: names.response_enum_name(),
-            base_path_elements: self.base_path_elements.iter().map(clone_path_segment).collect(),
+            base_path_elements: self.base_path_elements.iter().map(MessagePathElement::duplicate).collect(),
         }
     }
 
@@ -171,7 +171,7 @@ impl FeagiRequestMessageCategory {
             Span::call_site(),
         );
         let fields = self.configurables.iter().map(|(field, max_length)| {
-            quote!(pub #field: #basis::feagi_message::feagi_message_path::FeagiPathConfigurable<#max_length>,)
+            quote!(pub #field: #basis::__private::heapless::String<#max_length>,)
         });
         quote! {
             #[doc = #doc]
@@ -179,6 +179,8 @@ impl FeagiRequestMessageCategory {
             pub struct #name {
                 #( #fields )*
             }
+
+            impl #basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathConfigurables for #name {}
         }
     }
 
@@ -189,7 +191,7 @@ impl FeagiRequestMessageCategory {
     ) -> proc_macro2::TokenStream {
         let basis = basis_path();
         let recyclable = quote!(#basis::parallelism::feagi_channel::recycling::Recyclable);
-        let grouping = quote!(#basis::feagi_message::feagi_request_message_grouping);
+        let grouping = quote!(#basis::feagi_message::request::feagi_request_message_grouping);
         let request_enum = &context.request_enum_name;
         let response_enum = &context.response_enum_name;
         let marker = &context.category_marker_name;
@@ -270,7 +272,7 @@ impl FeagiRequestMessageCategory {
             #[derive(Clone, Copy, Debug)]
             pub struct #marker;
 
-            impl #basis::feagi_message::feagi_request_message_category::FeagiRequestCategory for #marker {
+            impl #basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory for #marker {
                 const CATEGORY_NAME: &'static str = #category_name;
                 const CATEGORY_DESCRIPTION: &'static str = #category_description;
                 const BASE_PATH: &'static str = #base_path;
@@ -334,16 +336,6 @@ fn collect_entries<'a, const METHOD: FeagiRequestMessageU8>(messages: &'a IndexM
     }
 }
 
-/// Base path elements are only static segments and configurables, which can be cloned
-fn clone_path_segment(element: &MessagePathElement) -> MessagePathElement {
-    match element {
-        MessagePathElement::StaticPath(text) => MessagePathElement::StaticPath(text.clone()),
-        MessagePathElement::ConfigurableOfName(name) => MessagePathElement::ConfigurableOfName(name.clone()),
-        MessagePathElement::ParameterOfName(name, parameter_type) => MessagePathElement::ParameterOfName(name.clone(), parameter_type.clone()),
-        MessagePathElement::QueryableOfName(name, query_type) => MessagePathElement::QueryableOfName(name.clone(), query_type.clone()),
-    }
-}
-
 impl Parse for FeagiRequestMessageCategory {
     /// Parse the category fields. Verb sections may be omitted, in docstring order.
     fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -375,7 +367,7 @@ impl Parse for FeagiRequestMessageCategory {
         let base_path_elements = if base_path.value().is_empty() { Vec::new() } else { message_path_elements(&base_path)? };
         if base_path_elements
             .iter()
-            .any(|element| matches!(element, MessagePathElement::ParameterOfName(..) | MessagePathElement::QueryableOfName(..)))
+            .any(|element| matches!(element, MessagePathElement::ParameterOfName(..)))
         {
             return Err(syn::Error::new(base_path.span(), "base path may only contain static segments and `$configurables`"));
         }

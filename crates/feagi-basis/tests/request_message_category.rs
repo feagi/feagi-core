@@ -1,9 +1,12 @@
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
-use feagi_basis::feagi_message::feagi_message_path::{FeagiMessagePath, FeagiPathElementConfigurable, FeagiPathConfigurableError, PathParameterElement};
-use feagi_basis::feagi_message::feagi_request_message::{FeagiRequestMessage, FeagiRequestMessageDescriptor};
-use feagi_basis::feagi_message::feagi_request_message_category::FeagiRequestCategory;
-use feagi_basis::feagi_message::feagi_request_message_grouping::{NMDes, NNull};
-use feagi_basis::feagi_message::request::feagi_response_error::{FeagiMessageError, FeagiUnexpectedError};
+use feagi_basis::feagi_message::feagi_message_path::configurables::ConfigurableSlot;
+use feagi_basis::feagi_message::feagi_message_path::parameters::MessagePathSlotElement;
+use feagi_basis::feagi_message::feagi_message_path::FeagiMessagePath;
+use feagi_basis::feagi_message::request::feagi_request_descriptor::FeagiRequestMessageDescriptor;
+use feagi_basis::feagi_message::request::feagi_request_message::FeagiRequestMessage;
+use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory;
+use feagi_basis::feagi_message::request::feagi_request_message_grouping::{NMDes, NNull};
+use feagi_basis::feagi_message::request::feagi_request_response_payloads::{FeagiMessageError, FeagiUnexpectedError};
 
 //region Test Category
 
@@ -32,11 +35,14 @@ define_request_message_category! {
     },
     read: {
         "Order": {
-            path: "orders/:order_id<u32>?include_price<bool>",
+            path: "orders/:order_id<u32>",
             path_item_descriptions: {
                 order_id: "Which order to read",
             },
             description: "Read an order",
+            payload: {
+                include_price: bool,
+            },
             response: {
                 drink: u32, "Which drink was ordered",
                 price: Option<u32>,
@@ -79,10 +85,11 @@ define_request_message_category! {
 
 //endregion
 
-fn configurables() -> CoffeeShopConfigurables {
-    CoffeeShopConfigurables {
-        shop_name: FeagiPathElementConfigurable::try_from_str("downtown").unwrap(),
-    }
+/// Configurables live as long as the program, so they are leaked here
+fn configurables() -> &'static CoffeeShopConfigurables {
+    Box::leak(Box::new(CoffeeShopConfigurables {
+        shop_name: heapless::String::try_from("downtown").unwrap(),
+    }))
 }
 
 /// Compiles only if `Actual` and `Expected` are the same type
@@ -122,27 +129,45 @@ fn category_marker_holds_category_information() {
 }
 
 #[test]
-fn path_tuple_starts_with_base_path_and_reads_configurables() {
-    let configurables = configurables();
-    let (shops, shop_name, orders, _order_id): (&str, &str, &str, PathParameterElement<u32>) =
-        ReadOrderFeagiRequestMessagePath::as_path_parser_tuple(&configurables);
-    assert_eq!((shops, shop_name, orders), ("shops", "downtown", "orders"));
+fn full_path_starts_with_base_path_and_names_its_slots() {
+    let (shops, shop_name, orders, order_id): (&str, ConfigurableSlot, &str, MessagePathSlotElement<u32>) =
+        ReadOrderFeagiRequestMessagePath::FULL_MESSAGE_PATH;
+    assert_eq!((shops, shop_name.name, orders, order_id.name), ("shops", "shop_name", "orders", "order_id"));
 
-    assert_same_type::<<ReadOrderFeagiRequestMessagePath as FeagiMessagePath>::ParametersTuple, (u32,)>();
-    assert_same_type::<<CreateOrderFeagiRequestMessagePath as FeagiMessagePath>::ParametersTuple, ()>();
+    assert_same_type::<<ReadOrderFeagiRequestMessagePath as FeagiMessagePath>::Parameters, ReadOrderFeagiRequestMessageParameters>();
+    assert_same_type::<<CreateOrderFeagiRequestMessagePath as FeagiMessagePath>::Parameters, ()>();
+    assert_same_type::<<CreateOrderFeagiRequestMessagePath as FeagiMessagePath>::Configurables, CoffeeShopConfigurables>();
+}
+
+#[test]
+fn slotted_path_fills_in_configurables() {
+    let (shops, shop_name, orders, order_id): (&str, &str, &str, MessagePathSlotElement<u32>) =
+        ReadOrderFeagiRequestMessagePath::to_slotted_parameter_message_path(configurables());
+    assert_eq!((shops, shop_name, orders, order_id.name), ("shops", "downtown", "orders", "order_id"));
+}
+
+#[test]
+fn message_path_is_written_with_its_parameters() {
+    let mut path = heapless::String::<64>::new();
+    ReadOrderFeagiRequestMessagePath::write_message_path(configurables(), &ReadOrderFeagiRequestMessageParameters { order_id: 7 }, &mut path).unwrap();
+    assert_eq!(path.as_str(), "shops/downtown/orders/7");
+
+    let mut path = heapless::String::<64>::new();
+    CreateOrderFeagiRequestMessagePath::write_message_path(configurables(), &(), &mut path).unwrap();
+    assert_eq!(path.as_str(), "shops/downtown/orders");
 }
 
 #[test]
 fn message_composes_from_and_decomposes_into_its_specifications() {
     let message = ReadOrderFeagiRequestMessage::new(7, true);
-    let (parameters, queryables, ()) = message.decompose();
+    let (parameters, payload) = message.decompose();
     assert_eq!(parameters.order_id, 7);
-    assert!(queryables.include_price);
+    assert!(payload.include_price);
 
-    let message = ReadOrderFeagiRequestMessage::compose(parameters, queryables, ());
+    let message = ReadOrderFeagiRequestMessage::compose(parameters, payload);
     assert_eq!((message.order_id, message.include_price), (7, true));
 
-    let message = CreateOrderFeagiRequestMessage::compose((), (), CreateOrderFeagiRequestMessagePayload { drink: 2, size: 3 });
+    let message = CreateOrderFeagiRequestMessage::compose((), CreateOrderFeagiRequestMessagePayload { drink: 2, size: 3 });
     assert_eq!((message.drink, message.size), (2, 3));
 }
 
@@ -166,17 +191,6 @@ fn errors_serialize_as_plain_serde_enums() {
 
     let error: ReadOrderFeagiRequestMessageError = serde_json::from_str(r#""OrderNotFound""#).unwrap();
     assert_eq!(error.to_string(), "No order has that ID");
-}
-
-#[test]
-fn path_configurables_only_accept_url_safe_base64() {
-    assert!(FeagiPathElementConfigurable::<8>::try_from_str("aZ09-_=").is_ok());
-    assert_eq!(FeagiPathElementConfigurable::<8>::try_from_str(""), Err(FeagiPathConfigurableError::Empty));
-    assert_eq!(
-        FeagiPathElementConfigurable::<2>::try_from_str("abc"),
-        Err(FeagiPathConfigurableError::TooLong { actual: 3, max: 2 })
-    );
-    assert_eq!(FeagiPathElementConfigurable::<8>::try_from_str("a/b"), Err(FeagiPathConfigurableError::InvalidCharacter('/')));
 }
 
 #[cfg(feature = "std")]

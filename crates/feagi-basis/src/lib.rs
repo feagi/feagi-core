@@ -13,6 +13,7 @@ extern crate self as feagi_basis;
 /// Dependencies reached by generated code, so crates using the macros do not need them directly
 #[doc(hidden)]
 pub mod __private {
+    pub use heapless;
     pub use serde;
 }
 

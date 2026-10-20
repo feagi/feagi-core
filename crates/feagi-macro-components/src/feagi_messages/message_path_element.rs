@@ -10,8 +10,6 @@ pub enum MessagePathElement {
     ConfigurableOfName(LitStr),
     /// Parsed from the path of each request
     ParameterOfName(LitStr, Type),
-    /// Parsed from the query of each request
-    QueryableOfName(LitStr, Type),
 }
 
 impl MessagePathElement {
@@ -22,14 +20,15 @@ impl MessagePathElement {
             MessagePathElement::ParameterOfName(s, t) => {
                 format!(":{}<{}>", s.value(), quote!(#t).to_string())
             }
-            MessagePathElement::QueryableOfName(s, t) => {
-                format!("{}<{}>", s.value(), quote!(#t).to_string())
-            }
         }
     }
 
-    /// True for elements that are part of the path itself, rather than its query
-    pub fn is_path_segment(&self) -> bool {
-        !matches!(self, MessagePathElement::QueryableOfName(..))
+    /// Copies this element
+    pub fn duplicate(&self) -> Self {
+        match self {
+            MessagePathElement::StaticPath(text) => MessagePathElement::StaticPath(text.clone()),
+            MessagePathElement::ConfigurableOfName(name) => MessagePathElement::ConfigurableOfName(name.clone()),
+            MessagePathElement::ParameterOfName(name, parameter_type) => MessagePathElement::ParameterOfName(name.clone(), parameter_type.clone()),
+        }
     }
 }
