@@ -1,7 +1,13 @@
 //! Systems (largely) common to both STD and Embassy
 
 use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryGroupChannelRouter;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::basis::FeagiRequestResponseChannels;
 use path_builder::AddNestedCategoryPathsToPicoServeRouter;
+
+/// The path configurables of every message in every category of `GroupChannelRouter`, nested the
+/// same way as its `NCat` / `NMDes` chains. Passed to `build_router_with_routes`
+pub type GroupPathConfigurables<GroupChannelRouter, Channels> =
+    <<GroupChannelRouter as RequestCategoryGroupChannelRouter<Channels>>::NestedCategoryChannelRouters as AddNestedCategoryPathsToPicoServeRouter<Channels>>::NestedConfigurables;
 
 /// Request read buffer. Response bodies are written from their static slices.
 pub const HTTP_BUFFER_LEN: usize = 2048;
@@ -9,17 +15,17 @@ pub const HTTP_BUFFER_LEN: usize = 2048;
 /// Builds a REST server worker. Implemented once per backend (std threads, embassy), each also
 /// implementing `FeagiWorkerBuilder` for its spawner. Backend specific settings are set on the
 /// implementing struct after construction
-pub trait RestServerWorkerBuilder<>: Sized {
+pub trait RestServerWorkerBuilder<Channels: FeagiRequestResponseChannels>: Sized {
     /// Creates a builder that will serve on `socket_address`, with backend defaults for
     /// everything else
     fn new(socket_address: core::net::SocketAddr) -> Self;
 
     /// Builds the static routes for the server.
-    fn build_router_with_routes<GroupChannelRouter: RequestCategoryGroupChannelRouter<Request, Response, Channels>>(
-        path_configurables: <GroupChannelRouter::NestedCategoryChannelRouters as AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>>::NestedConfigurables,
+    fn build_router_with_routes<GroupChannelRouter: RequestCategoryGroupChannelRouter<Channels>>(
+        path_configurables: GroupPathConfigurables<GroupChannelRouter, Channels>,
     ) -> picoserve::Router<impl picoserve::routing::PathRouter>
     where
-        GroupChannelRouter::NestedCategoryChannelRouters: AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>,
+        GroupChannelRouter::NestedCategoryChannelRouters: AddNestedCategoryPathsToPicoServeRouter<Channels>,
     {
         use picoserve::routing::PathRouter;
 
@@ -82,7 +88,7 @@ pub trait RestServerWorkerBuilder<>: Sized {
         let router = route_swagger_ui(router);
 
         // Main routes, one per message descriptor in each category of the group
-        let router = <GroupChannelRouter::NestedCategoryChannelRouters as AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>>::add_nested_category_paths_to_pico_serve_router(
+        let router = <GroupChannelRouter::NestedCategoryChannelRouters as AddNestedCategoryPathsToPicoServeRouter<Channels>>::add_nested_category_paths_to_pico_serve_router(
             router,
             path_configurables,
         );
@@ -98,7 +104,6 @@ pub mod path_builder {
     use feagi_basis::feagi_message::feagi_message_path::{FeagiMessagePath, FeagiRequestMessagePath, PathParameterElement};
     use feagi_basis::feagi_message::feagi_request_message::FeagiRequestMessageDescriptor;
     use feagi_basis::feagi_message::feagi_request_message_grouping::{NCat, NMDes, NNull, RequestCategoryChannelRouter};
-    use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
     use feagi_basis::parallelism::feagi_channel::request_response_channel::basis::FeagiRequestResponseChannels;
     use feagi_interop_proc::generate_into_picoserve_path_impls;
 
@@ -133,7 +138,7 @@ pub mod path_builder {
     }
 
     /// Converts a single FEAGI path element into its picoserve path-segment type.
-    trait IntoPicoserveSegment {
+    pub trait IntoPicoserveSegment {
         /// The picoserve segment type this element becomes.
         type Output;
 
@@ -164,7 +169,7 @@ pub mod path_builder {
 
     /// Converts a whole FEAGI path tuple into the picoserve path-description tuple
     /// accepted by `Router::route`. Per-arity impls are macro-generated.
-    trait IntoPicoservePath {
+    pub trait IntoPicoservePath {
         /// The picoserve path-description tuple produced from `Self`.
         type Output;
 
@@ -240,10 +245,8 @@ pub mod path_builder {
     /// Unrolls a `NCat` chain (such as `RequestCategoryGroupChannelRouter::NestedCategoryChannelRouters`),
     /// adding the paths of every category's `NestedMessageDescriptors` through
     /// [`AddNestedRequestPathsToPicoServeRouter`]
-    pub trait AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>
+    pub trait AddNestedCategoryPathsToPicoServeRouter<Channels>
     where
-        Request: Recyclable,
-        Response: Recyclable,
         Channels: FeagiRequestResponseChannels,
     {
         /// Each category's `NestedConfigurables`, nested the same way as the `NCat` chain:
@@ -258,11 +261,9 @@ pub mod path_builder {
     }
 
     /// End of the chain, nothing left to add
-    impl<Request, Response, Channels>
-        AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels> for NNull
+    impl<Channels>
+        AddNestedCategoryPathsToPicoServeRouter<Channels> for NNull
     where
-        Request: Recyclable,
-        Response: Recyclable,
         Channels: FeagiRequestResponseChannels,
     {
         type NestedConfigurables = ();
@@ -277,15 +278,13 @@ pub mod path_builder {
     }
 
     /// Adds the head category's message paths, then recurses into the tail
-    impl<Head, Tail, Request, Response, Channels>
-        AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels> for NCat<Head, Tail>
+    impl<Head, Tail, Channels>
+        AddNestedCategoryPathsToPicoServeRouter<Channels> for NCat<Head, Tail>
     where
-        Request: Recyclable,
-        Response: Recyclable,
         Channels: FeagiRequestResponseChannels,
-        Head: RequestCategoryChannelRouter<Request, Response, Channels>,
+        Head: RequestCategoryChannelRouter<Channels>,
         Head::NestedMessageDescriptors: AddNestedRequestPathsToPicoServeRouter,
-        Tail: AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>,
+        Tail: AddNestedCategoryPathsToPicoServeRouter<Channels>,
     {
         type NestedConfigurables = (
             <Head::NestedMessageDescriptors as AddNestedRequestPathsToPicoServeRouter>::NestedConfigurables,

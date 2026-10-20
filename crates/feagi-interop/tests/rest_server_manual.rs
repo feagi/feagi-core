@@ -11,7 +11,9 @@
 use std::io::BufRead;
 use std::net::SocketAddr;
 
+use feagi_basis::feagi_message::feagi_request_message_grouping::{NNull, RequestCategoryGroupChannelRouter};
 use feagi_basis::parallelism::block_on_thread;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAlloc;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
 use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 use feagi_interop::transport::rest::server::server_basis::RestServerWorkerBuilder;
@@ -19,6 +21,14 @@ use feagi_interop::transport::rest::server::server_std::RestServerBuilderStd;
 
 /// HTTP address Brain Visualizer connects to on launch.
 const LISTEN_ADDRESS: &str = "127.0.0.1:8000";
+
+/// Group with no categories, so only the predefined routes are served
+#[derive(Clone)]
+struct EmptyGroupChannelRouter;
+
+impl RequestCategoryGroupChannelRouter<FeagiRequestResponseChannelsAlloc> for EmptyGroupChannelRouter {
+    type NestedCategoryChannelRouters = NNull;
+}
 
 /// Returns the fixed listen address used by this manual server.
 fn listen_address() -> SocketAddr {
@@ -52,7 +62,7 @@ fn wait_for_enter() {
 fn rest_server_runs_until_stopped_manually() {
     let address = listen_address();
     let (mut server, ()) = RestServerBuilderStd::new(address)
-        .build_worker(&FeagiStdThreadSpawner, ())
+        .build_worker(&FeagiStdThreadSpawner, (EmptyGroupChannelRouter, ()))
         .expect("REST server failed to start");
     print_routes(address);
 
