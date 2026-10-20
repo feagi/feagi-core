@@ -90,4 +90,6 @@ pub enum FeagiRequestError {
     ReplyNotReceived(#[from] FeagiChannelReceiveError),
     #[error("Feagi responder dropped the request without responding!")]
     ResponderDroppedRequest,
+    #[error("Feagi responder replied with a response that does not match the request!")]
+    UnexpectedResponse,
 }

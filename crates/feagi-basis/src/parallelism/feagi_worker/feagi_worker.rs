@@ -16,53 +16,61 @@ use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawn
 /// Runs some task separately depending on context. Runs on another thread in std, and on
 /// another task in embassy. THe interface is generally uniform irrespective of being in
 /// std or no-std modes
-pub struct FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
+pub struct FeagiWorker<Spawner, Channels, CustomRequest, CustomResponse>
 where
-    SpawnerImplementation: WorkerSpawnerImplementation,
-    ChannelImplementation: FeagiRequestResponseChannelBackend,
+    Spawner: WorkerSpawnerImplementation,
+    Channels: FeagiRequestResponseChannelBackend,
 {
-    request_maker: FeagiRequester<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>, ChannelImplementation>,
-    handle: SpawnerImplementation::WorkerInternalHandle,
+    requester: FeagiRequester<FeagiWorkerRequest<CustomRequest>, FeagiWorkerResponse<CustomResponse>, Channels>,
+    handle: Spawner::WorkerInternalHandle,
     /// Set once the worker has acknowledged `stop`. Later requests are refused without sending
     stopped: bool,
 }
 
-impl<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
-    FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
+impl<Spawner, Channels, CustomRequest, CustomResponse> FeagiWorker<Spawner, Channels, CustomRequest, CustomResponse>
 where
-    SpawnerImplementation: WorkerSpawnerImplementation,
-    ChannelImplementation: FeagiRequestResponseChannelBackend,
+    Spawner: WorkerSpawnerImplementation,
+    Channels: FeagiRequestResponseChannelBackend,
 {
     /// Meant be called by `FeagiWorkerBuilder::build_worker` implementations, spawns a new
     /// (running) worker
     pub fn new(
-        request_maker: FeagiRequester<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>, ChannelImplementation>,
-        handle: SpawnerImplementation::WorkerInternalHandle,
+        requester: FeagiRequester<FeagiWorkerRequest<CustomRequest>, FeagiWorkerResponse<CustomResponse>, Channels>,
+        handle: Spawner::WorkerInternalHandle,
     ) -> Self {
         Self {
-            request_maker,
+            requester,
             handle,
             stopped: false,
         }
     }
 
-    /// Sends a custom request and awaits for the worker's reply
+    /// Sends a custom request and awaits for the worker's custom reply
     ///
-    /// Errors with `RequestNotSent` if the worker has been stopped or has already exited
-    pub async fn make_request(&mut self, request: CustomCommandRequest) -> Result<FeagiWorkerResponse<CustomCommandResponse>, FeagiRequestError> {
+    /// Errors with `RequestNotSent` if the worker has been stopped or has already exited, and
+    /// with `UnexpectedResponse` if the worker replied with anything but a custom response
+    pub async fn make_request(&mut self, request: CustomRequest) -> Result<CustomResponse, FeagiRequestError> {
         self.refuse_if_stopped()?;
-        self.request_maker.make_request(FeagiWorkerRequest::Custom(request)).await
+        match self.requester.make_request(FeagiWorkerRequest::Custom(request)).await? {
+            FeagiWorkerResponse::Custom(response) => Ok(response),
+            _ => Err(FeagiRequestError::UnexpectedResponse),
+        }
     }
 
     /// Tells the worker to stop and waits until it has acknowledged. The worker exits after
     /// replying, so it may still be finishing when this returns
     ///
-    /// Errors with `RequestNotSent` if the worker has been stopped or has already exited
+    /// Errors with `RequestNotSent` if the worker has been stopped or has already exited, and
+    /// with `UnexpectedResponse` if the worker replied with anything but an acknowledgement
     pub async fn stop(&mut self) -> Result<(), FeagiRequestError> {
         self.refuse_if_stopped()?;
-        self.request_maker.make_request(FeagiWorkerRequest::Stop).await?;
-        self.stopped = true;
-        Ok(())
+        match self.requester.make_request(FeagiWorkerRequest::Stop).await? {
+            FeagiWorkerResponse::Acknowledged => {
+                self.stopped = true;
+                Ok(())
+            }
+            _ => Err(FeagiRequestError::UnexpectedResponse),
+        }
     }
 
     /// Errors the same way as a request to an exited worker, if `stop` was acknowledged
@@ -76,17 +84,16 @@ where
 
 // Joining is specific to std. Leaving here to ease of understanding as its not really an "implementation"
 #[cfg(feature = "std")]
-impl<ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
-    FeagiWorker<FeagiStdThreadSpawner, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
+impl<Channels, CustomRequest, CustomResponse> FeagiWorker<FeagiStdThreadSpawner, Channels, CustomRequest, CustomResponse>
 where
-    ChannelImplementation: FeagiRequestResponseChannelBackend,
+    Channels: FeagiRequestResponseChannelBackend,
 {
     /// Blocks until the worker's thread exits. Errors with the panic payload if it panicked
     ///
     /// The request channel is dropped first, so a worker that exits once its channel closes
     /// is not left waiting on this handle
     pub fn join(self) -> std::thread::Result<()> {
-        drop(self.request_maker);
+        drop(self.requester);
         self.handle.join()
     }
 }

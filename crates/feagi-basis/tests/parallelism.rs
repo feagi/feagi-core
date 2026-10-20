@@ -717,7 +717,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
                         }
                         FeagiWorkerRequest::Custom(value) => {
                             event_sender.async_send(Number(u64::from(value))).await.unwrap();
-                            FeagiWorkerResponse::Acknowledged
+                            FeagiWorkerResponse::Custom(value)
                         }
                         FeagiWorkerRequest::Nothing => FeagiWorkerResponse::Nothing,
                     })
@@ -768,8 +768,7 @@ fn built_worker_answers_custom_requests_then_stops() {
 
     block_on_thread(async {
         for value in 0..50u32 {
-            let response = worker.make_request(value).await.unwrap();
-            assert!(matches!(response, FeagiWorkerResponse::Custom(doubled) if doubled == value * 2));
+            assert_eq!(worker.make_request(value).await.unwrap(), value * 2);
         }
         worker.stop().await.unwrap();
         // TODO: These are refused by `FeagiWorker` itself to avoid the request / response drain
@@ -794,8 +793,8 @@ fn built_worker_sends_on_its_required_channel_pair() {
     let (mut worker, ()) = builder.build_worker(&FeagiStdThreadSpawner, event_sender).unwrap();
 
     block_on_thread(async {
-        worker.make_request(3).await.unwrap();
-        worker.make_request(4).await.unwrap();
+        assert_eq!(worker.make_request(3).await.unwrap(), 3);
+        assert_eq!(worker.make_request(4).await.unwrap(), 4);
         worker.stop().await.unwrap();
     });
     worker.join().unwrap();
