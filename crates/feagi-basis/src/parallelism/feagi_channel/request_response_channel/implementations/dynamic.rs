@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use crate::parallelism::feagi_channel::base_channels::alloc_channels::FeagiChannelAllocBuilder;
+use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 use crate::parallelism::feagi_channel::request_response_channel::basis::{FeagiRequestResponseBuilder, ReplySlot, RequestSlot};
 use crate::parallelism::feagi_channel::request_response_channel::requester::FeagiRequester;

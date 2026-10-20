@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 use std::ops::DerefMut;
-use crate::parallelism::feagi_channel::base_channels::basis::{FeagiChannelReceiver, FeagiChannelTransmitter};
+use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 use crate::parallelism::feagi_channel::request_response_channel::basis::{ReplySlot, ReplyStatus, RequestSlot};

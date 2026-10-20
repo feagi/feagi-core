@@ -15,9 +15,11 @@ use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_res
     FeagiRequestResponseDynamicBuilder, FeagiRequesterDynamic, FeagiResponderDynamic,
 };
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, FeagiWorkerChannelsDynamic};
-use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::{FeagiStdThreadSpawner, FeagiWorkerSpawnError};
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_channel::FeagiWorkerChannelsAlloc;
+use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiWorkerSpawnError;
 
 //region Helpers
 
@@ -662,7 +664,7 @@ struct DoublingWorkerBuilder {
 }
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DoublingWorkerBuilder {
-    type Channels = FeagiWorkerChannelsDynamic;
+    type Channels = FeagiWorkerChannelsAlloc;
     type BuildInputs = ();
     type BuildOutputs = ();
     type RequiredChannelPairs = ();
@@ -690,7 +692,7 @@ struct EventWorkerBuilder {
 }
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
-    type Channels = FeagiWorkerChannelsDynamic;
+    type Channels = FeagiWorkerChannelsAlloc;
     type BuildInputs = thingbuf::mpsc::Sender<Number, RecyclableRecyclePolicy<Number>>;
     type BuildOutputs = ();
     type RequiredChannelPairs = (thingbuf::mpsc::Sender<Number, RecyclableRecyclePolicy<Number>>, thingbuf::mpsc::Receiver<Number, RecyclableRecyclePolicy<Number>>);
@@ -737,7 +739,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
 struct ExitingWorkerBuilder;
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ExitingWorkerBuilder {
-    type Channels = FeagiWorkerChannelsDynamic;
+    type Channels = FeagiWorkerChannelsAlloc;
     type BuildInputs = ();
     type BuildOutputs = ();
     type RequiredChannelPairs = ();

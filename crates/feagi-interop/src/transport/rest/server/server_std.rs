@@ -6,9 +6,10 @@ use core::future::Future;
 use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequestResponseDynamicBuilder, FeagiResponderDynamic};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::{FeagiWorkerBuilder, FeagiWorkerChannelsDynamic};
-use feagi_basis::parallelism::feagi_worker::worker_requests::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiStdThreadSpawner;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_channel::FeagiWorkerChannelsAlloc;
+use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
+use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 
 /// One request per TCP connection, matching a single accept loop on this thread.
 static CONFIG: picoserve::Config = picoserve::Config::const_default().close_connection_after_response();
@@ -21,7 +22,7 @@ const DEFAULT_ACCEPT_POLL_INTERVAL: std::time::Duration = std::time::Duration::f
 
 type RestServerRequests = FeagiResponderDynamic<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>;
 
-pub type RestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiWorkerChannelsDynamic, (), ()>;
+pub type RestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiWorkerChannelsAlloc, (), ()>;
 
 /// Builds an HTTP server for the OpenAPI document and, when enabled, the Swagger UI, running on
 /// its own std thread. Create it with `RestServerBuilder::new`
@@ -43,7 +44,7 @@ impl RestServerWorkerBuilder for RestServerBuilderStd {
 }
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for RestServerBuilderStd {
-    type Channels = FeagiWorkerChannelsDynamic;
+    type Channels = FeagiWorkerChannelsAlloc;
     type BuildInputs = ();
     type BuildOutputs = ();
     type RequiredChannelPairs = ();

@@ -1,4 +1,4 @@
-use crate::parallelism::feagi_channel::base_channels::basis::{FeagiChannelReceiver, FeagiChannelTransmitter};
+use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiChannelTransmitError};
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 

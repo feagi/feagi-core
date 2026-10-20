@@ -1,5 +1,5 @@
 pub mod basis;
-pub mod dynamic;
+pub mod implementations;
 
 pub use requester::FeagiRequester;
 pub use responder::FeagiResponder;
