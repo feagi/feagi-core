@@ -2,9 +2,11 @@
 
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiRequestError};
 #[cfg(feature = "alloc")]
-use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelDynamicBuilder, FeagiChannelReceiverDynamic, FeagiChannelSenderDynamic};
+use crate::parallelism::feagi_channel::feagi_channel::FeagiChannelAllocBuilder;
 use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
 use crate::parallelism::feagi_channel::recycling::Recyclable;
+#[cfg(feature = "alloc")]
+use crate::parallelism::feagi_channel::recycling::RecyclableRecyclePolicy;
 use core::marker::PhantomData;
 use core::ops::DerefMut;
 
@@ -309,7 +311,21 @@ where
 
 /// Reply sender carried inside dynamic requests
 #[cfg(feature = "alloc")]
-pub type FeagiReplySenderDynamic<Response> = FeagiChannelSenderDynamic<ReplySlot<Response>>;
+pub type FeagiReplySenderDynamic<Response> = thingbuf::mpsc::Sender<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
+
+/// Request sender used by dynamic requesters
+#[cfg(feature = "alloc")]
+pub type FeagiRequestSenderDynamic<Request, Response> =
+    thingbuf::mpsc::Sender<RequestSlot<Request, FeagiReplySenderDynamic<Response>>, RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>>;
+
+/// Request receiver used by dynamic responders
+#[cfg(feature = "alloc")]
+pub type FeagiRequestReceiverDynamic<Request, Response> =
+    thingbuf::mpsc::Receiver<RequestSlot<Request, FeagiReplySenderDynamic<Response>>, RecyclableRecyclePolicy<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>>;
+
+/// Reply receiver used by dynamic requesters
+#[cfg(feature = "alloc")]
+pub type FeagiReplyReceiverDynamic<Response> = thingbuf::mpsc::Receiver<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
 
 /// Requester using heap allocated channels. Cloning creates another requester to the same
 /// responder, with its own reply channel
@@ -317,9 +333,9 @@ pub type FeagiReplySenderDynamic<Response> = FeagiChannelSenderDynamic<ReplySlot
 pub type FeagiRequesterDynamic<Request, Response> = FeagiRequester<
     Request,
     Response,
-    FeagiChannelSenderDynamic<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>,
+    FeagiRequestSenderDynamic<Request, Response>,
     FeagiReplySenderDynamic<Response>,
-    FeagiChannelReceiverDynamic<ReplySlot<Response>>,
+    FeagiReplyReceiverDynamic<Response>,
 >;
 
 /// Responder using heap allocated channels
@@ -327,7 +343,7 @@ pub type FeagiRequesterDynamic<Request, Response> = FeagiRequester<
 pub type FeagiResponderDynamic<Request, Response> = FeagiResponder<
     Request,
     Response,
-    FeagiChannelReceiverDynamic<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>,
+    FeagiRequestReceiverDynamic<Request, Response>,
     FeagiReplySenderDynamic<Response>,
 >;
 
@@ -351,7 +367,7 @@ impl<Request: Recyclable, Response: Recyclable> FeagiRequestResponseDynamicBuild
     /// Creates a new, independent requester and responder. Clone the requester for more
     /// requesters to the same responder
     pub fn create(&self) -> (FeagiRequesterDynamic<Request, Response>, FeagiResponderDynamic<Request, Response>) {
-        let (request_sender, request_receiver) = FeagiChannelDynamicBuilder::new(self.request_queue_capacity).create_channels();
+        let (request_sender, request_receiver) = FeagiChannelAllocBuilder::new(self.request_queue_capacity).create_channels();
         (
             FeagiRequesterDynamic::new_with_reply_channel(request_sender),
             FeagiResponderDynamic::new(request_receiver),
@@ -370,8 +386,8 @@ impl<Request: Recyclable, Response: Recyclable> FeagiRequestResponseBuilder<Requ
 #[cfg(feature = "alloc")]
 impl<Request: Recyclable, Response: Recyclable> FeagiRequesterDynamic<Request, Response> {
     /// Creates a requester with a newly allocated reply channel of capacity 1
-    fn new_with_reply_channel(request_sender: FeagiChannelSenderDynamic<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>) -> Self {
-        let (reply_sender, reply_receiver) = FeagiChannelDynamicBuilder::new(1).create_channels();
+    fn new_with_reply_channel(request_sender: FeagiRequestSenderDynamic<Request, Response>) -> Self {
+        let (reply_sender, reply_receiver) = FeagiChannelAllocBuilder::new(1).create_channels();
         FeagiRequester::new(request_sender, reply_sender, reply_receiver)
     }
 }

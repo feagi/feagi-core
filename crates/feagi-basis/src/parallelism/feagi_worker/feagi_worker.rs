@@ -110,9 +110,7 @@ where
 use crate::parallelism::feagi_channel::channel_error::FeagiRequestError;
 use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
 #[cfg(feature = "alloc")]
-use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiverDynamic, FeagiChannelSenderDynamic};
-#[cfg(feature = "alloc")]
-use crate::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiReplySenderDynamic, FeagiRequestResponseDynamicBuilder, FeagiResponderDynamic};
+use crate::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiReplyReceiverDynamic, FeagiReplySenderDynamic, FeagiRequestResponseDynamicBuilder, FeagiRequestSenderDynamic, FeagiResponderDynamic};
 use crate::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequester, ReplySlot, RequestSlot};
 use crate::parallelism::feagi_worker::notifications::{FeagiWorkerNotification, FeagiWorkerReply};
 use core::marker::PhantomData;
@@ -208,9 +206,9 @@ FeagiResponderDynamic<FeagiWorkerNotification<CustomNotification>, FeagiWorkerRe
 pub type FeagiWorkerHandleDynamic<CustomNotification, CustomReply, BackendHandle> = FeagiWorkerHandle<
     CustomNotification,
     CustomReply,
-    FeagiChannelSenderDynamic<RequestSlot<FeagiWorkerNotification<CustomNotification>, FeagiReplySenderDynamic<FeagiWorkerReply<CustomReply>>>>,
+    FeagiRequestSenderDynamic<FeagiWorkerNotification<CustomNotification>, FeagiWorkerReply<CustomReply>>,
     FeagiReplySenderDynamic<FeagiWorkerReply<CustomReply>>,
-    FeagiChannelReceiverDynamic<ReplySlot<FeagiWorkerReply<CustomReply>>>,
+    FeagiReplyReceiverDynamic<FeagiWorkerReply<CustomReply>>,
     BackendHandle,
 >;
 

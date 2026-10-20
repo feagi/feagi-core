@@ -1,9 +1,7 @@
 use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
-#[cfg(feature = "alloc")]
-use crate::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiverDynamic, FeagiChannelSenderDynamic};
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 #[cfg(feature = "alloc")]
-use crate::parallelism::feagi_channel::request_response::feagi_request_response::FeagiReplySenderDynamic;
+use crate::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiReplyReceiverDynamic, FeagiReplySenderDynamic, FeagiRequestSenderDynamic};
 use crate::parallelism::feagi_channel::request_response::feagi_request_response::{ReplySlot, RequestSlot};
 use crate::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
@@ -64,10 +62,9 @@ pub struct FeagiWorkerChannelsDynamic;
 
 #[cfg(feature = "alloc")]
 impl WorkerChannelImplementation for FeagiWorkerChannelsDynamic {
-    type RequestSender<Request: Recyclable, Response: Recyclable> =
-        FeagiChannelSenderDynamic<RequestSlot<Request, FeagiReplySenderDynamic<Response>>>;
+    type RequestSender<Request: Recyclable, Response: Recyclable> = FeagiRequestSenderDynamic<Request, Response>;
     type ReplySender<Response: Recyclable> = FeagiReplySenderDynamic<Response>;
-    type ReplyReceiver<Response: Recyclable> = FeagiChannelReceiverDynamic<ReplySlot<Response>>;
+    type ReplyReceiver<Response: Recyclable> = FeagiReplyReceiverDynamic<Response>;
 }
 
 //endregion
@@ -75,7 +72,8 @@ impl WorkerChannelImplementation for FeagiWorkerChannelsDynamic {
 //region Static Channels
 
 // TODO: Disabled until thingbuf is forked / patched. thingbuf 0.1.6 only implements `Clone` for
-// `StaticSender` with its default recycle policy, so `FeagiChannelSenderStatic` cannot satisfy
+// `StaticSender` with its default recycle policy, so a `StaticSender` using
+// `RecyclableRecyclePolicy` cannot satisfy
 // the `ReplySender: Clone` bound. The static channel types also require `'static` items, so the
 // GAT bounds above will need `Request: 'static` / `Response: 'static` added when this is enabled
 /*
@@ -85,9 +83,9 @@ pub struct FeagiWorkerChannelsStatic;
 
 impl WorkerChannelImplementation for FeagiWorkerChannelsStatic {
     type RequestSender<Request: Recyclable, Response: Recyclable> =
-        FeagiChannelSenderStatic<RequestSlot<Request, FeagiChannelSenderStatic<ReplySlot<Response>>>>;
-    type ReplySender<Response: Recyclable> = FeagiChannelSenderStatic<ReplySlot<Response>>;
-    type ReplyReceiver<Response: Recyclable> = FeagiChannelReceiverStatic<ReplySlot<Response>>;
+        thingbuf::mpsc::StaticSender<RequestSlot<Request, Self::ReplySender<Response>>, RecyclableRecyclePolicy<RequestSlot<Request, Self::ReplySender<Response>>>>;
+    type ReplySender<Response: Recyclable> = thingbuf::mpsc::StaticSender<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
+    type ReplyReceiver<Response: Recyclable> = thingbuf::mpsc::StaticReceiver<ReplySlot<Response>, RecyclableRecyclePolicy<ReplySlot<Response>>>;
 }
 */
 

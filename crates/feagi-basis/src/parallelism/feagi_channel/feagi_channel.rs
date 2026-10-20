@@ -2,9 +2,18 @@ use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError,
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 use core::ops::DerefMut;
 
-// NOTE: Yes this is a bit repetitive over Thingbuf, but lets keep the upstream consistent
+// NOTE: These traits are implemented directly on thingbuf's channel halves. They exist so code
+// can be generic over heap allocated and static channels, which thingbuf has no common trait for
 
 // TODO optional timeout policy as a generic?
+
+/// Marks a type that builds feagi channels carrying T
+pub trait FeagiChannelBuilder<T: Recyclable> {
+    /// Sending half produced by this builder
+    type Sender: FeagiChannelSender<T>;
+    /// Receiving half produced by this builder
+    type Receiver: FeagiChannelReceiver<T>;
+}
 
 /// Sending half of a feagi channel
 pub trait FeagiChannelSender<T: Recyclable> {
@@ -70,13 +79,6 @@ pub trait FeagiChannelReceiver<T: Recyclable> {
     // fn is_closed(&self) -> bool;
 }
 
-/// Marks a type that builds feagi channels carrying T
-pub trait FeagiChannelBuilder<T: Recyclable> {
-    /// Sending half produced by this builder
-    type Sender: FeagiChannelSender<T>;
-    /// Receiving half produced by this builder
-    type Receiver: FeagiChannelReceiver<T>;
-}
 
 //region Static Channels
 
@@ -94,250 +96,231 @@ impl<T: Recyclable + 'static, const CAPACITY: usize> FeagiChannelStaticBuilder<T
 
     /// Splits the channel into its sender and receiver
     /// A static channel can only be split once.
-    pub fn create_channels(&'static self) -> (FeagiChannelSenderStatic<T>, FeagiChannelReceiverStatic<T>) {
-        let (s, r) = self.0.split();
-        (FeagiChannelSenderStatic(s), FeagiChannelReceiverStatic(r))
+    pub fn create_channels(&'static self) -> (thingbuf::mpsc::StaticSender<T, RecyclableRecyclePolicy<T>>, thingbuf::mpsc::StaticReceiver<T, RecyclableRecyclePolicy<T>>) {
+        self.0.split()
     }
 }
 
 impl<T: Recyclable + 'static, const CAPACITY: usize> FeagiChannelBuilder<T> for FeagiChannelStaticBuilder<T, CAPACITY> {
-    type Sender = FeagiChannelSenderStatic<T>;
-    type Receiver = FeagiChannelReceiverStatic<T>;
+    type Sender = thingbuf::mpsc::StaticSender<T, RecyclableRecyclePolicy<T>>;
+    type Receiver = thingbuf::mpsc::StaticReceiver<T, RecyclableRecyclePolicy<T>>;
 }
 */
 
-pub struct FeagiChannelSenderStatic<T: Recyclable + 'static>(thingbuf::mpsc::StaticSender<T, RecyclableRecyclePolicy<T>>);
-
-impl<T: Recyclable + 'static> FeagiChannelSender<T> for FeagiChannelSenderStatic<T> {
+impl<T: Recyclable + 'static> FeagiChannelSender<T> for thingbuf::mpsc::StaticSender<T, RecyclableRecyclePolicy<T>> {
     type SendGuard<'a>
         = thingbuf::mpsc::SendRef<'a, T>
     where
         Self: 'a;
 
     async fn async_send(&self, value: T) -> Result<(), FeagiChannelSendError> {
-        self.0.send(value).await.map_err(|e| e.into())
+        thingbuf::mpsc::StaticSender::send(self, value).await.map_err(|e| e.into())
     }
 
     fn try_send(&self, value: T) -> Result<(), FeagiChannelSendError> {
-        self.0.try_send(value).map_err(|e| e.into())
+        thingbuf::mpsc::StaticSender::try_send(self, value).map_err(|e| e.into())
     }
 
     async fn async_send_ref(&self) -> Result<Self::SendGuard<'_>, FeagiChannelSendError> {
-        self.0.send_ref().await.map_err(|e| e.into())
+        thingbuf::mpsc::StaticSender::send_ref(self).await.map_err(|e| e.into())
     }
 
     fn try_send_ref(&self) -> Result<Self::SendGuard<'_>, FeagiChannelSendError> {
-        self.0.try_send_ref().map_err(|e| e.into())
+        thingbuf::mpsc::StaticSender::try_send_ref(self).map_err(|e| e.into())
     }
 
     fn capacity(&self) -> usize {
-        self.0.capacity()
+        thingbuf::mpsc::StaticSender::capacity(self)
     }
 
     fn remaining(&self) -> usize {
-        self.0.remaining()
+        thingbuf::mpsc::StaticSender::remaining(self)
     }
 
     fn len(&self) -> usize {
-        self.0.len()
+        thingbuf::mpsc::StaticSender::len(self)
     }
 
     fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        thingbuf::mpsc::StaticSender::is_empty(self)
     }
 
     fn is_full(&self) -> bool {
-        self.0.remaining() == 0
+        thingbuf::mpsc::StaticSender::remaining(self) == 0
     }
 }
 
-pub struct FeagiChannelReceiverStatic<T: Recyclable + 'static>(thingbuf::mpsc::StaticReceiver<T, RecyclableRecyclePolicy<T>>);
-
-impl<T: Recyclable + 'static> FeagiChannelReceiver<T> for FeagiChannelReceiverStatic<T> {
+impl<T: Recyclable + 'static> FeagiChannelReceiver<T> for thingbuf::mpsc::StaticReceiver<T, RecyclableRecyclePolicy<T>> {
     type RecvGuard<'a>
         = thingbuf::mpsc::RecvRef<'a, T>
     where
         Self: 'a;
 
     async fn async_recv(&self) -> Result<T, FeagiChannelReceiveError> {
-        self.0.recv().await.ok_or(FeagiChannelReceiveError::ChannelClosed)
+        thingbuf::mpsc::StaticReceiver::recv(self).await.ok_or(FeagiChannelReceiveError::ChannelClosed)
     }
 
     fn try_recv(&self) -> Result<T, FeagiChannelReceiveError> {
-        self.0.try_recv().map_err(|e| e.into())
+        thingbuf::mpsc::StaticReceiver::try_recv(self).map_err(|e| e.into())
     }
 
     async fn async_recv_ref(&self) -> Result<Self::RecvGuard<'_>, FeagiChannelReceiveError> {
-        self.0.recv_ref().await.ok_or(FeagiChannelReceiveError::ChannelClosed)
+        thingbuf::mpsc::StaticReceiver::recv_ref(self).await.ok_or(FeagiChannelReceiveError::ChannelClosed)
     }
 
     fn try_recv_ref(&self) -> Result<Self::RecvGuard<'_>, FeagiChannelReceiveError> {
-        self.0.try_recv_ref().map_err(|e| e.into())
+        thingbuf::mpsc::StaticReceiver::try_recv_ref(self).map_err(|e| e.into())
     }
 
     fn capacity(&self) -> usize {
-        self.0.capacity()
+        thingbuf::mpsc::StaticReceiver::capacity(self)
     }
 
     fn remaining(&self) -> usize {
-        self.0.remaining()
+        thingbuf::mpsc::StaticReceiver::remaining(self)
     }
 
     fn len(&self) -> usize {
-        self.0.len()
+        thingbuf::mpsc::StaticReceiver::len(self)
     }
 
     fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        thingbuf::mpsc::StaticReceiver::is_empty(self)
     }
 
     fn is_full(&self) -> bool {
-        self.0.remaining() == 0
+        thingbuf::mpsc::StaticReceiver::remaining(self) == 0
     }
 
     // TODO: Disabled, see `FeagiChannelReceiver`
     // fn is_closed(&self) -> bool {
-    //     self.0.is_closed()
+    //     thingbuf::mpsc::StaticReceiver::is_closed(self)
     // }
 }
 
 //endregion
 
-//region Dynamic Channels
+//region Alloc Channels
 
 /// Creates heap allocated channel pairs holding up to `capacity` items each.
 #[cfg(feature = "alloc")]
-pub struct FeagiChannelDynamicBuilder<T: Recyclable> {
+pub struct FeagiChannelAllocBuilder<T: Recyclable> {
     capacity: usize,
     _item: core::marker::PhantomData<fn() -> T>,
 }
 
 #[cfg(feature = "alloc")]
-impl<T: Recyclable> FeagiChannelDynamicBuilder<T> {
+impl<T: Recyclable> FeagiChannelAllocBuilder<T> {
     pub const fn new(capacity: usize) -> Self {
-        FeagiChannelDynamicBuilder {
+        FeagiChannelAllocBuilder {
             capacity,
             _item: core::marker::PhantomData,
         }
     }
 
     /// Creates a new, independent sender and receiver. Can be called any number of times.
-    pub fn create_channels(&self) -> (FeagiChannelSenderDynamic<T>, FeagiChannelReceiverDynamic<T>) {
-        let (s, r) = thingbuf::mpsc::with_recycle(self.capacity, RecyclableRecyclePolicy::<T>::new());
-        (FeagiChannelSenderDynamic(s), FeagiChannelReceiverDynamic(r))
+    /// Clone the sender for multiple producers
+    pub fn create_channels(&self) -> (thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>>, thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>>) {
+        thingbuf::mpsc::with_recycle(self.capacity, RecyclableRecyclePolicy::<T>::new())
     }
 }
 
 #[cfg(feature = "alloc")]
-impl<T: Recyclable> FeagiChannelBuilder<T> for FeagiChannelDynamicBuilder<T> {
-    type Sender = FeagiChannelSenderDynamic<T>;
-    type Receiver = FeagiChannelReceiverDynamic<T>;
+impl<T: Recyclable> FeagiChannelBuilder<T> for FeagiChannelAllocBuilder<T> {
+    type Sender = thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>>;
+    type Receiver = thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>>;
 }
 
 #[cfg(feature = "alloc")]
-pub struct FeagiChannelSenderDynamic<T: Recyclable>(thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>>);
-
-/// Creates another sender to the same channel, allowing multiple producers
-#[cfg(feature = "alloc")]
-impl<T: Recyclable> Clone for FeagiChannelSenderDynamic<T> {
-    fn clone(&self) -> Self {
-        FeagiChannelSenderDynamic(self.0.clone())
-    }
-}
-
-#[cfg(feature = "alloc")]
-impl<T: Recyclable> FeagiChannelSender<T> for FeagiChannelSenderDynamic<T> {
+impl<T: Recyclable> FeagiChannelSender<T> for thingbuf::mpsc::Sender<T, RecyclableRecyclePolicy<T>> {
     type SendGuard<'a>
         = thingbuf::mpsc::SendRef<'a, T>
     where
         Self: 'a;
 
     async fn async_send(&self, value: T) -> Result<(), FeagiChannelSendError> {
-        self.0.send(value).await.map_err(|e| e.into())
+        thingbuf::mpsc::Sender::send(self, value).await.map_err(|e| e.into())
     }
 
     fn try_send(&self, value: T) -> Result<(), FeagiChannelSendError> {
-        self.0.try_send(value).map_err(|e| e.into())
+        thingbuf::mpsc::Sender::try_send(self, value).map_err(|e| e.into())
     }
 
     async fn async_send_ref(&self) -> Result<Self::SendGuard<'_>, FeagiChannelSendError> {
-        self.0.send_ref().await.map_err(|e| e.into())
+        thingbuf::mpsc::Sender::send_ref(self).await.map_err(|e| e.into())
     }
 
     fn try_send_ref(&self) -> Result<Self::SendGuard<'_>, FeagiChannelSendError> {
-        self.0.try_send_ref().map_err(|e| e.into())
+        thingbuf::mpsc::Sender::try_send_ref(self).map_err(|e| e.into())
     }
 
     fn capacity(&self) -> usize {
-        self.0.capacity()
+        thingbuf::mpsc::Sender::capacity(self)
     }
 
     fn remaining(&self) -> usize {
-        self.0.remaining()
+        thingbuf::mpsc::Sender::remaining(self)
     }
 
     fn len(&self) -> usize {
-        self.0.len()
+        thingbuf::mpsc::Sender::len(self)
     }
 
     fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        thingbuf::mpsc::Sender::is_empty(self)
     }
 
     fn is_full(&self) -> bool {
-        self.0.remaining() == 0
+        thingbuf::mpsc::Sender::remaining(self) == 0
     }
 }
 
 #[cfg(feature = "alloc")]
-pub struct FeagiChannelReceiverDynamic<T: Recyclable>(thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>>);
-
-#[cfg(feature = "alloc")]
-impl<T: Recyclable> FeagiChannelReceiver<T> for FeagiChannelReceiverDynamic<T> {
+impl<T: Recyclable> FeagiChannelReceiver<T> for thingbuf::mpsc::Receiver<T, RecyclableRecyclePolicy<T>> {
     type RecvGuard<'a>
         = thingbuf::mpsc::RecvRef<'a, T>
     where
         Self: 'a;
 
     async fn async_recv(&self) -> Result<T, FeagiChannelReceiveError> {
-        self.0.recv().await.ok_or(FeagiChannelReceiveError::ChannelClosed)
+        thingbuf::mpsc::Receiver::recv(self).await.ok_or(FeagiChannelReceiveError::ChannelClosed)
     }
 
     fn try_recv(&self) -> Result<T, FeagiChannelReceiveError> {
-        self.0.try_recv().map_err(|e| e.into())
+        thingbuf::mpsc::Receiver::try_recv(self).map_err(|e| e.into())
     }
 
     async fn async_recv_ref(&self) -> Result<Self::RecvGuard<'_>, FeagiChannelReceiveError> {
-        self.0.recv_ref().await.ok_or(FeagiChannelReceiveError::ChannelClosed)
+        thingbuf::mpsc::Receiver::recv_ref(self).await.ok_or(FeagiChannelReceiveError::ChannelClosed)
     }
 
     fn try_recv_ref(&self) -> Result<Self::RecvGuard<'_>, FeagiChannelReceiveError> {
-        self.0.try_recv_ref().map_err(|e| e.into())
+        thingbuf::mpsc::Receiver::try_recv_ref(self).map_err(|e| e.into())
     }
 
     fn capacity(&self) -> usize {
-        self.0.capacity()
+        thingbuf::mpsc::Receiver::capacity(self)
     }
 
     fn remaining(&self) -> usize {
-        self.0.remaining()
+        thingbuf::mpsc::Receiver::remaining(self)
     }
 
     fn len(&self) -> usize {
-        self.0.len()
+        thingbuf::mpsc::Receiver::len(self)
     }
 
     fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        thingbuf::mpsc::Receiver::is_empty(self)
     }
 
     fn is_full(&self) -> bool {
-        self.0.remaining() == 0
+        thingbuf::mpsc::Receiver::remaining(self) == 0
     }
 
     // TODO: Disabled, see `FeagiChannelReceiver`
     // fn is_closed(&self) -> bool {
-    //     self.0.is_closed()
+    //     thingbuf::mpsc::Receiver::is_closed(self)
     // }
 }
 
