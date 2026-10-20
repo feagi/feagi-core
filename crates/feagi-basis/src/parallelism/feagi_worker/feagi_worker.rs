@@ -32,6 +32,7 @@ where
     Spawner: WorkerSpawnerImplementation,
     Channels: FeagiRequestResponseChannelBackend,
 {
+    #[doc(hidden)] // Probably shouldnt be called directly by other than `FeagiWorkerBuilder`
     /// Meant be called by `FeagiWorkerBuilder::build_worker` implementations, spawns a new
     /// (running) worker
     pub fn new(

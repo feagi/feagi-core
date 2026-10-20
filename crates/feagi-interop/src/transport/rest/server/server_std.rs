@@ -5,15 +5,17 @@
 use core::future::Future;
 use core::marker::PhantomData;
 use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryGroupChannelRouter;
-use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 use crate::transport::rest::server::error::FeagiRestServerError;
 use crate::transport::rest::server::server_basis::path_builder::AddNestedCategoryPathsToPicoServeRouter;
 use crate::transport::rest::server::server_basis::{GroupPathConfigurables, RestServerWorkerBuilder, HTTP_BUFFER_LEN};
+
+//region Local Configs
 
 /// One request per TCP connection, matching a single accept loop on this thread.
 static CONFIG: picoserve::Config = picoserve::Config::const_default().close_connection_after_response();
@@ -26,10 +28,9 @@ const REQUEST_QUEUE_CAPACITY: usize = 1;
 /// cost of higher base CPU usage
 const DEFAULT_ACCEPT_POLL_INTERVAL: core::time::Duration = core::time::Duration::from_millis(10);
 
-/// The Rest Server (STD) which allows accessing Requests of various categories via HTTP REST.
-/// Optionally (configured by crate features) can init with an OpenAPI JSON endpoint and a 
-/// Swagger UI page for documentation, testing, and development
-pub type StdRestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiRequestResponseChannelsAllocBackend, (), ()>;
+//endregion
+
+//region Builder
 
 /// Builds an HTTP server for the OpenAPI document and, when enabled, the Swagger UI, running on
 /// its own std thread. Create it with `RestServerBuilder::new`
@@ -42,7 +43,7 @@ pub struct StdRestServerBuilder<GroupChannelRouter> {
     /// How long the idle listener sleeps between checks for a connection or a request. Bounds
     /// how late a new connection is accepted and how long a `stop` waits while no connection is
     /// open. Shorter intervals wake the thread more often while idle
-    pub accept_poll_interval: std::time::Duration,
+    pub accept_poll_interval: core::time::Duration,
     _group_channel_router: PhantomData<fn() -> GroupChannelRouter>,
 }
 
@@ -94,13 +95,32 @@ where
     fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {}
 }
 
+//endregion
+
+//region Worker
+/// The Rest Server (STD) which allows accessing Requests of various categories via HTTP REST.
+/// Optionally (configured by crate features) can init with an OpenAPI JSON endpoint and a
+/// Swagger UI page for documentation, testing, and development
+pub type StdRestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiRequestResponseChannelsAllocBackend, (), ()>;
+
+/// Answers commands sent to the server worker. Only `Stop` is used, which needs no cleanup
+struct RestServerCommandHandler;
+
+impl FeagiWorkerCommandHandler for RestServerCommandHandler {
+    // No custom requests are defined
+    type CustomRequest = ();
+    type CustomResponse = ();
+
+    async fn on_custom(&mut self, _request: ()) {}
+}
+
 /// Accepts one connection at a time and serves it to completion. Checks for requests before
 /// each accept attempt, sleeping `accept_poll_interval` when no connection is waiting. Exits
 /// after acknowledging `Stop` or once the worker handle is dropped.
 async fn run_rest_server<GroupChannelRouter>(
     listener: std::net::TcpListener,
     requests: FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>,
-    accept_poll_interval: std::time::Duration,
+    accept_poll_interval: core::time::Duration,
     group_channel_router: GroupChannelRouter,
     path_configurables: GroupPathConfigurables<GroupChannelRouter, FeagiRequestResponseChannelsAllocBackend>,
 )
@@ -113,27 +133,14 @@ where
     let router = <StdRestServerBuilder<GroupChannelRouter> as RestServerWorkerBuilder<FeagiRequestResponseChannelsAllocBackend>>::build_router_with_routes::<GroupChannelRouter>(
         path_configurables,
     );
-    let router = route_brain_visualizer_startup(router);
-    let mut running = true;
+    //let router = route_brain_visualizer_startup(router);
+    let commands = FeagiWorkerCommands::new(requests);
+    let mut command_handler = RestServerCommandHandler;
 
-    while running {
-        let request_result = requests
-            .try_process_next(async |request| match request {
-                FeagiWorkerRequest::Stop => {
-                    running = false;
-                    FeagiWorkerResponse::Acknowledged
-                }
-                // No custom requests are defined
-                FeagiWorkerRequest::Custom(()) | FeagiWorkerRequest::Nothing => FeagiWorkerResponse::Nothing,
-            })
-            .await;
-        match request_result {
-            Ok(()) | Err(FeagiChannelReceiveError::ChannelEmpty) => {}
-            // The worker handle was dropped, nothing can stop this worker anymore
-            Err(_) => break,
-        }
-        if !running {
-            break;
+    loop {
+        match commands.try_handle_next(&mut command_handler).await {
+            FeagiWorkerStep::Handled | FeagiWorkerStep::Idle => {}
+            FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => break,
         }
 
         let (stream, _peer) = match listener.accept() {
@@ -156,8 +163,9 @@ where
         let _serve_result = serve.await;
     }
 }
+//endregion
 
-//region patching
+//region patching TODO remove
 
 const JSON_CONTENT_TYPE: &str = "application/json";
 
@@ -315,8 +323,8 @@ impl StdThreadSocket {
     /// Returns `None` when the socket cannot be configured. The caller drops that connection.
     fn from_accepted(stream: std::net::TcpStream) -> Option<Self> {
         stream.set_nonblocking(false).ok()?;
-        let read_timeout = std::time::Duration::from_millis(CONFIG.timeouts.read_request.as_millis());
-        let write_timeout = std::time::Duration::from_millis(CONFIG.timeouts.write.as_millis());
+        let read_timeout = core::time::Duration::from_millis(CONFIG.timeouts.read_request.as_millis());
+        let write_timeout = core::time::Duration::from_millis(CONFIG.timeouts.write.as_millis());
         stream.set_read_timeout(Some(read_timeout)).ok()?;
         stream.set_write_timeout(Some(write_timeout)).ok()?;
         let write = stream.try_clone().ok()?;
