@@ -1452,8 +1452,11 @@ impl Neuroembryogenesis {
                 let Some(twin_area) = genome.cortical_areas.get(&dst_id) else {
                     continue;
                 };
-                let owned_by_this_memory =
-                    ConnectomeManager::memory_owns_twin(memory_id, twin_area, &genome.cortical_areas);
+                let owned_by_this_memory = ConnectomeManager::memory_owns_twin(
+                    memory_id,
+                    twin_area,
+                    &genome.cortical_areas,
+                );
                 let legacy_replay = rule_array.iter().any(|rule| {
                     rule.get("morphology_id").and_then(|v| v.as_str()) == Some("memory_replay")
                 });

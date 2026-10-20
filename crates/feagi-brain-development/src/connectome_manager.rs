@@ -12107,7 +12107,11 @@ mod tests {
             .unwrap()
             .get_memory_twin_mapping(mem_idx, src_idx)
             .map(|(idx, _)| idx);
-        assert_eq!(bound, Some(twin_idx), "NPU replay must target the saved twin");
+        assert_eq!(
+            bound,
+            Some(twin_idx),
+            "NPU replay must target the saved twin"
+        );
     }
 
     #[test]
