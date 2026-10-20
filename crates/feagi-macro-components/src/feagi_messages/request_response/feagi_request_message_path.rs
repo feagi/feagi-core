@@ -1,6 +1,7 @@
-use crate::common::lit_str_to_ident;
+use crate::common::{basis_path, lit_str_to_ident};
 use crate::feagi_messages::message_path_element::MessagePathElement;
 use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
+use crate::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategoryContext;
 use crate::template_parsing::struct_template::StructTemplate;
 use crate::templates::Unparse;
 use proc_macro2::Span;
@@ -35,7 +36,7 @@ impl FeagiRequestMessagePathRustStructNames {
 //region Feagi Request Message Path
 
 /// Parses over a single string to get the pathing out, with the formatting:
-/// "static_1/static_2/:parameter_1<ParameterType1>/static_3?query_1<QueryType1>&query_2<QueryType2>"
+/// "static_1/$configurable_1/:parameter_1<ParameterType1>/static_3?query_1<QueryType1>&query_2<QueryType2>"
 pub struct FeagiRequestMessagePath<const METHOD_U8: FeagiRequestMessageU8> {
     leaf: Vec<MessagePathElement>,
 }
@@ -63,11 +64,8 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
         LitStr::new(&format!("{}/{}", category.value(), path.value()), Span::call_site())
     }
 
-    // TODO full_message_path_with_method(&self, category: &LitStr) -> LitStr should append the method at the end
-
     pub fn as_lit_str(&self) -> LitStr {
-        let string_out: String = self.leaf.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("/");
-        LitStr::new(&string_out, Span::call_site())
+        LitStr::new(&path_elements_to_string(&self.leaf), Span::call_site())
     }
 
     /// Path and query elements in template order.
@@ -79,12 +77,9 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
     pub fn as_parameter_struct_template(&self) -> StructTemplate {
         let mut output = StructTemplate::new_empty();
         for element in &self.leaf {
-            match element {
-                MessagePathElement::ParameterOfName(n, p) => {
-                    let ident = lit_str_to_ident(n).unwrap();
-                    output.insert_property(ident, p.clone(), None);
-                }
-                _ => {} // do nothing
+            if let MessagePathElement::ParameterOfName(n, p) = element {
+                let ident = lit_str_to_ident(n).unwrap();
+                output.insert_property(ident, p.clone(), None);
             }
         }
         output
@@ -94,51 +89,84 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
     pub fn as_queryable_struct_template(&self) -> StructTemplate {
         let mut output = StructTemplate::new_empty();
         for element in &self.leaf {
-            match element {
-                MessagePathElement::QueryableOfName(n, q) => {
-                    let ident = lit_str_to_ident(n).unwrap();
-                    output.insert_property(ident, q.clone(), None);
-                }
-                _ => {} // do nothing
+            if let MessagePathElement::QueryableOfName(n, q) = element {
+                let ident = lit_str_to_ident(n).unwrap();
+                output.insert_property(ident, q.clone(), None);
             }
         }
         output
     }
 
-    /// Generate the FeagiMessagePath impl struct rust code for this path
+    /// Generate the path struct and its `FeagiMessagePath` / `FeagiRequestMessagePath` impls. The
+    /// category's base path is prepended to this path
     pub fn generate_feagi_message_path_struct_and_impls(
         &self,
         path_struct_names: &FeagiRequestMessagePathRustStructNames,
-        name_of_message_struct: &syn::Ident,
+        category: &FeagiRequestMessageCategoryContext,
     ) -> proc_macro2::TokenStream {
-        let mut output = proc_macro2::TokenStream::new();
-        let elements: Vec<proc_macro2::TokenStream> = self.leaf.iter().map(MessagePathElement::as_rust_message_path_element_enum).collect();
+        let basis = basis_path();
+        let path_module = quote!(#basis::feagi_message::feagi_message_path);
+
+        let mut types = Vec::new();
+        let mut values = Vec::new();
+        let mut parameter_types = Vec::new();
+        let mut uses_configurables = false;
+        let segments = category.base_path_elements.iter().chain(self.leaf.iter().filter(|element| element.is_path_segment()));
+        for element in segments {
+            match element {
+                MessagePathElement::StaticPath(text) => {
+                    types.push(quote!(&'static str));
+                    values.push(quote!(#text));
+                }
+                MessagePathElement::ConfigurableOfName(name) => {
+                    let field = lit_str_to_ident(name).unwrap();
+                    uses_configurables = true;
+                    types.push(quote!(&'a str));
+                    values.push(quote!(configurables.#field.as_str()));
+                }
+                MessagePathElement::ParameterOfName(_, parameter_type) => {
+                    types.push(quote!(#path_module::PathParameterElement<#parameter_type>));
+                    values.push(quote!(#path_module::PathParameterElement::new()));
+                    parameter_types.push(parameter_type.clone());
+                }
+                MessagePathElement::QueryableOfName(..) => unreachable!("queryables are filtered out of path segments"),
+            }
+        }
+
+        let consume_configurables = if uses_configurables {
+            quote!()
+        } else {
+            quote!(let _ = configurables;)
+        };
 
         let full_struct_name = path_struct_names.feagi_message_path_struct_name();
-        let method_name = format_ident!("{}", FeagiRequestMessageMethod::from_u8(METHOD).as_str());
+        let configurables_struct_name = &category.configurables_struct_name;
+        let method_marker = format_ident!("{}", FeagiRequestMessageMethod::from_u8(METHOD).marker_type_name());
 
-        output.extend(quote! {
-
+        quote! {
             #[derive(Clone, Copy, Debug)]
             pub struct #full_struct_name;
 
-            impl FeagiMessagePath for #full_struct_name {
-                const PATH: &'static [MessagePathElement] = &[ #( #elements )* ];
+            impl #path_module::FeagiMessagePath for #full_struct_name {
+                type Configurables = #configurables_struct_name;
+                type TypesTuple<'a> = ( #( #types, )* );
+                type ParametersTuple = ( #( #parameter_types, )* );
 
-                type Message = #name_of_message_struct;
+                fn as_path_parser_tuple(configurables: &Self::Configurables) -> Self::TypesTuple<'_> {
+                    #consume_configurables
+                    ( #( #values, )* )
+                }
             }
 
-            impl FeagiRequestMessagePath for #full_struct_name {
-                const METHOD: FeagiMessageRequestMethod = FeagiMessageRequestMethod::#method_name;
+            impl #path_module::FeagiRequestMessagePath for #full_struct_name {
+                type Method = #path_module::#method_marker;
             }
-        });
-
-        output
+        }
     }
 }
 
 impl<const METHOD: FeagiRequestMessageU8> Parse for FeagiRequestMessagePath<METHOD> {
-    /// Parse `"static/:parameter<Type>/static?query<Type>&query<Type>"` into path elements.
+    /// Parse `"static/$configurable/:parameter<Type>/static?query<Type>&query<Type>"` into path elements.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let path_str: LitStr = input.parse()?;
         let leaf = message_path_elements(&path_str)?;
@@ -157,12 +185,33 @@ impl<const METHOD: FeagiRequestMessageU8> Unparse for FeagiRequestMessagePath<ME
 
 //region Internal
 
-/// Split a path literal into static segments, parameters, and queries.
+/// Rebuild the template string of path elements, with `?` before the first query and `&`
+/// between queries
+pub fn path_elements_to_string(elements: &[MessagePathElement]) -> String {
+    let mut output = String::new();
+    let mut in_query = false;
+    for (index, element) in elements.iter().enumerate() {
+        if element.is_path_segment() {
+            if index != 0 {
+                output.push('/');
+            }
+        } else if in_query {
+            output.push('&');
+        } else {
+            output.push('?');
+            in_query = true;
+        }
+        output.push_str(&element.to_string());
+    }
+    output
+}
+
+/// Split a path literal into static segments, configurables, parameters, and queries.
 ///
 /// `/`, `?`, and `&` separate elements only outside `<...>`, so a type such as
 /// `Vec<&str>` stays inside the element it belongs to. `>` in `->` is not a
 /// closing angle bracket.
-fn message_path_elements(path_str: &LitStr) -> syn::Result<Vec<MessagePathElement>> {
+pub fn message_path_elements(path_str: &LitStr) -> syn::Result<Vec<MessagePathElement>> {
     let span = path_str.span();
     let raw = path_str.value();
     if raw.is_empty() {
@@ -236,17 +285,22 @@ fn push_path_part(leaf: &mut Vec<MessagePathElement>, part: &str, in_query: bool
     Ok(())
 }
 
-/// Parse `static_name` or `:parameter_name<Type>`.
+/// Parse `static_name`, `$configurable_name`, or `:parameter_name<Type>`.
 fn parse_path_segment(segment: &str, span: Span) -> syn::Result<MessagePathElement> {
     if let Some(spec) = segment.strip_prefix(':') {
         let (name, parameter_type) = parse_name_and_type(spec, span)?;
         return Ok(MessagePathElement::ParameterOfName(LitStr::new(name, span), parameter_type));
     }
 
-    if segment.chars().any(|ch| matches!(ch, '<' | '>' | '&' | ':') || ch.is_whitespace()) {
+    if let Some(name) = segment.strip_prefix('$') {
+        syn::parse_str::<syn::Ident>(name).map_err(|_| syn::Error::new(span, format!("`{name}` is not a valid configurable name")))?;
+        return Ok(MessagePathElement::ConfigurableOfName(LitStr::new(name, span)));
+    }
+
+    if segment.chars().any(|ch| matches!(ch, '<' | '>' | '&' | ':' | '$') || ch.is_whitespace()) {
         return Err(syn::Error::new(
             span,
-            format!("static path segment `{segment}` contains path syntax; parameters use `:name<Type>`"),
+            format!("static path segment `{segment}` contains path syntax; parameters use `:name<Type>` and configurables use `$name`"),
         ));
     }
 
@@ -255,10 +309,10 @@ fn parse_path_segment(segment: &str, span: Span) -> syn::Result<MessagePathEleme
 
 /// Parse `query_name<Type>`.
 fn parse_query(spec: &str, span: Span) -> syn::Result<MessagePathElement> {
-    if spec.starts_with(':') {
+    if spec.starts_with(':') || spec.starts_with('$') {
         return Err(syn::Error::new(
             span,
-            format!("query `{spec}` must be `name<Type>` without a leading ':'"),
+            format!("query `{spec}` must be `name<Type>` without a leading ':' or '$'"),
         ));
     }
     let (name, query_type) = parse_name_and_type(spec, span)?;

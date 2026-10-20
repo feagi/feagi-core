@@ -48,6 +48,17 @@ impl FeagiRequestMessageMethod {
         }
     }
 
+    /// Name of the matching `RequestMethodType` marker struct in `feagi_basis`
+    pub const fn marker_type_name(&self) -> &'static str {
+        match self {
+            FeagiRequestMessageMethod::Read => "RequestMethodRead",
+            FeagiRequestMessageMethod::Create => "RequestMethodCreate",
+            FeagiRequestMessageMethod::Edit => "RequestMethodEdit",
+            FeagiRequestMessageMethod::Delete => "RequestMethodDelete",
+            FeagiRequestMessageMethod::Patch => "RequestMethodPatch",
+        }
+    }
+
     pub const fn as_str(&self) -> &'static str {
         match self {
             FeagiRequestMessageMethod::Read => "Read",

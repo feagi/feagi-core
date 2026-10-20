@@ -1,19 +1,23 @@
 use crate::templates::Unparse;
+use indexmap::IndexMap;
 use proc_macro2::Ident;
-use quote::{quote, TokenStreamExt};
-use std::collections::HashMap;
+use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{braced, Lit, LitStr, Token};
+use syn::{braced, LitStr, Token};
 
-/// Allows adding comments to a given property
-pub struct PropertyDescriptors(HashMap<Ident, LitStr>);
+/// Allows adding comments to a given property. Properties keep their template order
+pub struct PropertyDescriptors(IndexMap<Ident, LitStr>);
 
 impl PropertyDescriptors {
+    pub fn new_empty() -> Self {
+        Self(IndexMap::new())
+    }
+
     pub fn try_get_description(&self, property: &Ident) -> Option<&LitStr> {
         self.0.get(property)
     }
 
-    pub fn iter(&self) -> std::collections::hash_map::Iter<Ident, LitStr> {
+    pub fn iter(&self) -> indexmap::map::Iter<'_, Ident, LitStr> {
         self.0.iter()
     }
 }
@@ -22,7 +26,7 @@ impl Parse for PropertyDescriptors {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let field_input;
         braced!(field_input in input);
-        let mut properties = HashMap::new();
+        let mut properties = IndexMap::new();
         while !field_input.is_empty() {
             let property = field_input.parse::<Ident>()?;
             field_input.parse::<Token![:]>()?;
@@ -42,7 +46,7 @@ impl Unparse for PropertyDescriptors {
         let mut stream = proc_macro2::TokenStream::new();
 
         for (prop, desc) in &self.0 {
-            stream.extend(quote!(#prop: #desc));
+            stream.extend(quote!(#prop: #desc,));
         }
 
         quote! {

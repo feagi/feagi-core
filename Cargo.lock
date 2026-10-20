@@ -783,6 +783,7 @@ name = "feagi-macro-components"
 version = "0.1.1"
 dependencies = [
  "heck",
+ "indexmap 2.14.2",
  "proc-macro2",
  "quote",
  "syn 3.0.6",

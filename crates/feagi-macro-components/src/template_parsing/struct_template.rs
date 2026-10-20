@@ -1,13 +1,14 @@
 use crate::common::RustVisibility;
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::templates::Unparse;
+use indexmap::IndexMap;
 use proc_macro2::Ident;
 use quote::quote;
-use std::collections::HashMap;
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, LitStr, Token, Type};
 
-/// Struct fields as `field_name: Type`, with an optional description string.
+/// Struct fields as `field_name: Type`, with an optional description string. Fields keep their
+/// template order
 ///
 /// ```text
 /// {
@@ -15,11 +16,11 @@ use syn::{braced, LitStr, Token, Type};
 /// }
 /// ```
 #[derive(Clone)]
-pub struct StructTemplate(HashMap<Ident, (Type, Option<LitStr>)>);
+pub struct StructTemplate(IndexMap<Ident, (Type, Option<LitStr>)>);
 
 impl StructTemplate {
     pub fn new_empty() -> Self {
-        Self(HashMap::new())
+        Self(IndexMap::new())
     }
 
     /// Returns the type and optional description registered for `field`.
@@ -27,12 +28,13 @@ impl StructTemplate {
         self.0.get(field)
     }
 
-    /// Outputs a token stream that generates this definition as a struct, with name, optional comment, visibility, and derives
+    /// Outputs a token stream that generates this definition as a struct, with name, optional
+    /// comment, visibility (of the struct and its fields), and any attributes such as derives
     pub fn generate_rust_struct(
         &self,
         struct_name: Ident,
         description: Option<LitStr>,
-        derives: &Vec<Ident>,
+        attributes: proc_macro2::TokenStream,
         visibility: RustVisibility,
     ) -> proc_macro2::TokenStream {
         let mut stream = proc_macro2::TokenStream::new();
@@ -43,27 +45,23 @@ impl StructTemplate {
             })
         };
 
-        if !derives.is_empty() {
-            stream.extend(quote! {
-                #[derive( #( #derives ),* )]
-            })
-        };
+        stream.extend(attributes);
 
+        let visibility = visibility.to_token_stream();
         let mut properties = proc_macro2::TokenStream::new();
         for (name, (property_type, optional_comment)) in &self.0 {
             if let Some(comment) = optional_comment {
                 properties.extend(quote! {
                     #[doc = #comment]
-                    #name: #property_type,
+                    #visibility #name: #property_type,
                 })
             } else {
                 properties.extend(quote! {
-                    #name: #property_type,
+                    #visibility #name: #property_type,
                 })
             }
         }
 
-        let visibility = visibility.to_token_stream();
         stream.extend(quote! {
             #visibility struct #struct_name
             {
@@ -101,7 +99,7 @@ impl StructTemplate {
         self.0.is_empty()
     }
 
-    pub fn get_map(&self) -> &HashMap<Ident, (Type, Option<LitStr>)> {
+    pub fn get_map(&self) -> &IndexMap<Ident, (Type, Option<LitStr>)> {
         &self.0
     }
 }
@@ -110,7 +108,7 @@ impl Parse for StructTemplate {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let field_input;
         braced!(field_input in input);
-        let mut fields = HashMap::new();
+        let mut fields = IndexMap::new();
         while !field_input.is_empty() {
             let field_name = field_input.parse::<Ident>()?;
             field_input.parse::<Token![:]>()?;

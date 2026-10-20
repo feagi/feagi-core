@@ -3,23 +3,26 @@ use crate::feagi_message::feagi_message_components::FeagiMessageParameterFieldSe
 /// Represents the path (and the configurations of it) for a feagi message to take. Zero Sized,
 /// ergo has no internal fields
 pub trait FeagiMessagePath {
-    /// The actual types of each path element
-    type TypesTuple; // (&'static str, &'a str, PathParameterElement<P1>, PathParameterElement<P2>)
+    /// The runtime set path segments of the category this path belongs to
+    type Configurables;
 
-    /// Just the Configurables as a tuple, needed to make the path instantiation functions inputs
-    type ConfigurablesTuple;
+    /// The actual types of each path element, starting with the category's base path. Static
+    /// segments are `&'static str`, configurable segments borrow from `Configurables`
+    type TypesTuple<'a> // (&'static str, &'a str, PathParameterElement<P1>, PathParameterElement<P2>)
+    where
+        Self::Configurables: 'a;
 
     /// The Parameter types as a tuple, needed to make the path instantiation functions inputs
     type ParametersTuple;
 
-    fn as_path_parser_tuple(configurables: Self::ConfigurablesTuple) -> Self::TypesTuple;
+    fn as_path_parser_tuple(configurables: &Self::Configurables) -> Self::TypesTuple<'_>;
 }
-/// Request Response paths may be used by pico, and thus needs some of its own logic
-pub trait FeagiRequestMessagePath: FeagiMessagePath {
-    
-    type Method: RequestMethodType;
-    const METHOD: FeagiMessageEnum = Self::Method::METHOD;
-}
+
+
+
+
+
+//region Path Parameter Element
 
 /// A path parameter slot carrying only its type `Par`.
 pub struct PathParameterElement<Par: FeagiMessageParameterFieldSerializable>(
@@ -57,60 +60,65 @@ impl<Par: FeagiMessageParameterFieldSerializable> Default for PathParameterEleme
     }
 }
 
-//region Request Method
+//endregion
 
-/// A enum for defining what type of request method is being used.
-#[repr(u8)]
-#[derive(Debug, Clone, Copy)]
-pub enum FeagiMessageEnum {
-    Read = 0, // get
-    Create = 1, // post
-    Edit = 2, // put
-    Delete = 3, // delete
-    Patch = 4, // patch
-}
+//region Path Element Configurable
 
-impl FeagiMessageEnum {
-    /// Returns true if a request payload is allowed (Mainly relevant for REST)
-    pub const fn is_request_payload_allowed(&self) -> bool {
-        !matches!(self, Self::Read)
+/// A path segment that is not known at compile time, but is set once at runtime and does not
+/// change per request (for example a server name read from a config file). Holds at most
+/// `MAX_LENGTH` characters of the URL-safe base64 alphabet (`A-Z`, `a-z`, `0-9`, `-`, `_`, `=`),
+/// so it is always a valid single segment of a REST path or zenoh key
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FeagiPathElementConfigurable<const MAX_LENGTH: usize>(heapless::String<MAX_LENGTH>);
+
+impl<const MAX_LENGTH: usize> FeagiPathElementConfigurable<MAX_LENGTH> {
+    /// Errors if `text` is empty, longer than `MAX_LENGTH`, or has a character outside of the
+    /// URL-safe base64 alphabet
+    pub fn try_from_str(text: &str) -> Result<Self, FeagiPathConfigurableError> {
+        if text.is_empty() {
+            return Err(FeagiPathConfigurableError::Empty);
+        }
+        if text.len() > MAX_LENGTH {
+            return Err(FeagiPathConfigurableError::TooLong {
+                actual: text.len(),
+                max: MAX_LENGTH,
+            });
+        }
+        if let Some(invalid) = text.chars().find(|ch| !(ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '='))) {
+            return Err(FeagiPathConfigurableError::InvalidCharacter(invalid));
+        }
+        let text = heapless::String::try_from(text).unwrap_or_else(|_| panic!("text length was checked against MAX_LENGTH"));
+        Ok(Self(text))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 }
 
-/// A Marker trait for defining what type of request method is being used. Matched to how rest defines it
-pub trait RequestMethodType {
-    const METHOD: FeagiMessageEnum;
+impl<const MAX_LENGTH: usize> TryFrom<&str> for FeagiPathElementConfigurable<MAX_LENGTH> {
+    type Error = FeagiPathConfigurableError;
+
+    fn try_from(text: &str) -> Result<Self, Self::Error> {
+        Self::try_from_str(text)
+    }
 }
 
-/// Requesting getting something. Equal to Rest GET.
-/// Note that no payload is allowed in GET rest calls!
-pub struct RequestMethodRead;
-impl RequestMethodType for RequestMethodRead {
-    const METHOD: FeagiMessageEnum = FeagiMessageEnum::Read;
+impl<const MAX_LENGTH: usize> core::fmt::Display for FeagiPathElementConfigurable<MAX_LENGTH> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
-/// Requesting creating something. Equal to Rest POST.
-pub struct RequestMethodCreate;
-impl RequestMethodType for RequestMethodCreate {
-    const METHOD: FeagiMessageEnum = FeagiMessageEnum::Create;
-}
-
-/// Requesting updating something. Equal to Rest PUT.
-pub struct RequestMethodEdit;
-impl RequestMethodType for RequestMethodEdit {
-    const METHOD: FeagiMessageEnum = FeagiMessageEnum::Edit;
-}
-
-/// Requesting getting something. Equal to Rest DELETE.
-pub struct RequestMethodDelete;
-impl RequestMethodType for RequestMethodDelete {
-    const METHOD: FeagiMessageEnum = FeagiMessageEnum::Delete;
-}
-
-/// Requesting getting something. Equal to Rest PATCH.
-pub struct RequestMethodPatch;
-impl RequestMethodType for RequestMethodPatch {
-    const METHOD: FeagiMessageEnum = FeagiMessageEnum::Patch;
+/// Text could not be used as a `FeagiPathConfigurable`
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum FeagiPathConfigurableError {
+    #[error("Path configurable cannot be empty!")]
+    Empty,
+    #[error("Path configurable is {actual} characters, more than its maximum of {max}!")]
+    TooLong { actual: usize, max: usize },
+    #[error("Path configurable has '{0}', which is not in the URL-safe base64 alphabet!")]
+    InvalidCharacter(char),
 }
 
 //endregion

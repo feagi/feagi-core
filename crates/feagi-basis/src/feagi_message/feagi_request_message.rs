@@ -1,6 +1,7 @@
 use crate::feagi_message::feagi_message_components::{MessageParameters, MessagePayload, MessageQueryables};
-use crate::feagi_message::feagi_message_path::FeagiRequestMessagePath;
-use crate::feagi_message::feagi_response_message::FeagiResponsePayload;
+use crate::feagi_message::feagi_request_message_category::FeagiRequestCategory;
+use crate::feagi_message::request::feagi_response_error::FeagiMessageError;
+use crate::feagi_message::request::feagi_response_message::FeagiResponsePayload;
 
 /// The request message to send to make a request. Contains internally typing context to aid in
 /// routing and processing
@@ -12,7 +13,7 @@ pub trait FeagiRequestMessage {
         Queryables=Self::DescriptorQueryables,
         RequestPayload=Self::DescriptorRequestPayload
     >;
-    
+
     // NOTE: These 3 get set directly from the Descriptor by the generator
     type DescriptorParameters: MessageParameters;
     type DescriptorQueryables: MessageQueryables;
@@ -37,7 +38,7 @@ pub trait FeagiRequestMessageDescriptor {
     type Message: FeagiRequestMessage<Descriptor=Self>;
 
     /// Defines the path that this Feagi Message Takes
-    type MessagePath: FeagiRequestMessagePath;
+    type MessagePath: FeagiRequestMessagePath<Configurables = <Self::Category as FeagiRequestCategory>::Configurables>;
 
     /// Intra path runtime configurables
     type Parameters: MessageParameters;
@@ -51,18 +52,22 @@ pub trait FeagiRequestMessageDescriptor {
     type ResponsePayload: FeagiResponsePayload;
 
     /// The custom error type that can be sent back if something went wrong with the response
-    type ResponseError: core::error::Error;
-    
+    type ResponseError: FeagiMessageError;
+
+    /// The category this message belongs to, whose channel it travels over
+    type Category: FeagiRequestCategory;
+
+    /// Wraps the message into its variant of the category's request enum
+    fn into_category_request(message: Self::Message) -> <Self::Category as FeagiRequestCategory>::RequestEnum;
+
+    /// Wraps a response to this message into its variant of the category's response enum
+    fn into_category_response(response: Result<Self::ResponsePayload, Self::ResponseError>) -> <Self::Category as FeagiRequestCategory>::ResponseEnum;
+
+    /// Unwraps a response to this message from the category's response enum. Gives the enum
+    /// back if it holds a response to some other message
+    fn try_from_category_response(
+        response: <Self::Category as FeagiRequestCategory>::ResponseEnum,
+    ) -> Result<Result<Self::ResponsePayload, Self::ResponseError>, <Self::Category as FeagiRequestCategory>::ResponseEnum>;
+
     // This struct should be zero sized, no fields!
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -1,20 +1,14 @@
-use crate::common::{parse_property_colon_member, unit_type, RustVisibility};
+use crate::common::{basis_path, serde_data_derive_attributes, unit_type, RustVisibility};
 use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
+use crate::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategoryContext;
 use crate::feagi_messages::request_response::feagi_request_message_path::{FeagiRequestMessagePath, FeagiRequestMessagePathRustStructNames};
+use crate::feagi_messages::request_response::message_error::MessageErrorTemplate;
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::template_parsing::struct_template::StructTemplate;
 use crate::templates::Unparse;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{braced, LitStr};
-
-mod kw {
-    syn::custom_keyword!(path);
-    syn::custom_keyword!(path_item_descriptions);
-    syn::custom_keyword!(description);
-    syn::custom_keyword!(payload);
-    syn::custom_keyword!(response);
-}
+use syn::{braced, LitBool, LitStr, Token};
 
 //region Feagi Request Message Specification Struct Names
 
@@ -33,15 +27,24 @@ impl FeagiRequestMessageRustStructNames {
         Self { base_name, method }
     }
 
-    pub fn feagi_message_response_struct_name(&self) -> syn::Ident {
+    /// Name of the variant this message has in its category's request and response enums
+    pub fn category_enum_variant_name(&self) -> syn::Ident {
+        format_ident!("{}{}", self.method.as_str(), self.base_name)
+    }
+
+    pub fn feagi_message_struct_name(&self) -> syn::Ident {
         self.with_prefix_method_and_given_suffix("FeagiRequestMessage")
+    }
+
+    pub fn feagi_message_descriptor_struct_name(&self) -> syn::Ident {
+        self.with_prefix_method_and_given_suffix("FeagiRequestMessageDescriptor")
     }
 
     pub fn path_struct_names(&self) -> FeagiRequestMessagePathRustStructNames {
         FeagiRequestMessagePathRustStructNames::new(self.base_name.clone(), self.method.clone())
     }
 
-    pub fn feagi_message_response_path_struct_name(&self) -> syn::Ident {
+    pub fn feagi_message_path_struct_name(&self) -> syn::Ident {
         self.path_struct_names().feagi_message_path_struct_name()
     }
 
@@ -61,6 +64,10 @@ impl FeagiRequestMessageRustStructNames {
         self.with_prefix_method_and_given_suffix("FeagiRequestMessageResponse")
     }
 
+    pub fn feagi_message_error_struct_name(&self) -> syn::Ident {
+        self.with_prefix_method_and_given_suffix("FeagiRequestMessageError")
+    }
+
     fn with_prefix_method_and_given_suffix(&self, suffix: &str) -> syn::Ident {
         format_ident!("{}{}{}", self.method.as_str(), self.base_name, suffix)
     }
@@ -70,28 +77,33 @@ impl FeagiRequestMessageRustStructNames {
 
 //region Feagi Request Message
 
-/// Parses over a FeagiMessage with a payload. Formatted as the following
+/// Parses over a FeagiMessage. Formatted as the following, with the keys in any order
 /// "MessageTitle": {
 ///     path: `FeagiMessagePath`,
-///     path_item_descriptions: {
+///     path_item_descriptions: {          (optional)
 ///         property_name: "Description String",
 ///     },
 ///     description: "Description String",
-///     payload: {
+///     alloc_only: true,                  (optional, defaults to false)
+///     payload: {                         (optional, not allowed for Read messages)
 ///         property_name: Type, "optional_comment",
 ///     },
-///     response: {
+///     response: {                        (optional)
 ///         property_name: Type, "optional_comment",
-///     }
+///     },
+///     error: `MessageErrorTemplate`,     (optional)
 /// }
-/// Note that the payload is skipped for Read Messages
 pub struct FeagiRequestMessage<const METHOD_TYPE_U8: FeagiRequestMessageU8> {
     pub path: FeagiRequestMessagePath<METHOD_TYPE_U8>,
     pub path_item_descriptions: PropertyDescriptors,
     pub description: LitStr,
+    /// The message uses types that need an allocator. It only exists when `feagi_basis` is built
+    /// with its `alloc` feature. When false, the template author confirms the message works
+    /// without an allocator
+    pub alloc_only: bool,
     pub payload: StructTemplate,
     pub response: StructTemplate,
-    pub custom_response_error: Option<syn::Ident>,
+    pub error: MessageErrorTemplate,
 }
 
 impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYPE_U8> {
@@ -122,281 +134,315 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
         FeagiRequestMessageRustStructNames::new(name_base, FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8))
     }
 
-    /// Generate the Specification structs, the feagi request message struct, and the response struct (if valid)
-    pub fn generate_rust_specification_and_request_and_response_structs(
-        &self,
-        feagi_message_specification_struct_names: FeagiRequestMessageRustStructNames,
-    ) -> proc_macro2::TokenStream {
-        let mut output: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
-        let specification_derives = vec![
-            format_ident!("{}", "Clone"),
-            format_ident!("{}", "Debug"),
-            format_ident!("{}", "Serialize"),
-            format_ident!("{}", "Deserialize"),
-        ];
+    /// The type of the response payload, `()` when the message has no response fields
+    pub fn response_payload_type(&self, names: &FeagiRequestMessageRustStructNames) -> syn::Type {
+        if self.is_response_struct_generated() {
+            let name = names.feagi_message_response_specification_struct_name();
+            syn::parse_quote!(#name)
+        } else {
+            unit_type()
+        }
+    }
 
-        let tokens_message_path = self.path.generate_feagi_message_path_struct_and_impls(
-            &feagi_message_specification_struct_names.path_struct_names(),
-            &feagi_message_specification_struct_names.feagi_message_response_struct_name(),
-        ); // TODO add root route
-        output.extend(tokens_message_path);
+    /// The type of the response error
+    pub fn response_error_type(&self, names: &FeagiRequestMessageRustStructNames) -> proc_macro2::TokenStream {
+        self.error.error_type(&names.feagi_message_error_struct_name())
+    }
 
+    /// Generate the path struct, the specification structs, the error enum (if defined), the
+    /// message struct, and the descriptor of this message
+    pub fn generate_rust_message_items(&self, names: &FeagiRequestMessageRustStructNames, category: &FeagiRequestMessageCategoryContext) -> proc_macro2::TokenStream {
+        let basis = basis_path();
+        let components = quote!(#basis::feagi_message::feagi_message_components);
+        let specification_derives = serde_data_derive_attributes();
+        let mut output = proc_macro2::TokenStream::new();
+
+        output.extend(self.path.generate_feagi_message_path_struct_and_impls(&names.path_struct_names(), category));
+
+        // Every field of the message, from all of its request specifications
         let mut all_request_fields = StructTemplate::new_empty();
 
-        let (parameter_type, parameter_message_field_constructor, parameter_value) = {
-            // Struct is parsed from path itself
-            if !self.is_parameter_struct_generated() {
-                (unit_type(), proc_macro2::TokenStream::new(), quote!(()))
-            } else {
-                let mut struct_template = self.path.as_parameter_struct_template();
-                struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
+        let mut generate_specification = |template: StructTemplate,
+                                          struct_name: syn::Ident,
+                                          trait_path: proc_macro2::TokenStream,
+                                          argument: syn::Ident,
+                                          output: &mut proc_macro2::TokenStream|
+         -> Specification {
+            if template.is_empty() {
+                return Specification {
+                    type_name: unit_type(),
+                    compose_fields: quote!(),
+                    decompose_value: quote!(()),
+                    consume_argument: quote!(let _ = #argument;),
+                };
+            }
 
-                let struct_name = feagi_message_specification_struct_names.feagi_message_parameter_specification_struct_name();
+            let mut template = template;
+            template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
+            let mut compose_fields = proc_macro2::TokenStream::new();
+            let mut decompose_fields = proc_macro2::TokenStream::new();
+            for (field_name, (field_type, field_docs)) in template.get_map() {
+                all_request_fields.insert_property(field_name.clone(), field_type.clone(), field_docs.clone());
+                compose_fields.extend(quote!(#field_name: #argument.#field_name,));
+                decompose_fields.extend(quote!(#field_name: self.#field_name,));
+            }
 
-                // Add fields to total field vector, field_name_tokens
-                let mut field_name_tokens = proc_macro2::TokenStream::new();
-                let mut deconstructor_tokens = proc_macro2::TokenStream::new();
-                for (field_name, (field_type, maybe_field_docs)) in struct_template.get_map() {
-                    all_request_fields.insert_property(field_name.clone(), field_type.clone(), maybe_field_docs.clone());
-                    field_name_tokens.extend(quote! {
-                        #field_name: parameters.#field_name,
-                    });
-                    deconstructor_tokens.extend(quote! {
-                        #field_name: self.#field_name,
-                    })
-                }
+            output.extend(template.generate_rust_struct(struct_name.clone(), None, specification_derives.clone(), RustVisibility::Public));
+            output.extend(quote! {
+                impl #trait_path for #struct_name {}
+            });
 
-                // Add Struct
-                output.extend(struct_template.generate_rust_struct(struct_name.clone(), None, &specification_derives, RustVisibility::Public));
-
-                // Add Trait impl
-                output.extend(quote! {
-                    impl FeagiMessageParameters for #struct_name {}
-                });
-
-                let value = quote! { Self::Parameters { #deconstructor_tokens } };
-                (syn::parse_quote!(#struct_name), field_name_tokens, value)
+            Specification {
+                type_name: syn::parse_quote!(#struct_name),
+                compose_fields,
+                decompose_value: quote!(#struct_name { #decompose_fields }),
+                consume_argument: quote!(),
             }
         };
 
-        let (queryable_type, queryable_message_field_constructor, queryable_value) = {
-            // Struct is parsed from path itself
-            if !self.is_queryable_struct_generated() {
-                (unit_type(), proc_macro2::TokenStream::new(), quote!(()))
-            } else {
-                let mut struct_template = self.path.as_queryable_struct_template();
-                struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
-
-                let struct_name = feagi_message_specification_struct_names.feagi_message_queryable_specification_struct_name();
-
-                // Add fields to total field vector, field_name_tokens
-                let mut field_name_tokens = proc_macro2::TokenStream::new();
-                let mut deconstructor_tokens = proc_macro2::TokenStream::new();
-                for (field_name, (field_type, maybe_field_docs)) in struct_template.get_map() {
-                    all_request_fields.insert_property(field_name.clone(), field_type.clone(), maybe_field_docs.clone());
-                    field_name_tokens.extend(quote! {
-                        #field_name: queryables.#field_name,
-                    });
-                    deconstructor_tokens.extend(quote! {
-                        #field_name: self.#field_name,
-                    })
-                }
-
-                // Add Struct
-                output.extend(struct_template.generate_rust_struct(struct_name.clone(), None, &specification_derives, RustVisibility::Public));
-
-                // Add Trait impl
-                output.extend(quote! {
-                    impl FeagiMessageQueryables for #struct_name {}
-                });
-
-                let value = quote! { Self::Queryables { #deconstructor_tokens } };
-                (syn::parse_quote!(#struct_name), field_name_tokens, value)
-            }
-        };
-
-        // NOTE: since we do validation that theres no payload with the READ METHOD, we can always trust
-        // that this will return empty / NULL in those cases
-
-        let (payload_type, payload_message_field_constructor, payload_value) = {
-            // Struct is seperate
-            if !self.is_payload_struct_generated() {
-                (unit_type(), proc_macro2::TokenStream::new(), quote!(()))
-            } else {
-                let mut struct_template = self.payload.clone();
-                struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
-
-                let struct_name = feagi_message_specification_struct_names.feagi_message_payload_specification_struct_name();
-
-                // Add fields to total field vector, field_name_tokens
-                let mut field_name_tokens = proc_macro2::TokenStream::new();
-                let mut deconstructor_tokens = proc_macro2::TokenStream::new();
-                for (field_name, (field_type, maybe_field_docs)) in struct_template.get_map() {
-                    all_request_fields.insert_property(field_name.clone(), field_type.clone(), maybe_field_docs.clone());
-                    field_name_tokens.extend(quote! {
-                        #field_name: payload.#field_name,
-                    });
-                    deconstructor_tokens.extend(quote! {
-                        #field_name: self.#field_name,
-                    })
-                }
-
-                // Add Struct
-                output.extend(struct_template.generate_rust_struct(struct_name.clone(), None, &specification_derives, RustVisibility::Public));
-
-                // Add Trait impl
-                output.extend(quote! {
-                    impl FeagiMessagePayload for #struct_name {}
-                });
-
-                let value = quote! { Self::Payload { #deconstructor_tokens } };
-                (syn::parse_quote!(#struct_name), field_name_tokens, value)
-            }
-        };
-
-        let response_type = {
-            // Struct is separate. Response fields stay off the request struct.
-            if !self.is_response_struct_generated() {
-                unit_type()
-            } else {
-                let mut struct_template = self.response.clone();
-                struct_template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
-
-                let struct_name = feagi_message_specification_struct_names.feagi_message_response_specification_struct_name();
-
-                output.extend(struct_template.generate_rust_struct(struct_name.clone(), None, &specification_derives, RustVisibility::Public));
-
-                output.extend(quote! {
-                    impl FeagiMessageResponse for #struct_name {}
-                });
-
-                syn::parse_quote!(#struct_name)
-            }
-        };
-
-        // Generate Feagi Message Struct Directly
-        let feagi_message_name = feagi_message_specification_struct_names.feagi_message_response_struct_name().clone();
-        let feagi_message_derives = vec![format_ident!("{}", "Clone"), format_ident!("{}", "Debug")]; // doesn't need serialization
-        let feagi_message_tokens = all_request_fields.generate_rust_struct(
-            feagi_message_name.clone(),
-            Some(self.description.clone()),
-            &feagi_message_derives,
-            RustVisibility::Public,
+        let parameters = generate_specification(
+            self.path.as_parameter_struct_template(),
+            names.feagi_message_parameter_specification_struct_name(),
+            quote!(#components::MessageParameters),
+            format_ident!("parameters"),
+            &mut output,
         );
-        output.extend(feagi_message_tokens);
+        let queryables = generate_specification(
+            self.path.as_queryable_struct_template(),
+            names.feagi_message_queryable_specification_struct_name(),
+            quote!(#components::MessageQueryables),
+            format_ident!("queryables"),
+            &mut output,
+        );
+        // Read messages are validated to have no payload, so this is always `()` for them
+        let payload = generate_specification(
+            self.payload.clone(),
+            names.feagi_message_payload_specification_struct_name(),
+            quote!(#components::MessagePayload),
+            format_ident!("request_payload"),
+            &mut output,
+        );
 
-        // Feagi Message impl
-        let mut new_arguments = proc_macro2::TokenStream::new(); // arguments for new func
-        let mut new_members = proc_macro2::TokenStream::new(); // parameters in new func (matches field names of struct)
-        for (field_name, (field_type, _)) in all_request_fields.get_map() {
-            new_arguments.extend(quote! { #field_name: #field_type, });
-            new_members.extend(quote! { #field_name, });
+        if self.is_response_struct_generated() {
+            let mut template = self.response.clone();
+            template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
+            let struct_name = names.feagi_message_response_specification_struct_name();
+            output.extend(template.generate_rust_struct(struct_name.clone(), None, specification_derives.clone(), RustVisibility::Public));
+            output.extend(quote! {
+                impl #basis::feagi_message::feagi_response_message::FeagiResponsePayload for #struct_name {}
+            });
         }
 
-        output.extend(quote! {
+        output.extend(self.error.generate_rust_error_enum(&names.feagi_message_error_struct_name(), &self.description));
 
-            impl #feagi_message_name {
-                pub fn new(#new_arguments) -> Self {
-                    Self {
-                        #new_members
-                    }
+        // Message struct
+        let message_name = names.feagi_message_struct_name();
+        output.extend(all_request_fields.generate_rust_struct(
+            message_name.clone(),
+            Some(self.description.clone()),
+            quote!(#[derive(Clone, Debug)]),
+            RustVisibility::Public,
+        ));
+
+        let new_arguments = all_request_fields.get_map().iter().map(|(name, (field_type, _))| quote!(#name: #field_type));
+        let new_members = all_request_fields.get_map().keys();
+        let consume_self = if all_request_fields.is_empty() { quote!(let _ = self;) } else { quote!() };
+
+        let descriptor_name = names.feagi_message_descriptor_struct_name();
+        let (parameters_type, queryables_type, payload_type) = (&parameters.type_name, &queryables.type_name, &payload.type_name);
+        let (consume_parameters, consume_queryables, consume_payload) =
+            (&parameters.consume_argument, &queryables.consume_argument, &payload.consume_argument);
+        let (compose_parameters, compose_queryables, compose_payload) =
+            (&parameters.compose_fields, &queryables.compose_fields, &payload.compose_fields);
+        let (decompose_parameters, decompose_queryables, decompose_payload) =
+            (&parameters.decompose_value, &queryables.decompose_value, &payload.decompose_value);
+
+        output.extend(quote! {
+            impl #message_name {
+                pub fn new(#( #new_arguments, )*) -> Self {
+                    Self { #( #new_members, )* }
                 }
             }
-        });
 
-        // An empty specification is `()` and contributes no fields, so name the unused binding.
-        let consume_parameters = if !self.is_parameter_struct_generated() {
-            quote!(let _ = parameters;)
-        } else {
-            quote!()
-        };
-        let consume_queryables = if !self.is_queryable_struct_generated() {
-            quote!(let _ = queryables;)
-        } else {
-            quote!()
-        };
-        let consume_payload = if !self.is_payload_struct_generated() {
-            quote!(let _ = payload;)
-        } else {
-            quote!()
-        };
-        let consume_self = if all_request_fields.is_empty() {
-            quote!(let _ = self;)
-        } else {
-            quote!()
-        };
+            impl #basis::feagi_message::feagi_request_message::FeagiRequestMessage for #message_name {
+                type Descriptor = #descriptor_name;
+                type DescriptorParameters = #parameters_type;
+                type DescriptorQueryables = #queryables_type;
+                type DescriptorRequestPayload = #payload_type;
 
-        let path_type = &feagi_message_specification_struct_names.feagi_message_response_path_struct_name();
-
-        output.extend(quote! {
-
-            impl FeagiMessage for #feagi_message_name {
-                type Path = #path_type;
-                type Parameters = #parameter_type;
-                type Queryables = #queryable_type;
-                type Payload = #payload_type;
-
-                fn from_message_data(parameters: Self::Parameters, queryables: Self::Queryables, payload: Self::Payload) -> Self {
+                fn compose(parameters: Self::DescriptorParameters, queryables: Self::DescriptorQueryables, request_payload: Self::DescriptorRequestPayload) -> Self {
                     #consume_parameters
                     #consume_queryables
                     #consume_payload
                     Self {
-                        #parameter_message_field_constructor
-                        #queryable_message_field_constructor
-                        #payload_message_field_constructor
+                        #compose_parameters
+                        #compose_queryables
+                        #compose_payload
                     }
                 }
 
-                fn to_message_data(self) -> (Self::Parameters, Self::Queryables, Self::Payload) {
+                fn decompose(self) -> (Self::DescriptorParameters, Self::DescriptorQueryables, Self::DescriptorRequestPayload) {
                     #consume_self
-                    (
-                        #parameter_value,
-                        #queryable_value,
-                        #payload_value,
-                    )
+                    (#decompose_parameters, #decompose_queryables, #decompose_payload)
                 }
             }
+        });
 
-            impl FeagiRequestMessage for #feagi_message_name {
-                type ResponseData = #response_type;
-                type ResponseCustomError = ();
+        // Descriptor
+        let description = &self.description;
+        let path_name = names.feagi_message_path_struct_name();
+        let response_payload_type = self.response_payload_type(names);
+        let response_error_type = self.response_error_type(names);
+        let category_marker = &category.category_marker_name;
+        let request_enum = &category.request_enum_name;
+        let response_enum = &category.response_enum_name;
+        let variant = names.category_enum_variant_name();
+
+        output.extend(quote! {
+            #[doc = #description]
+            #[derive(Clone, Copy, Debug)]
+            pub struct #descriptor_name;
+
+            impl #basis::feagi_message::feagi_request_message::FeagiRequestMessageDescriptor for #descriptor_name {
+                const MESSAGE_DESCRIPTION: &'static str = #description;
+                type Message = #message_name;
+                type MessagePath = #path_name;
+                type Parameters = #parameters_type;
+                type Queryables = #queryables_type;
+                type RequestPayload = #payload_type;
+                type ResponsePayload = #response_payload_type;
+                type ResponseError = #response_error_type;
+                type Category = #category_marker;
+
+                fn into_category_request(message: Self::Message) -> #request_enum {
+                    #request_enum::#variant(message)
+                }
+
+                fn into_category_response(response: ::core::result::Result<Self::ResponsePayload, Self::ResponseError>) -> #response_enum {
+                    #response_enum::#variant(response)
+                }
+
+                fn try_from_category_response(
+                    response: #response_enum,
+                ) -> ::core::result::Result<::core::result::Result<Self::ResponsePayload, Self::ResponseError>, #response_enum> {
+                    match response {
+                        #response_enum::#variant(response) => Ok(response),
+                        other => Err(other),
+                    }
+                }
             }
-
         });
 
         output
     }
 }
 
+/// How one request specification (parameters, queryables, payload) is wired into the message
+struct Specification {
+    /// The specification struct, or `()` when it has no fields
+    type_name: syn::Type,
+    /// `field: argument.field,` for each field, used by `compose`
+    compose_fields: proc_macro2::TokenStream,
+    /// Expression rebuilding the specification from `self`, used by `decompose`
+    decompose_value: proc_macro2::TokenStream,
+    /// Marks the `compose` argument as used when the specification is `()`
+    consume_argument: proc_macro2::TokenStream,
+}
+
+mod kw {
+    syn::custom_keyword!(path);
+    syn::custom_keyword!(path_item_descriptions);
+    syn::custom_keyword!(description);
+    syn::custom_keyword!(alloc_only);
+    syn::custom_keyword!(payload);
+    syn::custom_keyword!(response);
+    syn::custom_keyword!(error);
+}
+
 impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Parse for FeagiRequestMessage<METHOD_TYPE_U8> {
     /// Parse the braced message body. `"MessageTitle":` belongs to the parent entry.
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        /// Errors if `slot` was already filled by an earlier key
+        fn set_once<T>(slot: &mut Option<T>, value: T, key: &str, span: proc_macro2::Span) -> syn::Result<()> {
+            if slot.is_some() {
+                return Err(syn::Error::new(span, format!("duplicate `{key}` in FEAGI message")));
+            }
+            *slot = Some(value);
+            Ok(())
+        }
+
         let members;
         braced!(members in input);
 
-        let path = parse_property_colon_member::<kw::path, FeagiRequestMessagePath<METHOD_TYPE_U8>>(&members)?;
-        let path_item_descriptions = parse_property_colon_member::<kw::path_item_descriptions, PropertyDescriptors>(&members)?;
-        let description = parse_property_colon_member::<kw::description, LitStr>(&members)?;
-        let payload;
-        if !FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).had_no_payload() {
-            payload = parse_property_colon_member::<kw::payload, StructTemplate>(&members)?;
-        } else {
-            payload = StructTemplate::new_empty();
+        let mut path = None;
+        let mut path_item_descriptions = None;
+        let mut description = None;
+        let mut alloc_only = None;
+        let mut payload = None;
+        let mut response = None;
+        let mut error = None;
+
+        while !members.is_empty() {
+            let key: syn::Ident = members.fork().call(syn::ext::IdentExt::parse_any)?;
+            let span = key.span();
+            let lookahead = members.lookahead1();
+            if lookahead.peek(kw::path) {
+                members.parse::<kw::path>()?;
+                members.parse::<Token![:]>()?;
+                set_once(&mut path, members.parse()?, "path", span)?;
+            } else if lookahead.peek(kw::path_item_descriptions) {
+                members.parse::<kw::path_item_descriptions>()?;
+                members.parse::<Token![:]>()?;
+                set_once(&mut path_item_descriptions, members.parse()?, "path_item_descriptions", span)?;
+            } else if lookahead.peek(kw::description) {
+                members.parse::<kw::description>()?;
+                members.parse::<Token![:]>()?;
+                set_once(&mut description, members.parse()?, "description", span)?;
+            } else if lookahead.peek(kw::alloc_only) {
+                members.parse::<kw::alloc_only>()?;
+                members.parse::<Token![:]>()?;
+                let value: LitBool = members.parse()?;
+                set_once(&mut alloc_only, value.value, "alloc_only", span)?;
+            } else if lookahead.peek(kw::payload) {
+                members.parse::<kw::payload>()?;
+                members.parse::<Token![:]>()?;
+                if FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).had_no_payload() {
+                    return Err(syn::Error::new(span, "Read messages cannot have a payload"));
+                }
+                set_once(&mut payload, members.parse()?, "payload", span)?;
+            } else if lookahead.peek(kw::response) {
+                members.parse::<kw::response>()?;
+                members.parse::<Token![:]>()?;
+                set_once(&mut response, members.parse()?, "response", span)?;
+            } else if lookahead.peek(kw::error) {
+                members.parse::<kw::error>()?;
+                members.parse::<Token![:]>()?;
+                set_once(&mut error, members.parse()?, "error", span)?;
+            } else {
+                return Err(lookahead.error());
+            }
+
+            if members.is_empty() {
+                break;
+            }
+            members.parse::<Token![,]>()?;
         }
 
-        let response = parse_property_colon_member::<kw::response, StructTemplate>(&members)?;
-
-        if !members.is_empty() {
-            return Err(members.error("unexpected tokens in FEAGI message"));
-        }
+        let Some(path) = path else {
+            return Err(members.error("FEAGI message is missing `path`"));
+        };
+        let Some(description) = description else {
+            return Err(members.error("FEAGI message is missing `description`"));
+        };
 
         Ok(Self {
             path,
-            path_item_descriptions,
+            path_item_descriptions: path_item_descriptions.unwrap_or_else(PropertyDescriptors::new_empty),
             description,
-            payload,
-            response,
-            custom_response_error: None, // TODO
+            alloc_only: alloc_only.unwrap_or(false),
+            payload: payload.unwrap_or_else(StructTemplate::new_empty),
+            response: response.unwrap_or_else(StructTemplate::new_empty),
+            error: error.unwrap_or(MessageErrorTemplate::Default),
         })
     }
 }
@@ -407,29 +453,25 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Unparse for FeagiRequestMessag
         let path = self.path.unparse();
         let path_item_descriptions = self.path_item_descriptions.unparse();
         let description = &self.description;
-        let payload = self.payload.unparse();
-        let response = self.response.unparse();
-
-        // TODO unparse error type
-
-        if !FeagiRequestMessageMethod::from_u8(METHOD_TYPE_U8).had_no_payload() {
-            quote! {
-                {
-                    path: #path,
-                    path_item_descriptions: #path_item_descriptions,
-                    description: #description,
-                    payload: #payload,
-                    response: #response,
-                }
-            }
+        let alloc_only = self.alloc_only;
+        let payload = if self.is_payload_struct_generated() {
+            let payload = self.payload.unparse();
+            quote!(payload: #payload,)
         } else {
-            quote! {
-                {
-                    path: #path,
-                    path_item_descriptions: #path_item_descriptions,
-                    description: #description,
-                    response: #response,
-                }
+            quote!()
+        };
+        let response = self.response.unparse();
+        let error = self.error.unparse();
+
+        quote! {
+            {
+                path: #path,
+                path_item_descriptions: #path_item_descriptions,
+                description: #description,
+                alloc_only: #alloc_only,
+                #payload
+                response: #response,
+                #error
             }
         }
     }

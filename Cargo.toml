@@ -129,6 +129,7 @@ quote = "1.0.47"
 syn = { version = "3.0.6", features = ["full"] }
 proc-macro2 = "1.0.107"
 heck = "0.5.0"
+indexmap = "2.14.2"
 
 # TODO a lot of these need default features stripped
 

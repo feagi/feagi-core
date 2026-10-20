@@ -74,3 +74,39 @@ impl RustVisibility {
 }
 
 //endregion
+
+//region Generated Code Paths
+
+// NOTE: Generated code names everything by absolute path through `feagi_basis`, so it compiles
+// wherever a template is defined without the caller importing anything. `feagi_basis` declares
+// `extern crate self as feagi_basis` so these paths also resolve inside of it
+
+/// Absolute path to the `feagi_basis` crate
+pub fn basis_path() -> proc_macro2::TokenStream {
+    quote!(::feagi_basis)
+}
+
+/// Clone, Debug, and serde derives, with serde reached through `feagi_basis` so the caller does
+/// not need to depend on serde directly
+pub fn serde_data_derive_attributes() -> proc_macro2::TokenStream {
+    let basis = basis_path();
+    quote! {
+        #[derive(Clone, Debug, #basis::__private::serde::Serialize, #basis::__private::serde::Deserialize)]
+        #[serde(crate = "::feagi_basis::__private::serde")]
+    }
+}
+
+/// Wraps `alloc_items` so they only exist when `feagi_basis` is built with its `alloc` feature,
+/// and `no_alloc_items` so they only exist when it is not
+pub fn alloc_gated(alloc_items: proc_macro2::TokenStream, no_alloc_items: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+    let basis = basis_path();
+    quote! {
+        #basis::__feagi_if_alloc! {
+            { #alloc_items }
+            else
+            { #no_alloc_items }
+        }
+    }
+}
+
+//endregion

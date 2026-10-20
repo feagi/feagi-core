@@ -10,7 +10,7 @@ use feagi_macro_components::template_parsing::property_descriptors::PropertyDesc
 use feagi_macro_components::template_parsing::struct_template::StructTemplate;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
-use std::collections::HashMap;
+use feagi_macro_components::IndexMap;
 use syn::{GenericArgument, LitStr, PathArguments, Type};
 
 /// Expression that evaluates to one `CategoryApi`.
@@ -44,7 +44,7 @@ pub fn category_api_tokens(category: &FeagiRequestMessageCategory) -> TokenStrea
 
 fn push_bucket<const METHOD: FeagiRequestMessageU8>(
     category: &FeagiRequestMessageCategory,
-    messages: &HashMap<LitStr, FeagiRequestMessage<METHOD>>,
+    messages: &IndexMap<LitStr, FeagiRequestMessage<METHOD>>,
     operations: &mut TokenStream,
     operation_names: &mut TokenStream,
     index: &mut usize,
@@ -82,6 +82,11 @@ fn operation_tokens<const METHOD: FeagiRequestMessageU8>(
     for element in message.path.elements() {
         match element {
             MessagePathElement::StaticPath(text) => {
+                segments.extend(quote!(PathSegment::Literal(#text),));
+            }
+            // TODO Only known at runtime. Shown by name until OpenAPI is built from the traits
+            MessagePathElement::ConfigurableOfName(name) => {
+                let text = LitStr::new(&format!("${}", name.value()), name.span());
                 segments.extend(quote!(PathSegment::Literal(#text),));
             }
             MessagePathElement::ParameterOfName(name, ty) => {
