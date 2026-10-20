@@ -5221,30 +5221,35 @@ mod tests {
 
         let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
 
-        let areas_hash_before = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_cortical_areas_hash();
-        let geometry_hash_before = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_brain_geometry_hash();
+        // Hash the isolated manager directly. StateManager is a process-wide singleton, so
+        // parallel feagi-services tests overwrite published hashes and make before/after
+        // reads of get_brain_geometry_hash() race.
+        let (areas_hash_before, geometry_hash_before) = {
+            let mgr = connectome.read();
+            (
+                mgr.compute_cortical_areas_hash(),
+                mgr.compute_brain_geometry_hash(),
+            )
+        };
 
         // Act: delete by base64 string.
         let cortical_id_base64 = cortical_id.as_base_64();
         svc.delete_cortical_area(&cortical_id_base64).await?;
 
-        let areas_hash_after = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_cortical_areas_hash();
-        let geometry_hash_after = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_brain_geometry_hash();
+        let (areas_hash_after, geometry_hash_after) = {
+            let mgr = connectome.read();
+            (
+                mgr.compute_cortical_areas_hash(),
+                mgr.compute_brain_geometry_hash(),
+            )
+        };
         assert_ne!(
             areas_hash_before, areas_hash_after,
-            "delete must republish cortical_areas_hash for Brain Visualizer"
+            "delete must change cortical_areas_hash for Brain Visualizer"
         );
         assert_ne!(
             geometry_hash_before, geometry_hash_after,
-            "delete must republish brain_geometry_hash for Brain Visualizer"
+            "delete must change brain_geometry_hash for Brain Visualizer"
         );
 
         // Assert: RuntimeGenome no longer contains the area nor region membership.

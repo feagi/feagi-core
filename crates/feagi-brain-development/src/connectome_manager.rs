@@ -590,7 +590,9 @@ impl ConnectomeManager {
     }
 
     /// Compute hash for cortical areas and properties (excluding mappings).
-    fn compute_cortical_areas_hash(&self) -> u64 {
+    ///
+    /// This is the content hash published to `StateManager` as `cortical_areas_hash`.
+    pub fn compute_cortical_areas_hash(&self) -> u64 {
         let mut hasher = Xxh64::new(DATA_HASH_SEED);
         let mut areas: Vec<&CorticalArea> = self.cortical_areas.values().collect();
         areas.sort_by_key(|area| area.cortical_id.as_base_64());
@@ -610,7 +612,9 @@ impl ConnectomeManager {
     }
 
     /// Compute hash for brain geometry (area positions, dimensions, and 2D coordinates).
-    fn compute_brain_geometry_hash(&self) -> u64 {
+    ///
+    /// This is the content hash published to `StateManager` as `brain_geometry_hash`.
+    pub fn compute_brain_geometry_hash(&self) -> u64 {
         let mut hasher = Xxh64::new(DATA_HASH_SEED);
         let mut areas: Vec<&CorticalArea> = self.cortical_areas.values().collect();
         areas.sort_by_key(|area| area.cortical_id.as_base_64());
@@ -10432,30 +10436,22 @@ mod tests {
         manager.add_cortical_area(area).unwrap();
         assert_eq!(manager.get_cortical_area_count(), initial_count + 1);
 
-        let areas_hash_before = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_cortical_areas_hash();
-        let geometry_hash_before = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_brain_geometry_hash();
+        let areas_hash_before = manager.compute_cortical_areas_hash();
+        let geometry_hash_before = manager.compute_brain_geometry_hash();
 
         manager.remove_cortical_area(&cortical_id).unwrap();
         assert_eq!(manager.get_cortical_area_count(), initial_count);
         assert!(!manager.has_cortical_area(&cortical_id));
 
-        let areas_hash_after = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_cortical_areas_hash();
-        let geometry_hash_after = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_brain_geometry_hash();
+        let areas_hash_after = manager.compute_cortical_areas_hash();
+        let geometry_hash_after = manager.compute_brain_geometry_hash();
         assert_ne!(
             areas_hash_before, areas_hash_after,
-            "remove_cortical_area must publish a new cortical_areas_hash"
+            "remove_cortical_area must change cortical_areas_hash"
         );
         assert_ne!(
             geometry_hash_before, geometry_hash_after,
-            "remove_cortical_area must publish a new brain_geometry_hash"
+            "remove_cortical_area must change brain_geometry_hash"
         );
     }
 
