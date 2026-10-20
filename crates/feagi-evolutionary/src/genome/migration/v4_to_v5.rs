@@ -376,8 +376,9 @@ fn append_region_area(root: &mut Map<String, Value>, region_id: &str, area_id: &
     let Some(region) = regions.get_mut(region_id).and_then(|v| v.as_object_mut()) else {
         return;
     };
+    crate::genome::parser::fold_region_membership_into_cortical_areas(region);
     let areas = region
-        .entry("areas".to_string())
+        .entry("cortical_areas".to_string())
         .or_insert_with(|| json!([]));
     let Some(areas) = areas.as_array_mut() else {
         return;
@@ -484,7 +485,7 @@ mod tests {
         );
         let error_area_id = classifier["error_area_id"].as_str().unwrap().to_string();
         assert!(genome["blueprint"].get(&error_area_id).is_some());
-        assert!(genome["brain_regions"]["circuit"]["areas"]
+        assert!(genome["brain_regions"]["circuit"]["cortical_areas"]
             .as_array()
             .unwrap()
             .iter()
@@ -513,6 +514,25 @@ mod tests {
             genome["blueprint"].as_object().unwrap().len(),
             4,
             "a second pass must not allocate another error area"
+        );
+    }
+
+    #[test]
+    fn append_folds_duplicate_membership_keys_before_adding_the_error_area() {
+        let mut root = json!({
+            "brain_regions": {
+                "circuit": {
+                    "areas": ["legacy-only", "shared"],
+                    "cortical_areas": ["shared", "canonical-only"]
+                }
+            }
+        });
+        append_region_area(root.as_object_mut().unwrap(), "circuit", "error-area");
+        let circuit = &root["brain_regions"]["circuit"];
+        assert!(circuit.get("areas").is_none());
+        assert_eq!(
+            circuit["cortical_areas"],
+            json!(["shared", "canonical-only", "legacy-only", "error-area"])
         );
     }
 

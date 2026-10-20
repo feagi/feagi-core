@@ -348,7 +348,8 @@ fn add_drivers_to_root(root: &mut Map<String, Value>, driver_ids: &[String]) {
     let Some(region) = regions.get_mut(&root_id).and_then(|v| v.as_object_mut()) else {
         return;
     };
-    let areas = region.entry("areas").or_insert_with(|| json!([]));
+    crate::genome::parser::fold_region_membership_into_cortical_areas(region);
+    let areas = region.entry("cortical_areas").or_insert_with(|| json!([]));
     let Some(areas) = areas.as_array_mut() else {
         return;
     };
@@ -411,5 +412,26 @@ mod tests {
         assert!(genome["blueprint"]["Y3JldzAwMDE="]["cortical_mapping_dst"]
             .get(driver)
             .is_some());
+    }
+
+    #[test]
+    fn add_drivers_folds_duplicate_membership_keys() {
+        let mut genome = json!({
+            "brain_regions_root": "root",
+            "brain_regions": {
+                "root": {
+                    "parent_region_id": null,
+                    "areas": ["legacy-only", "shared"],
+                    "cortical_areas": ["shared", "canonical-only"]
+                }
+            }
+        });
+        add_drivers_to_root(genome.as_object_mut().unwrap(), &["driver".to_string()]);
+        let root = &genome["brain_regions"]["root"];
+        assert!(root.get("areas").is_none());
+        assert_eq!(
+            root["cortical_areas"],
+            json!(["shared", "canonical-only", "legacy-only", "driver"])
+        );
     }
 }

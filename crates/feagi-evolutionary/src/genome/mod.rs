@@ -44,10 +44,10 @@ pub use loader::{
 };
 pub use migration::{
     ChainRegistry, ChainResult, ChainRunner, MigrationError, MigrationStepDiagnostics, Migrator,
-    V2ToV3Migrator, V3ToV4Migrator, V4ToV5Migrator,
+    V2ToV3Migrator, V3ToV4Migrator, V4ToV5Migrator, V5ToV6Migrator,
 };
 pub use migrator::{map_old_id_to_new, migrate_genome, MigrationResult};
-pub use normalizers::{NormalizationDiagnostics, Normalizer, V3Normalizer};
+pub use normalizers::{NormalizationDiagnostics, Normalizer, V3Normalizer, V6Normalizer};
 pub use parser::{GenomeParser, ParsedGenome};
 pub use region_export::{
     apply_genome_title_to_unique_top_circuit, subset_runtime_genome_for_region_branch,
@@ -59,7 +59,9 @@ pub use schema::{
     detect_schema_version, GenomeSchemaVersion, CURRENT_SCHEMA_VERSION, MIN_SCHEMA_VERSION,
 };
 pub use signatures::generate_signatures;
-pub use validators::{V3Validator, V4Validator, V5Validator, ValidationReport, Validator};
+pub use validators::{
+    V3Validator, V4Validator, V5Validator, V6Validator, ValidationReport, Validator,
+};
 
 /// Build the canonical chain registry: the **full** migrator chain, all
 /// normalizers, and all validators known to this crate.
@@ -89,12 +91,21 @@ pub fn default_chain_registry() -> ChainRegistry {
         .expect("V4ToV5Migrator is well-formed; this expect is the registry contract violation we want to crash on");
 
     registry
+        .register_migrator(Box::new(V5ToV6Migrator::new()))
+        .expect("V5ToV6Migrator is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
         .register_normalizer(Box::new(V3Normalizer::new()))
         .expect("V3Normalizer is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
+        .register_normalizer(Box::new(V6Normalizer::new()))
+        .expect("V6Normalizer is well-formed; this expect is the registry contract violation we want to crash on");
 
     registry.register_validator(Box::new(V3Validator::new()));
     registry.register_validator(Box::new(V4Validator::new()));
     registry.register_validator(Box::new(V5Validator::new()));
+    registry.register_validator(Box::new(V6Validator::new()));
 
     registry
 }

@@ -2,7 +2,7 @@
 
 **Status:** Implemented
 **Owners:** feagi-core / feagi-evolutionary
-**Last updated:** 2026-09-06
+**Last updated:** 2026-10-20
 
 ## Goal
 
@@ -10,6 +10,8 @@ Replace the monolithic genome migrator with a stepwise chain of small,
 isolated `vN → vN+1` migrators paired with per-version validators. Make
 `genome_schema_version` load-bearing so dispatch is deterministic
 instead of shape-sniffing.
+
+Schema v6 keeps brain-region membership in `cortical_areas` only. Load folds a legacy `areas` list into that key and drops `areas`. New genome and connectome saves write `cortical_areas`.
 
 ## Scope
 
@@ -59,7 +61,7 @@ pub struct GenomeSchemaVersion(pub u32);
 // slot would be fiction. The chain registry is contiguous starting at
 // MIN_SCHEMA_VERSION.
 pub const MIN_SCHEMA_VERSION: GenomeSchemaVersion = GenomeSchemaVersion(2);
-pub const CURRENT_SCHEMA_VERSION: GenomeSchemaVersion = GenomeSchemaVersion(3);
+pub const CURRENT_SCHEMA_VERSION: GenomeSchemaVersion = GenomeSchemaVersion(6);
 
 pub trait Migrator: Send + Sync {
     fn from_version(&self) -> GenomeSchemaVersion;

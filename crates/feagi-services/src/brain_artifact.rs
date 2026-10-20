@@ -475,6 +475,7 @@ mod tests {
         ConnectomeMetadata, SerializableNeuronArray, SerializableSynapseArray,
         LITE_EDGE_ENCODING_SEMANTIC_V1, LITE_EDGE_ENCODING_TAG,
     };
+    use serde_json::json;
 
     use super::*;
 
@@ -565,7 +566,7 @@ mod tests {
         .expect("parse migrated genome");
 
         assert_eq!(result.report.source_genome_schema_version, Some(2));
-        assert_eq!(result.report.target_genome_schema_version, Some(5));
+        assert_eq!(result.report.target_genome_schema_version, Some(6));
         assert!(result
             .report
             .migration_steps
@@ -578,7 +579,11 @@ mod tests {
             .report
             .migration_steps
             .contains(&"genome:v4_to_v5".to_string()));
-        assert_eq!(migrated_genome["genome_schema_version"], 5);
+        assert!(result
+            .report
+            .migration_steps
+            .contains(&"genome:v5_to_v6".to_string()));
+        assert_eq!(migrated_genome["genome_schema_version"], 6);
         assert!(migrated_snapshot
             .metadata
             .tags
@@ -586,6 +591,125 @@ mod tests {
         assert_eq!(
             result.manifest.genome_sha256.as_deref().map(str::len),
             Some(64)
+        );
+    }
+
+    fn both_membership_keys_genome() -> String {
+        r#"{
+            "genome_id": "t-both",
+            "genome_title": "t",
+            "genome_description": "t",
+            "version": "2.0",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Power",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                },
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "areas": ["_power"],
+                    "cortical_areas": ["_death"]
+                }
+            },
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "stats": { "innate_cortical_area_count": 2, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+            "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+            "timestamp": 0.0
+        }"#
+        .to_string()
+    }
+
+    #[test]
+    fn lite_artifact_folds_duplicate_region_membership_keys() {
+        let source = snapshot(
+            ConnectomePersistMode::Lite,
+            Some(both_membership_keys_genome()),
+        );
+        let bytes = legacy_v2_bytes(&source);
+
+        let result = validate_and_migrate_brain_artifact(&bytes).expect("migrate both-key genome");
+        assert!(result.report.valid);
+        assert_eq!(result.report.target_genome_schema_version, Some(6));
+
+        let migrated_snapshot =
+            load_connectome_from_bytes(&result.artifact_bytes).expect("decode migrated artifact");
+        let migrated_genome: Value = serde_json::from_str(
+            migrated_snapshot
+                .genome_json
+                .as_deref()
+                .expect("migrated genome"),
+        )
+        .expect("parse migrated genome");
+        let root = &migrated_genome["brain_regions"]["root"];
+        assert!(root.get("areas").is_none());
+        assert_eq!(root["cortical_areas"].as_array().unwrap().len(), 2);
+        feagi_evolutionary::load_genome_with_report(
+            migrated_snapshot.genome_json.as_deref().unwrap(),
+        )
+        .expect("folded genome parses");
+
+        let again = validate_and_migrate_brain_artifact(&result.artifact_bytes)
+            .expect("migrated artifact migrates again");
+        assert!(again.report.valid);
+        let again_snapshot =
+            load_connectome_from_bytes(&again.artifact_bytes).expect("decode second artifact");
+        let again_genome: Value = serde_json::from_str(
+            again_snapshot
+                .genome_json
+                .as_deref()
+                .expect("second genome"),
+        )
+        .expect("parse second genome");
+        assert!(again_genome["brain_regions"]["root"].get("areas").is_none());
+        assert_eq!(
+            again_genome["brain_regions"]["root"]["cortical_areas"],
+            root["cortical_areas"]
+        );
+    }
+
+    #[test]
+    fn lite_artifact_folds_areas_when_embedded_genome_is_already_current() {
+        let mut genome: Value =
+            serde_json::from_str(&both_membership_keys_genome()).expect("genome json");
+        genome["genome_schema_version"] = json!(6);
+        let source = snapshot(ConnectomePersistMode::Lite, Some(genome.to_string()));
+        let bytes = legacy_v2_bytes(&source);
+
+        let result =
+            validate_and_migrate_brain_artifact(&bytes).expect("current genome with areas folds");
+        assert!(result.report.valid);
+        assert_eq!(result.report.source_genome_schema_version, Some(6));
+        assert_eq!(result.report.target_genome_schema_version, Some(6));
+
+        let migrated_snapshot =
+            load_connectome_from_bytes(&result.artifact_bytes).expect("decode migrated artifact");
+        let migrated_genome: Value = serde_json::from_str(
+            migrated_snapshot
+                .genome_json
+                .as_deref()
+                .expect("migrated genome"),
+        )
+        .expect("parse migrated genome");
+        assert!(migrated_genome["brain_regions"]["root"]
+            .get("areas")
+            .is_none());
+        assert_eq!(
+            migrated_genome["brain_regions"]["root"]["cortical_areas"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
         );
     }
 

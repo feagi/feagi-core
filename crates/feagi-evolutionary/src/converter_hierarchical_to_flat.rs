@@ -180,6 +180,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
                 }
             }
 
+            crate::genome::parser::fold_region_membership_into_cortical_areas(&mut props);
             region_data = props;
         }
 
@@ -568,6 +569,56 @@ mod tests {
         assert!(flat["physiology"].is_object());
         assert!(flat["classifiers"].is_object());
         assert_eq!(flat["classifiers"].as_object().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn convert_writes_region_membership_only_as_cortical_areas() {
+        use feagi_structures::genomic::brain_regions::RegionID;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::{BrainRegion, RegionType};
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "A test genome".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let region_id = RegionID::new();
+        let power_id = CoreCorticalType::Power.to_cortical_id();
+        let mut region =
+            BrainRegion::new(region_id, "Root".to_string(), RegionType::Undefined).unwrap();
+        region.add_area(power_id);
+        region.add_property("areas".to_string(), json!(["should-stay-nested"]));
+        region.add_property("description".to_string(), json!("kept"));
+        genome.brain_regions.insert(region_id.to_string(), region);
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let saved = &flat["brain_regions"][region_id.to_string()];
+        assert!(saved.get("areas").is_none());
+        let membership = saved["cortical_areas"].as_array().unwrap();
+        assert!(membership
+            .iter()
+            .any(|value| value.as_str() == Some(power_id.as_base_64().as_str())));
+        assert_eq!(saved["properties"]["description"], "kept");
+        assert_eq!(saved["properties"]["areas"], json!(["should-stay-nested"]));
     }
 
     #[test]
