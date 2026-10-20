@@ -1,5 +1,8 @@
 //! Systems (largely) common to both STD and Embassy
 
+use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryGroupChannelRouter;
+use path_builder::AddNestedCategoryPathsToPicoServeRouter;
+
 /// Request read buffer. Response bodies are written from their static slices.
 pub const HTTP_BUFFER_LEN: usize = 2048;
 
@@ -12,7 +15,12 @@ pub trait RestServerWorkerBuilder<>: Sized {
     fn new(socket_address: core::net::SocketAddr) -> Self;
 
     /// Builds the static routes for the server.
-    fn build_router_with_routes<>() -> picoserve::Router<impl picoserve::routing::PathRouter> {
+    fn build_router_with_routes<GroupChannelRouter: RequestCategoryGroupChannelRouter<Request, Response, Channels>>(
+        path_configurables: <GroupChannelRouter::NestedCategoryChannelRouters as AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>>::NestedConfigurables,
+    ) -> picoserve::Router<impl picoserve::routing::PathRouter>
+    where
+        GroupChannelRouter::NestedCategoryChannelRouters: AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>,
+    {
         use picoserve::routing::PathRouter;
 
         //region Predefined Route Builders
@@ -73,7 +81,11 @@ pub trait RestServerWorkerBuilder<>: Sized {
         #[cfg(feature = "swagger_web_ui")]
         let router = route_swagger_ui(router);
 
-        // TODO Main routes
+        // Main routes, one per message descriptor in each category of the group
+        let router = <GroupChannelRouter::NestedCategoryChannelRouters as AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>>::add_nested_category_paths_to_pico_serve_router(
+            router,
+            path_configurables,
+        );
 
         router
     }
@@ -83,59 +95,19 @@ pub trait RestServerWorkerBuilder<>: Sized {
 pub mod path_builder {
     use picoserve::routing::{get, PathDescription, PathRouter, parse_path_segment, ParsePathSegment};
     use feagi_basis::feagi_message::feagi_message_components::{MessageQueryables, FeagiMessageParameterFieldSerializable};
-    use feagi_basis::feagi_message::feagi_message_path::{FeagiRequestMessagePath, PathParameterElement};
-    use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryChannelRouter;
-    use feagi_basis::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
+    use feagi_basis::feagi_message::feagi_message_path::{FeagiMessagePath, FeagiRequestMessagePath, PathParameterElement};
+    use feagi_basis::feagi_message::feagi_request_message::FeagiRequestMessageDescriptor;
+    use feagi_basis::feagi_message::feagi_request_message_grouping::{NCat, NMDes, NNull, RequestCategoryChannelRouter};
     use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
-    use feagi_basis::parallelism::feagi_channel::request_response_channel::basis::{ReplySlot, RequestSlot};
-    use feagi_basis::parallelism::feagi_channel::request_response_channel::FeagiRequester;
+    use feagi_basis::parallelism::feagi_channel::request_response_channel::basis::FeagiRequestResponseChannels;
     use feagi_interop_proc::generate_into_picoserve_path_impls;
 
-    
 
-
-    pub(crate) struct PicoServeRequestCategoryChannelRouter<Cat, Request, Response, ReplySender, RequestSender, ReplyReceiver>
-    where
-        Cat: RequestCategoryChannelRouter<Request, Response, ReplySender, RequestSender, ReplyReceiver>,
-        Request: Recyclable,
-        Response: Recyclable,
-        ReplySender: FeagiChannelTransmitter<ReplySlot<Response>> + Clone,
-        RequestSender: FeagiChannelTransmitter<RequestSlot<Request, ReplySender>>,
-        ReplyReceiver: FeagiChannelReceiver<ReplySlot<Response>>
-    {
-        requester: FeagiRequester<
-            Request, Response,
-            RequestSender, ReplySender, ReplyReceiver
-        >,
-        _p: core::marker::PhantomData<Cat>
-    }
-
-    impl<Cat, Request, Response, ReplySender, RequestSender, ReplyReceiver> PicoServeRequestCategoryChannelRouter<Cat, Request, Response, ReplySender, RequestSender, ReplyReceiver>
-    where
-        Cat: RequestCategoryChannelRouter<Request, Response, ReplySender, RequestSender, ReplyReceiver>,
-        Request: Recyclable,
-        Response: Recyclable,
-        ReplySender: FeagiChannelTransmitter<ReplySlot<Response>> + Clone,
-        RequestSender: FeagiChannelTransmitter<RequestSlot<Request, ReplySender>>,
-        ReplyReceiver: FeagiChannelReceiver<ReplySlot<Response>>
-    {
-
-        pub fn new(requester: FeagiRequester<Request, Response, RequestSender, ReplySender, ReplyReceiver>) -> Self {
-            Self {requester, _p: core::marker::PhantomData}
-        }
-
-        pub fn unwrap_requester(self) -> FeagiRequester<Request, Response, RequestSender, ReplySender, ReplyReceiver> {
-            self.requester
-        }
-
-        pub fn apply_routes<R>(router: picoserve::Router<R>) where R: PathRouter {
-
-        }
-    }
 
     //region Individual Messages
 
-    /// Adds a path to the picoserve router. Needs the queryables specifically.
+    /// Adds a path to the picoserve router. `Q` is the message's queryables type (type only, no
+    /// value exists at route build time).
     ///
     /// The path's type tuple is converted to a picoserve path description through
     /// [`IntoPicoservePath`]. The `NewPathParameters = ()` bound matches the
@@ -144,7 +116,6 @@ pub mod path_builder {
     pub fn add_request_path_to_pico_serve_router<R, Path, Q>(
         router: picoserve::Router<R>,
         path_configurables: Path::ConfigurablesTuple,
-        message_queryables: Q,
     ) -> picoserve::Router<impl PathRouter>
     where
         R: PathRouter,
@@ -203,6 +174,137 @@ pub mod path_builder {
 
     // One `IntoPicoservePath` impl per tuple arity
     generate_into_picoserve_path_impls!();
+
+    //endregion
+
+    //region Nested Messages
+
+    /// Unrolls a `NMDes` chain (such as `RequestCategoryChannelRouter::NestedMessageDescriptors`),
+    /// calling [`add_request_path_to_pico_serve_router`] once per contained descriptor
+    pub trait AddNestedRequestPathsToPicoServeRouter {
+        /// Each descriptor path's `ConfigurablesTuple`, nested the same way as the `NMDes` chain:
+        /// `(HeadConfigurables, (NextConfigurables, (..., ())))`
+        type NestedConfigurables;
+
+        /// Adds the paths of every descriptor in the chain to the router, head first
+        fn add_nested_request_paths_to_pico_serve_router<R: PathRouter>(
+            router: picoserve::Router<R>,
+            nested_configurables: Self::NestedConfigurables,
+        ) -> picoserve::Router<impl PathRouter>;
+    }
+
+    /// End of the chain, nothing left to add
+    impl AddNestedRequestPathsToPicoServeRouter for NNull {
+        type NestedConfigurables = ();
+
+        #[inline]
+        fn add_nested_request_paths_to_pico_serve_router<R: PathRouter>(
+            router: picoserve::Router<R>,
+            _nested_configurables: Self::NestedConfigurables,
+        ) -> picoserve::Router<impl PathRouter> {
+            router
+        }
+    }
+
+    /// Adds the head descriptor's path, then recurses into the tail
+    impl<Head, Tail> AddNestedRequestPathsToPicoServeRouter for NMDes<Head, Tail>
+    where
+        Head: FeagiRequestMessageDescriptor,
+        <Head::MessagePath as FeagiMessagePath>::TypesTuple: IntoPicoservePath,
+        <<Head::MessagePath as FeagiMessagePath>::TypesTuple as IntoPicoservePath>::Output: PathDescription<(), NewPathParameters = ()>,
+        Tail: AddNestedRequestPathsToPicoServeRouter,
+    {
+        type NestedConfigurables = (
+            <Head::MessagePath as FeagiMessagePath>::ConfigurablesTuple,
+            Tail::NestedConfigurables,
+        );
+
+        #[inline]
+        fn add_nested_request_paths_to_pico_serve_router<R: PathRouter>(
+            router: picoserve::Router<R>,
+            nested_configurables: Self::NestedConfigurables,
+        ) -> picoserve::Router<impl PathRouter> {
+            let (head_configurables, tail_configurables) = nested_configurables;
+            let router = add_request_path_to_pico_serve_router::<R, Head::MessagePath, Head::Queryables>(
+                router,
+                head_configurables,
+            );
+            Tail::add_nested_request_paths_to_pico_serve_router(router, tail_configurables)
+        }
+    }
+
+    //endregion
+
+    //region Nested Categories
+
+    /// Unrolls a `NCat` chain (such as `RequestCategoryGroupChannelRouter::NestedCategoryChannelRouters`),
+    /// adding the paths of every category's `NestedMessageDescriptors` through
+    /// [`AddNestedRequestPathsToPicoServeRouter`]
+    pub trait AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>
+    where
+        Request: Recyclable,
+        Response: Recyclable,
+        Channels: FeagiRequestResponseChannels,
+    {
+        /// Each category's `NestedConfigurables`, nested the same way as the `NCat` chain:
+        /// `(HeadCategoryConfigurables, (NextCategoryConfigurables, (..., ())))`
+        type NestedConfigurables;
+
+        /// Adds the paths of every category in the chain to the router, head first
+        fn add_nested_category_paths_to_pico_serve_router<R: PathRouter>(
+            router: picoserve::Router<R>,
+            nested_configurables: Self::NestedConfigurables,
+        ) -> picoserve::Router<impl PathRouter>;
+    }
+
+    /// End of the chain, nothing left to add
+    impl<Request, Response, Channels>
+        AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels> for NNull
+    where
+        Request: Recyclable,
+        Response: Recyclable,
+        Channels: FeagiRequestResponseChannels,
+    {
+        type NestedConfigurables = ();
+
+        #[inline]
+        fn add_nested_category_paths_to_pico_serve_router<R: PathRouter>(
+            router: picoserve::Router<R>,
+            _nested_configurables: Self::NestedConfigurables,
+        ) -> picoserve::Router<impl PathRouter> {
+            router
+        }
+    }
+
+    /// Adds the head category's message paths, then recurses into the tail
+    impl<Head, Tail, Request, Response, Channels>
+        AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels> for NCat<Head, Tail>
+    where
+        Request: Recyclable,
+        Response: Recyclable,
+        Channels: FeagiRequestResponseChannels,
+        Head: RequestCategoryChannelRouter<Request, Response, Channels>,
+        Head::NestedMessageDescriptors: AddNestedRequestPathsToPicoServeRouter,
+        Tail: AddNestedCategoryPathsToPicoServeRouter<Request, Response, Channels>,
+    {
+        type NestedConfigurables = (
+            <Head::NestedMessageDescriptors as AddNestedRequestPathsToPicoServeRouter>::NestedConfigurables,
+            Tail::NestedConfigurables,
+        );
+
+        #[inline]
+        fn add_nested_category_paths_to_pico_serve_router<R: PathRouter>(
+            router: picoserve::Router<R>,
+            nested_configurables: Self::NestedConfigurables,
+        ) -> picoserve::Router<impl PathRouter> {
+            let (head_configurables, tail_configurables) = nested_configurables;
+            let router = <Head::NestedMessageDescriptors as AddNestedRequestPathsToPicoServeRouter>::add_nested_request_paths_to_pico_serve_router(
+                router,
+                head_configurables,
+            );
+            Tail::add_nested_category_paths_to_pico_serve_router(router, tail_configurables)
+        }
+    }
 
     //endregion
 }

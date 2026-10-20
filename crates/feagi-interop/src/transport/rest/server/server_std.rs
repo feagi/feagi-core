@@ -4,10 +4,9 @@ use crate::transport::rest::server::error::FeagiRestServerError;
 use crate::transport::rest::server::server_basis::{RestServerWorkerBuilder, HTTP_BUFFER_LEN};
 use core::future::Future;
 use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseAllocBuilder, FeagiResponderAlloc};
+use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseAllocBuilder, FeagiRequestResponseChannelsAlloc, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_channel::impl_alloc::FeagiWorkerChannelsAlloc;
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 
@@ -22,7 +21,7 @@ const DEFAULT_ACCEPT_POLL_INTERVAL: std::time::Duration = std::time::Duration::f
 
 type RestServerRequests = FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>;
 
-pub type RestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiWorkerChannelsAlloc, (), ()>;
+pub type RestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiRequestResponseChannelsAlloc, (), ()>;
 
 /// Builds an HTTP server for the OpenAPI document and, when enabled, the Swagger UI, running on
 /// its own std thread. Create it with `RestServerBuilder::new`
@@ -44,7 +43,7 @@ impl RestServerWorkerBuilder for RestServerBuilderStd {
 }
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for RestServerBuilderStd {
-    type Channels = FeagiWorkerChannelsAlloc;
+    type Channels = FeagiRequestResponseChannelsAlloc;
     type BuildInputs = ();
     type BuildOutputs = ();
     type RequiredChannelPairs = ();

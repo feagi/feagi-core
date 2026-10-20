@@ -3,33 +3,31 @@ use std::ops::DerefMut;
 use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response_channel::basis::{ReplySlot, ReplyStatus, RequestSlot};
+use crate::parallelism::feagi_channel::request_response_channel::basis::{FeagiRequestResponseChannels, ReplyStatus, RequestSlot};
 
 /// Receives requests from any number of requesters and replies to each one
 ///
 /// When dropped, every request still queued is answered as not responded, so no requester is left
 /// waiting on a responder that no longer exists
 // NOTE: Do NOT allow this to be clonable! There is exactly one responder per request channel
-pub struct FeagiResponder<Request, Response, RequestReceiver, ReplySender>
+pub struct FeagiResponder<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,
-    RequestReceiver: FeagiChannelReceiver<RequestSlot<Request, ReplySender>>,
-    ReplySender: FeagiChannelTransmitter<ReplySlot<Response>>,
+    Channels: FeagiRequestResponseChannels,
 {
-    request_receiver: RequestReceiver,
-    _types: PhantomData<fn(Request, ReplySender) -> Response>,
+    request_receiver: Channels::RequestReceiver<Request, Response>,
+    _types: PhantomData<fn(Request) -> Response>,
 }
 
-impl<Request, Response, RequestReceiver, ReplySender> FeagiResponder<Request, Response, RequestReceiver, ReplySender>
+impl<Request, Response, Channels> FeagiResponder<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,
-    RequestReceiver: FeagiChannelReceiver<RequestSlot<Request, ReplySender>>,
-    ReplySender: FeagiChannelTransmitter<ReplySlot<Response>>,
+    Channels: FeagiRequestResponseChannels,
 {
     /// Creates a responder from the request channel receiver
-    pub(crate) fn new(request_receiver: RequestReceiver) -> Self {
+    pub(crate) fn new(request_receiver: Channels::RequestReceiver<Request, Response>) -> Self {
         FeagiResponder {
             request_receiver,
             _types: PhantomData,
@@ -82,7 +80,7 @@ where
     /// The reply slot is claimed before processing and marked as not responded. If `processor`
     /// is cancelled or panics, dropping the reply guard still publishes the slot, so the requester
     /// receives `ResponderDroppedRequest` instead of waiting forever
-    async fn respond_in_place<Processor>(mut slot: impl DerefMut<Target = RequestSlot<Request, ReplySender>>, processor: Processor)
+    async fn respond_in_place<Processor>(mut slot: impl DerefMut<Target = RequestSlot<Request, Channels::ReplyTransmitter<Response>>>, processor: Processor)
     where
         Processor: AsyncFnOnce(&mut Request, &mut Response),
     {
@@ -114,13 +112,12 @@ where
     }
 }
 
-impl<Request, Response, RequestReceiver, ReplySender> Drop
-for FeagiResponder<Request, Response, RequestReceiver, ReplySender>
+impl<Request, Response, Channels> Drop
+for FeagiResponder<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,
-    RequestReceiver: FeagiChannelReceiver<RequestSlot<Request, ReplySender>>,
-    ReplySender: FeagiChannelTransmitter<ReplySlot<Response>>,
+    Channels: FeagiRequestResponseChannels,
 {
     // A request published after this drain finishes but before the receiver is dropped is not
     // answered. thingbuf receivers cannot close the channel ahead of their own drop

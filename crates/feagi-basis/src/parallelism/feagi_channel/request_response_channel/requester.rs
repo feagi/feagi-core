@@ -1,32 +1,38 @@
 use std::marker::PhantomData;
-use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::FeagiRequestError;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response_channel::basis::{ReplySlot, ReplyStatus, RequestSlot};
+use crate::parallelism::feagi_channel::request_response_channel::basis::{FeagiRequestResponseChannels, ReplySlot, ReplyStatus};
 
 /// Sends requests to a responder and awaits the matching response
-pub struct FeagiRequester<Request, Response, RequestSender, ReplySender, ReplyReceiver> {
-    pub(crate) request_sender: RequestSender,
+pub struct FeagiRequester<Request, Response, Channels>
+where
+    Request: Recyclable,
+    Response: Recyclable,
+    Channels: FeagiRequestResponseChannels,
+{
+    pub(crate) request_sender: Channels::RequestTransmitter<Request, Response>,
     /// Copied into every request so the responder can reply
-    pub(crate) reply_sender: ReplySender,
-    pub(crate) reply_receiver: ReplyReceiver,
+    pub(crate) reply_sender: Channels::ReplyTransmitter<Response>,
+    pub(crate) reply_receiver: Channels::ReplyReceiver<Response>,
     pub(crate) next_sequence: u32,
     /// Sequence of a sent request whose reply was never read, because its future was dropped
     pub(crate) unread_reply_sequence: Option<u32>,
     pub(crate) _types: PhantomData<fn(Request) -> Response>,
 }
 
-impl<Request, Response, RequestSender, ReplySender, ReplyReceiver> FeagiRequester<Request, Response, RequestSender, ReplySender, ReplyReceiver>
+impl<Request, Response, Channels> FeagiRequester<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,
-    RequestSender: FeagiChannelTransmitter<RequestSlot<Request, ReplySender>>,
-    ReplySender: FeagiChannelTransmitter<ReplySlot<Response>> + Clone,
-    ReplyReceiver: FeagiChannelReceiver<ReplySlot<Response>>,
+    Channels: FeagiRequestResponseChannels,
 {
     /// Creates a requester from a request channel sender and this requester's own reply channel
-    pub(crate) fn new(request_sender: RequestSender, reply_sender: ReplySender, reply_receiver: ReplyReceiver) -> Self {
+    pub(crate) fn new(
+        request_sender: Channels::RequestTransmitter<Request, Response>,
+        reply_sender: Channels::ReplyTransmitter<Response>,
+        reply_receiver: Channels::ReplyReceiver<Response>,
+    ) -> Self {
         FeagiRequester {
             request_sender,
             reply_sender,
@@ -87,9 +93,9 @@ where
 
     /// Waits for the reply tagged with `sequence`, discarding any other replies
     async fn await_reply(
-        reply_receiver: &ReplyReceiver,
+        reply_receiver: &Channels::ReplyReceiver<Response>,
         sequence: u32,
-    ) -> Result<<ReplyReceiver as FeagiChannelReceiver<ReplySlot<Response>>>::RecvGuard<'_>, FeagiRequestError> {
+    ) -> Result<<Channels::ReplyReceiver<Response> as FeagiChannelReceiver<ReplySlot<Response>>>::RecvGuard<'_>, FeagiRequestError> {
         loop {
             let reply = reply_receiver.async_recv_ref().await?;
             if reply.sequence == sequence {

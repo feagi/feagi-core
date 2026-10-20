@@ -6,7 +6,7 @@
 
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelTransmitError, FeagiRequestError};
 use crate::parallelism::feagi_channel::request_response_channel::FeagiRequester;
-use crate::parallelism::feagi_worker::feagi_worker_channel::FeagiWorkerChannels;
+use crate::parallelism::feagi_channel::request_response_channel::basis::FeagiRequestResponseChannels;
 use crate::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 
 #[cfg(feature = "std")]
@@ -19,15 +19,9 @@ use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawn
 pub struct FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
 where
     SpawnerImplementation: WorkerSpawnerImplementation,
-    ChannelImplementation: FeagiWorkerChannels,
+    ChannelImplementation: FeagiRequestResponseChannels,
 {
-    request_maker: FeagiRequester<
-        FeagiWorkerRequest<CustomCommandRequest>,
-        FeagiWorkerResponse<CustomCommandResponse>,
-        ChannelImplementation::RequestSender<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>>,
-        ChannelImplementation::ReplySender<FeagiWorkerResponse<CustomCommandResponse>>,
-        ChannelImplementation::ReplyReceiver<FeagiWorkerResponse<CustomCommandResponse>>,
-    >,
+    request_maker: FeagiRequester<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>, ChannelImplementation>,
     handle: SpawnerImplementation::WorkerInternalHandle,
     /// Set once the worker has acknowledged `stop`. Later requests are refused without sending
     stopped: bool,
@@ -37,18 +31,12 @@ impl<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomC
     FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
 where
     SpawnerImplementation: WorkerSpawnerImplementation,
-    ChannelImplementation: FeagiWorkerChannels,
+    ChannelImplementation: FeagiRequestResponseChannels,
 {
     /// Meant be called by `FeagiWorkerBuilder::build_worker` implementations, spawns a new
     /// (running) worker
     pub fn new(
-        request_maker: FeagiRequester<
-            FeagiWorkerRequest<CustomCommandRequest>,
-            FeagiWorkerResponse<CustomCommandResponse>,
-            ChannelImplementation::RequestSender<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>>,
-            ChannelImplementation::ReplySender<FeagiWorkerResponse<CustomCommandResponse>>,
-            ChannelImplementation::ReplyReceiver<FeagiWorkerResponse<CustomCommandResponse>>,
-        >,
+        request_maker: FeagiRequester<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>, ChannelImplementation>,
         handle: SpawnerImplementation::WorkerInternalHandle,
     ) -> Self {
         Self {
@@ -91,7 +79,7 @@ where
 impl<ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
     FeagiWorker<FeagiStdThreadSpawner, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
 where
-    ChannelImplementation: FeagiWorkerChannels,
+    ChannelImplementation: FeagiRequestResponseChannels,
 {
     /// Blocks until the worker's thread exits. Errors with the panic payload if it panicked
     ///

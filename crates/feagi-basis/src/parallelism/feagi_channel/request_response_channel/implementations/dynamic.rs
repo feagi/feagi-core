@@ -1,9 +1,24 @@
 use std::marker::PhantomData;
 use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
-use crate::parallelism::feagi_channel::request_response_channel::basis::{FeagiRequestResponseBuilder, ReplySlot, RequestSlot};
+use crate::parallelism::feagi_channel::request_response_channel::basis::{FeagiRequestResponseBuilder, FeagiRequestResponseChannels, ReplySlot, RequestSlot};
 use crate::parallelism::feagi_channel::request_response_channel::requester::FeagiRequester;
 use crate::parallelism::feagi_channel::request_response_channel::responder::FeagiResponder;
+
+//region Channels
+
+/// Requester / responder pairs use heap allocated channels
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FeagiRequestResponseChannelsAlloc;
+
+impl FeagiRequestResponseChannels for FeagiRequestResponseChannelsAlloc {
+    type RequestTransmitter<Request: Recyclable, Response: Recyclable> = FeagiRequestTransmitterAlloc<Request, Response>;
+    type RequestReceiver<Request: Recyclable, Response: Recyclable> = FeagiRequestReceiverAlloc<Request, Response>;
+    type ReplyTransmitter<Response: Recyclable> = FeagiReplyTransmitterAlloc<Response>;
+    type ReplyReceiver<Response: Recyclable> = FeagiReplyReceiverAlloc<Response>;
+}
+
+//endregion
 
 //region Builder
 
@@ -36,8 +51,7 @@ impl<Request: Recyclable, Response: Recyclable> FeagiRequestResponseAllocBuilder
 impl<Request: Recyclable, Response: Recyclable> FeagiRequestResponseBuilder<Request, Response>
 for FeagiRequestResponseAllocBuilder<Request, Response>
 {
-    type Requester = FeagiRequesterAlloc<Request, Response>;
-    type Responder = FeagiResponderAlloc<Request, Response>;
+    type Channels = FeagiRequestResponseChannelsAlloc;
 }
 
 //endregion
@@ -60,21 +74,10 @@ pub type FeagiReplyReceiverAlloc<Response> =
 
 /// Requester using heap allocated channels. Cloning creates another requester to the same
 /// responder, with its own reply channel
-pub type FeagiRequesterAlloc<Request, Response> = FeagiRequester<
-    Request,
-    Response,
-    FeagiRequestTransmitterAlloc<Request, Response>,
-    FeagiReplyTransmitterAlloc<Response>,
-    FeagiReplyReceiverAlloc<Response>,
->;
+pub type FeagiRequesterAlloc<Request, Response> = FeagiRequester<Request, Response, FeagiRequestResponseChannelsAlloc>;
 
 /// Responder using heap allocated channels
-pub type FeagiResponderAlloc<Request, Response> = FeagiResponder<
-    Request,
-    Response,
-    FeagiRequestReceiverAlloc<Request, Response>,
-    FeagiReplyTransmitterAlloc<Response>,
->;
+pub type FeagiResponderAlloc<Request, Response> = FeagiResponder<Request, Response, FeagiRequestResponseChannelsAlloc>;
 
 
 impl<Request: Recyclable, Response: Recyclable> FeagiRequesterAlloc<Request, Response> {
