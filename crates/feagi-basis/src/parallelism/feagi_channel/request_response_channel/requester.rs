@@ -7,14 +7,14 @@ use crate::parallelism::feagi_channel::request_response_channel::basis::{ReplySl
 
 /// Sends requests to a responder and awaits the matching response
 pub struct FeagiRequester<Request, Response, RequestSender, ReplySender, ReplyReceiver> {
-    request_sender: RequestSender,
+    pub(crate) request_sender: RequestSender,
     /// Copied into every request so the responder can reply
-    reply_sender: ReplySender,
-    reply_receiver: ReplyReceiver,
-    next_sequence: u32,
+    pub(crate) reply_sender: ReplySender,
+    pub(crate) reply_receiver: ReplyReceiver,
+    pub(crate) next_sequence: u32,
     /// Sequence of a sent request whose reply was never read, because its future was dropped
-    unread_reply_sequence: Option<u32>,
-    _types: PhantomData<fn(Request) -> Response>,
+    pub(crate) unread_reply_sequence: Option<u32>,
+    pub(crate) _types: PhantomData<fn(Request) -> Response>,
 }
 
 impl<Request, Response, RequestSender, ReplySender, ReplyReceiver> FeagiRequester<Request, Response, RequestSender, ReplySender, ReplyReceiver>

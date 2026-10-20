@@ -3,9 +3,6 @@
 /// Request read buffer. Response bodies are written from their static slices.
 pub const HTTP_BUFFER_LEN: usize = 2048;
 
-
-
-
 /// Builds a REST server worker. Implemented once per backend (std threads, embassy), each also
 /// implementing `FeagiWorkerBuilder` for its spawner. Backend specific settings are set on the
 /// implementing struct after construction
@@ -88,18 +85,22 @@ pub mod path_builder {
     use feagi_basis::feagi_message::feagi_message_components::{MessageQueryables, FeagiMessageParameterFieldSerializable};
     use feagi_basis::feagi_message::feagi_message_path::{FeagiRequestMessagePath, PathParameterElement};
     use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryChannelRouter;
-    use feagi_basis::parallelism::feagi_channel::feagi_channel::{FeagiChannelReceiver, FeagiChannelSender};
+    use feagi_basis::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
     use feagi_basis::parallelism::feagi_channel::recycling::Recyclable;
-    use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequester, ReplySlot, RequestSlot};
+    use feagi_basis::parallelism::feagi_channel::request_response_channel::basis::{ReplySlot, RequestSlot};
+    use feagi_basis::parallelism::feagi_channel::request_response_channel::FeagiRequester;
     use feagi_interop_proc::generate_into_picoserve_path_impls;
+
+    
+
 
     pub(crate) struct PicoServeRequestCategoryChannelRouter<Cat, Request, Response, ReplySender, RequestSender, ReplyReceiver>
     where
         Cat: RequestCategoryChannelRouter<Request, Response, ReplySender, RequestSender, ReplyReceiver>,
         Request: Recyclable,
         Response: Recyclable,
-        ReplySender: FeagiChannelSender<ReplySlot<Response>> + Clone,
-        RequestSender: FeagiChannelSender<RequestSlot<Request, ReplySender>>,
+        ReplySender: FeagiChannelTransmitter<ReplySlot<Response>> + Clone,
+        RequestSender: FeagiChannelTransmitter<RequestSlot<Request, ReplySender>>,
         ReplyReceiver: FeagiChannelReceiver<ReplySlot<Response>>
     {
         requester: FeagiRequester<
@@ -114,8 +115,8 @@ pub mod path_builder {
         Cat: RequestCategoryChannelRouter<Request, Response, ReplySender, RequestSender, ReplyReceiver>,
         Request: Recyclable,
         Response: Recyclable,
-        ReplySender: FeagiChannelSender<ReplySlot<Response>> + Clone,
-        RequestSender: FeagiChannelSender<RequestSlot<Request, ReplySender>>,
+        ReplySender: FeagiChannelTransmitter<ReplySlot<Response>> + Clone,
+        RequestSender: FeagiChannelTransmitter<RequestSlot<Request, ReplySender>>,
         ReplyReceiver: FeagiChannelReceiver<ReplySlot<Response>>
     {
 

@@ -4,10 +4,10 @@ use crate::transport::rest::server::error::FeagiRestServerError;
 use crate::transport::rest::server::server_basis::{RestServerWorkerBuilder, HTTP_BUFFER_LEN};
 use core::future::Future;
 use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
-use feagi_basis::parallelism::feagi_channel::request_response::feagi_request_response::{FeagiRequestResponseDynamicBuilder, FeagiResponderDynamic};
+use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseAllocBuilder, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
-use feagi_basis::parallelism::feagi_worker::feagi_worker_channel::FeagiWorkerChannelsAlloc;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_channel::impl_alloc::FeagiWorkerChannelsAlloc;
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 
@@ -20,7 +20,7 @@ const REQUEST_QUEUE_CAPACITY: usize = 1;
 /// Default for `RestServerBuilderStd::accept_poll_interval`
 const DEFAULT_ACCEPT_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
 
-type RestServerRequests = FeagiResponderDynamic<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>;
+type RestServerRequests = FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>;
 
 pub type RestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiWorkerChannelsAlloc, (), ()>;
 
@@ -63,7 +63,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for RestServerBuilderStd {
         listener
             .set_nonblocking(true)
             .map_err(|_| FeagiRestServerError::FailedToConfigureSocket)?;
-        let (requester, requests) = FeagiRequestResponseDynamicBuilder::new(REQUEST_QUEUE_CAPACITY).create();
+        let (requester, requests) = FeagiRequestResponseAllocBuilder::new(REQUEST_QUEUE_CAPACITY).create();
         let accept_poll_interval = self.accept_poll_interval;
         let handle = spawner.spawn_worker(move || run_rest_server(listener, requests, accept_poll_interval))?;
         Ok((FeagiWorker::new(requester, handle), ()))
