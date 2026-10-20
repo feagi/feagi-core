@@ -5,3 +5,4 @@ pub use requester::FeagiRequester;
 pub use responder::FeagiResponder;
 mod requester;
 mod responder;
+pub mod channel_backend;

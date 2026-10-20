@@ -1,11 +1,11 @@
+use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_worker::feagi_worker::FeagiWorker;
-use crate::parallelism::feagi_channel::request_response_channel::basis::FeagiRequestResponseChannels;
 use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
 
 /// Handles the construction of various 'FeagiWorker' types
 pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
     /// Which channel types (heap allocated, static) the built worker uses for its requests
-    type Channels: FeagiRequestResponseChannels;
+    type Channels: FeagiRequestResponseChannelBackend;
     /// What the builder needs to build the worker, including any incoming request receiver
     /// channels from `spawn_required_channel_pairs`
     type BuildInputs;

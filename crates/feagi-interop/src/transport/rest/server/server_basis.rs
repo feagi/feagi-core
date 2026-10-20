@@ -1,7 +1,7 @@
 //! Systems (largely) common to both STD and Embassy
 
 use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryGroupChannelRouter;
-use feagi_basis::parallelism::feagi_channel::request_response_channel::basis::FeagiRequestResponseChannels;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 use path_builder::AddNestedCategoryPathsToPicoServeRouter;
 
 /// The path configurables of every message in every category of `GroupChannelRouter`, nested the
@@ -15,11 +15,12 @@ pub const HTTP_BUFFER_LEN: usize = 2048;
 /// Builds a REST server worker. Implemented once per backend (std threads, embassy), each also
 /// implementing `FeagiWorkerBuilder` for its spawner. Backend specific settings are set on the
 /// implementing struct after construction
-pub trait RestServerWorkerBuilder<Channels: FeagiRequestResponseChannels>: Sized {
+pub trait RestServerWorkerBuilder<Channels: FeagiRequestResponseChannelBackend>: Sized {
     /// Creates a builder that will serve on `socket_address`, with backend defaults for
     /// everything else
     fn new(socket_address: core::net::SocketAddr) -> Self;
 
+    // TODO take this out of here, we dont want to expose this
     /// Builds the static routes for the server.
     fn build_router_with_routes<GroupChannelRouter: RequestCategoryGroupChannelRouter<Channels>>(
         path_configurables: GroupPathConfigurables<GroupChannelRouter, Channels>,
@@ -99,14 +100,13 @@ pub trait RestServerWorkerBuilder<Channels: FeagiRequestResponseChannels>: Sized
 
 
 pub mod path_builder {
-    use picoserve::routing::{get, PathDescription, PathRouter, parse_path_segment, ParsePathSegment};
-    use feagi_basis::feagi_message::feagi_message_components::{MessageQueryables, FeagiMessageParameterFieldSerializable};
+    use feagi_basis::feagi_message::feagi_message_components::{FeagiMessageParameterFieldSerializable, MessageQueryables};
     use feagi_basis::feagi_message::feagi_message_path::{FeagiMessagePath, FeagiRequestMessagePath, PathParameterElement};
     use feagi_basis::feagi_message::feagi_request_message::FeagiRequestMessageDescriptor;
     use feagi_basis::feagi_message::feagi_request_message_grouping::{NCat, NMDes, NNull, RequestCategoryChannelRouter};
-    use feagi_basis::parallelism::feagi_channel::request_response_channel::basis::FeagiRequestResponseChannels;
+    use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
     use feagi_interop_proc::generate_into_picoserve_path_impls;
-
+    use picoserve::routing::{get, parse_path_segment, ParsePathSegment, PathDescription, PathRouter};
 
 
     //region Individual Messages
@@ -247,7 +247,7 @@ pub mod path_builder {
     /// [`AddNestedRequestPathsToPicoServeRouter`]
     pub trait AddNestedCategoryPathsToPicoServeRouter<Channels>
     where
-        Channels: FeagiRequestResponseChannels,
+        Channels: FeagiRequestResponseChannelBackend,
     {
         /// Each category's `NestedConfigurables`, nested the same way as the `NCat` chain:
         /// `(HeadCategoryConfigurables, (NextCategoryConfigurables, (..., ())))`
@@ -264,7 +264,7 @@ pub mod path_builder {
     impl<Channels>
         AddNestedCategoryPathsToPicoServeRouter<Channels> for NNull
     where
-        Channels: FeagiRequestResponseChannels,
+        Channels: FeagiRequestResponseChannelBackend,
     {
         type NestedConfigurables = ();
 
@@ -281,7 +281,7 @@ pub mod path_builder {
     impl<Head, Tail, Channels>
         AddNestedCategoryPathsToPicoServeRouter<Channels> for NCat<Head, Tail>
     where
-        Channels: FeagiRequestResponseChannels,
+        Channels: FeagiRequestResponseChannelBackend,
         Head: RequestCategoryChannelRouter<Channels>,
         Head::NestedMessageDescriptors: AddNestedRequestPathsToPicoServeRouter,
         Tail: AddNestedCategoryPathsToPicoServeRouter<Channels>,

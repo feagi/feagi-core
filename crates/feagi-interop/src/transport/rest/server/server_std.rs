@@ -1,37 +1,41 @@
 //! REST server routes on std
 
-use crate::transport::rest::server::error::FeagiRestServerError;
-use crate::transport::rest::server::server_basis::path_builder::AddNestedCategoryPathsToPicoServeRouter;
-use crate::transport::rest::server::server_basis::{GroupPathConfigurables, RestServerWorkerBuilder, HTTP_BUFFER_LEN};
 use core::future::Future;
 use core::marker::PhantomData;
 use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryGroupChannelRouter;
 use feagi_basis::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseAllocBuilder, FeagiRequestResponseChannelsAlloc, FeagiResponderAlloc};
+use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
+use crate::transport::rest::server::error::FeagiRestServerError;
+use crate::transport::rest::server::server_basis::path_builder::AddNestedCategoryPathsToPicoServeRouter;
+use crate::transport::rest::server::server_basis::{GroupPathConfigurables, RestServerWorkerBuilder, HTTP_BUFFER_LEN};
 
 /// One request per TCP connection, matching a single accept loop on this thread.
 static CONFIG: picoserve::Config = picoserve::Config::const_default().close_connection_after_response();
 
-/// Requests queued for the server worker. Only `Stop` is ever sent
+/// Requests queued for the server worker. Only `Stop` is ever sent so it doesn't need to be long here
 const REQUEST_QUEUE_CAPACITY: usize = 1;
 
-/// Default for `RestServerBuilderStd::accept_poll_interval`
-const DEFAULT_ACCEPT_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+/// Default for `RestServerBuilderStd::accept_poll_interval`. Sets how often the server checks for
+/// requests. Lowering this number decreases latency and potentially increases throughput but at the
+/// cost of higher base CPU usage
+const DEFAULT_ACCEPT_POLL_INTERVAL: core::time::Duration = core::time::Duration::from_millis(10);
 
-type RestServerRequests = FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>;
-
-pub type RestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiRequestResponseChannelsAlloc, (), ()>;
+/// The Rest Server (STD) which allows accessing Requests of various categories via HTTP REST.
+/// Optionally (configured by crate features) can init with an OpenAPI JSON endpoint and a 
+/// Swagger UI page for documentation, testing, and development
+pub type StdRestServerWorker = FeagiWorker<FeagiStdThreadSpawner, FeagiRequestResponseChannelsAllocBackend, (), ()>;
 
 /// Builds an HTTP server for the OpenAPI document and, when enabled, the Swagger UI, running on
 /// its own std thread. Create it with `RestServerBuilder::new`
 ///
 /// Serves one route per message of every category in `GroupChannelRouter`, which is passed by
 /// value to `build_worker` along with its path configurables
-pub struct RestServerBuilderStd<GroupChannelRouter> {
+pub struct StdRestServerBuilder<GroupChannelRouter> {
+    /// The endpoint to bind to
     socket_address: core::net::SocketAddr,
     /// How long the idle listener sleeps between checks for a connection or a request. Bounds
     /// how late a new connection is accepted and how long a `stop` waits while no connection is
@@ -40,9 +44,9 @@ pub struct RestServerBuilderStd<GroupChannelRouter> {
     _group_channel_router: PhantomData<fn() -> GroupChannelRouter>,
 }
 
-impl<GroupChannelRouter> RestServerWorkerBuilder<FeagiRequestResponseChannelsAlloc> for RestServerBuilderStd<GroupChannelRouter> {
+impl<GroupChannelRouter> RestServerWorkerBuilder<FeagiRequestResponseChannelsAllocBackend> for StdRestServerBuilder<GroupChannelRouter> {
     fn new(socket_address: core::net::SocketAddr) -> Self {
-        RestServerBuilderStd {
+        StdRestServerBuilder {
             socket_address,
             accept_poll_interval: DEFAULT_ACCEPT_POLL_INTERVAL,
             _group_channel_router: PhantomData,
@@ -50,15 +54,15 @@ impl<GroupChannelRouter> RestServerWorkerBuilder<FeagiRequestResponseChannelsAll
     }
 }
 
-impl<GroupChannelRouter> FeagiWorkerBuilder<FeagiStdThreadSpawner> for RestServerBuilderStd<GroupChannelRouter>
+impl<GroupChannelRouter> FeagiWorkerBuilder<FeagiStdThreadSpawner> for StdRestServerBuilder<GroupChannelRouter>
 where
-    GroupChannelRouter: RequestCategoryGroupChannelRouter<FeagiRequestResponseChannelsAlloc> + Send + 'static,
-    GroupChannelRouter::NestedCategoryChannelRouters: AddNestedCategoryPathsToPicoServeRouter<FeagiRequestResponseChannelsAlloc>,
-    GroupPathConfigurables<GroupChannelRouter, FeagiRequestResponseChannelsAlloc>: Send + 'static,
+    GroupChannelRouter: RequestCategoryGroupChannelRouter<FeagiRequestResponseChannelsAllocBackend> + Send + 'static,
+    GroupChannelRouter::NestedCategoryChannelRouters: AddNestedCategoryPathsToPicoServeRouter<FeagiRequestResponseChannelsAllocBackend>,
+    GroupPathConfigurables<GroupChannelRouter, FeagiRequestResponseChannelsAllocBackend>: Send + 'static,
 {
-    type Channels = FeagiRequestResponseChannelsAlloc;
+    type Channels = FeagiRequestResponseChannelsAllocBackend;
     /// The group router whose categories are served, and the path configurables of its messages
-    type BuildInputs = (GroupChannelRouter, GroupPathConfigurables<GroupChannelRouter, FeagiRequestResponseChannelsAlloc>);
+    type BuildInputs = (GroupChannelRouter, GroupPathConfigurables<GroupChannelRouter, FeagiRequestResponseChannelsAllocBackend>);
     type BuildOutputs = ();
     type RequiredChannelPairs = ();
     type CustomRequest = ();
@@ -71,13 +75,13 @@ where
         self,
         spawner: &FeagiStdThreadSpawner,
         inputs: Self::BuildInputs,
-    ) -> Result<(RestServerWorker, Self::BuildOutputs), Self::BuildError> {
+    ) -> Result<(StdRestServerWorker, Self::BuildOutputs), Self::BuildError> {
         let listener = std::net::TcpListener::bind(self.socket_address).map_err(|_| FeagiRestServerError::FailedToBindToSocket)?;
         listener
             .set_nonblocking(true)
             .map_err(|_| FeagiRestServerError::FailedToConfigureSocket)?;
         let (group_channel_router, path_configurables) = inputs;
-        let (requester, requests) = FeagiRequestResponseAllocBuilder::new(REQUEST_QUEUE_CAPACITY).create();
+        let (requester, requests) = FeagiRequestResponseChannelsAllocBackend::create_channels(REQUEST_QUEUE_CAPACITY);
         let accept_poll_interval = self.accept_poll_interval;
         let handle = spawner.spawn_worker(move || {
             run_rest_server(listener, requests, accept_poll_interval, group_channel_router, path_configurables)
@@ -93,18 +97,18 @@ where
 /// after acknowledging `Stop` or once the worker handle is dropped.
 async fn run_rest_server<GroupChannelRouter>(
     listener: std::net::TcpListener,
-    requests: RestServerRequests,
+    requests: FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>,
     accept_poll_interval: std::time::Duration,
     group_channel_router: GroupChannelRouter,
-    path_configurables: GroupPathConfigurables<GroupChannelRouter, FeagiRequestResponseChannelsAlloc>,
+    path_configurables: GroupPathConfigurables<GroupChannelRouter, FeagiRequestResponseChannelsAllocBackend>,
 )
 where
-    GroupChannelRouter: RequestCategoryGroupChannelRouter<FeagiRequestResponseChannelsAlloc>,
-    GroupChannelRouter::NestedCategoryChannelRouters: AddNestedCategoryPathsToPicoServeRouter<FeagiRequestResponseChannelsAlloc>,
+    GroupChannelRouter: RequestCategoryGroupChannelRouter<FeagiRequestResponseChannelsAllocBackend>,
+    GroupChannelRouter::NestedCategoryChannelRouters: AddNestedCategoryPathsToPicoServeRouter<FeagiRequestResponseChannelsAllocBackend>,
 {
     // TODO Held for the route handlers, which still respond with placeholders
     let _group_channel_router = group_channel_router;
-    let router = <RestServerBuilderStd<GroupChannelRouter> as RestServerWorkerBuilder<FeagiRequestResponseChannelsAlloc>>::build_router_with_routes::<GroupChannelRouter>(
+    let router = <StdRestServerBuilder<GroupChannelRouter> as RestServerWorkerBuilder<FeagiRequestResponseChannelsAllocBackend>>::build_router_with_routes::<GroupChannelRouter>(
         path_configurables,
     );
     let router = route_brain_visualizer_startup(router);

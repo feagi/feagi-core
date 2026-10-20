@@ -5,8 +5,8 @@
 // forked so receivers can close the channel before draining
 
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelTransmitError, FeagiRequestError};
+use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::FeagiRequester;
-use crate::parallelism::feagi_channel::request_response_channel::basis::FeagiRequestResponseChannels;
 use crate::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 
 #[cfg(feature = "std")]
@@ -19,7 +19,7 @@ use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawn
 pub struct FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
 where
     SpawnerImplementation: WorkerSpawnerImplementation,
-    ChannelImplementation: FeagiRequestResponseChannels,
+    ChannelImplementation: FeagiRequestResponseChannelBackend,
 {
     request_maker: FeagiRequester<FeagiWorkerRequest<CustomCommandRequest>, FeagiWorkerResponse<CustomCommandResponse>, ChannelImplementation>,
     handle: SpawnerImplementation::WorkerInternalHandle,
@@ -31,7 +31,7 @@ impl<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomC
     FeagiWorker<SpawnerImplementation, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
 where
     SpawnerImplementation: WorkerSpawnerImplementation,
-    ChannelImplementation: FeagiRequestResponseChannels,
+    ChannelImplementation: FeagiRequestResponseChannelBackend,
 {
     /// Meant be called by `FeagiWorkerBuilder::build_worker` implementations, spawns a new
     /// (running) worker
@@ -79,7 +79,7 @@ where
 impl<ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
     FeagiWorker<FeagiStdThreadSpawner, ChannelImplementation, CustomCommandRequest, CustomCommandResponse>
 where
-    ChannelImplementation: FeagiRequestResponseChannels,
+    ChannelImplementation: FeagiRequestResponseChannelBackend,
 {
     /// Blocks until the worker's thread exits. Errors with the panic payload if it panicked
     ///

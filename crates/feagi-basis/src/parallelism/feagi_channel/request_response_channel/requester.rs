@@ -1,15 +1,16 @@
-use std::marker::PhantomData;
 use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::FeagiRequestError;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response_channel::basis::{FeagiRequestResponseChannels, ReplySlot, ReplyStatus};
+use crate::parallelism::feagi_channel::request_response_channel::basis::{ReplySlot, ReplyStatus};
+use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
+use std::marker::PhantomData;
 
 /// Sends requests to a responder and awaits the matching response
 pub struct FeagiRequester<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,
-    Channels: FeagiRequestResponseChannels,
+    Channels: FeagiRequestResponseChannelBackend,
 {
     pub(crate) request_sender: Channels::RequestTransmitter<Request, Response>,
     /// Copied into every request so the responder can reply
@@ -25,7 +26,7 @@ impl<Request, Response, Channels> FeagiRequester<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,
-    Channels: FeagiRequestResponseChannels,
+    Channels: FeagiRequestResponseChannelBackend,
 {
     /// Creates a requester from a request channel sender and this requester's own reply channel
     pub(crate) fn new(

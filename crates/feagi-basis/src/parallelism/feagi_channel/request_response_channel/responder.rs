@@ -1,9 +1,10 @@
-use std::marker::PhantomData;
-use std::ops::DerefMut;
 use crate::parallelism::feagi_channel::base_channels::base_traits::{FeagiChannelReceiver, FeagiChannelTransmitter};
 use crate::parallelism::feagi_channel::channel_error::FeagiChannelReceiveError;
 use crate::parallelism::feagi_channel::recycling::Recyclable;
-use crate::parallelism::feagi_channel::request_response_channel::basis::{FeagiRequestResponseChannels, ReplyStatus, RequestSlot};
+use crate::parallelism::feagi_channel::request_response_channel::basis::{ReplyStatus, RequestSlot};
+use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
+use std::marker::PhantomData;
+use std::ops::DerefMut;
 
 /// Receives requests from any number of requesters and replies to each one
 ///
@@ -14,7 +15,7 @@ pub struct FeagiResponder<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,
-    Channels: FeagiRequestResponseChannels,
+    Channels: FeagiRequestResponseChannelBackend,
 {
     request_receiver: Channels::RequestReceiver<Request, Response>,
     _types: PhantomData<fn(Request) -> Response>,
@@ -24,7 +25,7 @@ impl<Request, Response, Channels> FeagiResponder<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,
-    Channels: FeagiRequestResponseChannels,
+    Channels: FeagiRequestResponseChannelBackend,
 {
     /// Creates a responder from the request channel receiver
     pub(crate) fn new(request_receiver: Channels::RequestReceiver<Request, Response>) -> Self {
@@ -117,7 +118,7 @@ for FeagiResponder<Request, Response, Channels>
 where
     Request: Recyclable,
     Response: Recyclable,
-    Channels: FeagiRequestResponseChannels,
+    Channels: FeagiRequestResponseChannelBackend,
 {
     // A request published after this drain finishes but before the receiver is dropped is not
     // answered. thingbuf receivers cannot close the channel ahead of their own drop
