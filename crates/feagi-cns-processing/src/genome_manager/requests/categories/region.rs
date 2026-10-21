@@ -3,6 +3,7 @@
 
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
+use feagi_cns_structures::identifiers::cortical_areas::Base64EncodedCorticalID;
 
 /// Summary of one brain region and its members, as listed by `RegionsMembers`
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -18,7 +19,7 @@ pub struct RegionMembersEntry {
     /// 3D layout coordinate
     pub coordinate_3d: [i32; 3],
     /// IDs of member cortical areas
-    pub areas: Vec<String>,
+    pub areas: Vec<Base64EncodedCorticalID>,
     /// IDs of child regions
     pub regions: Vec<String>,
     /// Cortical area IDs acting as region inputs
@@ -107,7 +108,7 @@ define_request_message_category! {
                 region_type: Option<String>, "Functional type; defaults to Undefined",
                 coordinate_2d: [i32; 2], "2D layout coordinate (alias: coordinates_2d)",
                 coordinate_3d: [i32; 3], "3D layout coordinate (alias: coordinates_3d)",
-                areas: Option<Vec<String>>, "IDs of cortical areas to place in the region",
+                areas: Option<Vec<Base64EncodedCorticalID>>, "IDs of cortical areas to place in the region",
                 regions: Option<Vec<String>>, "IDs of regions to place in the region",
             },
             response: {
@@ -118,8 +119,8 @@ define_request_message_category! {
                 coordinate_3d: [i32; 3],
                 areas: Vec<String>,
                 regions: Vec<String>,
-                inputs: Option<Vec<String>>, "Cortical area IDs acting as region inputs",
-                outputs: Option<Vec<String>>, "Cortical area IDs acting as region outputs",
+                inputs: Option<Vec<Base64EncodedCorticalID>>, "Cortical area IDs acting as region inputs",
+                outputs: Option<Vec<Base64EncodedCorticalID>>, "Cortical area IDs acting as region outputs",
             },
             error: {
                 InvalidRegionId: "The given region_id is not a valid region ID",

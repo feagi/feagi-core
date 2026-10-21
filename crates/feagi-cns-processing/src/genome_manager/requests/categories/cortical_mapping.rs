@@ -3,12 +3,13 @@
 
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
+use feagi_cns_structures::identifiers::cortical_areas::Base64EncodedCorticalID;
 
 /// One connection rule of a mapping from a source to a destination cortical area
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MappingRule {
     /// ID of the morphology defining the connection pattern
-    pub morphology_id: String,
+    pub morphology_id: String, // This is the name
     /// Scale applied to the morphology, per axis
     pub morphology_scalar: [i32; 3],
     /// Multiplier on the post synaptic current
@@ -61,8 +62,8 @@ define_request_message_category! {
             description: "Get the raw stored connection rules from one cortical area to another",
             alloc_only: true,
             payload: {
-                src_cortical_area: String, "Source cortical area ID",
-                dst_cortical_area: String, "Destination cortical area ID",
+                src_cortical_area: Base64EncodedCorticalID, "Source cortical area ID",
+                dst_cortical_area: Base64EncodedCorticalID, "Destination cortical area ID",
             },
             response: {
                 connections: Vec<serde_json::Value>, "Stored rules, in array or object form",
@@ -76,7 +77,7 @@ define_request_message_category! {
             description: "Get every mapped [source, destination] cortical area pair",
             alloc_only: true,
             response: {
-                mappings: Vec<[String; 2]>, "[source area ID, destination area ID] pairs",
+                mappings: Vec<[Base64EncodedCorticalID; 2]>, "[source area ID, destination area ID] pairs",
             },
         },
     },
@@ -86,8 +87,8 @@ define_request_message_category! {
             description: "Get the normalized connection rules from one cortical area to another",
             alloc_only: true,
             payload: {
-                src_cortical_area: String, "Source cortical area ID",
-                dst_cortical_area: String, "Destination cortical area ID",
+                src_cortical_area: Base64EncodedCorticalID, "Source cortical area ID",
+                dst_cortical_area: Base64EncodedCorticalID, "Destination cortical area ID",
             },
             response: {
                 rules: Vec<MappingRule>, "Connection rules; empty if the areas are not mapped",
@@ -102,7 +103,7 @@ define_request_message_category! {
             description: "Get the cortical areas mapping into a cortical area",
             alloc_only: true,
             response: {
-                cortical_areas: Vec<String>, "Cortical area IDs",
+                cortical_areas: Vec<Base64EncodedCorticalID>, "Cortical area IDs",
             },
         },
         "Efferents": {
@@ -110,7 +111,7 @@ define_request_message_category! {
             description: "Get the cortical areas a cortical area maps to",
             alloc_only: true,
             response: {
-                cortical_areas: Vec<String>, "Cortical area IDs",
+                cortical_areas: Vec<Base64EncodedCorticalID>, "Cortical area IDs",
             },
         },
         "BatchUpdate": {
@@ -140,8 +141,8 @@ define_request_message_category! {
             description: "Replace the connection rules from one cortical area to another and regenerate synapses",
             alloc_only: true,
             payload: {
-                src_cortical_area: String, "Source cortical area ID",
-                dst_cortical_area: String, "Destination cortical area ID",
+                src_cortical_area: Base64EncodedCorticalID, "Source cortical area ID",
+                dst_cortical_area: Base64EncodedCorticalID, "Destination cortical area ID",
                 mapping_string: Vec<MappingRule>, "New connection rules; empty removes the mapping",
             },
             response: {
@@ -171,13 +172,13 @@ define_request_message_category! {
             description: "Delete the mapping from one cortical area to another, pruning its synapses",
             alloc_only: true,
             payload: {
-                src_cortical_area: String, "Source cortical area ID",
-                dst_cortical_area: String, "Destination cortical area ID",
+                src_cortical_area: Base64EncodedCorticalID, "Source cortical area ID",
+                dst_cortical_area: Base64EncodedCorticalID, "Destination cortical area ID",
             },
             response: {
                 message: String,
-                src_cortical_area: String,
-                dst_cortical_area: String,
+                src_cortical_area: Base64EncodedCorticalID,
+                dst_cortical_area: Base64EncodedCorticalID,
                 synapse_count: u64, "Synapses remaining between the areas",
             },
             error: {

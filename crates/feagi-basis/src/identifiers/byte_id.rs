@@ -174,7 +174,7 @@ pub trait ByteID<const NUMBER_OF_BYTES: usize>:
 
 //region Base64ByteId
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Base64EncodedByteID<
     ID: ByteID<NUMBER_OF_SOURCE_BYTES>,
     const NUMBER_OF_SOURCE_BYTES: usize,

@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
-
+use feagi_cns_structures::identifiers::cortical_areas::Base64EncodedCorticalID;
 
 /// All cortical areas of one cortical subtype
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -12,7 +12,7 @@ pub struct ConnectomeCorticalTypeGroup {
     /// Human readable name of the subtype
     pub title: String,
     /// Base64 cortical IDs of this subtype, sorted
-    pub cortical_ids: Vec<String>,
+    pub cortical_ids: Vec<Base64EncodedCorticalID>,
     /// Group IDs used by this subtype, sorted
     pub group_ids: Vec<u8>,
 }
@@ -27,7 +27,7 @@ define_request_message_category! {
             description: "Get every cortical area with all its properties",
             alloc_only: true,
             response: {
-                areas: HashMap<String, serde_json::Value>, "Serialized cortical area per cortical ID",
+                areas: HashMap<Base64EncodedCorticalID, serde_json::Value>, "Serialized cortical area per cortical ID",
             },
         },
         "CorticalAreaListTypes": {
@@ -43,7 +43,7 @@ define_request_message_category! {
             description: "Get all cortical area mappings",
             alloc_only: true,
             response: {
-                mappings: HashMap<String, Vec<String>>, "Destination cortical IDs per source cortical ID",
+                mappings: HashMap<Base64EncodedCorticalID, Vec<Base64EncodedCorticalID>>, "Destination cortical IDs per source cortical ID",
             },
         },
         "Snapshot": {
@@ -91,7 +91,7 @@ define_request_message_category! {
             description: "Get the properties of a neuron, by ID in the path",
             alloc_only: true,
             response: {
-                properties: HashMap<String, serde_json::Value>,
+                properties: HashMap<Base64EncodedCorticalID, serde_json::Value>,
             },
         },
         "NeuronProperties": {
@@ -102,7 +102,7 @@ define_request_message_category! {
                 neuron_id: u64,
             },
             response: {
-                properties: HashMap<String, serde_json::Value>,
+                properties: HashMap<Base64EncodedCorticalID, serde_json::Value>,
             },
         },
         "MemoryNeuron": { // cannot be implemented

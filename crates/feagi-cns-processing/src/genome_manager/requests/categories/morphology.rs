@@ -3,6 +3,7 @@
 
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
+use feagi_cns_structures::identifiers::cortical_areas::Base64EncodedCorticalID;
 
 /// A morphology definition, as listed by `Morphologies`
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -120,7 +121,7 @@ define_request_message_category! {
                 morphology_name: String,
             },
             response: {
-                usage: Vec<[String; 2]>, "[source area ID, destination area ID] pairs",
+                usage: Vec<[Base64EncodedCorticalID; 2]>, "[source area ID, destination area ID] pairs",
             },
         },
     },
