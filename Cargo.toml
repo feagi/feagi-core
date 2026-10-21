@@ -87,6 +87,10 @@ serde_json = {workspace = true, optional = true, default-features = false}
 
 [dev-dependencies]
 
+[[example]]
+name = "designer_brain_server"
+required-features = ["runtime_feagi_design_server"]
+
 
 # ============================================================================
 #                             WORKSPACE CONFIGURATION
