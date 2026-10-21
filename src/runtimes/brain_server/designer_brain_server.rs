@@ -1,83 +1,51 @@
+use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
+use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
+use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
+use feagi_cns_processing::genome_manager::worker_builder::GenomeManagerWorkerBuilder;
+use feagi_interop::transport::rest::server::server_basis::RestServerWorkerBuilder;
+use feagi_interop::transport::rest::server::server_std::StdRestServerBuilder;
 
-pub struct DesignerBrainServer {
-    
+pub struct DesignerBrainServerWorkerBuilder {
+    pub rest_server_socket: core::net::SocketAddr
 }
 
-fn runtime_loop() {
-    
-    
-    
-    
-    
-}
+impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuilder {
+    type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
+    type BuildInputs = ();
+    type BuildOutputs = ();
+    type RequiredChannelPairs = ();
+    type CustomRequest = ();
+    type CustomResponse = ();
+    type BuildError = DesignerBrainServerLaunchError;
+
+    fn build_worker(self, spawner: &FeagiStdThreadSpawner, inputs: Self::BuildInputs) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, Self::CustomRequest, Self::CustomResponse>, Self::BuildOutputs), Self::BuildError> {
+        let (cmd_requester, cmd_responder) = FeagiRequestResponseChannelsAllocBackend::create_channels(1);
+
+        let genome_manager_builder = GenomeManagerWorkerBuilder::default();
+        let (genome_manager_requesters, genome_manager_responders) = genome_manager_builder.spawn_required_channel_pairs();
+
+
+        let picoserve_builder = StdRestServerBuilder::new(self.rest_server_socket);
 
 
 
-//region System
-
-pub struct HealthCheckMessageRequest {
-    // no fields!
-}
-
-impl FeagiRequestMessage for HealthCheckMessageRequest {
-    type Descriptor = HealthCheckMessageRequestDescriptor;
-
-    fn compose(
-        parameters: Self::Descriptor::Parameters,
-        queryables: Self::Descriptor::Queryables,
-        payload: Self::Descriptor::RequestPayload) -> Self {
-
-        // no data!
-        Self
     }
 
-    fn decompose(self)
-        -> (
-            Self::Descriptor::Parameters,
-            Self::Descriptor::Queryables,
-            Self::Descriptor::RequestPayload)
-    {
-        ((),(),())
+    fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {
+        ()
     }
 }
 
+fn server_runtime() {
 
-pub struct HealthCheckMessageRequestDescriptor;
-
-impl FeagiRequestMessageDescriptor for HealthCheckMessageRequestDescriptor {
-    const MESSAGE_DESCRIPTION: &'static str = "FEAGI Server System Level Statuses";
-    type Message = HealthCheckMessageRequest;
-    type MessagePath = HealthCheckMessageRequestPath;
-    type Parameters = ();
-    type Queryables = ();
-
-    type RequestPayload = ();
-    type ResponsePayload = HealthCheckResponse;
-
-    type ResponseError = ();
+    
 }
 
-pub struct HealthCheckMessageRequestPath;
-
-impl FeagiMessagePath for HealthCheckMessageRequestPath {
-    type TypesTuple = (&'static str, &'static str);
-    type ConfigurablesTuple = ();
-
-    fn create_key_expr_for_zenoh(configurables: &Self::ConfigurablesTuple) -> () {
-        todo!()
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum DesignerBrainServerLaunchError {
+    #[error("Unknown Start Error")]
+    UnknownError
 }
 
-impl FeagiRequestMessagePath for HealthCheckMessageRequestPath {
-    fn add_path_to_pico_serve_router<Q: MessageQueryables>(configurables: &Self::ConfigurablesTuple) -> () {
-        todo!()
-    }
-}
-
-
-pub struct HealthCheckResponse {
-    feagi_running: bool,
-}
-
-//endregion
 

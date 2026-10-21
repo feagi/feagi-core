@@ -69,8 +69,10 @@ feagi-basis = {path = "crates/feagi-basis"}
 feagi-interop = {path = "crates/feagi-interop"}
 
 # Feagi (Sometimes)
+feagi-cns-processing = {path = "crates/feagi-cns-processing"}
 
 # External (always)
+thiserror = {workspace = true}
 serde = {workspace = true, default-features = false}
 
 # External (sometimes)
