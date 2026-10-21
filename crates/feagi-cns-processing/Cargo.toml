@@ -24,6 +24,7 @@ alloc = [
 [dependencies]
 # Workspace Crates
 feagi-basis = { path = "../feagi-basis" }
+feagi-cns-structures = {path = "../feagi-cns-structures"}
 
 # External Crates
 paste = { workspace = true }

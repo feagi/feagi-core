@@ -5,6 +5,7 @@
 
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
+use feagi_cns_structures::identifiers::cortical_areas::Base64EncodedCorticalID;
 
 /// An x/y/z triple keyed by axis name (signed, used for positions)
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -34,9 +35,9 @@ pub struct CorticalIOCodingOptions {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CorticalAreaInfo {
     /// Base64 cortical area ID
-    pub cortical_id: String,
+    pub cortical_id: Base64EncodedCorticalID,
     /// Human-readable ASCII form of the ID (e.g. "___power")
-    pub cortical_id_s: String,
+    pub cortical_id_s: String, // TODO Nuke This?
     /// Internal numerical index
     pub cortical_idx: u32,
     pub cortical_name: String,
@@ -109,7 +110,7 @@ pub struct CorticalAreaInfo {
 /// Geometry and neural parameters of one cortical area, in the shape the Brain Visualizer expects
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CorticalAreaGeometry {
-    pub cortical_id: String,
+    pub cortical_id: Base64EncodedCorticalID,
     pub cortical_name: String,
     pub cortical_group: String,
     pub cortical_type: String,
@@ -190,7 +191,7 @@ define_request_message_category! {
             description: "List the IDs of all IPU (sensory) cortical areas",
             alloc_only: true,
             response: {
-                cortical_ids: Vec<String>, "IDs of all IPU cortical areas",
+                cortical_ids: Vec<Base64EncodedCorticalID>, "IDs of all IPU cortical areas",
             },
         },
         "Opu": {
@@ -198,7 +199,7 @@ define_request_message_category! {
             description: "List the IDs of all OPU (motor) cortical areas",
             alloc_only: true,
             response: {
-                cortical_ids: Vec<String>, "IDs of all OPU cortical areas",
+                cortical_ids: Vec<Base64EncodedCorticalID>, "IDs of all OPU cortical areas",
             },
         },
         "IpuTypes": {
@@ -222,7 +223,7 @@ define_request_message_category! {
             description: "List the IDs of every cortical area in the genome (IPU, OPU, custom, memory and core)",
             alloc_only: true,
             response: {
-                cortical_ids: Vec<String>, "All cortical area IDs",
+                cortical_ids: Vec<Base64EncodedCorticalID>, "All cortical area IDs",
             },
         },
         "CorticalAreaNameList": {
@@ -238,7 +239,7 @@ define_request_message_category! {
             description: "Get a map of cortical area IDs to their names",
             alloc_only: true,
             response: {
-                mapping: HashMap<String, String>, "Cortical area ID to name",
+                mapping: HashMap<Base64EncodedCorticalID, String>, "Cortical area ID to name",
             },
         },
         "CorticalTypes": {
@@ -254,7 +255,7 @@ define_request_message_category! {
             description: "Get detailed source-to-destination connectivity mappings with mapping rules, for every area that has outgoing mappings",
             alloc_only: true,
             response: {
-                mappings: HashMap<String, serde_json::Value>, "Source area ID to its cortical_mapping_dst object (destination ID to list of mapping rules)",
+                mappings: HashMap<Base64EncodedCorticalID, serde_json::Value>, "Source area ID to its cortical_mapping_dst object (destination ID to list of mapping rules)",
             },
         },
         "CorticalLocations2d": {
@@ -262,7 +263,7 @@ define_request_message_category! {
             description: "Get the 2D visualization position of every cortical area",
             alloc_only: true,
             response: {
-                locations: HashMap<String, (i32, i32)>, "Cortical area ID to (x, y)",
+                locations: HashMap<Base64EncodedCorticalID, (i32, i32)>, "Cortical area ID to (x, y)",
             },
         },
         "CorticalAreaGeometry": {
@@ -270,7 +271,7 @@ define_request_message_category! {
             description: "Get full geometry, neural parameters and metadata for every cortical area (used by the Brain Visualizer when loading a genome)",
             alloc_only: true,
             response: {
-                areas: HashMap<String, CorticalAreaGeometry>, "Cortical area ID to its geometry",
+                areas: HashMap<Base64EncodedCorticalID, CorticalAreaGeometry>, "Cortical area ID to its geometry",
             },
         },
         "CorticalVisibility": {
@@ -278,7 +279,7 @@ define_request_message_category! {
             description: "Get the visibility flag of every cortical area",
             alloc_only: true,
             response: {
-                visibility: HashMap<String, bool>, "Cortical area ID to visibility flag",
+                visibility: HashMap<Base64EncodedCorticalID, bool>, "Cortical area ID to visibility flag",
             },
         },
         "VoxelNeurons": { // cannot be implemented
@@ -286,14 +287,14 @@ define_request_message_category! {
             description: "List every neuron at a voxel of a cortical area, with live properties and paginated synapse details (at most 50 outgoing and 50 incoming per page)",
             alloc_only: true,
             payload: {
-                cortical_id: String, "Base64 cortical area ID",
+                cortical_id: Base64EncodedCorticalID, "Base64 cortical area ID",
                 x: u32, "Voxel X within the area",
                 y: u32, "Voxel Y within the area",
                 z: u32, "Voxel Z within the area",
                 synapse_page: Option<u32>, "0-based synapse detail page (default 0)",
             },
             response: {
-                cortical_id: String, "Base64 cortical area ID",
+                cortical_id: Base64EncodedCorticalID, "Base64 cortical area ID",
                 cortical_name: String, "Name of the cortical area",
                 cortical_idx: u32, "Internal index of the cortical area",
                 voxel_coordinate: [u32; 3], "The queried voxel",
@@ -314,12 +315,12 @@ define_request_message_category! {
             description: "Get runtime stats, genome memory parameters, upstream wiring, synapse counts and paginated memory neuron IDs of a memory cortical area",
             alloc_only: true,
             payload: {
-                cortical_id: String, "Base64 ID of a memory cortical area",
+                cortical_id: Base64EncodedCorticalID, "Base64 ID of a memory cortical area",
                 page: Option<u32>, "0-based page of memory_neuron_ids (default 0)",
                 page_size: Option<u32>, "Page size for memory_neuron_ids (default 50, max 500)",
             },
             response: {
-                cortical_id: String,
+                cortical_id: Base64EncodedCorticalID,
                 cortical_idx: u32,
                 cortical_name: String,
                 short_term_neuron_count: u64,
@@ -353,7 +354,7 @@ define_request_message_category! {
                 cortical_name: String, "Name of the cortical area",
             },
             response: {
-                locations: HashMap<String, (i32, i32)>, "Single entry: cortical area ID to (x, y)",
+                locations: HashMap<Base64EncodedCorticalID, (i32, i32)>, "Single entry: cortical area ID to (x, y)",
             },
         },
         "CorticalAreaProperties": {
@@ -361,7 +362,7 @@ define_request_message_category! {
             description: "Get the full properties of a single cortical area",
             alloc_only: true,
             payload: {
-                cortical_id: String, "Base64 cortical area ID",
+                cortical_id: Base64EncodedCorticalID, "Base64 cortical area ID",
             },
             response: {
                 properties: CorticalAreaInfo, "Full properties of the area",
@@ -372,10 +373,10 @@ define_request_message_category! {
             description: "Get the full properties of several cortical areas (unknown IDs are skipped)",
             alloc_only: true,
             payload: {
-                cortical_id_list: Vec<String>, "Base64 cortical area IDs",
+                cortical_id_list: Vec<Base64EncodedCorticalID>, "Base64 cortical area IDs",
             },
             response: {
-                areas: HashMap<String, CorticalAreaInfo>, "Cortical area ID to its properties",
+                areas: HashMap<Base64EncodedCorticalID, CorticalAreaInfo>, "Cortical area ID to its properties",
             },
         },
         "CorticalArea": {
@@ -383,7 +384,7 @@ define_request_message_category! {
             description: "Create the cortical areas of an IPU (sensory) or OPU (motor) cortical unit, one per sub-unit, with the unit's default topology",
             alloc_only: true,
             payload: {
-                cortical_id: String, "IPU/OPU type key, e.g. 'isvi' or 'omot'",
+                cortical_id: Base64EncodedCorticalID, "IPU/OPU type key, e.g. 'isvi' or 'omot'",
                 cortical_type: String, "'IPU' or 'OPU'",
                 device_count: u32, "Number of devices; scales X of each sub-unit",
                 coordinates_3d: [i32; 3], "Base 3D position of the unit",
@@ -395,7 +396,7 @@ define_request_message_category! {
             },
             response: {
                 message: String,
-                cortical_id: String, "ID of the first created area (backward compatibility)",
+                cortical_id: Base64EncodedCorticalID, "ID of the first created area (backward compatibility)",
                 cortical_ids: String, "Comma-separated IDs of all created areas",
                 unit_count: u32, "Number of areas created",
                 areas: Vec<CorticalAreaInfo>, "Full details of every created area",
@@ -419,7 +420,7 @@ define_request_message_category! {
             },
             response: {
                 message: String,
-                cortical_id: String, "Generated base64 ID of the new area",
+                cortical_id: Base64EncodedCorticalID, "Generated base64 ID of the new area",
                 cortical_name: String,
             },
             error: {
@@ -431,7 +432,7 @@ define_request_message_category! {
             description: "Clone a custom or memory cortical area, optionally reproducing its incoming and outgoing mappings",
             alloc_only: true,
             payload: {
-                source_area_id: String, "Base64 ID of the area to clone",
+                source_area_id: Base64EncodedCorticalID, "Base64 ID of the area to clone",
                 new_name: String, "Name of the clone",
                 coordinates_3d: [i32; 3], "3D position of the clone",
                 coordinates_2d: [i32; 2], "2D visualization position of the clone",
@@ -459,7 +460,7 @@ define_request_message_category! {
                 synapse_page: Option<u32>, "0-based synapse detail page (default 0)",
             },
             response: {
-                cortical_id: String,
+                cortical_id: Base64EncodedCorticalID,
                 cortical_name: String,
                 cortical_idx: u32,
                 voxel_coordinate: [u32; 3],
@@ -490,12 +491,12 @@ define_request_message_category! {
             description: "Update properties of a cortical area (position, dimensions, neural parameters, ...); the area ID may change",
             alloc_only: true,
             payload: {
-                cortical_id: String, "Base64 ID of the area to update",
+                cortical_id: Base64EncodedCorticalID, "Base64 ID of the area to update",
                 changes: HashMap<String, serde_json::Value>, "Property name to new value",
             },
             response: {
                 message: String,
-                cortical_id: String, "ID after the update",
+                cortical_id: Base64EncodedCorticalID, "ID after the update",
                 previous_cortical_id: String, "ID before the update",
             },
         },
@@ -504,7 +505,7 @@ define_request_message_category! {
             description: "Update several cortical areas at once: shared changes apply to all, per-area changes override them",
             alloc_only: true,
             payload: {
-                cortical_id_list: Vec<String>, "IDs of the areas to update (non-empty)",
+                cortical_id_list: Vec<Base64EncodedCorticalID>, "IDs of the areas to update (non-empty)",
                 shared_changes: HashMap<String, serde_json::Value>, "Changes applied to every listed area",
                 per_area_changes: Option<HashMap<String, HashMap<String, serde_json::Value>>>, "Area ID to changes overriding the shared ones",
             },
@@ -566,7 +567,7 @@ define_request_message_category! {
             description: "Delete a cortical area with all its neurons and synapses",
             alloc_only: true,
             payload: {
-                cortical_id: String, "Base64 ID of the area to delete",
+                cortical_id: Base64EncodedCorticalID, "Base64 ID of the area to delete",
             },
             response: {
                 message: String,
@@ -577,7 +578,7 @@ define_request_message_category! {
             description: "Delete several cortical areas",
             alloc_only: true,
             payload: {
-                cortical_ids: Vec<String>, "IDs of the areas to delete (non-empty)",
+                cortical_ids: Vec<Base64EncodedCorticalID>, "IDs of the areas to delete (non-empty)",
             },
             response: {
                 message: String,

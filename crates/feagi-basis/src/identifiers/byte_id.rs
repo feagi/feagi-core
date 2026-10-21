@@ -157,7 +157,8 @@ macro_rules! impl_byte_array_id_random {
 
 /// An ID in feagi that is internally a fixed array of bytes
 pub trait ByteID<const NUMBER_OF_BYTES: usize>:
-    Sized + Clone + core::hash::Hash + core::fmt::Debug + core::fmt::Display + serde::Serialize + serde::de::DeserializeOwned
+    Sized + Clone + PartialEq + Eq + core::hash::Hash + core::fmt::Debug + core::fmt::Display
+    + serde::Serialize + serde::de::DeserializeOwned
 {
     type DeserializationError: core::error::Error;
 

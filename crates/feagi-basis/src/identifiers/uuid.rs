@@ -81,7 +81,7 @@ macro_rules! create_wrapped_uuid {
         $struct_name:ident, $version:path, { $($constructors:tt)* }
     ) => {
         $(#[$meta])*
-        #[derive(Copy, Clone, Debug, Hash, ::serde::Serialize, ::serde::Deserialize)]
+        #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, ::serde::Serialize, ::serde::Deserialize)]
         pub struct $struct_name($crate::identifiers::uuid::Uuid);
 
         impl $struct_name {

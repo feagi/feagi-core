@@ -729,6 +729,7 @@ version = "0.1.1"
 dependencies = [
  "base64 0.23.1",
  "feagi-basis",
+ "feagi-cns-structures",
  "half",
  "heapless 0.9.3",
  "paste",
