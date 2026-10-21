@@ -11,6 +11,13 @@
 
 pub mod runtimes;
 pub mod wokr;
-pub mod rt;
-
 pub extern crate feagi_basis;
+
+/*
+picoserve should be spawning the right request type
+what is causing all this nesting
+proper http error codes
+json generator should be static / schemas?
+default worker spawner effort (nesting?)
+a way to group channels a bit easier? (trait shenanigans?)
+ */
