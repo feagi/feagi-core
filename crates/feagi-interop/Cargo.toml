@@ -58,6 +58,7 @@ thingbuf = { workspace = true }
 base64 = { workspace = true }
 paste = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+heapless = { workspace = true }
 
 # STD toggled
 zenoh = { workspace = true, optional = true, features = ["default", "unstable", "internal"] } # TODO swap this with zenoh-no-std in no std env

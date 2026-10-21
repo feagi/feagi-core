@@ -1,16 +1,16 @@
 //! Systems (largely) common to both STD and Embassy
 
-use feagi_basis::feagi_message::feagi_request_message_grouping::RequestCategoryGroupChannelRouter;
+use feagi_basis::feagi_message::request::feagi_request_message_grouping::FeagiRequestCategoryGroup;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
-use path_builder::AddNestedCategoryPathsToPicoServeRouter;
+use routing::{FeagiRestGroupRouter, IntoRestCategoryRoutes, RestCategoryRoutes};
 
-/// The path configurables of every message in every category of `GroupChannelRouter`, nested the
-/// same way as its `NCat` / `NMDes` chains. Passed to `build_router_with_routes`
-pub type GroupPathConfigurables<GroupChannelRouter, Channels> =
-    <<GroupChannelRouter as RequestCategoryGroupChannelRouter<Channels>>::NestedCategoryChannelRouters as AddNestedCategoryPathsToPicoServeRouter<Channels>>::NestedConfigurables;
+/// The routes serving every category of `Group`, built from its requesters and configurables
+pub type GroupRestRoutes<Group, Channels> = <<Group as FeagiRequestCategoryGroup<Channels>>::NestedCategoryRequesters as IntoRestCategoryRoutes<
+    <Group as FeagiRequestCategoryGroup<Channels>>::NestedConfigurables,
+>>::Routes;
 
 /// Request read buffer. Response bodies are written from their static slices.
-pub const HTTP_BUFFER_LEN: usize = 2048;
+pub const HTTP_BUFFER_LEN: usize = 2048; // TODO this needs to be not const, different devices may want different buffers
 
 /// Builds a REST server worker. Implemented once per backend (std threads, embassy), each also
 /// implementing `FeagiWorkerBuilder` for its spawner. Backend specific settings are set on the
@@ -19,293 +19,452 @@ pub trait RestServerWorkerBuilder<Channels: FeagiRequestResponseChannelBackend>:
     /// Creates a builder that will serve on `socket_address`, with backend defaults for
     /// everything else
     fn new(socket_address: core::net::SocketAddr) -> Self;
-
-    // TODO take this out of here, we dont want to expose this
-    /// Builds the static routes for the server.
-    fn build_router_with_routes<GroupChannelRouter: RequestCategoryGroupChannelRouter<Channels>>(
-        path_configurables: GroupPathConfigurables<GroupChannelRouter, Channels>,
-    ) -> picoserve::Router<impl picoserve::routing::PathRouter>
-    where
-        GroupChannelRouter::NestedCategoryChannelRouters: AddNestedCategoryPathsToPicoServeRouter<Channels>,
-    {
-        use picoserve::routing::PathRouter;
-
-        //region Predefined Route Builders
-
-        #[cfg(feature = "open_api_endpoint")]
-        fn route_open_api<R: PathRouter>(router: picoserve::Router<R>) -> picoserve::Router<impl PathRouter> {
-            use picoserve::response::File;
-            use picoserve::routing::get_service;
-
-            /// Generated OpenAPI json
-            const OPEN_API_JSON: &str = {
-                use super::open_api_builder::OpenApiDocument;
-
-                const DOCUMENT: OpenApiDocument = OpenApiDocument::from_categories(&[]);
-                const JSON_LEN: usize = DOCUMENT.json_len();
-                const JSON_BYTES: [u8; JSON_LEN] = DOCUMENT.write_json();
-                OpenApiDocument::json_str(&JSON_BYTES)
-            };
-
-            const OPEN_API_JSON_PATH: &str = "/api-docs/openapi.json";
-
-            router.route(
-                OPEN_API_JSON_PATH,
-                get_service(File::with_content_type("application/json", OPEN_API_JSON.as_bytes())),
-            )
-        }
-
-        /// Serves the Swagger UI page and the CSS and JS files it loads beside that page.
-        #[cfg(feature = "swagger_web_ui")]
-        fn route_swagger_ui<R: PathRouter>(router: picoserve::Router<R>) -> picoserve::Router<impl PathRouter> {
-            pub const HTML: &str = include_str!("../../../../resources_swagger/feagi-server.html");
-            pub const CSS: &[u8] = include_bytes!("../../../../resources_swagger/swagger-ui.css");
-            pub const JS: &[u8] = include_bytes!("../../../../resources_swagger/swagger-ui-bundle.js");
-            // TODO CDN link on our cloud for deployments where we cannot fit the above data in the library
-
-            use picoserve::response::File;
-            use picoserve::routing::get_service;
-
-            const SWAGGER_HTML_PATH: &str = "/swagger-ui/feagi-server.html";
-            const SWAGGER_CSS_PATH: &str = "/swagger-ui/swagger-ui.css";
-            const SWAGGER_JS_PATH: &str = "/swagger-ui/swagger-ui-bundle.js";
-
-            router
-                .route(SWAGGER_HTML_PATH, get_service(File::html(HTML)))
-                .route(SWAGGER_CSS_PATH, get_service(File::with_content_type(File::MIME_CSS, CSS)))
-                .route(SWAGGER_JS_PATH, get_service(File::with_content_type(File::MIME_JS, JS)))
-        }
-
-        //endregion
-
-        //let _pending_route_definitions = PhantomData::<RequestPathDefinition>;
-
-        let router = picoserve::Router::new();
-
-        #[cfg(feature = "open_api_endpoint")]
-        let router = route_open_api(router);
-
-        #[cfg(feature = "swagger_web_ui")]
-        let router = route_swagger_ui(router);
-
-        // Main routes, one per message descriptor in each category of the group
-        let router = <GroupChannelRouter::NestedCategoryChannelRouters as AddNestedCategoryPathsToPicoServeRouter<Channels>>::add_nested_category_paths_to_pico_serve_router(
-            router,
-            path_configurables,
-        );
-
-        router
-    }
 }
 
+/// Builds the router of the server: an endpoint for every message of every category in
+/// `routes`, plus the predefined routes enabled by crate features
+pub(crate) fn build_router_with_routes<Routes: RestCategoryRoutes>(routes: Routes) -> picoserve::Router<impl picoserve::routing::PathRouter> {
+    #[cfg(any(feature = "open_api_endpoint", feature = "swagger_web_ui"))]
+    use picoserve::routing::PathRouter;
 
-pub mod path_builder {
-    use feagi_basis::feagi_message::feagi_message_components::{FeagiMessageParameterFieldSerializable, MessageQueryables};
-    use feagi_basis::feagi_message::feagi_message_path::{FeagiMessagePath, FeagiRequestMessagePath, PathParameterElement};
-    use feagi_basis::feagi_message::feagi_request_message::FeagiRequestMessageDescriptor;
-    use feagi_basis::feagi_message::feagi_request_message_grouping::{NCat, NMDes, NNull, RequestCategoryChannelRouter};
-    use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
-    use feagi_interop_proc::generate_into_picoserve_path_impls;
-    use picoserve::routing::{get, parse_path_segment, ParsePathSegment, PathDescription, PathRouter};
+    //region Predefined Route Builders
 
+    #[cfg(feature = "open_api_endpoint")]
+    fn route_open_api<R: PathRouter>(router: picoserve::Router<R>) -> picoserve::Router<impl PathRouter> {
+        use picoserve::response::File;
+        use picoserve::routing::get_service;
 
-    //region Individual Messages
+        /// Generated OpenAPI json
+        const OPEN_API_JSON: &str = {
+            use super::open_api_builder::OpenApiDocument;
 
-    /// Adds a path to the picoserve router. `Q` is the message's queryables type (type only, no
-    /// value exists at route build time).
-    ///
-    /// The path's type tuple is converted to a picoserve path description through
-    /// [`IntoPicoservePath`]. The `NewPathParameters = ()` bound matches the
-    /// current zero-argument placeholder handler and will be generalised once
-    /// parameter/queryable handling is implemented.
-    pub fn add_request_path_to_pico_serve_router<R, Path, Q>(
-        router: picoserve::Router<R>,
-        path_configurables: Path::ConfigurablesTuple,
-    ) -> picoserve::Router<impl PathRouter>
-    where
-        R: PathRouter,
-        Path: FeagiRequestMessagePath,
-        Path::TypesTuple: IntoPicoservePath,
-        <Path::TypesTuple as IntoPicoservePath>::Output: PathDescription<(), NewPathParameters = ()>,
-        Q: MessageQueryables,
-    {
-        let tuple_path = Path::as_path_parser_tuple(path_configurables);
-        let picoserve_tuple = tuple_path.into_picoserve_path();
+            const DOCUMENT: OpenApiDocument = OpenApiDocument::from_categories(&[]);
+            const JSON_LEN: usize = DOCUMENT.json_len();
+            const JSON_BYTES: [u8; JSON_LEN] = DOCUMENT.write_json();
+            OpenApiDocument::json_str(&JSON_BYTES)
+        };
+
+        const OPEN_API_JSON_PATH: &str = "/api-docs/openapi.json";
+
         router.route(
-            picoserve_tuple,
-            get(async || "test_response"), // TODO queryables
+            OPEN_API_JSON_PATH,
+            get_service(File::with_content_type("application/json", OPEN_API_JSON.as_bytes())),
         )
     }
 
-    /// Converts a single FEAGI path element into its picoserve path-segment type.
-    pub trait IntoPicoserveSegment {
-        /// The picoserve segment type this element becomes.
-        type Output;
+    /// Serves the Swagger UI page and the CSS and JS files it loads beside that page.
+    #[cfg(feature = "swagger_web_ui")]
+    fn route_swagger_ui<R: PathRouter>(router: picoserve::Router<R>) -> picoserve::Router<impl PathRouter> {
+        pub const HTML: &str = include_str!("../../../../resources_swagger/feagi-server.html");
+        pub const CSS: &[u8] = include_bytes!("../../../../resources_swagger/swagger-ui.css");
+        pub const JS: &[u8] = include_bytes!("../../../../resources_swagger/swagger-ui-bundle.js");
+        // TODO CDN link on our cloud for deployments where we cannot fit the above data in the library
 
-        /// Produce the picoserve segment for this element.
-        fn into_picoserve_segment(self) -> Self::Output;
-    }
+        use picoserve::response::File;
+        use picoserve::routing::get_service;
 
-    /// A static or configured segment maps straight through as a literal match.
-    impl<'a> IntoPicoserveSegment for &'a str {
-        type Output = &'a str;
+        const SWAGGER_HTML_PATH: &str = "/swagger-ui/feagi-server.html";
+        const SWAGGER_CSS_PATH: &str = "/swagger-ui/swagger-ui.css";
+        const SWAGGER_JS_PATH: &str = "/swagger-ui/swagger-ui-bundle.js";
 
-        #[inline]
-        fn into_picoserve_segment(self) -> Self::Output {
-            self
-        }
-    }
-
-    /// A typed parameter becomes a `ParsePathSegment<Par>`, which picoserve parses
-    /// from the URL segment using `Par: FromStr`
-    impl<Par: FeagiMessageParameterFieldSerializable> IntoPicoserveSegment for PathParameterElement<Par> {
-        type Output = ParsePathSegment<Par>;
-
-        #[inline]
-        fn into_picoserve_segment(self) -> Self::Output {
-            parse_path_segment::<Par>()
-        }
-    }
-
-    /// Converts a whole FEAGI path tuple into the picoserve path-description tuple
-    /// accepted by `Router::route`. Per-arity impls are macro-generated.
-    pub trait IntoPicoservePath {
-        /// The picoserve path-description tuple produced from `Self`.
-        type Output;
-
-        /// Produce the picoserve path description for this tuple.
-        fn into_picoserve_path(self) -> Self::Output;
-    }
-
-    // One `IntoPicoservePath` impl per tuple arity
-    generate_into_picoserve_path_impls!();
-
-    //endregion
-
-    //region Nested Messages
-
-    /// Unrolls a `NMDes` chain (such as `RequestCategoryChannelRouter::NestedMessageDescriptors`),
-    /// calling [`add_request_path_to_pico_serve_router`] once per contained descriptor
-    pub trait AddNestedRequestPathsToPicoServeRouter {
-        /// Each descriptor path's `ConfigurablesTuple`, nested the same way as the `NMDes` chain:
-        /// `(HeadConfigurables, (NextConfigurables, (..., ())))`
-        type NestedConfigurables;
-
-        /// Adds the paths of every descriptor in the chain to the router, head first
-        fn add_nested_request_paths_to_pico_serve_router<R: PathRouter>(
-            router: picoserve::Router<R>,
-            nested_configurables: Self::NestedConfigurables,
-        ) -> picoserve::Router<impl PathRouter>;
-    }
-
-    /// End of the chain, nothing left to add
-    impl AddNestedRequestPathsToPicoServeRouter for NNull {
-        type NestedConfigurables = ();
-
-        #[inline]
-        fn add_nested_request_paths_to_pico_serve_router<R: PathRouter>(
-            router: picoserve::Router<R>,
-            _nested_configurables: Self::NestedConfigurables,
-        ) -> picoserve::Router<impl PathRouter> {
-            router
-        }
-    }
-
-    /// Adds the head descriptor's path, then recurses into the tail
-    impl<Head, Tail> AddNestedRequestPathsToPicoServeRouter for NMDes<Head, Tail>
-    where
-        Head: FeagiRequestMessageDescriptor,
-        <Head::MessagePath as FeagiMessagePath>::TypesTuple: IntoPicoservePath,
-        <<Head::MessagePath as FeagiMessagePath>::TypesTuple as IntoPicoservePath>::Output: PathDescription<(), NewPathParameters = ()>,
-        Tail: AddNestedRequestPathsToPicoServeRouter,
-    {
-        type NestedConfigurables = (
-            <Head::MessagePath as FeagiMessagePath>::ConfigurablesTuple,
-            Tail::NestedConfigurables,
-        );
-
-        #[inline]
-        fn add_nested_request_paths_to_pico_serve_router<R: PathRouter>(
-            router: picoserve::Router<R>,
-            nested_configurables: Self::NestedConfigurables,
-        ) -> picoserve::Router<impl PathRouter> {
-            let (head_configurables, tail_configurables) = nested_configurables;
-            let router = add_request_path_to_pico_serve_router::<R, Head::MessagePath, Head::Queryables>(
-                router,
-                head_configurables,
-            );
-            Tail::add_nested_request_paths_to_pico_serve_router(router, tail_configurables)
-        }
+        router
+            .route(SWAGGER_HTML_PATH, get_service(File::html(HTML)))
+            .route(SWAGGER_CSS_PATH, get_service(File::with_content_type(File::MIME_CSS, CSS)))
+            .route(SWAGGER_JS_PATH, get_service(File::with_content_type(File::MIME_JS, JS)))
     }
 
     //endregion
 
-    //region Nested Categories
+    // The message endpoints come last, so routes added on top (predefined, or by the backend)
+    // are matched first. They answer 404 / 405 for anything else
+    let router = picoserve::Router::from_service(FeagiRestGroupRouter::new(routes));
 
-    /// Unrolls a `NCat` chain (such as `RequestCategoryGroupChannelRouter::NestedCategoryChannelRouters`),
-    /// adding the paths of every category's `NestedMessageDescriptors` through
-    /// [`AddNestedRequestPathsToPicoServeRouter`]
-    pub trait AddNestedCategoryPathsToPicoServeRouter<Channels>
-    where
-        Channels: FeagiRequestResponseChannelBackend,
-    {
-        /// Each category's `NestedConfigurables`, nested the same way as the `NCat` chain:
-        /// `(HeadCategoryConfigurables, (NextCategoryConfigurables, (..., ())))`
-        type NestedConfigurables;
+    #[cfg(feature = "open_api_endpoint")]
+    let router = route_open_api(router);
 
-        /// Adds the paths of every category in the chain to the router, head first
-        fn add_nested_category_paths_to_pico_serve_router<R: PathRouter>(
-            router: picoserve::Router<R>,
-            nested_configurables: Self::NestedConfigurables,
-        ) -> picoserve::Router<impl PathRouter>;
-    }
+    #[cfg(feature = "swagger_web_ui")]
+    let router = route_swagger_ui(router);
 
-    /// End of the chain, nothing left to add
-    impl<Channels>
-        AddNestedCategoryPathsToPicoServeRouter<Channels> for NNull
-    where
-        Channels: FeagiRequestResponseChannelBackend,
-    {
-        type NestedConfigurables = ();
-
-        #[inline]
-        fn add_nested_category_paths_to_pico_serve_router<R: PathRouter>(
-            router: picoserve::Router<R>,
-            _nested_configurables: Self::NestedConfigurables,
-        ) -> picoserve::Router<impl PathRouter> {
-            router
-        }
-    }
-
-    /// Adds the head category's message paths, then recurses into the tail
-    impl<Head, Tail, Channels>
-        AddNestedCategoryPathsToPicoServeRouter<Channels> for NCat<Head, Tail>
-    where
-        Channels: FeagiRequestResponseChannelBackend,
-        Head: RequestCategoryChannelRouter<Channels>,
-        Head::NestedMessageDescriptors: AddNestedRequestPathsToPicoServeRouter,
-        Tail: AddNestedCategoryPathsToPicoServeRouter<Channels>,
-    {
-        type NestedConfigurables = (
-            <Head::NestedMessageDescriptors as AddNestedRequestPathsToPicoServeRouter>::NestedConfigurables,
-            Tail::NestedConfigurables,
-        );
-
-        #[inline]
-        fn add_nested_category_paths_to_pico_serve_router<R: PathRouter>(
-            router: picoserve::Router<R>,
-            nested_configurables: Self::NestedConfigurables,
-        ) -> picoserve::Router<impl PathRouter> {
-            let (head_configurables, tail_configurables) = nested_configurables;
-            let router = <Head::NestedMessageDescriptors as AddNestedRequestPathsToPicoServeRouter>::add_nested_request_paths_to_pico_serve_router(
-                router,
-                head_configurables,
-            );
-            Tail::add_nested_category_paths_to_pico_serve_router(router, tail_configurables)
-        }
-    }
-
-    //endregion
+    router
 }
 
+/// Routes requests to the message they are for, sends them through the message's category
+/// channel, and writes back the response
+///
+/// A message is matched by its path and its REST method together, so messages of different
+/// methods may share a path. Read messages take their payload from the URL query, all others
+/// from a json body. Responses are json: the response payload on success, or the message's error
+pub mod routing {
+    use feagi_basis::feagi_message::feagi_message_path::FeagiMessagePath;
+    use feagi_basis::feagi_message::request::feagi_request_descriptor::{FeagiMessageEnum, FeagiRequestMessageDescriptor};
+    use feagi_basis::feagi_message::request::feagi_request_message::FeagiRequestMessage;
+    use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiRequestCategory};
+    use feagi_basis::feagi_message::request::feagi_request_message_grouping::{NCat, NMDes, NNull};
+    use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
+    use picoserve::extract::{FromRequest, JsonWithUnescapeBufferSize};
+    use picoserve::io::Read;
+    use picoserve::request::{Path, Request};
+    use picoserve::response::{IntoResponse, Json, ResponseWriter, StatusCode};
+    use picoserve::routing::PathRouterService;
+    use picoserve::ResponseSent;
 
+    /// Most segments a request path may have. Longer paths are answered with 404
+    pub const MAX_PATH_SEGMENTS: usize = 16;
+    /// Longest a decoded path segment may be. Paths with longer segments are answered with 404
+    pub const MAX_PATH_SEGMENT_LEN: usize = 128;
+    /// Space for unescaping strings while parsing a json body
+    const JSON_UNESCAPE_BUFFER_LEN: usize = 256;
+
+    /// The REST method of a message
+    pub const fn http_method(method: FeagiMessageEnum) -> &'static str {
+        match method {
+            FeagiMessageEnum::Read => "GET",
+            FeagiMessageEnum::Create => "POST",
+            FeagiMessageEnum::Edit => "PUT",
+            FeagiMessageEnum::Delete => "DELETE",
+            FeagiMessageEnum::Patch => "PATCH",
+        }
+    }
+
+    /// Whether a route handled a request, or gives it back for the next route to try
+    pub enum RouteOutcome<'r, R: Read, W: ResponseWriter> {
+        Handled(Result<ResponseSent, W::Error>),
+        NotHandled {
+            request: Request<'r, R>,
+            response_writer: W,
+            /// Some route had this path, but not this method
+            path_matched: bool,
+        },
+    }
+
+    //region Group
+
+    /// The `PathRouterService` serving every message of every category of a group
+    pub struct FeagiRestGroupRouter<Routes> {
+        routes: Routes,
+    }
+
+    impl<Routes: RestCategoryRoutes> FeagiRestGroupRouter<Routes> {
+        pub fn new(routes: Routes) -> Self {
+            FeagiRestGroupRouter { routes }
+        }
+    }
+
+    impl<State, Routes: RestCategoryRoutes> PathRouterService<State> for FeagiRestGroupRouter<Routes> {
+        async fn call_path_router_service<R: Read, W: ResponseWriter<Error = R::Error>>(
+            &self,
+            _state: &State,
+            _current_path_parameters: (),
+            path: Path<'_>,
+            request: Request<'_, R>,
+            response_writer: W,
+        ) -> Result<ResponseSent, W::Error> {
+            // Decoded once, then matched against every message path
+            let mut decoded_segments = heapless::Vec::<heapless::String<MAX_PATH_SEGMENT_LEN>, MAX_PATH_SEGMENTS>::new();
+            for segment in path.segments() {
+                let Ok(segment) = segment.try_into_string::<MAX_PATH_SEGMENT_LEN>() else {
+                    return write_status(request, response_writer, StatusCode::NOT_FOUND, "Not Found").await;
+                };
+                if decoded_segments.push(segment).is_err() {
+                    return write_status(request, response_writer, StatusCode::NOT_FOUND, "Not Found").await;
+                }
+            }
+            let segments: heapless::Vec<&str, MAX_PATH_SEGMENTS> = decoded_segments.iter().map(|segment| segment.as_str()).collect();
+
+            match self.routes.try_handle(&segments, request, response_writer).await {
+                RouteOutcome::Handled(result) => result,
+                RouteOutcome::NotHandled {
+                    request,
+                    response_writer,
+                    path_matched: true,
+                } => write_status(request, response_writer, StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed").await,
+                RouteOutcome::NotHandled {
+                    request,
+                    response_writer,
+                    path_matched: false,
+                } => write_status(request, response_writer, StatusCode::NOT_FOUND, "Not Found").await,
+            }
+        }
+    }
+
+    /// Converts the requesters of a group, with their configurables, into the routes serving
+    /// them. Implemented for the `NCat` chains of `FeagiRequestCategoryGroup`
+    pub trait IntoRestCategoryRoutes<NestedConfigurables> {
+        type Routes: RestCategoryRoutes;
+
+        fn into_rest_category_routes(self, nested_configurables: NestedConfigurables) -> Self::Routes;
+    }
+
+    impl IntoRestCategoryRoutes<NNull> for NNull {
+        type Routes = NNull;
+
+        fn into_rest_category_routes(self, _nested_configurables: NNull) -> Self::Routes {
+            NNull
+        }
+    }
+
+    impl<Category, Channels, Tail, TailConfigurables> IntoRestCategoryRoutes<NCat<&'static Category::Configurables, TailConfigurables>>
+        for NCat<FeagiCategoryRequester<Category, Channels>, Tail>
+    where
+        Category: FeagiRequestCategory,
+        Category::Configurables: 'static,
+        Channels: FeagiRequestResponseChannelBackend,
+        Tail: IntoRestCategoryRoutes<TailConfigurables>,
+        NCat<RestCategoryRoute<Category, Channels>, Tail::Routes>: RestCategoryRoutes,
+    {
+        type Routes = NCat<RestCategoryRoute<Category, Channels>, Tail::Routes>;
+
+        fn into_rest_category_routes(self, nested_configurables: NCat<&'static Category::Configurables, TailConfigurables>) -> Self::Routes {
+            NCat {
+                head: RestCategoryRoute {
+                    requester: self.head,
+                    configurables: nested_configurables.head,
+                },
+                tail: self.tail.into_rest_category_routes(nested_configurables.tail),
+            }
+        }
+    }
+
+    //endregion
+
+    //region Category
+
+    /// The routes of one category: its requester, and the configurables its paths are built from
+    pub struct RestCategoryRoute<Category, Channels>
+    where
+        Category: FeagiRequestCategory,
+        Category::Configurables: 'static,
+        Channels: FeagiRequestResponseChannelBackend,
+    {
+        requester: FeagiCategoryRequester<Category, Channels>,
+        configurables: &'static Category::Configurables,
+    }
+
+    /// Tries the routes of each category in turn. Implemented for `NCat` chains of
+    /// `RestCategoryRoute`
+    pub trait RestCategoryRoutes {
+        async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
+            &self,
+            segments: &[&str],
+            request: Request<'r, R>,
+            response_writer: W,
+        ) -> RouteOutcome<'r, R, W>;
+    }
+
+    impl RestCategoryRoutes for NNull {
+        async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
+            &self,
+            _segments: &[&str],
+            request: Request<'r, R>,
+            response_writer: W,
+        ) -> RouteOutcome<'r, R, W> {
+            RouteOutcome::NotHandled {
+                request,
+                response_writer,
+                path_matched: false,
+            }
+        }
+    }
+
+    impl<Category, Channels, Tail> RestCategoryRoutes for NCat<RestCategoryRoute<Category, Channels>, Tail>
+    where
+        Category: FeagiRequestCategory,
+        Category::Configurables: 'static,
+        Category::NestedMessageDescriptors: RestMessageRoutes<Category, Channels>,
+        Channels: FeagiRequestResponseChannelBackend,
+        Tail: RestCategoryRoutes,
+    {
+        async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
+            &self,
+            segments: &[&str],
+            request: Request<'r, R>,
+            response_writer: W,
+        ) -> RouteOutcome<'r, R, W> {
+            let outcome = <Category::NestedMessageDescriptors as RestMessageRoutes<Category, Channels>>::try_handle(
+                &self.head.requester,
+                self.head.configurables,
+                segments,
+                request,
+                response_writer,
+            )
+            .await;
+            let RouteOutcome::NotHandled {
+                request,
+                response_writer,
+                path_matched,
+            } = outcome
+            else {
+                return outcome;
+            };
+            with_path_matched(self.tail.try_handle(segments, request, response_writer).await, path_matched)
+        }
+    }
+
+    //endregion
+
+    //region Message
+
+    /// Tries the route of each message of a category in turn. Implemented for the `NMDes`
+    /// chain of the category
+    pub trait RestMessageRoutes<Category, Channels>
+    where
+        Category: FeagiRequestCategory,
+        Channels: FeagiRequestResponseChannelBackend,
+    {
+        async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
+            requester: &FeagiCategoryRequester<Category, Channels>,
+            configurables: &Category::Configurables,
+            segments: &[&str],
+            request: Request<'r, R>,
+            response_writer: W,
+        ) -> RouteOutcome<'r, R, W>;
+    }
+
+    impl<Category, Channels> RestMessageRoutes<Category, Channels> for NNull
+    where
+        Category: FeagiRequestCategory,
+        Channels: FeagiRequestResponseChannelBackend,
+    {
+        async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
+            _requester: &FeagiCategoryRequester<Category, Channels>,
+            _configurables: &Category::Configurables,
+            _segments: &[&str],
+            request: Request<'r, R>,
+            response_writer: W,
+        ) -> RouteOutcome<'r, R, W> {
+            RouteOutcome::NotHandled {
+                request,
+                response_writer,
+                path_matched: false,
+            }
+        }
+    }
+
+    impl<Descriptor, Tail, Category, Channels> RestMessageRoutes<Category, Channels> for NMDes<Descriptor, Tail>
+    where
+        Descriptor: FeagiRequestMessageDescriptor<Category = Category>,
+        Tail: RestMessageRoutes<Category, Channels>,
+        Category: FeagiRequestCategory,
+        Channels: FeagiRequestResponseChannelBackend,
+        FeagiCategoryRequester<Category, Channels>: Clone,
+    {
+        async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
+            requester: &FeagiCategoryRequester<Category, Channels>,
+            configurables: &Category::Configurables,
+            segments: &[&str],
+            request: Request<'r, R>,
+            response_writer: W,
+        ) -> RouteOutcome<'r, R, W> {
+            let Some(parameters) = Descriptor::MessagePath::parse_message_path(configurables, segments.iter().copied()) else {
+                return Tail::try_handle(requester, configurables, segments, request, response_writer).await;
+            };
+            if request.parts.method() != http_method(Descriptor::METHOD) {
+                let outcome = Tail::try_handle(requester, configurables, segments, request, response_writer).await;
+                return with_path_matched(outcome, true);
+            }
+            RouteOutcome::Handled(respond_to_message::<Descriptor, Category, Channels, R, W>(requester, parameters, request, response_writer).await)
+        }
+    }
+
+    /// Builds the message from the request, sends it through the category channel, and writes
+    /// back the response
+    async fn respond_to_message<Descriptor, Category, Channels, R, W>(
+        requester: &FeagiCategoryRequester<Category, Channels>,
+        parameters: Descriptor::Parameters,
+        mut request: Request<'_, R>,
+        response_writer: W,
+    ) -> Result<ResponseSent, W::Error>
+    where
+        Descriptor: FeagiRequestMessageDescriptor<Category = Category>,
+        Category: FeagiRequestCategory,
+        Channels: FeagiRequestResponseChannelBackend,
+        FeagiCategoryRequester<Category, Channels>: Clone,
+        R: Read,
+        W: ResponseWriter<Error = R::Error>,
+    {
+        let Some(request_payload) = decode_request_payload::<<Descriptor::Message as FeagiRequestMessage>::DescriptorRequestPayload, R>(
+            Descriptor::METHOD,
+            &mut request,
+        )
+        .await
+        else {
+            return write_status(request, response_writer, StatusCode::BAD_REQUEST, "Request payload could not be parsed").await;
+        };
+        let message = Descriptor::Message::compose(parameters, request_payload);
+
+        // A clone has its own reply channel, so concurrent requests to the same category do not
+        // share one
+        let response = requester.clone().request(message).await;
+
+        let connection = request.body_connection.finalize().await?;
+        match response {
+            Ok(Ok(response_payload)) => Json(response_payload).write_to(connection, response_writer).await,
+            // TODO per error status codes
+            Ok(Err(message_error)) => {
+                Json(message_error)
+                    .into_response()
+                    .with_status_code(StatusCode::BAD_REQUEST)
+                    .write_to(connection, response_writer)
+                    .await
+            }
+            Err(channel_error) => {
+                (StatusCode::SERVICE_UNAVAILABLE, format_args!("{channel_error}\r\n"))
+                    .write_to(connection, response_writer)
+                    .await
+            }
+        }
+    }
+
+    /// Read messages take their payload from the URL query, all others from a json body. A
+    /// payload of `()` may also be left out entirely
+    async fn decode_request_payload<Payload: serde::de::DeserializeOwned, R: Read>(method: FeagiMessageEnum, request: &mut Request<'_, R>) -> Option<Payload> {
+        if matches!(method, FeagiMessageEnum::Read) {
+            let query = request.parts.query().unwrap_or_default();
+            return picoserve::url_encoded::deserialize_form(query).ok().or_else(deserialize_nothing);
+        }
+
+        if request.body_connection.content_length() == 0 {
+            return deserialize_nothing();
+        }
+        let parts = request.parts;
+        <JsonWithUnescapeBufferSize<Payload, JSON_UNESCAPE_BUFFER_LEN> as FromRequest<'_, (), Payload>>::from_request(&(), parts, request.body_connection.body())
+            .await
+            .ok()
+            .map(|JsonWithUnescapeBufferSize(payload)| payload)
+    }
+
+    /// The payload of a request that sent none. Only succeeds for `()`
+    fn deserialize_nothing<Payload: serde::de::DeserializeOwned>() -> Option<Payload> {
+        Payload::deserialize(serde::de::value::UnitDeserializer::<serde::de::value::Error>::new()).ok()
+    }
+
+    //endregion
+
+    /// Marks a not handled outcome as having matched the path, if `path_matched`
+    fn with_path_matched<'r, R: Read, W: ResponseWriter>(outcome: RouteOutcome<'r, R, W>, path_matched: bool) -> RouteOutcome<'r, R, W> {
+        match outcome {
+            RouteOutcome::NotHandled {
+                request,
+                response_writer,
+                path_matched: matched_later,
+            } => RouteOutcome::NotHandled {
+                request,
+                response_writer,
+                path_matched: path_matched || matched_later,
+            },
+            handled => handled,
+        }
+    }
+
+    /// Answers with only a status and a short message
+    async fn write_status<R: Read, W: ResponseWriter<Error = R::Error>>(
+        request: Request<'_, R>,
+        response_writer: W,
+        status_code: StatusCode,
+        message: &'static str,
+    ) -> Result<ResponseSent, W::Error> {
+        (status_code, format_args!("{message}\r\n"))
+            .write_to(request.body_connection.finalize().await?, response_writer)
+            .await
+    }
+}

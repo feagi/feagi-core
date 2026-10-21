@@ -158,6 +158,19 @@ fn message_path_is_written_with_its_parameters() {
 }
 
 #[test]
+fn message_path_is_parsed_into_its_parameters() {
+    let parse = |path: &str| ReadOrderFeagiRequestMessagePath::parse_message_path(configurables(), path.split('/'));
+    assert_eq!(parse("shops/downtown/orders/7").map(|parameters| parameters.order_id), Some(7));
+    assert!(parse("shops/uptown/orders/7").is_none(), "configurable differs");
+    assert!(parse("shops/downtown/order/7").is_none(), "static segment differs");
+    assert!(parse("shops/downtown/orders/seven").is_none(), "parameter does not parse");
+    assert!(parse("shops/downtown/orders/7/extra").is_none(), "too many segments");
+    assert!(parse("shops/downtown/orders").is_none(), "too few segments");
+
+    assert!(CreateOrderFeagiRequestMessagePath::parse_message_path(configurables(), "shops/downtown/orders".split('/')).is_some());
+}
+
+#[test]
 fn message_composes_from_and_decomposes_into_its_specifications() {
     let message = ReadOrderFeagiRequestMessage::new(7, true);
     let (parameters, payload) = message.decompose();

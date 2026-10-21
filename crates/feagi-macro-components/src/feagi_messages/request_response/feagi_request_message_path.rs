@@ -98,6 +98,8 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
         let mut slotted_types = Vec::new();
         let mut slotted_values = Vec::new();
         let mut write_segments = Vec::new();
+        let mut parse_segments = Vec::new();
+        let mut parameter_fields = Vec::new();
         let mut uses_configurables = false;
         let mut uses_parameters = false;
 
@@ -110,6 +112,11 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
                     slotted_types.push(quote!(&'static str));
                     slotted_values.push(quote!(full.#tuple_index));
                     write_segments.push(quote!(out.write_str(#text)?;));
+                    parse_segments.push(quote! {
+                        if segments.next()? != #text {
+                            return None;
+                        }
+                    });
                 }
                 MessagePathElement::ConfigurableOfName(name) => {
                     let field = lit_str_to_ident(name).unwrap();
@@ -119,6 +126,11 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
                     slotted_types.push(quote!(&'static str));
                     slotted_values.push(quote!(#static_element::to_str_slice(&configurables.#field)));
                     write_segments.push(quote!(out.write_str(#static_element::to_str_slice(&configurables.#field))?;));
+                    parse_segments.push(quote! {
+                        if segments.next()? != #static_element::to_str_slice(&configurables.#field) {
+                            return None;
+                        }
+                    });
                 }
                 MessagePathElement::ParameterOfName(name, parameter_type) => {
                     let field = lit_str_to_ident(name).unwrap();
@@ -129,6 +141,10 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
                     slotted_types.push(slot);
                     slotted_values.push(quote!(full.#tuple_index));
                     write_segments.push(quote!(#parameter_element::write_path_segment(&parameters.#field, out)?;));
+                    parse_segments.push(quote! {
+                        let #field: #parameter_type = ::core::str::FromStr::from_str(segments.next()?).ok()?;
+                    });
+                    parameter_fields.push(field);
                 }
             }
         }
@@ -143,6 +159,11 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
 
         let consume_configurables = if uses_configurables { quote!() } else { quote!(let _ = configurables;) };
         let consume_parameters = if uses_parameters { quote!() } else { quote!(let _ = parameters;) };
+        let parsed_parameters = if uses_parameters {
+            quote!(#parameters_type { #( #parameter_fields, )* })
+        } else {
+            quote!(())
+        };
 
         let full_struct_name = path_struct_names.feagi_message_path_struct_name();
         let configurables_struct_name = &category.configurables_struct_name;
@@ -174,6 +195,18 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
                     #consume_parameters
                     #write_body
                     Ok(())
+                }
+
+                fn parse_message_path<'a, I: ::core::iter::Iterator<Item = &'a str>>(
+                    configurables: &Self::Configurables,
+                    mut segments: I,
+                ) -> ::core::option::Option<Self::Parameters> {
+                    #consume_configurables
+                    #( #parse_segments )*
+                    if segments.next().is_some() {
+                        return None;
+                    }
+                    Some(#parsed_parameters)
                 }
             }
         }

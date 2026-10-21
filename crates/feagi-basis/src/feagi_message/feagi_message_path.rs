@@ -33,6 +33,12 @@ pub trait FeagiMessagePath: 'static {
         parameters: &Self::Parameters,
         out: &mut W,
     ) -> core::fmt::Result;
+
+    /// Matches a concrete path, given as its already decoded segments, against this path. Gives
+    /// the parameters parsed from it, or `None` if the path is not this one (a static or
+    /// configurable segment differs, the segment count differs, or a parameter fails to parse).
+    /// Used by the responding side (REST routing, zenoh keys)
+    fn parse_message_path<'a, I: Iterator<Item = &'a str>>(configurables: &Self::Configurables, segments: I) -> Option<Self::Parameters>;
 }
 
 
