@@ -726,6 +726,17 @@ dependencies = [
 [[package]]
 name = "feagi-cns-processing"
 version = "0.1.1"
+dependencies = [
+ "base64 0.23.1",
+ "feagi-basis",
+ "half",
+ "heapless 0.9.3",
+ "paste",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "uuid",
+]
 
 [[package]]
 name = "feagi-cns-structures"

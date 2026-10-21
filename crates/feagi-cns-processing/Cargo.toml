@@ -8,8 +8,33 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
+description = "Various workers that do tasks related to FEAGI Brain Functionality"
+
+[features]
+
+std = [
+    "alloc",
+    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std"
+]
+
+alloc = [
+    "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc"
+]
 
 [dependencies]
+# Workspace Crates
+feagi-basis = { path = "../feagi-basis" }
+
+# External Crates
+paste = { workspace = true }
+thiserror = { workspace = true, default-features = false }
+half = { workspace = true, features = ["serde"] }
+serde = { workspace = true, default-features = false, features = ["derive"] }
+base64 = { workspace = true, default-features = false }
+heapless = { workspace = true, default-features = false, features = ["serde"] }
+uuid = { workspace = true, features = ["serde"] }
+
+serde_json = { workspace = true } # TODO make optional
 
 [lints]
 workspace = true
