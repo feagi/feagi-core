@@ -30,16 +30,19 @@ workspace = true
 
 default = [
     "std",
+    "runtime_feagi_design_server"
 ]
 
 std = [
     "alloc",
     "serde/std", "serde_json/std",
+    "feagi-basis/std", "feagi-interop/std"
 ]
 
 alloc = [
     "serde_json",
     "serde/alloc", "serde/derive", "serde_json/alloc",
+    "feagi-basis/alloc", "feagi-interop/alloc"
 ]
 
 ### Runtimes are default implementations ###
@@ -50,14 +53,18 @@ runtime_feagi_design_server = [
 
 ### Extensions of functionality ###
 
-rest_server = []
+rest_server = [
+    "feagi-interop/transport_rest"
+]
 
 rest_open_api = [
-    "rest_server"
+    "rest_server",
+    "feagi-interop/open_api_endpoint"
 ]
 
 rest_swagger_ui = [
-    "rest_open_api"
+    "rest_open_api",
+    "feagi-interop/swagger_web_ui"
 ]
 
 # TODO
