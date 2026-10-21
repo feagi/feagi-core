@@ -92,7 +92,6 @@ members = [
     "crates/feagi-basis/feagi-basis-proc-common",
 
     "crates/feagi-interop",
-    "crates/feagi-interop/feagi-interop-proc",
 
     "crates/feagi-cns-structures",
 

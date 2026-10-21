@@ -16,14 +16,6 @@ pub fn define_request_message_category(input: proc_macro::TokenStream) -> proc_m
     }
 }
 
-/// For a given category, exports its template as a macro, for consumers that still need the
-/// template itself rather than the generated types (OpenAPI, until it moves to the traits)
-#[proc_macro]
-pub fn define_template_categorized_requests(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use feagi_macro_components::templates::TemplateRoot;
-    TemplateRoot::<FeagiRequestMessageCategory>::parse_template_and_generate_generator_input_macro(input.into()).into()
-}
-
 //endregion
 
 //region Feagi Request Messaging Categorization

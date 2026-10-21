@@ -1,6 +1,5 @@
 use crate::common::RustVisibility;
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
-use crate::templates::Unparse;
 use indexmap::IndexMap;
 use proc_macro2::Ident;
 use quote::quote;
@@ -128,28 +127,5 @@ impl Parse for StructTemplate {
             field_input.parse::<Token![,]>()?;
         }
         Ok(Self(fields))
-    }
-}
-
-impl Unparse for StructTemplate {
-    fn unparse(&self) -> proc_macro2::TokenStream {
-        let mut stream = proc_macro2::TokenStream::new();
-
-        for (field_name, (field_type, description)) in &self.0 {
-            match description {
-                Some(description) => {
-                    stream.extend(quote!(#field_name: #field_type, #description,));
-                }
-                None => {
-                    stream.extend(quote!(#field_name: #field_type,));
-                }
-            }
-        }
-
-        quote! {
-            {
-                #stream
-            }
-        }
     }
 }

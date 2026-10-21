@@ -1,5 +1,4 @@
 use crate::common::{basis_path, serde_data_derive_attributes};
-use crate::templates::Unparse;
 use indexmap::IndexMap;
 use proc_macro2::Ident;
 use quote::quote;
@@ -101,20 +100,5 @@ impl Parse for MessageErrorTemplate {
             return Err(entries.error("error block must define at least one error. Leave `error` out to use the default error"));
         }
         Ok(MessageErrorTemplate::Variants(variants))
-    }
-}
-
-impl Unparse for MessageErrorTemplate {
-    /// Re-emit `error: ...,`, or nothing for the default error
-    fn unparse(&self) -> proc_macro2::TokenStream {
-        match self {
-            MessageErrorTemplate::Default => quote!(),
-            MessageErrorTemplate::Variants(variants) => {
-                let names = variants.keys();
-                let descriptions = variants.values();
-                quote!(error: { #( #names: #descriptions, )* },)
-            }
-            MessageErrorTemplate::Explicit(error_type) => quote!(error: #error_type,),
-        }
     }
 }

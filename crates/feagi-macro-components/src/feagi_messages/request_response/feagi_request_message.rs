@@ -5,7 +5,6 @@ use crate::feagi_messages::request_response::feagi_request_message_path::{FeagiR
 use crate::feagi_messages::request_response::message_error::MessageErrorTemplate;
 use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::template_parsing::struct_template::StructTemplate;
-use crate::templates::Unparse;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, LitBool, LitStr, Token};
@@ -442,36 +441,6 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Parse for FeagiRequestMessage<
             response: response.unwrap_or_else(StructTemplate::new_empty),
             error: error.unwrap_or(MessageErrorTemplate::Default),
         })
-    }
-}
-
-impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> Unparse for FeagiRequestMessage<METHOD_TYPE_U8> {
-    /// Re-emit the braced message body so it can be parsed again.
-    fn unparse(&self) -> proc_macro2::TokenStream {
-        let path = self.path.unparse();
-        let path_item_descriptions = self.path_item_descriptions.unparse();
-        let description = &self.description;
-        let alloc_only = self.alloc_only;
-        let payload = if self.is_payload_struct_generated() {
-            let payload = self.payload.unparse();
-            quote!(payload: #payload,)
-        } else {
-            quote!()
-        };
-        let response = self.response.unparse();
-        let error = self.error.unparse();
-
-        quote! {
-            {
-                path: #path,
-                path_item_descriptions: #path_item_descriptions,
-                description: #description,
-                alloc_only: #alloc_only,
-                #payload
-                response: #response,
-                #error
-            }
-        }
     }
 }
 

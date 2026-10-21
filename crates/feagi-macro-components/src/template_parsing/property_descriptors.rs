@@ -1,7 +1,5 @@
-use crate::templates::Unparse;
 use indexmap::IndexMap;
 use proc_macro2::Ident;
-use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{braced, LitStr, Token};
 
@@ -38,21 +36,5 @@ impl Parse for PropertyDescriptors {
             field_input.parse::<Token![,]>()?;
         }
         Ok(Self(properties))
-    }
-}
-
-impl Unparse for PropertyDescriptors {
-    fn unparse(&self) -> proc_macro2::TokenStream {
-        let mut stream = proc_macro2::TokenStream::new();
-
-        for (prop, desc) in &self.0 {
-            stream.extend(quote!(#prop: #desc,));
-        }
-
-        quote! {
-            {
-                #stream
-            }
-        }
     }
 }

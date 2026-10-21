@@ -45,9 +45,6 @@ swagger_web_ui = [
 # TODO other transports, compression, auth?
 
 [dependencies]
-# Child Crates
-feagi-interop-proc = { path = "feagi-interop-proc" }
-
 # Root Crates
 feagi-basis = { path = "../feagi-basis" }
 

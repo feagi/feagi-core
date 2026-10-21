@@ -3,7 +3,6 @@ use crate::feagi_messages::message_path_element::MessagePathElement;
 use crate::feagi_messages::request_response::common_structs::FeagiRequestMessageU8;
 use crate::feagi_messages::request_response::feagi_request_message::FeagiRequestMessage;
 use crate::feagi_messages::request_response::feagi_request_message_path::message_path_elements;
-use crate::templates::Unparse;
 use heck::ToPascalCase;
 use indexmap::IndexMap;
 use proc_macro2::Span;
@@ -459,49 +458,6 @@ impl Parse for FeagiRequestMessageCategory {
         };
         category.validate_configurables()?;
         Ok(category)
-    }
-}
-
-impl Unparse for FeagiRequestMessageCategory {
-    /// Re-emit the category. Empty verb sections are left out.
-    fn unparse(&self) -> proc_macro2::TokenStream {
-        /// Append `section: { "Title": Message, ... },` when the map is not empty.
-        fn extend_bucket<Message: Unparse>(stream: &mut proc_macro2::TokenStream, section: &str, messages: &IndexMap<LitStr, Message>) {
-            if messages.is_empty() {
-                return;
-            }
-            let section = proc_macro2::Ident::new(section, Span::call_site());
-            let mut entries = proc_macro2::TokenStream::new();
-            for (title, message) in messages {
-                let body = message.unparse();
-                entries.extend(quote!(#title: #body,));
-            }
-            stream.extend(quote! {
-                #section: {
-                    #entries
-                },
-            });
-        }
-
-        let category_name = &self.category_name;
-        let base_path = &self.base_path;
-        let category_description = &self.category_description;
-        let mut stream = quote! {
-            category_name: #category_name,
-            base_path: #base_path,
-            category_description: #category_description,
-        };
-        if !self.configurables.is_empty() {
-            let names = self.configurables.keys();
-            let max_lengths = self.configurables.values();
-            stream.extend(quote!(configurables: { #( #names: #max_lengths, )* },));
-        }
-        extend_bucket(&mut stream, "read", &self.read);
-        extend_bucket(&mut stream, "create", &self.create);
-        extend_bucket(&mut stream, "edit", &self.edit);
-        extend_bucket(&mut stream, "delete", &self.delete);
-        extend_bucket(&mut stream, "patch", &self.patch);
-        stream
     }
 }
 

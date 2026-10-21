@@ -4,7 +4,6 @@ use crate::feagi_messages::message_path_element::MessagePathElement;
 use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
 use crate::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategoryContext;
 use crate::template_parsing::struct_template::StructTemplate;
-use crate::templates::Unparse;
 use proc_macro2::Span;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
@@ -53,15 +52,6 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
     pub fn calculate_feagi_message_path_struct_names(&self, name_base: syn::Ident) -> FeagiRequestMessagePathRustStructNames {
         let _ = self;
         FeagiRequestMessagePathRustStructNames::new(name_base, FeagiRequestMessageMethod::from_u8(METHOD))
-    }
-
-    pub fn full_message_path(&self, category: &LitStr) -> LitStr {
-        let path = self.as_lit_str();
-        LitStr::new(&format!("{}/{}", category.value(), path.value()), Span::call_site())
-    }
-
-    pub fn as_lit_str(&self) -> LitStr {
-        LitStr::new(&path_elements_to_string(&self.leaf), Span::call_site())
     }
 
     /// Path elements in template order.
@@ -236,21 +226,9 @@ impl<const METHOD: FeagiRequestMessageU8> Parse for FeagiRequestMessagePath<METH
     }
 }
 
-impl<const METHOD: FeagiRequestMessageU8> Unparse for FeagiRequestMessagePath<METHOD> {
-    fn unparse(&self) -> proc_macro2::TokenStream {
-        let string_out = self.as_lit_str();
-        quote! { #string_out }
-    }
-}
-
 //endregion
 
 //region Internal
-
-/// Rebuild the template string of path elements
-pub fn path_elements_to_string(elements: &[MessagePathElement]) -> String {
-    elements.iter().map(MessagePathElement::to_string).collect::<Vec<_>>().join("/")
-}
 
 /// Split a path literal into static segments, configurables, and parameters.
 ///

@@ -757,7 +757,6 @@ version = "0.1.1"
 dependencies = [
  "base64 0.23.1",
  "feagi-basis",
- "feagi-interop-proc",
  "heapless 0.9.3",
  "paste",
  "picoserve",
@@ -766,17 +765,6 @@ dependencies = [
  "thingbuf",
  "thiserror 2.0.21",
  "zenoh",
-]
-
-[[package]]
-name = "feagi-interop-proc"
-version = "0.1.1"
-dependencies = [
- "feagi-macro-components",
- "heck",
- "proc-macro2",
- "quote",
- "syn 3.0.6",
 ]
 
 [[package]]
