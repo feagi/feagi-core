@@ -17,6 +17,11 @@ pub trait FeagiMessagePath: 'static {
     /// The whole path as known at compile time. Usable in const code (open-api)
     const FULL_MESSAGE_PATH: Self::FullMessagePathBaseTuple;
 
+    /// Every element of the path in order, starting with the category's base path. The same
+    /// path as `FULL_MESSAGE_PATH`, as a slice that can be walked without knowing its types
+    /// (documentation, such as open-api)
+    const PATH_ELEMENTS: &'static [crate::feagi_message::feagi_message_description::FeagiMessagePathElementDescription];
+
     /// The flat tuple representation of the path once configurables are applied: &'static str
     /// for static path components and configurable values, and `MessagePathSlotElement` for the
     /// parameters that must be parsed dynamically
@@ -49,10 +54,17 @@ pub mod configurables {
     /// macro
     pub trait FeagiMessagePathConfigurables {
         // Composed of pub fields of `FeagiMessagePathStaticElement`
+
+        /// The value of the configurable field `name`, or `None` if there is no such field
+        fn configurable_str(&self, name: &str) -> Option<&str>;
     }
 
     // Categories without any configurables use the unit type
-    impl FeagiMessagePathConfigurables for () {}
+    impl FeagiMessagePathConfigurables for () {
+        fn configurable_str(&self, _name: &str) -> Option<&str> {
+            None
+        }
+    }
 
 
     /// Defines something that can be serialized to become part of the message path statically.

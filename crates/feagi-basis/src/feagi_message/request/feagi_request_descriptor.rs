@@ -37,6 +37,12 @@ pub trait FeagiRequestMessageDescriptor {
     /// The custom error type that can be sent back if something went wrong with the response
     type ResponseError: FeagiMessageError;
 
+    /// The fields of `RequestPayload`, for documentation (such as open-api)
+    const REQUEST_PAYLOAD_FIELDS: &'static [crate::feagi_message::feagi_message_description::FeagiFieldDescription];
+
+    /// The fields of `ResponsePayload`, for documentation (such as open-api)
+    const RESPONSE_PAYLOAD_FIELDS: &'static [crate::feagi_message::feagi_message_description::FeagiFieldDescription];
+
     /// The category this message belongs to, whose channel it travels over
     type Category: FeagiRequestCategory;
 
@@ -62,7 +68,7 @@ pub trait FeagiRequestMessageDescriptor {
 
 /// An enum for defining what type of request method is being used.
 #[repr(u8)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FeagiMessageEnum {
     Read = 0, // get
     Create = 1, // post

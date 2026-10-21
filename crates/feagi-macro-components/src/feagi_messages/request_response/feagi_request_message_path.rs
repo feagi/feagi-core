@@ -1,4 +1,5 @@
-use crate::common::{basis_path, lit_str_to_ident};
+use crate::common::{basis_path, field_kind_tokens, lit_str_to_ident};
+use crate::template_parsing::property_descriptors::PropertyDescriptors;
 use crate::feagi_messages::message_path_element::MessagePathElement;
 use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
 use crate::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategoryContext;
@@ -81,15 +82,19 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
     }
 
     /// Generate the path struct and its `FeagiMessagePath` impl. The category's base path is
-    /// prepended to this path. `parameters_type` is the message's parameters struct, or `()`
+    /// prepended to this path. `parameters_type` is the message's parameters struct, or `()`.
+    /// `descriptions` documents the parameters
     pub fn generate_feagi_message_path_struct_and_impls(
         &self,
         path_struct_names: &FeagiRequestMessagePathRustStructNames,
         parameters_type: &syn::Type,
+        descriptions: &PropertyDescriptors,
         category: &FeagiRequestMessageCategoryContext,
     ) -> proc_macro2::TokenStream {
         let basis = basis_path();
         let path_module = quote!(#basis::feagi_message::feagi_message_path);
+        let element_description = quote!(#basis::feagi_message::feagi_message_description::FeagiMessagePathElementDescription);
+        let mut element_descriptions = Vec::new();
         let static_element = quote!(#path_module::configurables::FeagiMessagePathStaticElement);
         let parameter_element = quote!(#path_module::parameters::FeagiMessagePathParameterElement);
 
@@ -112,6 +117,7 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
                     slotted_types.push(quote!(&'static str));
                     slotted_values.push(quote!(full.#tuple_index));
                     write_segments.push(quote!(out.write_str(#text)?;));
+                    element_descriptions.push(quote!(#element_description::Static(#text)));
                     parse_segments.push(quote! {
                         if segments.next()? != #text {
                             return None;
@@ -126,6 +132,7 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
                     slotted_types.push(quote!(&'static str));
                     slotted_values.push(quote!(#static_element::to_str_slice(&configurables.#field)));
                     write_segments.push(quote!(out.write_str(#static_element::to_str_slice(&configurables.#field))?;));
+                    element_descriptions.push(quote!(#element_description::Configurable { name: #name }));
                     parse_segments.push(quote! {
                         if segments.next()? != #static_element::to_str_slice(&configurables.#field) {
                             return None;
@@ -141,6 +148,12 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
                     slotted_types.push(slot);
                     slotted_values.push(quote!(full.#tuple_index));
                     write_segments.push(quote!(#parameter_element::write_path_segment(&parameters.#field, out)?;));
+                    let (kind, _) = field_kind_tokens(parameter_type);
+                    let description = match descriptions.try_get_description(&field) {
+                        Some(text) => quote!(::core::option::Option::Some(#text)),
+                        None => quote!(::core::option::Option::None),
+                    };
+                    element_descriptions.push(quote!(#element_description::Parameter { name: #name, description: #description, kind: #kind }));
                     parse_segments.push(quote! {
                         let #field: #parameter_type = ::core::str::FromStr::from_str(segments.next()?).ok()?;
                     });
@@ -177,6 +190,7 @@ impl<const METHOD: FeagiRequestMessageU8> FeagiRequestMessagePath<METHOD> {
                 type Parameters = #parameters_type;
                 type FullMessagePathBaseTuple = ( #( #full_types, )* );
                 const FULL_MESSAGE_PATH: Self::FullMessagePathBaseTuple = ( #( #full_values, )* );
+                const PATH_ELEMENTS: &'static [#element_description] = &[ #( #element_descriptions, )* ];
                 type SlottedParameterMessagePath = ( #( #slotted_types, )* );
 
                 fn to_slotted_parameter_message_path(configurables: &'static Self::Configurables) -> Self::SlottedParameterMessagePath {

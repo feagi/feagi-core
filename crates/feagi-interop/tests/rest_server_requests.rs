@@ -39,6 +39,37 @@ fn http(method: &str, path: &str, body: Option<&str>) -> (u16, String) {
     (status, body)
 }
 
+/// The served OpenAPI document lists every message, with configurables filled in
+#[cfg(feature = "open_api_endpoint")]
+fn check_open_api_document() {
+    let (status, body) = http("GET", "/api-docs/openapi.json", None);
+    assert_eq!(status, 200);
+    let document: serde_json::Value = serde_json::from_str(&body).expect("OpenAPI document is json");
+
+    assert_eq!(document["tags"][0]["name"], "CoffeeShop");
+    let paths = document["paths"].as_object().unwrap();
+    let mut path_keys: Vec<&str> = paths.keys().map(String::as_str).collect();
+    path_keys.sort();
+    assert_eq!(path_keys, ["/shops/downtown/orders", "/shops/downtown/orders/{order_id}", "/shops/downtown/status"]);
+
+    // Read and Delete share the order's path
+    let order = &paths["/shops/downtown/orders/{order_id}"];
+    assert_eq!(order["delete"]["description"], "Cancel an order");
+    let read_parameters = order["get"]["parameters"].as_array().unwrap();
+    assert_eq!(read_parameters[0]["name"], "order_id");
+    assert_eq!(read_parameters[0]["in"], "path");
+    assert_eq!(read_parameters[0]["schema"]["type"], "integer");
+    // A Read payload is the URL query
+    assert_eq!(read_parameters[1]["name"], "include_price");
+    assert_eq!(read_parameters[1]["in"], "query");
+    assert_eq!(read_parameters[1]["required"], false);
+    assert_eq!(order["get"]["responses"]["200"]["content"]["application/json"]["schema"]["properties"]["price"]["type"], "integer");
+
+    // Other payloads are the json body
+    let create_body = &paths["/shops/downtown/orders"]["post"]["requestBody"]["content"]["application/json"]["schema"];
+    assert_eq!(create_body["required"], serde_json::json!(["drink", "size"]));
+}
+
 #[test]
 fn rest_server_sends_requests_through_category_channels() {
     let (group, configurables, responder_thread) = start_coffee_shop("downtown");
@@ -71,6 +102,9 @@ fn rest_server_sends_requests_through_category_channels() {
     // Payloads that do not parse
     assert_eq!(http("POST", "/shops/downtown/orders", Some(r#"{"drink":"tea"}"#)).0, 400);
     assert_eq!(http("POST", "/shops/downtown/orders", None).0, 400);
+
+    #[cfg(feature = "open_api_endpoint")]
+    check_open_api_document();
 
     block_on_thread(server.stop()).expect("REST server acknowledges stopping");
     server.join().expect("REST server worker did not panic");

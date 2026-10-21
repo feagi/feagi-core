@@ -1,3 +1,6 @@
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 pub mod embodiment;
 
 pub mod error;

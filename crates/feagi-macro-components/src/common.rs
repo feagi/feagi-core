@@ -75,6 +75,88 @@ impl RustVisibility {
 
 //endregion
 
+//region Field Descriptions
+
+/// The `FeagiFieldKind` of a field type, and whether the field is required (false for
+/// `Option<T>`). Types are recognized by their last path segment, so `heapless::String<N>` is a
+/// string and `heapless::Vec<T, N>` an array. Anything unrecognized is an object
+pub fn field_kind_tokens(field_type: &Type) -> (proc_macro2::TokenStream, bool) {
+    let (inner, required) = match generic_inner(field_type, "Option") {
+        Some(inner) => (inner, false),
+        None => (field_type, true),
+    };
+    let basis = basis_path();
+    let kind = match field_kind_name(inner) {
+        "Boolean" => quote!(Boolean),
+        "Integer" => quote!(Integer),
+        "Number" => quote!(Number),
+        "String" => quote!(String),
+        "Array" => quote!(Array),
+        _ => quote!(Object),
+    };
+    (quote!(#basis::feagi_message::feagi_message_description::FeagiFieldKind::#kind), required)
+}
+
+/// A const `FeagiFieldDescription` for a field
+pub fn field_description_tokens(name: &syn::Ident, field_type: &Type, description: Option<&LitStr>) -> proc_macro2::TokenStream {
+    let basis = basis_path();
+    let name = ident_to_lit_str(name);
+    let (kind, required) = field_kind_tokens(field_type);
+    let description = match description {
+        Some(text) => quote!(::core::option::Option::Some(#text)),
+        None => quote!(::core::option::Option::None),
+    };
+    quote! {
+        #basis::feagi_message::feagi_message_description::FeagiFieldDescription {
+            name: #name,
+            description: #description,
+            kind: #kind,
+            required: #required,
+        }
+    }
+}
+
+fn field_kind_name(field_type: &Type) -> &'static str {
+    match field_type {
+        Type::Reference(reference) => field_kind_name(&reference.elem),
+        Type::Array(_) | Type::Slice(_) => "Array",
+        Type::Path(path) => {
+            let Some(last) = path.path.segments.last() else {
+                return "Object";
+            };
+            match last.ident.to_string().as_str() {
+                "bool" => "Boolean",
+                "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => "Integer",
+                "f32" | "f64" => "Number",
+                "String" | "str" | "char" => "String",
+                "Vec" => "Array",
+                _ => "Object",
+            }
+        }
+        _ => "Object",
+    }
+}
+
+/// The single type argument of `Name<T>`, if `field_type` is one
+fn generic_inner<'a>(field_type: &'a Type, name: &str) -> Option<&'a Type> {
+    let Type::Path(path) = field_type else {
+        return None;
+    };
+    let last = path.path.segments.last()?;
+    if last.ident != name {
+        return None;
+    }
+    let syn::PathArguments::AngleBracketed(arguments) = &last.arguments else {
+        return None;
+    };
+    match arguments.args.first()? {
+        syn::GenericArgument::Type(inner) => Some(inner),
+        _ => None,
+    }
+}
+
+//endregion
+
 //region Generated Code Paths
 
 // NOTE: Generated code names everything by absolute path through `feagi_basis`, so it compiles

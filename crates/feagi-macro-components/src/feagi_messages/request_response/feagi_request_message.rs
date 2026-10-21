@@ -1,4 +1,4 @@
-use crate::common::{basis_path, serde_data_derive_attributes, unit_type, RustVisibility};
+use crate::common::{basis_path, field_description_tokens, serde_data_derive_attributes, unit_type, RustVisibility};
 use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
 use crate::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategoryContext;
 use crate::feagi_messages::request_response::feagi_request_message_path::{FeagiRequestMessagePath, FeagiRequestMessagePathRustStructNames};
@@ -135,6 +135,18 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
         }
     }
 
+    /// Const `FeagiFieldDescription`s of the fields of `template`, documented by
+    /// `path_item_descriptions` where given, otherwise by their own comment
+    fn field_descriptions(&self, template: &StructTemplate) -> Vec<proc_macro2::TokenStream> {
+        let mut template = template.clone();
+        template.overwrite_descriptions_from_property_descriptors(&self.path_item_descriptions);
+        template
+            .get_map()
+            .iter()
+            .map(|(name, (field_type, description))| field_description_tokens(name, field_type, description.as_ref()))
+            .collect()
+    }
+
     /// The type of the response error
     pub fn response_error_type(&self, names: &FeagiRequestMessageRustStructNames) -> proc_macro2::TokenStream {
         self.error.error_type(&names.feagi_message_error_struct_name())
@@ -205,7 +217,12 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             &mut output,
         );
 
-        output.extend(self.path.generate_feagi_message_path_struct_and_impls(&names.path_struct_names(), &parameters.type_name, category));
+        output.extend(self.path.generate_feagi_message_path_struct_and_impls(
+            &names.path_struct_names(),
+            &parameters.type_name,
+            &self.path_item_descriptions,
+            category,
+        ));
 
         if self.is_response_struct_generated() {
             let mut template = self.response.clone();
@@ -271,6 +288,9 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
         let path_name = names.feagi_message_path_struct_name();
         let response_payload_type = self.response_payload_type(names);
         let response_error_type = self.response_error_type(names);
+        let request_payload_fields = self.field_descriptions(&self.payload);
+        let response_payload_fields = self.field_descriptions(&self.response);
+        let field_description = quote!(#basis::feagi_message::feagi_message_description::FeagiFieldDescription);
         let category_marker = &category.category_marker_name;
         let request_enum = &category.request_enum_name;
         let response_enum = &category.response_enum_name;
@@ -291,6 +311,8 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
                 type RequestPayload = #payload_type;
                 type ResponsePayload = #response_payload_type;
                 type ResponseError = #response_error_type;
+                const REQUEST_PAYLOAD_FIELDS: &'static [#field_description] = &[ #( #request_payload_fields, )* ];
+                const RESPONSE_PAYLOAD_FIELDS: &'static [#field_description] = &[ #( #response_payload_fields, )* ];
                 type Category = #category_marker;
 
                 fn into_category_request(message: Self::Message) -> #request_enum {

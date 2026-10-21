@@ -173,6 +173,10 @@ impl FeagiRequestMessageCategory {
         let fields = self.configurables.iter().map(|(field, max_length)| {
             quote!(pub #field: #basis::__private::heapless::String<#max_length>,)
         });
+        let lookups = self.configurables.keys().map(|field| {
+            let field_name = LitStr::new(&field.to_string(), field.span());
+            quote!(#field_name => ::core::option::Option::Some(self.#field.as_str()),)
+        });
         quote! {
             #[doc = #doc]
             #[derive(Clone, Debug)]
@@ -180,7 +184,14 @@ impl FeagiRequestMessageCategory {
                 #( #fields )*
             }
 
-            impl #basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathConfigurables for #name {}
+            impl #basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathConfigurables for #name {
+                fn configurable_str(&self, name: &str) -> ::core::option::Option<&str> {
+                    match name {
+                        #( #lookups )*
+                        _ => ::core::option::Option::None,
+                    }
+                }
+            }
         }
     }
 

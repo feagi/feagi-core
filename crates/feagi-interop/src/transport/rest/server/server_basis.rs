@@ -29,27 +29,15 @@ pub(crate) fn build_router_with_routes<Routes: RestCategoryRoutes>(routes: Route
 
     //region Predefined Route Builders
 
-    #[cfg(feature = "open_api_endpoint")]
-    fn route_open_api<R: PathRouter>(router: picoserve::Router<R>) -> picoserve::Router<impl PathRouter> {
-        use picoserve::response::File;
+    /// Serves the OpenAPI document of `open_api_json`, written from the routes before they were
+    /// handed to the router
+    // TODO without alloc, write the document into a buffer given to the server instead
+    #[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
+    fn route_open_api<R: PathRouter>(router: picoserve::Router<R>, open_api_json: alloc::string::String) -> picoserve::Router<impl PathRouter> {
+        use super::open_api_builder::OPEN_API_JSON_PATH;
         use picoserve::routing::get_service;
 
-        /// Generated OpenAPI json
-        const OPEN_API_JSON: &str = {
-            use super::open_api_builder::OpenApiDocument;
-
-            const DOCUMENT: OpenApiDocument = OpenApiDocument::from_categories(&[]);
-            const JSON_LEN: usize = DOCUMENT.json_len();
-            const JSON_BYTES: [u8; JSON_LEN] = DOCUMENT.write_json();
-            OpenApiDocument::json_str(&JSON_BYTES)
-        };
-
-        const OPEN_API_JSON_PATH: &str = "/api-docs/openapi.json";
-
-        router.route(
-            OPEN_API_JSON_PATH,
-            get_service(File::with_content_type("application/json", OPEN_API_JSON.as_bytes())),
-        )
+        router.route(OPEN_API_JSON_PATH, get_service(OpenApiDocumentService { open_api_json }))
     }
 
     /// Serves the Swagger UI page and the CSS and JS files it loads beside that page.
@@ -75,17 +63,48 @@ pub(crate) fn build_router_with_routes<Routes: RestCategoryRoutes>(routes: Route
 
     //endregion
 
+    #[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
+    let open_api_json = {
+        let mut open_api_json = alloc::string::String::new();
+        super::open_api_builder::write_open_api_json(&routes, &mut open_api_json).expect("writing to a String does not fail");
+        open_api_json
+    };
+
     // The message endpoints come last, so routes added on top (predefined, or by the backend)
     // are matched first. They answer 404 / 405 for anything else
     let router = picoserve::Router::from_service(FeagiRestGroupRouter::new(routes));
 
-    #[cfg(feature = "open_api_endpoint")]
-    let router = route_open_api(router);
+    #[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
+    let router = route_open_api(router, open_api_json);
 
     #[cfg(feature = "swagger_web_ui")]
     let router = route_swagger_ui(router);
 
     router
+}
+
+/// Answers with the OpenAPI document it holds
+#[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
+struct OpenApiDocumentService {
+    open_api_json: alloc::string::String,
+}
+
+#[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
+impl<State, PathParameters> picoserve::routing::RequestHandlerService<State, PathParameters> for OpenApiDocumentService {
+    async fn call_request_handler_service<R: picoserve::io::Read, W: picoserve::response::ResponseWriter<Error = R::Error>>(
+        &self,
+        _state: &State,
+        _path_parameters: PathParameters,
+        request: picoserve::request::Request<'_, R>,
+        response_writer: W,
+    ) -> Result<picoserve::ResponseSent, W::Error> {
+        use picoserve::response::IntoResponse;
+
+        picoserve::response::Response::ok(self.open_api_json.as_str())
+            .with_content_type("application/json")
+            .write_to(request.body_connection.finalize().await?, response_writer)
+            .await
+    }
 }
 
 /// Routes requests to the message they are for, sends them through the message's category
@@ -95,6 +114,8 @@ pub(crate) fn build_router_with_routes<Routes: RestCategoryRoutes>(routes: Route
 /// methods may share a path. Read messages take their payload from the URL query, all others
 /// from a json body. Responses are json: the response payload on success, or the message's error
 pub mod routing {
+    use feagi_basis::feagi_message::feagi_message_description::{FeagiFieldDescription, FeagiMessagePathElementDescription};
+    use feagi_basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathConfigurables;
     use feagi_basis::feagi_message::feagi_message_path::FeagiMessagePath;
     use feagi_basis::feagi_message::request::feagi_request_descriptor::{FeagiMessageEnum, FeagiRequestMessageDescriptor};
     use feagi_basis::feagi_message::request::feagi_request_message::FeagiRequestMessage;
@@ -229,6 +250,21 @@ pub mod routing {
 
     //region Category
 
+    /// One route of the server, described for documentation (such as OpenAPI)
+    #[derive(Clone, Copy)]
+    pub struct RouteDescription<'a> {
+        pub category_name: &'static str,
+        pub category_description: &'static str,
+        pub method: FeagiMessageEnum,
+        pub description: &'static str,
+        pub path_elements: &'static [FeagiMessagePathElementDescription],
+        /// Values of the configurable path elements
+        pub configurables: &'a dyn FeagiMessagePathConfigurables,
+        /// From the URL query for Read messages, otherwise from the json body
+        pub request_payload_fields: &'static [FeagiFieldDescription],
+        pub response_payload_fields: &'static [FeagiFieldDescription],
+    }
+
     /// The routes of one category: its requester, and the configurables its paths are built from
     pub struct RestCategoryRoute<Category, Channels>
     where
@@ -249,9 +285,17 @@ pub mod routing {
             request: Request<'r, R>,
             response_writer: W,
         ) -> RouteOutcome<'r, R, W>;
+
+        /// Describes route `index`, counting across all categories in order, or `None` past
+        /// the last route
+        fn route_description(&self, index: usize) -> Option<RouteDescription<'_>>;
     }
 
     impl RestCategoryRoutes for NNull {
+        fn route_description(&self, _index: usize) -> Option<RouteDescription<'_>> {
+            None
+        }
+
         async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
             &self,
             _segments: &[&str],
@@ -298,6 +342,14 @@ pub mod routing {
             };
             with_path_matched(self.tail.try_handle(segments, request, response_writer).await, path_matched)
         }
+
+        fn route_description(&self, index: usize) -> Option<RouteDescription<'_>> {
+            let route_count = <Category::NestedMessageDescriptors as RestMessageRoutes<Category, Channels>>::ROUTE_COUNT;
+            if index < route_count {
+                return <Category::NestedMessageDescriptors as RestMessageRoutes<Category, Channels>>::route_description(self.head.configurables, index);
+            }
+            self.tail.route_description(index - route_count)
+        }
     }
 
     //endregion
@@ -318,6 +370,12 @@ pub mod routing {
             request: Request<'r, R>,
             response_writer: W,
         ) -> RouteOutcome<'r, R, W>;
+
+        /// How many messages, and so routes, the chain has
+        const ROUTE_COUNT: usize;
+
+        /// Describes the route of message `index` of the chain, or `None` past the last one
+        fn route_description(configurables: &Category::Configurables, index: usize) -> Option<RouteDescription<'_>>;
     }
 
     impl<Category, Channels> RestMessageRoutes<Category, Channels> for NNull
@@ -325,6 +383,12 @@ pub mod routing {
         Category: FeagiRequestCategory,
         Channels: FeagiRequestResponseChannelBackend,
     {
+        const ROUTE_COUNT: usize = 0;
+
+        fn route_description(_configurables: &Category::Configurables, _index: usize) -> Option<RouteDescription<'_>> {
+            None
+        }
+
         async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
             _requester: &FeagiCategoryRequester<Category, Channels>,
             _configurables: &Category::Configurables,
@@ -363,6 +427,24 @@ pub mod routing {
                 return with_path_matched(outcome, true);
             }
             RouteOutcome::Handled(respond_to_message::<Descriptor, Category, Channels, R, W>(requester, parameters, request, response_writer).await)
+        }
+
+        const ROUTE_COUNT: usize = 1 + Tail::ROUTE_COUNT;
+
+        fn route_description(configurables: &Category::Configurables, index: usize) -> Option<RouteDescription<'_>> {
+            if index != 0 {
+                return Tail::route_description(configurables, index - 1);
+            }
+            Some(RouteDescription {
+                category_name: Category::CATEGORY_NAME,
+                category_description: Category::CATEGORY_DESCRIPTION,
+                method: Descriptor::METHOD,
+                description: Descriptor::MESSAGE_DESCRIPTION,
+                path_elements: <Descriptor::MessagePath as FeagiMessagePath>::PATH_ELEMENTS,
+                configurables,
+                request_payload_fields: Descriptor::REQUEST_PAYLOAD_FIELDS,
+                response_payload_fields: Descriptor::RESPONSE_PAYLOAD_FIELDS,
+            })
         }
     }
 

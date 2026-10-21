@@ -158,6 +158,56 @@ fn message_path_is_written_with_its_parameters() {
 }
 
 #[test]
+fn messages_describe_their_paths_and_fields() {
+    use feagi_basis::feagi_message::feagi_message_description::{FeagiFieldDescription, FeagiFieldKind, FeagiMessagePathElementDescription};
+    use feagi_basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathConfigurables;
+
+    assert_eq!(
+        ReadOrderFeagiRequestMessagePath::PATH_ELEMENTS,
+        &[
+            FeagiMessagePathElementDescription::Static("shops"),
+            FeagiMessagePathElementDescription::Configurable { name: "shop_name" },
+            FeagiMessagePathElementDescription::Static("orders"),
+            FeagiMessagePathElementDescription::Parameter {
+                name: "order_id",
+                description: Some("Which order to read"),
+                kind: FeagiFieldKind::Integer,
+            },
+        ]
+    );
+    assert_eq!(
+        ReadOrderFeagiRequestMessageDescriptor::REQUEST_PAYLOAD_FIELDS,
+        &[FeagiFieldDescription {
+            name: "include_price",
+            description: None,
+            kind: FeagiFieldKind::Boolean,
+            required: true,
+        }]
+    );
+    assert_eq!(
+        ReadOrderFeagiRequestMessageDescriptor::RESPONSE_PAYLOAD_FIELDS,
+        &[
+            FeagiFieldDescription {
+                name: "drink",
+                description: Some("Which drink was ordered"),
+                kind: FeagiFieldKind::Integer,
+                required: true,
+            },
+            FeagiFieldDescription {
+                name: "price",
+                description: None,
+                kind: FeagiFieldKind::Integer,
+                required: false,
+            },
+        ]
+    );
+    assert!(ReadStatusFeagiRequestMessageDescriptor::REQUEST_PAYLOAD_FIELDS.is_empty());
+
+    assert_eq!(configurables().configurable_str("shop_name"), Some("downtown"));
+    assert_eq!(configurables().configurable_str("other"), None);
+}
+
+#[test]
 fn message_path_is_parsed_into_its_parameters() {
     let parse = |path: &str| ReadOrderFeagiRequestMessagePath::parse_message_path(configurables(), path.split('/'));
     assert_eq!(parse("shops/downtown/orders/7").map(|parameters| parameters.order_id), Some(7));
