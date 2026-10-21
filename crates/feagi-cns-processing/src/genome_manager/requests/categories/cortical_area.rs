@@ -281,14 +281,7 @@ define_request_message_category! {
                 visibility: HashMap<String, bool>, "Cortical area ID to visibility flag",
             },
         },
-        "Visualization": {
-            path: "visualization",
-            description: "Check whether visualization is enabled for the system",
-            response: {
-                enabled: bool, "True when visualization is enabled",
-            },
-        },
-        "VoxelNeurons": {
+        "VoxelNeurons": { // cannot be implemented
             path: "voxel_neurons",
             description: "List every neuron at a voxel of a cortical area, with live properties and paginated synapse details (at most 50 outgoing and 50 incoming per page)",
             alloc_only: true,
@@ -316,7 +309,7 @@ define_request_message_category! {
                 IntrospectionUnavailable: "The engine cannot inspect neurons per voxel",
             },
         },
-        "Memory": {
+        "Memory": { // cannot be implemented as is
             path: "memory",
             description: "Get runtime stats, genome memory parameters, upstream wiring, synapse counts and paginated memory neuron IDs of a memory cortical area",
             alloc_only: true,
@@ -348,50 +341,6 @@ define_request_message_category! {
                 NotAMemoryArea: "The cortical area is not a memory area",
                 InvalidCorticalId: "The cortical ID is not valid base64",
                 IntrospectionUnavailable: "The engine cannot provide memory runtime detail",
-            },
-        },
-        "CorticalAreaIndexList": {
-            path: "cortical_area_index_list",
-            description: "List the internal numerical indices of every cortical area",
-            alloc_only: true,
-            response: {
-                indices: Vec<u32>, "All cortical area indices",
-            },
-        },
-        "CorticalIdxMapping": {
-            path: "cortical_idx_mapping",
-            description: "Get a map of cortical area IDs to their internal indices",
-            alloc_only: true,
-            response: {
-                mapping: HashMap<String, u32>, "Cortical area ID to internal index",
-            },
-        },
-        "MemoryUsage": {
-            path: ":cortical_id<String>/memory_usage",
-            path_item_descriptions: {
-                cortical_id: "Base64 cortical area ID",
-            },
-            description: "Get the estimated memory usage of a cortical area in bytes (neuron count times bytes per neuron)",
-            alloc_only: true,
-            response: {
-                memory_bytes: i64, "Estimated memory usage in bytes",
-            },
-            error: {
-                CorticalAreaNotFound: "No cortical area has that ID",
-            },
-        },
-        "NeuronCount": {
-            path: ":cortical_id<String>/neuron_count",
-            path_item_descriptions: {
-                cortical_id: "Base64 cortical area ID",
-            },
-            description: "Get the total number of neurons in a cortical area",
-            alloc_only: true,
-            response: {
-                neuron_count: i64, "Number of neurons in the area",
-            },
-            error: {
-                CorticalAreaNotFound: "No cortical area has that ID",
             },
         },
     },
@@ -498,7 +447,7 @@ define_request_message_category! {
                 InvalidInput: "Source is not a custom/memory area, the ID is invalid, or parent_region_id mismatches",
             },
         },
-        "VoxelNeurons": {
+        "VoxelNeurons": { // cannot be implemented as is
             path: "voxel_neurons",
             description: "Same as reading voxel_neurons, but with a JSON body",
             alloc_only: true,
@@ -526,55 +475,12 @@ define_request_message_category! {
                 IntrospectionUnavailable: "The engine cannot inspect neurons per voxel",
             },
         },
-        "CorticalTypeOptions": {
-            path: "cortical_type_options",
-            description: "Get the cortical type options for UI selection (Sensory, Motor, Custom, Memory)",
-            alloc_only: true,
-            response: {
-                options: Vec<String>, "Cortical type options",
-            },
-        },
-        "BatchOperations": {
-            path: "batch_operations",
-            description: "Execute multiple cortical area operations (create, update, delete) in a single batch",
-            alloc_only: true,
-            payload: {
-                operations: Vec<HashMap<String, serde_json::Value>>, "Operations to execute (shape undefined in the old code)",
-            },
-            response: {
-                processed: i32, "Number of operations processed",
-            },
-        },
         "Resize": {
             path: "resize",
             description: "Resize a cortical area by changing its dimensions (not yet implemented)",
             alloc_only: true,
             response: {
                 message: String,
-            },
-        },
-        "Reposition": {
-            path: "reposition",
-            description: "Move a cortical area to a new position (not yet implemented)",
-            alloc_only: true,
-            response: {
-                message: String,
-            },
-        },
-        "MappingRestrictions": {
-            path: "mapping_restrictions",
-            description: "Get mapping restrictions for specific cortical areas (POST version with a request body)",
-            alloc_only: true,
-            response: {
-                restrictions: HashMap<String, Vec<String>>, "Restrictions map (always empty in the old code)",
-            },
-        },
-        "MappingRestrictionsBetweenAreas": {
-            path: "mapping_restrictions_between_areas",
-            description: "Get mapping restrictions between two specific cortical areas (connection validation)",
-            alloc_only: true,
-            response: {
-                restrictions: HashMap<String, Vec<String>>, "Restrictions map (always empty in the old code)",
             },
         },
     },
@@ -676,17 +582,6 @@ define_request_message_category! {
             response: {
                 message: String,
                 cortical_ids: String, "Comma-separated IDs of the deleted areas",
-            },
-        },
-        "BulkDelete": {
-            path: "bulk_delete",
-            description: "Delete multiple cortical areas by their IDs in a single operation",
-            alloc_only: true,
-            payload: {
-                cortical_ids: Vec<String>, "IDs of the areas to delete",
-            },
-            response: {
-                deleted_count: i32, "Number of areas deleted",
             },
         },
     },

@@ -57,14 +57,6 @@ define_request_message_category! {
                 morphologies: HashMap<String, MorphologyDefinition>, "Definitions, keyed by name",
             },
         },
-        "List": {
-            path: "list",
-            description: "Get all morphology names in alphabetical order",
-            alloc_only: true,
-            response: {
-                morphologies: Vec<String>,
-            },
-        },
         "Info": {
             path: "info/:morphology_id<String>",
             path_item_descriptions: {
@@ -131,14 +123,6 @@ define_request_message_category! {
                 usage: Vec<[String; 2]>, "[source area ID, destination area ID] pairs",
             },
         },
-        "Create": {
-            path: "create",
-            description: "Create a new morphology with specified parameters",
-            alloc_only: true,
-            response: {
-                message: String,
-            },
-        },
     },
     edit: {
         "Morphology": {
@@ -175,14 +159,6 @@ define_request_message_category! {
             error: {
                 MorphologyNotFound: "No morphology has the old name",
                 MorphologyIdTaken: "A morphology with the new name already exists",
-            },
-        },
-        "Update": {
-            path: "update",
-            description: "Update an existing morphology's parameters",
-            alloc_only: true,
-            response: {
-                message: String,
             },
         },
     },

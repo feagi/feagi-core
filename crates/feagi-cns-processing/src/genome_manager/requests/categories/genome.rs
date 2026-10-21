@@ -113,13 +113,6 @@ define_request_message_category! {
                 name: String, "Genome name",
             },
         },
-        "Timestamp": {
-            path: "timestamp",
-            description: "Get the genome creation or modification timestamp",
-            response: {
-                timestamp: i64,
-            },
-        },
         "Download": {
             path: "download",
             description: "Download the current genome as a JSON document (with the current runtime simulation timestep injected)",
@@ -128,32 +121,12 @@ define_request_message_category! {
                 genome: serde_json::Value, "Full genome JSON",
             },
         },
-        "Properties": {
-            path: "properties",
-            description: "Get genome properties including metadata, size, and configuration details",
-            alloc_only: true,
-            response: {
-                properties: HashMap<String, serde_json::Value>,
-            },
-        },
         "Metadata": {
             path: "metadata",
             description: "Get genome metadata (alternative endpoint to properties)",
             alloc_only: true,
             response: {
                 properties: HashMap<String, serde_json::Value>,
-            },
-        },
-        "Diff": {
-            path: "diff",
-            description: "Get a diff comparison between two genomes",
-            alloc_only: true,
-            payload: {
-                genome_a: String, "First genome name",
-                genome_b: String, "Second genome name",
-            },
-            response: {
-                differences: Vec<serde_json::Value>,
             },
         },
         "Amalgamation": {
@@ -197,13 +170,6 @@ define_request_message_category! {
             },
             response: {
                 genome: serde_json::Value, "Region genome JSON",
-            },
-        },
-        "GenomeNumber": {
-            path: "genome_number",
-            description: "Get the current genome number or generation identifier",
-            response: {
-                genome_number: i32,
             },
         },
     },
@@ -279,18 +245,6 @@ define_request_message_category! {
                 file_path: String, "Where the genome was written",
             },
         },
-        "Load": {
-            path: "load",
-            description: "Load a genome by name",
-            alloc_only: true,
-            payload: {
-                genome_name: String,
-            },
-            response: {
-                message: String,
-                genome_title: String,
-            },
-        },
         "Upload": {
             path: "upload",
             description: "Upload and load a genome from a JSON payload",
@@ -303,27 +257,6 @@ define_request_message_category! {
                 message: String,
                 cortical_area_count: u64,
                 brain_region_count: u64,
-            },
-        },
-        "Validate": {
-            path: "validate",
-            description: "Validate a genome structure for correctness and completeness",
-            alloc_only: true,
-            payload: {
-                genome: serde_json::Value, "Full genome JSON",
-            },
-            response: {
-                valid: bool,
-                errors: Vec<String>,
-                warnings: Vec<String>,
-            },
-        },
-        "Transform": {
-            path: "transform",
-            description: "Transform a genome between formats (flat to hierarchical or vice versa)",
-            alloc_only: true,
-            response: {
-                message: String,
             },
         },
         "Clone": {
@@ -346,25 +279,6 @@ define_request_message_category! {
             },
             error: {
                 TransitionInProgress: "Another genome transition is in progress",
-            },
-        },
-        "Merge": {
-            path: "merge",
-            description: "Merge another genome into the current genome",
-            alloc_only: true,
-            response: {
-                message: String,
-            },
-        },
-        "ExportFormat": {
-            path: "export_format",
-            description: "Export the genome in a specific format (JSON, YAML, binary, etc.)",
-            alloc_only: true,
-            payload: {
-                format: String, "Target format",
-            },
-            response: {
-                message: String,
             },
         },
         "AmalgamationByFilename": {
@@ -429,28 +343,6 @@ define_request_message_category! {
                 message: String,
                 cortical_area_count: u64,
                 brain_region_count: u64,
-            },
-        },
-        "UploadFileEdit": {
-            path: "upload/file/edit",
-            description: "Upload a genome file with edit mode enabled",
-            alloc_only: true,
-            payload: {
-                file: String, "Genome file contents (UTF-8 JSON)",
-            },
-            response: {
-                message: String,
-            },
-        },
-        "UploadString": {
-            path: "upload/string",
-            description: "Upload and load a genome from a JSON string",
-            alloc_only: true,
-            payload: {
-                genome_json: String, "Genome as a JSON string",
-            },
-            response: {
-                message: String,
             },
         },
     },
