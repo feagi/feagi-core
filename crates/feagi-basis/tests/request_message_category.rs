@@ -261,9 +261,8 @@ fn errors_serialize_as_plain_serde_enums() {
 fn category_requests_round_trip_through_the_category_channel() {
     use feagi_basis::parallelism::block_on_thread;
     use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
-
-    let (mut requester, responder) = FeagiRequestResponseChannelsAllocBackend::create_category_channels::<CoffeeShopRequestCategory>(2);
-
+    
+    let (mut requester, responder) = CoffeeShopRequestCategory::spawn_alloc_requester_responser_pair(2);
     let worker = std::thread::spawn(move || {
         block_on_thread(async move {
             for _ in 0..3 {

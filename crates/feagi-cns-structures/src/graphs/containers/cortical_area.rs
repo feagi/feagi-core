@@ -15,6 +15,7 @@ where
     pub position_2d: (),
 
     pub cache_lookups: DataLookups,
+    _t: core::marker::PhantomData<NeuronModel>
 }
 
 /// Describes how to get some data

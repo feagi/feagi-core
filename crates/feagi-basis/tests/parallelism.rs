@@ -719,7 +719,7 @@ struct DoublingWorkerBuilder {
 }
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DoublingWorkerBuilder {
-    type Channels = FeagiRequestResponseChannelsAllocBackend;
+    type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
     type BuildInputs = ();
     type BuildOutputs = ();
     type RequiredChannelPairs = ();
@@ -731,7 +731,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DoublingWorkerBuilder {
         self,
         spawner: &FeagiStdThreadSpawner,
         _inputs: Self::BuildInputs,
-    ) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
+    ) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, u32, u32>, Self::BuildOutputs), Self::BuildError> {
         let (requester, responder) = worker_request_channel(self.request_queue_capacity);
         let handle = spawner.spawn_worker(move || doubling_worker(responder))?;
         Ok((FeagiWorker::new(requester, handle), ()))
@@ -747,7 +747,7 @@ struct EventWorkerBuilder {
 }
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
-    type Channels = FeagiRequestResponseChannelsAllocBackend;
+    type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
     type BuildInputs = thingbuf::mpsc::Sender<Number, RecyclableRecyclePolicy<Number>>;
     type BuildOutputs = ();
     type RequiredChannelPairs = (thingbuf::mpsc::Sender<Number, RecyclableRecyclePolicy<Number>>, thingbuf::mpsc::Receiver<Number, RecyclableRecyclePolicy<Number>>);
@@ -759,7 +759,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
         self,
         spawner: &FeagiStdThreadSpawner,
         event_sender: Self::BuildInputs,
-    ) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
+    ) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, u32, u32>, Self::BuildOutputs), Self::BuildError> {
         let (requester, responder) = worker_request_channel(1);
         let handle = spawner.spawn_worker(move || async move {
             FeagiWorkerCommands::new(responder).run_until_stopped(&mut EventHandler { event_sender }).await;
@@ -776,7 +776,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for EventWorkerBuilder {
 struct ExitingWorkerBuilder;
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ExitingWorkerBuilder {
-    type Channels = FeagiRequestResponseChannelsAllocBackend;
+    type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
     type BuildInputs = ();
     type BuildOutputs = ();
     type RequiredChannelPairs = ();
@@ -788,7 +788,7 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ExitingWorkerBuilder {
         self,
         spawner: &FeagiStdThreadSpawner,
         _inputs: Self::BuildInputs,
-    ) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::Channels, u32, u32>, Self::BuildOutputs), Self::BuildError> {
+    ) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, u32, u32>, Self::BuildOutputs), Self::BuildError> {
         let (requester, responder) = worker_request_channel(1);
         let handle = spawner.spawn_worker(move || async move { drop(responder) })?;
         Ok((FeagiWorker::new(requester, handle), ()))

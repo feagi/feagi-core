@@ -9,9 +9,10 @@ use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError,
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::{FeagiRequester, FeagiResponder};
+use crate::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
 
 /// A zero sized struct that contains static information about a category of request messages
-pub trait FeagiRequestCategory {
+pub trait FeagiRequestCategory: Sized {
     const CATEGORY_NAME: &'static str;
     /// Details about this category. Used in doc generation
     const CATEGORY_DESCRIPTION: &'static str;
@@ -27,7 +28,28 @@ pub trait FeagiRequestCategory {
     /// Every message descriptor of this category, nested as `NMDes<Head, NMDes<..., NNull>>`
     type NestedMessageDescriptors;
 
+    /// Create no-alloc compatible channels for compile time using default settings using the
+    /// given backend for the entire category, using the request/response enums as their data types,
+    fn spawn_requester_responser_pair<ChannelBackend: FeagiRequestResponseChannelBackend, const QUEUE_SIZE: usize>()
+        -> (FeagiCategoryRequester<Self, ChannelBackend>,
+            FeagiCategoryResponder<Self, ChannelBackend>) {
+        let (requester, responder) = ChannelBackend::create_default_channel_pair::<Self::RequestEnum, Self::ResponseEnum, QUEUE_SIZE>();
+        (FeagiCategoryRequester::new(requester), FeagiCategoryResponder::new(responder))
+    }
+
+    /// Create at runtime alloc utilizing channels for the entire category, using the
+    /// request/response enums as their data types
+    #[cfg(feature = "alloc")]
+    fn spawn_alloc_requester_responser_pair(queue_capacity: usize)
+        -> (FeagiCategoryRequester<Self, FeagiRequestResponseChannelsAllocBackend>,
+            FeagiCategoryResponder<Self, FeagiRequestResponseChannelsAllocBackend>) {
+        let (requester, responder) = FeagiRequestResponseChannelsAllocBackend::create_channels(queue_capacity);
+        (FeagiCategoryRequester::new(requester), FeagiCategoryResponder::new(responder))
+    }
+
+
     // This struct should be zero sized, no fields!
+
 }
 
 /// Response to a message `Message`, or the error that message responded with
@@ -40,21 +62,21 @@ pub type FeagiMessageResult<Message> = Result<
 
 /// Makes requests to whichever responder serves `Category`. Clone it to make requests from
 /// several places to the same responder
-pub struct FeagiCategoryRequester<Category, Channels>
+pub struct FeagiCategoryRequester<Category, ChannelBackend>
 where
     Category: FeagiRequestCategory,
-    Channels: FeagiRequestResponseChannelBackend,
+    ChannelBackend: FeagiRequestResponseChannelBackend,
 {
-    requester: FeagiRequester<Category::RequestEnum, Category::ResponseEnum, Channels>,
+    requester: FeagiRequester<Category::RequestEnum, Category::ResponseEnum, ChannelBackend>,
 }
 
-impl<Category, Channels> FeagiCategoryRequester<Category, Channels>
+impl<Category, ChannelBackend> FeagiCategoryRequester<Category, ChannelBackend>
 where
     Category: FeagiRequestCategory,
-    Channels: FeagiRequestResponseChannelBackend,
+    ChannelBackend: FeagiRequestResponseChannelBackend,
 {
     /// Wraps the requester half of a channel pair carrying `Category`'s enums
-    pub fn new(requester: FeagiRequester<Category::RequestEnum, Category::ResponseEnum, Channels>) -> Self {
+    pub fn new(requester: FeagiRequester<Category::RequestEnum, Category::ResponseEnum, ChannelBackend>) -> Self {
         FeagiCategoryRequester { requester }
     }
 
@@ -79,11 +101,11 @@ where
     }
 }
 
-impl<Category, Channels> Clone for FeagiCategoryRequester<Category, Channels>
+impl<Category, ChannelBackend> Clone for FeagiCategoryRequester<Category, ChannelBackend>
 where
     Category: FeagiRequestCategory,
-    Channels: FeagiRequestResponseChannelBackend,
-    FeagiRequester<Category::RequestEnum, Category::ResponseEnum, Channels>: Clone,
+    ChannelBackend: FeagiRequestResponseChannelBackend,
+    FeagiRequester<Category::RequestEnum, Category::ResponseEnum, ChannelBackend>: Clone,
 {
     fn clone(&self) -> Self {
         FeagiCategoryRequester {
@@ -99,21 +121,21 @@ where
 /// Answers the requests of `Category`, from any number of `FeagiCategoryRequester`s. Lives within
 /// the worker that serves the category
 // NOTE: Do NOT allow this to be clonable! There is exactly one responder per request channel
-pub struct FeagiCategoryResponder<Category, Channels>
+pub struct FeagiCategoryResponder<Category, ChannelBackend>
 where
     Category: FeagiRequestCategory,
-    Channels: FeagiRequestResponseChannelBackend,
+    ChannelBackend: FeagiRequestResponseChannelBackend,
 {
-    responder: FeagiResponder<Category::RequestEnum, Category::ResponseEnum, Channels>,
+    responder: FeagiResponder<Category::RequestEnum, Category::ResponseEnum, ChannelBackend>,
 }
 
-impl<Category, Channels> FeagiCategoryResponder<Category, Channels>
+impl<Category, ChannelBackend> FeagiCategoryResponder<Category, ChannelBackend>
 where
     Category: FeagiRequestCategory,
-    Channels: FeagiRequestResponseChannelBackend,
+    ChannelBackend: FeagiRequestResponseChannelBackend,
 {
     /// Wraps the responder half of a channel pair carrying `Category`'s enums
-    pub fn new(responder: FeagiResponder<Category::RequestEnum, Category::ResponseEnum, Channels>) -> Self {
+    pub fn new(responder: FeagiResponder<Category::RequestEnum, Category::ResponseEnum, ChannelBackend>) -> Self {
         FeagiCategoryResponder { responder }
     }
 

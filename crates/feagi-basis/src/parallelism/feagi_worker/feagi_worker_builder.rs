@@ -5,7 +5,7 @@ use crate::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawn
 /// Handles the construction of various 'FeagiWorker' types
 pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
     /// Which channel types (heap allocated, static) the built worker uses for its requests
-    type Channels: FeagiRequestResponseChannelBackend;
+    type ChannelBackend: FeagiRequestResponseChannelBackend;
     /// What the builder needs to build the worker, including any incoming request receiver
     /// channels from `spawn_required_channel_pairs`
     type BuildInputs;
@@ -27,7 +27,7 @@ pub trait FeagiWorkerBuilder<Spawner: WorkerSpawnerImplementation> {
         inputs: Self::BuildInputs,
     ) -> Result<
         (
-            FeagiWorker<Spawner, Self::Channels, Self::CustomRequest, Self::CustomResponse>,
+            FeagiWorker<Spawner, Self::ChannelBackend, Self::CustomRequest, Self::CustomResponse>,
             Self::BuildOutputs,
         ),
         Self::BuildError,

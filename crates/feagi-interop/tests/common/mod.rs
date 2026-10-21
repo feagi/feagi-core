@@ -2,7 +2,7 @@
 //! tests
 
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
-use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder};
+use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::feagi_message::request::feagi_request_message_grouping::{NCat, NNull};
 use feagi_basis::parallelism::block_on_thread;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
@@ -65,7 +65,7 @@ pub type ShopGroupConfigurables = NCat<&'static CoffeeShopConfigurables, NNull>;
 /// Starts a responder answering every coffee shop request on its own thread, and returns the
 /// group and configurables to serve. The shop is named `shop_name`
 pub fn start_coffee_shop(shop_name: &str) -> (ShopGroup, ShopGroupConfigurables, std::thread::JoinHandle<()>) {
-    let (requester, responder) = Channels::create_category_channels::<CoffeeShopRequestCategory>(4);
+    let (requester, responder) = CoffeeShopRequestCategory::spawn_alloc_requester_responser_pair(4);
     let responder_thread = std::thread::spawn(move || answer_coffee_shop_requests(responder));
 
     let configurables: &'static CoffeeShopConfigurables = Box::leak(Box::new(CoffeeShopConfigurables {

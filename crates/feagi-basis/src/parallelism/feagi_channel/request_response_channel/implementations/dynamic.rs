@@ -1,4 +1,3 @@
-use crate::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
 use crate::parallelism::feagi_channel::base_channels::implementations::alloc_channels::FeagiChannelAllocBuilder;
 use crate::parallelism::feagi_channel::recycling::{Recyclable, RecyclableRecyclePolicy};
 use crate::parallelism::feagi_channel::request_response_channel::shared_structs::{ReplySlot, RequestSlot};
@@ -17,6 +16,12 @@ impl FeagiRequestResponseChannelBackend for FeagiRequestResponseChannelsAllocBac
     type RequestReceiver<Request: Recyclable, Response: Recyclable> = FeagiRequestReceiverAlloc<Request, Response>;
     type ReplyTransmitter<Response: Recyclable> = FeagiReplyTransmitterAlloc<Response>;
     type ReplyReceiver<Response: Recyclable> = FeagiReplyReceiverAlloc<Response>;
+
+    fn create_default_channel_pair<
+        Request: Recyclable, Response: Recyclable, const QUEUE_SIZE: usize
+    >() -> (FeagiRequester<Request, Response, Self>, FeagiResponder<Request, Response, Self>) {
+        Self::create_channels(QUEUE_SIZE)
+    }
 }
 
 impl FeagiRequestResponseChannelsAllocBackend {
@@ -31,15 +36,6 @@ impl FeagiRequestResponseChannelsAllocBackend {
             FeagiRequesterAlloc::new_with_reply_channel(request_sender),
             FeagiResponderAlloc::new(request_receiver),
         )
-    }
-
-    /// Creates a new, independent requester and responder for the messages of `Category`. Clone
-    /// the requester for more requesters to the same responder
-    pub fn create_category_channels<Category: FeagiRequestCategory>(
-        request_queue_capacity: usize,
-    ) -> (FeagiCategoryRequester<Category, Self>, FeagiCategoryResponder<Category, Self>) {
-        let (requester, responder) = Self::create_channels(request_queue_capacity);
-        (FeagiCategoryRequester::new(requester), FeagiCategoryResponder::new(responder))
     }
 }
 

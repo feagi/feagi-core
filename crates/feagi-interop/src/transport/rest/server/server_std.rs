@@ -64,7 +64,7 @@ where
     Group::NestedCategoryRequesters: IntoRestCategoryRoutes<Group::NestedConfigurables>,
     GroupRestRoutes<Group, FeagiRequestResponseChannelsAllocBackend>: Send + 'static,
 {
-    type Channels = FeagiRequestResponseChannelsAllocBackend;
+    type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
     /// The group whose categories are served, and the configurables of those categories
     type BuildInputs = (Group, Group::NestedConfigurables);
     type BuildOutputs = ();
