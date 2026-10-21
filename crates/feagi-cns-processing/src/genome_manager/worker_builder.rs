@@ -1,10 +1,23 @@
-use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory;
+use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
+use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::WorkerSpawnerImplementation;
-use crate::genome_manager::requests::categories;
+use crate::genome_manager::requests::categories::burst_engine::BurstEngineRequestCategory;
+use crate::genome_manager::requests::categories::connectome::ConnectomeRequestCategory;
+use crate::genome_manager::requests::categories::cortical_area::CorticalAreaRequestCategory;
+use crate::genome_manager::requests::categories::cortical_mapping::CorticalMappingRequestCategory;
+use crate::genome_manager::requests::categories::genome::GenomeRequestCategory;
+use crate::genome_manager::requests::categories::morphology::MorphologyRequestCategory;
+use crate::genome_manager::requests::categories::region::RegionRequestCategory;
+use crate::genome_manager::worker_loop::run_genome_manager;
 
+/// How many commands can be in queue on this worker at one time
+const COMMAND_QUEUE_LENGTH: usize = 2;
+
+/// Responsible for spawning the genome manager, which handles high level genome processing
+/// and is the proxy through which connectomes are modified
 pub struct GenomeManagerWorkerBuilder {
     pub burst_engine_request_queue_length: usize,
     pub connectome_request_queue_length: usize,
@@ -16,6 +29,7 @@ pub struct GenomeManagerWorkerBuilder {
 }
 
 impl Default for GenomeManagerWorkerBuilder {
+       
     fn default() -> Self {
         Self {
             burst_engine_request_queue_length: 8,
@@ -30,45 +44,88 @@ impl Default for GenomeManagerWorkerBuilder {
 }
 
 // This is STD thread only for the time being
-impl<Spawner: WorkerSpawnerImplementation> FeagiWorkerBuilder<Spawner> for GenomeManagerWorkerBuilder {
+impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for GenomeManagerWorkerBuilder {
     type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
-
-    type BuildInputs = ();
-    /// Genome Manager makes many request channels for the various categories it covers
+    type BuildInputs = (GenomeManagerResponders);
     type BuildOutputs = ();
     /// This defines the channels of the various categories of request this worker goes through
-    type RequiredChannelPairs = ();
+    type RequiredChannelPairs = (GenomeManagerRequesters, GenomeManagerResponders);
     type CustomRequest = (); // TODO NPU launcher configuration
     type CustomResponse = ();
     type BuildError = GenomeManagerWorkerBuilderError;
 
-    fn build_worker(self, spawner: &Spawner, inputs: Self::BuildInputs) -> Result<(FeagiWorker<Spawner, Self::ChannelBackend, Self::CustomRequest, Self::CustomResponse>, Self::BuildOutputs), Self::BuildError> {
-        todo!()
+    fn build_worker(self, spawner: &FeagiStdThreadSpawner, inputs: Self::BuildInputs) -> Result<(FeagiWorker<FeagiStdThreadSpawner, Self::ChannelBackend, Self::CustomRequest, Self::CustomResponse>, Self::BuildOutputs), Self::BuildError> {
+        
+        let (responders) = inputs;
+        let (cmd_requester, cmd_responder) = FeagiRequestResponseChannelsAllocBackend::create_channels(COMMAND_QUEUE_LENGTH);
+        let handle = spawner.spawn_worker(move || run_genome_manager(cmd_responder, responders)).unwrap(); // TODO actual error handling
+        Ok((FeagiWorker::new(cmd_requester, handle), ()))
     }
 
     fn spawn_required_channel_pairs(&self) -> Self::RequiredChannelPairs {
-        let (burst_engine_req, burst_engine_res) =  categories::burst_engine::BurstEngineRequestCategory::spawn_alloc_requester_responser_pair(self.burst_engine_request_queue_length);
-        let (connectome_req, connectome_res) =  categories::connectome::ConnectomeRequestCategory::spawn_alloc_requester_responser_pair(self.burst_engine_request_queue_length);
-        let (cortical_area_req, cortical_area_res) =  categories::cortical_area::CorticalAreaRequestCategory::spawn_alloc_requester_responser_pair(self.burst_engine_request_queue_length);
-        let (cortical_mapping_req, cortical_mapping_res) =  categories::cortical_mapping::CorticalMappingRequestCategory::spawn_alloc_requester_responser_pair(self.burst_engine_request_queue_length);
-        let (genome_req, genome_res) =  categories::genome::GenomeRequestCategory::spawn_alloc_requester_responser_pair(self.burst_engine_request_queue_length);
-        let (morphology_req, morphology_res) =  categories::morphology::MorphologyRequestCategory::spawn_alloc_requester_responser_pair(self.burst_engine_request_queue_length);
-        let (region_req, region_res) =  categories::region::RegionRequestCategory::spawn_alloc_requester_responser_pair(self.burst_engine_request_queue_length);
+        let (burst_engine_req, burst_engine_res) = BurstEngineRequestCategory::spawn_alloc_requester_responser_pair(self.burst_engine_request_queue_length);
+        let (connectome_req, connectome_res) = ConnectomeRequestCategory::spawn_alloc_requester_responser_pair(self.connectome_request_queue_length);
+        let (cortical_area_req, cortical_area_res) = CorticalAreaRequestCategory::spawn_alloc_requester_responser_pair(self.cortical_area_request_queue_length);
+        let (cortical_mapping_req, cortical_mapping_res) = CorticalMappingRequestCategory::spawn_alloc_requester_responser_pair(self.cortical_mapping_request_queue_length);
+        let (genome_req, genome_res) = GenomeRequestCategory::spawn_alloc_requester_responser_pair(self.genome_queue_length);
+        let (morphology_req, morphology_res) = MorphologyRequestCategory::spawn_alloc_requester_responser_pair(self.morphology_queue_length);
+        let (region_req, region_res) = RegionRequestCategory::spawn_alloc_requester_responser_pair(self.region_queue_length);
 
-        (
-            (burst_engine_req, burst_engine_res),
-            (connectome_req, connectome_res),
-            (cortical_area_req, cortical_area_res),
-            (cortical_mapping_req, cortical_mapping_res),
-            (genome_req, genome_res),
-            (morphology_req, morphology_res),
-            (region_req, region_res),
-        )
+        let requesters = GenomeManagerRequesters {
+            burst_engine: burst_engine_req,
+            connectome: connectome_req,
+            cortical_area: cortical_area_req,
+            cortical_mapping: cortical_mapping_req,
+            genome: genome_req,
+            morphology: morphology_req,
+            region: region_req,
+        };
+        let responders = GenomeManagerResponders {
+            burst_engine: burst_engine_res,
+            connectome: connectome_res,
+            cortical_area: cortical_area_res,
+            cortical_mapping: cortical_mapping_res,
+            genome: genome_res,
+            morphology: morphology_res,
+            region: region_res,
+        };
+        (requesters, responders)
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum GenomeManagerWorkerBuilderError {
+    #[error(transparent)]
+    ThreadError(std::io::Error),
     #[error("Unknown Start Error")]
     UnknownError
+}
+
+impl From<std::io::Error> for GenomeManagerWorkerBuilderError {
+    fn from(v: std::io::Error) -> Self {GenomeManagerWorkerBuilderError::ThreadError(v)}
+}
+
+/// The requester side of every request category the genome manager serves. Each can be cloned
+/// and handed to whatever needs to make requests of that category
+#[derive(Clone)]
+pub struct GenomeManagerRequesters {
+    pub burst_engine: FeagiCategoryRequester<BurstEngineRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub connectome: FeagiCategoryRequester<ConnectomeRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub cortical_area: FeagiCategoryRequester<CorticalAreaRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub cortical_mapping: FeagiCategoryRequester<CorticalMappingRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub genome: FeagiCategoryRequester<GenomeRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub morphology: FeagiCategoryRequester<MorphologyRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub region: FeagiCategoryRequester<RegionRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+}
+
+/// The responder side of every request category the genome manager serves, held by the genome
+/// manager worker itself
+pub struct GenomeManagerResponders {
+    pub burst_engine: FeagiCategoryResponder<BurstEngineRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub connectome: FeagiCategoryResponder<ConnectomeRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub cortical_area: FeagiCategoryResponder<CorticalAreaRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub cortical_mapping: FeagiCategoryResponder<CorticalMappingRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub genome: FeagiCategoryResponder<GenomeRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub morphology: FeagiCategoryResponder<MorphologyRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+    pub region: FeagiCategoryResponder<RegionRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
 }
