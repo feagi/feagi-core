@@ -1,0 +1,7 @@
+# Pins fmt, Clippy, and builds to Rust 1.99.
+# The rustup toolchain named "stable" on a developer machine can lag the
+# stable release CI installs. This file overrides that name inside feagi-core.
+# CI must not pass toolchain: stable; that input ignores this file.
+[toolchain]
+channel = "1.99"
+components = ["clippy", "rustfmt"]
