@@ -7264,7 +7264,10 @@ mod tests {
             "lite snapshot should omit raw-ID edges and retain semantic memory/plastic edges"
         );
         let embedded_genome: serde_json::Value = serde_json::from_str(
-            exported.genome_json.as_deref().expect("lite snapshot embeds the genome"),
+            exported
+                .genome_json
+                .as_deref()
+                .expect("lite snapshot embeds the genome"),
         )
         .expect("genome json");
         assert!(

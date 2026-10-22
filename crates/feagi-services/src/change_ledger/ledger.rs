@@ -75,7 +75,10 @@ struct PersistedSizes {
 }
 
 fn history_entry_id(entry: &Value) -> Option<String> {
-    entry.get("change_id").and_then(Value::as_str).map(str::to_string)
+    entry
+        .get("change_id")
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 fn history_entry_bytes(entry: &Value) -> usize {
@@ -542,7 +545,10 @@ mod tests {
             .change_id;
         let kept = persisted_ids(&genome);
         assert_eq!(kept.last(), Some(&newest));
-        assert!(kept.len() < 4, "loaded entries count toward the limit: {kept:?}");
+        assert!(
+            kept.len() < 4,
+            "loaded entries count toward the limit: {kept:?}"
+        );
         let guard = genome.read();
         let bytes: usize = guard
             .as_ref()
