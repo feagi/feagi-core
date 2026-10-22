@@ -83,6 +83,9 @@ pub struct GenomeConfig {
     pub change_ledger_session_capacity: usize,
     /// Changes kept in the genome's `change_history` section (oldest dropped first).
     pub change_history_max_entries: usize,
+    /// Serialized JSON size of the genome's `change_history` section (oldest dropped
+    /// first). Keeps exported genomes, checkpoints, and connectomes small.
+    pub change_history_max_bytes: usize,
     /// Longest accepted `X-FEAGI-Agent-Id` value, in bytes.
     pub change_agent_id_max_length: usize,
 }
@@ -92,7 +95,8 @@ impl Default for GenomeConfig {
         Self {
             auto_recovery_on_validation_failure: true,
             change_ledger_session_capacity: 10_000,
-            change_history_max_entries: 50_000,
+            change_history_max_entries: 10_000,
+            change_history_max_bytes: 4 * 1024 * 1024,
             change_agent_id_max_length: 128,
         }
     }

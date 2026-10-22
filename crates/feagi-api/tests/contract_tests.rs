@@ -140,6 +140,7 @@ fn build_test_state() -> ApiState {
             ChangeLedgerConfig {
                 session_capacity: genome_config.change_ledger_session_capacity,
                 max_persisted_entries: genome_config.change_history_max_entries,
+                max_persisted_bytes: genome_config.change_history_max_bytes,
                 agent_id_max_length: genome_config.change_agent_id_max_length,
             },
             current_genome.clone(),

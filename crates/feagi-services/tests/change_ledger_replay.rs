@@ -31,6 +31,7 @@ use std::sync::Arc;
 const LEDGER_CONFIG: ChangeLedgerConfig = ChangeLedgerConfig {
     session_capacity: 1_000,
     max_persisted_entries: 1_000,
+    max_persisted_bytes: usize::MAX,
     agent_id_max_length: 64,
 };
 

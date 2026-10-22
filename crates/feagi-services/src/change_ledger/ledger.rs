@@ -5,8 +5,8 @@
 //!
 //! Holds the most recent changes in memory for polling (bounded by
 //! `session_capacity`) and mirrors every replayable change into the live genome's
-//! `change_history` (bounded by `max_persisted_entries`), so a saved genome carries
-//! its own history.
+//! `change_history` (bounded by `max_persisted_entries` and `max_persisted_bytes`), so a
+//! saved genome carries its own history.
 
 use super::context::ChangeContext;
 use super::types::{ChangeOrigin, ChangesPage, GenomeChange, GenomeChangeOperation};
@@ -24,6 +24,10 @@ pub struct ChangeLedgerConfig {
     pub session_capacity: usize,
     /// Changes kept in the genome's `change_history` (oldest dropped first).
     pub max_persisted_entries: usize,
+    /// Serialized JSON size of the genome's `change_history` (oldest dropped first). Each
+    /// entry carries the before and after state of what changed, so the entry limit alone
+    /// does not keep exported genomes small.
+    pub max_persisted_bytes: usize,
     /// Longest accepted caller agent id, in bytes.
     pub agent_id_max_length: usize,
 }
@@ -41,6 +45,11 @@ impl ChangeLedgerConfig {
                 "change ledger max_persisted_entries must be greater than 0".to_string(),
             ));
         }
+        if self.max_persisted_bytes == 0 {
+            return Err(ServiceError::InvalidInput(
+                "change ledger max_persisted_bytes must be greater than 0".to_string(),
+            ));
+        }
         if self.agent_id_max_length == 0 {
             return Err(ServiceError::InvalidInput(
                 "change ledger agent_id_max_length must be greater than 0".to_string(),
@@ -55,11 +64,73 @@ struct LedgerState {
     entries: VecDeque<GenomeChange>,
 }
 
+/// Serialized size of each entry in the genome's `change_history`, so the byte limit is
+/// enforced without serializing the whole history on every change.
+#[derive(Default)]
+struct PersistedSizes {
+    sizes: VecDeque<usize>,
+    total: usize,
+    first_id: Option<String>,
+    last_id: Option<String>,
+}
+
+fn history_entry_id(entry: &Value) -> Option<String> {
+    entry.get("change_id").and_then(Value::as_str).map(str::to_string)
+}
+
+fn history_entry_bytes(entry: &Value) -> usize {
+    serde_json::to_vec(entry).map_or(0, |bytes| bytes.len())
+}
+
+impl PersistedSizes {
+    /// Whether the cache still describes `history` (a loaded genome replaces it).
+    fn describes(&self, history: &[Value]) -> bool {
+        self.sizes.len() == history.len()
+            && self.first_id == history.first().and_then(history_entry_id)
+            && self.last_id == history.last().and_then(history_entry_id)
+    }
+
+    fn rebuild(&mut self, history: &[Value]) {
+        self.sizes = history.iter().map(history_entry_bytes).collect();
+        self.total = self.sizes.iter().sum();
+        self.refresh_ids(history);
+    }
+
+    fn refresh_ids(&mut self, history: &[Value]) {
+        self.first_id = history.first().and_then(history_entry_id);
+        self.last_id = history.last().and_then(history_entry_id);
+    }
+
+    fn push(&mut self, bytes: usize) {
+        self.sizes.push_back(bytes);
+        self.total += bytes;
+    }
+
+    /// How many oldest entries to drop to respect both limits. The newest entry is
+    /// always kept, even when it alone exceeds the byte limit.
+    fn excess(&self, max_entries: usize, max_bytes: usize) -> usize {
+        let mut drop = self.sizes.len().saturating_sub(max_entries);
+        let mut remaining: usize = self.total - self.sizes.iter().take(drop).sum::<usize>();
+        while remaining > max_bytes && drop + 1 < self.sizes.len() {
+            remaining -= self.sizes[drop];
+            drop += 1;
+        }
+        drop
+    }
+
+    fn drop_oldest(&mut self, count: usize) {
+        for bytes in self.sizes.drain(..count) {
+            self.total -= bytes;
+        }
+    }
+}
+
 /// Records genome changes for one FEAGI process.
 pub struct ChangeLedger {
     config: ChangeLedgerConfig,
     current_genome: Arc<RwLock<Option<RuntimeGenome>>>,
     state: Mutex<LedgerState>,
+    persisted_sizes: Mutex<PersistedSizes>,
     /// Serializes replay so a change id cannot be applied twice concurrently.
     apply_lock: tokio::sync::Mutex<()>,
 }
@@ -78,6 +149,7 @@ impl ChangeLedger {
                 next_sequence: 1,
                 entries: VecDeque::new(),
             }),
+            persisted_sizes: Mutex::new(PersistedSizes::default()),
             apply_lock: tokio::sync::Mutex::new(()),
         })
     }
@@ -175,14 +247,21 @@ impl ChangeLedger {
         };
         match persisted_entry(change) {
             Ok(entry) => {
+                let mut sizes = self.persisted_sizes.lock();
+                if !sizes.describes(&genome.change_history) {
+                    sizes.rebuild(&genome.change_history);
+                }
+                sizes.push(history_entry_bytes(&entry));
                 genome.change_history.push(entry);
-                let excess = genome
-                    .change_history
-                    .len()
-                    .saturating_sub(self.config.max_persisted_entries);
+                let excess = sizes.excess(
+                    self.config.max_persisted_entries,
+                    self.config.max_persisted_bytes,
+                );
                 if excess > 0 {
                     genome.change_history.drain(..excess);
+                    sizes.drop_oldest(excess);
                 }
+                sizes.refresh_ids(&genome.change_history);
             }
             Err(error) => tracing::error!(
                 target: "feagi-services",
@@ -280,6 +359,7 @@ mod tests {
         ChangeLedgerConfig {
             session_capacity,
             max_persisted_entries,
+            max_persisted_bytes: usize::MAX,
             agent_id_max_length: 16,
         }
     }
@@ -311,6 +391,9 @@ mod tests {
         assert!(ChangeLedger::new(config(1, 0), genome.clone()).is_err());
         let mut cfg = config(1, 1);
         cfg.agent_id_max_length = 0;
+        assert!(ChangeLedger::new(cfg, genome.clone()).is_err());
+        let mut cfg = config(1, 1);
+        cfg.max_persisted_bytes = 0;
         assert!(ChangeLedger::new(cfg, genome).is_err());
     }
 
@@ -395,6 +478,80 @@ mod tests {
             .map(|e| e["change_id"].as_str().expect("id"))
             .collect();
         assert_eq!(kept, vec![ids[1].as_str(), ids[2].as_str()]);
+    }
+
+    fn persisted_ids(genome: &Arc<RwLock<Option<RuntimeGenome>>>) -> Vec<String> {
+        genome
+            .read()
+            .as_ref()
+            .expect("genome")
+            .change_history
+            .iter()
+            .map(|e| e["change_id"].as_str().expect("id").to_string())
+            .collect()
+    }
+
+    fn one_entry_bytes() -> usize {
+        let (probe, genome) = ledger_with_genome(config(10, 10));
+        probe.record(delete_op("a"), None, None, &ChangeContext::default());
+        let guard = genome.read();
+        history_entry_bytes(&guard.as_ref().expect("genome").change_history[0])
+    }
+
+    #[test]
+    fn persisted_history_drops_oldest_beyond_byte_limit() {
+        let entry = one_entry_bytes();
+        let mut cfg = config(10, 10);
+        cfg.max_persisted_bytes = entry * 2 + entry / 2;
+        let (ledger, genome) = ledger_with_genome(cfg);
+        let ids: Vec<String> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|id| {
+                ledger
+                    .record(delete_op(id), None, None, &ChangeContext::default())
+                    .change_id
+            })
+            .collect();
+        assert_eq!(persisted_ids(&genome), ids[2..].to_vec());
+    }
+
+    #[test]
+    fn newest_change_is_kept_even_when_larger_than_the_byte_limit() {
+        let mut cfg = config(10, 10);
+        cfg.max_persisted_bytes = 1;
+        let (ledger, genome) = ledger_with_genome(cfg);
+        ledger.record(delete_op("a"), None, None, &ChangeContext::default());
+        let newest = ledger
+            .record(delete_op("b"), None, None, &ChangeContext::default())
+            .change_id;
+        assert_eq!(persisted_ids(&genome), vec![newest]);
+    }
+
+    #[test]
+    fn byte_limit_counts_history_loaded_with_the_genome() {
+        let entry = one_entry_bytes();
+        let mut cfg = config(10, 10);
+        cfg.max_persisted_bytes = entry * 3;
+        let (ledger, genome) = ledger_with_genome(cfg);
+        // A loaded genome brings its own history, larger than this ledger allows.
+        genome.write().as_mut().expect("genome").change_history = (0..3)
+            .map(|i| serde_json::json!({"change_id": format!("old-{i}"), "after": "x".repeat(entry)}))
+            .collect();
+        let newest = ledger
+            .record(delete_op("a"), None, None, &ChangeContext::default())
+            .change_id;
+        let kept = persisted_ids(&genome);
+        assert_eq!(kept.last(), Some(&newest));
+        assert!(kept.len() < 4, "loaded entries count toward the limit: {kept:?}");
+        let guard = genome.read();
+        let bytes: usize = guard
+            .as_ref()
+            .expect("genome")
+            .change_history
+            .iter()
+            .map(history_entry_bytes)
+            .sum();
+        assert!(bytes <= entry * 3);
     }
 
     #[test]
