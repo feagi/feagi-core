@@ -2,9 +2,9 @@
 /// neuron behavior, such as overrides of firing behavior and logic. It also carries a single
 /// final result bit for if the neuron is firing, which is used to retain this context between
 /// burst phases
-pub struct PerNeuronFlags(u8);
+pub struct PerNeuronScratchFlags(u8);
 
-impl PerNeuronFlags {
+impl PerNeuronScratchFlags {
     // Free flags for 0, 1, 2, 3, 4
 
     const MASK_PROBE_IS_PRESSING_FIRE: u8 = 5;

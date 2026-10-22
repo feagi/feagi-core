@@ -1,7 +1,7 @@
 use serde::Serialize;
 use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use crate::cortical_area::components_rigid::neuron_layout::NeuronLayout;
+use crate::cortical_area::components::neuron_layout::NeuronLayout;
 
 /// Defines that the neurons are laid out in linear fashion
 #[derive(Clone, Serialize)]

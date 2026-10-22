@@ -1,26 +1,21 @@
-use crate::cortical_area::components_rigid::neuron_layout::NeuronLayout;
-use crate::cortical_area::components_extendable::cortical_area_dynamics::CorticalAreaDynamics;
-use crate::cortical_area::components_extendable::cortical_area_quantization::CorticalAreaQuantization;
+use crate::cortical_area::components::cortical_area_quantization::CorticalAreaQuantization;
+use crate::cortical_area::components::neuron_layout::NeuronLayout;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Describes a cortical area model with all its dynamics
-pub trait CorticalAreaModel<FIQ, CAQ>:
+pub trait CorticalAreaModel<FIQ, NL, CAQ>:
 where
     FIQ: FeagiIndexQuantization,
-    CAQ: CorticalAreaQuantization,
+    NL: NeuronLayout<FIQ>, // This may be fixed for certain models
+    CAQ: CorticalAreaQuantization, // this will be further refined per model
 {
-    /// How are the neurons laid out in the cortical area?
-    type NeuronLayout: NeuronLayout<FIQ>;
+    // /// The implementation of the dynamics, and the data it requires
+    //type CorticalAreaDynamics: CorticalAreaDynamics<FIQ, NL, CAQ>;
 
-    /// The implementation of the dynamics, and the data it requires
-    type CorticalAreaDynamics: CorticalAreaDynamics<FIQ, Self::NeuronLayout, CAQ>;
+    //type CorticalAreaModelWriter; // TODO
 
-    type CorticalAreaModelWriter; // TODO
-    
-    fn get_neuron_layout(&self) -> &Self::NeuronLayout;
-    
-    fn replace_neuron_layout(&mut self, new_neuron_layout: Self::NeuronLayout);
-    
-    
     
 }
+
+
+

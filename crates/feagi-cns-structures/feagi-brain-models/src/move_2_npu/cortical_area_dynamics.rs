@@ -3,7 +3,7 @@ use feagi_basis::prelude::*;
 use crate::cortical_area::components_rigid::neuron_layout::NeuronLayout;
 use crate::cortical_area::data_structs::{CorticalAreaModelConnectomeCorticalData, CorticalAreaModelNeuronData};
 use crate::cortical_area::components_extendable::cortical_area_quantization::CorticalAreaQuantization;
-use crate::cortical_area::components_extendable::cortical_model_data_field::CorticalModelDataField;
+use crate::cortical_area::components_extendable::cortical_model_data_field::CorticalAreaQuantizationSpecification;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 type IsFiring = bool;
@@ -27,28 +27,28 @@ where
 
     /// The cortical level data that should be exposed to genome developers. Not mutable during
     /// cortical processing
-    type CorticalDataProperties: CorticalModelDataField<CAQ>;
+    type CorticalDataProperties: CorticalAreaQuantizationSpecification<CAQ>;
 
     /// The cortical level data that is for mutable internal processing, will not be
     /// exposed to genome developers but is saved in the connectome
-    type CorticalDataInternal: CorticalModelDataField<CAQ>;
+    type CorticalDataInternal: CorticalAreaQuantizationSpecification<CAQ>;
 
     /// The cortical level data that is used for runtime processing, is not exposed to
     /// genome developers nor is it saved (starts clean with every init)
-    type CorticalDataScratch: CorticalModelDataField<CAQ>;
+    type CorticalDataScratch: CorticalAreaQuantizationSpecification<CAQ>;
 
     /// Not actual cortical data, but rather represents various "values" that are actually the result
     /// of running functions on the neuron data
-    type CorticalFunctionContext: CorticalModelDataField<CAQ>;
+    type CorticalFunctionContext: CorticalAreaQuantizationSpecification<CAQ>;
     //endregion
 
     //region Per Neuron Data
     /// The per neuron level data that should be saved to the connectome
-    type NeuronDataInternal: CorticalModelDataField<CAQ>;
+    type NeuronDataInternal: CorticalAreaQuantizationSpecification<CAQ>;
 
     /// The per neuron level data that should not be saved to the connectome
     /// (starts clean with every init)
-    type NeuronDataScratch: CorticalModelDataField<CAQ>;
+    type NeuronDataScratch: CorticalAreaQuantizationSpecification<CAQ>;
 
     //endregion
 
