@@ -1,5 +1,3 @@
-pub mod components;
-pub mod cortical_area;
-pub mod data_structs;
-pub mod implementations;
 pub mod containers;
+pub mod model;
+pub mod cortical_burst_engine_dynamics;

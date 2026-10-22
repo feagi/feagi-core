@@ -107,10 +107,6 @@ pub enum FeagiIndexQuantizationLevel {
     MiniQuantization = 2,
 }
 
-//region Nested Enums
-
-// TODO macro to generate all the below for a given trait with zero sized impls like this,
-// including generating the with_X macros and the macro for adding the family trait to the struct
 
 enum_leveled_builder!(
     (Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize),
@@ -121,26 +117,3 @@ enum_leveled_builder!(
     }
 );
 
-
-/*
-/// Maps a quantization level to a concrete type
-pub trait FeagiIndexQuantizationFamily {
-    type Of<FIQ: FeagiIndexQuantization>;
-}
-
-pub enum FeagiIndexQuantizationLeveled<FIQF: FeagiIndexQuantizationFamily> {
-    StandardQuantization(FIQF::Of<FeagiIndexQuantizationStandard>),
-    LowQuantization(FIQF::Of<FeagiIndexQuantizationLow>),
-    MiniQuantization(FIQF::Of<FeagiIndexQuantizationMini>),
-}
-
-
-// TODO macro with_fiq!
-
-// TODO macro to add FeagiIndexQuantizationFamily to a struct
-
-
- */
-
-
-//endregion

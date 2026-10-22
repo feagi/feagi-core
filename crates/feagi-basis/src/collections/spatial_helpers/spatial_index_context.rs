@@ -64,6 +64,8 @@ where
     pub fn get_axis_order_array(&self) -> &AxisOrderArray<NUM_DIMS> {
         &self.axis_order
     }
+
+    // TODO dimension update in place
 }
 
 /// just used for deserializing and initing the stride again

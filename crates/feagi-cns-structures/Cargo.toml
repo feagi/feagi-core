@@ -25,6 +25,7 @@ alloc = [
 
 [dependencies]
 # Workspace Crates
+feagi-brain-models = {path = "feagi-brain-models"}
 feagi-basis = { path = "../feagi-basis" }
 
 # External Crates

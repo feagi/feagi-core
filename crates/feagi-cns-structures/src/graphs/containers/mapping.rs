@@ -1,3 +1,5 @@
+
+/*
 use feagi_brain_models::::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
 
@@ -17,3 +19,5 @@ pub enum ConnectivityRule<FIQ: FeagiIndexQuantization> {
     OneToAll(CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>),
     OneToOne(CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>, CorticalAreaVoxelCoordinates<FIQ::NeuronIndexQuant>),
 }
+
+ */

@@ -1,62 +1,67 @@
-use core::marker::PhantomData;
-use feagi_basis::collections::par_data::par_data::ParDataStore;
-use feagi_basis::prelude::*;
+use crate::cortical_area::model::components::neuron_layout::NeuronLayout;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::quantization_levels::membrane_potential_quantization::MembranePotentialQuantization;
+use feagi_basis::collections::par_data::par_data::ParDataStore;
 
-/// Common root trait shared by all Neuron Model Quantizations. This trait should be extended
-/// by the given neuron model to add any quantization parameters for their given data. Contains
-/// the typing information for the specification data structs as well
-pub trait CorticalAreaQuantization: MembranePotentialQuantization {
+// NOTE: How this works is a sub trait is made FIRST per cortical area model, then
+// there are implementations under that
 
+/// Describes a specific cortical area model for some usecase, as well as its dynamics
+pub trait CorticalAreaModel: MembranePotentialQuantization
+{
+   
+    
     //region Cortical level Data
 
     /// The cortical level data that should be exposed to genome developers. Not mutable during
     /// cortical processing
-    type CorticalDataProperties: CorticalAreaQuantizationCorticalSpecification<Self>;
+    type CorticalDataProperties: CorticalAreaModelCorticalSpecification<Self>;
 
     /// The cortical level data that is for mutable internal processing, will not be
     /// exposed to genome developers but is saved in the connectome
-    type CorticalDataInternal: CorticalAreaQuantizationCorticalSpecification<Self>;
+    type CorticalDataInternal: CorticalAreaModelCorticalSpecification<Self>;
 
     /// The cortical level data that is used for runtime processing, is not exposed to
     /// genome developers nor is it saved (starts clean with every init)
-    type CorticalDataScratch: CorticalAreaQuantizationCorticalSpecification<Self>;
+    type CorticalDataScratch: CorticalAreaModelCorticalSpecification<Self>;
 
     /// Not actual cortical data, but rather represents various "values" that are actually the result
     /// of running functions on the neuron data
-    type CorticalFunctionContext: CorticalAreaQuantizationCorticalSpecification<Self>;
+    type CorticalFunctionContext: CorticalAreaModelCorticalSpecification<Self>;
     //endregion
 
     //region Per Neuron Data
     /// The per neuron level data that should be saved to the connectome
-    type NeuronDataInternal: CorticalAreaQuantizationNeuronSpecification<Self>;
+    type NeuronDataInternal: CorticalAreaModelNeuronSpecification<Self>;
 
     /// The per neuron level data that should not be saved to the connectome
     /// (starts clean with every init)
-    type NeuronDataScratch: CorticalAreaQuantizationNeuronSpecification<Self>;
+    type NeuronDataScratch: CorticalAreaModelNeuronSpecification<Self>;
 
     //endregion
-
+    
 }
 
+
+//region Specifications
+
 /// A Cortical Area Model Specification at the cortical level, typed as singular elements
-pub trait CorticalAreaQuantizationCorticalSpecification<MPQ: MembranePotentialQuantization> {
+pub trait CorticalAreaModelCorticalSpecification<MPQ: MembranePotentialQuantization> {
     // Any cortical area model data should be defined here (for the specification)
 }
 
 /// A Cortical Area Model Specification at the neuron level, typed as singular elements
-pub trait CorticalAreaQuantizationNeuronSpecification<MPQ: MembranePotentialQuantization> {
+pub trait CorticalAreaModelNeuronSpecification<MPQ: MembranePotentialQuantization> {
     /// Instead of singular element types, get them as some form of linear collection
     type Parallelized<
         FIQ: FeagiIndexQuantization,
         Storage: ParDataStore
-    >: CorticalAreaQuantizationNeuronParallelizedSpecification<MPQ, FIQ, Storage>;
+    >: CorticalAreaModelNeuronParallelizedSpecification<MPQ, FIQ, Storage>;
 }
 
 /// Should have the same types as `CorticalAreaQuantizationNeuronSpecification` but as
 /// `ParData` element types (a linear collection of them)
-pub trait CorticalAreaQuantizationNeuronParallelizedSpecification<
+pub trait CorticalAreaModelNeuronParallelizedSpecification<
     MPQ: MembranePotentialQuantization,
     FIQ: FeagiIndexQuantization,
     Storage: ParDataStore>
@@ -65,6 +70,4 @@ pub trait CorticalAreaQuantizationNeuronParallelizedSpecification<
     // but using ParData<FIQ::NeuronIndexQuant, CollectionType<Element>>
 }
 
-
-
-
+//endregion
