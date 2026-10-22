@@ -24,61 +24,52 @@ pub trait RestServerWorkerBuilder<Channels: FeagiRequestResponseChannelBackend>:
 /// Builds the router of the server: an endpoint for every message of every category in
 /// `routes`, plus the predefined routes enabled by crate features
 pub(crate) fn build_router_with_routes<Routes: RestCategoryRoutes>(routes: Routes) -> picoserve::Router<impl picoserve::routing::PathRouter> {
-    #[cfg(any(feature = "open_api_endpoint", feature = "swagger_web_ui"))]
     use picoserve::routing::PathRouter;
 
-    //region Predefined Route Builders
+    let router = picoserve::Router::from_service(FeagiRestGroupRouter::new(routes));
 
-    /// Serves the OpenAPI document of `open_api_json`, written from the routes before they were
-    /// handed to the router
-    // TODO without alloc, write the document into a buffer given to the server instead
-    #[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
-    fn route_open_api<R: PathRouter>(router: picoserve::Router<R>, open_api_json: alloc::string::String) -> picoserve::Router<impl PathRouter> {
+    /* // TODO make openapi doc generation compile time again
+    /// OpenAPI / Swagger
+    #[cfg(feature = "open_api_endpoint")]
+    let router = {
         use super::open_api_builder::OPEN_API_JSON_PATH;
         use picoserve::routing::get_service;
 
-        router.route(OPEN_API_JSON_PATH, get_service(OpenApiDocumentService { open_api_json }))
-    }
+        let open_api_json = {
+            let mut open_api_json = alloc::string::String::new();
+            super::open_api_builder::write_open_api_json(&routes, &mut open_api_json).expect("writing to a String does not fail");
+            open_api_json
+        };
 
-    /// Serves the Swagger UI page and the CSS and JS files it loads beside that page.
-    #[cfg(feature = "swagger_web_ui")]
-    fn route_swagger_ui<R: PathRouter>(router: picoserve::Router<R>) -> picoserve::Router<impl PathRouter> {
-        pub const HTML: &str = include_str!("../../../../resources_swagger/feagi-server.html");
-        pub const CSS: &[u8] = include_bytes!("../../../../resources_swagger/swagger-ui.css");
-        pub const JS: &[u8] = include_bytes!("../../../../resources_swagger/swagger-ui-bundle.js");
-        // TODO CDN link on our cloud for deployments where we cannot fit the above data in the library
+        let router = router.route(OPEN_API_JSON_PATH, get_service(OpenApiDocumentService { open_api_json }));
 
-        use picoserve::response::File;
-        use picoserve::routing::get_service;
 
-        const SWAGGER_HTML_PATH: &str = "/swagger-ui/feagi-server.html";
-        const SWAGGER_CSS_PATH: &str = "/swagger-ui/swagger-ui.css";
-        const SWAGGER_JS_PATH: &str = "/swagger-ui/swagger-ui-bundle.js";
+        /// Serves the Swagger UI page and the CSS and JS files it loads beside that page.
+        #[cfg(feature = "swagger_web_ui")]
+        let router = {
+            use picoserve::response::File;
+
+            pub const HTML: &str = include_str!("../../../../resources_swagger/feagi-server.html");
+            pub const CSS: &[u8] = include_bytes!("../../../../resources_swagger/swagger-ui.css");
+            pub const JS: &[u8] = include_bytes!("../../../../resources_swagger/swagger-ui-bundle.js");
+
+            // TODO CDN link on our cloud for deployments where we cannot fit the above data in the library
+
+            const SWAGGER_HTML_PATH: &str = "/swagger-ui/feagi-server.html";
+            const SWAGGER_CSS_PATH: &str = "/swagger-ui/swagger-ui.css";
+            const SWAGGER_JS_PATH: &str = "/swagger-ui/swagger-ui-bundle.js";
+
+            router
+                .route(SWAGGER_HTML_PATH, get_service(File::html(HTML)))
+                .route(SWAGGER_CSS_PATH, get_service(File::with_content_type(File::MIME_CSS, CSS)))
+                .route(SWAGGER_JS_PATH, get_service(File::with_content_type(File::MIME_JS, JS)))
+        };
+
 
         router
-            .route(SWAGGER_HTML_PATH, get_service(File::html(HTML)))
-            .route(SWAGGER_CSS_PATH, get_service(File::with_content_type(File::MIME_CSS, CSS)))
-            .route(SWAGGER_JS_PATH, get_service(File::with_content_type(File::MIME_JS, JS)))
-    }
-
-    //endregion
-
-    #[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
-    let open_api_json = {
-        let mut open_api_json = alloc::string::String::new();
-        super::open_api_builder::write_open_api_json(&routes, &mut open_api_json).expect("writing to a String does not fail");
-        open_api_json
     };
 
-    // The message endpoints come last, so routes added on top (predefined, or by the backend)
-    // are matched first. They answer 404 / 405 for anything else
-    let router = picoserve::Router::from_service(FeagiRestGroupRouter::new(routes));
-
-    #[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
-    let router = route_open_api(router, open_api_json);
-
-    #[cfg(feature = "swagger_web_ui")]
-    let router = route_swagger_ui(router);
+     */
 
     router
 }
