@@ -212,3 +212,48 @@ pub struct DeviceRegistrationImportResponse {
     pub message: String,
     pub agent_id: String,
 }
+
+/// One cortical area a device registration declares, next to the live area it maps to.
+///
+/// `declared_*` is what the agent's stored device registrations resolve to (the same
+/// derivation auto-create uses); `live_*` is the connectome's current area, `None` when
+/// the area does not exist yet. `matches` is true only when dimensions, per-device
+/// dimensions and device count are all equal.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RegistrationAreaDiff {
+    /// Base64 cortical ID.
+    pub cortical_id: String,
+    /// Live area name when it exists, otherwise the name registration would assign.
+    pub name: String,
+    /// "ipu" (sensory) or "opu" (motor).
+    pub direction: String,
+    pub declared_dimensions: [usize; 3],
+    pub declared_per_device_dimensions: [usize; 3],
+    pub declared_device_count: usize,
+    pub live_dimensions: Option<[usize; 3]>,
+    pub live_per_device_dimensions: Option<[usize; 3]>,
+    pub live_device_count: Option<usize>,
+    pub matches: bool,
+}
+
+/// Registration diff for one agent.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RegistrationDiffAgent {
+    /// Base64 agent (session) ID.
+    pub agent_id: String,
+    pub areas: Vec<RegistrationAreaDiff>,
+}
+
+/// Response of `GET /v1/agent/registration_diff`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RegistrationDiffResponse {
+    pub agents: Vec<RegistrationDiffAgent>,
+}
+
+/// Query parameters for `GET /v1/agent/registration_diff`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RegistrationDiffQuery {
+    /// Restrict the diff to this base64 agent ID; all agents when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+}

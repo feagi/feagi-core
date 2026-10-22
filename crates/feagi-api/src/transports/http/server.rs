@@ -443,6 +443,10 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/device_registration_store",
             get(agent::get_device_registration_store),
         )
+        .route(
+            "/agent/registration_diff",
+            get(agent::get_registration_diff),
+        )
         .route("/agent/info/:agent_id", get(agent::get_agent_info))
         .route(
             "/agent/properties/:agent_id",
