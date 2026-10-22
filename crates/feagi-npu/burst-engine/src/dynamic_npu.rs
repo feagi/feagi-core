@@ -1447,6 +1447,25 @@ where
         }
     }
 
+    /// Most recent FireLedger frames of a tracked area (oldest first, at most `max_depth`).
+    pub fn get_fire_ledger_recent_frames(
+        &self,
+        cortical_idx: u32,
+        max_depth: usize,
+    ) -> Result<Vec<(u64, roaring::RoaringBitmap)>> {
+        dispatch!(self, get_fire_ledger_recent_frames(cortical_idx, max_depth))
+    }
+
+    /// Stop tracking a cortical area in the FireLedger. Returns whether it was tracked.
+    pub fn untrack_fire_ledger_area(&mut self, cortical_idx: u32) -> bool {
+        dispatch_mut!(self, untrack_fire_ledger_area(cortical_idx))
+    }
+
+    /// Tracked FireLedger window of one area; error when untracked.
+    pub fn get_fire_ledger_window_size(&self, cortical_idx: u32) -> Result<usize> {
+        dispatch!(self, get_fire_ledger_window_size(cortical_idx))
+    }
+
     /// Get a dense, burst-aligned window of firing history as RoaringBitmaps.
     pub fn get_fire_ledger_dense_window_bitmaps(
         &self,

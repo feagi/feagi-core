@@ -6757,6 +6757,29 @@ impl<
         Ok(())
     }
 
+    /// Most recent FireLedger frames of a tracked area (oldest first, at most `max_depth`).
+    pub fn get_fire_ledger_recent_frames(
+        &self,
+        cortical_idx: u32,
+        max_depth: usize,
+    ) -> Result<Vec<(u64, RoaringBitmap)>> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .fire_ledger
+            .get_recent_frames(cortical_idx, max_depth)
+            .map_err(|e| FeagiError::RuntimeError(format!("FireLedger query failed: {e}")))
+    }
+
+    /// Stop tracking a cortical area in the FireLedger. Returns whether it was tracked.
+    pub fn untrack_fire_ledger_area(&mut self, cortical_idx: u32) -> bool {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .fire_ledger
+            .untrack_area(cortical_idx)
+    }
+
     /// Get all tracked FireLedger window sizes (tracked areas only).
     pub fn get_all_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
         self.fire_structures

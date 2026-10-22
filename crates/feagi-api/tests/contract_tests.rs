@@ -238,6 +238,48 @@ fn build_test_state() -> ApiState {
         > {
             Ok(std::collections::HashMap::new())
         }
+        async fn get_fire_history(
+            &self,
+            areas: &[u32],
+            bursts: usize,
+        ) -> feagi_services::ServiceResult<feagi_services::types::FireHistory> {
+            use feagi_services::types::{FireHistoryArea, FireHistoryFrame, FiredNeuron};
+            Ok(feagi_services::types::FireHistory {
+                current_burst: 42,
+                areas: areas
+                    .iter()
+                    .map(|idx| FireHistoryArea {
+                        cortical_idx: *idx,
+                        window: bursts,
+                        frames: vec![
+                            FireHistoryFrame {
+                                burst: 41,
+                                neurons: vec![],
+                            },
+                            FireHistoryFrame {
+                                burst: 42,
+                                neurons: vec![
+                                    FiredNeuron {
+                                        neuron_id: 7,
+                                        voxel: Some((1, 2, 3)),
+                                    },
+                                    FiredNeuron {
+                                        neuron_id: 50_000_001,
+                                        voxel: None,
+                                    },
+                                ],
+                            },
+                        ],
+                    })
+                    .collect(),
+            })
+        }
+        async fn unsubscribe_fire_history(
+            &self,
+            areas: &[u32],
+        ) -> feagi_services::ServiceResult<usize> {
+            Ok(areas.len())
+        }
         async fn get_fire_ledger_configs(
             &self,
         ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
@@ -3977,4 +4019,87 @@ async fn test_cortical_mapping_reset_weights_and_plasticity_frozen_routes() {
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "mapping is gone: {body}");
+}
+
+// ============================================================================
+// BURST-ALIGNED FIRE HISTORY
+// ============================================================================
+
+/// `GET|DELETE /v1/burst_engine/fire_history` resolve cortical ids, enforce the area and
+/// burst caps, and shape the service's frames into aligned voxel lists.
+#[tokio::test]
+async fn test_burst_engine_fire_history_route_shape_and_limits() {
+    let state = build_test_state();
+    let area_id = create_plain_custom_area(&state, b"cfirehA1", "fire-history", (0, 0, 0)).await;
+    let cortical_idx = state
+        .connectome_service
+        .get_cortical_area(&area_id)
+        .await
+        .expect("area")
+        .cortical_idx;
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=5"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["current_burst"], json!(42));
+    assert_eq!(body["bursts"], json!(5));
+    assert_eq!(body["max_bursts"], json!(2000));
+    assert_eq!(body["max_areas"], json!(16));
+    assert_eq!(body["subscription_ttl_s"], json!(300));
+    let area = &body["areas"][&area_id];
+    assert_eq!(area["cortical_idx"], json!(cortical_idx));
+    assert_eq!(area["name"], json!("fire-history"));
+    assert_eq!(area["window"], json!(5));
+    assert_eq!(area["frames"][0]["burst"], json!(41));
+    assert_eq!(area["frames"][0]["voxels"], json!([]));
+    assert_eq!(area["frames"][1]["burst"], json!(42));
+    assert_eq!(area["frames"][1]["voxels"], json!([[1, 2, 3]]));
+    assert_eq!(area["frames"][1]["memory_neuron_ids"], json!([50000001]));
+
+    // Default bursts, duplicate ids collapse to one area.
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/burst_engine/fire_history?areas={area_id},{area_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["bursts"], json!(100));
+    assert_eq!(body["areas"].as_object().map(|m| m.len()), Some(1));
+
+    for (path, expected) in [
+        ("/v1/burst_engine/fire_history".to_string(), StatusCode::BAD_REQUEST),
+        ("/v1/burst_engine/fire_history?areas=".to_string(), StatusCode::BAD_REQUEST),
+        (format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=0"), StatusCode::BAD_REQUEST),
+        (format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=2001"), StatusCode::BAD_REQUEST),
+        (format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=ten"), StatusCode::BAD_REQUEST),
+        (
+            format!(
+                "/v1/burst_engine/fire_history?areas={}",
+                (0..17).map(|i| format!("Y2ZpcmVoQ{i:02}")).collect::<Vec<_>>().join(",")
+            ),
+            StatusCode::BAD_REQUEST,
+        ),
+        ("/v1/burst_engine/fire_history?areas=Y25vc3VjaDE=".to_string(), StatusCode::NOT_FOUND),
+    ] {
+        let (status, body) = request_json(create_http_server(state.clone()), "GET", &path, None).await;
+        assert_eq!(status, expected, "{path}: {body}");
+    }
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "DELETE",
+        &format!("/v1/burst_engine/fire_history?areas={area_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["unsubscribed"], json!(1));
+    assert_eq!(body["areas"], json!([area_id]));
 }
