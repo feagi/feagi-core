@@ -2,12 +2,10 @@
 
 use feagi_basis::feagi_message::request::feagi_request_message_grouping::FeagiRequestCategoryGroup;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
-use routing::{FeagiRestGroupRouter, IntoRestCategoryRoutes, RestCategoryRoutes};
+use routing::{FeagiRestGroupRouter, RestCategoryRoutes};
 
-/// The routes serving every category of `Group`, built from its requesters and configurables
-pub type GroupRestRoutes<Group, Channels> = <<Group as FeagiRequestCategoryGroup<Channels>>::NestedCategoryRequesters as IntoRestCategoryRoutes<
-    <Group as FeagiRequestCategoryGroup<Channels>>::NestedConfigurables,
->>::Routes;
+/// The routes serving every category of `Group`, paired with their configurables
+pub type GroupRestRoutes<Group, Channels> = <Group as FeagiRequestCategoryGroup<Channels>>::NestedCategories;
 
 /// Request read buffer. Response bodies are written from their static slices.
 pub const HTTP_BUFFER_LEN: usize = 2048; // TODO this needs to be not const, different devices may want different buffers
@@ -28,7 +26,7 @@ pub(crate) fn build_router_with_routes<Routes: RestCategoryRoutes>(routes: Route
 
     let router = picoserve::Router::from_service(FeagiRestGroupRouter::new(routes));
 
-    /* // TODO make openapi doc generation compile time again
+    /* // TODO make openapi doc generation compile time again, but for now skip
     /// OpenAPI / Swagger
     #[cfg(feature = "open_api_endpoint")]
     let router = {
@@ -111,7 +109,7 @@ pub mod routing {
     use feagi_basis::feagi_message::request::feagi_request_descriptor::{FeagiMessageEnum, FeagiRequestMessageDescriptor};
     use feagi_basis::feagi_message::request::feagi_request_message::FeagiRequestMessage;
     use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiRequestCategory};
-    use feagi_basis::feagi_message::request::feagi_request_message_grouping::{NCat, NMDes, NNull};
+    use feagi_basis::feagi_message::request::feagi_request_message_grouping::{FeagiConfiguredCategoryRequester, NCat, NMDes, NNull};
     use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
     use picoserve::extract::{FromRequest, JsonWithUnescapeBufferSize};
     use picoserve::io::Read;
@@ -199,44 +197,6 @@ pub mod routing {
         }
     }
 
-    /// Converts the requesters of a group, with their configurables, into the routes serving
-    /// them. Implemented for the `NCat` chains of `FeagiRequestCategoryGroup`
-    pub trait IntoRestCategoryRoutes<NestedConfigurables> {
-        type Routes: RestCategoryRoutes;
-
-        fn into_rest_category_routes(self, nested_configurables: NestedConfigurables) -> Self::Routes;
-    }
-
-    impl IntoRestCategoryRoutes<NNull> for NNull {
-        type Routes = NNull;
-
-        fn into_rest_category_routes(self, _nested_configurables: NNull) -> Self::Routes {
-            NNull
-        }
-    }
-
-    impl<Category, Channels, Tail, TailConfigurables> IntoRestCategoryRoutes<NCat<&'static Category::Configurables, TailConfigurables>>
-        for NCat<FeagiCategoryRequester<Category, Channels>, Tail>
-    where
-        Category: FeagiRequestCategory,
-        Category::Configurables: 'static,
-        Channels: FeagiRequestResponseChannelBackend,
-        Tail: IntoRestCategoryRoutes<TailConfigurables>,
-        NCat<RestCategoryRoute<Category, Channels>, Tail::Routes>: RestCategoryRoutes,
-    {
-        type Routes = NCat<RestCategoryRoute<Category, Channels>, Tail::Routes>;
-
-        fn into_rest_category_routes(self, nested_configurables: NCat<&'static Category::Configurables, TailConfigurables>) -> Self::Routes {
-            NCat {
-                head: RestCategoryRoute {
-                    requester: self.head,
-                    configurables: nested_configurables.head,
-                },
-                tail: self.tail.into_rest_category_routes(nested_configurables.tail),
-            }
-        }
-    }
-
     //endregion
 
     //region Category
@@ -256,19 +216,8 @@ pub mod routing {
         pub response_payload_fields: &'static [FeagiFieldDescription],
     }
 
-    /// The routes of one category: its requester, and the configurables its paths are built from
-    pub struct RestCategoryRoute<Category, Channels>
-    where
-        Category: FeagiRequestCategory,
-        Category::Configurables: 'static,
-        Channels: FeagiRequestResponseChannelBackend,
-    {
-        requester: FeagiCategoryRequester<Category, Channels>,
-        configurables: &'static Category::Configurables,
-    }
-
-    /// Tries the routes of each category in turn. Implemented for `NCat` chains of
-    /// `RestCategoryRoute`
+    /// Tries the routes of each category in turn. Implemented for the `NCat` chain of a group's
+    /// `FeagiConfiguredCategoryRequester`s
     pub trait RestCategoryRoutes {
         async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
             &self,
@@ -301,10 +250,9 @@ pub mod routing {
         }
     }
 
-    impl<Category, Channels, Tail> RestCategoryRoutes for NCat<RestCategoryRoute<Category, Channels>, Tail>
+    impl<Category, Channels, Tail> RestCategoryRoutes for NCat<FeagiConfiguredCategoryRequester<Category, Channels>, Tail>
     where
         Category: FeagiRequestCategory,
-        Category::Configurables: 'static,
         Category::NestedMessageDescriptors: RestMessageRoutes<Category, Channels>,
         Channels: FeagiRequestResponseChannelBackend,
         Tail: RestCategoryRoutes,

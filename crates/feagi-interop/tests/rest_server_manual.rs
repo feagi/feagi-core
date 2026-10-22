@@ -54,7 +54,7 @@ fn rest_server_runs_until_stopped_manually() {
     let address = listen_address();
     // A group with no categories, so only the predefined routes are served
     let (mut server, ()) = StdRestServerBuilder::<NNull>::new(address)
-        .build_worker(&FeagiStdThreadSpawner, (NNull, NNull))
+        .build_worker(&FeagiStdThreadSpawner, (NNull, ()))
         .expect("REST server failed to start");
     print_routes(address);
 

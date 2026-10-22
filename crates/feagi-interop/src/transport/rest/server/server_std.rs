@@ -12,7 +12,7 @@ use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommand
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 use crate::transport::rest::server::error::FeagiRestServerError;
-use crate::transport::rest::server::server_basis::routing::{IntoRestCategoryRoutes, RestCategoryRoutes};
+use crate::transport::rest::server::server_basis::routing::RestCategoryRoutes;
 use crate::transport::rest::server::server_basis::{build_router_with_routes, GroupRestRoutes, RestServerWorkerBuilder, HTTP_BUFFER_LEN};
 
 //region Local Configs
@@ -61,12 +61,11 @@ impl<Group> RestServerWorkerBuilder<FeagiRequestResponseChannelsAllocBackend> fo
 impl<Group> FeagiWorkerBuilder<FeagiStdThreadSpawner> for StdRestServerBuilder<Group>
 where
     Group: FeagiRequestCategoryGroup<FeagiRequestResponseChannelsAllocBackend>,
-    Group::NestedCategoryRequesters: IntoRestCategoryRoutes<Group::NestedConfigurables>,
-    GroupRestRoutes<Group, FeagiRequestResponseChannelsAllocBackend>: Send + 'static,
+    GroupRestRoutes<Group, FeagiRequestResponseChannelsAllocBackend>: RestCategoryRoutes + Send + 'static,
 {
     type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
     /// The group whose categories are served, and the configurables of those categories
-    type BuildInputs = (Group, Group::NestedConfigurables);
+    type BuildInputs = (Group, Group::Configurables);
     type BuildOutputs = ();
     type RequiredChannelPairs = ();
     type CustomRequest = ();
@@ -84,8 +83,8 @@ where
         listener
             .set_nonblocking(true)
             .map_err(|_| FeagiRestServerError::FailedToConfigureSocket)?;
-        let (group, nested_configurables) = inputs;
-        let routes = group.into_nested_category_requesters().into_rest_category_routes(nested_configurables);
+        let (group, configurables) = inputs;
+        let routes = group.into_nested_categories(configurables);
         let (requester, requests) = FeagiRequestResponseChannelsAllocBackend::create_channels(REQUEST_QUEUE_CAPACITY);
         let accept_poll_interval = self.accept_poll_interval;
         let handle = spawner.spawn_worker(move || run_rest_server(listener, requests, accept_poll_interval, routes))?;

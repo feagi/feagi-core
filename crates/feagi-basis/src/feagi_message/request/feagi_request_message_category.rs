@@ -24,7 +24,10 @@ pub trait FeagiRequestCategory: Sized {
     /// Has a variant holding the response (or error) of each message of this category
     type ResponseEnum: Recyclable;
     /// The runtime set path segments shared by all messages of this category
-    type Configurables: FeagiMessagePathConfigurables;
+    type Configurables: FeagiMessagePathConfigurables + 'static;
+    /// `Some` for categories that declare no configurables, so their (empty) configurables
+    /// don't have to be given
+    const EMPTY_CONFIGURABLES: Option<&'static Self::Configurables>;
     /// Every message descriptor of this category, nested as `NMDes<Head, NMDes<..., NNull>>`
     type NestedMessageDescriptors;
 

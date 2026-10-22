@@ -1,4 +1,5 @@
-use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
+use feagi_basis::feagi_basis_proc_common::define_request_category_group;
+use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestCategory;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
@@ -46,10 +47,13 @@ impl Default for GenomeManagerWorkerBuilder {
 // This is STD thread only for the time being
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for GenomeManagerWorkerBuilder {
     type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
-    type BuildInputs = (GenomeManagerResponders);
+    type BuildInputs = GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>;
     type BuildOutputs = ();
     /// This defines the channels of the various categories of request this worker goes through
-    type RequiredChannelPairs = (GenomeManagerRequesters, GenomeManagerResponders);
+    type RequiredChannelPairs = (
+        GenomeManagerRequesters<FeagiRequestResponseChannelsAllocBackend>,
+        GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>,
+    );
     type CustomRequest = (); // TODO NPU launcher configuration
     type CustomResponse = ();
     type BuildError = GenomeManagerWorkerBuilderError;
@@ -105,27 +109,18 @@ impl From<std::io::Error> for GenomeManagerWorkerBuilderError {
     fn from(v: std::io::Error) -> Self {GenomeManagerWorkerBuilderError::ThreadError(v)}
 }
 
-/// The requester side of every request category the genome manager serves. Each can be cloned
-/// and handed to whatever needs to make requests of that category
-#[derive(Clone)]
-pub struct GenomeManagerRequesters {
-    pub burst_engine: FeagiCategoryRequester<BurstEngineRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub connectome: FeagiCategoryRequester<ConnectomeRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub cortical_area: FeagiCategoryRequester<CorticalAreaRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub cortical_mapping: FeagiCategoryRequester<CorticalMappingRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub genome: FeagiCategoryRequester<GenomeRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub morphology: FeagiCategoryRequester<MorphologyRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub region: FeagiCategoryRequester<RegionRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-}
-
-/// The responder side of every request category the genome manager serves, held by the genome
-/// manager worker itself
-pub struct GenomeManagerResponders {
-    pub burst_engine: FeagiCategoryResponder<BurstEngineRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub connectome: FeagiCategoryResponder<ConnectomeRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub cortical_area: FeagiCategoryResponder<CorticalAreaRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub cortical_mapping: FeagiCategoryResponder<CorticalMappingRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub genome: FeagiCategoryResponder<GenomeRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub morphology: FeagiCategoryResponder<MorphologyRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
-    pub region: FeagiCategoryResponder<RegionRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
+// The requester and responder of every request category the genome manager serves. The
+// responders are held by the genome manager worker itself, the requesters can be cloned and
+// handed to whatever needs to make requests of those categories
+define_request_category_group! {
+    group_name: GenomeManager,
+    categories: {
+        burst_engine: BurstEngineRequestCategory,
+        connectome: ConnectomeRequestCategory,
+        cortical_area: CorticalAreaRequestCategory,
+        cortical_mapping: CorticalMappingRequestCategory,
+        genome: GenomeRequestCategory,
+        morphology: MorphologyRequestCategory,
+        region: RegionRequestCategory,
+    }
 }

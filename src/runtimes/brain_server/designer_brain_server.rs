@@ -1,5 +1,3 @@
-use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiCategoryRequester;
-use feagi_basis::feagi_message::request::feagi_request_message_grouping::{NCat, NNull};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::feagi_worker::FeagiWorker;
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
@@ -7,14 +5,7 @@ use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread:
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands};
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiWorkerSpawnError;
-use feagi_cns_processing::genome_manager::requests::categories::burst_engine::{BurstEngineConfigurables, BurstEngineRequestCategory};
-use feagi_cns_processing::genome_manager::requests::categories::connectome::{ConnectomeConfigurables, ConnectomeRequestCategory};
-use feagi_cns_processing::genome_manager::requests::categories::cortical_area::{CorticalAreaConfigurables, CorticalAreaRequestCategory};
-use feagi_cns_processing::genome_manager::requests::categories::cortical_mapping::{CorticalMappingConfigurables, CorticalMappingRequestCategory};
-use feagi_cns_processing::genome_manager::requests::categories::genome::{GenomeConfigurables, GenomeRequestCategory};
-use feagi_cns_processing::genome_manager::requests::categories::morphology::{MorphologyConfigurables, MorphologyRequestCategory};
-use feagi_cns_processing::genome_manager::requests::categories::region::{RegionConfigurables, RegionRequestCategory};
-use feagi_cns_processing::genome_manager::worker_builder::{GenomeManagerRequesters, GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
+use feagi_cns_processing::genome_manager::worker_builder::{GenomeManagerConfigurables, GenomeManagerRequesters, GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
 use feagi_interop::transport::rest::server::error::FeagiRestServerError;
 use feagi_interop::transport::rest::server::server_basis::RestServerWorkerBuilder;
 use feagi_interop::transport::rest::server::server_std::{StdRestServerBuilder, StdRestServerWorker};
@@ -23,95 +14,6 @@ type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
 
 /// How many commands can be queued on the brain server worker at once. Only `Stop` is sent
 const COMMAND_QUEUE_LENGTH: usize = 1;
-
-//region Request Group
-
-/// Every request category the genome manager serves, as the group the REST server serves
-type DesignerRequestGroup = NCat<
-    FeagiCategoryRequester<BurstEngineRequestCategory, ChannelBackend>,
-    NCat<
-        FeagiCategoryRequester<ConnectomeRequestCategory, ChannelBackend>,
-        NCat<
-            FeagiCategoryRequester<CorticalAreaRequestCategory, ChannelBackend>,
-            NCat<
-                FeagiCategoryRequester<CorticalMappingRequestCategory, ChannelBackend>,
-                NCat<
-                    FeagiCategoryRequester<GenomeRequestCategory, ChannelBackend>,
-                    NCat<FeagiCategoryRequester<MorphologyRequestCategory, ChannelBackend>, NCat<FeagiCategoryRequester<RegionRequestCategory, ChannelBackend>, NNull>>,
-                >,
-            >,
-        >,
-    >,
->;
-
-/// The configurables of every category in `DesignerRequestGroup`, nested the same way
-type DesignerRequestGroupConfigurables = NCat<
-    &'static BurstEngineConfigurables,
-    NCat<
-        &'static ConnectomeConfigurables,
-        NCat<
-            &'static CorticalAreaConfigurables,
-            NCat<
-                &'static CorticalMappingConfigurables,
-                NCat<&'static GenomeConfigurables, NCat<&'static MorphologyConfigurables, NCat<&'static RegionConfigurables, NNull>>>,
-            >,
-        >,
-    >,
->;
-
-// None of the categories have configurables yet
-static BURST_ENGINE_CONFIGURABLES: BurstEngineConfigurables = BurstEngineConfigurables {};
-static CONNECTOME_CONFIGURABLES: ConnectomeConfigurables = ConnectomeConfigurables {};
-static CORTICAL_AREA_CONFIGURABLES: CorticalAreaConfigurables = CorticalAreaConfigurables {};
-static CORTICAL_MAPPING_CONFIGURABLES: CorticalMappingConfigurables = CorticalMappingConfigurables {};
-static GENOME_CONFIGURABLES: GenomeConfigurables = GenomeConfigurables {};
-static MORPHOLOGY_CONFIGURABLES: MorphologyConfigurables = MorphologyConfigurables {};
-static REGION_CONFIGURABLES: RegionConfigurables = RegionConfigurables {};
-
-/// Puts the genome manager's requesters in a group, with the configurables of their categories
-fn designer_request_group(requesters: GenomeManagerRequesters) -> (DesignerRequestGroup, DesignerRequestGroupConfigurables) {
-    let group = NCat {
-        head: requesters.burst_engine,
-        tail: NCat {
-            head: requesters.connectome,
-            tail: NCat {
-                head: requesters.cortical_area,
-                tail: NCat {
-                    head: requesters.cortical_mapping,
-                    tail: NCat {
-                        head: requesters.genome,
-                        tail: NCat {
-                            head: requesters.morphology,
-                            tail: NCat { head: requesters.region, tail: NNull },
-                        },
-                    },
-                },
-            },
-        },
-    };
-    let configurables = NCat {
-        head: &BURST_ENGINE_CONFIGURABLES,
-        tail: NCat {
-            head: &CONNECTOME_CONFIGURABLES,
-            tail: NCat {
-                head: &CORTICAL_AREA_CONFIGURABLES,
-                tail: NCat {
-                    head: &CORTICAL_MAPPING_CONFIGURABLES,
-                    tail: NCat {
-                        head: &GENOME_CONFIGURABLES,
-                        tail: NCat {
-                            head: &MORPHOLOGY_CONFIGURABLES,
-                            tail: NCat { head: &REGION_CONFIGURABLES, tail: NNull },
-                        },
-                    },
-                },
-            },
-        },
-    };
-    (group, configurables)
-}
-
-//endregion
 
 //region Builder
 
@@ -139,10 +41,12 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
         let (genome_manager_requesters, genome_manager_responders) = genome_manager_builder.spawn_required_channel_pairs();
         let (genome_manager, ()) = genome_manager_builder.build_worker(spawner, genome_manager_responders)?;
 
-        // The REST server gets the requesters, as a group. If it fails to start, the genome
-        // manager is dropped here, which disconnects it so it exits on its own
-        let (group, configurables) = designer_request_group(genome_manager_requesters);
-        let (rest_server, ()) = StdRestServerBuilder::<DesignerRequestGroup>::new(self.rest_server_socket).build_worker(spawner, (group, configurables))?;
+        // The REST server gets the requesters, as a group. None of the genome manager's
+        // categories have configurables yet. If it fails to start, the genome manager is dropped
+        // here, which disconnects it so it exits on its own
+        let configurables = GenomeManagerConfigurables::without_configurables();
+        let (rest_server, ()) = StdRestServerBuilder::<GenomeManagerRequesters<ChannelBackend>>::new(self.rest_server_socket)
+            .build_worker(spawner, (genome_manager_requesters, configurables))?;
 
         let (command_requester, command_responder) = ChannelBackend::create_channels(COMMAND_QUEUE_LENGTH);
         let handle = spawner.spawn_worker(move || server_runtime(command_responder, genome_manager, rest_server))?;

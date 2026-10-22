@@ -1,4 +1,4 @@
-use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiResponderAlloc;
+use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use crate::genome_manager::worker_builder::GenomeManagerResponders;
@@ -18,7 +18,7 @@ impl FeagiWorkerCommandHandler for GenomeManagerCommandHandler {
 /// for edits, and then acts upon them
 pub(crate) async fn run_genome_manager(
     responder: FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>,
-    genome_request_responders: GenomeManagerResponders
+    genome_request_responders: GenomeManagerResponders<FeagiRequestResponseChannelsAllocBackend>
 )
 {
     

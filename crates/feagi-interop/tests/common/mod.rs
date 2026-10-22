@@ -1,9 +1,8 @@
 //! A coffee shop category of messages, and a responder answering them, shared by the REST server
 //! tests
 
-use feagi_basis::feagi_basis_proc_common::define_request_message_category;
-use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiCategoryResponder, FeagiRequestCategory};
-use feagi_basis::feagi_message::request::feagi_request_message_grouping::{NCat, NNull};
+use feagi_basis::feagi_basis_proc_common::{define_request_category_group, define_request_message_category};
+use feagi_basis::feagi_message::request::feagi_request_message_category::FeagiCategoryResponder;
 use feagi_basis::parallelism::block_on_thread;
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
 
@@ -59,19 +58,26 @@ define_request_message_category! {
 }
 
 pub type Channels = FeagiRequestResponseChannelsAllocBackend;
-pub type ShopGroup = NCat<FeagiCategoryRequester<CoffeeShopRequestCategory, Channels>, NNull>;
-pub type ShopGroupConfigurables = NCat<&'static CoffeeShopConfigurables, NNull>;
+
+define_request_category_group! {
+    group_name: Shop,
+    categories: {
+        coffee_shop: CoffeeShopRequestCategory,
+    }
+}
+
+pub type ShopGroup = ShopRequesters<Channels>;
 
 /// Starts a responder answering every coffee shop request on its own thread, and returns the
 /// group and configurables to serve. The shop is named `shop_name`
-pub fn start_coffee_shop(shop_name: &str) -> (ShopGroup, ShopGroupConfigurables, std::thread::JoinHandle<()>) {
-    let (requester, responder) = CoffeeShopRequestCategory::spawn_alloc_requester_responser_pair(4);
-    let responder_thread = std::thread::spawn(move || answer_coffee_shop_requests(responder));
+pub fn start_coffee_shop(shop_name: &str) -> (ShopGroup, ShopConfigurables, std::thread::JoinHandle<()>) {
+    let (requesters, responders) = ShopRequesters::create_alloc_channel_pairs(4);
+    let responder_thread = std::thread::spawn(move || answer_coffee_shop_requests(responders.coffee_shop));
 
     let configurables: &'static CoffeeShopConfigurables = Box::leak(Box::new(CoffeeShopConfigurables {
         shop_name: heapless::String::try_from(shop_name).expect("shop name fits"),
     }));
-    (NCat { head: requester, tail: NNull }, NCat { head: configurables, tail: NNull }, responder_thread)
+    (requesters, ShopConfigurables { coffee_shop: configurables }, responder_thread)
 }
 
 /// Answers every coffee shop request, until every requester is gone. Order 7 is the only order

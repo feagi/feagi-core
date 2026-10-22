@@ -45,7 +45,7 @@ pub fn enum_leveled_builder(input: TokenStream) -> TokenStream {
 //region Feagi Request Messaging
 
 use feagi_macro_components::feagi_messages::request_response::feagi_request_message_category::FeagiRequestMessageCategory;
-use feagi_macro_components::template_parsing::feagi_messages::request_response::category_grouping::GroupedRequestResponseCategoryTemplate;
+use feagi_macro_components::feagi_messages::request_response::feagi_request_category_group::FeagiRequestCategoryGroup;
 
 
 /// Defines a category of request messages. Generates, for every message, its path, request
@@ -64,20 +64,14 @@ pub fn define_request_message_category(input: proc_macro::TokenStream) -> proc_m
 
 //region Feagi Request Messaging Categorization
 
-/// Define all the categories of requests
+/// Defines a group of request categories, by listing the category markers in order. Generates
+/// `{Group}Requesters` and `{Group}Responders` (one field per category, generic over the channel
+/// backend), `{Group}Configurables`, and the requesters' `FeagiRequestCategoryGroup` impl
 #[proc_macro]
-pub fn define_template_request_categories(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use feagi_macro_components::templates::TemplateRoot;
-    TemplateRoot::<GroupedRequestResponseCategoryTemplate>::parse_template_and_generate_generator_input_macro(input.into()).into()
-}
-
-#[proc_macro]
-pub fn from_template_define_generic_struct_of_category_fields(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    use feagi_macro_components::templates::TemplateRoot;
-    let res = TemplateRoot::<GroupedRequestResponseCategoryTemplate>::parse_generator_input_macro(input.into());
-    match res {
+pub fn define_request_category_group(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    match syn::parse::<FeagiRequestCategoryGroup>(input) {
         Err(e) => e.to_compile_error().into(),
-        Ok(s) => s.generate_generic_with_field_name_categories_and_of_type().into(),
+        Ok(group) => group.generate_rust_group().into(),
     }
 }
 

@@ -233,6 +233,11 @@ impl FeagiRequestMessageCategory {
             .rev()
             .fold(quote!(#grouping::NNull), |tail, head| quote!(#grouping::NMDes<#head, #tail>));
 
+        let empty_configurables = if self.configurables.is_empty() {
+            quote!(::core::option::Option::Some(&#configurables {}))
+        } else {
+            quote!(::core::option::Option::None)
+        };
         let category_name = &self.category_name;
         let category_description = &self.category_description;
         let base_path = &self.base_path;
@@ -289,6 +294,7 @@ impl FeagiRequestMessageCategory {
                 type RequestEnum = #request_enum;
                 type ResponseEnum = #response_enum;
                 type Configurables = #configurables;
+                const EMPTY_CONFIGURABLES: ::core::option::Option<&'static #configurables> = #empty_configurables;
                 type NestedMessageDescriptors = #nested_descriptors;
             }
         }
