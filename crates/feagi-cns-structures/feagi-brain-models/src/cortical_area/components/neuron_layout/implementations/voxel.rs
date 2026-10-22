@@ -1,7 +1,8 @@
-use crate::cortical_area::components::neuron_layout::NeuronLayout;
-use feagi_basis::feagi_neuron::single_area_collections::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
-use feagi_basis::prelude::*;
 use serde::Serialize;
+use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex, DimensionalCorticalAreaDimensions, DimensionalCorticalAreaNeuronCoordinates};
+use feagi_basis::prelude::QuantizedUnsignedIntegerTrait;
+use crate::cortical_area::components::neuron_layout::NeuronLayout;
+use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Defines that the neurons are laid out in xyzd (depth) order linearly in a dense fashion
 #[derive(Clone, Serialize)]

@@ -1,4 +1,4 @@
-use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_brain_models::::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_basis::voxels::CorticalAreaVoxelCoordinates;
 
 

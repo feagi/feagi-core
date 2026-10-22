@@ -4,9 +4,7 @@ use std::collections::HashSet;
 
 // TODO premade types 
 
-pub struct CorticalArea<DataLookups, NeuronModel>
-where
-    DataLookups: CorticalAreaDataLookups,
+pub struct CorticalArea
 // TODO neuron model as a typed enum for model with deeper fields
 {
     pub name: String,
@@ -14,9 +12,12 @@ where
     pub position_3d: (),
     pub position_2d: (),
 
-    pub cache_lookups: DataLookups,
-    _t: core::marker::PhantomData<NeuronModel>
+    
+
+    //_t: core::marker::PhantomData<NeuronModel>
 }
+
+//region Cortical Area Data Lookups
 
 /// Describes how to get some data
 pub trait CorticalAreaDataLookups {}
@@ -28,6 +29,8 @@ impl CoritcalAreaStoredDataLookup {
     // TODO Sync Accessors
 }
 
+//endregion
+
 /// Caches some data that is technically not needed but good for fast access. Also has async accessors
 /// for getting data from the NPU
 pub struct CorticalAreaRuntimeCache {
@@ -35,7 +38,7 @@ pub struct CorticalAreaRuntimeCache {
     pub incoming_mappings: HashSet<CorticalID>,
     pub outgoing_mappings: HashSet<CorticalID>,
 }
-impl CorticalAreaDataLookups for CorticalAreaRuntimeCache {}
+
 impl CorticalAreaRuntimeCache {
     // TODO Async Accessors that use the NPU
 

@@ -1,7 +1,7 @@
-use crate::cortical_area::data_structs::cortical_area_flags::CorticalAreaFlags;
+use feagi_basis::neurons::CorticalAreaNeuronPotential;
 use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
 use crate::cortical_area::extendable_components::cortical_model_data_field::CorticalModelDataField;
-use feagi_basis::feagi_neuron::single_area_collections::neurons::CorticalAreaNeuronPotential;
+use crate::cortical_area::data_structs::cortical_area_flags::CorticalAreaFlags;
 
 pub struct CorticalAreaModelConnectomeCorticalData<CAQ, CorticalDataProperties, CorticalDataInternal, CorticalDataScratch>
 where

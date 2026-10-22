@@ -1,6 +1,6 @@
-use feagi_basis::feagi_neuron::single_area_collections::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
-use feagi_basis::prelude::*;
 use serde::{Deserialize, Serialize};
+use feagi_basis::neurons::{CorticalAreaNeuronCount, CorticalAreaNeuronLocalIndex};
+use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root trait for defining Neuron Layout
 pub trait NeuronLayout<FIQ: FeagiIndexQuantization>: Clone + Serialize + Sized

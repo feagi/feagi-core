@@ -1,5 +1,6 @@
 use core::cmp::min;
 use feagi_basis::prelude::*;
+use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 create_wrapped_quantized_decimal!(
     /// When psp uniformity is DISABLED, we divide the membrane potential by the number of outgoing
