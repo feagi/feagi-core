@@ -2756,6 +2756,54 @@ impl ConnectomeService for ConnectomeServiceImpl {
         Ok(())
     }
 
+    async fn set_mapping_plasticity_frozen(
+        &self,
+        src_area_id: &str,
+        dst_area_id: &str,
+        frozen: bool,
+    ) -> ServiceResult<()> {
+        let src_id = CorticalID::try_from_base_64(src_area_id).map_err(|e| {
+            ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e))
+        })?;
+        let dst_id = CorticalID::try_from_base_64(dst_area_id).map_err(|e| {
+            ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e))
+        })?;
+        let rules = {
+            let mut manager = self.connectome.write();
+            manager
+                .set_mapping_plasticity_frozen(&src_id, &dst_id, frozen)
+                .map_err(|e| match e {
+                    feagi_brain_development::types::BduError::InvalidArea(msg)
+                    | feagi_brain_development::types::BduError::InvalidMorphology(msg) => {
+                        ServiceError::InvalidInput(msg)
+                    }
+                    other => {
+                        ServiceError::Backend(format!("Failed to set plasticity_frozen: {}", other))
+                    }
+                })?;
+            manager
+                .get_mapping_rules(&src_id, &dst_id)
+                .unwrap_or_default()
+        };
+        // Mirror the flag into the RuntimeGenome so a save/load keeps the mapping frozen.
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            if let Some(src_area) = genome.cortical_areas.get_mut(&src_id) {
+                update_cortical_mapping_dst_in_properties(
+                    &mut src_area.properties,
+                    dst_area_id,
+                    &rules,
+                )?;
+            } else {
+                warn!(
+                    target: "feagi-services",
+                    "[GENOME-UPDATE] Source area {} not found in RuntimeGenome while storing plasticity_frozen",
+                    src_area_id
+                );
+            }
+        }
+        Ok(())
+    }
+
     async fn update_cortical_mapping(
         &self,
         src_area_id: String,
@@ -2844,11 +2892,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     plasticity_flag = true;
                 }
                 if let Some(existing) = existing_plasticity_by_morphology.get(&morphology_id) {
-                    if !normalized.contains_key("synaptic_delay_bursts")
-                        && existing.contains_key("synaptic_delay_bursts")
-                    {
-                        if let Some(value) = existing.get("synaptic_delay_bursts") {
-                            normalized.insert("synaptic_delay_bursts".to_string(), value.clone());
+                    // Carry over per-rule state a caller is unlikely to resend: the delay and
+                    // the freeze flag set through `set_mapping_plasticity_frozen`.
+                    for key in ["synaptic_delay_bursts", "plasticity_frozen"] {
+                        if !normalized.contains_key(key) && existing.contains_key(key) {
+                            if let Some(value) = existing.get(key) {
+                                normalized.insert(key.to_string(), value.clone());
+                            }
                         }
                     }
                 }
@@ -6336,6 +6386,126 @@ mod tests {
         assert_eq!(stats.incoming_synapse_count, 2);
         assert_eq!(stats.outgoing_synapse_count, 1);
     }
+    /// Freezing a mapping stores `plasticity_frozen` on the rule and in the NPU, a later PUT of
+    /// the same rule without the flag carries it over and does not regenerate (so learned
+    /// weights survive), and `reset_mapping_weights` puts the weight back to the rule's value.
+    #[tokio::test]
+    async fn freeze_and_reset_weights_keep_rule_and_synapses() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).unwrap();
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+        mgr.setup_core_morphologies_for_testing();
+
+        let src_id = CorticalID::try_from_bytes(b"cfrzsrc1").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"cfrzdst1").unwrap();
+        for (id, label) in [(src_id, "src"), (dst_id, "dst")] {
+            mgr.add_cortical_area(
+                CorticalArea::new(
+                    id,
+                    0,
+                    label.to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        }
+        let s0 = mgr
+            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        mgr.add_neuron(&dst_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let src_idx = mgr.get_cortical_idx(&src_id).unwrap();
+        let dst_idx = mgr.get_cortical_idx(&dst_id).unwrap();
+
+        let connectome = Arc::new(RwLock::new(mgr));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), Arc::new(RwLock::new(None)));
+        let rule = serde_json::json!({
+            "morphology_id": "projector",
+            "morphology_scalar": [1, 1, 1],
+            "postSynapticCurrent_multiplier": 2.0,
+            "plasticity_flag": true,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1,
+            "plasticity_window": 1,
+        });
+        let created = svc
+            .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![rule.clone()])
+            .await?;
+        assert_eq!(created, 1);
+
+        svc.set_mapping_plasticity_frozen(&src_id.as_base_64(), &dst_id.as_base_64(), true)
+            .await?;
+        {
+            let mgr = connectome.read();
+            assert_eq!(mgr.mapping_plasticity_frozen(&src_id, &dst_id), Some(true));
+            let npu = dyn_npu.lock().unwrap();
+            assert_eq!(npu.is_stdp_mapping_frozen(src_idx, dst_idx), Some(true));
+        }
+
+        // Simulate learning, then re-PUT the same rule (no flag): carried over, no regeneration.
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            let target = npu.get_outgoing_synapses(s0 as u32)[0].0;
+            assert!(npu.update_synapse_weight(
+                feagi_npu_neural::types::NeuronId(s0 as u32),
+                feagi_npu_neural::types::NeuronId(target),
+                feagi_npu_neural::types::SynapticWeight(7.0)
+            ));
+        }
+        let regenerated = svc
+            .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![rule.clone()])
+            .await?;
+        assert_eq!(
+            regenerated, 0,
+            "identical rule plus carried-over flag must not regenerate"
+        );
+        {
+            let npu = dyn_npu.lock().unwrap();
+            assert_eq!(npu.get_outgoing_synapses(s0 as u32)[0].1, 7.0);
+            assert_eq!(npu.is_stdp_mapping_frozen(src_idx, dst_idx), Some(true));
+        }
+
+        let (reset, weight) = svc
+            .reset_mapping_weights(&src_id.as_base_64(), &dst_id.as_base_64())
+            .await
+            .map(|info| (info.synapses_reset, info.weight))?;
+        assert_eq!((reset, weight), (1, 2.0));
+        {
+            let npu = dyn_npu.lock().unwrap();
+            assert_eq!(npu.get_outgoing_synapses(s0 as u32)[0].1, 2.0);
+        }
+
+        svc.set_mapping_plasticity_frozen(&src_id.as_base_64(), &dst_id.as_base_64(), false)
+            .await?;
+        assert_eq!(
+            connectome
+                .read()
+                .mapping_plasticity_frozen(&src_id, &dst_id),
+            Some(false)
+        );
+        assert!(svc
+            .set_mapping_plasticity_frozen(&dst_id.as_base_64(), &src_id.as_base_64(), true)
+            .await
+            .is_err());
+        Ok(())
+    }
+
     type OwnedMemoryTwinFixture = (
         ConnectomeServiceImpl,
         Arc<RwLock<ConnectomeManager>>,

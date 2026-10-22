@@ -218,6 +218,10 @@ pub struct StdpMappingParams {
     pub instance_reward: bool,
     /// Synaptic modulator group stamped onto this mapping's synapses. `0` means none.
     pub modulation_group: u16,
+    /// When `true` the end-of-burst plasticity pass skips this mapping entirely: no
+    /// eligibility-trace update, no weight commit, no associative synapse synthesis. The
+    /// rule and its registration stay in place so unfreezing resumes learning in place.
+    pub frozen: bool,
 }
 
 impl Default for StdpMappingParams {
@@ -239,6 +243,7 @@ impl Default for StdpMappingParams {
             plasticity_eta: 1.0,
             instance_reward: false,
             modulation_group: 0,
+            frozen: false,
         }
     }
 }
@@ -5075,7 +5080,23 @@ impl<
     ) -> usize {
         let ns = self.neuron_storage.read().unwrap();
         let mut ss = self.synapse_storage.write().unwrap();
+        let propagation_engine = self.propagation_engine.read().unwrap();
         let neuron_count = ns.count();
+        // Dense neurons carry their area in neuron storage; dynamic memory neurons (ids
+        // outside dense storage) are resolved through the propagation engine's
+        // neuron-to-area map so learned associative synapses are reset too.
+        let area_of = |neuron: usize| -> Option<u32> {
+            if neuron < neuron_count {
+                return ns.valid_mask()[neuron].then(|| ns.cortical_areas()[neuron]);
+            }
+            if neuron >= MEMORY_NEURON_ID_START as usize {
+                return propagation_engine
+                    .neuron_to_area
+                    .get(&NeuronId(neuron as u32))
+                    .and_then(|id| self.get_cortical_area_id(id.as_base_64().as_str()));
+            }
+            None
+        };
         let mut reset = 0usize;
         for i in 0..ss.count() {
             if !ss.valid_mask()[i] {
@@ -5083,15 +5104,7 @@ impl<
             }
             let s = ss.source_neurons()[i] as usize;
             let t = ss.target_neurons()[i] as usize;
-            if s >= neuron_count || t >= neuron_count {
-                continue;
-            }
-            if !ns.valid_mask()[s] || !ns.valid_mask()[t] {
-                continue;
-            }
-            if ns.cortical_areas()[s] == src_cortical_idx
-                && ns.cortical_areas()[t] == dst_cortical_idx
-            {
+            if area_of(s) == Some(src_cortical_idx) && area_of(t) == Some(dst_cortical_idx) {
                 ss.weights_mut()[i] = weight;
                 ss.eligibility_traces_mut()[i] = 0.0;
                 reset += 1;
@@ -5879,6 +5892,39 @@ impl<
         removed
     }
 
+    /// Freeze or unfreeze plasticity on a registered mapping A→B without touching its rule.
+    ///
+    /// Returns `false` when no plastic mapping is registered for the pair.
+    pub fn set_stdp_mapping_frozen(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        frozen: bool,
+    ) -> bool {
+        let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
+        match self.stdp_mappings.write().unwrap().get_mut(&key) {
+            Some(params) => {
+                params.frozen = frozen;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// `Some(frozen)` for a registered plastic mapping A→B, `None` when none is registered.
+    pub fn is_stdp_mapping_frozen(
+        &self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> Option<bool> {
+        let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
+        self.stdp_mappings
+            .read()
+            .unwrap()
+            .get(&key)
+            .map(|params| params.frozen)
+    }
+
     fn rebuild_stdp_mapping_index(&self) {
         let mappings = self.stdp_mappings.read().unwrap().clone();
         if mappings.is_empty() {
@@ -5960,7 +6006,16 @@ impl<
         burst_timestep: u64,
         fire_ledger: &crate::fire_ledger::FireLedger,
     ) -> Result<()> {
-        let mappings = self.stdp_mappings.read().unwrap().clone();
+        // Frozen mappings keep their registration (and ledger tracking) but are invisible
+        // to this pass, so their weights, traces and synapse set stay exactly as they are.
+        let mappings: AHashMap<CorticalMappingKey, StdpMappingParams> = self
+            .stdp_mappings
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|(_, params)| !params.frozen)
+            .map(|(key, params)| (*key, *params))
+            .collect();
         if mappings.is_empty() {
             return Ok(());
         }

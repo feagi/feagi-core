@@ -81,6 +81,7 @@ fn stdp_params(
         plasticity_eta: 1.0,
         instance_reward: false,
         modulation_group: 0,
+        frozen: false,
     }
 }
 

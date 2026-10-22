@@ -144,6 +144,7 @@ fn rstdp_params(
         plasticity_eta: 1.0,
         instance_reward: false,
         modulation_group: 1,
+        frozen: false,
     }
 }
 

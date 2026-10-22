@@ -770,6 +770,103 @@ mod tests {
     }
 }
 
+/// PUT /v1/cortical_mapping/plasticity_frozen
+///
+/// Freeze (`frozen: true`) or resume (`false`) plasticity on one mapping without changing
+/// its rule: no weight commits, no eligibility-trace updates and no associative synapse
+/// synthesis while frozen; learned weights are kept. The flag is stored as
+/// `plasticity_frozen` on the mapping's plastic rules, so it shows in the mapping listing
+/// and survives genome save/load.
+///
+/// Body: `{"src_cortical_area": <base64>, "dst_cortical_area": <base64>, "frozen": <bool>}`.
+/// Response: `{"src_cortical_area", "dst_cortical_area", "frozen": <bool>}`.
+#[utoipa::path(
+    put,
+    path = "/v1/cortical_mapping/plasticity_frozen",
+    tag = "cortical_mapping",
+    responses(
+        (status = 200, description = "Plasticity freeze state updated", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Unknown mapping or mapping has no plastic rule")
+    )
+)]
+pub async fn put_plasticity_frozen(
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let src_area = req
+        .get("src_cortical_area")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("Missing src_cortical_area"))?;
+    let dst_area = req
+        .get("dst_cortical_area")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("Missing dst_cortical_area"))?;
+    let frozen = req
+        .get("frozen")
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| ApiError::invalid_input("Missing boolean field frozen"))?;
+
+    state
+        .connectome_service
+        .set_mapping_plasticity_frozen(src_area, dst_area, frozen)
+        .await?;
+
+    let mut response = HashMap::new();
+    response.insert("src_cortical_area".to_string(), serde_json::json!(src_area));
+    response.insert("dst_cortical_area".to_string(), serde_json::json!(dst_area));
+    response.insert("frozen".to_string(), serde_json::json!(frozen));
+    Ok(Json(response))
+}
+
+/// GET /v1/cortical_mapping/plasticity_frozen?src_cortical_area=..&dst_cortical_area=..
+///
+/// Response: `{"src_cortical_area", "dst_cortical_area", "frozen": <bool|null>}`; `null`
+/// when the mapping does not exist.
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_mapping/plasticity_frozen",
+    tag = "cortical_mapping",
+    params(
+        ("src_cortical_area" = String, Query, description = "Source cortical area ID (base64)"),
+        ("dst_cortical_area" = String, Query, description = "Destination cortical area ID (base64)")
+    ),
+    responses(
+        (status = 200, description = "Plasticity freeze state", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_plasticity_frozen(
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let src_area = params
+        .get("src_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("src_cortical_area required"))?;
+    let dst_area = params
+        .get("dst_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("dst_cortical_area required"))?;
+
+    let src_info = state.connectome_service.get_cortical_area(src_area).await?;
+    let frozen = src_info
+        .properties
+        .get("cortical_mapping_dst")
+        .and_then(|v| v.as_object())
+        .and_then(|map| map.get(dst_area))
+        .and_then(|v| v.as_array())
+        .map(|rules| {
+            rules.iter().any(|rule| {
+                rule.get("plasticity_frozen")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            })
+        });
+
+    let mut response = HashMap::new();
+    response.insert("src_cortical_area".to_string(), serde_json::json!(src_area));
+    response.insert("dst_cortical_area".to_string(), serde_json::json!(dst_area));
+    response.insert("frozen".to_string(), serde_json::json!(frozen));
+    Ok(Json(response))
+}
+
 /// POST /v1/cortical_mapping/batch_update
 /// Batch update multiple cortical mappings
 #[utoipa::path(

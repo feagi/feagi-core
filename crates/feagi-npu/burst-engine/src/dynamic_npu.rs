@@ -868,6 +868,29 @@ where
         )
     }
 
+    pub fn set_stdp_mapping_frozen(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        frozen: bool,
+    ) -> bool {
+        dispatch_mut!(
+            self,
+            set_stdp_mapping_frozen(src_cortical_idx, dst_cortical_idx, frozen)
+        )
+    }
+
+    pub fn is_stdp_mapping_frozen(
+        &self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> Option<bool> {
+        dispatch!(
+            self,
+            is_stdp_mapping_frozen(src_cortical_idx, dst_cortical_idx)
+        )
+    }
+
     pub fn get_neuron_capacity(&self) -> usize {
         match self {
             DynamicNPUGeneric::F32(npu) => {

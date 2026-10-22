@@ -354,6 +354,20 @@ pub trait ConnectomeService: Send + Sync {
         mapping_data: Vec<serde_json::Value>,
     ) -> ServiceResult<usize>;
 
+    /// Freeze (`true`) or resume (`false`) weight commits and associative synapse
+    /// synthesis on `src -> dst`, keeping the rule and learned weights in place.
+    /// Stored as `plasticity_frozen` on the mapping's plastic rules.
+    async fn set_mapping_plasticity_frozen(
+        &self,
+        _src_area_id: &str,
+        _dst_area_id: &str,
+        _frozen: bool,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "set_mapping_plasticity_frozen is not available on this transport".to_string(),
+        ))
+    }
+
     // ========================================================================
     // CONNECTOME I/O OPERATIONS
     // ========================================================================

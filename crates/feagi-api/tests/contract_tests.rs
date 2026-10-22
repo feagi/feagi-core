@@ -4543,21 +4543,43 @@ async fn test_burst_engine_fire_history_route_shape_and_limits() {
     assert_eq!(body["areas"].as_object().map(|m| m.len()), Some(1));
 
     for (path, expected) in [
-        ("/v1/burst_engine/fire_history".to_string(), StatusCode::BAD_REQUEST),
-        ("/v1/burst_engine/fire_history?areas=".to_string(), StatusCode::BAD_REQUEST),
-        (format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=0"), StatusCode::BAD_REQUEST),
-        (format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=2001"), StatusCode::BAD_REQUEST),
-        (format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=ten"), StatusCode::BAD_REQUEST),
+        (
+            "/v1/burst_engine/fire_history".to_string(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            "/v1/burst_engine/fire_history?areas=".to_string(),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=0"),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=2001"),
+            StatusCode::BAD_REQUEST,
+        ),
+        (
+            format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=ten"),
+            StatusCode::BAD_REQUEST,
+        ),
         (
             format!(
                 "/v1/burst_engine/fire_history?areas={}",
-                (0..17).map(|i| format!("Y2ZpcmVoQ{i:02}")).collect::<Vec<_>>().join(",")
+                (0..17)
+                    .map(|i| format!("Y2ZpcmVoQ{i:02}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
             ),
             StatusCode::BAD_REQUEST,
         ),
-        ("/v1/burst_engine/fire_history?areas=Y25vc3VjaDE=".to_string(), StatusCode::NOT_FOUND),
+        (
+            "/v1/burst_engine/fire_history?areas=Y25vc3VjaDE=".to_string(),
+            StatusCode::NOT_FOUND,
+        ),
     ] {
-        let (status, body) = request_json(create_http_server(state.clone()), "GET", &path, None).await;
+        let (status, body) =
+            request_json(create_http_server(state.clone()), "GET", &path, None).await;
         assert_eq!(status, expected, "{path}: {body}");
     }
 
@@ -4571,4 +4593,174 @@ async fn test_burst_engine_fire_history_route_shape_and_limits() {
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["unsubscribed"], json!(1));
     assert_eq!(body["areas"], json!([area_id]));
+}
+
+// ============================================================================
+// CORTICAL MAPPING: WEIGHT RESET AND PLASTICITY FREEZE
+// ============================================================================
+
+async fn create_plain_custom_area(
+    state: &ApiState,
+    id_bytes: &[u8; 8],
+    name: &str,
+    position: (i32, i32, i32),
+) -> String {
+    let cortical_id = general_purpose::STANDARD.encode(id_bytes);
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: name.to_string(),
+            dimensions: (1, 1, 1),
+            position,
+            area_type: "Custom".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: Some(1.0),
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: Some(true),
+            properties: None,
+        }])
+        .await
+        .expect("create custom area");
+    cortical_id
+}
+
+fn plastic_projector_rule(weight: f64) -> Value {
+    json!({
+        "morphology_id": "projector",
+        "morphology_scalar": [1, 1, 1],
+        "postSynapticCurrent_multiplier": weight,
+        "plasticity_flag": true,
+        "plasticity_constant": 1,
+        "ltp_multiplier": 1,
+        "ltd_multiplier": 1,
+        "plasticity_window": 1
+    })
+}
+
+/// `GET|PUT /v1/cortical_mapping/plasticity_frozen`
+/// drive one plastic mapping end to end through the real connectome service and NPU.
+#[tokio::test]
+async fn test_cortical_mapping_plasticity_frozen_routes() {
+    let state = build_test_state();
+    state
+        .connectome_service
+        .create_morphology(
+            "projector".to_string(),
+            feagi_evolutionary::Morphology {
+                morphology_type: feagi_evolutionary::MorphologyType::Functions,
+                parameters: feagi_evolutionary::MorphologyParameters::Functions {},
+                class: "core".to_string(),
+            },
+        )
+        .await
+        .expect("register projector morphology");
+    let src = create_plain_custom_area(&state, b"cwrsrcA1", "weights-src", (0, 0, 0)).await;
+    let dst = create_plain_custom_area(&state, b"cwrdstA1", "weights-dst", (10, 0, 0)).await;
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_mapping/mapping_properties",
+        Some(json!({
+            "src_cortical_area": src,
+            "dst_cortical_area": dst,
+            "mapping_string": [plastic_projector_rule(2.0)]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "create mapping: {body}");
+    let created = body["synapse_count"].as_u64().expect("synapse_count");
+    assert!(
+        created >= 1,
+        "projector between 1x1x1 areas must create a synapse"
+    );
+
+    let frozen_query = format!(
+        "/v1/cortical_mapping/plasticity_frozen?src_cortical_area={src}&dst_cortical_area={dst}"
+    );
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &frozen_query,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["frozen"], json!(false));
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_mapping/plasticity_frozen",
+        Some(json!({"src_cortical_area": src, "dst_cortical_area": dst, "frozen": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["frozen"], json!(true));
+    assert_eq!(body["src_cortical_area"], json!(src));
+    assert_eq!(body["dst_cortical_area"], json!(dst));
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &frozen_query,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["frozen"], json!(true));
+
+    // The flag is visible on the rule itself through the mapping listing.
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/cortical_mapping/mapping?src_cortical_area={src}&dst_cortical_area={dst}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["connections"][0]["plasticity_frozen"], json!(true));
+    assert_eq!(body["connections"][0]["morphology_id"], json!("projector"));
+
+    // Validation: unknown mapping.
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_mapping/plasticity_frozen",
+        Some(json!({"src_cortical_area": dst, "dst_cortical_area": src, "frozen": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "no mapping dst -> src");
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/cortical_mapping/plasticity_frozen?src_cortical_area={dst}&dst_cortical_area={src}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["frozen"], json!(null));
+
+    // Deleting the mapping drops its synapses; a recreate starts from the rule weight.
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "DELETE",
+        &format!("/v1/cortical_mapping/mapping?src_cortical_area={src}&dst_cortical_area={dst}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["synapse_count"].as_u64(), Some(0));
 }
