@@ -23,6 +23,9 @@ pub enum ManualStimulationMode {
     ForceFire,
 }
 
+/// Idle time after which a fire-history subscription is dropped on the next read.
+pub const FIRE_HISTORY_SUBSCRIPTION_TTL: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// Runtime control service (transport-agnostic)
 #[async_trait]
 pub trait RuntimeService: Send + Sync {
@@ -181,6 +184,38 @@ pub trait RuntimeService: Send + Sync {
     /// # Returns
     /// * `(f64, u32)` - (frequency_hz, consumer_type) where consumer: 1=viz, 2=motor, 3=both
     ///
+    /// Subscribe to burst-aligned fire history for `areas` (cortical indices), keeping at
+    /// least `bursts` frames per area in the Fire Ledger. Ledger tracking that exists for
+    /// plasticity or memory is only ever grown, never shrunk. Idempotent; refreshes the
+    /// subscription's idle timer. Returns `(cortical_idx, window_now)` per area.
+    async fn subscribe_fire_history(
+        &self,
+        _areas: &[u32],
+        _bursts: usize,
+    ) -> ServiceResult<Vec<(u32, usize)>> {
+        Err(ServiceError::NotImplemented(
+            "fire history is not available on this transport".to_string(),
+        ))
+    }
+
+    /// Drop fire-history subscriptions for `areas`, restoring the ledger window each area had
+    /// before (untracking areas that were not tracked). Returns how many were dropped.
+    async fn unsubscribe_fire_history(&self, _areas: &[u32]) -> ServiceResult<usize> {
+        Err(ServiceError::NotImplemented(
+            "fire history is not available on this transport".to_string(),
+        ))
+    }
+
+    /// The last `bursts` frames of each area in `areas`. Subscribes the areas first (see
+    /// [`Self::subscribe_fire_history`]), so the first read after a subscription returns
+    /// only the frames recorded since. Subscriptions idle for longer than the service's
+    /// TTL are dropped on the next read.
+    async fn get_fire_history(&self, _areas: &[u32], _bursts: usize) -> ServiceResult<FireHistory> {
+        Err(ServiceError::NotImplemented(
+            "fire history is not available on this transport".to_string(),
+        ))
+    }
+
     async fn get_fcl_sampler_config(&self) -> ServiceResult<(f64, u32)>;
 
     /// Set FCL/FQ sampler configuration

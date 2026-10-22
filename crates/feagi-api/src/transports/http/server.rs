@@ -1047,6 +1047,10 @@ fn create_v1_router() -> Router<ApiState> {
                 .put(burst_engine::put_fire_ledger_default_window_size),
         )
         .route(
+            "/burst_engine/fire_history",
+            get(burst_engine::get_fire_history).delete(burst_engine::delete_fire_history),
+        )
+        .route(
             "/burst_engine/fire_ledger/areas_window_config",
             get(burst_engine::get_fire_ledger_areas_window_config),
         )

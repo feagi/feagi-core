@@ -371,6 +371,28 @@ impl FireLedger {
         Ok(())
     }
 
+    /// The most recent frames of a tracked area, oldest first, at most `max_depth` of them.
+    ///
+    /// Unlike [`Self::get_dense_window_bitmaps`] this never fails for short history: a freshly
+    /// tracked area simply returns fewer frames (possibly none). `max_depth` is clamped to the
+    /// area's window.
+    pub fn get_recent_frames(
+        &self,
+        cortical_idx: u32,
+        max_depth: usize,
+    ) -> Result<Vec<(u64, RoaringBitmap)>, FireLedgerError> {
+        if max_depth == 0 {
+            return Err(FireLedgerError::InvalidDepth);
+        }
+        let hist = self
+            .tracked
+            .get(&cortical_idx)
+            .ok_or(FireLedgerError::AreaNotTracked { cortical_idx })?;
+        let take = max_depth.min(hist.window_size).min(hist.frames.len());
+        let skip = hist.frames.len() - take;
+        Ok(hist.frames.iter().skip(skip).cloned().collect())
+    }
+
     /// Get a dense, burst-aligned window of bitmaps for a tracked area.
     ///
     /// Returns exactly `depth` frames covering `[end_timestep - depth + 1 .. end_timestep]`.
@@ -479,6 +501,51 @@ mod tests {
     use super::*;
     use crate::fire_structures::{FireQueue, FiringNeuron, FIRE_KIND_STDP_ELIGIBLE};
     use feagi_npu_neural::types::NeuronId;
+
+    #[test]
+    fn test_recent_frames_are_bounded_by_history_and_window() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(3, 4).unwrap();
+        assert!(ledger.get_recent_frames(3, 10).unwrap().is_empty());
+        assert!(matches!(
+            ledger.get_recent_frames(9, 1),
+            Err(FireLedgerError::AreaNotTracked { cortical_idx: 9 })
+        ));
+        assert!(matches!(
+            ledger.get_recent_frames(3, 0),
+            Err(FireLedgerError::InvalidDepth)
+        ));
+
+        for t in 1..=6u64 {
+            let mut fq = FireQueue::new();
+            if t % 2 == 0 {
+                fq.add_neuron(FiringNeuron {
+                    neuron_id: NeuronId(t as u32),
+                    membrane_potential: 1.0,
+                    cortical_idx: 3,
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                    fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+                });
+            }
+            ledger.archive_burst(t, &fq).unwrap();
+        }
+        // Window is 4, so bursts 3..=6 are kept; asking for 10 gives those 4.
+        let frames = ledger.get_recent_frames(3, 10).unwrap();
+        assert_eq!(
+            frames.iter().map(|(t, _)| *t).collect::<Vec<_>>(),
+            vec![3, 4, 5, 6]
+        );
+        assert!(frames[0].1.is_empty());
+        assert!(frames[1].1.contains(4));
+        // Asking for 2 gives the newest 2.
+        let frames = ledger.get_recent_frames(3, 2).unwrap();
+        assert_eq!(
+            frames.iter().map(|(t, _)| *t).collect::<Vec<_>>(),
+            vec![5, 6]
+        );
+    }
 
     #[test]
     fn test_dense_history_includes_silence() {

@@ -19,9 +19,20 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use tracing::{debug, info, warn};
 
-use crate::traits::runtime_service::ManualStimulationMode;
+use crate::traits::runtime_service::{ManualStimulationMode, FIRE_HISTORY_SUBSCRIPTION_TTL};
 use crate::traits::RuntimeService;
-use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
+use crate::types::{
+    FireHistory, FireHistoryArea, FireHistoryFrame, FiredNeuron, RuntimeStatus, ServiceError,
+    ServiceResult,
+};
+
+/// Bookkeeping for one area subscribed through `subscribe_fire_history`.
+#[derive(Debug, Clone)]
+struct FireHistorySubscription {
+    /// Ledger window before the subscription grew it; `None` when the area was untracked.
+    prior_window: Option<usize>,
+    last_access: std::time::Instant,
+}
 
 /// Default implementation of RuntimeService
 ///
@@ -29,6 +40,7 @@ use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
 pub struct RuntimeServiceImpl {
     burst_runner: Arc<RwLock<BurstLoopRunner>>,
     paused: Arc<RwLock<bool>>,
+    fire_history_subscriptions: parking_lot::Mutex<std::collections::HashMap<u32, FireHistorySubscription>>,
     /// Only present when `plasticity` feature is enabled (used in `reset_cortical_area_states`).
     #[cfg(feature = "plasticity")]
     plasticity_service: Option<Arc<dyn std::any::Any + Send + Sync>>,
@@ -40,6 +52,7 @@ impl RuntimeServiceImpl {
         Self {
             burst_runner,
             paused: Arc::new(RwLock::new(false)),
+            fire_history_subscriptions: parking_lot::Mutex::new(std::collections::HashMap::new()),
             #[cfg(feature = "plasticity")]
             plasticity_service: None,
         }
@@ -54,6 +67,7 @@ impl RuntimeServiceImpl {
         Self {
             burst_runner,
             paused: Arc::new(RwLock::new(false)),
+            fire_history_subscriptions: parking_lot::Mutex::new(std::collections::HashMap::new()),
             plasticity_service: Some(plasticity_service as Arc<dyn std::any::Any + Send + Sync>),
         }
     }
@@ -67,12 +81,190 @@ impl RuntimeServiceImpl {
         Self {
             burst_runner,
             paused: Arc::new(RwLock::new(false)),
+            fire_history_subscriptions: parking_lot::Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
+impl RuntimeServiceImpl {
+    /// Subscriptions currently held: `(cortical_idx, prior_window, idle_seconds)`.
+    pub fn fire_history_subscriptions(&self) -> Vec<(u32, Option<usize>, u64)> {
+        let now = std::time::Instant::now();
+        let subs = self.fire_history_subscriptions.lock();
+        let mut out: Vec<(u32, Option<usize>, u64)> = subs
+            .iter()
+            .map(|(idx, sub)| {
+                (
+                    *idx,
+                    sub.prior_window,
+                    now.saturating_duration_since(sub.last_access).as_secs(),
+                )
+            })
+            .collect();
+        out.sort_by_key(|entry| entry.0);
+        out
+    }
+
+    /// Grow (never shrink) ledger tracking for `areas` to at least `bursts` and record the
+    /// subscription. Returns the window now kept for each area.
+    fn subscribe_fire_history_sync(
+        &self,
+        areas: &[u32],
+        bursts: usize,
+    ) -> ServiceResult<Vec<(u32, usize)>> {
+        if bursts == 0 {
+            return Err(ServiceError::InvalidInput(
+                "bursts must be at least 1".to_string(),
+            ));
+        }
+        let runner = self.burst_runner.read();
+        let npu_arc = runner.get_npu();
+        let mut npu = npu_arc
+            .lock()
+            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+        let mut subs = self.fire_history_subscriptions.lock();
+        let now = std::time::Instant::now();
+        let mut windows = Vec::with_capacity(areas.len());
+        for &idx in areas {
+            let current = npu.get_fire_ledger_window_size(idx).ok();
+            let entry = subs
+                .entry(idx)
+                .or_insert_with(|| FireHistorySubscription {
+                    prior_window: current,
+                    last_access: now,
+                });
+            entry.last_access = now;
+            let window = match current {
+                Some(window) if window >= bursts => window,
+                _ => {
+                    npu.configure_fire_ledger_window(idx, bursts).map_err(|e| {
+                        ServiceError::Backend(format!(
+                            "Failed to track area {} in the fire ledger: {}",
+                            idx, e
+                        ))
+                    })?;
+                    bursts
+                }
+            };
+            windows.push((idx, window));
+        }
+        Ok(windows)
+    }
+
+    /// Drop subscriptions for `areas`, restoring the ledger window each had before.
+    fn unsubscribe_fire_history_sync(&self, areas: &[u32]) -> ServiceResult<usize> {
+        let runner = self.burst_runner.read();
+        let npu_arc = runner.get_npu();
+        let mut npu = npu_arc
+            .lock()
+            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+        let mut subs = self.fire_history_subscriptions.lock();
+        let mut dropped = 0usize;
+        for idx in areas {
+            let Some(sub) = subs.remove(idx) else {
+                continue;
+            };
+            dropped += 1;
+            match sub.prior_window {
+                None => {
+                    npu.untrack_fire_ledger_area(*idx);
+                }
+                Some(prior) => {
+                    if npu.get_fire_ledger_window_size(*idx).ok() != Some(prior) {
+                        if let Err(e) = npu.configure_fire_ledger_window(*idx, prior) {
+                            warn!(
+                                target: "feagi-services",
+                                "Could not restore fire ledger window {} for area {}: {}",
+                                prior, idx, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Ok(dropped)
+    }
+
+    fn expire_idle_fire_history_subscriptions(&self) {
+        let expired: Vec<u32> = {
+            let now = std::time::Instant::now();
+            self.fire_history_subscriptions
+                .lock()
+                .iter()
+                .filter(|(_, sub)| {
+                    now.saturating_duration_since(sub.last_access) > FIRE_HISTORY_SUBSCRIPTION_TTL
+                })
+                .map(|(idx, _)| *idx)
+                .collect()
+        };
+        if !expired.is_empty() {
+            info!(
+                target: "feagi-services",
+                "Dropping {} idle fire-history subscription(s): {:?}",
+                expired.len(),
+                expired
+            );
+            if let Err(e) = self.unsubscribe_fire_history_sync(&expired) {
+                warn!(target: "feagi-services", "Failed to drop idle fire-history subscriptions: {}", e);
+            }
         }
     }
 }
 
 #[async_trait]
 impl RuntimeService for RuntimeServiceImpl {
+    async fn subscribe_fire_history(
+        &self,
+        areas: &[u32],
+        bursts: usize,
+    ) -> ServiceResult<Vec<(u32, usize)>> {
+        self.subscribe_fire_history_sync(areas, bursts)
+    }
+
+    async fn unsubscribe_fire_history(&self, areas: &[u32]) -> ServiceResult<usize> {
+        self.unsubscribe_fire_history_sync(areas)
+    }
+
+    async fn get_fire_history(&self, areas: &[u32], bursts: usize) -> ServiceResult<FireHistory> {
+        self.expire_idle_fire_history_subscriptions();
+        let windows = self.subscribe_fire_history_sync(areas, bursts)?;
+
+        let runner = self.burst_runner.read();
+        let npu_arc = runner.get_npu();
+        let npu = npu_arc
+            .lock()
+            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+        let current_burst = npu.get_burst_count();
+        let mut out = Vec::with_capacity(windows.len());
+        for (idx, window) in windows {
+            let frames = npu.get_fire_ledger_recent_frames(idx, bursts).map_err(|e| {
+                ServiceError::Backend(format!("Fire history read failed for area {}: {}", idx, e))
+            })?;
+            let frames = frames
+                .into_iter()
+                .map(|(burst, bitmap)| FireHistoryFrame {
+                    burst,
+                    neurons: bitmap
+                        .iter()
+                        .map(|neuron_id| FiredNeuron {
+                            neuron_id,
+                            voxel: npu.get_neuron_coordinates(neuron_id),
+                        })
+                        .collect(),
+                })
+                .collect();
+            out.push(FireHistoryArea {
+                cortical_idx: idx,
+                window,
+                frames,
+            });
+        }
+        Ok(FireHistory {
+            current_burst,
+            areas: out,
+        })
+    }
+
     async fn start(&self) -> ServiceResult<()> {
         info!(target: "feagi-services", "Starting burst engine");
 
@@ -515,5 +707,137 @@ impl RuntimeService for RuntimeServiceImpl {
         }
 
         Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod fire_history_tests {
+    use super::*;
+    use feagi_npu_burst_engine::{
+        DynamicNPU, MotorPublisher, RawFireQueueSnapshot, TracingMutex, VisualizationPublisher,
+    };
+
+    struct NoViz;
+    impl VisualizationPublisher for NoViz {
+        fn publish_raw_fire_queue_for_agent(
+            &self,
+            _agent_id: &str,
+            _fire_data: RawFireQueueSnapshot,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+    struct NoMotor;
+    impl MotorPublisher for NoMotor {
+        fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    const AREA: u32 = 5;
+
+    fn service_with_one_neuron() -> (RuntimeServiceImpl, Arc<TracingMutex<DynamicNPU>>, u32) {
+        let mut rust_npu = feagi_npu_burst_engine::RustNPU::new(
+            feagi_npu_runtime::StdRuntime,
+            feagi_npu_burst_engine::backend::CPUBackend::new(),
+            1000,
+            10000,
+            20,
+        )
+        .unwrap();
+        rust_npu.register_cortical_area(
+            AREA,
+            CorticalID::try_from_bytes(b"cfirehis").unwrap().as_base_64(),
+        );
+        let neuron = rust_npu
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, AREA, 1, 2, 3)
+            .unwrap()
+            .0;
+        let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "TestNPU"));
+        let runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu.clone(), None, None, 10.0);
+        (
+            RuntimeServiceImpl::new(Arc::new(RwLock::new(runner))),
+            npu,
+            neuron,
+        )
+    }
+
+    fn burst(npu: &Arc<TracingMutex<DynamicNPU>>, neuron: u32, fire: bool) {
+        let mut npu = npu.lock().unwrap();
+        if fire {
+            npu.inject_sensory_with_potentials(&[(feagi_npu_neural::types::NeuronId(neuron), 128.0)]);
+        }
+        npu.process_burst().unwrap();
+    }
+
+    #[tokio::test]
+    async fn fire_history_tracks_only_while_subscribed_and_returns_aligned_frames() {
+        let (svc, npu, neuron) = service_with_one_neuron();
+        burst(&npu, neuron, true); // burst 1: not tracked yet, must not appear
+
+        let windows = svc.subscribe_fire_history(&[AREA], 3).await.unwrap();
+        assert_eq!(windows, vec![(AREA, 3)]);
+        for (b, fire) in [(2u64, false), (3, true), (4, false), (5, true)] {
+            burst(&npu, neuron, fire);
+            assert_eq!(npu.lock().unwrap().get_burst_count(), b);
+        }
+
+        let history = svc.get_fire_history(&[AREA], 3).await.unwrap();
+        assert_eq!(history.current_burst, 5);
+        assert_eq!(history.areas.len(), 1);
+        let area = &history.areas[0];
+        assert_eq!((area.cortical_idx, area.window), (AREA, 3));
+        assert_eq!(
+            area.frames.iter().map(|f| f.burst).collect::<Vec<_>>(),
+            vec![3, 4, 5],
+            "window of 3 ending at the current burst"
+        );
+        assert_eq!(
+            area.frames[0].neurons,
+            vec![FiredNeuron {
+                neuron_id: neuron,
+                voxel: Some((1, 2, 3))
+            }]
+        );
+        assert!(area.frames[1].neurons.is_empty(), "silent burst is an explicit empty frame");
+        assert_eq!(area.frames[2].neurons.len(), 1);
+
+        // A smaller read keeps the window, a larger read grows it.
+        let history = svc.get_fire_history(&[AREA], 2).await.unwrap();
+        assert_eq!(history.areas[0].window, 3);
+        assert_eq!(history.areas[0].frames.len(), 2);
+        let history = svc.get_fire_history(&[AREA], 6).await.unwrap();
+        assert_eq!(history.areas[0].window, 6);
+        assert_eq!(svc.fire_history_subscriptions()[0], (AREA, None, 0));
+
+        assert_eq!(svc.unsubscribe_fire_history(&[AREA, 77]).await.unwrap(), 1);
+        assert!(svc.fire_history_subscriptions().is_empty());
+        assert!(
+            npu.lock().unwrap().get_fire_ledger_window_size(AREA).is_err(),
+            "area untracked again after unsubscribe"
+        );
+    }
+
+    #[tokio::test]
+    async fn fire_history_never_shrinks_an_existing_window_and_restores_it() {
+        let (svc, npu, _neuron) = service_with_one_neuron();
+        npu.lock()
+            .unwrap()
+            .configure_fire_ledger_window(AREA, 8)
+            .unwrap();
+
+        let windows = svc.subscribe_fire_history(&[AREA], 2).await.unwrap();
+        assert_eq!(windows, vec![(AREA, 8)], "plasticity window kept");
+        svc.subscribe_fire_history(&[AREA], 12).await.unwrap();
+        assert_eq!(npu.lock().unwrap().get_fire_ledger_window_size(AREA).unwrap(), 12);
+        assert_eq!(svc.fire_history_subscriptions()[0].1, Some(8));
+
+        svc.unsubscribe_fire_history(&[AREA]).await.unwrap();
+        assert_eq!(
+            npu.lock().unwrap().get_fire_ledger_window_size(AREA).unwrap(),
+            8,
+            "prior window restored"
+        );
+        assert!(svc.get_fire_history(&[AREA], 0).await.is_err());
     }
 }

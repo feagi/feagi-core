@@ -502,6 +502,39 @@ pub struct SystemHealth {
 // RUNTIME DTOs
 // ============================================================================
 
+/// One neuron that fired in a burst, with its voxel when it is a dense (storage) neuron.
+/// Dynamic memory neurons have no voxel and report `None`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FiredNeuron {
+    pub neuron_id: u32,
+    pub voxel: Option<(u32, u32, u32)>,
+}
+
+/// Every neuron of one area that fired in one burst (empty when the area was silent).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FireHistoryFrame {
+    pub burst: u64,
+    pub neurons: Vec<FiredNeuron>,
+}
+
+/// Burst-aligned firing history of one cortical area, oldest frame first.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FireHistoryArea {
+    pub cortical_idx: u32,
+    /// Ledger window currently kept for the area (may exceed the requested depth when
+    /// plasticity or memory needs more, or be less when the subscription could not grow it).
+    pub window: usize,
+    pub frames: Vec<FireHistoryFrame>,
+}
+
+/// Result of a fire-history read across several areas.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FireHistory {
+    /// Burst counter at the time of the read; the newest frame is at most this burst.
+    pub current_burst: u64,
+    pub areas: Vec<FireHistoryArea>,
+}
+
 /// Runtime status information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeStatus {
