@@ -113,7 +113,7 @@ pub enum FeagiIndexQuantizationLevel {
 // including generating the with_X macros and the macro for adding the family trait to the struct
 
 enum_leveled_builder!(
-     (Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize),
+    (Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize),
     FeagiIndexQuantization, FIQ, {
         (StandardQuantization, FeagiIndexQuantizationStandard)
         (LowQuantization, FeagiIndexQuantizationLow)

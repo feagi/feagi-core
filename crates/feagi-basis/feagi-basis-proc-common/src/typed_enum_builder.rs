@@ -12,6 +12,7 @@ pub fn enum_leveled_builder(input: TokenStream) -> TokenStream {
 
     out.extend(enum_level_params.generate_family_trait());
     out.extend(enum_level_params.generate_leveled_enum());
+    out.extend(enum_level_params.generate_with_macro());
 
     out.into()
 }
@@ -144,6 +145,47 @@ impl EnumLevelParams {
             }
 
             #manual_impls
+        }
+    }
+
+    /// generate `with_{short}!`, which runs the same code against whichever variant is held.
+    /// Names in the expansion resolve where it is called, so the leveled enum (and for the
+    /// `<LEVEL>` form, the level structs) must be in scope there
+    pub fn generate_with_macro(&self) -> proc_macro2::TokenStream {
+        let leveled_enum_name = format_ident!("{}Leveled", self.base_trait_name.to_string());
+        let with_macro_name = format_ident!("with_{}", self.short_trait_name.to_string().to_lowercase());
+        let variants: Vec<&Ident> = self.short_and_struct_key_names.iter().map(|row| &row.short).collect();
+        let structs: Vec<&Ident> = self.short_and_struct_key_names.iter().map(|row| &row.key).collect();
+
+        let doc = format!(
+            "Runs the same code against whichever variant of `{leveled_enum_name}` is held.\n\n\
+             `{with_macro_name}!(value, |inner| body)` binds the variant's contents to `inner`. \
+             `{with_macro_name}!(value, <{short}> |inner| body)` additionally aliases the variant's \
+             level struct as `{short}` within `body` (use `<{short} as {base}>::Assoc` for its \
+             associated types).",
+            short = self.short_trait_name,
+            base = self.base_trait_name,
+        );
+
+        quote! {
+            #[doc = #doc]
+            #[macro_export]
+            macro_rules! #with_macro_name {
+                ($value:expr, |$inner:pat_param| $body:expr) => {
+                    match $value {
+                        #(#leveled_enum_name::#variants($inner) => $body,)*
+                    }
+                };
+                ($value:expr, <$level:ident> |$inner:pat_param| $body:expr) => {
+                    match $value {
+                        #(#leveled_enum_name::#variants($inner) => {
+                            #[allow(dead_code)]
+                            type $level = #structs;
+                            $body
+                        })*
+                    }
+                };
+            }
         }
     }
 }
