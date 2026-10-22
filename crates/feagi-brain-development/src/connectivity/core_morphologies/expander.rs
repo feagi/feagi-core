@@ -14,14 +14,16 @@ use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
 /// Apply expander morphology directly on NPU
+#[allow(clippy::too_many_arguments)]
 pub fn apply_expander_morphology(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
     src_area_id: u32,
     dst_area_id: u32,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
+    delay_bursts: u8,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -62,6 +64,8 @@ pub fn apply_expander_morphology(
                         SynapticWeight(weight),
                         SynapticPsp(psp),
                         synapse_type,
+                        0,
+                        delay_bursts,
                     )
                     .is_ok()
             {

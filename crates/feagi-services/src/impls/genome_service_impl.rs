@@ -15,10 +15,12 @@ use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
-use feagi_npu_burst_engine::{BurstLoopRunner, ParameterUpdateQueue};
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalSubUnitIndex, CorticalUnitIndex,
+use feagi_npu_burst_engine::{
+    is_firing_threshold_increment_param, is_firing_threshold_param, json_number_as_f32,
+    merge_firing_threshold_increment, should_rewrite_threshold_gradient, BurstLoopRunner,
+    ParameterUpdateQueue,
 };
+use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
@@ -29,9 +31,9 @@ use feagi_structures::genomic::cortical_area::{
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use parking_lot::RwLock;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tracing::{info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
 
@@ -61,6 +63,7 @@ fn signage_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static s
         | IOCorticalAreaConfigurationFlag::Percentage4D(..) => "Percentage Unsigned",
         IOCorticalAreaConfigurationFlag::CartesianPlane(..) => "Cartesian Plane",
         IOCorticalAreaConfigurationFlag::Misc(..) => "Misc",
+        IOCorticalAreaConfigurationFlag::PoseEstimation(..) => "Pose Estimation",
         IOCorticalAreaConfigurationFlag::Boolean => "Boolean",
     }
 }
@@ -91,6 +94,24 @@ fn merge_memory_area_properties(
     defaults
         .entry("init_lifespan".to_string())
         .or_insert(Value::from(memory_defaults.init_lifespan));
+    defaults
+        .entry("min_window_activity".to_string())
+        .or_insert(Value::from(memory_defaults.min_window_activity));
+    defaults
+        .entry("scan_skip_density".to_string())
+        .or_insert(Value::from(memory_defaults.scan_skip_density));
+    defaults
+        .entry(feagi_evolutionary::MP_CHANGE_MODE_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.mp_change_mode.as_str()));
+    defaults
+        .entry(feagi_evolutionary::MP_DELTA_QUANTIZATION_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.mp_delta_quantization));
+    defaults
+        .entry(feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.mp_ratio_quantization));
+    defaults
+        .entry("psp_uniform_distribution".to_string())
+        .or_insert(Value::from(true));
 
     defaults.extend(base);
     if let Some(extra_props) = extra {
@@ -99,11 +120,42 @@ fn merge_memory_area_properties(
     defaults
 }
 
+/// Reject an update whose MP encoding keys would leave the area invalid.
+///
+/// Merges only the MP encoding keys of `changes` over the current values so
+/// that combinations (e.g. enabling MP learning while a change mode is set)
+/// are checked, not just individual values.
+fn validate_mp_encoding_update(
+    current: &HashMap<String, Value>,
+    changes: &HashMap<String, Value>,
+) -> ServiceResult<()> {
+    const MP_KEYS: [&str; 4] = [
+        feagi_evolutionary::MP_LEARNING_ENABLED_KEY,
+        feagi_evolutionary::MP_CHANGE_MODE_KEY,
+        feagi_evolutionary::MP_DELTA_QUANTIZATION_KEY,
+        feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY,
+    ];
+    if !changes.keys().any(|k| MP_KEYS.contains(&k.as_str())) {
+        return Ok(());
+    }
+    let merged: HashMap<String, Value> = MP_KEYS
+        .iter()
+        .filter_map(|key| {
+            changes
+                .get(*key)
+                .or_else(|| current.get(*key))
+                .map(|v| (key.to_string(), v.clone()))
+        })
+        .collect();
+    feagi_evolutionary::validate_memory_mp_properties(&merged).map_err(ServiceError::InvalidInput)
+}
+
 fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
     match flag {
         IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
         IOCorticalAreaConfigurationFlag::CartesianPlane(frame)
         | IOCorticalAreaConfigurationFlag::Misc(frame)
+        | IOCorticalAreaConfigurationFlag::PoseEstimation(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage2D(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage3D(frame, _)
@@ -115,6 +167,39 @@ fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static 
             frame_handling_label(*frame)
         }
     }
+}
+
+fn resolve_non_overlapping_position(
+    requested_position: (i32, i32, i32),
+    area_width: usize,
+    occupied_positions: &mut HashSet<(i32, i32, i32)>,
+) -> ServiceResult<(i32, i32, i32)> {
+    if !occupied_positions.contains(&requested_position) {
+        occupied_positions.insert(requested_position);
+        return Ok(requested_position);
+    }
+
+    let width_for_gap = area_width.max(1);
+    let gap = width_for_gap.div_ceil(5).max(1); // ceil(20% of width)
+    let step_usize = width_for_gap.saturating_add(gap);
+    let step = i32::try_from(step_usize).map_err(|_| {
+        ServiceError::InvalidInput(format!(
+            "Unable to place cortical area: width {} creates horizontal step {} outside i32 range",
+            area_width, step_usize
+        ))
+    })?;
+
+    let mut candidate = requested_position;
+    while occupied_positions.contains(&candidate) {
+        candidate.0 = candidate.0.checked_add(step).ok_or_else(|| {
+            ServiceError::InvalidInput(format!(
+                "Unable to place cortical area: overflow while shifting x from {} by {}",
+                candidate.0, step
+            ))
+        })?;
+    }
+    occupied_positions.insert(candidate);
+    Ok(candidate)
 }
 
 fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
@@ -131,6 +216,7 @@ fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'stat
         }
         IOCorticalAreaConfigurationFlag::CartesianPlane(..)
         | IOCorticalAreaConfigurationFlag::Misc(..)
+        | IOCorticalAreaConfigurationFlag::PoseEstimation(..)
         | IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
     }
 }
@@ -232,6 +318,101 @@ fn io_coding_options_for_unit(cortical_id: &CorticalID) -> Option<IOCodingOption
     })
 }
 
+fn normalize_quantization_precision(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "fp32" | "f32" => "fp32".to_string(),
+        "fp16" | "f16" => "fp16".to_string(),
+        "int8" | "i8" => "int8".to_string(),
+        _ => "unknown".to_string(),
+    }
+}
+
+fn precision_import_warning_reason(
+    requested_precision: &str,
+    active_precision: &str,
+) -> Option<&'static str> {
+    if requested_precision == "unknown" {
+        Some("unknown")
+    } else if requested_precision != active_precision {
+        Some("mismatch")
+    } else {
+        None
+    }
+}
+
+/// Copy live connectome structure into `genome` so save/export matches runtime.
+///
+/// The live connectome is the source of truth for:
+/// - all cortical areas (including areas created after the last genome load)
+/// - all area properties (mappings, memory flags, plasticity dstmaps, geometry)
+/// - morphologies
+/// - brain regions and the region tree root
+pub fn sync_runtime_genome_from_connectome(
+    genome: &mut feagi_evolutionary::RuntimeGenome,
+    manager: &ConnectomeManager,
+) {
+    let hierarchy = manager.get_brain_region_hierarchy();
+    genome.brain_regions = hierarchy.get_all_regions();
+    if let Some(root_id) = hierarchy.get_root_id().cloned() {
+        genome.metadata.brain_regions_root = Some(root_id);
+    }
+
+    genome.classifiers = manager.list_classifiers();
+    genome.morphologies = manager.get_morphologies().clone();
+
+    let live_ids: HashSet<CorticalID> = manager
+        .get_cortical_area_ids()
+        .into_iter()
+        .cloned()
+        .collect();
+    genome.cortical_areas.retain(|id, _| live_ids.contains(id));
+
+    for cortical_id in manager.get_cortical_area_ids() {
+        if let Some(conn_area) = manager.get_cortical_area(cortical_id) {
+            genome
+                .cortical_areas
+                .insert(*cortical_id, conn_area.clone());
+        }
+    }
+}
+
+/// Collect architecture indexes used by connectome snapshots and completeness checks.
+pub fn architecture_indexes_from_genome(
+    genome: &feagi_evolutionary::RuntimeGenome,
+) -> (Vec<String>, Vec<(String, String)>, Vec<String>) {
+    let mut memory_area_ids = Vec::new();
+    let mut plastic_mappings = Vec::new();
+    for (cortical_id, area) in &genome.cortical_areas {
+        let is_memory = matches!(area.cortical_type, CorticalAreaType::Memory(_))
+            || area.properties.get("is_mem_type").and_then(|v| v.as_bool()) == Some(true);
+        if is_memory {
+            memory_area_ids.push(cortical_id.as_base_64());
+        }
+        if let Some(dstmap) = area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+        {
+            for (dst, rules) in dstmap {
+                let Some(arr) = rules.as_array() else {
+                    continue;
+                };
+                if arr
+                    .iter()
+                    .any(|rule| rule.get("plasticity_flag").and_then(|v| v.as_bool()) == Some(true))
+                {
+                    plastic_mappings.push((cortical_id.as_base_64(), dst.clone()));
+                }
+            }
+        }
+    }
+    memory_area_ids.sort();
+    plastic_mappings.sort();
+    let mut brain_region_ids: Vec<String> = genome.brain_regions.keys().cloned().collect();
+    brain_region_ids.sort();
+    (memory_area_ids, plastic_mappings, brain_region_ids)
+}
+
 /// Default implementation of GenomeService
 pub struct GenomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
@@ -278,6 +459,18 @@ impl GenomeServiceImpl {
         self.burst_runner = Some(burst_runner);
     }
 
+    /// Drop published activity that still belongs to the previous genome.
+    ///
+    /// The NPU fire ledger is replaced in `prepare_for_new_genome`. Visualization,
+    /// motor output, and the activity monitor read the burst runner's cached
+    /// sample and the global burst taps, which that reset does not touch.
+    fn clear_published_activity(&self) {
+        if let Some(ref burst_runner) = self.burst_runner {
+            burst_runner.read().clear_cached_fire_queue();
+        }
+        feagi_npu_burst_engine::BurstTaps::instance().clear();
+    }
+
     /// Refresh cortical_id cache in burst runner
     fn refresh_burst_runner_cache(&self) {
         if let Some(ref burst_runner) = self.burst_runner {
@@ -288,7 +481,7 @@ impl GenomeServiceImpl {
             let burst_runner_write = burst_runner.write();
             burst_runner_write.refresh_cortical_id_mappings(mappings);
             burst_runner_write.refresh_visualization_granularities(chunk_sizes);
-            info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
+            debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
 
@@ -297,6 +490,32 @@ impl GenomeServiceImpl {
     pub fn get_current_genome_arc(&self) -> Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>> {
         Arc::clone(&self.current_genome)
     }
+
+    /// Share the genome-load counter so connectome import can bump `genome_num`.
+    pub fn get_genome_load_counter_arc(&self) -> Arc<RwLock<i32>> {
+        Arc::clone(&self.genome_load_counter)
+    }
+
+    /// Share the genome-load timestamp so connectome import can update health_check.
+    pub fn get_genome_load_timestamp_arc(&self) -> Arc<RwLock<Option<i64>>> {
+        Arc::clone(&self.genome_load_timestamp)
+    }
+
+    /// Increment `genome_num` and stamp `genome_timestamp` for BV reload detection.
+    fn record_genome_load(&self) -> i32 {
+        let genome_num = {
+            let mut counter = self.genome_load_counter.write();
+            *counter += 1;
+            *counter
+        };
+        let genome_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_secs() as i64);
+        *self.genome_load_timestamp.write() = genome_timestamp;
+        info!(target: "feagi-services", "Genome load #{}, timestamp: {:?}", genome_num, genome_timestamp);
+        genome_num
+    }
 }
 
 #[async_trait]
@@ -304,9 +523,33 @@ impl GenomeService for GenomeServiceImpl {
     async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
         info!(target: "feagi-services", "Loading genome from JSON");
 
-        // Parse genome using feagi-evo (this is CPU-bound, but relatively fast)
-        let mut genome = feagi_evolutionary::load_genome_from_json(&params.json_str)
-            .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
+        // Parse genome using feagi-evo (this is CPU-bound, but relatively fast).
+        //
+        // We use `load_genome_with_report` so the chain report is
+        // available to write into `genome_validity` on core state.
+        // The library does NOT convert validator errors into `Err`
+        // per the "validator is reporter" policy, so a `false` validity
+        // is reported via the `/health` endpoint while this load still
+        // succeeds. Consumers (desktop, composer) react to the flag.
+        let (mut genome, chain_report) =
+            feagi_evolutionary::load_genome_with_report(&params.json_str).map_err(|e| {
+                ServiceError::InvalidInput(format!("Failed to parse genome: {}", e))
+            })?;
+        {
+            let instance = feagi_state_manager::StateManager::instance();
+            let manager = instance.read();
+            manager
+                .get_core_state()
+                .set_genome_validity(Some(chain_report.is_blocking_clean()));
+        }
+        if !chain_report.is_blocking_clean() {
+            warn!(
+                target: "feagi-services",
+                "Loaded genome has {} blocking validator error(s); running in degraded mode (genome_validity=false). First: {}",
+                chain_report.blocking_errors.len(),
+                chain_report.blocking_errors.first().map(String::as_str).unwrap_or("")
+            );
+        }
         let (_areas_added, morphs_added) = feagi_evolutionary::ensure_core_components(&mut genome);
         if morphs_added > 0 {
             info!(
@@ -320,26 +563,57 @@ impl GenomeService for GenomeServiceImpl {
         let simulation_timestep = genome.physiology.simulation_timestep;
         info!(target: "feagi-services", "Genome simulation_timestep: {} seconds", simulation_timestep);
 
+        // Keep genome import deterministic and non-failing: when a genome requests a precision
+        // that differs from active runtime precision, continue load and canonicalize to runtime.
+        // This preserves import success while making runtime precision intent explicit in memory.
+        let requested_precision =
+            normalize_quantization_precision(&genome.physiology.quantization_precision);
+        let active_precision = {
+            let npu_arc = self
+                .connectome
+                .read()
+                .get_npu()
+                .cloned()
+                .ok_or_else(|| ServiceError::Backend("NPU not initialized".to_string()))?;
+            let npu_guard = npu_arc
+                .lock()
+                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+            match &*npu_guard {
+                feagi_npu_burst_engine::DynamicNPU::F32(_) => "fp32",
+                feagi_npu_burst_engine::DynamicNPU::INT8(_) => "int8",
+            }
+        };
+        if let Some(reason) =
+            precision_import_warning_reason(&requested_precision, active_precision)
+        {
+            match reason {
+                "unknown" => warn!(
+                    target: "feagi-services",
+                    "Genome quantization precision '{}' is unknown; using active runtime precision '{}'",
+                    genome.physiology.quantization_precision,
+                    active_precision
+                ),
+                "mismatch" => warn!(
+                    target: "feagi-services",
+                    "Genome quantization precision '{}' does not match active runtime precision '{}'; importing with active runtime precision",
+                    genome.physiology.quantization_precision,
+                    active_precision
+                ),
+                _ => {}
+            }
+            genome.physiology.quantization_precision = active_precision.to_string();
+        } else if genome.physiology.quantization_precision != active_precision {
+            // Canonicalize aliases (e.g. f32 -> fp32) even when semantically matching.
+            genome.physiology.quantization_precision = active_precision.to_string();
+        }
+
         // Store genome for future updates (source of truth for structural changes)
         info!(target: "feagi-services", "Storing RuntimeGenome with {} cortical areas, {} morphologies",
             genome.cortical_areas.len(), genome.morphologies.iter().count());
         *self.current_genome.write() = Some(genome.clone());
 
-        // Increment genome load counter and set timestamp
-        let genome_num = {
-            let mut counter = self.genome_load_counter.write();
-            *counter += 1;
-            *counter
-        };
-
-        let genome_timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .ok()
-            .map(|d| d.as_secs() as i64);
-
-        *self.genome_load_timestamp.write() = genome_timestamp;
-
-        info!(target: "feagi-services", "Genome load #{}, timestamp: {:?}", genome_num, genome_timestamp);
+        let genome_num = self.record_genome_load();
+        let genome_timestamp = *self.genome_load_timestamp.read();
 
         // Load into connectome via ConnectomeManager
         // This involves synaptogenesis which can be CPU-intensive, so run it on a blocking thread
@@ -362,24 +636,75 @@ impl GenomeService for GenomeServiceImpl {
                     (prepare_result, resize_result)
                 }; // Lock released here
 
-                prepare_result.map_err(ServiceError::from)?;
+                prepare_result.map_err(|e| {
+                    tracing::error!(target: "feagi-services", "prepare_for_new_genome failed: {}", e);
+                    ServiceError::from(e)
+                })?;
                 if let Some(resize_result) = resize_result {
-                    resize_result.map_err(ServiceError::from)?;
+                    resize_result.map_err(|e| {
+                        tracing::error!(target: "feagi-services", "resize_for_genome failed: {}", e);
+                        ServiceError::from(e)
+                    })?;
                 }
 
                 // Now call develop_from_genome without holding the lock
                 // It will acquire its own locks internally
                 let manager_arc = feagi_brain_development::ConnectomeManager::instance();
                 let mut neuro = Neuroembryogenesis::new(manager_arc.clone());
-                neuro.develop_from_genome(&genome_clone).map_err(|e| {
-                    ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e))
-                })?;
+
+                let develop_result = neuro.develop_from_genome(&genome_clone);
+                let develop_result = match develop_result {
+                    Ok(()) => Ok(()),
+                    Err(e) => {
+                        let err_str = e.to_string();
+                        let is_already_exists = err_str.contains("already exists");
+                        if is_already_exists {
+                            tracing::warn!(
+                                target: "feagi-services",
+                                "Neuroembryogenesis failed with 'already exists' - clearing connectome and retrying once: {}",
+                                err_str
+                            );
+                            // Re-prepare and retry: handle stale connectome state.
+                            let (retry_prepare, retry_resize) = {
+                                let mut manager = connectome_clone.write();
+                                let prep = manager.prepare_for_new_genome();
+                                let resize = prep.as_ref().ok().map(|_| manager.resize_for_genome(&genome_clone));
+                                (prep, resize)
+                            };
+                            retry_prepare.map_err(|e| {
+                                tracing::error!(target: "feagi-services", "Retry prepare_for_new_genome failed: {}", e);
+                                ServiceError::from(e)
+                            })?;
+                            if let Some(res) = retry_resize {
+                                res.map_err(|e| {
+                                    tracing::error!(target: "feagi-services", "Retry resize_for_genome failed: {}", e);
+                                    ServiceError::from(e)
+                                })?;
+                            }
+                            let mut neuro_retry = Neuroembryogenesis::new(manager_arc.clone());
+                            neuro_retry.develop_from_genome(&genome_clone).map_err(|e| {
+                                tracing::error!(target: "feagi-services", "Neuroembryogenesis retry failed: {}", e);
+                                ServiceError::Backend(format!(
+                                    "Neuroembryogenesis failed: {}. Retry after connectome reset also failed.",
+                                    err_str
+                                ))
+                            })?;
+                            neuro = neuro_retry;
+                            Ok(())
+                        } else {
+                            tracing::error!(target: "feagi-services", "Neuroembryogenesis failed: {}", e);
+                            Err(ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e)))
+                        }
+                    }
+                };
+                develop_result?;
 
                 // Ensure core cortical areas exist after neuroembryogenesis
                 // (they may have been added during corticogenesis, but we ensure they exist)
                 {
                     let mut manager = manager_arc.write();
                     manager.ensure_core_cortical_areas().map_err(|e| {
+                        tracing::error!(target: "feagi-services", "ensure_core_cortical_areas failed: {}", e);
                         ServiceError::Backend(format!("Failed to ensure core cortical areas: {}", e))
                     })?;
                 }
@@ -428,27 +753,14 @@ impl GenomeService for GenomeServiceImpl {
             progress.synapses_created
         );
 
-        // CRITICAL: Sync auto-generated brain regions back to RuntimeGenome
-        // BDU may auto-generate brain regions if the genome didn't have any.
-        // We need to sync these back to current_genome so they're included when saving.
-        let brain_regions_from_bdu = {
+        // Connectome load drops illegal classifier auto twins and places legal
+        // twins in their non-root region. Write that hierarchy back so a later
+        // save does not resurrect the unloaded areas.
+        {
             let manager = self.connectome.read();
-            let hierarchy = manager.get_brain_region_hierarchy();
-            hierarchy.get_all_regions()
-        };
-
-        if !brain_regions_from_bdu.is_empty() {
             let mut current_genome_guard = self.current_genome.write();
             if let Some(ref mut genome) = *current_genome_guard {
-                // Only update if BDU has more regions (handles auto-generation case)
-                if brain_regions_from_bdu.len() > genome.brain_regions.len() {
-                    info!(
-                        target: "feagi-services",
-                        "Syncing {} auto-generated brain regions from BDU to RuntimeGenome",
-                        brain_regions_from_bdu.len()
-                    );
-                    genome.brain_regions = brain_regions_from_bdu;
-                }
+                sync_runtime_genome_from_connectome(genome, &manager);
             }
         }
 
@@ -461,8 +773,10 @@ impl GenomeService for GenomeServiceImpl {
             (cortical_area_count, brain_region_count)
         };
 
-        // Refresh burst runner cache after genome load
+        // Refresh burst runner cache after genome load and drop the previous
+        // genome's published spikes.
         self.refresh_burst_runner_cache();
+        self.clear_published_activity();
 
         Ok(GenomeInfo {
             genome_id: "current".to_string(),
@@ -490,41 +804,6 @@ impl GenomeService for GenomeServiceImpl {
 
         info!(target: "feagi-services", "✅ RuntimeGenome loaded, exporting in flat format v3.0");
 
-        // Debug: Check all property values in RuntimeGenome before saving
-        for (cortical_id, area) in &genome.cortical_areas {
-            let area_id_str = cortical_id.as_base_64();
-            info!(
-                target: "feagi-services",
-                "[GENOME-SAVE] Area {} has {} properties in RuntimeGenome",
-                area_id_str,
-                area.properties.len()
-            );
-
-            // Log key properties that should be saved
-            let key_props = [
-                "mp_driven_psp",
-                "snooze_length",
-                "consecutive_fire_cnt_max",
-                "firing_threshold_increment_x",
-                "firing_threshold_increment_y",
-                "firing_threshold_increment_z",
-                "firing_threshold",
-                "leak_coefficient",
-                "refractory_period",
-                "neuron_excitability",
-            ];
-
-            for prop_name in &key_props {
-                if let Some(prop_value) = area.properties.get(*prop_name) {
-                    info!(
-                        target: "feagi-services",
-                        "[GENOME-SAVE] Area {} property {}={}",
-                        area_id_str, prop_name, prop_value
-                    );
-                }
-            }
-        }
-
         // Update metadata if provided
         if let Some(id) = params.genome_id {
             genome.metadata.genome_id = id;
@@ -533,12 +812,41 @@ impl GenomeService for GenomeServiceImpl {
             genome.metadata.genome_title = title;
         }
 
+        {
+            let manager = self.connectome.read();
+            sync_runtime_genome_from_connectome(&mut genome, &manager);
+        }
+
         // Use the full RuntimeGenome saver (produces flat format v3.0)
         let json_str = feagi_evolutionary::save_genome_to_json(&genome)
             .map_err(|e| ServiceError::Internal(format!("Failed to save genome: {}", e)))?;
 
         info!(target: "feagi-services", "✅ Genome exported successfully (flat format v3.0)");
         Ok(json_str)
+    }
+
+    async fn export_region_genome(&self, region_id: String) -> ServiceResult<String> {
+        let mut genome = self.current_genome.read().clone().ok_or_else(|| {
+            ServiceError::Internal(
+                "No RuntimeGenome stored. Genome must be loaded before exporting a region."
+                    .to_string(),
+            )
+        })?;
+        {
+            let manager = self.connectome.read();
+            sync_runtime_genome_from_connectome(&mut genome, &manager);
+        }
+        let subset =
+            feagi_evolutionary::subset_runtime_genome_for_region_branch(&genome, &region_id)
+                .map_err(|e| match e {
+                    feagi_evolutionary::EvoError::InvalidRegion(msg) => {
+                        ServiceError::InvalidInput(msg)
+                    }
+                    other => ServiceError::Internal(other.to_string()),
+                })?;
+        feagi_evolutionary::save_genome_to_json(&subset).map_err(|e| {
+            ServiceError::Internal(format!("Failed to serialize region genome: {}", e))
+        })
     }
 
     async fn get_genome_info(&self) -> ServiceResult<GenomeInfo> {
@@ -630,6 +938,7 @@ impl GenomeService for GenomeServiceImpl {
             .write()
             .prepare_for_new_genome()
             .map_err(ServiceError::from)?;
+        self.clear_published_activity();
 
         info!(target: "feagi-services", "Connectome reset complete");
         Ok(())
@@ -640,6 +949,20 @@ impl GenomeService for GenomeServiceImpl {
         params: Vec<CreateCorticalAreaParams>,
     ) -> ServiceResult<Vec<CorticalAreaInfo>> {
         info!(target: "feagi-services", "Creating {} new cortical areas via GenomeService", params.len());
+
+        // IO areas (IPU/OPU) must always be in root region; get root ID for default
+        let root_region_id = self.connectome.read().get_root_region_id();
+        let mut occupied_positions: HashSet<(i32, i32, i32)> = {
+            let genome_lock = self.current_genome.read();
+            let genome = genome_lock
+                .as_ref()
+                .ok_or_else(|| ServiceError::Backend("No genome loaded".to_string()))?;
+            genome
+                .cortical_areas
+                .values()
+                .map(|area| (area.position.x, area.position.y, area.position.z))
+                .collect()
+        };
 
         // Step 1: Build CorticalArea structures
         let mut areas_to_add = Vec::new();
@@ -653,6 +976,27 @@ impl GenomeService for GenomeServiceImpl {
                 ServiceError::InvalidInput(format!("Failed to determine cortical area type: {}", e))
             })?;
 
+            let requested_position = param.position;
+            let resolved_position = resolve_non_overlapping_position(
+                requested_position,
+                param.dimensions.0,
+                &mut occupied_positions,
+            )?;
+            if resolved_position != requested_position {
+                info!(
+                    target: "feagi-services",
+                    "Adjusted cortical area position to avoid overlap: id={} requested=({},{},{}) resolved=({},{},{}) width={} gap_rule=20pct",
+                    param.cortical_id,
+                    requested_position.0,
+                    requested_position.1,
+                    requested_position.2,
+                    resolved_position.0,
+                    resolved_position.1,
+                    resolved_position.2,
+                    param.dimensions.0
+                );
+            }
+
             // Create CorticalArea
             let mut area = CorticalArea::new(
                 cortical_id_typed,
@@ -663,7 +1007,7 @@ impl GenomeService for GenomeServiceImpl {
                     param.dimensions.1 as u32,
                     param.dimensions.2 as u32,
                 )?,
-                param.position.into(), // Convert (i32, i32, i32) to GenomeCoordinate3D
+                resolved_position.into(), // Convert (i32, i32, i32) to GenomeCoordinate3D
                 area_type,
             )?;
 
@@ -702,8 +1046,18 @@ impl GenomeService for GenomeServiceImpl {
                 );
             }
             if let Some(firing_threshold_increment) = param.firing_threshold_increment {
+                // Scalar value applies uniformly to all three spatial axes.
+                // Must be stored as _x/_y/_z so neuroembryogenesis can apply the gradient.
                 area.add_property_mut(
-                    "firing_threshold_increment".to_string(),
+                    "firing_threshold_increment_x".to_string(),
+                    serde_json::json!(firing_threshold_increment),
+                );
+                area.add_property_mut(
+                    "firing_threshold_increment_y".to_string(),
+                    serde_json::json!(firing_threshold_increment),
+                );
+                area.add_property_mut(
+                    "firing_threshold_increment_z".to_string(),
                     serde_json::json!(firing_threshold_increment),
                 );
             }
@@ -743,12 +1097,6 @@ impl GenomeService for GenomeServiceImpl {
                     serde_json::json!(leak_variability),
                 );
             }
-            if let Some(burst_engine_active) = param.burst_engine_active {
-                area.add_property_mut(
-                    "burst_engine_active".to_string(),
-                    serde_json::json!(burst_engine_active),
-                );
-            }
             if matches!(area_type, CorticalAreaType::Memory(_)) {
                 let merged = merge_memory_area_properties(
                     area.properties.clone(),
@@ -757,6 +1105,66 @@ impl GenomeService for GenomeServiceImpl {
                 area.properties = merged;
             } else if let Some(properties) = &param.properties {
                 area.properties = properties.clone();
+            }
+            // Custom-area `properties` replace wipes earlier param keys. Burst must
+            // be written after that assign or classifier twins / custom fields stay off.
+            if let Some(burst_engine_active) = param.burst_engine_active {
+                area.add_property_mut(
+                    "burst_engine_active".to_string(),
+                    serde_json::json!(burst_engine_active),
+                );
+            }
+
+            // IO areas (IPU/OPU) must always be in root region; default if missing
+            if matches!(
+                area_type,
+                CorticalAreaType::BrainInput(_) | CorticalAreaType::BrainOutput(_)
+            ) && !area.properties.contains_key("parent_region_id")
+            {
+                if let Some(ref root_id) = root_region_id {
+                    area.add_property_mut(
+                        "parent_region_id".to_string(),
+                        serde_json::Value::String(root_id.clone()),
+                    );
+                }
+            }
+
+            let joins_root = area
+                .properties
+                .get("parent_region_id")
+                .and_then(|value| value.as_str())
+                .is_some_and(|parent| root_region_id.as_deref() == Some(parent));
+            if matches!(area_type, CorticalAreaType::Modulator) {
+                if !area.properties.contains_key("modulator_instance_id") {
+                    return Err(ServiceError::InvalidInput(
+                        "Modulator driver areas are created with their modulator instance"
+                            .to_string(),
+                    ));
+                }
+                if param.dimensions != (1, 1, 1) {
+                    return Err(ServiceError::InvalidInput(
+                        "Modulator driver areas are 1x1x1".to_string(),
+                    ));
+                }
+                if !joins_root {
+                    return Err(ServiceError::InvalidInput(
+                        "Modulator driver areas belong to the root region".to_string(),
+                    ));
+                }
+            }
+
+            let root_reserved = !matches!(
+                area_type,
+                CorticalAreaType::Core(_)
+                    | CorticalAreaType::BrainInput(_)
+                    | CorticalAreaType::BrainOutput(_)
+                    | CorticalAreaType::Modulator
+            );
+            if joins_root && root_reserved {
+                return Err(ServiceError::InvalidInput(format!(
+                    "Cortical area {} cannot join root; root is reserved for core, IPU, OPU, and modulator areas",
+                    param.cortical_id
+                )));
             }
 
             areas_to_add.push(area);
@@ -842,24 +1250,108 @@ impl GenomeService for GenomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "Updating cortical area: {} with {} changes", cortical_id, changes.len());
 
-        // Convert String to CorticalID (supports legacy core aliases)
-        let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id)
+        let mut changes = changes;
+        let service_owns_driver_fields = changes.remove("modulator_field_owner").is_some();
+        let cortical_id_typed_for_lock = feagi_evolutionary::string_to_cortical_id(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
-
-        // Verify cortical area exists
-        {
-            let manager = self.connectome.read();
-            if !manager.has_cortical_area(&cortical_id_typed) {
-                return Err(ServiceError::NotFound {
-                    resource: "CorticalArea".to_string(),
-                    id: cortical_id.to_string(),
-                });
+        if cortical_id_typed_for_lock.is_modulator_driver() && !service_owns_driver_fields {
+            let locked = feagi_evolutionary::driver_locked_property_names();
+            if changes.keys().any(|key| locked.contains(&key.as_str())) {
+                return Err(ServiceError::InvalidInput(
+                    "consecutive_fire_limit, snooze_period, mp_driven_psp, refractory_period, and spike_train on a modulator driver are owned by the modulator instance".to_string(),
+                ));
+            }
+        }
+        if let Some(enabled) = changes.get("spike_train").and_then(|value| value.as_bool()) {
+            let limit = spike_train_limit_from_changes(&changes).or_else(|| {
+                let genome = self.current_genome.read();
+                genome.as_ref().and_then(|genome| {
+                    genome
+                        .cortical_areas
+                        .get(&cortical_id_typed_for_lock)
+                        .and_then(|area| spike_train_limit_from_properties(&area.properties))
+                })
+            });
+            if enabled {
+                let limit = limit.ok_or_else(|| {
+                    ServiceError::InvalidInput(
+                        "spike_train requires consecutive_fire_limit >= 1".to_string(),
+                    )
+                })?;
+                feagi_structures::genomic::validate_spike_train(true, limit)
+                    .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
             }
         }
 
-        let mut changes = changes;
+        // `neuron_excitability` is a firing probability in 0..=1 (Brain Visualizer shows it as a
+        // percentage but sends the fraction). The NPU clamps and the fast-update path used to
+        // drop out-of-range values while still returning success, so reject them here.
+        for key in ["neuron_excitability", "excitability"] {
+            if let Some(value) = changes.get(key) {
+                let excitability = value.as_f64().ok_or_else(|| {
+                    ServiceError::InvalidInput(format!(
+                        "{key} must be a number in 0..=1 (fraction, not percent); got {value}"
+                    ))
+                })?;
+                if !(0.0..=1.0).contains(&excitability) || !excitability.is_finite() {
+                    return Err(ServiceError::InvalidInput(format!(
+                        "{key} must be in 0..=1 (fraction of bursts a neuron may fire, not percent); got {excitability}"
+                    )));
+                }
+            }
+        }
+        let needs_modulator_sync = changes.contains_key("modulators")
+            || changes.contains_key("spike_train")
+            || changes.contains_key("rate_modulated_leak");
+
+        // Convert String to CorticalID (supports legacy core aliases)
+        let cortical_id_typed = cortical_id_typed_for_lock;
+
         let mut effective_cortical_id = cortical_id_typed;
         let mut effective_cortical_id_str = cortical_id.to_string();
+
+        // Verify cortical area exists.
+        // If not found, best-effort resolve IO cortical IDs that were recently remapped
+        // by coding changes (Absolute/Incremental, Linear/Fractional), where bytes 4-5
+        // change but the unit identifier + group/subunit stay the same.
+        {
+            let manager = self.connectome.read();
+            if !manager.has_cortical_area(&effective_cortical_id) {
+                let target_bytes = effective_cortical_id.as_bytes();
+                let mut candidates: Vec<_> = manager
+                    .get_cortical_area_ids()
+                    .iter()
+                    .map(|c| **c)
+                    .filter(|candidate| {
+                        let c = candidate.as_bytes();
+                        c[0] == target_bytes[0] // i/o namespace
+                            && c[1] == target_bytes[1]
+                            && c[2] == target_bytes[2]
+                            && c[3] == target_bytes[3] // cortical unit identifier
+                            && candidate.io_cortical_sub_unit_index()
+                                == effective_cortical_id.io_cortical_sub_unit_index()
+                            && candidate.io_cortical_unit_index()
+                                == effective_cortical_id.io_cortical_unit_index()
+                    })
+                    .collect();
+                if candidates.len() == 1 {
+                    let resolved = candidates.remove(0);
+                    info!(
+                        target: "feagi-services",
+                        "[GENOME-UPDATE] Resolved remapped cortical ID '{}' -> '{}'",
+                        cortical_id,
+                        resolved.as_base_64()
+                    );
+                    effective_cortical_id = resolved;
+                    effective_cortical_id_str = resolved.as_base_64();
+                } else {
+                    return Err(ServiceError::NotFound {
+                        resource: "CorticalArea".to_string(),
+                        id: cortical_id.to_string(),
+                    });
+                }
+            }
+        }
 
         if changes.contains_key("group_id") {
             let new_id = self.apply_unit_index_update(
@@ -883,7 +1375,7 @@ impl GenomeService for GenomeServiceImpl {
         CorticalChangeClassifier::log_classification_result(&changes, change_type);
 
         // Route based on change type
-        match change_type {
+        let result = match change_type {
             ChangeType::Parameter => {
                 // Fast path: Direct neuron updates (~2-5ms, NO synapse rebuild)
                 self.update_parameters_only(&effective_cortical_id_str, changes)
@@ -938,11 +1430,470 @@ impl GenomeService for GenomeServiceImpl {
                 self.get_cortical_area_info(&effective_cortical_id_str)
                     .await
             }
+        };
+        // Area-level modulator subscriptions (`modulators`), spike trains and homeostatic leak
+        // live in area properties and only reach the burst engine through
+        // `sync_modulators_from_genome`. Without this push a `neuro.*` subscription made
+        // through the API stays inert until the next genome load.
+        if needs_modulator_sync && result.is_ok() {
+            self.push_modulator_bindings()?;
+        }
+        result
+    }
+
+    async fn list_modulator_types(&self) -> ServiceResult<Vec<String>> {
+        Ok(feagi_structures::genomic::ModulatorKind::all()
+            .iter()
+            .map(|kind| kind.as_str().to_string())
+            .collect())
+    }
+
+    async fn list_modulators(&self) -> ServiceResult<Value> {
+        let genome = self.current_genome.read();
+        let genome = genome
+            .as_ref()
+            .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+        Ok(genome.modulators.to_json())
+    }
+
+    async fn get_modulator(&self, id: &str) -> ServiceResult<Value> {
+        let genome = self.current_genome.read();
+        let genome = genome
+            .as_ref()
+            .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+        let instance = genome
+            .modulators
+            .get(id)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "modulator".to_string(),
+                id: id.to_string(),
+            })?;
+        Ok(instance.to_json())
+    }
+
+    async fn create_modulator(
+        &self,
+        id: String,
+        write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<Value> {
+        if id.is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "modulator id must not be empty".to_string(),
+            ));
+        }
+        let (driver, instance) = {
+            let genome = self.current_genome.read();
+            let genome = genome
+                .as_ref()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            if genome.modulators.contains(&id) {
+                return Err(ServiceError::Conflict(format!(
+                    "modulator '{id}' already exists"
+                )));
+            }
+            let serial = next_modulator_serial(genome);
+            let driver = CorticalID::modulator_driver(serial);
+            let instance = write
+                .into_instance(driver)
+                .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
+            (driver, instance)
+        };
+        let root_region_id = self.connectome.read().get_root_region_id().ok_or_else(|| {
+            ServiceError::InvalidInput("Root region is required for a modulator driver".to_string())
+        })?;
+        let mut properties = get_default_neural_properties();
+        for (key, value) in feagi_evolutionary::driver_locked_properties(&instance) {
+            properties.insert(key, value);
+        }
+        properties.insert("firing_threshold".to_string(), serde_json::json!(1.0));
+        properties.insert("leak_coefficient".to_string(), serde_json::json!(0.0));
+        properties.insert("excitability".to_string(), serde_json::json!(1.0));
+        properties.insert("modulator_instance_id".to_string(), serde_json::json!(id));
+        properties.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(root_region_id),
+        );
+        self.create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: driver.as_base_64(),
+            name: id.clone(),
+            dimensions: (1, 1, 1),
+            position: (0, 0, 0),
+            area_type: "MODULATOR".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: Some(u32::from(instance.effect_duration_bursts)),
+            snooze_period: Some(u32::from(instance.rest_bursts)),
+            refractory_period: Some(0),
+            leak_coefficient: Some(0.0),
+            leak_variability: None,
+            burst_engine_active: Some(true),
+            properties: Some(properties),
+        }])
+        .await?;
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            genome.modulators.insert(id.clone(), instance);
+        }
+        self.push_modulator_bindings()?;
+        self.get_modulator(&id).await
+    }
+
+    async fn update_modulator(
+        &self,
+        id: &str,
+        write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<Value> {
+        let (driver_id, changes) = {
+            let genome = self.current_genome.read();
+            let genome = genome
+                .as_ref()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            let current = genome
+                .modulators
+                .get(id)
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "modulator".to_string(),
+                    id: id.to_string(),
+                })?;
+            let updated = write
+                .into_instance(current.driver_cortical_id)
+                .map_err(|err| ServiceError::InvalidInput(err.to_string()))?;
+            if updated.kind != current.kind && !usage_is_empty(&modulator_usage_of(genome, id)) {
+                return Err(ServiceError::Conflict(format!(
+                    "modulator '{id}' type cannot change while subscribers exist"
+                )));
+            }
+            let mut changes = feagi_evolutionary::driver_locked_properties(&updated);
+            changes.insert("modulator_field_owner".to_string(), serde_json::json!(true));
+            (current.driver_cortical_id.as_base_64(), (updated, changes))
+        };
+        let (updated, changes) = changes;
+        self.update_cortical_area(&driver_id, changes).await?;
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            genome.modulators.insert(id.to_string(), updated);
+        }
+        self.push_modulator_bindings()?;
+        self.get_modulator(id).await
+    }
+
+    async fn rename_modulator(&self, old_id: &str, new_id: String) -> ServiceResult<()> {
+        if new_id.is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "modulator id must not be empty".to_string(),
+            ));
+        }
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            if genome.modulators.contains(&new_id) {
+                return Err(ServiceError::Conflict(format!(
+                    "modulator '{new_id}' already exists"
+                )));
+            }
+            if !genome.modulators.rename(old_id, new_id.clone()) {
+                return Err(ServiceError::NotFound {
+                    resource: "modulator".to_string(),
+                    id: old_id.to_string(),
+                });
+            }
+            rewrite_modulator_id(genome, old_id, &new_id);
+        }
+        self.push_modulator_bindings()?;
+        Ok(())
+    }
+
+    async fn modulator_usage(&self, id: &str) -> ServiceResult<Value> {
+        let genome = self.current_genome.read();
+        let genome = genome
+            .as_ref()
+            .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+        if !genome.modulators.contains(id) {
+            return Err(ServiceError::NotFound {
+                resource: "modulator".to_string(),
+                id: id.to_string(),
+            });
+        }
+        Ok(modulator_usage_of(genome, id))
+    }
+
+    async fn delete_modulator(&self, id: &str, force: bool) -> ServiceResult<()> {
+        let snapshot = {
+            let genome = self.current_genome.read();
+            genome
+                .as_ref()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?
+                .clone()
+        };
+        let driver = snapshot
+            .modulators
+            .get(id)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "modulator".to_string(),
+                id: id.to_string(),
+            })?
+            .driver_cortical_id;
+        let usage = modulator_usage_of(&snapshot, id);
+        if !force && !usage_is_empty(&usage) {
+            return Err(ServiceError::Conflict(
+                serde_json::json!({
+                    "message": format!("modulator '{id}' is in use"),
+                    "usage": usage,
+                })
+                .to_string(),
+            ));
+        }
+        {
+            let mut genome = self.current_genome.write();
+            let genome = genome
+                .as_mut()
+                .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+            if force {
+                strip_modulator_subscriptions(genome, id);
+            }
+            genome.modulators.remove(id);
+            genome.cortical_areas.remove(&driver);
+            for region in genome.brain_regions.values_mut() {
+                region.cortical_areas.remove(&driver);
+            }
+        }
+        // The driver is a real cortical area: clear every mapping into or out of it and prune
+        // those synapses before the thin dictionary delete, otherwise other areas keep
+        // `cortical_mapping_dst` entries pointing at an id with no cortical idx, and the next
+        // delete that walks those entries fails with "No cortical idx for destination".
+        let removed = {
+            let mut manager = self.connectome.write();
+            manager
+                .detach_cortical_area_mappings(&driver)
+                .and_then(|_| manager.remove_cortical_area(&driver))
+        };
+        if let Err(err) = removed {
+            *self.current_genome.write() = Some(snapshot);
+            return Err(ServiceError::Backend(err.to_string()));
+        }
+        {
+            let driver_b64 = driver.as_base_64();
+            let mut genome = self.current_genome.write();
+            if let Some(genome) = genome.as_mut() {
+                for area in genome.cortical_areas.values_mut() {
+                    if let Some(mapping) = area
+                        .properties
+                        .get_mut("cortical_mapping_dst")
+                        .and_then(|value| value.as_object_mut())
+                    {
+                        mapping.remove(&driver_b64);
+                    }
+                }
+            }
+        }
+        self.push_modulator_bindings()?;
+        Ok(())
+    }
+}
+
+fn json_as_u16(value: &Value) -> Option<u16> {
+    value
+        .as_u64()
+        .or_else(|| value.as_f64().map(|number| number as u64))
+        .and_then(|number| u16::try_from(number).ok())
+}
+
+fn spike_train_limit_from_changes(changes: &HashMap<String, Value>) -> Option<u16> {
+    for key in [
+        "consecutive_fire_limit",
+        "consecutive_fire_cnt_max",
+        "neuron_consecutive_fire_count",
+        "consecutive_fire_count",
+    ] {
+        if let Some(limit) = changes.get(key).and_then(json_as_u16) {
+            return Some(limit);
+        }
+    }
+    None
+}
+
+fn spike_train_limit_from_properties(properties: &HashMap<String, Value>) -> Option<u16> {
+    for key in ["consecutive_fire_limit", "consecutive_fire_cnt_max"] {
+        if let Some(limit) = properties.get(key).and_then(json_as_u16) {
+            return Some(limit);
+        }
+    }
+    None
+}
+
+fn next_modulator_serial(genome: &feagi_evolutionary::RuntimeGenome) -> u32 {
+    let mut next = 0u32;
+    let mut consider = |id: CorticalID| {
+        if !id.is_modulator_driver() {
+            return;
+        }
+        let bytes = id.as_bytes();
+        let serial = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+        next = next.max(serial.saturating_add(1));
+    };
+    for id in genome.cortical_areas.keys() {
+        consider(*id);
+    }
+    for (_, instance) in genome.modulators.iter() {
+        consider(instance.driver_cortical_id);
+    }
+    next
+}
+
+fn modulator_usage_of(genome: &feagi_evolutionary::RuntimeGenome, id: &str) -> Value {
+    let mut areas = Vec::new();
+    let mut mappings = Vec::new();
+    for (area_id, area) in &genome.cortical_areas {
+        if property_lists_modulator(&area.properties, "modulators", id) {
+            areas.push(area_id.as_base_64());
+        }
+        let Some(dst) = area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|value| value.as_object())
+        else {
+            continue;
+        };
+        for (dst_id, rules) in dst {
+            let rules = rules
+                .as_array()
+                .map(|rules| rules.as_slice())
+                .unwrap_or(&[]);
+            for rule in rules {
+                let Some(rule) = rule.as_object() else {
+                    continue;
+                };
+                if property_list_contains(rule.get("modulators"), id) {
+                    mappings.push(serde_json::json!({
+                        "src": area_id.as_base_64(),
+                        "dst": dst_id,
+                    }));
+                }
+            }
+        }
+    }
+    serde_json::json!({ "areas": areas, "mappings": mappings })
+}
+
+fn usage_is_empty(usage: &Value) -> bool {
+    usage
+        .get("areas")
+        .and_then(|value| value.as_array())
+        .map(|list| list.is_empty())
+        .unwrap_or(true)
+        && usage
+            .get("mappings")
+            .and_then(|value| value.as_array())
+            .map(|list| list.is_empty())
+            .unwrap_or(true)
+}
+
+fn property_lists_modulator(properties: &HashMap<String, Value>, key: &str, id: &str) -> bool {
+    property_list_contains(properties.get(key), id)
+}
+
+fn property_list_contains(value: Option<&Value>, id: &str) -> bool {
+    value
+        .and_then(|value| value.as_array())
+        .map(|list| list.iter().any(|entry| entry.as_str() == Some(id)))
+        .unwrap_or(false)
+}
+
+fn rewrite_modulator_id(
+    genome: &mut feagi_evolutionary::RuntimeGenome,
+    old_id: &str,
+    new_id: &str,
+) {
+    for area in genome.cortical_areas.values_mut() {
+        rewrite_id_list(area.properties.get_mut("modulators"), old_id, new_id);
+        if let Some(dst) = area
+            .properties
+            .get_mut("cortical_mapping_dst")
+            .and_then(|value| value.as_object_mut())
+        {
+            for rules in dst.values_mut() {
+                let Some(rules) = rules.as_array_mut() else {
+                    continue;
+                };
+                for rule in rules {
+                    let Some(rule) = rule.as_object_mut() else {
+                        continue;
+                    };
+                    rewrite_id_list(rule.get_mut("modulators"), old_id, new_id);
+                }
+            }
         }
     }
 }
 
+fn rewrite_id_list(value: Option<&mut Value>, old_id: &str, new_id: &str) {
+    let Some(list) = value.and_then(|value| value.as_array_mut()) else {
+        return;
+    };
+    for entry in list {
+        if entry.as_str() == Some(old_id) {
+            *entry = serde_json::json!(new_id);
+        }
+    }
+}
+
+fn strip_modulator_subscriptions(genome: &mut feagi_evolutionary::RuntimeGenome, id: &str) {
+    for area in genome.cortical_areas.values_mut() {
+        strip_id_list(area.properties.get_mut("modulators"), id);
+        if let Some(dst) = area
+            .properties
+            .get_mut("cortical_mapping_dst")
+            .and_then(|value| value.as_object_mut())
+        {
+            for rules in dst.values_mut() {
+                let Some(rules) = rules.as_array_mut() else {
+                    continue;
+                };
+                for rule in rules {
+                    let Some(rule) = rule.as_object_mut() else {
+                        continue;
+                    };
+                    strip_id_list(rule.get_mut("modulators"), id);
+                }
+            }
+        }
+    }
+}
+
+fn strip_id_list(value: Option<&mut Value>, id: &str) {
+    let Some(list) = value.and_then(|value| value.as_array_mut()) else {
+        return;
+    };
+    list.retain(|entry| entry.as_str() != Some(id));
+}
+
 impl GenomeServiceImpl {
+    fn push_modulator_bindings(&self) -> ServiceResult<()> {
+        let genome = self.current_genome.read();
+        let Some(genome) = genome.as_ref() else {
+            return Ok(());
+        };
+        self.connectome
+            .read()
+            .sync_modulators_from_genome(genome)
+            .map_err(|err| ServiceError::Backend(err.to_string()))
+    }
+
     /// Fast path: Update only neuron parameters without synapse rebuild
     ///
     /// Performance: ~1-2µs to queue (non-blocking), applied in next burst cycle
@@ -959,55 +1910,124 @@ impl GenomeServiceImpl {
         // Get cortical index for NPU updates
         let cortical_idx = {
             let manager = self.connectome.read();
-            manager
+            let idx = manager
                 .get_cortical_idx(&cortical_id_typed)
                 .ok_or_else(|| ServiceError::NotFound {
                     resource: "CorticalArea".to_string(),
                     id: cortical_id.to_string(),
-                })?
+                })?;
+            if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
+                validate_mp_encoding_update(&area.properties, &changes)?;
+            }
+            idx
         };
 
         // Queue parameter updates for burst loop to consume (non-blocking!)
         if let Some(queue) = &self.parameter_queue {
-            // Get base threshold for spatial gradient updates
-            let base_threshold = {
+            // Resolve the static threshold rewrite once. Fire uses stored thresholds[],
+            // so increment/base changes must become one [x,y,z] write with the new base.
+            let (current_base, current_increment) = {
                 let manager = self.connectome.read();
-                manager
-                    .get_cortical_area(&cortical_id_typed)
-                    .map(|area| area.firing_threshold())
+                match manager.get_cortical_area(&cortical_id_typed) {
+                    Some(area) => (
+                        Some(area.firing_threshold()),
+                        Some([
+                            area.firing_threshold_increment_x(),
+                            area.firing_threshold_increment_y(),
+                            area.firing_threshold_increment_z(),
+                        ]),
+                    ),
+                    None => (None, None),
+                }
             };
 
-            for (param_name, value) in &changes {
-                // Only queue parameters that affect NPU neurons
-                let classifier = CorticalChangeClassifier::parameter_changes();
-                if classifier.contains(param_name.as_str()) {
-                    // Include base threshold for spatial gradient updates
-                    let bt = if param_name == "neuron_fire_threshold_increment"
-                        || param_name == "firing_threshold_increment"
-                    {
-                        base_threshold
-                    } else {
-                        None
-                    };
+            let increment_changed = changes
+                .keys()
+                .any(|k| is_firing_threshold_increment_param(k));
+            let threshold_changed = changes.keys().any(|k| is_firing_threshold_param(k));
 
+            let resolved_base = if threshold_changed {
+                changes
+                    .get("neuron_fire_threshold")
+                    .or_else(|| changes.get("firing_threshold"))
+                    .and_then(json_number_as_f32)
+                    .or(current_base)
+            } else {
+                current_base
+            };
+
+            let resolved_increment = match current_increment {
+                Some(current) if increment_changed => {
+                    merge_firing_threshold_increment(current, &changes)
+                }
+                other => other,
+            };
+
+            let apply_gradient = should_rewrite_threshold_gradient(
+                increment_changed,
+                threshold_changed,
+                resolved_increment.unwrap_or([0.0, 0.0, 0.0]),
+            );
+
+            if increment_changed && resolved_increment.is_none() {
+                warn!(
+                    target: "feagi-services",
+                    "[PARAM-QUEUE] Invalid firing_threshold_increment payload for area {}; NPU thresholds not rewritten",
+                    cortical_id
+                );
+            }
+
+            let classifier = CorticalChangeClassifier::parameter_changes();
+            for (param_name, value) in &changes {
+                if !classifier.contains(param_name.as_str()) {
+                    continue;
+                }
+                if is_firing_threshold_increment_param(param_name) {
+                    continue;
+                }
+                if apply_gradient && is_firing_threshold_param(param_name) {
+                    continue;
+                }
+
+                queue.push(feagi_npu_burst_engine::ParameterUpdate {
+                    cortical_idx,
+                    cortical_id: cortical_id.to_string(),
+                    parameter_name: param_name.clone(),
+                    value: value.clone(),
+                    dimensions: None,
+                    neurons_per_voxel: None,
+                    base_threshold: None,
+                });
+                trace!(
+                    target: "feagi-services",
+                    "[PARAM-QUEUE] Queued {}={} for area {}",
+                    param_name,
+                    value,
+                    cortical_id
+                );
+            }
+
+            if apply_gradient {
+                if let (Some(base), Some(inc)) = (resolved_base, resolved_increment) {
                     queue.push(feagi_npu_burst_engine::ParameterUpdate {
                         cortical_idx,
                         cortical_id: cortical_id.to_string(),
-                        parameter_name: param_name.clone(),
-                        value: value.clone(),
-                        dimensions: None, // Not needed anymore - neurons have stored positions
+                        parameter_name: "neuron_fire_threshold_increment".to_string(),
+                        value: serde_json::json!([inc[0], inc[1], inc[2]]),
+                        dimensions: None,
                         neurons_per_voxel: None,
-                        base_threshold: bt,
+                        base_threshold: Some(base),
                     });
                     trace!(
                         target: "feagi-services",
-                        "[PARAM-QUEUE] Queued {}={} for area {}",
-                        param_name,
-                        value,
+                        "[PARAM-QUEUE] Queued neuron_fire_threshold_increment={:?} base={} for area {}",
+                        inc,
+                        base,
                         cortical_id
                     );
                 }
             }
+
             info!(target: "feagi-services", "[FAST-UPDATE] Queued parameter updates (will apply in next burst)");
         } else {
             warn!(target: "feagi-services", "Parameter queue not available - updates will not affect neurons");
@@ -1102,6 +2122,20 @@ impl GenomeServiceImpl {
                                         serde_json::json!(z),
                                     );
                                 }
+                            } else if let Some(v) = value.as_f64() {
+                                // Scalar: apply uniformly to all three axes
+                                area.properties.insert(
+                                    "firing_threshold_increment_x".to_string(),
+                                    serde_json::json!(v),
+                                );
+                                area.properties.insert(
+                                    "firing_threshold_increment_y".to_string(),
+                                    serde_json::json!(v),
+                                );
+                                area.properties.insert(
+                                    "firing_threshold_increment_z".to_string(),
+                                    serde_json::json!(v),
+                                );
                             }
                         }
 
@@ -1246,6 +2280,18 @@ impl GenomeServiceImpl {
                                 }
                             }
                         }
+                        "mp_learning_enabled" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "mp_learning_enabled".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        // Validated up front by validate_mp_encoding_update.
+                        "mp_change_mode" | "mp_delta_quantization" | "mp_ratio_quantization" => {
+                            area.properties.insert(key.clone(), value.clone());
+                        }
 
                         // Membrane potential / runtime flags
                         "mp_charge_accumulation" | "neuron_mp_charge_accumulation" => {
@@ -1253,6 +2299,13 @@ impl GenomeServiceImpl {
                                 area.properties.insert(
                                     "mp_charge_accumulation".to_string(),
                                     serde_json::json!(v),
+                                );
+                            } else {
+                                warn!(
+                                    target: "feagi-services",
+                                    "[FAST-UPDATE] mp_charge_accumulation not stored: value must be JSON boolean, got {:?} (area {})",
+                                    value,
+                                    cortical_id
                                 );
                             }
                         }
@@ -1271,6 +2324,10 @@ impl GenomeServiceImpl {
                                     serde_json::json!(v),
                                 );
                             }
+                        }
+                        "rate_modulated_leak" => {
+                            area.properties
+                                .insert("rate_modulated_leak".to_string(), value.clone());
                         }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1
@@ -1315,6 +2372,32 @@ impl GenomeServiceImpl {
                 }
             }
             manager.refresh_cortical_area_hashes(true, false);
+        }
+
+        if changes.contains_key("rate_modulated_leak") {
+            let manager = self.connectome.write();
+            if let Some(npu_arc) = manager.get_npu().cloned() {
+                if let (Some(area), Ok(mut npu)) = (
+                    manager.get_cortical_area(&cortical_id_typed),
+                    npu_arc.lock(),
+                ) {
+                    if let Some(v) = area.properties.get("rate_modulated_leak") {
+                        let idxs: Vec<usize> = npu
+                            .get_neurons_in_cortical_area(cortical_idx)
+                            .into_iter()
+                            .map(|id| id as usize)
+                            .collect();
+                        npu.sync_rate_modulated_leak_from_cortical_property(
+                            cortical_idx,
+                            v,
+                            area.leak_coefficient(),
+                            idxs,
+                        );
+                    } else {
+                        npu.remove_rate_modulated_leak(cortical_idx);
+                    }
+                }
+            }
         }
 
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
@@ -1464,6 +2547,13 @@ impl GenomeServiceImpl {
                                     "mp_charge_accumulation".to_string(),
                                     serde_json::json!(v),
                                 );
+                            } else {
+                                warn!(
+                                    target: "feagi-services",
+                                    "[GENOME-UPDATE] mp_charge_accumulation not stored: value must be JSON boolean, got {:?} (area {})",
+                                    value,
+                                    cortical_id
+                                );
                             }
                         }
                         "neuron_excitability" => {
@@ -1514,6 +2604,18 @@ impl GenomeServiceImpl {
                                 }
                             }
                         }
+                        "mp_learning_enabled" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "mp_learning_enabled".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        // Validated up front by validate_mp_encoding_update.
+                        "mp_change_mode" | "mp_delta_quantization" | "mp_ratio_quantization" => {
+                            area.properties.insert(key.clone(), value.clone());
+                        }
                         "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
                             // Converter expects separate x, y, z properties, not an array
                             if let Some(arr) = value.as_array() {
@@ -1555,6 +2657,20 @@ impl GenomeServiceImpl {
                                         serde_json::json!(z),
                                     );
                                 }
+                            } else if let Some(v) = value.as_f64() {
+                                // Scalar: apply uniformly to all three axes
+                                area.properties.insert(
+                                    "firing_threshold_increment_x".to_string(),
+                                    serde_json::json!(v),
+                                );
+                                area.properties.insert(
+                                    "firing_threshold_increment_y".to_string(),
+                                    serde_json::json!(v),
+                                );
+                                area.properties.insert(
+                                    "firing_threshold_increment_z".to_string(),
+                                    serde_json::json!(v),
+                                );
                             }
                         }
                         "burst_engine_active" => {
@@ -1564,6 +2680,10 @@ impl GenomeServiceImpl {
                                     serde_json::json!(v),
                                 );
                             }
+                        }
+                        "rate_modulated_leak" => {
+                            area.properties
+                                .insert("rate_modulated_leak".to_string(), value.clone());
                         }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1
@@ -1744,11 +2864,21 @@ impl GenomeServiceImpl {
                                 "mp_charge_accumulation".to_string(),
                                 serde_json::json!(v),
                             );
+                        } else {
+                            warn!(
+                                target: "feagi-services",
+                                "[CONNECTOME-UPDATE] mp_charge_accumulation not applied: value must be JSON boolean, got {:?} (area {})",
+                                value,
+                                cortical_id
+                            );
                         }
                     }
                     "excitability" | "neuron_excitability" => {
                         if let Some(v) = value.as_f64() {
-                            area.add_property_mut("excitability".to_string(), serde_json::json!(v));
+                            area.add_property_mut(
+                                "neuron_excitability".to_string(),
+                                serde_json::json!(v),
+                            );
                         }
                     }
                     "init_lifespan" | "neuron_init_lifespan" => {
@@ -1776,18 +2906,13 @@ impl GenomeServiceImpl {
                         }
                     }
                     "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
-                        // Expect either array [x, y, z] or dict {x, y, z}
+                        // Accept array [x, y, z], object {x, y, z}, or scalar (uniform)
                         if let Some(arr) = value.as_array() {
                             if arr.len() == 3 {
                                 let x = arr[0].as_f64().unwrap_or(0.0);
                                 let y = arr[1].as_f64().unwrap_or(0.0);
                                 let z = arr[2].as_f64().unwrap_or(0.0);
 
-                                // Store both array format and individual x/y/z properties
-                                area.add_property_mut(
-                                    "firing_threshold_increment".to_string(),
-                                    serde_json::json!(arr),
-                                );
                                 area.add_property_mut(
                                     "firing_threshold_increment_x".to_string(),
                                     serde_json::json!(x),
@@ -1808,10 +2933,6 @@ impl GenomeServiceImpl {
                             let z = obj.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
                             area.add_property_mut(
-                                "firing_threshold_increment".to_string(),
-                                serde_json::json!([x, y, z]),
-                            );
-                            area.add_property_mut(
                                 "firing_threshold_increment_x".to_string(),
                                 serde_json::json!(x),
                             );
@@ -1822,6 +2943,20 @@ impl GenomeServiceImpl {
                             area.add_property_mut(
                                 "firing_threshold_increment_z".to_string(),
                                 serde_json::json!(z),
+                            );
+                        } else if let Some(v) = value.as_f64() {
+                            // Scalar: apply uniformly to all three axes
+                            area.add_property_mut(
+                                "firing_threshold_increment_x".to_string(),
+                                serde_json::json!(v),
+                            );
+                            area.add_property_mut(
+                                "firing_threshold_increment_y".to_string(),
+                                serde_json::json!(v),
+                            );
+                            area.add_property_mut(
+                                "firing_threshold_increment_z".to_string(),
+                                serde_json::json!(v),
                             );
                         }
                     }
@@ -1859,6 +2994,10 @@ impl GenomeServiceImpl {
                         | "longterm_mem_threshold"
                         | "neuron_longterm_mem_threshold"
                         | "temporal_depth"
+                        | "mp_learning_enabled"
+                        | "mp_change_mode"
+                        | "mp_delta_quantization"
+                        | "mp_ratio_quantization"
                 )
             });
 
@@ -1869,6 +3008,8 @@ impl GenomeServiceImpl {
                 let mut manager = self.connectome.write();
                 if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
                     if let Some(mem_props) = extract_memory_properties(&area.properties) {
+                        let mp_mode =
+                            feagi_brain_development::memory_mp_mode(&area.properties, &mem_props);
                         // Ensure upstream tracking is consistent with current mappings before re-registering.
                         let _ = manager
                             .refresh_upstream_cortical_areas_from_mappings(&cortical_id_typed);
@@ -1878,8 +3019,10 @@ impl GenomeServiceImpl {
                         // to avoid shrinking windows that may be required elsewhere (e.g., other memory areas).
                         if let Some(npu_arc) = manager.get_npu().cloned() {
                             if let Ok(mut npu) = npu_arc.lock() {
-                                let upstream_areas =
-                                    manager.get_upstream_cortical_areas(&cortical_id_typed);
+                                let upstream_areas = manager
+                                    .get_episodic_memory_upstream_cortical_areas(
+                                        &cortical_id_typed,
+                                    );
                                 let existing_configs = npu.get_all_fire_ledger_configs();
                                 let desired = mem_props.temporal_depth as usize;
 
@@ -1912,10 +3055,10 @@ impl GenomeServiceImpl {
                         // Re-register memory area config in PlasticityExecutor so temporal_depth/lifecycle changes apply immediately.
                         if let Some(executor) = manager.get_plasticity_executor() {
                             if let Ok(exec) = executor.lock() {
-                                let upstream_areas =
-                                    manager.get_upstream_cortical_areas(&cortical_id_typed);
-                                let upstream_non_memory =
-                                    manager.filter_non_memory_upstream_areas(&upstream_areas);
+                                let upstream_areas = manager
+                                    .get_episodic_memory_upstream_cortical_areas(
+                                        &cortical_id_typed,
+                                    );
                                 let lifecycle_config = MemoryNeuronLifecycleConfig {
                                     initial_lifespan: mem_props.init_lifespan,
                                     lifespan_growth_rate: mem_props.lifespan_growth_rate,
@@ -1923,13 +3066,22 @@ impl GenomeServiceImpl {
                                     max_reactivations: 1000,
                                 };
 
-                                exec.register_memory_area(
-                                    cortical_idx,
-                                    cortical_id.to_string(),
-                                    mem_props.temporal_depth,
-                                    upstream_non_memory,
-                                    Some(lifecycle_config),
-                                );
+                                match mp_mode {
+                                    Ok(mp_mode) => exec.register_memory_area(
+                                        cortical_idx,
+                                        cortical_id.to_string(),
+                                        mem_props.temporal_depth,
+                                        upstream_areas,
+                                        Some(lifecycle_config),
+                                        mp_mode,
+                                    ),
+                                    Err(e) => warn!(
+                                        target: "feagi-services",
+                                        "[GENOME-UPDATE] Memory area {} not re-registered: {}",
+                                        cortical_id,
+                                        e
+                                    ),
+                                }
                             } else {
                                 warn!(target: "feagi-services", "[GENOME-UPDATE] Failed to lock PlasticityExecutor for memory-area update");
                             }
@@ -2149,6 +3301,24 @@ impl GenomeServiceImpl {
                 let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 IOCorticalAreaConfigurationFlag::Misc(new_frame)
             }
+            IOCorticalAreaConfigurationFlag::PoseEstimation(frame, schema) => {
+                if let Some(signage) = requested_signage {
+                    if !signage.trim().eq_ignore_ascii_case("not applicable") {
+                        return Err(ServiceError::InvalidInput(
+                            "coding_signage not supported for PoseEstimation".to_string(),
+                        ));
+                    }
+                }
+                if let Some(coding_type) = requested_type {
+                    if !coding_type.trim().eq_ignore_ascii_case("not applicable") {
+                        return Err(ServiceError::InvalidInput(
+                            "coding_type not supported for PoseEstimation".to_string(),
+                        ));
+                    }
+                }
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
+                IOCorticalAreaConfigurationFlag::PoseEstimation(new_frame, schema)
+            }
             IOCorticalAreaConfigurationFlag::Boolean => {
                 if let Some(signage) = requested_signage {
                     if !signage.trim().eq_ignore_ascii_case("boolean")
@@ -2178,8 +3348,8 @@ impl GenomeServiceImpl {
         };
 
         let unit_identifier = [bytes[1], bytes[2], bytes[3]];
-        let cortical_subunit_index = CorticalSubUnitIndex::from(bytes[6]);
-        let cortical_unit_index = CorticalUnitIndex::from(bytes[7]);
+        let cortical_subunit_index = cortical_id.io_cortical_sub_unit_index();
+        let cortical_unit_index = cortical_id.io_cortical_unit_index();
         let computed_id = new_flag.as_io_cortical_id(
             is_input,
             unit_identifier,
@@ -2269,7 +3439,7 @@ impl GenomeServiceImpl {
         let new_group_id_value = changes.get("group_id").ok_or_else(|| {
             ServiceError::InvalidInput("group_id is required for unit index update".to_string())
         })?;
-        let new_group_id = if let Some(value) = new_group_id_value.as_u64() {
+        let new_group_id: u16 = if let Some(value) = new_group_id_value.as_u64() {
             value
                 .try_into()
                 .map_err(|_| ServiceError::InvalidInput("group_id out of range".to_string()))?
@@ -2284,7 +3454,7 @@ impl GenomeServiceImpl {
                 .try_into()
                 .map_err(|_| ServiceError::InvalidInput("group_id out of range".to_string()))?
         } else if let Some(raw) = new_group_id_value.as_str() {
-            raw.parse::<u8>().map_err(|_| {
+            raw.parse::<u16>().map_err(|_| {
                 ServiceError::InvalidInput("group_id must be an integer".to_string())
             })?
         } else {
@@ -2309,7 +3479,7 @@ impl GenomeServiceImpl {
             ))
         })?;
         let unit_identifier = [bytes[1], bytes[2], bytes[3]];
-        let cortical_subunit_index = CorticalSubUnitIndex::from(bytes[6]);
+        let cortical_subunit_index = cortical_id.io_cortical_sub_unit_index();
         let cortical_unit_index = CorticalUnitIndex::from(new_group_id);
         let computed_id = current_flag.as_io_cortical_id(
             is_input,
@@ -2587,6 +3757,18 @@ impl GenomeServiceImpl {
                                 warn!(target: "feagi-services", "[GENOME-UPDATE] coordinate_2d must be array or object, got: {:?}", value);
                             }
                         }
+                        "memory_twin_areas" => {
+                            let Some(map) = value.as_object() else {
+                                return Err(ServiceError::InvalidInput(
+                                    "memory_twin_areas must be an object of field area id to twin area id"
+                                        .to_string(),
+                                ));
+                            };
+                            area.properties.insert(
+                                "memory_twin_areas".to_string(),
+                                serde_json::Value::Object(map.clone()),
+                            );
+                        }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1
                             info!(target: "feagi-services", "[GENOME-UPDATE] Received visualization_voxel_granularity update: {:?}", value);
@@ -2630,6 +3812,29 @@ impl GenomeServiceImpl {
                                 }
                             } else {
                                 warn!(target: "feagi-services", "[GENOME-UPDATE] visualization_voxel_granularity must be an array, got: {:?}", value);
+                            }
+                        }
+                        // Modulator subscriptions and spike trains are plain properties read
+                        // by `sync_modulators_from_genome`; store them so the push after this
+                        // update sees them.
+                        "modulators" => {
+                            if let Some(list) = value.as_array() {
+                                let ids: Vec<serde_json::Value> =
+                                    list.iter().filter(|v| v.is_string()).cloned().collect();
+                                if ids.is_empty() {
+                                    area.properties.remove("modulators");
+                                } else {
+                                    area.properties
+                                        .insert("modulators".to_string(), serde_json::json!(ids));
+                                }
+                            } else {
+                                warn!(target: "feagi-services", "[GENOME-UPDATE] modulators must be an array of instance ids, got: {:?}", value);
+                            }
+                        }
+                        "spike_train" => {
+                            if value.is_boolean() {
+                                area.properties
+                                    .insert("spike_train".to_string(), value.clone());
                             }
                         }
                         _ => {}
@@ -2702,6 +3907,18 @@ impl GenomeServiceImpl {
                             warn!(target: "feagi-services", "[CONNECTOME-UPDATE] coordinate_2d must be array or object, got: {:?}", value);
                         }
                     }
+                    "memory_twin_areas" => {
+                        let Some(map) = value.as_object() else {
+                            return Err(ServiceError::InvalidInput(
+                                "memory_twin_areas must be an object of field area id to twin area id"
+                                    .to_string(),
+                            ));
+                        };
+                        area.properties.insert(
+                            "memory_twin_areas".to_string(),
+                            serde_json::Value::Object(map.clone()),
+                        );
+                    }
                     "visualization_voxel_granularity" => {
                         // Only store if != 1x1x1 (default), delete if set to 1x1x1
                         info!(target: "feagi-services", "[CONNECTOME-UPDATE] Received visualization_voxel_granularity update: {:?}", value);
@@ -2746,6 +3963,24 @@ impl GenomeServiceImpl {
                             warn!(target: "feagi-services", "[CONNECTOME-UPDATE] visualization_voxel_granularity must be an array, got: {:?}", value);
                         }
                     }
+                    "modulators" => {
+                        if let Some(list) = value.as_array() {
+                            let ids: Vec<serde_json::Value> =
+                                list.iter().filter(|v| v.is_string()).cloned().collect();
+                            if ids.is_empty() {
+                                area.properties.remove("modulators");
+                            } else {
+                                area.properties
+                                    .insert("modulators".to_string(), serde_json::json!(ids));
+                            }
+                        }
+                    }
+                    "spike_train" => {
+                        if value.is_boolean() {
+                            area.properties
+                                .insert("spike_train".to_string(), value.clone());
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -2760,7 +3995,8 @@ impl GenomeServiceImpl {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata update complete");
 
         // Return updated info
-        self.get_cortical_area_info(cortical_id).await
+        self.get_cortical_area_info(&effective_cortical_id_str)
+            .await
     }
 
     /// Structural rebuild: For dimension/density changes requiring synapse rebuild
@@ -2846,56 +4082,93 @@ impl GenomeServiceImpl {
             let old_dims = area.dimensions;
             let old_dens = area.neurons_per_voxel();
 
-            // Apply dimensional changes
-            // CRITICAL: For IPU/OPU areas, cortical_dimensions_per_device must be multiplied by dev_count
-            let is_per_device = changes.contains_key("cortical_dimensions_per_device");
-
-            if let Some(dims) = changes
-                .get("dimensions")
-                .or_else(|| changes.get("cortical_dimensions"))
-                .or_else(|| changes.get("cortical_dimensions_per_device"))
-            {
-                let (width, height, depth) = if let Some(arr) = dims.as_array() {
-                    // Handle array format: [width, height, depth]
+            // Apply dimensional changes.
+            // For IO areas, dev_count scales the X axis only:
+            // total = [per_device_x * dev_count, per_device_y, per_device_z].
+            let parse_triplet = |value: &serde_json::Value| -> Option<(usize, usize, usize)> {
+                if let Some(arr) = value.as_array() {
                     if arr.len() >= 3 {
-                        (
+                        return Some((
                             arr[0].as_u64().unwrap_or(1) as usize,
                             arr[1].as_u64().unwrap_or(1) as usize,
                             arr[2].as_u64().unwrap_or(1) as usize,
-                        )
-                    } else {
-                        (1, 1, 1)
+                        ));
                     }
-                } else if let Some(obj) = dims.as_object() {
-                    // Handle object format: {"x": width, "y": height, "z": depth}
+                    return None;
+                }
+                value.as_object().map(|obj| {
                     (
                         obj.get("x").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
                         obj.get("y").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
                         obj.get("z").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
                     )
-                } else {
-                    (1, 1, 1)
-                };
+                })
+            };
+            let parse_dev_count = |value: &serde_json::Value| -> Option<usize> {
+                value
+                    .as_u64()
+                    .map(|n| n as usize)
+                    .or_else(|| value.as_f64().map(|n| n as usize))
+                    .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
+                    .map(|n| n.max(1))
+            };
 
-                // If this is per-device dimensions, multiply depth by dev_count to get total dimensions
-                let final_depth = if is_per_device {
-                    // Get dev_count from changes or from existing area properties
-                    let dev_count = changes
-                        .get("dev_count")
-                        .and_then(|v| v.as_u64())
-                        .or_else(|| area.properties.get("dev_count").and_then(|v| v.as_u64()))
-                        .unwrap_or(1) as usize;
+            let has_per_device_update = changes.contains_key("cortical_dimensions_per_device");
+            let has_dev_count_update = changes.contains_key("dev_count");
+            if has_per_device_update || has_dev_count_update {
+                let existing_dev_count = area
+                    .properties
+                    .get("dev_count")
+                    .and_then(parse_dev_count)
+                    .unwrap_or(1);
+                let effective_dev_count = changes
+                    .get("dev_count")
+                    .and_then(parse_dev_count)
+                    .unwrap_or(existing_dev_count);
 
-                    info!("[STRUCTURAL-REBUILD] Per-device dimensions: [{}, {}, {}] × dev_count={} → total depth={}",
-                          width, height, depth, dev_count, depth * dev_count);
+                let per_device_dims = changes
+                    .get("cortical_dimensions_per_device")
+                    .and_then(parse_triplet)
+                    .or_else(|| {
+                        area.properties
+                            .get("cortical_dimensions_per_device")
+                            .and_then(parse_triplet)
+                    })
+                    .unwrap_or_else(|| {
+                        let current = area.dimensions;
+                        let per_x = (current.width as usize)
+                            .checked_div(existing_dev_count)
+                            .unwrap_or(current.width as usize);
+                        (
+                            per_x.max(1),
+                            current.height as usize,
+                            current.depth as usize,
+                        )
+                    });
 
-                    depth * dev_count
-                } else {
-                    depth
-                };
-
+                let total_width = per_device_dims.0.saturating_mul(effective_dev_count);
+                area.dimensions = CorticalAreaDimensions::new(
+                    total_width as u32,
+                    per_device_dims.1 as u32,
+                    per_device_dims.2 as u32,
+                )?;
+                info!(
+                    "[STRUCTURAL-REBUILD] Per-device dimensions: [{}, {}, {}] × dev_count={} → total dimensions=[{}, {}, {}]",
+                    per_device_dims.0,
+                    per_device_dims.1,
+                    per_device_dims.2,
+                    effective_dev_count,
+                    total_width,
+                    per_device_dims.1,
+                    per_device_dims.2
+                );
+            } else if let Some(dims) = changes
+                .get("dimensions")
+                .or_else(|| changes.get("cortical_dimensions"))
+            {
+                let (width, height, depth) = parse_triplet(dims).unwrap_or((1, 1, 1));
                 area.dimensions =
-                    CorticalAreaDimensions::new(width as u32, height as u32, final_depth as u32)?;
+                    CorticalAreaDimensions::new(width as u32, height as u32, depth as u32)?;
             }
 
             // Apply density changes
@@ -2916,8 +4189,13 @@ impl GenomeServiceImpl {
 
             // Store dev_count and cortical_dimensions_per_device in properties for IPU/OPU areas
             if let Some(dev_count) = changes.get("dev_count") {
-                area.properties
-                    .insert("dev_count".to_string(), dev_count.clone());
+                if let Some(parsed_dev_count) = parse_dev_count(dev_count) {
+                    area.properties
+                        .insert("dev_count".to_string(), serde_json::json!(parsed_dev_count));
+                } else {
+                    area.properties
+                        .insert("dev_count".to_string(), dev_count.clone());
+                }
             }
             if let Some(per_device_dims) = changes.get("cortical_dimensions_per_device") {
                 area.properties.insert(
@@ -3027,10 +4305,15 @@ impl GenomeServiceImpl {
                 "[STRUCTURAL-REBUILD] Deleting {} existing neurons",
                 neurons_to_delete.len()
             );
-            let mut manager = connectome.write();
-            manager
+            // NPU deletion can take longer than the desktop health_check timeout.
+            // A write lock here blocks that read for the whole loop. Shared
+            // access is enough; the NPU mutex still excludes the burst loop.
+            let manager = connectome.read();
+            let count = manager
                 .delete_neurons_batch(neurons_to_delete)
-                .map_err(|e| ServiceError::Backend(format!("Failed to delete neurons: {}", e)))?
+                .map_err(|e| ServiceError::Backend(format!("Failed to delete neurons: {}", e)))?;
+            drop(manager);
+            count
         } else {
             0
         };
@@ -3358,6 +4641,16 @@ impl GenomeServiceImpl {
                 .map_err(|e| ServiceError::Backend(format!("NPU neuron creation failed: {}", e)))?
         };
 
+        {
+            let manager = connectome.read();
+            manager.sync_cortical_ids_to_npu().map_err(|e| {
+                ServiceError::Backend(format!(
+                    "Failed to sync cortical IDs to NPU after rebuild: {}",
+                    e
+                ))
+            })?;
+        }
+
         let creation_duration = creation_start.elapsed();
         info!(
             "[STRUCTURAL-REBUILD] Created {} neurons in {:.2}s (NPU lock held until completion)",
@@ -3409,9 +4702,6 @@ impl GenomeServiceImpl {
             let mut manager = connectome.write();
             let mut total = 0u32;
             for dst_id in outgoing_targets {
-                if dst_id == cortical_id_typed {
-                    continue;
-                }
                 let count = manager
                     .regenerate_synapses_for_mapping(&cortical_id_typed, &dst_id)
                     .map_err(|e| {
@@ -3422,6 +4712,12 @@ impl GenomeServiceImpl {
                             e
                         ))
                     })?;
+                if dst_id == cortical_id_typed {
+                    info!(
+                        "[STRUCTURAL-REBUILD] Rebuilt {} recursive synapses in {}",
+                        count, cortical_id
+                    );
+                }
                 total = total.saturating_add(count as u32);
             }
             total
@@ -3440,7 +4736,8 @@ impl GenomeServiceImpl {
             let mut total = 0u32;
             for (src_id, src_area) in &genome.cortical_areas {
                 if src_id == &cortical_id_typed {
-                    continue; // Skip self (already handled in outgoing)
+                    // Recursive mappings are rebuilt with the outgoing targets above.
+                    continue;
                 }
 
                 // Check if this area maps to our target area
@@ -3531,7 +4828,7 @@ impl GenomeServiceImpl {
             let mappings = manager.get_all_cortical_idx_to_id_mappings();
             let mapping_count = mappings.len();
             burst_runner.write().refresh_cortical_id_mappings(mappings);
-            info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
+            debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
 
         // CRITICAL PERFORMANCE: For large areas, skip expensive get_synapse_count_in_area
@@ -3575,13 +4872,14 @@ impl GenomeServiceImpl {
             } else {
                 None
             };
-            let unit_id = if is_io_area {
-                Some(cortical_bytes[6])
+            // CorticalSubUnitIndex in flag bits 4-7; CorticalUnitIndex as LE u16 in bytes 6-7.
+            let subunit_id = if is_io_area {
+                Some(*cortical_id_typed.io_cortical_sub_unit_index())
             } else {
                 None
             };
-            let group_id = if is_io_area {
-                Some(cortical_bytes[7])
+            let cortical_unit_index = if is_io_area {
+                Some(*cortical_id_typed.io_cortical_unit_index())
             } else {
                 None
             };
@@ -3670,21 +4968,38 @@ impl GenomeServiceImpl {
                     use feagi_evolutionary::extract_memory_properties;
                     extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
                 },
+                mp_learning_enabled: {
+                    use feagi_evolutionary::extract_memory_properties;
+                    extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
+                },
+                mp_change_mode: feagi_evolutionary::extract_memory_properties(&area.properties)
+                    .map(|p| p.mp_change_mode.as_str().to_string()),
+                mp_delta_quantization: feagi_evolutionary::extract_memory_properties(
+                    &area.properties,
+                )
+                .map(|p| p.mp_delta_quantization),
+                mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(
+                    &area.properties,
+                )
+                .map(|p| p.mp_ratio_quantization),
                 properties: HashMap::new(),
                 cortical_subtype,
                 encoding_type,
                 encoding_format,
-                unit_id,
-                group_id,
+                unit_id: cortical_unit_index,
+                subunit_id,
+                group_id: cortical_unit_index,
                 coding_signage,
                 coding_behavior,
                 coding_type,
                 coding_options,
                 parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
-                dev_count: area
-                    .properties
-                    .get("dev_count")
-                    .and_then(|v| v.as_u64().map(|n| n as usize)),
+                dev_count: area.properties.get("dev_count").and_then(|v| {
+                    v.as_u64()
+                        .map(|n| n as usize)
+                        .or_else(|| v.as_f64().map(|n| n as usize))
+                        .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+                }),
                 cortical_dimensions_per_device: area
                     .properties
                     .get("cortical_dimensions_per_device")
@@ -3765,13 +5080,14 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area {
-            Some(cortical_bytes[6])
+        // CorticalSubUnitIndex in flag bits 4-7; CorticalUnitIndex as LE u16 in bytes 6-7.
+        let subunit_id = if is_io_area {
+            Some(*cortical_id_typed.io_cortical_sub_unit_index())
         } else {
             None
         };
-        let group_id = if is_io_area {
-            Some(cortical_bytes[7])
+        let cortical_unit_index = if is_io_area {
+            Some(*cortical_id_typed.io_cortical_unit_index())
         } else {
             None
         };
@@ -3860,22 +5176,35 @@ impl GenomeServiceImpl {
                 use feagi_evolutionary::extract_memory_properties;
                 extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
             },
+            mp_learning_enabled: {
+                use feagi_evolutionary::extract_memory_properties;
+                extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
+            },
+            mp_change_mode: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_change_mode.as_str().to_string()),
+            mp_delta_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_delta_quantization),
+            mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_ratio_quantization),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
             encoding_format,
-            unit_id,
-            group_id,
+            unit_id: cortical_unit_index,
+            subunit_id,
+            group_id: cortical_unit_index,
             coding_signage,
             coding_behavior,
             coding_type,
             coding_options,
             parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
             // Extract dev_count and cortical_dimensions_per_device from properties for IPU/OPU
-            dev_count: area
-                .properties
-                .get("dev_count")
-                .and_then(|v| v.as_u64().map(|n| n as usize)),
+            dev_count: area.properties.get("dev_count").and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as usize)
+                    .or_else(|| v.as_f64().map(|n| n as usize))
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+            }),
             cortical_dimensions_per_device: area
                 .properties
                 .get("cortical_dimensions_per_device")
@@ -3956,13 +5285,14 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area {
-            Some(cortical_bytes[6])
+        // CorticalSubUnitIndex in flag bits 4-7; CorticalUnitIndex as LE u16 in bytes 6-7.
+        let subunit_id = if is_io_area {
+            Some(*cortical_id_typed.io_cortical_sub_unit_index())
         } else {
             None
         };
-        let group_id = if is_io_area {
-            Some(cortical_bytes[7])
+        let cortical_unit_index = if is_io_area {
+            Some(*cortical_id_typed.io_cortical_unit_index())
         } else {
             None
         };
@@ -4051,22 +5381,35 @@ impl GenomeServiceImpl {
                 use feagi_evolutionary::extract_memory_properties;
                 extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
             },
+            mp_learning_enabled: {
+                use feagi_evolutionary::extract_memory_properties;
+                extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
+            },
+            mp_change_mode: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_change_mode.as_str().to_string()),
+            mp_delta_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_delta_quantization),
+            mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.mp_ratio_quantization),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
             encoding_format,
-            unit_id,
-            group_id,
+            unit_id: cortical_unit_index,
+            subunit_id,
+            group_id: cortical_unit_index,
             coding_signage,
             coding_behavior,
             coding_type,
             coding_options,
             parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
             // Extract dev_count and cortical_dimensions_per_device from properties for IPU/OPU
-            dev_count: area
-                .properties
-                .get("dev_count")
-                .and_then(|v| v.as_u64().map(|n| n as usize)),
+            dev_count: area.properties.get("dev_count").and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as usize)
+                    .or_else(|| v.as_f64().map(|n| n as usize))
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+            }),
             cortical_dimensions_per_device: area
                 .properties
                 .get("cortical_dimensions_per_device")
@@ -4098,5 +5441,746 @@ impl GenomeServiceImpl {
                     }
                 }),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_quantization_precision, precision_import_warning_reason};
+
+    #[test]
+    fn normalize_quantization_precision_handles_aliases() {
+        assert_eq!(normalize_quantization_precision("fp32"), "fp32");
+        assert_eq!(normalize_quantization_precision("F32"), "fp32");
+        assert_eq!(normalize_quantization_precision("int8"), "int8");
+        assert_eq!(normalize_quantization_precision("i8"), "int8");
+        assert_eq!(normalize_quantization_precision("fp16"), "fp16");
+    }
+
+    #[test]
+    fn normalize_quantization_precision_marks_unknown_values() {
+        assert_eq!(normalize_quantization_precision("weird"), "unknown");
+    }
+
+    #[test]
+    fn precision_import_warning_reason_flags_unknown_and_mismatch() {
+        assert_eq!(
+            precision_import_warning_reason("unknown", "fp32"),
+            Some("unknown")
+        );
+        assert_eq!(
+            precision_import_warning_reason("fp16", "fp32"),
+            Some("mismatch")
+        );
+        assert_eq!(precision_import_warning_reason("int8", "int8"), None);
+    }
+
+    #[tokio::test]
+    async fn save_genome_includes_live_memory_plastic_and_regions() {
+        use super::{architecture_indexes_from_genome, GenomeServiceImpl};
+        use crate::traits::GenomeService;
+        use crate::types::SaveGenomeParams;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+            MemoryCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let src_id = CorticalID::try_from_bytes(b"csrcsv01").unwrap();
+        let mem_id = CorticalID::try_from_bytes(b"mmemsv01").unwrap();
+
+        let mut src = CorticalArea::new(
+            src_id,
+            7,
+            "src".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        src.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                mem_id.as_base_64(): [{
+                    "morphology_id": "projector",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": true,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 3
+                }]
+            }),
+        );
+        src.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(false));
+
+        let mut mem = CorticalArea::new(
+            mem_id,
+            8,
+            "memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (2, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!(src_id.as_base_64()),
+        );
+
+        let region = BrainRegion::new(
+            RegionID::new(),
+            "save-test-region".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap()
+        .with_areas([src_id, mem_id]);
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_brain_region(region, None).unwrap();
+            manager.add_cortical_area(src).unwrap();
+            manager.add_cortical_area(mem).unwrap();
+        }
+
+        let stale_genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "stale".to_string(),
+                genome_title: "stale".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+
+        let svc = GenomeServiceImpl::new(connectome);
+        *svc.get_current_genome_arc().write() = Some(stale_genome);
+
+        let json = svc
+            .save_genome(SaveGenomeParams {
+                genome_id: Some("saved".to_string()),
+                genome_title: Some("Saved".to_string()),
+            })
+            .await
+            .expect("save_genome");
+        let loaded = feagi_evolutionary::load_genome_from_json(&json).expect("reload genome");
+        assert!(loaded.cortical_areas.contains_key(&src_id));
+        assert!(loaded.cortical_areas.contains_key(&mem_id));
+        let (memory_ids, plastic, regions) = architecture_indexes_from_genome(&loaded);
+        assert!(memory_ids.contains(&mem_id.as_base_64()));
+        assert!(plastic
+            .iter()
+            .any(|(src, dst)| src == &src_id.as_base_64() && dst == &mem_id.as_base_64()));
+        assert!(!regions.is_empty());
+        assert_eq!(
+            loaded.cortical_areas[&mem_id].properties["memory_twin_of"],
+            serde_json::json!(src_id.as_base_64())
+        );
+    }
+
+    #[tokio::test]
+    async fn update_cortical_area_rejects_out_of_range_excitability() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::ParameterUpdateQueue;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"cexcit01").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            10,
+            "excitability-test".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        connectome.write().add_cortical_area(area).unwrap();
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome, queue.clone());
+
+        let err = svc
+            .update_cortical_area(
+                &area_id.as_base_64(),
+                HashMap::from([("neuron_excitability".to_string(), serde_json::json!(25))]),
+            )
+            .await
+            .expect_err("excitability 25 must be rejected, not silently dropped");
+        assert!(
+            matches!(err, super::ServiceError::InvalidInput(_)),
+            "got {err:?}"
+        );
+        assert!(
+            queue.drain_all().is_empty(),
+            "rejected update must queue nothing"
+        );
+
+        svc.update_cortical_area(
+            &area_id.as_base_64(),
+            HashMap::from([("neuron_excitability".to_string(), serde_json::json!(0.25))]),
+        )
+        .await
+        .expect("in-range excitability is accepted");
+        assert!(queue
+            .drain_all()
+            .iter()
+            .any(|u| u.parameter_name == "neuron_excitability"));
+    }
+
+    #[tokio::test]
+    async fn update_cortical_area_modulators_subscription_reaches_the_npu() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use feagi_structures::genomic::ModulatorKind;
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000, 1_000, 10).unwrap();
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "modulator-sub-npu"));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            dyn_npu.clone(),
+        )));
+
+        let area_id = CorticalID::try_from_bytes(b"cmodsub1").unwrap();
+        let driver_id = CorticalID::modulator_driver(0);
+        let area = CorticalArea::new(
+            area_id,
+            0,
+            "subscriber".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let driver = CorticalArea::new(
+            driver_id,
+            0,
+            "damp".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Modulator,
+        )
+        .unwrap();
+        connectome.write().add_cortical_area(area.clone()).unwrap();
+        connectome
+            .write()
+            .add_cortical_area(driver.clone())
+            .unwrap();
+        let area_idx = connectome.read().get_cortical_idx(&area_id).unwrap();
+
+        let mut modulators = feagi_evolutionary::ModulatorRegistry::new();
+        modulators.insert(
+            "damp".to_string(),
+            feagi_evolutionary::ModulatorInstance {
+                kind: ModulatorKind::FiringProbability,
+                magnitude_percent: -70.0,
+                effect_duration_bursts: 1,
+                rest_bursts: 0,
+                graded: false,
+                full_scale_potential: None,
+                driver_cortical_id: driver_id,
+            },
+        );
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: String::new(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(area_id, area), (driver_id, driver)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators,
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let svc = GenomeServiceImpl::new(connectome);
+        *svc.get_current_genome_arc().write() = Some(genome);
+
+        svc.update_cortical_area(
+            &area_id.as_base_64(),
+            HashMap::from([("modulators".to_string(), serde_json::json!(["damp"]))]),
+        )
+        .await
+        .expect("subscribe area to modulator");
+
+        let subs = dyn_npu
+            .lock()
+            .unwrap()
+            .modulator_area_subscriptions(area_idx);
+        assert_eq!(
+            subs,
+            vec!["damp".to_string()],
+            "area modulator subscription must be pushed to the burst engine"
+        );
+    }
+
+    #[tokio::test]
+    async fn parameter_queue_normalizes_per_axis_increment_to_full_vector() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::{increment_from_parameter_update, ParameterUpdateQueue};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"cincrsv1").unwrap();
+        let mut area = CorticalArea::new(
+            area_id,
+            10,
+            "increment-test".to_string(),
+            CorticalAreaDimensions::new(4, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        area.properties
+            .insert("firing_threshold".to_string(), serde_json::json!(0.5));
+        area.properties.insert(
+            "firing_threshold_increment_x".to_string(),
+            serde_json::json!(1.0),
+        );
+        area.properties.insert(
+            "firing_threshold_increment_y".to_string(),
+            serde_json::json!(2.0),
+        );
+        area.properties.insert(
+            "firing_threshold_increment_z".to_string(),
+            serde_json::json!(3.0),
+        );
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(area).unwrap();
+        }
+
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome, queue.clone());
+
+        let mut changes = HashMap::new();
+        changes.insert(
+            "firing_threshold_increment_x".to_string(),
+            serde_json::json!(10),
+        );
+        svc.update_cortical_area(&area_id.as_base_64(), changes)
+            .await
+            .expect("parameter update");
+
+        let pending = queue.drain_all();
+        let increment_updates: Vec<_> = pending
+            .iter()
+            .filter(|u| u.parameter_name == "neuron_fire_threshold_increment")
+            .collect();
+        assert_eq!(increment_updates.len(), 1);
+        assert_eq!(
+            increment_from_parameter_update(increment_updates[0]),
+            Some((0.5, [10.0, 2.0, 3.0]))
+        );
+        assert!(pending
+            .iter()
+            .all(|u| u.parameter_name != "firing_threshold_increment_x"));
+    }
+
+    #[tokio::test]
+    async fn parameter_queue_rewrites_gradient_when_base_changes() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::{increment_from_parameter_update, ParameterUpdateQueue};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"cincrsv2").unwrap();
+        let mut area = CorticalArea::new(
+            area_id,
+            11,
+            "increment-base-test".to_string(),
+            CorticalAreaDimensions::new(3, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        area.properties
+            .insert("firing_threshold".to_string(), serde_json::json!(1.0));
+        area.properties.insert(
+            "firing_threshold_increment_x".to_string(),
+            serde_json::json!(100.0),
+        );
+        area.properties.insert(
+            "firing_threshold_increment_y".to_string(),
+            serde_json::json!(0.0),
+        );
+        area.properties.insert(
+            "firing_threshold_increment_z".to_string(),
+            serde_json::json!(0.0),
+        );
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(area).unwrap();
+        }
+
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome, queue.clone());
+
+        let mut changes = HashMap::new();
+        changes.insert("neuron_fire_threshold".to_string(), serde_json::json!(5));
+        svc.update_cortical_area(&area_id.as_base_64(), changes)
+            .await
+            .expect("parameter update");
+
+        let pending = queue.drain_all();
+        let increment_updates: Vec<_> = pending
+            .iter()
+            .filter(|u| u.parameter_name == "neuron_fire_threshold_increment")
+            .collect();
+        assert_eq!(increment_updates.len(), 1);
+        assert_eq!(
+            increment_from_parameter_update(increment_updates[0]),
+            Some((5.0, [100.0, 0.0, 0.0]))
+        );
+        assert!(pending
+            .iter()
+            .all(|u| u.parameter_name != "neuron_fire_threshold"));
+    }
+
+    /// The classifier field attach writes `memory_twin_areas` through the same
+    /// cortical-area update the API uses. Scan injection reads that map, so a
+    /// dropped write leaves the detection twin dark.
+    #[tokio::test]
+    async fn classifier_field_twin_map_survives_area_update() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let mem_id = CorticalID::try_from_bytes(b"mkmem001").unwrap();
+        let field_a = CorticalID::try_from_bytes(b"cfield01").unwrap();
+        let field_b = CorticalID::try_from_bytes(b"cfield02").unwrap();
+        let twin_a = CorticalID::try_from_bytes(b"ctwin001").unwrap();
+        let twin_b = CorticalID::try_from_bytes(b"ctwin002").unwrap();
+
+        let mut mem = CorticalArea::new(
+            mem_id,
+            0,
+            "kernel_mem".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem.properties
+            .insert("init_lifespan".to_string(), serde_json::json!(9));
+        mem.properties
+            .insert("memory_twin_areas".to_string(), serde_json::json!({}));
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(mem.clone()).unwrap();
+        }
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "clf".to_string(),
+                genome_title: "clf".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(mem_id, mem)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let svc = GenomeServiceImpl::new(Arc::clone(&connectome));
+        *svc.get_current_genome_arc().write() = Some(genome);
+
+        let mut both = HashMap::new();
+        both.insert(
+            "memory_twin_areas".to_string(),
+            serde_json::json!({
+                field_a.as_base_64(): twin_a.as_base_64(),
+                field_b.as_base_64(): twin_b.as_base_64(),
+            }),
+        );
+        svc.update_cortical_area(&mem_id.as_base_64(), both)
+            .await
+            .expect("field twin map must be stored");
+
+        {
+            let manager = connectome.read();
+            let area = manager.get_cortical_area(&mem_id).unwrap();
+            let twins = area
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .expect("memory_twin_areas must remain an object");
+            assert_eq!(
+                twins
+                    .get(&field_a.as_base_64())
+                    .and_then(|value| value.as_str()),
+                Some(twin_a.as_base_64().as_str())
+            );
+            assert_eq!(
+                twins
+                    .get(&field_b.as_base_64())
+                    .and_then(|value| value.as_str()),
+                Some(twin_b.as_base_64().as_str())
+            );
+            assert_eq!(
+                area.properties
+                    .get("init_lifespan")
+                    .and_then(|value| value.as_u64()),
+                Some(9),
+                "recording a twin target must not rebuild or wipe kernel memory"
+            );
+        }
+
+        let mut moved = HashMap::new();
+        moved.insert("coordinates_3d".to_string(), serde_json::json!([4, 5, 6]));
+        svc.update_cortical_area(&mem_id.as_base_64(), moved)
+            .await
+            .expect("position update");
+        {
+            let manager = connectome.read();
+            let area = manager.get_cortical_area(&mem_id).unwrap();
+            let twins = area
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .expect("a position update must keep the twin map");
+            assert_eq!(twins.len(), 2);
+            assert_eq!(area.position.x, 4);
+        }
+
+        let mut remaining = HashMap::new();
+        remaining.insert(
+            "memory_twin_areas".to_string(),
+            serde_json::json!({
+                field_a.as_base_64(): twin_a.as_base_64(),
+            }),
+        );
+        svc.update_cortical_area(&mem_id.as_base_64(), remaining)
+            .await
+            .expect("detach one field");
+        {
+            let manager = connectome.read();
+            let twins = manager
+                .get_cortical_area(&mem_id)
+                .unwrap()
+                .properties
+                .get("memory_twin_areas")
+                .and_then(|value| value.as_object())
+                .unwrap();
+            assert!(twins.get(&field_b.as_base_64()).is_none());
+            assert!(twins.get(&field_a.as_base_64()).is_some());
+        }
+
+        let mut invalid = HashMap::new();
+        invalid.insert(
+            "memory_twin_areas".to_string(),
+            serde_json::json!("not-a-map"),
+        );
+        let rejected = svc
+            .update_cortical_area(&mem_id.as_base_64(), invalid)
+            .await;
+        assert!(rejected.is_err(), "a non-object twin map must be rejected");
+        let manager = connectome.read();
+        let twins = manager
+            .get_cortical_area(&mem_id)
+            .unwrap()
+            .properties
+            .get("memory_twin_areas")
+            .and_then(|value| value.as_object())
+            .unwrap();
+        assert!(
+            twins.get(&field_a.as_base_64()).is_some(),
+            "a rejected twin-map write must leave the previous map in place"
+        );
+    }
+
+    #[test]
+    fn localized_rebuild_regenerates_recursive_mapping() {
+        use super::GenomeServiceImpl;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"crecursv").unwrap();
+        let mut area = CorticalArea::new(
+            area_id,
+            0,
+            "recursive".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                area_id.as_base_64(): [{
+                    "morphology_id": "projector",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "synaptic_delay_bursts": 1
+                }]
+            }),
+        );
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(npu),
+            "RecursiveRebuildTest",
+        ));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            dyn_npu.clone(),
+        )));
+        {
+            let mut manager = connectome.write();
+            manager.setup_core_morphologies_for_testing();
+            manager.add_cortical_area(area.clone()).unwrap();
+        }
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "recursive-rebuild".to_string(),
+                genome_title: "recursive-rebuild".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(area_id, area)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let genome_store = Arc::new(RwLock::new(Some(genome)));
+
+        let mut changes = HashMap::new();
+        changes.insert(
+            "cortical_dimensions".to_string(),
+            serde_json::json!([2, 1, 1]),
+        );
+        let info = GenomeServiceImpl::do_localized_rebuild(
+            &area_id.as_base_64(),
+            changes,
+            connectome.clone(),
+            genome_store,
+            None,
+        )
+        .expect("localized rebuild");
+
+        assert_eq!(info.dimensions, (2, 1, 1));
+
+        let npu = dyn_npu.lock().unwrap();
+        let neurons = npu.get_neurons_in_cortical_area(info.cortical_idx);
+        assert_eq!(
+            neurons.len(),
+            2,
+            "expanded area must contain the new neurons"
+        );
+        assert!(
+            npu.get_synapse_count() > 0,
+            "recursive mapping must be regenerated after the area is expanded"
+        );
     }
 }

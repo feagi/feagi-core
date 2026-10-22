@@ -5,6 +5,7 @@
 //!
 //! Provides file logging with rotation, per-crate log files, and configurable retention.
 
+use anyhow::anyhow;
 #[cfg(feature = "file-logging")]
 use anyhow::Context;
 use anyhow::Result;
@@ -18,6 +19,20 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer, Registry};
 
 use crate::cli::CrateDebugFlags;
+
+/// Resolve tracing EnvFilter with explicit RUST_LOG precedence.
+///
+/// If RUST_LOG is present, it is parsed and used verbatim.
+/// Otherwise, fall back to the per-crate debug flags filter string.
+fn resolve_env_filter(debug_flags: &CrateDebugFlags) -> Result<EnvFilter> {
+    if let Ok(rust_log) = std::env::var("RUST_LOG") {
+        return EnvFilter::try_new(rust_log.clone())
+            .map_err(|e| anyhow!("Invalid RUST_LOG '{}': {}", rust_log, e));
+    }
+
+    let filter = debug_flags.to_filter_string();
+    Ok(EnvFilter::new(&filter))
+}
 
 /// Logging initialization result
 pub struct LoggingGuard {
@@ -76,9 +91,7 @@ pub fn init_logging(
     // Clean up old logs based on retention policy
     cleanup_old_logs(&base_log_dir, retention_days, retention_runs)?;
 
-    // Build filter string from debug flags
-    let filter = debug_flags.to_filter_string();
-    let env_filter = EnvFilter::new(&filter);
+    let env_filter = resolve_env_filter(debug_flags)?;
 
     // Create per-crate log files
     let mut layers = Vec::new();
@@ -129,6 +142,17 @@ pub fn init_logging(
 
     layers.push(combined_layer);
 
+    // Ring-buffer layer for in-process log retrieval via /v1/system/log_tail.
+    // Capacity is controlled via FEAGI_LOG_RING_BUFFER_CAPACITY (default 2000, set 0 to disable).
+    let ring_capacity = crate::ring_layer::capacity_from_env();
+    if ring_capacity > 0 {
+        let ring = crate::ring_layer::install_global_ring(ring_capacity);
+        let ring_layer = crate::ring_layer::RingBufferLayer::new(ring)
+            .with_filter(env_filter.clone())
+            .boxed();
+        layers.push(ring_layer);
+    }
+
     // Initialize subscriber with all layers
     Registry::default().with(layers).init();
 
@@ -152,19 +176,30 @@ pub fn init_logging(
     _retention_days: Option<u64>,
     _retention_runs: Option<usize>,
 ) -> Result<LoggingGuard> {
-    // Build filter string from debug flags
-    let filter = debug_flags.to_filter_string();
-    let env_filter = EnvFilter::new(&filter);
+    let env_filter = resolve_env_filter(debug_flags)?;
 
     // Console layer only (human-readable)
     let console_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
         .with_file(false)
         .with_line_number(false)
-        .with_filter(env_filter);
+        .with_filter(env_filter.clone());
 
-    // Initialize subscriber with console layer only
-    Registry::default().with(console_layer.boxed()).init();
+    let mut layers: Vec<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> = Vec::new();
+    layers.push(console_layer.boxed());
+
+    // Ring-buffer layer for in-process log retrieval via /v1/system/log_tail.
+    let ring_capacity = crate::ring_layer::capacity_from_env();
+    if ring_capacity > 0 {
+        let ring = crate::ring_layer::install_global_ring(ring_capacity);
+        let ring_layer = crate::ring_layer::RingBufferLayer::new(ring)
+            .with_filter(env_filter)
+            .boxed();
+        layers.push(ring_layer);
+    }
+
+    // Initialize subscriber with combined layers
+    Registry::default().with(layers).init();
 
     Ok(LoggingGuard {})
 }

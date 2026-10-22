@@ -146,12 +146,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Cast to GenomeServiceImpl to access get_current_genome_arc()
     let genome_service_impl = Arc::new(GenomeServiceImpl::new(connectome.clone()));
     let current_genome = genome_service_impl.get_current_genome_arc();
+    let genome_load_counter = genome_service_impl.get_genome_load_counter_arc();
+    let genome_load_timestamp = genome_service_impl.get_genome_load_timestamp_arc();
     let genome_service = genome_service_impl as Arc<dyn GenomeService + Send + Sync>;
 
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(
-        connectome.clone(),
-        current_genome.clone(),
-    )) as Arc<dyn ConnectomeService + Send + Sync>;
+    let mut connectome_service_impl =
+        ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+    connectome_service_impl.set_genome_load_signals(genome_load_counter, genome_load_timestamp);
+    let connectome_service =
+        Arc::new(connectome_service_impl) as Arc<dyn ConnectomeService + Send + Sync>;
 
     let neuron_service = Arc::new(NeuronServiceImpl::new(connectome.clone()))
         as Arc<dyn NeuronService + Send + Sync>;
@@ -167,8 +170,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Dummy publishers for testing
     struct DummyViz;
     impl feagi_npu_burst_engine::VisualizationPublisher for DummyViz {
-        fn publish_raw_fire_queue(
+        fn publish_raw_fire_queue_for_agent(
             &self,
+            _agent_id: &str,
             _fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
         ) -> Result<(), String> {
             Ok(())
@@ -231,6 +235,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
+    let (genome_transition_lock, genome_transition_in_progress) =
+        ApiState::init_genome_transition_controls();
+    let filesystem_data_root = ApiState::filesystem_data_root_from_config(std::path::Path::new(""));
     let api_state = ApiState {
         network_connection_info_provider: None,
         agent_service: None,
@@ -240,12 +247,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         neuron_service,
         runtime_service,
         system_service,
-        snapshot_service: None,
         feagi_session_timestamp,
+        filesystem_data_root,
         memory_stats_cache: None,
         amalgamation_state: ApiState::init_amalgamation_state(),
+        genome_transition_lock,
+        genome_transition_in_progress,
+        last_failed_mutation: ApiState::init_last_failed_mutation(),
+        change_ledger: None,
         #[cfg(feature = "feagi-agent")]
-        agent_connectors: ApiState::init_agent_connectors(),
+        agent_handler: Some(ApiState::init_agent_registration_handler()),
     };
 
     println!(

@@ -1,0 +1,276 @@
+//! `RunEvent` v1 — the normalized, versioned event stream a run emits while executing.
+//!
+//! `RunEvent` is the public seam between the engine and any observer (the closed-source desktop
+//! app, a headless CI logger, a test). The engine emits a flat sequence of these through a sink
+//! (see [`RunEventSink`](crate::control::RunEventSink)); the observer renders them. Per ADR-005 the
+//! stream is **normalized**: it carries lifecycle, progress, and metric summaries — never raw
+//! FEAGI motor/sensory frames. Per ADR-011 it is a public contract owned by the open crate, so the
+//! desktop consumes it one-way.
+//!
+//! Determinism: the engine never stamps wall-clock time (it leaves `timestamp = None`); a host
+//! that needs timestamps fills them at the transport boundary, keeping unit tests reproducible
+//! (consistent with the executor's no-I/O contract).
+
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+
+use super::common::{RunId, ScorecardId};
+
+/// Wire/format version of the `RunEvent` contract.
+pub const SCHEMA_VERSION: u32 = 1;
+
+/// How many samples of one class were classified correctly.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassBreakdown {
+    /// Class id used by the decoder and the target.
+    pub class_id: u32,
+    /// Operator-facing class name. Digit labels are the digit text.
+    pub label: String,
+    /// Samples of this class whose prediction matched the target.
+    pub correct: u64,
+    /// Samples of this class in the scored set.
+    pub total: u64,
+}
+
+/// Whether a [`RunEventKind::MetricUpdate`] reports interim or final metrics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MetricScope {
+    /// Interim metrics computed over the samples seen so far (may change).
+    Partial,
+    /// Final metrics over the full scored subset for this run.
+    Aggregate,
+}
+
+/// The payload of a [`RunEvent`]. JSON-tagged by `type` for ergonomic consumption from the
+/// TypeScript/desktop side (e.g. `{ "type": "progress", "samples_done": 3, ... }`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RunEventKind {
+    /// The run record exists but has not started.
+    Created,
+    /// Pre-run validation is in progress (binding resolution, compatibility).
+    Validating,
+    /// Execution has begun.
+    Running,
+    /// Sample/episode progress for the current repeat.
+    Progress {
+        /// Samples (or episodes) completed so far in this repeat.
+        samples_done: u64,
+        /// Total samples (or episodes) planned for this repeat.
+        samples_total: u64,
+        /// Zero-based index of the current repeat (0 for a single, non-repeated run).
+        repeat_index: u32,
+        /// Total number of repeats (1 for a single run).
+        repeat_total: u32,
+        /// Analog values just submitted as graded P. Not a FEAGI XYZP frame (ADR-005).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        sent_values: Vec<f64>,
+        /// Zero-based index of the analog sample just submitted (stream presentation).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tick_index: Option<u64>,
+        /// Full analog window for the current beat. Stream train sends this on tick 0
+        /// so the desktop can draw the beat and a playhead without repeating it every burst.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        window_values: Vec<f64>,
+        /// Feed-size RGB PNG (standard base64) for the sample just submitted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        image_png_base64: Option<String>,
+        /// Colorized class-mask PNG (standard base64) for the sample just submitted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mask_png_base64: Option<String>,
+        /// Operator-facing name of the pair just submitted (image file path tail).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preview_name: Option<String>,
+        /// Class chosen from the decoder OPU for this sample.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        predicted_class: Option<u32>,
+        /// Per-class confidence read from that OPU. Empty when the sample was not scored.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        class_scores: Vec<f64>,
+    },
+    /// A metric snapshot — interim ([`MetricScope::Partial`]) or final
+    /// ([`MetricScope::Aggregate`]). Values are deterministically ordered.
+    MetricUpdate {
+        /// Whether these are interim or final metrics.
+        scope: MetricScope,
+        /// Named metric values.
+        metrics: BTreeMap<String, f64>,
+        /// Per-class correct counts. Empty for metric packs that are not classification.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        class_breakdown: Vec<ClassBreakdown>,
+    },
+    /// A `Scorecard` has been produced and persisted by the host.
+    ScorecardReady {
+        /// Identity of the produced scorecard.
+        scorecard_id: ScorecardId,
+    },
+    /// The run finished successfully.
+    Completed,
+    /// The operator ended the split after the current sample/tick.
+    Skipped {
+        /// Samples (or holds) submitted before the skip.
+        samples_done: u64,
+        /// Samples (or holds) planned for the split.
+        samples_total: u64,
+    },
+    /// The run terminated with an error (includes cooperative cancellation).
+    Failed {
+        /// Human-readable failure description.
+        message: String,
+    },
+    /// A non-fatal condition; the run continues (e.g. no detection readout from FEAGI).
+    Warning {
+        /// Human-readable warning description.
+        message: String,
+    },
+}
+
+/// One normalized event in a run's lifecycle.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RunEvent {
+    /// Wire/format version; must equal [`SCHEMA_VERSION`].
+    pub schema_version: u32,
+    /// Run this event belongs to (lets a host multiplex several runs over one channel).
+    pub run_id: RunId,
+    /// Optional emission time, Unix epoch milliseconds. Left `None` by the engine; a host may
+    /// stamp it at the transport boundary.
+    pub timestamp: Option<i64>,
+    /// The event payload.
+    pub kind: RunEventKind,
+}
+
+impl RunEvent {
+    /// Builds an event for `run_id` with the current [`SCHEMA_VERSION`] and no timestamp.
+    pub fn new(run_id: RunId, kind: RunEventKind) -> Self {
+        Self {
+            schema_version: SCHEMA_VERSION,
+            run_id,
+            timestamp: None,
+            kind,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run_id() -> RunId {
+        RunId("run-evt-0001".to_string())
+    }
+
+    #[test]
+    fn schema_version_is_pinned() {
+        let event = RunEvent::new(run_id(), RunEventKind::Running);
+        assert_eq!(event.schema_version, SCHEMA_VERSION);
+        assert_eq!(event.timestamp, None);
+    }
+
+    #[test]
+    fn progress_event_round_trips() {
+        let event = RunEvent::new(
+            run_id(),
+            RunEventKind::Progress {
+                samples_done: 3,
+                samples_total: 10,
+                repeat_index: 1,
+                repeat_total: 5,
+                sent_values: vec![-0.25, 1.5],
+                tick_index: Some(4),
+                window_values: vec![0.1, -0.25, 1.5],
+                image_png_base64: None,
+                mask_png_base64: None,
+                preview_name: None,
+                predicted_class: Some(1),
+                class_scores: vec![0.2, 0.8],
+            },
+        );
+        let json = serde_json::to_string(&event).expect("serialize");
+        // Tagged representation is consumable from the desktop/TS side.
+        assert!(json.contains("\"type\":\"progress\""));
+        assert!(json.contains("\"tick_index\":4"));
+        let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(event, restored);
+    }
+
+    #[test]
+    fn progress_event_accepts_payload_without_stream_preview_fields() {
+        let json = r#"{"schema_version":1,"run_id":"run-evt-0001","timestamp":null,"kind":{"type":"progress","samples_done":1,"samples_total":2,"repeat_index":0,"repeat_total":1}}"#;
+        let restored: RunEvent = serde_json::from_str(json).expect("deserialize");
+        match restored.kind {
+            RunEventKind::Progress {
+                tick_index,
+                window_values,
+                sent_values,
+                image_png_base64,
+                mask_png_base64,
+                preview_name,
+                ..
+            } => {
+                assert_eq!(tick_index, None);
+                assert!(window_values.is_empty());
+                assert!(sent_values.is_empty());
+                assert_eq!(image_png_base64, None);
+                assert_eq!(mask_png_base64, None);
+                assert_eq!(preview_name, None);
+            }
+            other => panic!("expected progress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn metric_update_and_failed_round_trip() {
+        let mut metrics = BTreeMap::new();
+        metrics.insert("accuracy".to_string(), 0.97);
+        let update = RunEvent::new(
+            run_id(),
+            RunEventKind::MetricUpdate {
+                scope: MetricScope::Aggregate,
+                metrics,
+                class_breakdown: Vec::new(),
+            },
+        );
+        let failed = RunEvent::new(
+            run_id(),
+            RunEventKind::Failed {
+                message: "cancelled".to_string(),
+            },
+        );
+        for event in [update, failed] {
+            let json = serde_json::to_string(&event).expect("serialize");
+            let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(event, restored);
+        }
+    }
+
+    #[test]
+    fn skipped_event_round_trips() {
+        let event = RunEvent::new(
+            run_id(),
+            RunEventKind::Skipped {
+                samples_done: 12,
+                samples_total: 40,
+            },
+        );
+        let json = serde_json::to_string(&event).expect("serialize");
+        assert!(json.contains("\"type\":\"skipped\""));
+        let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(event, restored);
+    }
+
+    #[test]
+    fn warning_event_round_trips() {
+        let event = RunEvent::new(
+            run_id(),
+            RunEventKind::Warning {
+                message: "no detection result has been received from FEAGI".to_string(),
+            },
+        );
+        let json = serde_json::to_string(&event).expect("serialize");
+        assert!(json.contains("\"type\":\"warning\""));
+        let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(event, restored);
+    }
+}

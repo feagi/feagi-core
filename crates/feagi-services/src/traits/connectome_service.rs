@@ -257,6 +257,13 @@ pub trait ConnectomeService: Send + Sync {
     ///
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool>;
 
+    /// Get brain region ID of the root region (no parent).
+    ///
+    /// # Returns
+    /// * `Option<String>` - Root region ID if one exists
+    ///
+    async fn get_root_region_id(&self) -> ServiceResult<Option<String>>;
+
     // ========================================================================
     // MORPHOLOGY OPERATIONS
     // ========================================================================
@@ -310,6 +317,18 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::NotFound` - Morphology does not exist
     async fn delete_morphology(&self, morphology_id: &str) -> ServiceResult<()>;
 
+    /// Rename a morphology definition.
+    ///
+    /// Updates the morphology registry and all references in cortical mappings
+    /// (cortical_mapping_dst rules) across the loaded genome.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidState` - No genome loaded
+    /// * `ServiceError::NotFound` - Old morphology does not exist
+    /// * `ServiceError::AlreadyExists` - New morphology ID already exists
+    /// * `ServiceError::InvalidInput` - Invalid old_id or new_id
+    async fn rename_morphology(&self, old_id: &str, new_id: &str) -> ServiceResult<()>;
+
     // ========================================================================
     // CORTICAL MAPPING OPERATIONS
     // ========================================================================
@@ -341,8 +360,9 @@ pub trait ConnectomeService: Send + Sync {
 
     /// Export the current connectome as a snapshot
     ///
-    /// Captures the complete state of the NPU including all neurons, synapses,
-    /// and runtime state. This is the service layer interface for connectome export.
+    /// Captures regular neurons, synapses (including plastic and associative
+    /// weight changes), and long-term memory neurons with synapses to/from them.
+    /// Short-term memory and fire-ledger contents are not persisted.
     ///
     /// # Returns
     /// * `ConnectomeSnapshot` - Complete connectome state snapshot
@@ -354,6 +374,7 @@ pub trait ConnectomeService: Send + Sync {
     #[cfg(feature = "connectome-io")]
     async fn export_connectome(
         &self,
+        mode: feagi_npu_neural::types::connectome::ConnectomePersistMode,
     ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot>;
 
     /// Import a connectome snapshot
@@ -374,4 +395,25 @@ pub trait ConnectomeService: Send + Sync {
         &self,
         snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
     ) -> ServiceResult<()>;
+
+    /// Persist a first-class classifier assembly on the live connectome and genome.
+    async fn upsert_classifier(
+        &self,
+        classifier: feagi_structures::genomic::classifiers::Classifier,
+    ) -> ServiceResult<()>;
+
+    async fn list_classifiers(&self) -> ServiceResult<Vec<ClassifierInfo>>;
+
+    async fn get_classifier(&self, classifier_id: &str) -> ServiceResult<ClassifierInfo>;
+
+    /// Move scan-twin ownership from one field source to another without deleting the stamp.
+    async fn rekey_memory_twin_source(
+        &self,
+        memory_area_id: &str,
+        old_src_area_id: &str,
+        new_src_area_id: &str,
+    ) -> ServiceResult<()>;
+
+    /// Remove the classifier record and delete its owned internals.
+    async fn delete_classifier(&self, classifier_id: &str) -> ServiceResult<()>;
 }

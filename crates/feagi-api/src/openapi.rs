@@ -83,8 +83,7 @@ use crate::{
         (url = "http://localhost:8080", description = "Alternative port")
     ),
     paths(
-        // Agent endpoints (14 total)
-        crate::endpoints::agent::register_agent,
+        // Agent endpoints (registration uses ZMQ/WebSocket only)
         crate::endpoints::agent::heartbeat,
         crate::endpoints::agent::list_agents,
         crate::endpoints::agent::get_agent_properties,
@@ -95,10 +94,9 @@ use crate::{
         crate::endpoints::agent::get_fq_sampler_status,
         crate::endpoints::agent::get_capabilities,
         crate::endpoints::agent::get_all_agent_capabilities,
+        crate::endpoints::agent::get_device_registration_store,
         crate::endpoints::agent::get_agent_info,
         crate::endpoints::agent::post_configure,
-        crate::endpoints::agent::export_device_registrations,
-        crate::endpoints::agent::import_device_registrations,
 
         // System endpoints (21 total)
         crate::endpoints::system::get_health_check,
@@ -118,6 +116,8 @@ use crate::{
         crate::endpoints::system::post_fcl_reset_system,
         crate::endpoints::system::get_processes,
         crate::endpoints::system::get_unique_logs,
+        crate::endpoints::system::get_log_tail,
+        crate::endpoints::system::get_last_failed_mutation,
         crate::endpoints::system::post_logs,
         crate::endpoints::system::get_beacon_subscribers,
         crate::endpoints::system::post_beacon_subscribe,
@@ -163,7 +163,9 @@ use crate::{
         crate::endpoints::cortical_area::post_clone,
         crate::endpoints::cortical_area::post_resize,
         crate::endpoints::cortical_area::post_reposition,
+        crate::endpoints::cortical_area::get_voxel_neurons,
         crate::endpoints::cortical_area::post_voxel_neurons,
+        crate::endpoints::cortical_area::get_memory_cortical_area,
         crate::endpoints::cortical_area::get_cortical_area_index_list,
         crate::endpoints::cortical_area::get_cortical_idx_mapping,
         crate::endpoints::cortical_area::get_mapping_restrictions_query,
@@ -174,6 +176,15 @@ use crate::{
         crate::endpoints::cortical_area::post_mapping_restrictions_between_areas,
         crate::endpoints::cortical_area::put_coord_3d,
 
+        crate::endpoints::modulator::get_modulator_types,
+        crate::endpoints::modulator::get_modulators,
+        crate::endpoints::modulator::get_modulator,
+        crate::endpoints::modulator::post_modulator,
+        crate::endpoints::modulator::put_modulator,
+        crate::endpoints::modulator::put_rename_modulator,
+        crate::endpoints::modulator::get_modulator_usage,
+        crate::endpoints::modulator::delete_modulator,
+
         // Morphology endpoints
         crate::endpoints::morphology::get_morphology_list,
         crate::endpoints::morphology::get_morphology_types,
@@ -181,6 +192,7 @@ use crate::{
         crate::endpoints::morphology::get_morphologies,
         crate::endpoints::morphology::post_morphology,
         crate::endpoints::morphology::put_morphology,
+        crate::endpoints::morphology::put_rename_morphology,
         crate::endpoints::morphology::delete_morphology_by_name,
         crate::endpoints::morphology::delete_morphology,  // This is delete_by_id
         crate::endpoints::morphology::post_morphology_properties,
@@ -215,6 +227,8 @@ use crate::{
         crate::endpoints::genome::post_export_format,
         crate::endpoints::genome::get_amalgamation,
         crate::endpoints::genome::get_amalgamation_history_exact,
+        crate::endpoints::genome_changes::get_changes,
+        crate::endpoints::genome_changes::post_apply_change,
         crate::endpoints::genome::get_cortical_template,
         crate::endpoints::genome::get_defaults_files,
         crate::endpoints::genome::get_download_region,
@@ -234,6 +248,7 @@ use crate::{
         crate::endpoints::cortical_mapping::put_mapping_properties,
         crate::endpoints::cortical_mapping::get_mapping,
         crate::endpoints::cortical_mapping::get_mapping_list,
+        crate::endpoints::cortical_mapping::get_twin_diagnostic,
         crate::endpoints::cortical_mapping::delete_mapping,
         crate::endpoints::cortical_mapping::post_batch_update,
         crate::endpoints::cortical_mapping::post_mapping,
@@ -253,7 +268,16 @@ use crate::{
         crate::endpoints::region::put_change_region_parent,
         crate::endpoints::region::put_change_cortical_area_region,
 
-        // Connectome endpoints (21 total)
+        // Connectome endpoints
+        crate::endpoints::connectome::get_download_connectome,
+        crate::endpoints::connectome::get_download_connectome_bytes,
+        crate::endpoints::connectome::get_download_cortical_area,
+        crate::endpoints::connectome::get_connectome_directory,
+        crate::endpoints::connectome::post_upload_connectome,
+        crate::endpoints::connectome::post_validate_connectome,
+        crate::endpoints::connectome::post_migrate_connectome,
+        crate::endpoints::connectome::post_upload_connectome_saved,
+        crate::endpoints::connectome::post_upload_cortical_area,
         crate::endpoints::connectome::get_cortical_areas_list_detailed,
         crate::endpoints::connectome::get_properties_dimensions,
         crate::endpoints::connectome::get_properties_mappings,
@@ -280,19 +304,17 @@ use crate::{
         crate::endpoints::connectome::get_cortical_area_list_types,
         crate::endpoints::connectome::get_cortical_area_neurons,
         crate::endpoints::connectome::get_area_synapses,
+        crate::endpoints::connectome::get_area_synapses_incoming,
         crate::endpoints::connectome::get_cortical_info,
         crate::endpoints::connectome::get_stats_cortical_cumulative,
         crate::endpoints::connectome::get_neuron_properties_by_id,
         crate::endpoints::connectome::get_neuron_properties_query,
         crate::endpoints::connectome::get_neuron_properties_at_query,
+        crate::endpoints::connectome::get_memory_neuron,
         crate::endpoints::connectome::get_area_neurons_query,
         crate::endpoints::connectome::get_fire_queue_area,
         crate::endpoints::connectome::get_plasticity_info,
         crate::endpoints::connectome::get_path_query,
-        crate::endpoints::connectome::get_download_connectome,
-        crate::endpoints::connectome::get_download_cortical_area,
-        crate::endpoints::connectome::post_upload_connectome,
-        crate::endpoints::connectome::post_upload_cortical_area,
 
         // Burst Engine endpoints (14 total)
         crate::endpoints::burst_engine::get_simulation_timestep,
@@ -300,6 +322,7 @@ use crate::{
         crate::endpoints::burst_engine::get_fcl,
         crate::endpoints::burst_engine::get_fcl_neuron,
         crate::endpoints::burst_engine::get_fire_queue,
+        crate::endpoints::burst_engine::get_fire_queue_detailed,
         crate::endpoints::burst_engine::get_fire_queue_neuron,
         crate::endpoints::burst_engine::post_fcl_reset,
         crate::endpoints::burst_engine::get_fcl_status,
@@ -348,10 +371,12 @@ use crate::{
         // Input endpoints
         crate::endpoints::input::get_vision,
         crate::endpoints::input::post_vision,
+        crate::endpoints::input::get_sensor_snapshot_last,
 
         // Outputs endpoints
         crate::endpoints::outputs::get_targets,
         crate::endpoints::outputs::post_configure,
+        crate::endpoints::outputs::get_motor_snapshot_last,
 
         // Physiology endpoints
         crate::endpoints::physiology::get_physiology,
@@ -395,16 +420,6 @@ use crate::{
         crate::endpoints::evolution::get_status,
         crate::endpoints::evolution::post_config,
 
-        // Snapshot endpoints
-        // TODO: Implement snapshot endpoints
-        // crate::endpoints::snapshot::post_create,
-        // crate::endpoints::snapshot::post_restore,
-        // crate::endpoints::snapshot::get_list,
-        // crate::endpoints::snapshot::delete_snapshot,
-        // crate::endpoints::snapshot::get_artifact,
-        // crate::endpoints::snapshot::post_compare,
-        // crate::endpoints::snapshot::post_upload,
-
         // Network endpoints
         crate::endpoints::network::get_status,
         crate::endpoints::network::post_config,
@@ -427,6 +442,16 @@ use crate::{
             crate::v1::OutputTargetsResponse,
             crate::v1::OutputConfigRequest,
             crate::v1::OutputConfigResponse,
+            crate::endpoints::outputs::MotorSnapshotResponse,
+            crate::endpoints::outputs::ActivitySummary,
+            crate::endpoints::outputs::MotorTapArea,
+            crate::endpoints::outputs::MotorTapSample,
+            crate::endpoints::outputs::MotorTapAgent,
+
+            // Input
+            crate::endpoints::input::SensorSnapshotResponse,
+            crate::endpoints::input::SensorTapArea,
+            crate::endpoints::input::SensorTapSample,
 
             // Physiology
             crate::v1::PhysiologyResponse,
@@ -483,22 +508,20 @@ use crate::{
             crate::v1::EvolutionConfigRequest,
             crate::v1::EvolutionSuccessResponse,
 
-            // Snapshot
-            crate::v1::SnapshotCreateRequest,
-            crate::v1::SnapshotCreateResponse,
-            crate::v1::SnapshotRestoreRequest,
-            crate::v1::SnapshotListResponse,
-            crate::v1::SnapshotInfo,
-            crate::v1::SnapshotArtifactResponse,
-            crate::v1::SnapshotCompareRequest,
-            crate::v1::SnapshotCompareResponse,
-            crate::v1::SnapshotUploadRequest,
-            crate::v1::SnapshotUploadResponse,
-            crate::v1::SnapshotSuccessResponse,
-
             // Network
             crate::v1::NetworkStatusResponse,
             crate::v1::NetworkConnectionInfo,
+            crate::v1::ConnectionInfoApi,
+            crate::v1::ConnectionInfoZmq,
+            crate::v1::ConnectionInfoZmqPorts,
+            crate::v1::ConnectionInfoZmqEndpoints,
+            crate::v1::ConnectionInfoWebSocket,
+            crate::v1::ConnectionInfoWebSocketPorts,
+            crate::v1::ConnectionInfoWebSocketEndpoints,
+            crate::v1::ConnectionInfoShm,
+            crate::v1::ConnectionInfoUdp,
+            crate::v1::ConnectionInfoBluetooth,
+            crate::v1::ConnectionInfoStreamStatus,
             crate::v1::NetworkConfigRequest,
             crate::v1::NetworkSuccessResponse,
             crate::v1::AgentRegistrationResponse,
@@ -507,6 +530,9 @@ use crate::{
             crate::v1::AgentListResponse,
             crate::v1::AgentPropertiesResponse,
             crate::v1::AgentCapabilitiesSummary,
+            crate::common::device_registration_store::DeviceRegistrationStoreResponse,
+            crate::common::device_registration_store::DeviceRegistrationStoreRow,
+            crate::common::device_registration_store::RegistrationIoSummary,
             crate::v1::AgentDeregistrationRequest,
             crate::v1::SuccessResponse,
             crate::v1::ManualStimulationRequest,
@@ -517,14 +543,31 @@ use crate::{
 
             // System
             crate::endpoints::system::HealthCheckResponse,
+            crate::endpoints::system::LogTailResponse,
+            crate::endpoints::system::LogTailRecord,
+            crate::endpoints::system::LastFailedMutation,
+            crate::endpoints::system::LastFailedMutationResponse,
 
             // Cortical Area
             crate::endpoints::cortical_area::CorticalAreaIdListResponse,
             crate::endpoints::cortical_area::CorticalAreaNameListResponse,
+            crate::endpoints::cortical_area::CorticalAreaResetRequest,
+            crate::endpoints::cortical_area::CorticalAreaResetResponse,
+            crate::endpoints::cortical_area::CorticalAreaResetItem,
             crate::endpoints::cortical_area::CorticalTypeMetadata,
+            crate::endpoints::cortical_area::VoxelNeuronsQuery,
+            crate::endpoints::cortical_area::VoxelNeuronsBody,
+            crate::endpoints::cortical_area::VoxelNeuronsResponse,
+            crate::endpoints::cortical_area::MemoryCorticalAreaQuery,
+            crate::endpoints::cortical_area::MemoryCorticalAreaParamsResponse,
+            crate::endpoints::cortical_area::MemoryCorticalAreaResponse,
+            crate::endpoints::cortical_area::UpdateClassifierRequest,
+            crate::endpoints::connectome::MemoryNeuronQuery,
+            crate::endpoints::connectome::MemoryNeuronDetailResponse,
 
             // Morphology
             crate::endpoints::morphology::MorphologyListResponse,
+            crate::endpoints::morphology::RenameMorphologyRequest,
 
             // Cortical Areas
             CorticalAreaSummary,
@@ -549,6 +592,10 @@ use crate::{
             ValidateGenomeRequest,
             ValidateGenomeResponse,
             crate::endpoints::genome::GenomeFileUploadForm,
+            crate::endpoints::connectome::ConnectomeFileUploadForm,
+            crate::endpoints::connectome::ConnectomeDirectoryResponse,
+            crate::endpoints::connectome::ConnectomeSavedFileEntry,
+            crate::endpoints::connectome::ConnectomeUploadSavedRequest,
 
             // Neurons
             NeuronInfoResponse,
@@ -658,6 +705,15 @@ mod tests {
         let components = openapi.components.unwrap();
         assert!(components.schemas.contains_key("HealthCheckResponseV1"));
         assert!(components.schemas.contains_key("ApiError"));
+        assert!(components.schemas.contains_key("VoxelNeuronsBody"));
+        assert!(components.schemas.contains_key("VoxelNeuronsResponse"));
+        assert!(components.schemas.contains_key("VoxelNeuronsQuery"));
+        assert!(components
+            .schemas
+            .contains_key("MemoryCorticalAreaResponse"));
+        assert!(components
+            .schemas
+            .contains_key("MemoryNeuronDetailResponse"));
     }
 
     #[test]

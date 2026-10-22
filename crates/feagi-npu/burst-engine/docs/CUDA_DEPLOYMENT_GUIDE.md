@@ -195,7 +195,7 @@ export CUDA_VISIBLE_DEVICES=0
 # Run FEAGI with CUDA backend
 cargo run --release --features cuda -- \
     --backend cuda \
-    --genome path/to/genome.json
+    --genome path/to/brain.genome
 ```
 
 ### Configuration File
@@ -324,7 +324,7 @@ cargo run --release --features cuda -- \
     --backend cuda \
     --multi-gpu \
     --num-gpus 8 \
-    --genome large_genome.json
+    --genome large_brain.genome
 ```
 
 ### Multi-Instance Alternative (Works TODAY)
@@ -336,13 +336,13 @@ cargo run --release --features cuda -- \
 # Terminal 1: GPU 0
 CUDA_VISIBLE_DEVICES=0 cargo run --release --features cuda -- \
     --backend cuda \
-    --genome visual_cortex.json \
+    --genome visual_cortex.genome \
     --port 8000 &
 
 # Terminal 2: GPU 1
 CUDA_VISIBLE_DEVICES=1 cargo run --release --features cuda -- \
     --backend cuda \
-    --genome motor_cortex.json \
+    --genome motor_cortex.genome \
     --port 8001 &
 
 # ... repeat for GPU 2-7

@@ -88,6 +88,10 @@ Licensed under the Apache License, Version 2.0
 */
 
 #[cfg(feature = "connectome-serialization")]
+pub mod brain_artifact;
+#[cfg(feature = "std")]
+pub mod change_ledger;
+#[cfg(feature = "connectome-serialization")]
 pub mod connectome;
 #[cfg(feature = "std")]
 pub mod genome;
@@ -99,7 +103,6 @@ pub mod types;
 // Re-export main API
 pub use traits::{
     AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
-    SnapshotCreateOptions, SnapshotMetadata, SnapshotService,
 };
 
 pub use types::{
@@ -142,7 +145,7 @@ pub use feagi_brain_development::models::CorticalAreaExt;
 #[cfg(feature = "std")]
 pub use impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
-    RuntimeServiceImpl, SnapshotServiceImpl,
+    RuntimeServiceImpl,
 };
 
 /// Version of this crate (for feagi-rust version reporting)

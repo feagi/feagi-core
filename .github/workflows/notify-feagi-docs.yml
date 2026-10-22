@@ -1,0 +1,38 @@
+name: Notify feagi-docs on core update
+
+# Triggers feagi-docs to rebuild its artifact whenever feagi-core's main
+# branch is updated, keeping API reference and architecture docs current.
+#
+# Required secret: FEAGI_DOCS_DISPATCH_TOKEN
+#   Type:        Fine-grained personal access token
+#   Owner:       Any member of the feagi org
+#   Permissions: Actions -> Read and write  (on feagi/feagi-docs only)
+#   Stored in:   feagi/feagi-core -> Settings -> Secrets -> Actions
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+jobs:
+  notify-feagi-docs:
+    name: Trigger feagi-docs rebuild
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch rebuild to feagi-docs
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.FEAGI_DOCS_DISPATCH_TOKEN }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: 'feagi',
+              repo: 'feagi-docs',
+              event_type: 'feagi-core-updated',
+              client_payload: {
+                sha: context.sha,
+                ref: context.ref,
+                triggered_by: 'feagi-core',
+              },
+            });
+            console.log('Dispatched feagi-core-updated to feagi/feagi-docs');

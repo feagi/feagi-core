@@ -50,7 +50,7 @@ fn test_end_to_end_pattern_detection_and_memory_creation() {
     let idx = neuron_idx.unwrap();
 
     // Verify pattern can be found
-    let found_idx = memory_array.find_neuron_by_pattern(&pattern.pattern_hash);
+    let found_idx = memory_array.find_neuron_by_pattern(100, &pattern.pattern_hash);
     assert_eq!(found_idx, Some(idx));
 
     // Verify stats show active neuron
@@ -246,7 +246,14 @@ fn test_plasticity_service_basic_workflow() {
     let service = PlasticityService::new(config, cache, npu);
 
     // Register a memory area
-    let success = service.register_memory_area(100, "mem_00".to_string(), 3, vec![1, 2], None);
+    let success = service.register_memory_area(
+        100,
+        "mem_00".to_string(),
+        3,
+        vec![1, 2],
+        None,
+        feagi_npu_plasticity::MemoryMpMode::PatternOnly,
+    );
     assert!(success);
 
     // Notify of a burst
@@ -275,22 +282,30 @@ fn test_register_memory_area_configures_fire_ledger() {
     let service = PlasticityService::new(config, cache, npu.clone());
 
     let upstream_idx = 42u32;
+    let memory_area_idx = 100u32;
     let temporal_depth = 3u32;
     service.register_memory_area(
-        100,
+        memory_area_idx,
         "mem_00".to_string(),
         temporal_depth,
         vec![upstream_idx],
         None,
+        feagi_npu_plasticity::MemoryMpMode::PatternOnly,
     );
 
-    let configs = npu.lock().unwrap().get_all_fire_ledger_configs();
+    let npu_guard = npu.lock().unwrap();
+    let configs = npu_guard.get_all_fire_ledger_configs();
     let window = configs
         .iter()
         .find(|(idx, _)| *idx == upstream_idx)
         .map(|(_, w)| *w)
         .expect("FireLedger window should be configured for upstream area");
     assert_eq!(window, temporal_depth as usize);
+
+    let episodic = npu_guard
+        .get_episodic_memory_fire_ledger_window_size(memory_area_idx)
+        .expect("episodic memory FireLedger should track the memory cortical area");
+    assert_eq!(episodic, temporal_depth as usize);
 }
 
 #[test]
@@ -408,4 +423,13 @@ fn test_concurrent_pattern_detection() {
 
     // All should have detected patterns
     assert_eq!(results.iter().filter(|r| r.is_some()).count(), 10);
+}
+
+#[test]
+fn test_mp_unavailable_warn_period_is_part_of_plasticity_config() {
+    let config = PlasticityConfig::default();
+    assert!(
+        config.mp_unavailable_warn_period_bursts > 0,
+        "MP-unavailable warnings must be rate-limited by default"
+    );
 }

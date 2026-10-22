@@ -11,6 +11,9 @@ Handles communication between FEAGI brain and agents:
 - Visualization data streaming
 - ZMQ and shared memory transports
 
+This crate also provides `TransportProtocolEndpoint`, which is used across FEAGI
+to represent **ZMQ** and **WebSocket** endpoints in a transport-agnostic way.
+
 ## Installation
 
 ```toml
@@ -37,4 +40,15 @@ use feagi_io::{AgentRegistry, IOConfig};
 Per architecture docs, this crate will be moved to a separate `feagi-io` repository in the future.
 
 Part of the [FEAGI](https://github.com/feagi/feagi-core) ecosystem.
+
+## TransportProtocolEndpoint factories (recommended)
+
+When converting a `TransportProtocolEndpoint` into concrete client/server properties,
+prefer the **fallible** factory helpers:
+
+- `TransportProtocolEndpoint::try_create_boxed_client_requester_properties()`
+- `TransportProtocolEndpoint::try_create_boxed_client_pusher_properties()`
+- `TransportProtocolEndpoint::try_create_boxed_client_subscriber_properties()`
+
+These avoid panics and allow callers to propagate endpoint/config errors.
 

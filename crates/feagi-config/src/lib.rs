@@ -18,7 +18,8 @@
 //! let config = load_config(None, None).expect("Failed to load config");
 //!
 //! // Access type-safe configuration values
-//! println!("API Host: {}", config.api.host);
+//! println!("API Bind Host: {}", config.api.bind_host);
+//! println!("API Advertised Host: {}", config.api.advertised_host);
 //! println!("API Port: {}", config.api.port);
 //! ```
 //!

@@ -1,0 +1,22 @@
+{
+  "feagi-config":            "foundation",
+  "feagi-structures":        "foundation",
+  "feagi-dataset-contracts": "foundation",
+  "feagi-observability":     "foundation",
+  "feagi-state-manager":     "foundation",
+  "feagi-serialization":     "foundation",
+  "feagi-npu-neural":        "npu",
+  "feagi-npu-runtime":       "npu",
+  "feagi-npu-burst-engine":  "npu",
+  "feagi-npu-plasticity":    "npu",
+  "feagi-hal":               "hal",
+  "feagi-evolutionary":      "algorithms",
+  "feagi-brain-development": "algorithms",
+  "feagi-io":                "io",
+  "feagi-sensorimotor":      "io",
+  "feagi-agent":             "io",
+  "feagi-services":          "services",
+  "feagi-api":               "services",
+  "feagi-trainer":           "training",
+  "feagi":                   "umbrella"
+}

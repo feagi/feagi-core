@@ -1,6 +1,6 @@
 [package]
 name = "feagi-services"
-version = "0.0.1-beta.8"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -14,26 +14,28 @@ name = "feagi_services"
 
 [dependencies]
 # Core FEAGI crates (backend)
-feagi-npu-neural = { version = "=0.0.1-beta.8", path = "../feagi-npu/neural" }  # For types
-feagi-evolutionary = { version = "=0.0.1-beta.8", path = "../feagi-evolutionary" }
-feagi-brain-development = { version = "=0.0.1-beta.8", path = "../feagi-brain-development", default-features = false }
-feagi-npu-burst-engine = { version = "=0.0.1-beta.12", path = "../feagi-npu/burst-engine", default-features = false, optional = true }
-feagi-npu-plasticity = { version = "=0.0.1-beta.12", path = "../feagi-npu/plasticity", optional = true }
-feagi-state-manager = { version = "=0.0.1-beta.8", path = "../feagi-state-manager", default-features = false }
+feagi-npu-neural = { version = "0.0.47", path = "../feagi-npu/neural" } # For types
+feagi-evolutionary = { version = "0.0.47", path = "../feagi-evolutionary" }
+feagi-brain-development = { version = "0.0.47", path = "../feagi-brain-development", default-features = false }
+feagi-npu-burst-engine = { version = "0.0.47", path = "../feagi-npu/burst-engine", default-features = false, optional = true }
+feagi-npu-plasticity = { version = "0.0.47", path = "../feagi-npu/plasticity", optional = true }
+feagi-state-manager = { version = "0.0.47", path = "../feagi-state-manager", default-features = false }
 # feagi-io dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
 feagi-structures = { workspace = true }
 
 # Async runtime (optional for embedded)
-async-trait = "0.1"
+async-trait = "0.1.92"
 tokio = { version = "1.0", features = ["sync", "rt", "time", "rt-multi-thread"], optional = true }
 
 # Synchronization
 parking_lot = "0.12"
+ahash = { workspace = true }
 
 # Serialization (for DTOs)
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha2 = "0.10"
 bincode = { version = "1.3", optional = true }  # Connectome serialization
 lz4 = { version = "1.28", optional = true }  # Connectome compression
 
@@ -49,7 +51,7 @@ thiserror.workspace = true
 
 # Time/date
 chrono = "0.4"
-uuid = { version = "1.0", features = ["v4", "serde"] }
+uuid = { workspace = true }
 
 [features]
 default = ["std", "connectome-io"]
@@ -64,6 +66,5 @@ plasticity = ["feagi-brain-development/plasticity", "dep:feagi-npu-plasticity"] 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
 feagi-npu-runtime = { path = "../feagi-npu/runtime" }
-ahash = { workspace = true }
 tempfile = "3.8"
 

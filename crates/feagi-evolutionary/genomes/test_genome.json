@@ -1328,12 +1328,47 @@
       "type": "functions",
       "class": "core"
     },
-    "expander_x": {
+    "sweeper": {
       "parameters": {},
       "type": "functions",
       "class": "core"
     },
-    "reducer_x": {
+    "last_to_first": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "first_to_last": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_encoder_x": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_encoder_y": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_encoder_z": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_decoder_x": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_decoder_y": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_decoder_z": {
       "parameters": {},
       "type": "functions",
       "class": "core"
@@ -1563,7 +1598,7 @@
     "_____10c-_power-cx-_n_cnt-i": 1,
     "_____10c-_power-cx-synatt-f": 100,
     "_____10c-_power-cx-de_gen-f": 0,
-    "_____10c-_power-cx-pspuni-b": false,
+    "_____10c-_power-cx-pspuni-b": true,
     "_____10c-_power-nx-pstcrm-f": 35,
     "_____10c-_power-cx-dstmap-d": {},
     "_____10c-_power-cx-___bbx-i": 1,
@@ -1580,7 +1615,7 @@
     "_____10c-_power-nx-refrac-i": 0,
     "_____10c-_power-nx-leak_c-f": 10,
     "_____10c-_power-nx-leak_v-f": 0,
-    "_____10c-_power-nx-c_fr_c-i": 3,
+    "_____10c-_power-nx-c_fr_c-i": 0,
     "_____10c-_power-nx-snooze-i": 0,
     "_____10c-_power-nx-ftincx-f": 0,
     "_____10c-_power-nx-ftincy-f": 0,

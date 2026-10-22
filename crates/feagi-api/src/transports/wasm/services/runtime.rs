@@ -141,9 +141,56 @@ impl RuntimeService for WasmRuntimeService {
         &self,
         _cortical_id: &str,
         _xyzp_data: &[(u32, u32, u32, f32)],
+        _mode: feagi_services::traits::ManualStimulationMode,
     ) -> ServiceResult<usize> {
         Err(ServiceError::NotImplemented(
             "WASM mode sensory injection not yet implemented".to_string(),
+        ))
+    }
+
+    async fn register_motor_subscriptions(
+        &self,
+        _agent_id: &str,
+        _cortical_ids: Vec<String>,
+        _rate_hz: f64,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode motor subscription not yet implemented".to_string(),
+        ))
+    }
+
+    async fn register_visualization_subscriptions(
+        &self,
+        _agent_id: &str,
+        _rate_hz: f64,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode visualization subscription not yet implemented".to_string(),
+        ))
+    }
+
+    fn unregister_motor_subscriptions(&self, _agent_id: &str) {
+        // No-op: WASM mode does not support agent subscriptions
+    }
+
+    fn unregister_visualization_subscriptions(&self, _agent_id: &str) {
+        // No-op: WASM mode does not support agent subscriptions
+    }
+
+    fn clear_all_motor_subscriptions(&self) {
+        // No-op: WASM mode does not support agent subscriptions
+    }
+
+    fn clear_all_visualization_subscriptions(&self) {
+        // No-op: WASM mode does not support agent subscriptions
+    }
+
+    async fn reset_cortical_area_states(
+        &self,
+        _cortical_indices: &[u32],
+    ) -> ServiceResult<Vec<(u32, usize)>> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode cortical reset not yet implemented".to_string(),
         ))
     }
 }

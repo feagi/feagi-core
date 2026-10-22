@@ -26,21 +26,19 @@ fn main() {
 
     for path in &path_list {
         let path_item = paths.paths.get(*path).unwrap();
-        let method_count = path_item.operations.len();
-
         // Get tags from operations
-        for (_method, operation) in &path_item.operations {
+        for operation in path_item.operations.values() {
             if let Some(tags) = &operation.tags {
                 for tag in tags {
                     tags_map
                         .entry(tag.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push((*path).clone());
                 }
             } else {
                 tags_map
                     .entry("untagged".to_string())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push((*path).clone());
             }
         }

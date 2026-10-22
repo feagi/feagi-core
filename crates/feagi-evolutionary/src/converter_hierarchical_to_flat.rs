@@ -69,6 +69,10 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         json!(genome.metadata.genome_description),
     );
     flat_genome.insert("version".to_string(), json!("3.0"));
+    flat_genome.insert(
+        "genome_schema_version".to_string(),
+        json!(crate::genome::schema::CURRENT_SCHEMA_VERSION.as_u32()),
+    );
     flat_genome.insert("timestamp".to_string(), json!(genome.metadata.timestamp));
 
     // Root region ID (if available)
@@ -112,6 +116,8 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         Value::Object(morphologies_map),
     );
 
+    flat_genome.insert("modulators".to_string(), genome.modulators.to_json());
+
     // Physiology
     let physiology = json!({
         "simulation_timestep": genome.physiology.simulation_timestep,
@@ -143,45 +149,66 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
     // Hosts (empty for now)
     flat_genome.insert("hosts".to_string(), json!({}));
 
-    // Brain regions (with cortical IDs converted to base64)
-    if !genome.brain_regions.is_empty() {
-        let mut brain_regions_map = serde_json::Map::new();
+    // Brain regions (with cortical IDs converted to base64).
+    // Always emit `brain_regions` (at least `{}`) so JSON round-trips and Python
+    // `json.loads` never lose the key when the runtime map is empty (hub / Composer merge).
+    let mut brain_regions_map = serde_json::Map::new();
 
-        for (region_id, region) in &genome.brain_regions {
-            let mut region_data = serde_json::Map::new();
+    for (region_id, region) in &genome.brain_regions {
+        let mut region_data = serde_json::Map::new();
 
-            // Serialize all properties from the BrainRegion
-            let region_json = serde_json::to_value(region)
-                .map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
+        // Serialize all properties from the BrainRegion
+        let region_json =
+            serde_json::to_value(region).map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
 
-            if let Value::Object(mut props) = region_json {
-                // Convert cortical ID arrays to base64
-                let keys_to_convert = vec!["areas", "inputs", "outputs", "cortical_areas"];
-                for key in keys_to_convert {
-                    if let Some(Value::Array(ids)) = props.get(key) {
-                        let converted_ids: Vec<String> = ids
-                            .iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|id_str| {
-                                // Try to parse as CorticalID and convert to base64
-                                crate::genome::parser::string_to_cortical_id(id_str)
-                                    .map(|cid| cid.as_base_64())
-                                    .unwrap_or_else(|_| id_str.to_string())
-                            })
-                            .collect();
-                        props.insert(key.to_string(), json!(converted_ids));
-                    }
+        if let Value::Object(mut props) = region_json {
+            // Convert cortical ID arrays to base64
+            let keys_to_convert = vec!["areas", "inputs", "outputs", "cortical_areas"];
+            for key in keys_to_convert {
+                if let Some(Value::Array(ids)) = props.get(key) {
+                    let converted_ids: Vec<String> = ids
+                        .iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|id_str| {
+                            // Try to parse as CorticalID and convert to base64
+                            crate::genome::parser::string_to_cortical_id(id_str)
+                                .map(|cid| cid.as_base_64())
+                                .unwrap_or_else(|_| id_str.to_string())
+                        })
+                        .collect();
+                    props.insert(key.to_string(), json!(converted_ids));
                 }
-
-                region_data = props;
             }
 
-            brain_regions_map.insert(region_id.clone(), Value::Object(region_data));
+            let fold =
+                crate::genome::migration::membership::fold_region_membership_into_cortical_areas(
+                    &mut props,
+                );
+            if let Some(note) = fold.data_loss_note(region_id) {
+                tracing::warn!(target: "feagi-evo", "[GENOME-SAVE] {}", note);
+            }
+            region_data = props;
         }
 
+        brain_regions_map.insert(region_id.clone(), Value::Object(region_data));
+    }
+
+    flat_genome.insert(
+        "brain_regions".to_string(),
+        Value::Object(brain_regions_map),
+    );
+
+    let mut classifiers_map = serde_json::Map::new();
+    for (classifier_id, classifier) in &genome.classifiers {
+        let classifier_json = serde_json::to_value(classifier)
+            .map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
+        classifiers_map.insert(classifier_id.clone(), classifier_json);
+    }
+    flat_genome.insert("classifiers".to_string(), Value::Object(classifiers_map));
+    if !genome.change_history.is_empty() {
         flat_genome.insert(
-            "brain_regions".to_string(),
-            Value::Object(brain_regions_map),
+            "change_history".to_string(),
+            Value::Array(genome.change_history.clone()),
         );
     }
 
@@ -237,13 +264,25 @@ fn convert_area_to_flat(
             CorticalAreaType::Memory(_) => "MEMORY",
             CorticalAreaType::Core(_) => "CORE",
             CorticalAreaType::Custom(_) => "CUSTOM",
+            CorticalAreaType::Modulator => "MODULATOR",
         };
         properties_with_group.insert("cortical_group".to_string(), json!(cortical_group));
     }
 
     // Convert all properties from area.properties using reverse mapping
     // This includes cortical_group (_group-t) which should come from properties, not area_type
-    convert_properties_to_flat(&prefix, &properties_with_group, flat_blueprint)?;
+    let default_psp_uniform = matches!(
+        area.cortical_type,
+        feagi_structures::genomic::cortical_area::CorticalAreaType::Core(
+            feagi_structures::genomic::cortical_area::CoreCorticalType::Power
+        )
+    );
+    convert_properties_to_flat(
+        &prefix,
+        &properties_with_group,
+        flat_blueprint,
+        default_psp_uniform,
+    )?;
 
     Ok(())
 }
@@ -253,6 +292,7 @@ fn convert_properties_to_flat(
     prefix: &str,
     properties: &HashMap<String, Value>,
     flat_blueprint: &mut serde_json::Map<String, Value>,
+    default_psp_uniform: bool,
 ) -> EvoResult<()> {
     // Reverse property mapping: hierarchical_key -> (flat_suffix, scope)
     // This MUST match converter_flat_full.rs PROPERTY_MAPPINGS exactly (reversed)
@@ -284,9 +324,18 @@ fn convert_properties_to_flat(
         ("lifespan_growth_rate", ("mem_gr-i", "cx")),
         ("init_lifespan", ("mem_ls-i", "cx")),
         ("temporal_depth", ("tmpdpt-i", "cx")),
+        ("mp_learning_enabled", ("mplrn-b", "cx")),
+        ("mp_change_mode", ("mpchg-t", "cx")),
+        ("mp_delta_quantization", ("mpdlq-f", "cx")),
+        ("mp_ratio_quantization", ("mprtq-f", "cx")),
+        ("min_window_activity", ("mnwin-i", "cx")),
+        ("scan_skip_density", ("scnsk-f", "cx")),
         ("neuron_excitability", ("excite-f", "nx")),
         ("dev_count", ("devcnt-i", "cx")),
         ("memory_twin_of", ("twinrf-t", "cx")),
+        ("burst_engine_active", ("brsten-b", "cx")),
+        ("spike_train", ("spktrn-b", "cx")),
+        ("modulators", ("modls-d", "cx")),
     ]
     .iter()
     .cloned()
@@ -313,7 +362,7 @@ fn convert_properties_to_flat(
         ("group_id", json!("CUSTOM")),
         ("sub_group_id", json!("")),
         ("degeneration", json!(0.0)),
-        ("psp_uniform_distribution", json!(false)),
+        ("psp_uniform_distribution", json!(default_psp_uniform)),
         ("mp_charge_accumulation", json!(false)),
         ("mp_driven_psp", json!(false)),
         ("is_mem_type", json!(false)),
@@ -345,13 +394,13 @@ fn convert_properties_to_flat(
         ];
         if debug_props.contains(prop_key) {
             if let Some(prop_value) = properties.get(*prop_key) {
-                tracing::info!(
+                tracing::debug!(
                     "[GENOME-CONVERT] Found {}={} in properties for area {}, writing to flat format",
                     prop_key, prop_value, prefix
                 );
             } else {
                 let default_val = required_defaults.get(*prop_key).unwrap_or(&json!(null));
-                tracing::info!(
+                tracing::debug!(
                     "[GENOME-CONVERT] {} not in properties for area {}, using default={}",
                     prop_key,
                     prefix,
@@ -367,24 +416,37 @@ fn convert_properties_to_flat(
 
     // Then handle special cases (these override or supplement the above)
     for (key, value) in properties {
-        if key == "cortical_mapping_dst" {
+        if key == "rate_modulated_leak" {
+            if !value.is_null() {
+                flat_blueprint.insert(format!("{}-cx-hmlk-d", prefix), value.clone());
+            }
+        } else if key == "cortical_mapping_dst" {
             // dstmap keys are already in base64 format (converted during genome load)
             if let Some(dstmap_obj) = value.as_object() {
                 flat_blueprint.insert(format!("{}-cx-dstmap-d", prefix), json!(dstmap_obj));
             }
-        } else if key == "2d_coordinate" {
-            // Handle 2D coordinates - split array into separate keys
-            if let Some(coords) = value.as_array() {
-                if coords.len() >= 2 {
-                    flat_blueprint.insert(format!("{}-cx-2dcorx-i", prefix), coords[0].clone());
-                    flat_blueprint.insert(format!("{}-cx-2dcory-i", prefix), coords[1].clone());
-                }
-            }
+        } else if key == "2d_coordinate" || key == "coordinate_2d" || key == "coordinates_2d" {
+            // Parsed genomes use `2d_coordinate`; HTTP metadata updates (e.g. circuit builder) use
+            // `coordinate_2d` / `coordinates_2d`. De-duplicated write after this loop.
+            continue;
         } else if key == "block_boundaries" || key == "relative_coordinate" {
             // Skip - already handled in convert_area_to_flat
         } else if key == "cortical_group" {
             // Map cortical_group to _group-t (overrides group_id default)
             flat_blueprint.insert(format!("{}-cx-_group-t", prefix), value.clone());
+        }
+    }
+
+    // Single write for 2D circuit-board layout. Prefer `coordinate_2d` (API / BV) over parsed-file
+    // `2d_coordinate` so saved genomes match live positions after moving nodes in Brain Visualizer.
+    let coord2d = properties
+        .get("coordinate_2d")
+        .or_else(|| properties.get("coordinates_2d"))
+        .or_else(|| properties.get("2d_coordinate"));
+    if let Some(coords) = coord2d.and_then(|v| v.as_array()) {
+        if coords.len() >= 2 {
+            flat_blueprint.insert(format!("{}-cx-2dcorx-i", prefix), coords[0].clone());
+            flat_blueprint.insert(format!("{}-cx-2dcory-i", prefix), coords[1].clone());
         }
     }
 
@@ -440,6 +502,31 @@ fn pattern_elements_to_json(elements: &[crate::PatternElement]) -> Value {
             crate::PatternElement::Wildcard => json!("*"),
             crate::PatternElement::Skip => json!("?"),
             crate::PatternElement::Exclude => json!("!"),
+            crate::PatternElement::DirectionPositive => json!("?+"),
+            crate::PatternElement::DirectionNegative => json!("?-"),
+            crate::PatternElement::DirectionPositiveInclusive => json!("?+="),
+            crate::PatternElement::DirectionNegativeInclusive => json!("?-="),
+            crate::PatternElement::Offset(off) => {
+                if *off >= 0 {
+                    json!(format!("?+{}", off))
+                } else {
+                    json!(format!("?{}", off))
+                }
+            }
+            crate::PatternElement::Range(lo, hi) => {
+                let lo_str = if *lo >= 0 {
+                    format!("?+{}", lo)
+                } else {
+                    format!("?{}", lo)
+                };
+                let hi_str = if *hi >= 0 {
+                    format!("?+{}", hi)
+                } else {
+                    format!("?{}", hi)
+                };
+                json!(format!("{}:{}", lo_str, hi_str))
+            }
+            crate::PatternElement::AbsoluteRange(lo, hi) => json!(format!("{}..{}", lo, hi)),
         })
         .collect();
 
@@ -465,7 +552,9 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0000000000000000".to_string(),
@@ -474,6 +563,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let flat = convert_hierarchical_to_flat(&genome).unwrap();
@@ -483,6 +573,120 @@ mod tests {
         assert!(flat["blueprint"].is_object());
         assert!(flat["neuron_morphologies"].is_object());
         assert!(flat["physiology"].is_object());
+        assert!(flat["classifiers"].is_object());
+        assert_eq!(flat["classifiers"].as_object().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn convert_writes_region_membership_only_as_cortical_areas() {
+        use feagi_structures::genomic::brain_regions::RegionID;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::{BrainRegion, RegionType};
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "A test genome".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let region_id = RegionID::new();
+        let power_id = CoreCorticalType::Power.to_cortical_id();
+        let mut region =
+            BrainRegion::new(region_id, "Root".to_string(), RegionType::Undefined).unwrap();
+        region.add_area(power_id);
+        region.add_property("areas".to_string(), json!(["should-stay-nested"]));
+        region.add_property("description".to_string(), json!("kept"));
+        genome.brain_regions.insert(region_id.to_string(), region);
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let saved = &flat["brain_regions"][region_id.to_string()];
+        assert!(saved.get("areas").is_none());
+        let membership = saved["cortical_areas"].as_array().unwrap();
+        assert!(membership
+            .iter()
+            .any(|value| value.as_str() == Some(power_id.as_base_64().as_str())));
+        assert_eq!(saved["properties"]["description"], "kept");
+        assert_eq!(saved["properties"]["areas"], json!(["should-stay-nested"]));
+    }
+
+    #[test]
+    fn test_convert_preserves_classifiers() {
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "A test genome".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        genome.classifiers.insert(
+            "clf-1".to_string(),
+            feagi_structures::genomic::classifiers::Classifier {
+                classifier_id: "clf-1".to_string(),
+                name: "object_class".to_string(),
+                parent_region_id: "root".to_string(),
+                coordinates_3d: [1, 2, 3],
+                sample_area_ids: vec!["csample".to_string()],
+                class_bindings: vec![
+                    feagi_structures::genomic::classifiers::ClassifierClassBinding {
+                        class_area_id: "ccls01".to_string(),
+                        class_output_area_id: "cout1".to_string(),
+                    },
+                ],
+                sample_memory_id: "mkmem1".to_string(),
+                class_memory_id: "mcmem1".to_string(),
+                error_area_id: "cerr1".to_string(),
+                reward_training: false,
+                answer_feedback_area_id: None,
+                pain_area_id: None,
+                pleasure_area_id: None,
+                answer_latency_bursts: 0,
+                learn_area_id: None,
+                confidence_area_id: None,
+                properties: HashMap::new(),
+            },
+        );
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        assert_eq!(flat["classifiers"]["clf-1"]["name"], "object_class");
+        assert_eq!(
+            flat["classifiers"]["clf-1"]["class_bindings"][0]["class_output_area_id"],
+            "cout1"
+        );
+        assert_eq!(flat["classifiers"]["clf-1"]["parent_region_id"], "root");
     }
 
     #[test]
@@ -504,7 +708,9 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0000000000000000".to_string(),
@@ -513,6 +719,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         // Create test areas with different cortical types
@@ -585,7 +792,9 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0000000000000000".to_string(),
@@ -594,6 +803,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let twin_id = CorticalID::try_from_base_64("Y7Gx8Xy7Fpo=").unwrap();
@@ -615,5 +825,121 @@ mod tests {
         let flat = convert_hierarchical_to_flat(&genome).unwrap();
         let key = "_____10c-Y7Gx8Xy7Fpo=-cx-twinrf-t";
         assert_eq!(flat["blueprint"][key], "Y2EyX19fX/U=");
+    }
+
+    /// `coordinate_2d` is what RuntimeGenome stores after PUT .../cortical_area (BV moves). Export must
+    /// still emit `2dcorx-i` / `2dcory-i` or reload loses circuit-builder positions.
+    #[test]
+    fn test_coordinate_2d_from_api_exports_to_flat_2dcor() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+            IOCorticalAreaConfigurationFlag,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "2d export".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+
+        let cid = CorticalID::try_from_base_64("Y7Gx8Xy7Fpo=").unwrap();
+        let mut area = CorticalArea::new(
+            cid,
+            0,
+            "movable".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            GenomeCoordinate3D::new(0, 0, 0),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        area.properties
+            .insert("coordinate_2d".to_string(), json!([400, 120]));
+        genome.cortical_areas.insert(cid, area);
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let blueprint = flat["blueprint"].as_object().unwrap();
+        let b64 = cid.as_base_64();
+        assert_eq!(blueprint[&format!("_____10c-{}-cx-2dcorx-i", b64)], 400);
+        assert_eq!(blueprint[&format!("_____10c-{}-cx-2dcory-i", b64)], 120);
+    }
+
+    #[test]
+    fn test_power_defaults_written_when_properties_omitted() {
+        use feagi_structures::genomic::cortical_area::{
+            CoreCorticalType, CorticalArea, CorticalAreaDimensions,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "Power defaults".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+
+        let power_id = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type = power_id.as_cortical_type().expect("Power type");
+        let power_area = CorticalArea::new(
+            power_id,
+            1,
+            "Brain_Power".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            GenomeCoordinate3D::new(0, 0, -20),
+            cortical_type,
+        )
+        .unwrap();
+        genome.cortical_areas.insert(power_id, power_area);
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let blueprint = flat["blueprint"].as_object().unwrap();
+        let b64 = power_id.as_base_64();
+        assert_eq!(
+            blueprint[&format!("_____10c-{}-cx-de_gen-f", b64)],
+            0.0,
+            "Power degeneration must default to 0"
+        );
+        assert_eq!(
+            blueprint[&format!("_____10c-{}-cx-pspuni-b", b64)],
+            true,
+            "Power PSP uniformity must default to on"
+        );
     }
 }

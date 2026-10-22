@@ -361,7 +361,7 @@ use_gpu = false
 
 **Command**:
 ```bash
-./target/release/feagi --config feagi_configuration.toml --genome test_genome.json
+./target/release/feagi --config feagi_configuration.toml --genome test.genome
 ```
 
 ---

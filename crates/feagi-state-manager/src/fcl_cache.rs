@@ -8,14 +8,14 @@
 #[cfg(feature = "std")]
 use ahash::AHashMap;
 
-#[cfg(feature = "no_std")]
+#[cfg(all(feature = "no_std", not(feature = "std")))]
 use heapless::FnvIndexMap as AHashMap;
 
 // Platform-specific imports
 #[cfg(all(feature = "std", not(target_family = "wasm")))]
 use parking_lot::RwLock;
 
-#[cfg(all(feature = "no_std", not(target_family = "wasm")))]
+#[cfg(all(feature = "no_std", not(feature = "std"), not(target_family = "wasm")))]
 use spin::RwLock;
 
 #[cfg(all(target_family = "wasm", not(feature = "wasm-threaded")))]
@@ -67,13 +67,13 @@ impl FCLWindowCache {
 }
 
 /// FCL window cache for no_std platforms
-#[cfg(all(feature = "no_std", not(target_family = "wasm")))]
+#[cfg(all(feature = "no_std", not(feature = "std"), not(target_family = "wasm")))]
 pub struct FCLWindowCache {
     cache: RwLock<AHashMap<u32, usize>>,
     default_window_size: usize,
 }
 
-#[cfg(all(feature = "no_std", not(target_family = "wasm")))]
+#[cfg(all(feature = "no_std", not(feature = "std"), not(target_family = "wasm")))]
 impl FCLWindowCache {
     pub fn new(default_window_size: usize) -> Self {
         Self {

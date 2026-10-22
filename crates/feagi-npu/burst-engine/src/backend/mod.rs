@@ -390,7 +390,7 @@ pub fn select_backend(
                 estimated_speedup: estimate_cuda_speedup(neuron_count, synapse_count),
             };
         } else {
-            info!("CUDA forced but not available, falling back to CPU");
+            tracing::info!("CUDA forced but not available, falling back to CPU");
             return BackendDecision {
                 backend_type: BackendType::CPU,
                 reason: "CUDA forced but not available, falling back to CPU".to_string(),
@@ -408,7 +408,7 @@ pub fn select_backend(
                 estimated_speedup: estimate_gpu_speedup(neuron_count, synapse_count),
             };
         } else {
-            info!("WGPU forced but not available, falling back to CPU");
+            tracing::info!("WGPU forced but not available, falling back to CPU");
             return BackendDecision {
                 backend_type: BackendType::CPU,
                 reason: "WGPU forced but not available, falling back to CPU".to_string(),
@@ -609,12 +609,12 @@ pub fn create_backend<T: NeuralValue>(
     let actual_type = if backend_type == BackendType::Auto {
         // Count will be updated later, use capacity as estimate
         let _decision = select_backend(neuron_capacity, synapse_capacity, config);
-        info!(
+        tracing::info!(
             "🎯 Backend auto-selection: {} ({})",
             decision.backend_type, decision.reason
         );
         if decision.estimated_speedup > 1.0 {
-            info!("   Estimated speedup: {:.1}x", decision.estimated_speedup);
+            tracing::info!("   Estimated speedup: {:.1}x", decision.estimated_speedup);
         }
         decision.backend_type
     } else {
@@ -623,7 +623,7 @@ pub fn create_backend<T: NeuralValue>(
 
     match actual_type {
         BackendType::CPU => {
-            info!("🖥️  Using CPU backend (SIMD optimized)");
+            tracing::info!("🖥️  Using CPU backend (SIMD optimized)");
             Ok(Box::new(CPUBackend::new()))
         }
         #[cfg(feature = "gpu")]
@@ -632,13 +632,13 @@ pub fn create_backend<T: NeuralValue>(
             // This is because shaders are compiled for f32 arithmetic
             if std::any::TypeId::of::<T>() != std::any::TypeId::of::<f32>() {
                 let type_name = std::any::type_name::<T>();
-                info!("⚠️  WGPU backend requested but {} quantization is not supported on GPU", type_name);
-                info!("   GPU shaders are currently f32-only. Falling back to CPU backend.");
-                info!("   Future: f16 GPU support planned for mixed-precision training");
+                tracing::info!("⚠️  WGPU backend requested but {} quantization is not supported on GPU", type_name);
+                tracing::info!("   GPU shaders are currently f32-only. Falling back to CPU backend.");
+                tracing::info!("   Future: f16 GPU support planned for mixed-precision training");
                 return Ok(Box::new(CPUBackend::new()));
             }
 
-            info!("🎮 Using WGPU backend (cross-platform GPU)");
+            tracing::info!("🎮 Using WGPU backend (cross-platform GPU)");
             // SAFETY: We've verified T == f32 above, so this is safe
             // We use unsafe transmute because we can't directly cast Box<WGPUBackend> to Box<dyn ComputeBackend<T>>
             // when T is a generic parameter, even though we know T == f32 at runtime
@@ -651,13 +651,13 @@ pub fn create_backend<T: NeuralValue>(
             // CUDA backend currently only supports f32
             if std::any::TypeId::of::<T>() != std::any::TypeId::of::<f32>() {
                 let type_name = std::any::type_name::<T>();
-                info!("⚠️  CUDA backend requested but {} quantization is not supported", type_name);
-                info!("   CUDA kernels are currently f32-only. Falling back to CPU backend.");
-                info!("   Future: f16/int8 CUDA support planned for mixed-precision training");
+                tracing::info!("⚠️  CUDA backend requested but {} quantization is not supported", type_name);
+                tracing::info!("   CUDA kernels are currently f32-only. Falling back to CPU backend.");
+                tracing::info!("   Future: f16/int8 CUDA support planned for mixed-precision training");
                 return Ok(Box::new(CPUBackend::new()));
             }
 
-            info!("🚀 Using CUDA backend (NVIDIA GPU - high performance)");
+            tracing::info!("🚀 Using CUDA backend (NVIDIA GPU - high performance)");
             // SAFETY: We've verified T == f32 above, so this is safe
             let backend = CUDABackend::new(neuron_capacity, synapse_capacity)?;
             let boxed: Box<dyn ComputeBackend<f32>> = Box::new(backend);

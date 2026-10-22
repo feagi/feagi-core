@@ -16,6 +16,14 @@ pub struct MorphologyListResponse {
     pub morphology_list: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct RenameMorphologyRequest {
+    #[serde(alias = "old_morphology_name")]
+    pub old_morphology_id: String,
+    #[serde(alias = "new_morphology_name")]
+    pub new_morphology_id: String,
+}
+
 /// Get list of all morphology names in alphabetical order.
 #[utoipa::path(get, path = "/v1/morphology/morphology_list", tag = "morphology")]
 pub async fn get_morphology_list(
@@ -183,6 +191,11 @@ pub async fn put_morphology(
     State(state): State<ApiState>,
     Json(req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    tracing::info!(
+        target: "feagi-api",
+        "[MORPH-AUDIT][API] PUT /v1/morphology/morphology received payload keys={:?}",
+        req.keys().collect::<Vec<_>>()
+    );
     let morphology_name = req
         .get("morphology_name")
         .and_then(|v| v.as_str())
@@ -243,11 +256,23 @@ pub async fn put_morphology(
         class: DEFAULT_MORPHOLOGY_CLASS.to_string(),
     };
 
+    tracing::info!(
+        target: "feagi-api",
+        "[MORPH-AUDIT][API] Dispatching update_morphology name={} type={}",
+        morphology_name,
+        morphology_type
+    );
+
     state
         .connectome_service
         .update_morphology(morphology_name, morphology)
         .await
         .map_err(ApiError::from)?;
+
+    tracing::info!(
+        target: "feagi-api",
+        "[MORPH-AUDIT][API] update_morphology completed successfully"
+    );
 
     Ok(Json(HashMap::from([(
         "status".to_string(),
@@ -280,6 +305,50 @@ pub async fn delete_morphology_by_name(
         "status".to_string(),
         "success".to_string(),
     )])))
+}
+
+/// Rename a morphology and update all references in the genome.
+#[utoipa::path(
+    put,
+    path = "/v1/morphology/rename",
+    tag = "morphology",
+    request_body = RenameMorphologyRequest,
+    responses(
+        (status = 200, description = "Morphology renamed", body = HashMap<String, String>),
+        (status = 404, description = "Morphology not found"),
+        (status = 409, description = "New morphology ID already exists"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn put_rename_morphology(
+    State(state): State<ApiState>,
+    Json(req): Json<RenameMorphologyRequest>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    let old_id = req.old_morphology_id.trim();
+    let new_id = req.new_morphology_id.trim();
+
+    if old_id.is_empty() {
+        return Err(ApiError::invalid_input(
+            "old_morphology_id must be non-empty",
+        ));
+    }
+    if new_id.is_empty() {
+        return Err(ApiError::invalid_input(
+            "new_morphology_id must be non-empty",
+        ));
+    }
+
+    state
+        .connectome_service
+        .rename_morphology(old_id, new_id)
+        .await
+        .map_err(ApiError::from)?;
+
+    Ok(Json(HashMap::from([
+        ("status".to_string(), "success".to_string()),
+        ("old_morphology_id".to_string(), old_id.to_string()),
+        ("new_morphology_id".to_string(), new_id.to_string()),
+    ])))
 }
 
 /// Get detailed properties for a specific morphology by name.

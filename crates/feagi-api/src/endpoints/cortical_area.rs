@@ -8,11 +8,18 @@
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
+use feagi_evolutionary::extract_memory_properties;
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalSubUnitIndex, CorticalUnitIndex,
+};
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use utoipa::{IntoParams, ToSchema};
 
 // ============================================================================
 // REQUEST/RESPONSE MODELS
@@ -26,6 +33,25 @@ pub struct CorticalAreaIdListResponse {
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CorticalAreaNameListResponse {
     pub cortical_area_name_list: Vec<String>,
+}
+
+/// Body for `PUT /v1/cortical_area/reset` (matches Brain Visualizer `area_list` payload).
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CorticalAreaResetRequest {
+    pub area_list: Vec<String>,
+}
+
+/// Per-area outcome for cortical reset.
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CorticalAreaResetItem {
+    pub cortical_idx: u32,
+    pub neurons_reset: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CorticalAreaResetResponse {
+    pub message: String,
+    pub results: Vec<CorticalAreaResetItem>,
 }
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
@@ -43,6 +69,354 @@ pub struct CorticalTypeMetadata {
     pub resolution: Vec<i32>,
     pub structure: String,
     pub unit_default_topology: HashMap<usize, UnitTopologyData>,
+}
+
+/// Maximum outgoing **or** incoming synapse detail objects per request page (100 synapse records max per neuron: 50 + 50).
+pub const VOXEL_NEURON_SYNAPSES_PER_DIRECTION_PER_PAGE: usize = 50;
+
+/// Returns `(range_start, range_end, has_more)` for a 0-based `page` over `total` items (`page_size` per page).
+fn synapse_page_window(total: usize, page: u32) -> (usize, usize, bool) {
+    let page = page as usize;
+    let page_size = VOXEL_NEURON_SYNAPSES_PER_DIRECTION_PER_PAGE;
+    let start = page.saturating_mul(page_size);
+    if start >= total {
+        return (0, 0, false);
+    }
+    let end = (start + page_size).min(total);
+    let has_more = total > end;
+    (start, end, has_more)
+}
+
+/// Query parameters for [`get_voxel_neurons`] (same coordinate space as `/v1/connectome/neuron_properties_at`).
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct VoxelNeuronsQuery {
+    /// Cortical area ID (base64-encoded string, e.g. from genome).
+    pub cortical_id: String,
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
+    /// 0-based page for synapse detail lists: at most [`VOXEL_NEURON_SYNAPSES_PER_DIRECTION_PER_PAGE`] outgoing and the same count incoming per page.
+    #[serde(default)]
+    pub synapse_page: u32,
+}
+
+/// JSON body for [`post_voxel_neurons`] (same fields as [`VoxelNeuronsQuery`]).
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct VoxelNeuronsBody {
+    pub cortical_id: String,
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
+    #[serde(default)]
+    pub synapse_page: u32,
+}
+
+/// Default page size for [`MemoryCorticalAreaQuery::page_size`].
+pub const MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_DEFAULT: u32 = 50;
+/// Maximum allowed page size for memory neuron id list pagination.
+pub const MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_MAX: u32 = 500;
+
+fn default_memory_cortical_page_size() -> u32 {
+    MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_DEFAULT
+}
+
+/// Query parameters for [`get_memory_cortical_area`].
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct MemoryCorticalAreaQuery {
+    /// Base64 cortical area id for a memory area.
+    pub cortical_id: String,
+    /// 0-based page index for `memory_neuron_ids`.
+    #[serde(default)]
+    pub page: u32,
+    /// Page size for `memory_neuron_ids` (clamped to [`MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_MAX`]).
+    #[serde(default = "default_memory_cortical_page_size")]
+    pub page_size: u32,
+}
+
+/// Lifecycle values the area record already resolved, plus the keys that stay in
+/// `properties` after duplicate top-level fields are removed.
+fn memory_parameters_from_reported_area(
+    area: &feagi_services::types::CorticalAreaInfo,
+    extracted: &feagi_evolutionary::MemoryAreaProperties,
+) -> MemoryCorticalAreaParamsResponse {
+    MemoryCorticalAreaParamsResponse {
+        temporal_depth: area
+            .temporal_depth
+            .unwrap_or(extracted.temporal_depth)
+            .max(1),
+        longterm_mem_threshold: area.longterm_mem_threshold,
+        lifespan_growth_rate: area.lifespan_growth_rate as f32,
+        init_lifespan: area.init_lifespan,
+        mp_learning_enabled: area
+            .mp_learning_enabled
+            .unwrap_or(extracted.mp_learning_enabled),
+        mp_change_mode: area
+            .mp_change_mode
+            .clone()
+            .unwrap_or_else(|| extracted.mp_change_mode.as_str().to_string()),
+        mp_delta_quantization: area
+            .mp_delta_quantization
+            .unwrap_or(extracted.mp_delta_quantization),
+        mp_ratio_quantization: area
+            .mp_ratio_quantization
+            .unwrap_or(extracted.mp_ratio_quantization),
+        min_window_activity: extracted.min_window_activity,
+        scan_skip_density: extracted.scan_skip_density,
+    }
+}
+
+/// Genome memory parameters for the cortical area (from `extract_memory_properties`).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct MemoryCorticalAreaParamsResponse {
+    pub temporal_depth: u32,
+    pub longterm_mem_threshold: u32,
+    pub lifespan_growth_rate: f32,
+    pub init_lifespan: u32,
+    pub mp_learning_enabled: bool,
+    /// Change-based MP encoding: "none", "mp_differential", or "mp_ratio".
+    pub mp_change_mode: String,
+    /// Differential rounding step in MP units.
+    pub mp_delta_quantization: f32,
+    /// Ratio rounding step in percent per compounding bucket.
+    pub mp_ratio_quantization: f32,
+    pub min_window_activity: u32,
+    pub scan_skip_density: f32,
+}
+
+/// Response for [`get_memory_cortical_area`].
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct MemoryCorticalAreaResponse {
+    pub cortical_id: String,
+    pub cortical_idx: u32,
+    pub cortical_name: String,
+    pub short_term_neuron_count: usize,
+    pub long_term_neuron_count: usize,
+    pub memory_parameters: MemoryCorticalAreaParamsResponse,
+    /// Mode the plasticity layer actually runs: "pattern_only", "mp_learning",
+    /// "mp_differential", or "mp_ratio". Differs from `memory_parameters` when a change
+    /// mode was auto-disabled (temporal_depth < 2). `None` if the area is not registered.
+    pub effective_mp_mode: Option<String>,
+    /// Upstream cortical indices that feed pattern detection for this memory area.
+    pub upstream_cortical_area_indices: Vec<u32>,
+    pub upstream_cortical_area_count: usize,
+    /// Distinct temporal patterns cached in the pattern detector for this area.
+    pub upstream_pattern_cache_size: usize,
+    pub incoming_synapse_count: usize,
+    pub outgoing_synapse_count: usize,
+    pub total_memory_neuron_ids: usize,
+    pub page: u32,
+    pub page_size: u32,
+    pub memory_neuron_ids: Vec<u64>,
+    pub has_more: bool,
+}
+
+/// Per-peer cortical id (base64 string or null), genome cortical **name**, cortical index, and voxel `(x,y,z)` for the given neuron id.
+pub(crate) fn peer_cortical_voxel_fields(
+    mgr: &feagi_brain_development::ConnectomeManager,
+    peer_id: u64,
+    prefix: &str,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut m = serde_json::Map::new();
+    let peer_cortical = mgr.get_neuron_cortical_id(peer_id);
+    let cortical_id = peer_cortical.map(|c| c.as_base_64());
+    m.insert(
+        format!("{prefix}_cortical_id"),
+        cortical_id.map_or(serde_json::Value::Null, serde_json::Value::String),
+    );
+    let cortical_name = peer_cortical
+        .and_then(|cid| mgr.get_cortical_area(&cid))
+        .map(|a| a.name.clone());
+    m.insert(
+        format!("{prefix}_cortical_name"),
+        cortical_name.map_or(serde_json::Value::Null, serde_json::Value::String),
+    );
+    m.insert(
+        format!("{prefix}_cortical_idx"),
+        mgr.get_neuron_cortical_idx_opt(peer_id)
+            .map_or(serde_json::Value::Null, |v| serde_json::json!(v)),
+    );
+    let (vx, vy, vz) = mgr.get_neuron_coordinates(peer_id);
+    m.insert(format!("{prefix}_x"), serde_json::json!(vx));
+    m.insert(format!("{prefix}_y"), serde_json::json!(vy));
+    m.insert(format!("{prefix}_z"), serde_json::json!(vz));
+    m
+}
+
+/// Build JSON arrays for NPU synapse tuples, aligned with `/v1/connectome/{cortical_area_id}/synapses`,
+/// plus peer cortical id, `target_cortical_name` / `source_cortical_name` (genome name), and voxel for the **target** (outgoing) or **source** (incoming) neuron.
+pub(crate) fn synapse_details_for_neuron(
+    mgr: &feagi_brain_development::ConnectomeManager,
+    neuron_id: u32,
+    outgoing: &[(u32, f32, f32, u8)],
+    incoming: &[(u32, f32, f32, u8)],
+) -> (serde_json::Value, serde_json::Value) {
+    let outgoing_json: Vec<serde_json::Value> = outgoing
+        .iter()
+        .map(|&(target_id, weight, psp, synapse_type)| {
+            let mut obj = serde_json::Map::new();
+            obj.insert("source_neuron_id".to_string(), serde_json::json!(neuron_id));
+            obj.insert("target_neuron_id".to_string(), serde_json::json!(target_id));
+            obj.insert("weight".to_string(), serde_json::json!(weight));
+            obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
+            obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
+            obj.extend(peer_cortical_voxel_fields(mgr, target_id as u64, "target"));
+            serde_json::Value::Object(obj)
+        })
+        .collect();
+    let incoming_json: Vec<serde_json::Value> = incoming
+        .iter()
+        .map(|&(source_id, weight, psp, synapse_type)| {
+            let mut obj = serde_json::Map::new();
+            obj.insert("source_neuron_id".to_string(), serde_json::json!(source_id));
+            obj.insert("target_neuron_id".to_string(), serde_json::json!(neuron_id));
+            obj.insert("weight".to_string(), serde_json::json!(weight));
+            obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
+            obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
+            obj.extend(peer_cortical_voxel_fields(mgr, source_id as u64, "source"));
+            serde_json::Value::Object(obj)
+        })
+        .collect();
+    (
+        serde_json::Value::Array(outgoing_json),
+        serde_json::Value::Array(incoming_json),
+    )
+}
+
+/// All neurons whose 3D coordinate within the cortical area matches the requested voxel, with live properties.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct VoxelNeuronsResponse {
+    pub cortical_id: String,
+    /// Genome / connectome human-readable name for this cortical area (same as `cortical_name` elsewhere).
+    pub cortical_name: String,
+    pub cortical_idx: u32,
+    /// Queried voxel within the cortical volume (same values as `x`, `y`, `z`).
+    pub voxel_coordinate: [u32; 3],
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
+    /// Echo of the requested synapse detail page (0-based).
+    pub synapse_page: u32,
+    pub neuron_count: usize,
+    pub neurons: Vec<serde_json::Value>,
+}
+
+/// Resolve every neuron at `(x, y, z)` inside `cortical_id` and attach `cortical_id` / `cortical_idx`,
+/// plus paginated `outgoing_synapses` / `incoming_synapses` (at most 50 each per `synapse_page`),
+/// full `outgoing_synapse_count` / `incoming_synapse_count`, and `*_synapses_has_more` flags.
+async fn resolve_voxel_neurons(
+    state: &ApiState,
+    cortical_id: String,
+    x: u32,
+    y: u32,
+    z: u32,
+    synapse_page: u32,
+) -> ApiResult<VoxelNeuronsResponse> {
+    let connectome_service = state.connectome_service.as_ref();
+    let area = connectome_service
+        .get_cortical_area(&cortical_id)
+        .await
+        .map_err(ApiError::from)?;
+
+    let cortical_idx = area.cortical_idx;
+    let cortical_name = area.name.clone();
+
+    let matching_ids: Vec<u32> = {
+        let manager = feagi_brain_development::ConnectomeManager::instance();
+        let manager_lock = manager.read();
+        let npu_arc = manager_lock
+            .get_npu()
+            .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
+        let npu_lock = npu_arc.lock().map_err(|_| {
+            ApiError::internal("NPU mutex poisoned; restart FEAGI or wait for burst recovery")
+        })?;
+
+        let mut ids: Vec<u32> = npu_lock
+            .get_neurons_in_cortical_area(cortical_idx)
+            .into_iter()
+            .filter(|&nid| {
+                npu_lock
+                    .get_neuron_coordinates(nid)
+                    .map(|(nx, ny, nz)| nx == x && ny == y && nz == z)
+                    .unwrap_or(false)
+            })
+            .collect();
+        ids.sort_unstable();
+        ids
+    };
+
+    let mut neurons: Vec<serde_json::Value> = Vec::with_capacity(matching_ids.len());
+    for neuron_id in &matching_ids {
+        let nid = *neuron_id;
+        let mut props = connectome_service
+            .get_neuron_properties(nid as u64)
+            .await
+            .map_err(ApiError::from)?;
+        props.insert(
+            "cortical_id".to_string(),
+            serde_json::Value::String(cortical_id.clone()),
+        );
+        props.insert("cortical_idx".to_string(), serde_json::json!(cortical_idx));
+
+        let (
+            outgoing_synapse_count,
+            incoming_synapse_count,
+            out_json,
+            in_json,
+            outgoing_synapses_has_more,
+            incoming_synapses_has_more,
+        ) = {
+            let manager = feagi_brain_development::ConnectomeManager::instance();
+            let mgr = manager.read();
+            let outgoing_full = mgr.get_outgoing_synapses(nid as u64);
+            let incoming_full = mgr.get_incoming_synapses(nid as u64);
+            let oc = outgoing_full.len();
+            let ic = incoming_full.len();
+            let (o_start, o_end, out_has_more) = synapse_page_window(oc, synapse_page);
+            let (i_start, i_end, in_has_more) = synapse_page_window(ic, synapse_page);
+            let out_slice = &outgoing_full[o_start..o_end];
+            let in_slice = &incoming_full[i_start..i_end];
+            let (out_json, in_json) = synapse_details_for_neuron(&mgr, nid, out_slice, in_slice);
+            (oc, ic, out_json, in_json, out_has_more, in_has_more)
+        };
+        props.insert("synapse_page".to_string(), serde_json::json!(synapse_page));
+        props.insert(
+            "outgoing_synapse_count".to_string(),
+            serde_json::json!(outgoing_synapse_count),
+        );
+        props.insert(
+            "incoming_synapse_count".to_string(),
+            serde_json::json!(incoming_synapse_count),
+        );
+        props.insert(
+            "outgoing_synapses_has_more".to_string(),
+            serde_json::json!(outgoing_synapses_has_more),
+        );
+        props.insert(
+            "incoming_synapses_has_more".to_string(),
+            serde_json::json!(incoming_synapses_has_more),
+        );
+        props.insert("outgoing_synapses".to_string(), out_json);
+        props.insert("incoming_synapses".to_string(), in_json);
+
+        neurons.push(serde_json::to_value(&props).map_err(|e| {
+            ApiError::internal(format!("Failed to serialize neuron properties: {}", e))
+        })?);
+    }
+
+    Ok(VoxelNeuronsResponse {
+        cortical_id,
+        cortical_name,
+        cortical_idx,
+        voxel_coordinate: [x, y, z],
+        x,
+        y,
+        z,
+        synapse_page,
+        neuron_count: neurons.len(),
+        neurons,
+    })
 }
 
 // ============================================================================
@@ -318,6 +692,9 @@ pub async fn get_cortical_area_geometry(
                         "parent_region_id": area.parent_region_id,
                         // Visualization voxel granularity for large-area rendering (optional)
                         "visualization_voxel_granularity": area.visualization_voxel_granularity.map(|(x, y, z)| serde_json::json!([x, y, z])),
+                        "scan_twin": geometry_scan_twin_flag(&area.properties),
+                        "classifier_role": geometry_classifier_role(&area.properties),
+                        "temporal_depth": area.temporal_depth,
                     });
                     (area.cortical_id.clone(), data)
                 })
@@ -451,13 +828,13 @@ pub async fn post_multi_cortical_area_properties(
 
     for cortical_id in cortical_ids {
         if let Ok(area_info) = connectome_service.get_cortical_area(&cortical_id).await {
-            tracing::debug!(target: "feagi-api",
+            tracing::trace!(target: "feagi-api",
                 "[MULTI] Area {}: cortical_type={}, cortical_group={}, is_mem_type={:?}",
                 cortical_id, area_info.cortical_type, area_info.cortical_group,
                 area_info.properties.get("is_mem_type")
             );
             let json_value = serde_json::to_value(&area_info).unwrap_or_default();
-            tracing::debug!(target: "feagi-api",
+            tracing::trace!(target: "feagi-api",
                 "[MULTI] Serialized has cortical_type: {}",
                 json_value.get("cortical_type").is_some()
             );
@@ -465,6 +842,98 @@ pub async fn post_multi_cortical_area_properties(
         }
     }
     Ok(Json(result))
+}
+
+fn parse_dimension_triplet(value: &serde_json::Value) -> Option<(usize, usize, usize)> {
+    let values = value.as_array()?;
+    if values.len() != 3 {
+        return None;
+    }
+    let width = values.first().and_then(serde_json::Value::as_u64)? as usize;
+    let height = values.get(1).and_then(serde_json::Value::as_u64)? as usize;
+    let depth = values.get(2).and_then(serde_json::Value::as_u64)? as usize;
+    if width == 0 || height == 0 || depth == 0 {
+        return None;
+    }
+    Some((width, height, depth))
+}
+
+/// Optional per-subunit volumes. Absent means every subunit uses the shared override or template.
+fn parse_per_device_dimensions_by_subunit(
+    request: &HashMap<String, serde_json::Value>,
+) -> Result<HashMap<u8, (usize, usize, usize)>, ApiError> {
+    let Some(raw) = request.get("per_device_dimensions_by_subunit") else {
+        return Ok(HashMap::new());
+    };
+    let object = raw.as_object().ok_or_else(|| {
+        ApiError::invalid_input("per_device_dimensions_by_subunit must be an object")
+    })?;
+    let mut parsed = HashMap::new();
+    for (key, value) in object {
+        let subunit_index = key.parse::<u8>().map_err(|_| {
+            ApiError::invalid_input("per_device_dimensions_by_subunit keys must be subunit indexes")
+        })?;
+        let dimensions = parse_dimension_triplet(value).ok_or_else(|| {
+            ApiError::invalid_input(format!(
+                "per_device_dimensions_by_subunit[{key}] must be [width, height, depth]"
+            ))
+        })?;
+        parsed.insert(subunit_index, dimensions);
+    }
+    Ok(parsed)
+}
+
+fn property_dev_count(properties: &Option<HashMap<String, serde_json::Value>>) -> Option<usize> {
+    properties
+        .as_ref()
+        .and_then(|properties| properties.get("dev_count"))
+        .and_then(|value| value.as_u64())
+        .map(|value| value as usize)
+}
+
+fn property_per_device_dimensions(
+    properties: &Option<HashMap<String, serde_json::Value>>,
+) -> Option<(usize, usize, usize)> {
+    properties
+        .as_ref()
+        .and_then(|properties| properties.get("cortical_dimensions_per_device"))
+        .and_then(parse_dimension_triplet)
+}
+
+/// True when the connectome area already has the volume this request would write.
+fn io_area_matches_requested_geometry(
+    current_dimensions: (usize, usize, usize),
+    current_dev_count: Option<usize>,
+    current_per_device: Option<(usize, usize, usize)>,
+    requested_dimensions: (usize, usize, usize),
+    requested_dev_count: Option<usize>,
+    requested_per_device: Option<(usize, usize, usize)>,
+) -> bool {
+    current_dimensions == requested_dimensions
+        && current_dev_count == requested_dev_count
+        && current_per_device == requested_per_device
+}
+
+fn dimension_update_changes(
+    dimensions: (usize, usize, usize),
+    per_device: Option<(usize, usize, usize)>,
+    dev_count: Option<usize>,
+) -> HashMap<String, serde_json::Value> {
+    let mut changes = HashMap::new();
+    changes.insert(
+        "dimensions".to_string(),
+        serde_json::json!([dimensions.0, dimensions.1, dimensions.2]),
+    );
+    if let Some(per_device) = per_device {
+        changes.insert(
+            "cortical_dimensions_per_device".to_string(),
+            serde_json::json!([per_device.0, per_device.1, per_device.2]),
+        );
+    }
+    if let Some(dev_count) = dev_count {
+        changes.insert("dev_count".to_string(), serde_json::json!(dev_count));
+    }
+    changes
 }
 
 /// Create IPU (sensory) or OPU (motor) cortical areas with proper topology and multi-unit support.
@@ -486,10 +955,12 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
 
-    let mut group_id = request
+    let mut group_id: u16 = request
         .get("group_id")
         .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u8;
+        .unwrap_or(0)
+        .try_into()
+        .map_err(|_| ApiError::invalid_input("group_id out of range"))?;
 
     let device_count = request
         .get("device_count")
@@ -518,7 +989,7 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_type required"))?;
 
-    let unit_id: Option<u8> = request
+    let unit_id: Option<u16> = request
         .get("unit_id")
         .and_then(|v| v.as_u64())
         .map(|value| {
@@ -536,6 +1007,14 @@ pub async fn post_cortical_area(
         .get("neurons_per_voxel")
         .and_then(|v| v.as_u64())
         .unwrap_or(1) as u32;
+
+    // Optional: Override per-device dimensions (especially Z for angle resolution)
+    // Format: [x, y, z] where x=joints per device, y=1, z=angle_resolution
+    // Example: [1, 1, 32] for single-joint servo with 32-angle resolution
+    let per_device_dimensions_override: Option<(usize, usize, usize)> = request
+        .get("per_device_dimensions")
+        .and_then(parse_dimension_triplet);
+    let per_device_dimensions_by_subunit = parse_per_device_dimensions_by_subunit(&request)?;
 
     // BREAKING CHANGE (unreleased API):
     // `data_type_config` is now per-subunit, because some cortical units have heterogeneous
@@ -598,10 +1077,12 @@ pub async fn post_cortical_area(
         data_type_configs_by_subunit
     );
 
-    // Determine number of units and get topology
-    let (num_units, unit_topology) = if cortical_type_str == "IPU" {
+    // Determine number of units and get topology. `resolved_sensory_unit` is carried into the
+    // per-subunit loop below so IPU creation can apply the unit's template-defined neural
+    // tunables (firing threshold / increment) instead of generic zeros.
+    let (num_units, unit_topology, resolved_sensory_unit) = if cortical_type_str == "IPU" {
         // Find the matching sensory cortical unit
-        let unit = SensoryCorticalUnit::list_all()
+        let unit = *SensoryCorticalUnit::list_all()
             .iter()
             .find(|u| {
                 let id_ref = u.get_cortical_id_unit_reference();
@@ -615,6 +1096,7 @@ pub async fn post_cortical_area(
         (
             unit.get_number_cortical_areas(),
             unit.get_unit_default_topology(),
+            Some(unit),
         )
     } else if cortical_type_str == "OPU" {
         // Find the matching motor cortical unit
@@ -632,6 +1114,7 @@ pub async fn post_cortical_area(
         (
             unit.get_number_cortical_areas(),
             unit.get_unit_default_topology(),
+            None,
         )
     } else {
         return Err(ApiError::invalid_input("cortical_type must be IPU or OPU"));
@@ -656,21 +1139,37 @@ pub async fn post_cortical_area(
                 ))
             })?;
 
-        // Split per-subunit data_type_config into two bytes for cortical ID
-        let config_byte_4 = (data_type_config & 0xFF) as u8; // Lower byte
-        let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
+        let io_flag = IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(
+            data_type_config,
+        )
+        .map_err(|e| {
+            ApiError::invalid_input(format!(
+                "Invalid data_type_config for subunit {}: {}",
+                unit_idx, e
+            ))
+        })?;
 
         // Get per-device dimensions from topology, then scale X by device_count:
         // total_x = device_count * per_device_x
-        let (per_device_dimensions, dimensions) =
-            if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
-                let dims = topo.channel_dimensions_default;
-                let per_device = (dims[0] as usize, dims[1] as usize, dims[2] as usize);
-                let total_x = per_device.0.saturating_mul(device_count);
-                (per_device, (total_x, per_device.1, per_device.2))
-            } else {
-                ((1, 1, 1), (device_count.max(1), 1, 1)) // Fallback
-            };
+        // If per_device_dimensions_override is provided, use it instead of topology defaults
+        let (per_device_dimensions, dimensions) = if let Some(override_dims) =
+            per_device_dimensions_by_subunit
+                .get(&(unit_idx as u8))
+                .copied()
+                .or(per_device_dimensions_override)
+        {
+            // Use custom per-device dimensions, scale X by device_count
+            let total_x = override_dims.0.saturating_mul(device_count);
+            (override_dims, (total_x, override_dims.1, override_dims.2))
+        } else if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
+            // Use topology defaults, scale X by device_count
+            let dims = topo.channel_dimensions_default;
+            let per_device = (dims[0] as usize, dims[1] as usize, dims[2] as usize);
+            let total_x = per_device.0.saturating_mul(device_count);
+            (per_device, (total_x, per_device.1, per_device.2))
+        } else {
+            ((1, 1, 1), (device_count.max(1), 1, 1)) // Fallback
+        };
 
         // Calculate position for this unit
         let position =
@@ -699,24 +1198,15 @@ pub async fn post_cortical_area(
             return Err(ApiError::invalid_input("Invalid cortical_type_key"));
         };
 
-        // Construct the 8-byte cortical ID
-        let cortical_id_bytes = [
-            if cortical_type_str == "IPU" {
-                b'i'
-            } else {
-                b'o'
-            }, // Byte 0: type
-            subtype_bytes[0], // Byte 1: subtype[0]
-            subtype_bytes[1], // Byte 2: subtype[1]
-            subtype_bytes[2], // Byte 3: subtype[2]
-            config_byte_4,    // Byte 4: data type config (lower byte)
-            config_byte_5,    // Byte 5: data type config (upper byte)
-            unit_idx as u8,   // Byte 6: unit index
-            group_id,         // Byte 7: group ID
-        ];
-
-        // Encode to base64 for use as cortical_id string
-        let cortical_id = general_purpose::STANDARD.encode(cortical_id_bytes);
+        // Construct the 8-byte cortical ID: flags include subunit in bits 4-7,
+        // unit index is little-endian u16 in bytes 6-7.
+        let cortical_id_obj = io_flag.as_io_cortical_id(
+            cortical_type_str == "IPU",
+            subtype_bytes,
+            CorticalUnitIndex::from(group_id),
+            CorticalSubUnitIndex::from(unit_idx as u8),
+        );
+        let cortical_id = cortical_id_obj.as_base_64();
 
         tracing::debug!(target: "feagi-api",
             "  Unit {}: dims={}x{}x{}, neurons_per_voxel={}, total_neurons={}",
@@ -739,9 +1229,58 @@ pub async fn post_cortical_area(
             ]),
         );
 
+        // Apply per-unit neural tunables. `CreateCorticalAreaParams.properties` fully replaces
+        // `area.properties` for non-Memory area types (see GenomeServiceImpl::create_cortical_areas),
+        // so these must be set here rather than via the (unused-for-IPU/OPU) typed
+        // firing_threshold_increment/limit fields below.
+        if let Some(sensory_unit) = resolved_sensory_unit {
+            if let Some(default_firing_threshold) = sensory_unit.get_default_firing_threshold() {
+                properties.insert(
+                    "firing_threshold".to_string(),
+                    serde_json::json!(default_firing_threshold),
+                );
+            }
+            if let Some(default_increment) = sensory_unit.get_default_firing_threshold_increment() {
+                properties.insert(
+                    "firing_threshold_increment_x".to_string(),
+                    serde_json::json!(default_increment[0]),
+                );
+                properties.insert(
+                    "firing_threshold_increment_y".to_string(),
+                    serde_json::json!(default_increment[1]),
+                );
+                properties.insert(
+                    "firing_threshold_increment_z".to_string(),
+                    serde_json::json!(default_increment[2]),
+                );
+            }
+            if let Some(default_mp_charge_accumulation) =
+                sensory_unit.get_default_mp_charge_accumulation()
+            {
+                properties.insert(
+                    "mp_charge_accumulation".to_string(),
+                    serde_json::json!(default_mp_charge_accumulation),
+                );
+            }
+        }
+
+        let area_name = request
+            .get("cortical_name")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| {
+                feagi_services::impls::connectome_service_impl::derive_friendly_cortical_name(
+                    &cortical_id_obj,
+                )
+                .unwrap_or_else(|| format!("{} Unit {}", cortical_type_key, group_id))
+            });
+
+        properties.remove("modulator_instance_id");
         let params = CreateCorticalAreaParams {
             cortical_id: cortical_id.clone(),
-            name: format!("{} Unit {}", cortical_type_key, unit_idx),
+            name: area_name,
             dimensions,
             position,
             area_type: cortical_type_str.to_string(),
@@ -766,17 +1305,83 @@ pub async fn post_cortical_area(
         creation_params.push(params);
     }
 
+    // Same group_id addresses the same cortical IDs. An existing subunit is resized to the
+    // requested volume. Only subunits that are absent are created, so a partial segmented
+    // vision group is completed at the agent's registered size.
+    let connectome_service = state.connectome_service.as_ref();
+    let mut to_create = Vec::new();
+    let mut resized_ids: Vec<String> = Vec::new();
+    for params in creation_params {
+        let exists = connectome_service
+            .cortical_area_exists(&params.cortical_id)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to check cortical area {}: {}",
+                    params.cortical_id, e
+                ))
+            })?;
+        if !exists {
+            to_create.push(params);
+            continue;
+        }
+        let current = connectome_service
+            .get_cortical_area(&params.cortical_id)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to read cortical area {}: {}",
+                    params.cortical_id, e
+                ))
+            })?;
+        let requested_per_device = property_per_device_dimensions(&params.properties);
+        let requested_dev_count = property_dev_count(&params.properties);
+        if io_area_matches_requested_geometry(
+            current.dimensions,
+            current.dev_count,
+            current.cortical_dimensions_per_device,
+            params.dimensions,
+            requested_dev_count,
+            requested_per_device,
+        ) {
+            continue;
+        }
+        let changes =
+            dimension_update_changes(params.dimensions, requested_per_device, requested_dev_count);
+        genome_service
+            .update_cortical_area(&params.cortical_id, changes)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to update cortical area {} to the registered size: {}",
+                    params.cortical_id, e
+                ))
+            })?;
+        tracing::info!(
+            "Updated existing cortical area {} to {:?} for group {}",
+            params.cortical_id,
+            params.dimensions,
+            group_id
+        );
+        resized_ids.push(params.cortical_id);
+    }
+
     tracing::info!(
-        "Calling GenomeService to create {} cortical areas",
-        creation_params.len()
+        "Calling GenomeService to create {} cortical areas (resized {})",
+        to_create.len(),
+        resized_ids.len()
     );
 
     // ARCHITECTURE: Call genome_service.create_cortical_areas (proper flow)
     // This will: 1) Update runtime genome, 2) Call neuroembryogenesis, 3) Create neurons/synapses
-    let areas_details = genome_service
-        .create_cortical_areas(creation_params)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to create cortical areas: {}", e)))?;
+    let areas_details = if to_create.is_empty() {
+        Vec::new()
+    } else {
+        genome_service
+            .create_cortical_areas(to_create)
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to create cortical areas: {}", e)))?
+    };
 
     tracing::info!(
         "✅ Successfully created {} cortical areas via GenomeService",
@@ -786,19 +1391,27 @@ pub async fn post_cortical_area(
     // Serialize as JSON
     let areas_json = serde_json::to_value(&areas_details).unwrap_or_default();
 
-    // Extract cortical IDs from created areas
-    let created_ids: Vec<String> = areas_details
+    // Extract cortical IDs from created areas. Resized IDs stay in the response so a partial
+    // group reports every subunit this request aligned.
+    let mut created_ids: Vec<String> = areas_details
         .iter()
         .map(|a| a.cortical_id.clone())
         .collect();
+    created_ids.extend(resized_ids.iter().cloned());
 
     // Return comprehensive response
     let first_id = created_ids.first().cloned().unwrap_or_default();
+    let message = if resized_ids.is_empty() {
+        format!("Created {} cortical areas", areas_details.len())
+    } else {
+        format!(
+            "Created {} cortical areas, resized {}",
+            areas_details.len(),
+            resized_ids.len()
+        )
+    };
     let mut response = serde_json::Map::new();
-    response.insert(
-        "message".to_string(),
-        serde_json::Value::String(format!("Created {} cortical areas", created_ids.len())),
-    );
+    response.insert("message".to_string(), serde_json::Value::String(message));
     response.insert(
         "cortical_id".to_string(),
         serde_json::Value::String(first_id),
@@ -960,10 +1573,19 @@ pub async fn post_custom_cortical_area(
         })
         .ok_or_else(|| ApiError::invalid_input("coordinates_3d must be [x, y, z]"))?;
 
+    // Custom and memory areas must belong to a brain region (circuit / sub-region), not be
+    // created without regional membership (root is reserved for core, IPU, and OPU).
     let brain_region_id = request
         .get("brain_region_id")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .ok_or_else(|| {
+            ApiError::invalid_input(
+                "brain_region_id is required for custom and memory cortical areas",
+            )
+        })?;
 
     let cortical_sub_group = request
         .get("cortical_sub_group")
@@ -1020,14 +1642,12 @@ pub async fn post_custom_cortical_area(
         cortical_id, cortical_id_bytes
     );
 
-    // Build properties with brain_region_id if provided
+    // parent_region_id is required (validated above) so the area is registered in the hierarchy.
     let mut properties = HashMap::new();
-    if let Some(region_id) = brain_region_id.clone() {
-        properties.insert(
-            "parent_region_id".to_string(),
-            serde_json::Value::String(region_id),
-        );
-    }
+    properties.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(brain_region_id.clone()),
+    );
 
     // Create cortical area parameters
     let params = CreateCorticalAreaParams {
@@ -1093,7 +1713,1210 @@ pub async fn post_custom_cortical_area(
     Ok(Json(response))
 }
 
-/// Clone an existing cortical area with all its properties and structure. (Not yet implemented)
+fn classifier_memory_params(
+    cortical_id: String,
+    name: String,
+    position: (i32, i32, i32),
+    parent_region_id: &str,
+    extra_properties: HashMap<String, serde_json::Value>,
+) -> feagi_services::types::CreateCorticalAreaParams {
+    let mut properties = extra_properties;
+    properties.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(parent_region_id.to_string()),
+    );
+    properties.insert("classifier_assembly".to_string(), serde_json::json!(true));
+    feagi_services::types::CreateCorticalAreaParams {
+        cortical_id,
+        name,
+        dimensions: (1, 1, 1),
+        position,
+        area_type: "Memory".to_string(),
+        visible: Some(false),
+        sub_group: Some("MEMORY".to_string()),
+        neurons_per_voxel: Some(1),
+        postsynaptic_current: None,
+        plasticity_constant: Some(0.0),
+        degeneration: Some(0.0),
+        psp_uniform_distribution: Some(false),
+        firing_threshold_increment: Some(0.0),
+        firing_threshold_limit: Some(0.0),
+        consecutive_fire_count: Some(0),
+        snooze_period: Some(0),
+        refractory_period: Some(0),
+        leak_coefficient: Some(0.0),
+        leak_variability: Some(0.0),
+        burst_engine_active: Some(true),
+        properties: Some(properties),
+    }
+}
+
+#[cfg(test)]
+fn classifier_enable_burst_changes() -> HashMap<String, serde_json::Value> {
+    let mut changes = HashMap::new();
+    changes.insert("burst_engine_active".to_string(), serde_json::json!(true));
+    changes
+}
+
+/// Place the class-map twin above the classifier. Y clearance is the twin's own
+/// height so the volume does not overlap the stamp at the classifier origin.
+fn classifier_twin_position(
+    classifier_position: (i32, i32, i32),
+    twin_dimensions: (usize, usize, usize),
+    x_offset: i32,
+) -> (i32, i32, i32) {
+    let clearance = twin_dimensions.1.max(1) as i32;
+    (
+        classifier_position.0 + x_offset,
+        classifier_position.1 + clearance,
+        classifier_position.2,
+    )
+}
+
+/// Class output copies the class input's dimensions.
+#[cfg(test)]
+fn classifier_output_dimensions(
+    class_dimensions: (usize, usize, usize),
+) -> ApiResult<(usize, usize, usize)> {
+    if class_dimensions.0 == 0 || class_dimensions.1 == 0 || class_dimensions.2 == 0 {
+        return Err(ApiError::invalid_input(
+            "class area dimensions must be greater than zero",
+        ));
+    }
+    Ok(class_dimensions)
+}
+
+#[allow(dead_code)]
+fn classifier_output_changes(
+    classifier: &feagi_structures::genomic::classifiers::Classifier,
+    class_area_name: &str,
+    twin_dimensions: (usize, usize, usize),
+    x_offset: i32,
+) -> HashMap<String, serde_json::Value> {
+    let mut changes = HashMap::new();
+    changes.insert(
+        "cortical_name".to_string(),
+        serde_json::json!(
+            feagi_structures::genomic::classifiers::class_output_area_name(
+                &classifier.name,
+                class_area_name,
+            )
+        ),
+    );
+    changes.insert(
+        "coordinates_3d".to_string(),
+        serde_json::json!(classifier_twin_position(
+            (
+                classifier.coordinates_3d[0],
+                classifier.coordinates_3d[1],
+                classifier.coordinates_3d[2],
+            ),
+            twin_dimensions,
+            x_offset,
+        )),
+    );
+    changes.insert(
+        "cortical_dimensions".to_string(),
+        serde_json::json!([twin_dimensions.0, twin_dimensions.1, twin_dimensions.2]),
+    );
+    changes.insert(
+        "parent_region_id".to_string(),
+        serde_json::json!(classifier.parent_region_id),
+    );
+    changes.insert("burst_engine_active".to_string(), serde_json::json!(true));
+    changes.insert("mp_driven_psp".to_string(), serde_json::json!(false));
+    changes.insert("leak_coefficient".to_string(), serde_json::json!(1.0));
+    changes
+}
+
+#[allow(clippy::too_many_arguments)]
+#[cfg(test)]
+fn classifier_scan_twin_params(
+    cortical_id: String,
+    name: String,
+    dimensions: (usize, usize, usize),
+    position: (i32, i32, i32),
+    parent_region_id: &str,
+    field_area_id: &str,
+    class_memory_id: &str,
+) -> feagi_services::types::CreateCorticalAreaParams {
+    let mut properties = HashMap::new();
+    properties.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(parent_region_id.to_string()),
+    );
+    properties.insert("classifier_assembly".to_string(), serde_json::json!(true));
+    properties.insert(
+        "classifier_role".to_string(),
+        serde_json::json!("class_output"),
+    );
+    properties.insert("burst_engine_active".to_string(), serde_json::json!(true));
+    properties.insert("is_mem_type".to_string(), serde_json::json!(false));
+    properties.insert("mp_driven_psp".to_string(), serde_json::json!(false));
+    properties.insert(
+        "memory_twin_of".to_string(),
+        serde_json::json!(field_area_id),
+    );
+    properties.insert(
+        "memory_twin_for".to_string(),
+        serde_json::json!(class_memory_id),
+    );
+    feagi_services::types::CreateCorticalAreaParams {
+        cortical_id,
+        name,
+        dimensions,
+        position,
+        area_type: "Custom".to_string(),
+        visible: Some(true),
+        sub_group: None,
+        neurons_per_voxel: Some(1),
+        postsynaptic_current: None,
+        plasticity_constant: Some(0.0),
+        degeneration: Some(0.0),
+        psp_uniform_distribution: Some(false),
+        firing_threshold_increment: Some(0.0),
+        firing_threshold_limit: Some(0.0),
+        consecutive_fire_count: Some(0),
+        snooze_period: Some(0),
+        refractory_period: Some(0),
+        leak_coefficient: Some(1.0),
+        leak_variability: Some(0.0),
+        burst_engine_active: Some(true),
+        properties: Some(properties),
+    }
+}
+
+fn geometry_scan_twin_flag(properties: &HashMap<String, serde_json::Value>) -> bool {
+    properties.get("scan_twin").and_then(|v| v.as_bool()) == Some(true)
+}
+
+fn geometry_classifier_role(properties: &HashMap<String, serde_json::Value>) -> serde_json::Value {
+    match properties.get("classifier_role").and_then(|v| v.as_str()) {
+        Some(role) if !role.is_empty() => serde_json::Value::String(role.to_string()),
+        _ => serde_json::Value::Null,
+    }
+}
+
+use feagi_structures::genomic::classifiers::classifier_mapping_rule;
+
+#[allow(dead_code)]
+fn mapping_rule_morphology_id(rule: &serde_json::Value) -> Option<&str> {
+    rule.as_object()
+        .and_then(|rule_object| rule_object.get("morphology_id"))
+        .and_then(|value| value.as_str())
+}
+
+#[allow(dead_code)]
+fn mapping_rules_for_destination(
+    properties: &HashMap<String, serde_json::Value>,
+    dst_area_id: &str,
+) -> Vec<serde_json::Value> {
+    properties
+        .get("cortical_mapping_dst")
+        .and_then(|value| value.as_object())
+        .and_then(|mappings| mappings.get(dst_area_id))
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Encode and scan share one edge when the kernel area is also the field.
+///
+/// `update_cortical_mapping` replaces the destination's rule list. Writing only
+/// `episodic_scan` deletes `episodic_memory`, so plasticity registers zero
+/// episodic upstream while Brain Visualizer still draws the remaining yellow edge.
+fn classifier_edge_rules_with_morphology(
+    _existing_rules: &[serde_json::Value],
+    morphology_id: &str,
+    associative_window: u32,
+) -> Vec<serde_json::Value> {
+    vec![classifier_mapping_rule(morphology_id, associative_window)]
+}
+
+#[allow(dead_code)]
+fn classifier_edge_rules_without_morphology(
+    existing_rules: &[serde_json::Value],
+    morphology_id: &str,
+) -> Vec<serde_json::Value> {
+    existing_rules
+        .iter()
+        .filter(|rule| mapping_rule_morphology_id(rule) != Some(morphology_id))
+        .cloned()
+        .collect()
+}
+
+/// Associative rule whose Reward instances are applied per scanning instance.
+fn classifier_reward_mapping_rule(
+    associative_window: u32,
+    existing: &serde_json::Value,
+    pleasure_instance_id: &str,
+    pain_instance_id: &str,
+) -> serde_json::Value {
+    let mut rule = if existing.is_object() {
+        existing.clone()
+    } else {
+        classifier_mapping_rule("associative_memory", associative_window)
+    };
+    if let Some(object) = rule.as_object_mut() {
+        object.insert(
+            "morphology_id".to_string(),
+            serde_json::json!("associative_memory"),
+        );
+        object.insert("plasticity_flag".to_string(), serde_json::json!(true));
+        object.insert("plasticity_mode".to_string(), serde_json::json!("rstdp"));
+        object.remove("reward_source_area");
+        object.remove("punishment_source_area");
+        object.insert(
+            "modulators".to_string(),
+            serde_json::json!([pleasure_instance_id, pain_instance_id]),
+        );
+        object.insert(
+            "classifier_instance_reward".to_string(),
+            serde_json::json!(true),
+        );
+        object
+            .entry("plasticity_constant".to_string())
+            .or_insert(serde_json::json!(1));
+        object
+            .entry("ltp_multiplier".to_string())
+            .or_insert(serde_json::json!(1));
+        object
+            .entry("ltd_multiplier".to_string())
+            .or_insert(serde_json::json!(1));
+        object
+            .entry("plasticity_window".to_string())
+            .or_insert(serde_json::json!(associative_window));
+    }
+    rule
+}
+
+fn classifier_plain_associative_rule(
+    associative_window: u32,
+    existing: &serde_json::Value,
+) -> serde_json::Value {
+    let mut rule = if existing.is_object() {
+        existing.clone()
+    } else {
+        classifier_mapping_rule("associative_memory", associative_window)
+    };
+    if let Some(object) = rule.as_object_mut() {
+        object.remove("plasticity_mode");
+        object.remove("reward_source_area");
+        object.remove("punishment_source_area");
+        object.remove("modulators");
+        object.remove("classifier_instance_reward");
+        object.remove("eligibility_decay_bursts");
+        object.insert("plasticity_flag".to_string(), serde_json::json!(true));
+        object.insert(
+            "morphology_id".to_string(),
+            serde_json::json!("associative_memory"),
+        );
+    }
+    rule
+}
+
+fn classifier_reward_instance_id(name: &str, role: &str) -> String {
+    let mut id = String::new();
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            id.push(ch.to_ascii_lowercase());
+        } else {
+            id.push('_');
+        }
+    }
+    if id.is_empty() {
+        id.push_str("classifier");
+    }
+    format!("{id}_{role}")
+}
+
+fn existing_associative_rule(
+    properties: &HashMap<String, serde_json::Value>,
+    class_memory_id: &str,
+) -> serde_json::Value {
+    let Some(mapping) = properties
+        .get("cortical_mapping_dst")
+        .and_then(|value| value.as_object())
+    else {
+        return serde_json::Value::Null;
+    };
+    let Some(rules) = mapping
+        .get(class_memory_id)
+        .and_then(|value| value.as_array())
+    else {
+        return serde_json::Value::Null;
+    };
+    rules
+        .iter()
+        .find(|rule| {
+            rule.get("morphology_id").and_then(|value| value.as_str()) == Some("associative_memory")
+        })
+        .cloned()
+        .unwrap_or(serde_json::Value::Null)
+}
+
+#[allow(dead_code)]
+fn area_dimensions_u32(dimensions: (usize, usize, usize), label: &str) -> ApiResult<[u32; 3]> {
+    let convert = |axis: usize| -> ApiResult<u32> {
+        u32::try_from(axis).map_err(|_| {
+            ApiError::invalid_input(format!("{label} dimension does not fit a 32-bit size"))
+        })
+    };
+    Ok([
+        convert(dimensions.0)?,
+        convert(dimensions.1)?,
+        convert(dimensions.2)?,
+    ])
+}
+
+/// Mint an 8-byte cortical id for a classifier-owned area.
+///
+/// `prefix` must be a legal cortical type byte. Sample and class memory use `m`.
+/// The error area is a custom area and uses `c`.
+fn classifier_owned_area_id(
+    prefix: u8,
+    name: &str,
+    timestamp: u64,
+    suffix: u8,
+) -> Result<String, ApiError> {
+    let mut bytes = [0u8; CorticalID::CORTICAL_ID_LENGTH];
+    bytes[0] = prefix;
+    let name_bytes = name.as_bytes();
+    for i in 1..7 {
+        bytes[i] = if i - 1 < name_bytes.len() {
+            let c = name_bytes[i - 1];
+            if c.is_ascii_alphanumeric() || c == b'_' {
+                c
+            } else {
+                b'_'
+            }
+        } else {
+            b'_'
+        };
+    }
+    bytes[7] = ((timestamp.wrapping_add(u64::from(suffix))) & 0xFF) as u8;
+    let id = CorticalID::try_from_bytes(&bytes)
+        .map_err(|error| ApiError::invalid_input(format!("Invalid cortical ID: {error}")))?;
+    Ok(id.as_base_64())
+}
+
+/// Create the classifier's own circuit region.
+///
+/// The requested parent may be root. Root accepts circuits. It does not accept
+/// the memory and custom areas inside the classifier, so those areas are
+/// parented to this new region.
+async fn create_classifier_circuit(
+    state: &ApiState,
+    name: &str,
+    parent_region_id: &str,
+    coordinates_3d: [i32; 3],
+) -> ApiResult<String> {
+    use feagi_services::types::CreateBrainRegionParams;
+    use feagi_structures::genomic::brain_regions::RegionID;
+
+    let region_id = RegionID::new().to_string();
+    let mut properties = HashMap::new();
+    properties.insert(
+        "coordinate_2d".to_string(),
+        serde_json::json!([coordinates_3d[0], coordinates_3d[2]]),
+    );
+    properties.insert(
+        "coordinate_3d".to_string(),
+        serde_json::json!(coordinates_3d),
+    );
+    properties.insert(
+        "parent_region_id".to_string(),
+        serde_json::json!(parent_region_id),
+    );
+    properties.insert("classifier_circuit".to_string(), serde_json::json!(true));
+    state
+        .connectome_service
+        .create_brain_region(CreateBrainRegionParams {
+            region_id: region_id.clone(),
+            name: name.to_string(),
+            region_type: "Custom".to_string(),
+            parent_id: Some(parent_region_id.to_string()),
+            properties: Some(properties),
+        })
+        .await
+        .map_err(|error| {
+            ApiError::internal(format!("Failed to create classifier circuit: {error}"))
+        })?;
+    Ok(region_id)
+}
+
+/// Assemble a classifier as its own circuit under an existing brain region.
+///
+/// The parent may be root. Sample memory, class memory, and the error area
+/// are created inside the new circuit. Sample and class inputs are added
+/// later by connectivity rule.
+#[utoipa::path(post, path = "/v1/cortical_area/classifier", tag = "cortical_area")]
+pub async fn post_classifier(
+    State(state): State<ApiState>,
+    Json(request): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let name = request
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("name required"))?;
+    let brain_region_id = request
+        .get("brain_region_id")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| ApiError::invalid_input("brain_region_id required"))?;
+    let coordinates_3d: Vec<i32> = request
+        .get("coordinates_3d")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            if arr.len() == 3 {
+                Some(vec![
+                    arr[0].as_i64()? as i32,
+                    arr[1].as_i64()? as i32,
+                    arr[2].as_i64()? as i32,
+                ])
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| ApiError::invalid_input("coordinates_3d must be [x, y, z]"))?;
+    let coordinates = [coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]];
+    let circuit_region_id =
+        create_classifier_circuit(&state, name, brain_region_id, coordinates).await?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let sample_mem_id = classifier_owned_area_id(b'm', name, timestamp, 1)?;
+    let class_mem_id = classifier_owned_area_id(b'm', name, timestamp, 2)?;
+    let error_area_id = classifier_owned_area_id(b'c', name, timestamp, 3)?;
+
+    let mut sample_mem_props = HashMap::new();
+    sample_mem_props.insert(
+        "classifier_role".to_string(),
+        serde_json::json!("sample_memory"),
+    );
+    sample_mem_props.insert(
+        "classifier_class_memory_id".to_string(),
+        serde_json::json!(class_mem_id),
+    );
+    sample_mem_props.insert("memory_twin_areas".to_string(), serde_json::json!({}));
+
+    let mut class_mem_props = HashMap::new();
+    class_mem_props.insert(
+        "classifier_role".to_string(),
+        serde_json::json!("class_memory"),
+    );
+    class_mem_props.insert(
+        "classifier_sample_memory_id".to_string(),
+        serde_json::json!(sample_mem_id),
+    );
+    class_mem_props.insert(
+        "classifier_error_area_id".to_string(),
+        serde_json::json!(error_area_id),
+    );
+    class_mem_props.insert("memory_twin_areas".to_string(), serde_json::json!({}));
+
+    let mut error_props = HashMap::new();
+    error_props.insert("classifier_role".to_string(), serde_json::json!("error"));
+    error_props.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(circuit_region_id.clone()),
+    );
+    error_props.insert("classifier_assembly".to_string(), serde_json::json!(true));
+
+    let mut sample_mem_params = classifier_memory_params(
+        sample_mem_id.clone(),
+        format!("{name}_sample_mem"),
+        (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]),
+        &circuit_region_id,
+        sample_mem_props,
+    );
+    sample_mem_params.visible = Some(true);
+    let class_mem_params = classifier_memory_params(
+        class_mem_id.clone(),
+        format!("{name}_class_mem"),
+        (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]),
+        &circuit_region_id,
+        class_mem_props,
+    );
+    let error_params = feagi_services::types::CreateCorticalAreaParams {
+        cortical_id: error_area_id.clone(),
+        name: format!("{name} error"),
+        dimensions: (1, 1, 1),
+        position: (coordinates_3d[0], coordinates_3d[1] + 2, coordinates_3d[2]),
+        area_type: "Custom".to_string(),
+        visible: Some(true),
+        sub_group: None,
+        neurons_per_voxel: Some(1),
+        postsynaptic_current: None,
+        plasticity_constant: Some(0.0),
+        degeneration: Some(0.0),
+        psp_uniform_distribution: Some(false),
+        firing_threshold_increment: Some(0.0),
+        firing_threshold_limit: Some(0.0),
+        consecutive_fire_count: Some(0),
+        snooze_period: Some(0),
+        refractory_period: Some(0),
+        leak_coefficient: Some(1.0),
+        leak_variability: Some(0.0),
+        burst_engine_active: Some(true),
+        properties: Some(error_props),
+    };
+
+    let genome_service = state.genome_service.as_ref();
+    let created_areas = match genome_service
+        .create_cortical_areas(vec![sample_mem_params, class_mem_params, error_params])
+        .await
+    {
+        Ok(created_areas) => created_areas,
+        Err(error) => {
+            let _ = state
+                .connectome_service
+                .delete_brain_region(&circuit_region_id)
+                .await;
+            return Err(ApiError::internal(format!(
+                "Failed to create classifier assembly areas: {error}"
+            )));
+        }
+    };
+    let associative_window = created_areas
+        .iter()
+        .find(|area| area.cortical_id == sample_mem_id)
+        .and_then(|area| area.temporal_depth)
+        .ok_or_else(|| {
+            ApiError::internal(
+                "Classifier sample memory is missing temporal_depth; associative mapping cannot be created".to_string(),
+            )
+        })?;
+
+    let connectome_service = state.connectome_service.as_ref();
+    connectome_service
+        .update_cortical_mapping(
+            sample_mem_id.clone(),
+            class_mem_id.clone(),
+            vec![classifier_mapping_rule(
+                "associative_memory",
+                associative_window,
+            )],
+        )
+        .await
+        .map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to map sample memory -> class memory: {}",
+                e
+            ))
+        })?;
+
+    let classifier_id = feagi_structures::genomic::brain_regions::RegionID::new().to_string();
+    let classifier = feagi_structures::genomic::classifiers::Classifier {
+        classifier_id: classifier_id.clone(),
+        name: name.to_string(),
+        parent_region_id: circuit_region_id.clone(),
+        coordinates_3d: coordinates,
+        sample_area_ids: Vec::new(),
+        class_bindings: Vec::new(),
+        sample_memory_id: sample_mem_id.clone(),
+        class_memory_id: class_mem_id.clone(),
+        error_area_id: error_area_id.clone(),
+        reward_training: false,
+        answer_feedback_area_id: None,
+        pain_area_id: None,
+        pleasure_area_id: None,
+        answer_latency_bursts: 0,
+        learn_area_id: None,
+        confidence_area_id: None,
+        properties: HashMap::new(),
+    };
+    connectome_service
+        .upsert_classifier(classifier)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to register classifier: {}", e)))?;
+
+    let mut response = HashMap::new();
+    response.insert(
+        "message".to_string(),
+        "Classifier assembly created".to_string(),
+    );
+    response.insert("classifier_id".to_string(), classifier_id);
+    response.insert("sample_memory_id".to_string(), sample_mem_id);
+    response.insert("class_memory_id".to_string(), class_mem_id);
+    response.insert("error_area_id".to_string(), error_area_id);
+    response.insert("circuit_region_id".to_string(), circuit_region_id);
+    response.insert("name".to_string(), name.to_string());
+    Ok(Json(response))
+}
+
+pub async fn list_classifiers(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<Vec<feagi_services::types::ClassifierInfo>>> {
+    let classifiers = state
+        .connectome_service
+        .list_classifiers()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list classifiers: {}", e)))?;
+    Ok(Json(classifiers))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/classifier/{classifier_id}",
+    tag = "cortical_area"
+)]
+pub async fn get_classifier(
+    State(state): State<ApiState>,
+    Path(classifier_id): Path<String>,
+) -> ApiResult<Json<feagi_services::types::ClassifierInfo>> {
+    state
+        .connectome_service
+        .get_classifier(&classifier_id)
+        .await
+        .map(Json)
+        .map_err(|e| match e {
+            feagi_services::types::errors::ServiceError::NotFound { resource, id } => {
+                ApiError::not_found(&resource, &id)
+            }
+            other => ApiError::internal(format!("Failed to get classifier: {}", other)),
+        })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct UpdateClassifierRequest {
+    pub name: Option<String>,
+    pub coordinates_3d: Option<[i32; 3]>,
+    pub parent_region_id: Option<String>,
+    #[serde(default)]
+    pub reward_training: Option<bool>,
+    /// Empty string clears the correct-answer area. Absent leaves it unchanged.
+    #[serde(default)]
+    pub answer_feedback_area_id: Option<String>,
+    #[serde(default)]
+    pub answer_latency_bursts: Option<u32>,
+    /// Empty string clears the learn line. Absent leaves it unchanged.
+    #[serde(default)]
+    pub learn_area_id: Option<String>,
+    /// Empty string clears the confidence OPU. Absent leaves it unchanged.
+    #[serde(default)]
+    pub confidence_area_id: Option<String>,
+}
+
+fn classifier_from_info(
+    existing: feagi_services::types::ClassifierInfo,
+) -> feagi_structures::genomic::classifiers::Classifier {
+    feagi_structures::genomic::classifiers::Classifier {
+        classifier_id: existing.classifier_id,
+        name: existing.name,
+        parent_region_id: existing.parent_region_id,
+        coordinates_3d: existing.coordinates_3d,
+        sample_area_ids: existing.sample_area_ids,
+        class_bindings: existing.class_bindings,
+        sample_memory_id: existing.sample_memory_id,
+        class_memory_id: existing.class_memory_id,
+        error_area_id: existing.error_area_id,
+        reward_training: existing.reward_training,
+        answer_feedback_area_id: existing.answer_feedback_area_id,
+        pain_area_id: existing.pain_area_id,
+        pleasure_area_id: existing.pleasure_area_id,
+        answer_latency_bursts: existing.answer_latency_bursts,
+        learn_area_id: existing.learn_area_id,
+        confidence_area_id: existing.confidence_area_id,
+        properties: existing.properties,
+    }
+}
+
+#[allow(dead_code)]
+async fn remap_classifier_input(
+    connectome_service: &Arc<dyn feagi_services::ConnectomeService + Send + Sync>,
+    old_src: Option<&str>,
+    new_src: Option<&str>,
+    dst: &str,
+    morphology: &str,
+    associative_window: u32,
+    kernel_memory_id: &str,
+) -> ApiResult<()> {
+    if old_src == new_src {
+        let _ = kernel_memory_id;
+        return Ok(());
+    }
+    let _ = kernel_memory_id;
+    if let Some(old_src) = old_src {
+        let old_area = connectome_service
+            .get_cortical_area(old_src)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to read classifier mapping {} -> {}: {}",
+                    old_src, dst, e
+                ))
+            })?;
+        let remaining = classifier_edge_rules_without_morphology(
+            &mapping_rules_for_destination(&old_area.properties, dst),
+            morphology,
+        );
+        connectome_service
+            .update_cortical_mapping(old_src.to_string(), dst.to_string(), remaining)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to clear classifier mapping {} -> {}: {}",
+                    old_src, dst, e
+                ))
+            })?;
+    }
+    if let Some(new_src) = new_src {
+        let new_area = connectome_service
+            .get_cortical_area(new_src)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to read classifier mapping {} -> {}: {}",
+                    new_src, dst, e
+                ))
+            })?;
+        let rules = classifier_edge_rules_with_morphology(
+            &mapping_rules_for_destination(&new_area.properties, dst),
+            morphology,
+            associative_window,
+        );
+        connectome_service
+            .update_cortical_mapping(new_src.to_string(), dst.to_string(), rules)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to set classifier mapping {} -> {}: {}",
+                    new_src, dst, e
+                ))
+            })?;
+    }
+    Ok(())
+}
+
+async fn ensure_classifier_affect_areas(
+    state: &ApiState,
+    classifier: &feagi_structures::genomic::classifiers::Classifier,
+) -> ApiResult<(String, String, String, String)> {
+    let (pain_area_id, pain_instance_id) = ensure_classifier_reward_instance(
+        state,
+        &classifier.name,
+        classifier.pain_area_id.as_deref(),
+        "pain",
+        -100.0,
+    )
+    .await?;
+    let (pleasure_area_id, pleasure_instance_id) = ensure_classifier_reward_instance(
+        state,
+        &classifier.name,
+        classifier.pleasure_area_id.as_deref(),
+        "pleasure",
+        100.0,
+    )
+    .await?;
+    Ok((
+        pain_area_id,
+        pleasure_area_id,
+        pain_instance_id,
+        pleasure_instance_id,
+    ))
+}
+
+/// Reuse a Reward driver that already exists, otherwise create the instance.
+async fn ensure_classifier_reward_instance(
+    state: &ApiState,
+    classifier_name: &str,
+    existing_area_id: Option<&str>,
+    role: &str,
+    magnitude_percent: f32,
+) -> ApiResult<(String, String)> {
+    if let Some(area_id) = existing_area_id {
+        if let Some(instance_id) = reward_instance_for_driver(state, area_id).await? {
+            return Ok((area_id.to_string(), instance_id));
+        }
+    }
+    let instance_id = classifier_reward_instance_id(classifier_name, role);
+    let write = feagi_evolutionary::ModulatorWrite {
+        kind: "synaptic.reward".to_string(),
+        magnitude_percent,
+        effect_duration_bursts: 1,
+        rest_bursts: 0,
+        graded: false,
+        full_scale_potential: None,
+    };
+    let created = match state
+        .genome_service
+        .create_modulator(instance_id.clone(), write)
+        .await
+    {
+        Ok(created) => created,
+        Err(feagi_services::types::errors::ServiceError::Conflict(_)) => state
+            .genome_service
+            .get_modulator(&instance_id)
+            .await
+            .map_err(|err| {
+                ApiError::internal(format!(
+                    "Failed to read existing classifier reward instance: {err}"
+                ))
+            })?,
+        Err(err) => {
+            return Err(ApiError::internal(format!(
+                "Failed to create classifier reward instance: {err}"
+            )));
+        }
+    };
+    let driver = created
+        .get("driver_cortical_id")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            ApiError::internal("Classifier reward instance did not return a driver".to_string())
+        })?;
+    Ok((driver.to_string(), instance_id))
+}
+
+async fn reward_instance_for_driver(
+    state: &ApiState,
+    driver_cortical_id: &str,
+) -> ApiResult<Option<String>> {
+    let modulators = state
+        .genome_service
+        .list_modulators()
+        .await
+        .map_err(|err| ApiError::internal(format!("Failed to list modulators: {err}")))?;
+    let Some(object) = modulators.as_object() else {
+        return Ok(None);
+    };
+    for (instance_id, body) in object {
+        let matches_driver = body
+            .get("driver_cortical_id")
+            .and_then(|value| value.as_str())
+            == Some(driver_cortical_id);
+        let is_reward =
+            body.get("type").and_then(|value| value.as_str()) == Some("synaptic.reward");
+        if matches_driver && is_reward {
+            return Ok(Some(instance_id.clone()));
+        }
+    }
+    Ok(None)
+}
+
+async fn sync_classifier_reward_mapping(
+    state: &ApiState,
+    classifier: &feagi_structures::genomic::classifiers::Classifier,
+    associative_window: u32,
+    reward_instances: Option<(&str, &str)>,
+) -> ApiResult<()> {
+    let kernel_area = state
+        .connectome_service
+        .get_cortical_area(&classifier.sample_memory_id)
+        .await
+        .map_err(|e| ApiError::internal(format!("Classifier kernel memory is missing: {}", e)))?;
+    let existing = existing_associative_rule(&kernel_area.properties, &classifier.class_memory_id);
+    let rule = if classifier.reward_training {
+        let (pleasure_instance, pain_instance) = reward_instances.ok_or_else(|| {
+            ApiError::internal("Classifier reward instances are missing".to_string())
+        })?;
+        classifier_reward_mapping_rule(
+            associative_window,
+            &existing,
+            pleasure_instance,
+            pain_instance,
+        )
+    } else {
+        classifier_plain_associative_rule(associative_window, &existing)
+    };
+    state
+        .connectome_service
+        .update_cortical_mapping(
+            classifier.sample_memory_id.clone(),
+            classifier.class_memory_id.clone(),
+            vec![rule],
+        )
+        .await
+        .map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to update classifier associative mapping: {}",
+                e
+            ))
+        })?;
+    Ok(())
+}
+
+#[utoipa::path(
+    put,
+    path = "/v1/cortical_area/classifier/{classifier_id}",
+    tag = "cortical_area"
+)]
+pub async fn update_classifier(
+    State(state): State<ApiState>,
+    Path(classifier_id): Path<String>,
+    Json(request): Json<UpdateClassifierRequest>,
+) -> ApiResult<Json<feagi_services::types::ClassifierInfo>> {
+    let existing = state
+        .connectome_service
+        .get_classifier(&classifier_id)
+        .await
+        .map_err(|e| match e {
+            feagi_services::types::errors::ServiceError::NotFound { resource, id } => {
+                ApiError::not_found(&resource, &id)
+            }
+            other => ApiError::internal(format!("Failed to get classifier: {}", other)),
+        })?;
+    let mut classifier = classifier_from_info(existing);
+    let circuit_hosted = state
+        .connectome_service
+        .get_brain_region(&classifier.parent_region_id)
+        .await
+        .ok()
+        .and_then(|region| {
+            region
+                .properties
+                .get("classifier_circuit")
+                .and_then(|value| value.as_bool())
+        })
+        == Some(true);
+    // The circuit stays the parent of the areas. Moving those areas onto root
+    // is rejected. A parent change from the editor is ignored for a circuit.
+    let parent_region_id = if circuit_hosted {
+        None
+    } else {
+        request.parent_region_id
+    };
+    classifier
+        .apply_assembly_update(request.name, request.coordinates_3d, parent_region_id)
+        .map_err(ApiError::invalid_input)?;
+    if circuit_hosted {
+        let mut region_changes = HashMap::new();
+        region_changes.insert("name".to_string(), serde_json::json!(classifier.name));
+        region_changes.insert("title".to_string(), serde_json::json!(classifier.name));
+        region_changes.insert(
+            "coordinate_3d".to_string(),
+            serde_json::json!(classifier.coordinates_3d),
+        );
+        region_changes.insert(
+            "coordinate_2d".to_string(),
+            serde_json::json!([classifier.coordinates_3d[0], classifier.coordinates_3d[2]]),
+        );
+        state
+            .connectome_service
+            .update_brain_region(&classifier.parent_region_id, region_changes)
+            .await
+            .map_err(|error| {
+                ApiError::internal(format!("Failed to update classifier circuit: {error}"))
+            })?;
+    }
+    if let Some(enabled) = request.reward_training {
+        classifier.reward_training = enabled;
+    }
+    if let Some(feedback_area_id) = request.answer_feedback_area_id.clone() {
+        if feedback_area_id.trim().is_empty() {
+            classifier.answer_feedback_area_id = None;
+        } else {
+            state
+                .connectome_service
+                .get_cortical_area(feedback_area_id.trim())
+                .await
+                .map_err(|e| {
+                    ApiError::invalid_input(format!("answer_feedback_area_id not found: {}", e))
+                })?;
+            classifier.answer_feedback_area_id = Some(feedback_area_id.trim().to_string());
+        }
+    }
+    if let Some(latency) = request.answer_latency_bursts {
+        classifier.answer_latency_bursts = latency;
+    }
+    if let Some(learn_area_id) = request.learn_area_id.clone() {
+        if learn_area_id.trim().is_empty() {
+            classifier.learn_area_id = None;
+        } else {
+            state
+                .connectome_service
+                .get_cortical_area(learn_area_id.trim())
+                .await
+                .map_err(|e| ApiError::invalid_input(format!("learn_area_id not found: {}", e)))?;
+            classifier.learn_area_id = Some(learn_area_id.trim().to_string());
+        }
+    }
+    if let Some(confidence_area_id) = request.confidence_area_id.clone() {
+        if confidence_area_id.trim().is_empty() {
+            classifier.confidence_area_id = None;
+        } else {
+            state
+                .connectome_service
+                .get_cortical_area(confidence_area_id.trim())
+                .await
+                .map_err(|e| {
+                    ApiError::invalid_input(format!("confidence_area_id not found: {}", e))
+                })?;
+            classifier.confidence_area_id = Some(confidence_area_id.trim().to_string());
+        }
+    }
+    let sample_mem = state
+        .connectome_service
+        .get_cortical_area(&classifier.sample_memory_id)
+        .await
+        .map_err(|e| ApiError::internal(format!("Classifier sample memory is missing: {}", e)))?;
+    let associative_window = sample_mem.temporal_depth.ok_or_else(|| {
+        ApiError::internal(
+            "Classifier sample memory is missing temporal_depth; mappings cannot be updated"
+                .to_string(),
+        )
+    })?;
+    if request.reward_training.is_some() {
+        let reward_instances = if classifier.reward_training {
+            let (pain_area_id, pleasure_area_id, pain_instance_id, pleasure_instance_id) =
+                ensure_classifier_affect_areas(&state, &classifier).await?;
+            classifier.pain_area_id = Some(pain_area_id);
+            classifier.pleasure_area_id = Some(pleasure_area_id);
+            Some((pleasure_instance_id, pain_instance_id))
+        } else {
+            None
+        };
+        let reward_refs = reward_instances
+            .as_ref()
+            .map(|(pleasure, pain)| (pleasure.as_str(), pain.as_str()));
+        sync_classifier_reward_mapping(&state, &classifier, associative_window, reward_refs)
+            .await?;
+    }
+    state
+        .connectome_service
+        .upsert_classifier(classifier.clone())
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to update classifier: {}", e)))?;
+    for owned_id in classifier.owned_area_ids() {
+        let mut owned_changes = HashMap::new();
+        owned_changes.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(classifier.parent_region_id),
+        );
+        if owned_id == classifier.sample_memory_id {
+            owned_changes.insert(
+                "coordinates_3d".to_string(),
+                serde_json::json!(classifier.coordinates_3d),
+            );
+            owned_changes.insert("visible".to_string(), serde_json::json!(true));
+        }
+        state
+            .genome_service
+            .update_cortical_area(&owned_id, owned_changes)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to update classifier internal {}: {}",
+                    owned_id, e
+                ))
+            })?;
+    }
+    Ok(Json(feagi_services::types::ClassifierInfo::from(
+        classifier,
+    )))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct ClassifierFieldRequest {
+    pub field_area_id: String,
+}
+
+pub async fn post_classifier_field(
+    State(_state): State<ApiState>,
+    Path(_classifier_id): Path<String>,
+    Json(_request): Json<ClassifierFieldRequest>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Err(ApiError::invalid_input(
+        "Classifier fields are gone. Map the area with classifier_sample or classifier_class.",
+    ))
+}
+
+pub async fn delete_classifier_field(
+    State(_state): State<ApiState>,
+    Path((_classifier_id, _field_area_id)): Path<(String, String)>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Err(ApiError::invalid_input(
+        "Classifier fields are gone. Remove the classifier_sample or classifier_class mapping.",
+    ))
+}
+
+pub async fn delete_classifier(
+    State(state): State<ApiState>,
+    Path(classifier_id): Path<String>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    state
+        .connectome_service
+        .delete_classifier(&classifier_id)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to delete classifier: {}", e)))?;
+    let mut response = HashMap::new();
+    response.insert(
+        "message".to_string(),
+        "Classifier assembly deleted".to_string(),
+    );
+    response.insert("classifier_id".to_string(), classifier_id);
+    Ok(Json(response))
+}
+
+/// Identity keys added by `get_cortical_area_properties`. They describe the source
+/// area itself and must not be stored on the clone.
+const CLONE_IDENTITY_PROPERTY_KEYS: &[&str] = &[
+    "cortical_id",
+    "cortical_id_s",
+    "cortical_idx",
+    "name",
+    "cortical_name",
+    "area_type",
+    "dimensions",
+    "position",
+    "block_boundaries",
+    "cortical_dimensions",
+];
+
+/// Build the property map for a cloned cortical area.
+///
+/// `raw_properties` is the unfiltered map from `ConnectomeService::get_cortical_area_properties`.
+/// The cortical-area read DTO removes neural parameters from `properties` because those
+/// values are also returned as typed fields. Cloning that stripped map drops them:
+/// `create_cortical_areas` replaces the new area's property bag with the request map
+/// after the typed create fields are written.
+///
+/// Mappings are removed here and reapplied through `update_cortical_mapping` so
+/// synapses are generated for the clone.
+pub(crate) fn properties_for_cortical_clone(
+    raw_properties: HashMap<String, serde_json::Value>,
+    parent_region_id: &str,
+    coordinates_2d: [i32; 2],
+    coordinates_3d: [i32; 3],
+) -> HashMap<String, serde_json::Value> {
+    let mut cloned = raw_properties;
+    for key in CLONE_IDENTITY_PROPERTY_KEYS {
+        cloned.remove(*key);
+    }
+    cloned.remove("cortical_mapping_dst");
+
+    cloned.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(parent_region_id.to_string()),
+    );
+
+    let coord_2d = serde_json::json!([coordinates_2d[0], coordinates_2d[1]]);
+    cloned.insert("coordinate_2d".to_string(), coord_2d.clone());
+    // Parsed genomes store `2d_coordinate`; some clients send `coordinates_2d`.
+    // Rewrite whichever aliases the source actually has so they do not keep the old placement.
+    for key in ["2d_coordinate", "coordinates_2d"] {
+        if cloned.contains_key(key) {
+            cloned.insert(key.to_string(), coord_2d.clone());
+        }
+    }
+
+    let coord_3d = serde_json::json!([coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]]);
+    for key in ["coordinates_3d", "relative_coordinate"] {
+        if cloned.contains_key(key) {
+            cloned.insert(key.to_string(), coord_3d.clone());
+        }
+    }
+
+    cloned
+}
+
+/// Clone an existing cortical area, including its stored properties and neural parameters.
 #[utoipa::path(post, path = "/v1/cortical_area/clone", tag = "cortical_area")]
 pub async fn post_clone(
     State(state): State<ApiState>,
@@ -1102,7 +2925,6 @@ pub async fn post_clone(
     use base64::{engine::general_purpose, Engine as _};
     use feagi_services::types::CreateCorticalAreaParams;
     use feagi_structures::genomic::cortical_area::CorticalID;
-    use serde_json::Value;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let genome_service = state.genome_service.as_ref();
@@ -1158,9 +2980,15 @@ pub async fn post_clone(
         }
     }
 
+    // The read DTO strips neural parameters out of `properties`. Clone from the
+    // raw stored map so those parameters are replicated.
+    let raw_properties = connectome_service
+        .get_cortical_area_properties(&source_id)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to read source properties: {}", e)))?;
+
     // Extract outgoing mappings (we will apply them after creation, via update_cortical_mapping).
-    let outgoing_mapping_dst = source_area
-        .properties
+    let outgoing_mapping_dst = raw_properties
         .get("cortical_mapping_dst")
         .and_then(|v| v.as_object())
         .cloned();
@@ -1196,19 +3024,12 @@ pub async fn post_clone(
 
     let new_area_id = general_purpose::STANDARD.encode(cortical_id_bytes);
 
-    // Clone properties, but do NOT carry over cortical mapping properties directly.
-    // Mappings must be created via update_cortical_mapping so synapses are regenerated.
-    let mut cloned_properties = source_area.properties.clone();
-    cloned_properties.remove("cortical_mapping_dst");
-
-    // Set parent region + 2D coordinate explicitly for the clone.
-    cloned_properties.insert(
-        "parent_region_id".to_string(),
-        Value::String(source_parent_region_id),
-    );
-    cloned_properties.insert(
-        "coordinate_2d".to_string(),
-        serde_json::json!([request.coordinates_2d[0], request.coordinates_2d[1]]),
+    // Clone the full stored property bag. Mappings are omitted and reapplied below.
+    let cloned_properties = properties_for_cortical_clone(
+        raw_properties,
+        &source_parent_region_id,
+        request.coordinates_2d,
+        request.coordinates_3d,
     );
 
     let params = CreateCorticalAreaParams {
@@ -1441,19 +3262,61 @@ pub async fn put_multi_cortical_area(
     ])))
 }
 
-/// Delete multiple cortical areas by their IDs. (Not yet implemented)
+/// Delete multiple cortical areas by their IDs.
 #[utoipa::path(
     delete,
     path = "/v1/cortical_area/multi/cortical_area",
     tag = "cortical_area"
 )]
-#[allow(unused_variables)] // In development
 pub async fn delete_multi_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<Vec<String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Delete multiple cortical areas
-    Err(ApiError::internal("Not yet implemented"))
+    if request.is_empty() {
+        return Err(ApiError::invalid_input(
+            "Request must contain at least one cortical ID",
+        ));
+    }
+
+    let connectome_service = state.connectome_service.as_ref();
+
+    tracing::debug!(
+        target: "feagi-api",
+        "DELETE /v1/cortical_area/multi/cortical_area - deleting {} areas",
+        request.len()
+    );
+
+    for cortical_id in &request {
+        match connectome_service.delete_cortical_area(cortical_id).await {
+            Ok(_) => {
+                tracing::debug!(
+                    target: "feagi-api",
+                    "DELETE /v1/cortical_area/multi/cortical_area - deleted {}",
+                    cortical_id
+                );
+            }
+            Err(e) => {
+                tracing::error!(
+                    target: "feagi-api",
+                    "DELETE /v1/cortical_area/multi/cortical_area - failed for {}: {}",
+                    cortical_id,
+                    e
+                );
+                return Err(ApiError::internal(format!(
+                    "Failed to delete cortical area {}: {}",
+                    cortical_id, e
+                )));
+            }
+        }
+    }
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            format!("Deleted {} cortical areas", request.len()),
+        ),
+        ("cortical_ids".to_string(), request.join(", ")),
+    ])))
 }
 
 /// Update the 2D visualization coordinates of a cortical area. (Not yet implemented)
@@ -1482,15 +3345,88 @@ pub async fn put_suppress_cortical_visibility(
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// Reset a cortical area to its default state (clear neuron states, etc.). (Not yet implemented)
-#[utoipa::path(put, path = "/v1/cortical_area/reset", tag = "cortical_area")]
-#[allow(unused_variables)] // In development
+/// Reset runtime neural state for one or more cortical areas (membrane potential, refractory
+/// counters, FCL candidates). Genome, connections, and parameters are unchanged.
+#[utoipa::path(
+    put,
+    path = "/v1/cortical_area/reset",
+    tag = "cortical_area",
+    request_body = CorticalAreaResetRequest,
+    responses(
+        (status = 200, description = "Reset applied", body = CorticalAreaResetResponse),
+    )
+)]
 pub async fn put_reset(
     State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Reset cortical area
-    Err(ApiError::internal("Not yet implemented"))
+    Json(request): Json<CorticalAreaResetRequest>,
+) -> ApiResult<Json<CorticalAreaResetResponse>> {
+    use tracing::info;
+
+    if request.area_list.is_empty() {
+        return Err(ApiError::invalid_input("area_list cannot be empty"));
+    }
+
+    info!(
+        target: "feagi-api",
+        "[RESET] Received reset request for {} cortical areas: {:?}",
+        request.area_list.len(),
+        request.area_list
+    );
+
+    let connectome_service = state.connectome_service.as_ref();
+    let mut cortical_indices: Vec<u32> = Vec::with_capacity(request.area_list.len());
+    for id in &request.area_list {
+        let area = connectome_service
+            .get_cortical_area(id)
+            .await
+            .map_err(ApiError::from)?;
+        cortical_indices.push(area.cortical_idx);
+        info!(
+            target: "feagi-api",
+            "[RESET] Resolved cortical ID '{}' to index {}",
+            id,
+            area.cortical_idx
+        );
+    }
+
+    info!(
+        target: "feagi-api",
+        "[RESET] Calling runtime service to reset indices: {:?}",
+        cortical_indices
+    );
+
+    let reset_pairs = state
+        .runtime_service
+        .reset_cortical_area_states(&cortical_indices)
+        .await
+        .map_err(ApiError::from)?;
+
+    let results: Vec<CorticalAreaResetItem> = reset_pairs
+        .into_iter()
+        .map(|(cortical_idx, neurons_reset)| {
+            info!(
+                target: "feagi-api",
+                "[RESET] Cortical area {} reset: {} neurons cleared",
+                cortical_idx,
+                neurons_reset
+            );
+            CorticalAreaResetItem {
+                cortical_idx,
+                neurons_reset,
+            }
+        })
+        .collect();
+
+    info!(
+        target: "feagi-api",
+        "[RESET] Reset complete for {} areas",
+        results.len()
+    );
+
+    Ok(Json(CorticalAreaResetResponse {
+        message: "ok".to_string(),
+        results,
+    }))
 }
 
 /// Check if visualization is enabled for the system.
@@ -1577,15 +3513,153 @@ pub async fn post_reposition(
     )])))
 }
 
-/// Get neurons at specific voxel coordinates within a cortical area.
-#[utoipa::path(post, path = "/v1/cortical_area/voxel_neurons", tag = "cortical_area")]
+/// List all neurons at a voxel `(x, y, z)` within a cortical area, with the same live property snapshot as `/v1/connectome/neuron_properties`.
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/voxel_neurons",
+    tag = "cortical_area",
+    params(VoxelNeuronsQuery),
+    responses(
+        (status = 200, description = "Neurons in voxel", body = VoxelNeuronsResponse),
+        (status = 404, description = "Cortical area or neuron data not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_voxel_neurons(
+    State(state): State<ApiState>,
+    Query(params): Query<VoxelNeuronsQuery>,
+) -> ApiResult<Json<VoxelNeuronsResponse>> {
+    resolve_voxel_neurons(
+        &state,
+        params.cortical_id,
+        params.x,
+        params.y,
+        params.z,
+        params.synapse_page,
+    )
+    .await
+    .map(Json)
+}
+
+/// Same as [`get_voxel_neurons`] but accepts a JSON body (for clients that cannot use query strings).
+#[utoipa::path(
+    post,
+    path = "/v1/cortical_area/voxel_neurons",
+    tag = "cortical_area",
+    request_body = VoxelNeuronsBody,
+    responses(
+        (status = 200, description = "Neurons in voxel", body = VoxelNeuronsResponse),
+        (status = 404, description = "Cortical area or neuron data not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn post_voxel_neurons(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, serde_json::Value>>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    let mut response = HashMap::new();
-    response.insert("neurons".to_string(), serde_json::json!([]));
-    Ok(Json(response))
+    State(state): State<ApiState>,
+    Json(body): Json<VoxelNeuronsBody>,
+) -> ApiResult<Json<VoxelNeuronsResponse>> {
+    resolve_voxel_neurons(
+        &state,
+        body.cortical_id,
+        body.x,
+        body.y,
+        body.z,
+        body.synapse_page,
+    )
+    .await
+    .map(Json)
+}
+
+/// GET /v1/cortical_area/memory — plasticity runtime stats, genome memory parameters, upstream wiring, synapse counts, and paginated memory neuron ids.
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/memory",
+    tag = "cortical_area",
+    params(MemoryCorticalAreaQuery),
+    responses(
+        (status = 200, description = "Memory cortical area details", body = MemoryCorticalAreaResponse),
+        (status = 400, description = "Invalid cortical id or not a memory area"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_memory_cortical_area(
+    State(state): State<ApiState>,
+    Query(params): Query<MemoryCorticalAreaQuery>,
+) -> ApiResult<Json<MemoryCorticalAreaResponse>> {
+    let connectome_service = state.connectome_service.as_ref();
+    let area = connectome_service
+        .get_cortical_area(&params.cortical_id)
+        .await
+        .map_err(ApiError::from)?;
+
+    let mem_props = extract_memory_properties(&area.properties).ok_or_else(|| {
+        ApiError::invalid_input(
+            "cortical area is not a memory area (expected is_mem_type memory properties)",
+        )
+    })?;
+
+    let cortical_idx = area.cortical_idx;
+    let cortical_name = area.name.clone();
+
+    let cid = CorticalID::try_from_base_64(&params.cortical_id)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid cortical_id: {}", e)))?;
+
+    let page_size_u32 = params
+        .page_size
+        .clamp(1, MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_MAX);
+    let page_size = page_size_u32 as usize;
+    let offset = (params.page as usize).saturating_mul(page_size);
+
+    let manager = feagi_brain_development::ConnectomeManager::instance();
+    let mgr = manager.read();
+
+    let upstream_cortical_area_indices = mgr.get_upstream_cortical_areas(&cid);
+    let upstream_cortical_area_count = upstream_cortical_area_indices.len();
+
+    let exec = mgr
+        .get_plasticity_executor()
+        .ok_or_else(|| ApiError::internal("Plasticity executor not available"))?;
+    let ex = exec
+        .lock()
+        .map_err(|_| ApiError::internal("Plasticity executor lock poisoned"))?;
+
+    let runtime = ex
+        .memory_cortical_area_runtime_info(cortical_idx)
+        .ok_or_else(|| ApiError::internal("Plasticity service not initialized"))?;
+
+    let (memory_neuron_ids_u32, total_memory_neuron_ids) = ex
+        .paginated_memory_neuron_ids_in_area(cortical_idx, offset, page_size)
+        .unwrap_or((Vec::new(), 0));
+
+    let has_more = offset.saturating_add(memory_neuron_ids_u32.len()) < total_memory_neuron_ids;
+
+    let memory_neuron_ids: Vec<u64> = memory_neuron_ids_u32
+        .into_iter()
+        .map(|id| id as u64)
+        .collect();
+
+    Ok(Json(MemoryCorticalAreaResponse {
+        cortical_id: params.cortical_id,
+        cortical_idx,
+        cortical_name,
+        short_term_neuron_count: runtime.short_term_neuron_count,
+        long_term_neuron_count: runtime.long_term_neuron_count,
+        // CorticalAreaInfo.properties drops init_lifespan, lifespan_growth_rate, and
+        // longterm_mem_threshold because those are already top-level fields. Extracting
+        // again from that bag substitutes MemoryAreaProperties defaults (9, 1, 100)
+        // and hides the values that were written to the genome.
+        memory_parameters: memory_parameters_from_reported_area(&area, &mem_props),
+        effective_mp_mode: runtime.effective_mp_mode,
+        upstream_cortical_area_indices,
+        upstream_cortical_area_count,
+        upstream_pattern_cache_size: runtime.upstream_pattern_cache_size,
+        incoming_synapse_count: area.incoming_synapse_count,
+        outgoing_synapse_count: area.outgoing_synapse_count,
+        total_memory_neuron_ids,
+        page: params.page,
+        page_size: page_size_u32,
+        memory_neuron_ids,
+        has_more,
+    }))
 }
 
 /// Get metadata for all available IPU types (vision, infrared, etc.). Includes encodings, formats, units, and topology.
@@ -1618,6 +3692,8 @@ pub async fn get_ipu_types(
         let snake_name = unit.get_snake_case_name();
         let formats = if snake_name == "vision"
             || snake_name == "segmented_vision"
+            || snake_name == "depth_map"
+            || snake_name == "misc_data"
             || snake_name == "miscellaneous"
         {
             vec![]
@@ -1627,9 +3703,11 @@ pub async fn get_ipu_types(
 
         // Default resolution based on type
         let resolution = if snake_name == "vision" {
-            vec![64, 64, 1] // Vision sensors typically 64x64
+            vec![128, 128, 3] // Simple vision default matches the Vision template (128x128 RGB)
         } else if snake_name == "segmented_vision" {
             vec![32, 32, 1] // Segmented vision segments are smaller
+        } else if snake_name == "depth_map" {
+            vec![64, 64, 1] // Depth map: XY topology, normalized depth as potential
         } else {
             vec![1, 1, 1] // Most sensors are scalar (1x1x1)
         };
@@ -1899,4 +3977,400 @@ pub async fn put_coord_3d(
         "message".to_string(),
         "Not yet implemented".to_string(),
     )])))
+}
+
+#[cfg(test)]
+mod voxel_neurons_dto_tests {
+    use super::{
+        synapse_details_for_neuron, synapse_page_window, VoxelNeuronsBody, VoxelNeuronsResponse,
+    };
+
+    #[test]
+    fn synapse_page_window_paginates_fifty_per_direction() {
+        let (s, e, more) = synapse_page_window(120, 0);
+        assert_eq!((s, e, more), (0, 50, true));
+        let (s, e, more) = synapse_page_window(120, 1);
+        assert_eq!((s, e, more), (50, 100, true));
+        let (s, e, more) = synapse_page_window(120, 2);
+        assert_eq!((s, e, more), (100, 120, false));
+        let (s, e, more) = synapse_page_window(120, 3);
+        assert_eq!((s, e, more), (0, 0, false));
+    }
+
+    #[test]
+    fn synapse_details_matches_connectome_shape() {
+        let mgr = feagi_brain_development::ConnectomeManager::new_for_testing();
+        let out_full = vec![(10, 2.0, 5.0, 1)];
+        let inc_full = vec![(3, 4.0, 6.0, 0)];
+        let (out, inc) = synapse_details_for_neuron(&mgr, 7, &out_full, &inc_full);
+        let out_a = out.as_array().expect("outgoing array");
+        assert_eq!(out_a[0]["source_neuron_id"], serde_json::json!(7));
+        assert_eq!(out_a[0]["target_neuron_id"], serde_json::json!(10));
+        assert_eq!(out_a[0]["weight"], serde_json::json!(2.0));
+        assert_eq!(out_a[0]["postsynaptic_potential"], serde_json::json!(5.0));
+        assert_eq!(out_a[0]["synapse_type"], serde_json::json!(1));
+        assert!(out_a[0].get("target_cortical_id").is_some());
+        assert!(out_a[0].get("target_cortical_name").is_some());
+        assert!(out_a[0].get("target_x").is_some());
+        let in_a = inc.as_array().expect("incoming array");
+        assert_eq!(in_a[0]["source_neuron_id"], serde_json::json!(3));
+        assert_eq!(in_a[0]["target_neuron_id"], serde_json::json!(7));
+        assert!(in_a[0].get("source_cortical_id").is_some());
+        assert!(in_a[0].get("source_cortical_name").is_some());
+        assert!(in_a[0].get("source_x").is_some());
+    }
+
+    #[test]
+    fn voxel_neurons_body_deserializes_from_json() {
+        let j = r#"{"cortical_id":"X19fcG93ZXI=","x":0,"y":0,"z":0}"#;
+        let b: VoxelNeuronsBody = serde_json::from_str(j).expect("deserialize body");
+        assert_eq!(b.cortical_id, "X19fcG93ZXI=");
+        assert_eq!((b.x, b.y, b.z), (0, 0, 0));
+        assert_eq!(b.synapse_page, 0);
+    }
+
+    #[test]
+    fn voxel_neurons_response_serializes() {
+        let r = VoxelNeuronsResponse {
+            cortical_id: "id".to_string(),
+            cortical_name: "test_area".to_string(),
+            cortical_idx: 2,
+            voxel_coordinate: [1, 2, 3],
+            x: 1,
+            y: 2,
+            z: 3,
+            synapse_page: 0,
+            neuron_count: 0,
+            neurons: vec![],
+        };
+        let v = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(v["cortical_name"], serde_json::json!("test_area"));
+        assert_eq!(v["voxel_coordinate"], serde_json::json!([1, 2, 3]));
+        assert_eq!(v["neuron_count"], serde_json::json!(0));
+        assert_eq!(v["synapse_page"], serde_json::json!(0));
+        assert_eq!(v["neurons"], serde_json::json!([]));
+    }
+}
+
+#[cfg(test)]
+mod classifier_mapping_rule_tests {
+    use super::classifier_mapping_rule;
+
+    #[test]
+    fn classifier_associative_rule_uses_memory_temporal_depth() {
+        let window = feagi_evolutionary::MemoryAreaProperties::default().temporal_depth;
+        assert!(window > 0);
+        let associative = classifier_mapping_rule("associative_memory", window);
+        assert_eq!(associative["plasticity_flag"], serde_json::json!(true));
+        assert_eq!(associative["plasticity_window"], serde_json::json!(window));
+        assert_eq!(associative["plasticity_constant"], serde_json::json!(1));
+        assert_eq!(associative["ltp_multiplier"], serde_json::json!(1));
+        assert_eq!(associative["ltd_multiplier"], serde_json::json!(1));
+        let scan = classifier_mapping_rule("episodic_scan", window);
+        assert_eq!(scan["plasticity_flag"], serde_json::json!(false));
+        assert_eq!(scan["plasticity_window"], serde_json::json!(0));
+        assert_eq!(scan["plasticity_constant"], serde_json::json!(0));
+    }
+
+    #[test]
+    fn classifier_edge_is_one_rule() {
+        use super::classifier_edge_rules_with_morphology;
+
+        let encode = classifier_mapping_rule("episodic_memory", 1);
+        let sample = classifier_edge_rules_with_morphology(
+            std::slice::from_ref(&encode),
+            "classifier_sample",
+            1,
+        );
+        assert_eq!(sample.len(), 1);
+        assert_eq!(sample[0]["morphology_id"], "classifier_sample");
+    }
+
+    #[test]
+    fn geometry_flags_read_scan_twin_and_classifier_role() {
+        use super::{geometry_classifier_role, geometry_scan_twin_flag};
+        use std::collections::HashMap;
+
+        let mut properties = HashMap::new();
+        assert!(!geometry_scan_twin_flag(&properties));
+        assert_eq!(
+            geometry_classifier_role(&properties),
+            serde_json::Value::Null
+        );
+
+        properties.insert("scan_twin".to_string(), serde_json::json!(true));
+        properties.insert(
+            "classifier_role".to_string(),
+            serde_json::json!("kernel_memory"),
+        );
+        assert!(geometry_scan_twin_flag(&properties));
+        assert_eq!(
+            geometry_classifier_role(&properties),
+            serde_json::json!("kernel_memory")
+        );
+    }
+
+    #[test]
+    fn classifier_memory_areas_are_created_hidden() {
+        use super::classifier_memory_params;
+        use std::collections::HashMap;
+
+        let params = classifier_memory_params(
+            "memid001".to_string(),
+            "demo_kernel_mem".to_string(),
+            (0, 0, 0),
+            "region",
+            HashMap::new(),
+        );
+        assert_eq!(params.visible, Some(false));
+        assert_eq!(params.name, "demo_kernel_mem");
+    }
+
+    #[test]
+    fn classifier_output_shape_copies_the_class_input() {
+        use super::classifier_output_dimensions;
+        assert_eq!(
+            classifier_output_dimensions((12, 8, 4)).unwrap(),
+            (12, 8, 4)
+        );
+        assert!(classifier_output_dimensions((12, 0, 4)).is_err());
+    }
+
+    #[test]
+    fn classifier_class_output_does_not_forward_potential() {
+        use super::classifier_scan_twin_params;
+        let params = classifier_scan_twin_params(
+            "twin0001".to_string(),
+            "demo class output".to_string(),
+            (12, 8, 4),
+            (0, 0, 0),
+            "region",
+            "field",
+            "kmem",
+        );
+        assert_eq!(
+            params
+                .properties
+                .as_ref()
+                .and_then(|properties| properties.get("mp_driven_psp")),
+            Some(&serde_json::json!(false))
+        );
+    }
+
+    #[test]
+    fn classifier_enable_burst_writes_burst_engine_active() {
+        use super::classifier_enable_burst_changes;
+        assert_eq!(
+            classifier_enable_burst_changes().get("burst_engine_active"),
+            Some(&serde_json::json!(true))
+        );
+    }
+
+    #[test]
+    fn classifier_twin_sits_above_the_classifier() {
+        use super::classifier_twin_position;
+        assert_eq!(
+            classifier_twin_position((-29, 57, 10), (10, 6, 6), 0),
+            (-29, 63, 10)
+        );
+    }
+
+    #[test]
+    fn classifier_twins_offset_along_x() {
+        use super::classifier_twin_position;
+        assert_eq!(
+            classifier_twin_position((-29, 57, 10), (10, 6, 6), 10),
+            (-19, 63, 10)
+        );
+    }
+
+    #[test]
+    fn classifier_scan_twin_is_custom_visible_and_flagged() {
+        use super::classifier_scan_twin_params;
+
+        let params = classifier_scan_twin_params(
+            "ctwin001".to_string(),
+            "demo class output".to_string(),
+            (1, 1, 10),
+            (10, 20, 30),
+            "region",
+            "field001",
+            "memid001",
+        );
+        assert_eq!(params.name, "demo class output");
+        assert_eq!(params.area_type, "Custom");
+        assert_eq!(params.visible, Some(true));
+        assert_eq!(params.dimensions, (1, 1, 10));
+        assert_eq!(params.position, (10, 20, 30));
+        let properties = params.properties.expect("class output properties");
+        assert!(!properties.contains_key("scan_twin"));
+        assert_eq!(
+            properties.get("burst_engine_active"),
+            Some(&serde_json::json!(true))
+        );
+        assert_eq!(
+            properties.get("classifier_role"),
+            Some(&serde_json::json!("class_output"))
+        );
+        assert_eq!(
+            properties.get("mp_driven_psp"),
+            Some(&serde_json::json!(false))
+        );
+        assert_eq!(params.leak_coefficient, Some(1.0));
+    }
+}
+
+#[cfg(test)]
+mod memory_parameters_response_tests {
+    use super::memory_parameters_from_reported_area;
+    use feagi_evolutionary::extract_memory_properties;
+    use feagi_services::types::CorticalAreaInfo;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    #[test]
+    fn reported_lifecycle_wins_over_stripped_properties_bag() {
+        let mut properties = HashMap::new();
+        properties.insert("is_mem_type".to_string(), json!(true));
+        properties.insert("temporal_depth".to_string(), json!(4));
+        let extracted = extract_memory_properties(&properties).expect("memory area");
+        assert_eq!(extracted.init_lifespan, 9);
+        assert_eq!(extracted.longterm_threshold, 100);
+
+        let area: CorticalAreaInfo = serde_json::from_value(json!({
+            "cortical_id": "bU1OSVNUXx8=",
+            "cortical_id_s": "mMNIST__",
+            "cortical_idx": 13,
+            "cortical_name": "MNIST classifier_kernel_mem",
+            "cortical_dimensions": [1, 1, 1],
+            "coordinates_3d": [0, 0, 0],
+            "area_type": "Memory",
+            "cortical_group": "MEMORY",
+            "cortical_type": "memory",
+            "neuron_count": 0,
+            "synapse_count": 0,
+            "incoming_synapse_count": 0,
+            "outgoing_synapse_count": 0,
+            "visible": false,
+            "neurons_per_voxel": 1,
+            "neuron_post_synaptic_potential": 0.0,
+            "neuron_post_synaptic_potential_max": 0.0,
+            "neuron_plasticity_constant": 0.0,
+            "neuron_degeneracy_coefficient": 0.0,
+            "neuron_psp_uniform_distribution": false,
+            "neuron_mp_driven_psp": false,
+            "neuron_fire_threshold": 0.1,
+            "neuron_fire_threshold_increment": [0.0, 0.0, 0.0],
+            "neuron_firing_threshold_limit": 0.0,
+            "neuron_consecutive_fire_count": 0,
+            "neuron_snooze_period": 0,
+            "neuron_refractory_period": 0,
+            "neuron_leak_coefficient": 0.0,
+            "neuron_leak_variability": 0.0,
+            "neuron_mp_charge_accumulation": false,
+            "neuron_excitability": 1.0,
+            "neuron_burst_engine_active": true,
+            "neuron_init_lifespan": 1,
+            "neuron_lifespan_growth_rate": 2.0,
+            "neuron_longterm_mem_threshold": 3,
+            "temporal_depth": 4,
+            "mp_learning_enabled": false,
+            "properties": {"is_mem_type": true, "temporal_depth": 4}
+        }))
+        .expect("area record");
+
+        let reported = memory_parameters_from_reported_area(&area, &extracted);
+        assert_eq!(reported.init_lifespan, 1);
+        assert_eq!(reported.longterm_mem_threshold, 3);
+        assert_eq!(reported.lifespan_growth_rate, 2.0);
+        assert_eq!(reported.temporal_depth, 4);
+    }
+}
+
+#[cfg(test)]
+mod cortical_clone_property_tests {
+    use super::properties_for_cortical_clone;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    #[test]
+    fn clone_property_map_keeps_neural_parameters_and_rewrites_placement() {
+        let mut raw = HashMap::new();
+        raw.insert("cortical_id".to_string(), json!("c291cmNl"));
+        raw.insert("name".to_string(), json!("source"));
+        raw.insert(
+            "dimensions".to_string(),
+            json!({"width": 2, "height": 2, "depth": 1}),
+        );
+        raw.insert("position".to_string(), json!([1, 2, 3]));
+        raw.insert(
+            "cortical_mapping_dst".to_string(),
+            json!({"other": [{"morphology_id": "block_to_block"}]}),
+        );
+        raw.insert("firing_threshold".to_string(), json!(2.5));
+        raw.insert("firing_threshold_increment_x".to_string(), json!(0.1));
+        raw.insert("firing_threshold_increment_y".to_string(), json!(0.2));
+        raw.insert("firing_threshold_increment_z".to_string(), json!(0.3));
+        raw.insert("postsynaptic_current_max".to_string(), json!(42.0));
+        raw.insert("mp_driven_psp".to_string(), json!(true));
+        raw.insert("neuron_excitability".to_string(), json!(7.0));
+        raw.insert("init_lifespan".to_string(), json!(9));
+        raw.insert("synapse_attractivity".to_string(), json!(77.0));
+        raw.insert("2d_coordinate".to_string(), json!([10, 20]));
+        raw.insert("relative_coordinate".to_string(), json!([1, 2, 3]));
+        raw.insert("temporal_depth".to_string(), json!(6));
+
+        let cloned = properties_for_cortical_clone(raw, "region-1", [40, 50], [8, 9, 10]);
+
+        assert!(!cloned.contains_key("cortical_id"));
+        assert!(!cloned.contains_key("name"));
+        assert!(!cloned.contains_key("cortical_mapping_dst"));
+        assert_eq!(cloned.get("firing_threshold"), Some(&json!(2.5)));
+        assert_eq!(
+            cloned.get("firing_threshold_increment_x"),
+            Some(&json!(0.1))
+        );
+        assert_eq!(
+            cloned.get("firing_threshold_increment_y"),
+            Some(&json!(0.2))
+        );
+        assert_eq!(
+            cloned.get("firing_threshold_increment_z"),
+            Some(&json!(0.3))
+        );
+        assert_eq!(cloned.get("postsynaptic_current_max"), Some(&json!(42.0)));
+        assert_eq!(cloned.get("mp_driven_psp"), Some(&json!(true)));
+        assert_eq!(cloned.get("neuron_excitability"), Some(&json!(7.0)));
+        assert_eq!(cloned.get("init_lifespan"), Some(&json!(9)));
+        assert_eq!(cloned.get("synapse_attractivity"), Some(&json!(77.0)));
+        assert_eq!(cloned.get("temporal_depth"), Some(&json!(6)));
+        assert_eq!(
+            cloned.get("parent_region_id").and_then(|v| v.as_str()),
+            Some("region-1")
+        );
+        assert_eq!(cloned.get("coordinate_2d"), Some(&json!([40, 50])));
+        assert_eq!(cloned.get("2d_coordinate"), Some(&json!([40, 50])));
+        assert_eq!(cloned.get("relative_coordinate"), Some(&json!([8, 9, 10])));
+    }
+}
+
+#[cfg(test)]
+mod classifier_area_id_tests {
+    use super::classifier_owned_area_id;
+    use feagi_structures::genomic::cortical_area::{CorticalAreaType, CorticalID};
+
+    #[test]
+    fn error_area_id_parses_as_a_custom_area() {
+        let sample = classifier_owned_area_id(b'm', "C1", 10, 1).expect("sample id");
+        let class_memory = classifier_owned_area_id(b'm', "C1", 10, 2).expect("class memory id");
+        let error = classifier_owned_area_id(b'c', "C1", 10, 3).expect("error id");
+        assert_ne!(sample, class_memory);
+        assert_ne!(error, sample);
+        let error_id = CorticalID::try_from_base_64(&error).expect("error id parses");
+        assert!(matches!(
+            error_id.as_cortical_type().expect("error type"),
+            CorticalAreaType::Custom(_)
+        ));
+        assert!(classifier_owned_area_id(b'e', "C1", 10, 3).is_err());
+    }
 }

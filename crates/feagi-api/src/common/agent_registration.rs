@@ -1,7 +1,2832 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Re-export of agent registration helpers for use by feagi-rs and other embedders.
+//! Shared registration helpers used across transports.
 
-#[cfg(feature = "feagi-agent")]
-pub use crate::endpoints::agent::auto_create_cortical_areas_from_device_registrations;
+use crate::common::ApiState;
+use feagi_config::load_config;
+use feagi_services::types::CreateCorticalAreaParams;
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalSubUnitIndex, CorticalUnitIndex,
+};
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit, UnitTopology};
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use tracing::{info, warn};
+
+const MOTOR_AREA_X_GAP_VOXELS: i32 = 10;
+const SEGMENTED_VISION_GROUP_X_GAP_VOXELS: i32 = 10;
+/// When grouped Servo encoder registrations declare ``motor_servo_group_id`` and
+/// ``sensor_tag`` (jointpos / jointvel), IPU placement follows the corresponding
+/// PositionalServo OPU sub-area (same Y/Z), shifted along X so strips sit beside motors.
+const SERVO_ENCODER_X_OFFSET_FROM_MATCHED_MOTOR_VOXELS: i32 = -30;
+
+/// First tuple element of `JSONDecoderProperties::Percentage` as JSON: either a bare
+/// positive integer (legacy / hand-written payloads) or `NeuronDepth`'s serde shape
+/// `{"value": n}` from `serde_json::to_value`.
+fn percentage_tuple_first_depth_u32(depth_json: &Value) -> Option<u32> {
+    if let Some(u) = depth_json.as_u64() {
+        return u32::try_from(u).ok();
+    }
+    if let Some(i) = depth_json.as_i64() {
+        if i > 0 {
+            return u32::try_from(i).ok();
+        }
+        return None;
+    }
+    depth_json
+        .get("value")
+        .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
+        .and_then(|u| u32::try_from(u).ok())
+}
+
+/// Per-channel (width, height, depth) for motor registration reconciliation.
+///
+/// For [`MotorCorticalUnit::CountOutput`], Z depth may be taken from the agent's
+/// `JSONDecoderProperties::Percentage` tuple (first element = [`NeuronDepth`]) so the
+/// connectome matches the embodiment decoder (e.g. Perception Inspector max count).
+/// For [`MotorCorticalUnit::PositionalServo`], Z depth is taken from
+/// `PositionalServo` / `PositionalServoTargetSpeed` so absolute and incremental
+/// OPUs match the controller's registered servo resolution (xARM shared servo z).
+/// For [`MotorCorticalUnit::ObjectSegmentation`], all three dims may be taken from the
+/// agent's `JSONDecoderProperties::MiscData` block so the connectome matches whatever
+/// grid size the agent registered with (e.g. Vision Lab user-chosen oseg resolution).
+/// Other motor units keep template `channel_dimensions_default` only.
+fn per_channel_motor_dimensions_for_registration(
+    motor_unit: MotorCorticalUnit,
+    unit_topology: &UnitTopology,
+    decoder_properties: Option<&Value>,
+) -> (usize, usize, usize) {
+    let default_w = unit_topology.channel_dimensions_default[0] as usize;
+    let default_h = unit_topology.channel_dimensions_default[1] as usize;
+    let default_d = unit_topology.channel_dimensions_default[2] as usize;
+    if motor_unit != MotorCorticalUnit::CountOutput
+        && motor_unit != MotorCorticalUnit::ObjectSegmentation
+        && motor_unit != MotorCorticalUnit::PoseEstimation
+        && motor_unit != MotorCorticalUnit::SpatialPointer
+        && motor_unit != MotorCorticalUnit::AngularPointer
+        && motor_unit != MotorCorticalUnit::PositionalServo
+        && motor_unit != MotorCorticalUnit::AudioOutput
+    {
+        return (default_w, default_h, default_d);
+    }
+    // AudioOutput: bin_count x phase_steps x 1 from the decoder's AudioSpectrum block.
+    if motor_unit == MotorCorticalUnit::AudioOutput {
+        return decoder_properties
+            .and_then(extract_audio_spectrum_dimensions)
+            .map(|dims| clamp_to_unit_topology(dims, unit_topology))
+            .unwrap_or((default_w, default_h, default_d));
+    }
+    if motor_unit == MotorCorticalUnit::CountOutput {
+        let z_min = unit_topology.channel_dimensions_min[2].max(1);
+        let z_max = unit_topology.channel_dimensions_max[2].max(1);
+        let Some(decode) = decoder_properties else {
+            return (default_w, default_h, default_d);
+        };
+        let Some(arr) = decode.get("Percentage").and_then(|v| v.as_array()) else {
+            return (default_w, default_h, default_d);
+        };
+        let Some(depth_json) = arr.first() else {
+            return (default_w, default_h, default_d);
+        };
+        let Some(d32) = percentage_tuple_first_depth_u32(depth_json) else {
+            return (default_w, default_h, default_d);
+        };
+        if d32 == 0 {
+            return (default_w, default_h, default_d);
+        }
+        let clamped = d32.clamp(z_min, z_max);
+        return (default_w, default_h, clamped as usize);
+    }
+    // ObjectSegmentation: honor MiscData dimensions declared by the agent decoder.
+    if motor_unit == MotorCorticalUnit::ObjectSegmentation {
+        if let Some(dims) = oseg_dims_from_misc_data_decoder(decoder_properties, unit_topology) {
+            return dims;
+        }
+        return (default_w, default_h, default_d);
+    }
+    // PoseEstimation: honor dimensions from decoder block.
+    // Expected: {"PoseEstimation": {"width": N, "height": N, "depth": N}}
+    if motor_unit == MotorCorticalUnit::PoseEstimation {
+        if let Some(dims) = pose_dims_from_decoder_properties(decoder_properties, unit_topology) {
+            return dims;
+        }
+        return (default_w, default_h, default_d);
+    }
+    // SpatialPointer: Absolute is 3×1×depth; Incremental is 6×1×depth;
+    // speed is 1×1×depth per XYZ channel. Expected:
+    // {"SpatialPointer": {"depth": N, "width": 1|3|6}}
+    if motor_unit == MotorCorticalUnit::SpatialPointer
+        || motor_unit == MotorCorticalUnit::AngularPointer
+    {
+        if let Some(dims) =
+            spatial_pointer_dims_from_decoder_properties(decoder_properties, unit_topology)
+        {
+            return dims;
+        }
+        return (default_w, default_h, default_d);
+    }
+    if motor_unit == MotorCorticalUnit::PositionalServo {
+        if let Some(depth) =
+            positional_servo_depth_from_decoder_properties(decoder_properties, unit_topology)
+        {
+            return (default_w, default_h, depth);
+        }
+        return (default_w, default_h, default_d);
+    }
+    (default_w, default_h, default_d)
+}
+
+/// Registered PositionalServo Z from `PositionalServo` or `PositionalServoTargetSpeed`.
+///
+/// Width/height stay on the template so absolute stays 1-wide and incremental stays
+/// 2-wide. Returns `None` when the decoder block is missing or the depth is zero.
+fn positional_servo_depth_from_decoder_properties(
+    decoder_properties: Option<&Value>,
+    unit_topology: &UnitTopology,
+) -> Option<usize> {
+    let decode = decoder_properties?;
+    let payload = decode
+        .get("PositionalServoTargetSpeed")
+        .or_else(|| decode.get("PositionalServo"))?;
+    let depth_json = if let Some(items) = payload.as_array() {
+        items.first()?
+    } else {
+        payload.get("depth").or_else(|| payload.get("value"))?
+    };
+    let depth = percentage_tuple_first_depth_u32(depth_json).filter(|depth| *depth > 0)?;
+    let d_min = unit_topology.channel_dimensions_min[2].max(1);
+    let d_max = unit_topology.channel_dimensions_max[2].max(1);
+    Some(depth.clamp(d_min, d_max) as usize)
+}
+
+/// Extracts and clamps oseg (width, height, depth) from a `{"MiscData": {…}}` decoder block.
+/// Returns `None` if the block is absent, malformed, or contains any zero dimension.
+fn oseg_dims_from_misc_data_decoder(
+    decoder_properties: Option<&Value>,
+    unit_topology: &UnitTopology,
+) -> Option<(usize, usize, usize)> {
+    let misc = decoder_properties?.get("MiscData")?;
+    let w = misc
+        .get("width")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let h = misc
+        .get("height")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let d = misc
+        .get("depth")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    if w == 0 || h == 0 || d == 0 {
+        return None;
+    }
+    let w_min = unit_topology.channel_dimensions_min[0].max(1);
+    let h_min = unit_topology.channel_dimensions_min[1].max(1);
+    let d_min = unit_topology.channel_dimensions_min[2].max(1);
+    let w_max = unit_topology.channel_dimensions_max[0].max(1);
+    let h_max = unit_topology.channel_dimensions_max[1].max(1);
+    let d_max = unit_topology.channel_dimensions_max[2].max(1);
+    Some((
+        w.clamp(w_min, w_max) as usize,
+        h.clamp(h_min, h_max) as usize,
+        d.clamp(d_min, d_max) as usize,
+    ))
+}
+
+/// Extracts and clamps pose estimation (width, height, depth) from a
+/// `{"PoseEstimation": {"width": N, "height": N, "depth": N}}` decoder block.
+/// Returns `None` if the block is absent, malformed, or contains any zero dimension.
+fn pose_dims_from_decoder_properties(
+    decoder_properties: Option<&Value>,
+    unit_topology: &UnitTopology,
+) -> Option<(usize, usize, usize)> {
+    let pose = decoder_properties?.get("PoseEstimation")?;
+    let w = pose
+        .get("width")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let h = pose
+        .get("height")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let d = pose
+        .get("depth")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    if w == 0 || h == 0 || d == 0 {
+        return None;
+    }
+    let w_min = unit_topology.channel_dimensions_min[0].max(1);
+    let h_min = unit_topology.channel_dimensions_min[1].max(1);
+    let d_min = unit_topology.channel_dimensions_min[2].max(1);
+    let w_max = unit_topology.channel_dimensions_max[0].max(1);
+    let h_max = unit_topology.channel_dimensions_max[1].max(1);
+    let d_max = unit_topology.channel_dimensions_max[2].max(1);
+    Some((
+        w.clamp(w_min, w_max) as usize,
+        h.clamp(h_min, h_max) as usize,
+        d.clamp(d_min, d_max) as usize,
+    ))
+}
+
+/// Extracts and clamps spatial pointer `(width, 1, depth)` from a
+/// `{"SpatialPointer": {"depth": N, "width": 1|3|6}}` decoder block.
+/// Returns `None` if the block is absent, malformed, or depth is zero.
+fn spatial_pointer_dims_from_decoder_properties(
+    decoder_properties: Option<&Value>,
+    unit_topology: &UnitTopology,
+) -> Option<(usize, usize, usize)> {
+    let pointer = decoder_properties?
+        .get("SpatialPointer")
+        .or_else(|| decoder_properties?.get("AngularPointer"))?;
+    let d = pointer
+        .get("depth")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    if d == 0 {
+        return None;
+    }
+    let w_min = unit_topology.channel_dimensions_min[0].max(1);
+    let w_max = unit_topology.channel_dimensions_max[0].max(1);
+    let requested_w = pointer
+        .get("width")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())
+        .unwrap_or(unit_topology.channel_dimensions_default[0]);
+    let w = requested_w.clamp(w_min, w_max) as usize;
+    let h = unit_topology.channel_dimensions_min[1].max(1) as usize;
+    let d_min = unit_topology.channel_dimensions_min[2].max(1);
+    let d_max = unit_topology.channel_dimensions_max[2].max(1);
+    Some((w, h, d.clamp(d_min, d_max) as usize))
+}
+
+/// Image Enhancements is one area. Absolute is three slider columns (diff,
+/// brightness, contrast). Incremental is six columns (increase, decrease per slider).
+/// Z depth follows the decoder when the registration carries one.
+fn registered_motor_channel_dimensions(
+    motor_unit: MotorCorticalUnit,
+    unit_topology: &UnitTopology,
+    decoder_properties: Option<&Value>,
+    frame_handling: Option<&str>,
+) -> (usize, usize, usize) {
+    let (width, height, depth) = per_channel_motor_dimensions_for_registration(
+        motor_unit,
+        unit_topology,
+        decoder_properties,
+    );
+    if motor_unit != MotorCorticalUnit::DynamicImageProcessing {
+        return (width, height, depth);
+    }
+    let slider_width = match frame_handling {
+        Some("Incremental") => 6,
+        Some("Absolute") => 3,
+        _ => width,
+    };
+    let depth_min = unit_topology.channel_dimensions_min[2].max(1) as usize;
+    let depth_max = unit_topology.channel_dimensions_max[2].max(1) as usize;
+    let slider_depth = image_filtering_registered_depth(decoder_properties)
+        .map(|decoded| decoded.clamp(depth_min, depth_max))
+        .unwrap_or(depth);
+    (slider_width, height, slider_depth)
+}
+
+fn image_filtering_registered_depth(decoder_properties: Option<&Value>) -> Option<usize> {
+    let depth_json = decoder_properties?
+        .get("ImageFilteringSettings")?
+        .as_array()?
+        .first()?;
+    let depth = percentage_tuple_first_depth_u32(depth_json)?;
+    (depth > 0).then_some(depth as usize)
+}
+
+fn build_friendly_unit_name(unit_label: &str, group: u16, sub_unit_index: usize) -> String {
+    format!("{unit_label}-{}-{}", group, sub_unit_index)
+}
+
+/// Incremental SpatialPointer world X. Absolute uses the template
+/// `relative_position` `(130, 0, -10)`. Y/Z stay on that template so the
+/// Cartesian areas sit on one row: sensor 115, absolute 130, incremental 145,
+/// speed 160.
+const SPATIAL_POINTER_INCREMENTAL_POSITION_X: i32 = 145;
+const SPATIAL_POINTER_SPEED_POSITION_X: i32 = 160;
+const ANGULAR_POINTER_ABSOLUTE_POSITION_X: i32 = 175;
+const ANGULAR_POINTER_INCREMENTAL_POSITION_X: i32 = 190;
+/// Per-axis speed pointer width. Matches `SPATIAL_POINTER_SPEED_CHANNEL_WIDTH`.
+const SPATIAL_POINTER_SPEED_WIDTH: u32 = 1;
+
+/// World position for a newly registered SpatialPointer area.
+///
+/// Absolute pose uses the unit template. Incremental and speed are offset on X
+/// only so they do not inherit the motor `group * 20` Y stagger used by
+/// multi-limb servos.
+fn spatial_pointer_world_position(
+    relative_position: [i32; 3],
+    frame_handling: Option<&str>,
+    decoder_width: Option<u32>,
+) -> (i32, i32, i32) {
+    let x = match frame_handling {
+        Some("Incremental") => SPATIAL_POINTER_INCREMENTAL_POSITION_X,
+        Some("Absolute") if decoder_width == Some(SPATIAL_POINTER_SPEED_WIDTH) => {
+            SPATIAL_POINTER_SPEED_POSITION_X
+        }
+        _ => relative_position[0],
+    };
+    (x, relative_position[1], relative_position[2])
+}
+
+/// World position for a newly registered AngularPointer area.
+///
+/// Absolute attitude uses X=175. Incremental is offset to 190 so it sits
+/// on the same Cartesian row after SpatialPointer speed (160).
+fn angular_pointer_world_position(
+    relative_position: [i32; 3],
+    frame_handling: Option<&str>,
+) -> (i32, i32, i32) {
+    let x = match frame_handling {
+        Some("Incremental") => ANGULAR_POINTER_INCREMENTAL_POSITION_X,
+        Some("Absolute") => ANGULAR_POINTER_ABSOLUTE_POSITION_X,
+        _ => relative_position[0],
+    };
+    (x, relative_position[1], relative_position[2])
+}
+
+/// Builds an unambiguous default name for motor areas created during registration.
+///
+/// SpatialPointer's frame handling changes its command semantics, so expose that
+/// distinction in its name rather than requiring users to infer it from an ID.
+/// PositionalServo area 2 is the dedicated per-joint speed strip.
+fn build_motor_registration_default_name(
+    motor_unit: MotorCorticalUnit,
+    group: u16,
+    sub_unit_index: usize,
+    frame_handling: Option<&str>,
+    decoder_width: Option<u32>,
+) -> String {
+    if motor_unit == MotorCorticalUnit::PositionalServo && sub_unit_index == 2 {
+        return "Positional Servo Speed".to_string();
+    }
+    let legacy_name =
+        build_friendly_unit_name(motor_unit.get_friendly_name(), group, sub_unit_index);
+    if motor_unit == MotorCorticalUnit::AngularPointer && sub_unit_index == 0 {
+        return match frame_handling {
+            Some("Absolute") => "Angular Pointer Absolute".to_string(),
+            Some("Incremental") => "Angular Pointer Incremental".to_string(),
+            _ => "Angular Pointer".to_string(),
+        };
+    }
+    if motor_unit != MotorCorticalUnit::SpatialPointer || sub_unit_index != 0 {
+        return legacy_name;
+    }
+    match frame_handling {
+        Some("Absolute") if decoder_width == Some(SPATIAL_POINTER_SPEED_WIDTH) => {
+            "Spatial Pointer Speed".to_string()
+        }
+        Some("Absolute") => "Spatial Pointer Absolute".to_string(),
+        Some("Incremental") => "Spatial Pointer Incremental".to_string(),
+        _ => "Spatial Pointer".to_string(),
+    }
+}
+
+/// Default title for a newly registered CartesianPosition IPU.
+fn build_sensory_registration_default_name(
+    sensory_unit: SensoryCorticalUnit,
+    group: u16,
+    sub_unit_index: usize,
+) -> String {
+    if sensory_unit == SensoryCorticalUnit::CartesianPosition {
+        return "Cartesian Position Sensor".to_string();
+    }
+    build_friendly_unit_name(sensory_unit.get_friendly_name(), group, sub_unit_index)
+}
+
+fn non_empty_string(value: Option<&Value>) -> Option<String> {
+    value
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+}
+
+fn extract_grouping_array(unit_def: &Value) -> &[Value] {
+    unit_def
+        .get("device_grouping")
+        .and_then(|v| v.as_array())
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+/// Width from a `{"SpatialPointer": {"width": N, ...}}` decoder block.
+fn spatial_pointer_decoder_width(decoder_properties: Option<&Value>) -> Option<u32> {
+    decoder_properties?
+        .get("SpatialPointer")
+        .or_else(|| decoder_properties?.get("AngularPointer"))?
+        .get("width")
+        .and_then(|value| value.as_u64())
+        .and_then(|width| u32::try_from(width).ok())
+}
+
+/// Returns the number of cortical devices represented by a motor registration.
+///
+/// Pose/incremental `SpatialPointer` is one `Percentage3D`/`SignedPercentage3D`
+/// device. A width-1 speed pointer is one independent device per grouping entry
+/// (X, Y, and Z each get a column). Other motor units use one device per
+/// grouping entry.
+fn motor_registration_device_count(
+    motor_unit: MotorCorticalUnit,
+    unit_def: &Value,
+    decoder_properties: Option<&Value>,
+) -> usize {
+    let grouping_count = extract_grouping_array(unit_def).len();
+    if motor_unit == MotorCorticalUnit::SpatialPointer {
+        if spatial_pointer_decoder_width(decoder_properties) == Some(SPATIAL_POINTER_SPEED_WIDTH) {
+            return grouping_count;
+        }
+        return if grouping_count > 0 { 1 } else { 0 };
+    }
+    if motor_unit == MotorCorticalUnit::AngularPointer {
+        return if grouping_count > 0 { 1 } else { 0 };
+    }
+    grouping_count
+}
+
+fn first_grouping_property(unit_def: &Value, key: &str) -> Option<String> {
+    extract_grouping_array(unit_def)
+        .iter()
+        .find_map(|grouping| {
+            non_empty_string(
+                grouping
+                    .get("device_properties")
+                    .and_then(|v| v.as_object())
+                    .and_then(|props| props.get(key)),
+            )
+        })
+}
+
+/// Reads ``motor_servo_group_id`` from the first channel (grouped strips share one ID).
+fn motor_servo_group_id_u8_from_first_channel(unit_def: &Value) -> Option<u16> {
+    extract_grouping_array(unit_def)
+        .first()
+        .and_then(|channel| channel.get("device_properties"))
+        .and_then(|props| props.get("motor_servo_group_id"))
+        .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
+        .and_then(|u| u16::try_from(u).ok())
+}
+
+/// ``sensor_tag`` on the first grouped channel (e.g. ``jointpos`` / ``jointvel`` for Servo).
+fn primary_sensor_tag_first_channel(unit_def: &Value) -> Option<String> {
+    extract_grouping_array(unit_def)
+        .first()
+        .and_then(|channel| {
+            non_empty_string(
+                channel
+                    .get("device_properties")
+                    .and_then(|props| props.get("sensor_tag")),
+            )
+        })
+}
+
+/// Maps grouped Servo encoder modality to PositionalServo sub-unit index (0 = absolute strip).
+fn servo_motor_subunit_index_for_servo_tag(tag: &str) -> Option<u8> {
+    match tag {
+        "jointpos" => Some(0),
+        "jointvel" => Some(1),
+        _ => None,
+    }
+}
+
+fn resolve_registration_name(unit_def: &Value, default_name: &str) -> String {
+    non_empty_string(unit_def.get("friendly_name"))
+        .or_else(|| first_grouping_property(unit_def, "bundle_id"))
+        .or_else(|| {
+            non_empty_string(
+                extract_grouping_array(unit_def)
+                    .first()?
+                    .get("friendly_name"),
+            )
+        })
+        .unwrap_or_else(|| default_name.to_string())
+}
+
+/// Like [`resolve_registration_name`], but SDK `{UnitType}_{group}` placeholders
+/// do not override the descriptive Cartesian / SpatialPointer default title.
+fn resolve_registration_name_with_placeholders(
+    unit_def: &Value,
+    default_name: &str,
+    ignore_generated_unit_titles: bool,
+) -> String {
+    if !ignore_generated_unit_titles {
+        return resolve_registration_name(unit_def, default_name);
+    }
+    if let Some(name) = non_empty_string(unit_def.get("friendly_name")) {
+        if !is_placeholder_cartesian_area_name(&name) {
+            return name;
+        }
+    }
+    default_name.to_string()
+}
+
+fn should_auto_rename(current_name: &str, cortical_id: &str, legacy_default_name: &str) -> bool {
+    current_name == cortical_id
+        || current_name == legacy_default_name
+        || current_name.starts_with("vsg_rgbd_")
+        || is_placeholder_cartesian_area_name(current_name)
+}
+
+/// Like [`should_auto_rename`], plus reconnect titles that used to collide.
+fn should_auto_rename_motor(
+    current_name: &str,
+    cortical_id: &str,
+    legacy_default_name: &str,
+    desired_name: &str,
+) -> bool {
+    if should_auto_rename(current_name, cortical_id, legacy_default_name) {
+        return true;
+    }
+    (current_name == "Spatial Pointer Absolute" && desired_name == "Spatial Pointer Speed")
+        || (current_name == "Positional Servo Speed" && desired_name != current_name)
+        || (desired_name == "Positional Servo Speed"
+            && current_name.ends_with("-2")
+            && (current_name.starts_with("Positional Servo-")
+                || current_name.starts_with("PositionalServo_")))
+}
+
+/// True when the current name is a generated SpatialPointer or CartesianPosition
+/// label, not a user rename.
+///
+/// Matches SDK `{UnitType}_{group}` placeholders, older `SpatialPointer_abs_n`
+/// forms, and `Spatial Pointer-{group}-{sub}` so reconnect can apply the
+/// descriptive titles.
+fn is_placeholder_cartesian_area_name(current_name: &str) -> bool {
+    let name = current_name.trim();
+    if name.starts_with("Spatial Pointer-")
+        || name.starts_with("Angular Pointer-")
+        || name.starts_with("Cartesian Position Sensor-")
+    {
+        return true;
+    }
+    const PREFIXES: [&str; 10] = [
+        "SpatialPointer_abs_",
+        "SpatialPointer_inc_",
+        "SpatialPointer_absolute_",
+        "SpatialPointer_incremental_",
+        "SpatialPointer_",
+        "AngularPointer_abs_",
+        "AngularPointer_inc_",
+        "AngularPointer_",
+        "CartesianPosition_",
+        "Cartesian Position Sensor_",
+    ];
+    PREFIXES.iter().any(|prefix| {
+        name.strip_prefix(prefix).is_some_and(|suffix| {
+            let stem = suffix.split("_ch").next().unwrap_or(suffix);
+            !stem.is_empty() && stem.bytes().all(|b| b.is_ascii_digit())
+        })
+    })
+}
+
+fn build_io_config_map_from_unit_def(
+    unit_def: &Value,
+) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    let io_flags = unit_def
+        .get("io_configuration_flags")
+        .and_then(|v| v.as_object());
+
+    let frame_value = io_flags
+        .and_then(|flags| flags.get("frame_change_handling"))
+        .cloned()
+        .or_else(|| unit_def.get("frame_change_handling").cloned())
+        .ok_or_else(|| "unit_def missing frame_change_handling".to_string())?;
+    let positioning_value = io_flags
+        .and_then(|flags| flags.get("percentage_neuron_positioning"))
+        .cloned()
+        .or_else(|| unit_def.get("percentage_neuron_positioning").cloned())
+        // Some legacy registration payloads omit this field on motor units.
+        // Use the deterministic default used elsewhere in this module.
+        .unwrap_or_else(|| serde_json::json!(PercentageNeuronPositioning::Linear));
+
+    let frame: FrameChangeHandling = serde_json::from_value(frame_value)
+        .map_err(|e| format!("Invalid frame_change_handling value: {}", e))?;
+    let positioning: PercentageNeuronPositioning = serde_json::from_value(positioning_value)
+        .map_err(|e| format!("Invalid percentage_neuron_positioning value: {}", e))?;
+
+    let mut config = serde_json::Map::new();
+    config.insert(
+        "frame_change_handling".to_string(),
+        serde_json::to_value(frame)
+            .map_err(|e| format!("Failed to serialize FrameChangeHandling: {}", e))?,
+    );
+    config.insert(
+        "percentage_neuron_positioning".to_string(),
+        serde_json::to_value(positioning)
+            .map_err(|e| format!("Failed to serialize PercentageNeuronPositioning: {}", e))?,
+    );
+    if let Some(pose_schema_value) = io_flags.and_then(|flags| flags.get("pose_schema")).cloned() {
+        config.insert("pose_schema".to_string(), pose_schema_value);
+    }
+    Ok(config)
+}
+
+fn as_nonzero_usize(value: Option<&Value>) -> Option<usize> {
+    value
+        .and_then(|v| v.as_u64())
+        .map(|v| v as usize)
+        .filter(|v| *v > 0)
+}
+
+fn color_channel_count_from_value(value: Option<&Value>) -> Option<usize> {
+    match value {
+        Some(Value::String(layout)) => match layout.as_str() {
+            "GrayScale" => Some(1),
+            "RG" => Some(2),
+            "RGB" => Some(3),
+            "RGBA" => Some(4),
+            _ => None,
+        },
+        Some(Value::Number(number)) => number
+            .as_u64()
+            .map(|v| v as usize)
+            .filter(|v| (1..=4).contains(v)),
+        _ => None,
+    }
+}
+
+fn encoder_variant_payload<'a>(encoder_properties: &'a Value, variant: &str) -> Option<&'a Value> {
+    let object = encoder_properties.as_object()?;
+    if let Some(payload) = object.get(variant) {
+        return Some(payload);
+    }
+    // Accept already-unwrapped payloads when variant tagging is stripped.
+    if variant == "CartesianPlane" && object.contains_key("image_resolution") {
+        return Some(encoder_properties);
+    }
+    if variant == "SegmentedImageFrame" && object.contains_key("segment_xy_resolutions") {
+        return Some(encoder_properties);
+    }
+    None
+}
+
+fn extract_cartesian_plane_dimensions(encoder_properties: &Value) -> Option<(usize, usize, usize)> {
+    let payload = encoder_variant_payload(encoder_properties, "CartesianPlane")?;
+    let resolution = payload.get("image_resolution")?;
+    let width = as_nonzero_usize(resolution.get("width"))?;
+    let height = as_nonzero_usize(resolution.get("height"))?;
+    let channels = color_channel_count_from_value(payload.get("color_channel_layout"))?;
+    Some((width, height, channels))
+}
+
+fn extract_segmented_vision_dimensions(
+    encoder_properties: &Value,
+    sub_unit_index: usize,
+) -> Option<(usize, usize, usize)> {
+    let payload = encoder_variant_payload(encoder_properties, "SegmentedImageFrame")?;
+    let resolutions = payload.get("segment_xy_resolutions")?.as_object()?;
+    let segment_key = match sub_unit_index {
+        0 => "lower_left",
+        1 => "lower_middle",
+        2 => "lower_right",
+        3 => "middle_left",
+        4 => "center",
+        5 => "middle_right",
+        6 => "upper_left",
+        7 => "upper_middle",
+        8 => "upper_right",
+        _ => return None,
+    };
+    let segment_resolution = resolutions.get(segment_key)?;
+    let width = as_nonzero_usize(segment_resolution.get("width"))?;
+    let height = as_nonzero_usize(segment_resolution.get("height"))?;
+    let channels = if sub_unit_index == 4 {
+        color_channel_count_from_value(payload.get("center_color_channel"))?
+    } else {
+        color_channel_count_from_value(payload.get("peripheral_color_channels"))?
+    };
+    Some((width, height, channels))
+}
+
+/// Audio spectrum areas are `bin_count x phase_steps x 1` from the registered
+/// `{"AudioSpectrum": {...}}` properties (encoder or decoder).
+fn extract_audio_spectrum_dimensions(coder_properties: &Value) -> Option<(usize, usize, usize)> {
+    let payload = encoder_variant_payload(coder_properties, "AudioSpectrum")?;
+    let columns = as_nonzero_usize(payload.get("bin_count"))?;
+    let phase_steps = as_nonzero_usize(payload.get("phase_steps"))?;
+    Some((columns, phase_steps, 1))
+}
+
+fn clamp_to_unit_topology(
+    dims: (usize, usize, usize),
+    unit_topology: &UnitTopology,
+) -> (usize, usize, usize) {
+    let clamp_axis = |value: usize, axis: usize| {
+        let min = unit_topology.channel_dimensions_min[axis].max(1) as usize;
+        let max = unit_topology.channel_dimensions_max[axis].max(1) as usize;
+        value.clamp(min, max)
+    };
+    (
+        clamp_axis(dims.0, 0),
+        clamp_axis(dims.1, 1),
+        clamp_axis(dims.2, 2),
+    )
+}
+
+fn extract_misc_dimensions(encoder_properties: &Value) -> Option<(usize, usize, usize)> {
+    let payload = encoder_variant_payload(encoder_properties, "MiscData")?;
+    let width = as_nonzero_usize(payload.get("width"))?;
+    let height = as_nonzero_usize(payload.get("height"))?;
+    let depth = as_nonzero_usize(payload.get("depth"))?;
+    Some((width, height, depth))
+}
+
+/// Extract the registered Z depth from a `JSONEncoderProperties::Percentage` tuple.
+///
+/// Percentage encoders serialize as `{"Percentage": [NeuronDepth, ...]}`. The
+/// cortical area must use this depth because the connector encodes samples using
+/// the same value; retaining a template depth would produce out-of-bounds sensory
+/// voxel coordinates.
+fn extract_percentage_depth(encoder_properties: &Value) -> Option<usize> {
+    let payload = encoder_variant_payload(encoder_properties, "Percentage")?;
+    if let Some(depth_json) = payload.as_array().and_then(|items| items.first()) {
+        return percentage_tuple_first_depth_u32(depth_json)
+            .filter(|depth| *depth > 0)
+            .map(|depth| depth as usize);
+    }
+    payload
+        .get("depth")
+        .or_else(|| payload.get("value"))
+        .and_then(percentage_tuple_first_depth_u32)
+        .filter(|depth| *depth > 0)
+        .map(|depth| depth as usize)
+}
+
+/// Per-channel X width of a signed `JSONEncoderProperties::Percentage` encoder.
+///
+/// The tuple serializes as `[NeuronDepth, positioning, is_signed, dimensionality]`.
+/// `PercentageNeuronVoxelXYZPEncoder::channel_width` lays a signed value out as a
+/// plus column and a minus column per component, so a `SignedPercentage3D`
+/// gyroscope streams 6 columns and a `SignedPercentage4D` quaternion streams 8.
+/// The one exception is signed 1D Linear, which carries the sign along Z in a
+/// single column. Unsigned encoders return `None` so the template width applies
+/// (one column per component, which is what they stream).
+///
+/// Without this the RawIMU / SmartIMU areas were created at the template width
+/// (3 / 4) and FEAGI dropped every minus column: a negative pitch never reached
+/// the brain until someone widened the area by hand, and the next agent
+/// registration shrank it again.
+fn extract_signed_percentage_channel_width(encoder_properties: &Value) -> Option<usize> {
+    let payload = encoder_variant_payload(encoder_properties, "Percentage")?;
+    let items = payload.as_array()?;
+    let is_signed = items.get(2)?.as_bool()?;
+    if !is_signed {
+        return None;
+    }
+    let dimensions = match items.get(3)?.as_str()? {
+        "D1" => 1usize,
+        "D2" => 2,
+        "D3" => 3,
+        "D4" => 4,
+        _ => return None,
+    };
+    let positioning = items.get(1)?.as_str()?;
+    if dimensions == 1 && positioning == "Linear" {
+        return Some(1);
+    }
+    Some(dimensions * 2)
+}
+
+/// Scalar IPU width is one per-channel X column per registered device; Y/Z stay
+/// on the encoder result (Proximity/Servo depth, MiscData volume Z).
+fn apply_grouped_scalar_encoder_width(
+    resolved: (usize, usize, usize),
+    per_channel_x: usize,
+    device_count: usize,
+) -> (usize, usize, usize) {
+    (
+        (per_channel_x * device_count).max(1),
+        resolved.1,
+        resolved.2,
+    )
+}
+
+fn resolve_sensory_dimensions_from_encoder_properties(
+    encoder_properties: Option<&Value>,
+    sub_unit_index: usize,
+    fallback: (usize, usize, usize),
+) -> (usize, usize, usize) {
+    let Some(encoder_properties) = encoder_properties else {
+        return fallback;
+    };
+    extract_cartesian_plane_dimensions(encoder_properties)
+        .or_else(|| extract_segmented_vision_dimensions(encoder_properties, sub_unit_index))
+        .or_else(|| extract_audio_spectrum_dimensions(encoder_properties))
+        .or_else(|| extract_misc_dimensions(encoder_properties))
+        .or_else(|| {
+            extract_percentage_depth(encoder_properties).map(|depth| {
+                let width = extract_signed_percentage_channel_width(encoder_properties)
+                    .unwrap_or(fallback.0);
+                (width, fallback.1, depth)
+            })
+        })
+        .unwrap_or(fallback)
+}
+
+/// Per-channel geometry implied by a registration total and device count.
+///
+/// IO area width is `per_device_x * dev_count`. Y and Z are not scaled by device
+/// count, so a Servo encoder registered as `(6, 1, 20)` with 6 joints is
+/// `[1, 1, 20]` per device.
+fn registration_per_device_dimensions(
+    expected_dimensions: (usize, usize, usize),
+    device_count: usize,
+) -> (usize, usize, usize) {
+    let per_x = expected_dimensions.0 / device_count.max(1);
+    (per_x.max(1), expected_dimensions.1, expected_dimensions.2)
+}
+
+/// Structural update payload so agent registration replaces leftover genome geometry.
+///
+/// Localized rebuild scales totals from `cortical_dimensions_per_device` whenever
+/// `dev_count` is present. Sending only `dimensions` leaves stale per-device Z
+/// (xARM Servo encoder stayed at depth 10 after the controller registered 20).
+fn registration_dimension_changes(
+    expected_dimensions: (usize, usize, usize),
+    device_count: usize,
+) -> HashMap<String, serde_json::Value> {
+    let per_device = registration_per_device_dimensions(expected_dimensions, device_count);
+    let mut changes = HashMap::new();
+    changes.insert(
+        "dimensions".to_string(),
+        serde_json::json!([
+            expected_dimensions.0,
+            expected_dimensions.1,
+            expected_dimensions.2
+        ]),
+    );
+    changes.insert(
+        "cortical_dimensions_per_device".to_string(),
+        serde_json::json!([per_device.0, per_device.1, per_device.2]),
+    );
+    changes.insert(
+        "dev_count".to_string(),
+        serde_json::Value::Number(serde_json::Number::from(device_count)),
+    );
+    changes
+}
+
+pub async fn auto_create_cortical_areas_from_device_registrations(
+    state: &ApiState,
+    device_registrations: &serde_json::Value,
+) {
+    let config = match load_config(None, None) {
+        Ok(config) => config,
+        Err(e) => {
+            warn!(
+                "⚠️ [API] Failed to load FEAGI configuration for auto-create: {}",
+                e
+            );
+            return;
+        }
+    };
+
+    if !config.agent.auto_create_missing_cortical_areas {
+        return;
+    }
+
+    let connectome_service = state.connectome_service.as_ref();
+    let genome_service = state.genome_service.as_ref();
+
+    // Get root region ID so auto-created OPU/IPU areas appear in root (fixes power area disappearing in BV)
+    let root_region_id = connectome_service.get_root_region_id().await.ok().flatten();
+    let existing_segmented_vision_yz_by_subunit = connectome_service
+        .list_cortical_areas()
+        .await
+        .ok()
+        .and_then(|areas| {
+            let mut grouped_yz_by_group: HashMap<u16, HashMap<u8, (i32, i32)>> = HashMap::new();
+
+            for area in areas {
+                let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
+                    continue;
+                };
+                let bytes = cortical_id.as_bytes();
+                if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+                    continue;
+                }
+                let subunit_index = *cortical_id.io_cortical_sub_unit_index();
+                let group_index = *cortical_id.io_cortical_unit_index();
+                grouped_yz_by_group
+                    .entry(group_index)
+                    .or_default()
+                    .insert(subunit_index, (area.position.1, area.position.2));
+            }
+
+            // Deterministically pick one existing segmented-vision group as alignment anchor:
+            // prefer the group with most subunits; ties resolved by lower group index.
+            let selected_group = grouped_yz_by_group
+                .iter()
+                .max_by(|(group_a, map_a), (group_b, map_b)| {
+                    map_a
+                        .len()
+                        .cmp(&map_b.len())
+                        .then_with(|| group_b.cmp(group_a))
+                })
+                .map(|(group_index, _)| *group_index)?;
+            let selected_map = grouped_yz_by_group.remove(&selected_group)?;
+            if selected_map.len()
+                == SensoryCorticalUnit::SegmentedVision.get_number_cortical_areas()
+            {
+                Some(selected_map)
+            } else {
+                None
+            }
+        });
+
+    let output_units = device_registrations
+        .get("output_units_and_decoder_properties")
+        .and_then(|v| v.as_object());
+    let input_units = device_registrations
+        .get("input_units_and_encoder_properties")
+        .and_then(|v| v.as_object());
+    if output_units.is_none() && input_units.is_none() {
+        return;
+    }
+
+    // For each (limb / motor_servo_group_id, PositionalServo sub-unit): resolved OPU
+    // min-corner position (matches grouped Servo motor_servo_group_id + jointpos/jointvel → sub 0/1).
+    let mut positional_servo_subarea_world_position: HashMap<(u16, u8), (i32, i32, i32)> =
+        HashMap::new();
+
+    // Build creation params for missing OPU areas based on default topologies.
+    let mut to_create: Vec<CreateCorticalAreaParams> = Vec::new();
+
+    if let Some(output_units) = output_units {
+        for (motor_unit_key, unit_defs) in output_units {
+            // MotorCorticalUnit is serde-deserializable from its string representation.
+            let motor_unit: MotorCorticalUnit = match serde_json::from_value::<MotorCorticalUnit>(
+                serde_json::Value::String(motor_unit_key.clone()),
+            ) {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(
+                    "⚠️ [API] Unable to parse MotorCorticalUnit key '{}' from device_registrations: {}",
+                    motor_unit_key, e
+                );
+                    continue;
+                }
+            };
+
+            let Some(unit_defs_arr) = unit_defs.as_array() else {
+                continue;
+            };
+
+            for entry in unit_defs_arr {
+                // Expected shape: [<unit_definition>, <decoder_properties>]
+                let Some(pair) = entry.as_array() else {
+                    continue;
+                };
+                let Some(unit_def) = pair.first() else {
+                    continue;
+                };
+                let decoder_properties = pair.get(1);
+                let Some(group_u64) = unit_def.get("cortical_unit_index").and_then(|v| v.as_u64())
+                else {
+                    continue;
+                };
+                let group_u16: u16 = match group_u64.try_into() {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let group: CorticalUnitIndex = group_u16.into();
+
+                let device_count =
+                    motor_registration_device_count(motor_unit, unit_def, decoder_properties);
+                if device_count == 0 {
+                    warn!(
+                    "⚠️ [API] device_grouping is empty for motor unit '{}' group {}; skipping auto-create",
+                    motor_unit_key, group_u16
+                );
+                    continue;
+                }
+
+                let config_map = match build_io_config_map_from_unit_def(unit_def) {
+                    Ok(map) => map,
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to build motor IO config map from registration for '{}' group {}: {}",
+                            motor_unit_key, group_u16, e
+                        );
+                        continue;
+                    }
+                };
+                let frame_handling = config_map
+                    .get("frame_change_handling")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                let topology = motor_unit.get_unit_default_topology();
+
+                let cortical_ids = match motor_unit
+                    .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+                        group, config_map,
+                    ) {
+                    Ok(ids) => ids,
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to derive motor cortical IDs for '{}' group {}: {}",
+                            motor_unit_key, group_u16, e
+                        );
+                        continue;
+                    }
+                };
+
+                // Precompute dimensions and positions for all sub-areas in this
+                // motor unit/group. Keep a guaranteed X-gap between neighboring
+                // areas regardless of their computed width.
+                let mut expected_dimensions_by_sub: Vec<Option<(usize, usize, usize)>> =
+                    vec![None; cortical_ids.len()];
+                let mut expected_position_by_sub: Vec<Option<(i32, i32, i32)>> =
+                    vec![None; cortical_ids.len()];
+                let mut previous_position_x: Option<i32> = None;
+                let mut previous_width: Option<i32> = None;
+                for i in 0..cortical_ids.len() {
+                    let sub_index = CorticalSubUnitIndex::from(i as u8);
+                    let Some(unit_topology) = topology.get(&sub_index) else {
+                        continue;
+                    };
+                    let (per_channel_width, per_channel_height, per_channel_depth) =
+                        registered_motor_channel_dimensions(
+                            motor_unit,
+                            unit_topology,
+                            decoder_properties,
+                            frame_handling.as_deref(),
+                        );
+                    let expected_dimensions = (
+                        (per_channel_width * device_count).max(1),
+                        per_channel_height,
+                        per_channel_depth,
+                    );
+                    expected_dimensions_by_sub[i] = Some(expected_dimensions);
+
+                    let y = unit_topology.relative_position[1] + (group_u16 as i32 * 20);
+                    let z = unit_topology.relative_position[2];
+                    let width_i32 = expected_dimensions.0 as i32;
+                    let x = if let (Some(prev_x), Some(_prev_w)) =
+                        (previous_position_x, previous_width)
+                    {
+                        // Areas are anchored from their minimum X and extend to +X.
+                        // To keep a fixed empty gap when placing current area on the
+                        // left of previous area:
+                        // current_x + current_width + gap <= previous_x
+                        prev_x - width_i32 - MOTOR_AREA_X_GAP_VOXELS
+                    } else {
+                        unit_topology.relative_position[0]
+                    };
+                    expected_position_by_sub[i] =
+                        Some(if motor_unit == MotorCorticalUnit::SpatialPointer {
+                            spatial_pointer_world_position(
+                                unit_topology.relative_position,
+                                frame_handling.as_deref(),
+                                spatial_pointer_decoder_width(decoder_properties),
+                            )
+                        } else if motor_unit == MotorCorticalUnit::AngularPointer {
+                            angular_pointer_world_position(
+                                unit_topology.relative_position,
+                                frame_handling.as_deref(),
+                            )
+                        } else {
+                            (x, y, z)
+                        });
+                    previous_position_x = Some(x);
+                    previous_width = Some(width_i32);
+                }
+
+                if motor_unit == MotorCorticalUnit::PositionalServo {
+                    for (sub_i, pos_opt) in expected_position_by_sub.iter().enumerate() {
+                        if let Some(pos) = *pos_opt {
+                            positional_servo_subarea_world_position
+                                .insert((group_u16, sub_i as u8), pos);
+                        }
+                    }
+                }
+
+                for (i, cortical_id) in cortical_ids.iter().enumerate() {
+                    let cortical_id_b64 = cortical_id.as_base_64();
+                    let legacy_default_name =
+                        build_friendly_unit_name(motor_unit.get_friendly_name(), group_u16, i);
+                    let registration_default_name = build_motor_registration_default_name(
+                        motor_unit,
+                        group_u16,
+                        i,
+                        frame_handling.as_deref(),
+                        spatial_pointer_decoder_width(decoder_properties),
+                    );
+                    let resolved_base_name = resolve_registration_name_with_placeholders(
+                        unit_def,
+                        &registration_default_name,
+                        motor_unit == MotorCorticalUnit::SpatialPointer
+                            || motor_unit == MotorCorticalUnit::AngularPointer,
+                    );
+                    let resolved_name =
+                        if motor_unit == MotorCorticalUnit::PositionalServo && i == 2 {
+                            match non_empty_string(unit_def.get("friendly_name")) {
+                                Some(name) => format!("{name} Speed"),
+                                None => "Positional Servo Speed".to_string(),
+                            }
+                        } else if resolved_base_name == registration_default_name
+                            || cortical_ids.len() == 1
+                        {
+                            resolved_base_name.clone()
+                        } else {
+                            format!("{}-{}", resolved_base_name, i)
+                        };
+                    let exists = match connectome_service
+                        .cortical_area_exists(&cortical_id_b64)
+                        .await
+                    {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!(
+                                "⚠️ [API] Failed to check cortical area existence for '{}': {}",
+                                cortical_id_b64, e
+                            );
+                            continue;
+                        }
+                    };
+
+                    let sub_index = CorticalSubUnitIndex::from(i as u8);
+                    let unit_topology = match topology.get(&sub_index) {
+                        Some(t) => t,
+                        None => {
+                            warn!(
+                                "⚠️ [API] Missing unit topology for motor unit '{}' subunit {}; skipping",
+                                motor_unit_key, i
+                            );
+                            continue;
+                        }
+                    };
+                    let expected_position = match expected_position_by_sub.get(i).and_then(|v| *v) {
+                        Some(pos) => pos,
+                        None => {
+                            warn!(
+                                "⚠️ [API] Missing precomputed motor position for '{}' subunit {}; skipping",
+                                motor_unit_key, i
+                            );
+                            continue;
+                        }
+                    };
+                    let expected_dimensions = match expected_dimensions_by_sub
+                        .get(i)
+                        .and_then(|v| *v)
+                    {
+                        Some(dims) => dims,
+                        None => {
+                            warn!(
+                                "⚠️ [API] Missing precomputed motor dimensions for '{}' subunit {}; skipping",
+                                motor_unit_key, i
+                            );
+                            continue;
+                        }
+                    };
+
+                    if exists {
+                        // Area exists: reconcile structural properties from registrations.
+                        // Preserve user-defined layout by not mutating existing position.
+                        // If a genome was loaded with wrong dimensions (e.g. 1 channel per limb),
+                        // update to the correct channel count from device_grouping.
+                        let current =
+                            match connectome_service.get_cortical_area(&cortical_id_b64).await {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    warn!(
+                                        "⚠️ [API] Failed to fetch existing cortical area '{}': {}",
+                                        cortical_id_b64, e
+                                    );
+                                    continue;
+                                }
+                            };
+
+                        let current_dev_count = current
+                            .properties
+                            .get("dev_count")
+                            .and_then(|v| v.as_u64())
+                            .map(|u| u as usize)
+                            .or(current.dev_count);
+                        let expected_per_device =
+                            registration_per_device_dimensions(expected_dimensions, device_count);
+                        let dimensions_mismatch = current.dimensions != expected_dimensions;
+                        let dev_count_mismatch = current_dev_count != Some(device_count);
+                        let per_device_mismatch =
+                            current.cortical_dimensions_per_device != Some(expected_per_device);
+
+                        if dimensions_mismatch || dev_count_mismatch || per_device_mismatch {
+                            let changes =
+                                registration_dimension_changes(expected_dimensions, device_count);
+                            if let Err(e) = genome_service
+                                .update_cortical_area(&cortical_id_b64, changes)
+                                .await
+                            {
+                                warn!(
+                                    "⚠️ [API] Failed to update cortical area '{}' dimensions/dev_count: {}",
+                                    cortical_id_b64, e
+                                );
+                            } else {
+                                info!(
+                                    "[API] Updated cortical area '{}' to {} channels (dimensions {:?})",
+                                    cortical_id_b64, device_count, expected_dimensions
+                                );
+                            }
+                        }
+
+                        // Auto-rename if current name is placeholder (== cortical_id).
+                        if should_auto_rename_motor(
+                            &current.name,
+                            &cortical_id_b64,
+                            &legacy_default_name,
+                            &resolved_name,
+                        ) {
+                            let desired_name = resolved_name.clone();
+                            let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
+                            changes.insert(
+                                "name".to_string(),
+                                serde_json::Value::String(desired_name),
+                            );
+                            if let Err(e) = genome_service
+                                .update_cortical_area(&cortical_id_b64, changes)
+                                .await
+                            {
+                                warn!(
+                                    "⚠️ [API] Failed to auto-rename existing motor cortical area '{}': {}",
+                                    cortical_id_b64, e
+                                );
+                            }
+                        }
+                        continue;
+                    }
+
+                    let friendly_name = resolved_name;
+                    let (per_channel_width, per_channel_height, per_channel_depth) =
+                        registered_motor_channel_dimensions(
+                            motor_unit,
+                            unit_topology,
+                            decoder_properties,
+                            frame_handling.as_deref(),
+                        );
+                    let dimensions = expected_dimensions;
+                    let per_device_dims =
+                        (per_channel_width, per_channel_height, per_channel_depth);
+                    let position = expected_position;
+
+                    let mut properties = HashMap::new();
+                    properties.insert(
+                        "dev_count".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(device_count)),
+                    );
+                    properties.insert(
+                        "cortical_dimensions_per_device".to_string(),
+                        serde_json::json!([
+                            per_device_dims.0,
+                            per_device_dims.1,
+                            per_device_dims.2
+                        ]),
+                    );
+                    if let Some(unit_name) = non_empty_string(unit_def.get("friendly_name")) {
+                        properties.insert(
+                            "registration_unit_friendly_name".to_string(),
+                            serde_json::Value::String(unit_name),
+                        );
+                    }
+                    if let Some(bundle_id) = first_grouping_property(unit_def, "bundle_id") {
+                        properties.insert(
+                            "registration_bundle_id".to_string(),
+                            serde_json::Value::String(bundle_id),
+                        );
+                    }
+                    if let Some(bundle_type) = first_grouping_property(unit_def, "bundle_type") {
+                        properties.insert(
+                            "registration_bundle_type".to_string(),
+                            serde_json::Value::String(bundle_type),
+                        );
+                    }
+                    if let Some(ref rid) = root_region_id {
+                        properties.insert(
+                            "parent_region_id".to_string(),
+                            serde_json::Value::String(rid.clone()),
+                        );
+                    }
+
+                    to_create.push(CreateCorticalAreaParams {
+                        cortical_id: cortical_id_b64.clone(),
+                        name: friendly_name,
+                        dimensions,
+                        position,
+                        area_type: "motor".to_string(),
+                        visible: None,
+                        sub_group: None,
+                        neurons_per_voxel: None,
+                        postsynaptic_current: None,
+                        plasticity_constant: None,
+                        degeneration: None,
+                        psp_uniform_distribution: None,
+                        firing_threshold_increment: None,
+                        firing_threshold_limit: None,
+                        consecutive_fire_count: None,
+                        snooze_period: None,
+                        refractory_period: None,
+                        leak_coefficient: None,
+                        leak_variability: None,
+                        burst_engine_active: None,
+                        properties: Some(properties),
+                    });
+                }
+            }
+        }
+    }
+
+    // Build creation params for missing IPU areas based on default topologies.
+    if let Some(input_units) = input_units {
+        for (sensory_unit_key, unit_defs) in input_units {
+            let sensory_unit: SensoryCorticalUnit = match serde_json::from_value::<
+                SensoryCorticalUnit,
+            >(serde_json::Value::String(
+                sensory_unit_key.clone(),
+            )) {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(
+                            "⚠️ [API] Unable to parse SensoryCorticalUnit key '{}' from device_registrations: {}",
+                            sensory_unit_key, e
+                        );
+                    continue;
+                }
+            };
+
+            let Some(unit_defs_arr) = unit_defs.as_array() else {
+                continue;
+            };
+
+            for entry in unit_defs_arr {
+                // Expected shape: [<unit_definition>, <encoder_properties>]
+                let Some(pair) = entry.as_array() else {
+                    continue;
+                };
+                let Some(unit_def) = pair.first() else {
+                    continue;
+                };
+                let encoder_properties = pair.get(1);
+                let Some(group_u64) = unit_def.get("cortical_unit_index").and_then(|v| v.as_u64())
+                else {
+                    continue;
+                };
+                let group_u16: u16 = match group_u64.try_into() {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let group: CorticalUnitIndex = group_u16.into();
+
+                let device_count = unit_def
+                    .get("device_grouping")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                if device_count == 0 {
+                    warn!(
+                        "⚠️ [API] device_grouping is empty for sensory unit '{}' group {}; skipping auto-create for this entry (SmartIMU/vision/IR need non-empty grouping from connector export)",
+                        sensory_unit_key, group_u16
+                    );
+                    continue;
+                }
+
+                let config_map = match build_io_config_map_from_unit_def(unit_def) {
+                    Ok(map) => map,
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to build sensory IO config map from registration for '{}' group {}: {}",
+                            sensory_unit_key, group_u16, e
+                        );
+                        continue;
+                    }
+                };
+                let cortical_ids = match sensory_unit
+                    .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+                        group, config_map,
+                    ) {
+                    Ok(ids) => ids,
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to derive sensory cortical IDs for '{}' group {}: {}",
+                            sensory_unit_key, group_u16, e
+                        );
+                        continue;
+                    }
+                };
+                let topology = sensory_unit.get_unit_default_topology();
+                let segmented_group_x_offsets =
+                    if sensory_unit == SensoryCorticalUnit::SegmentedVision {
+                        // For each segmented-vision group, compute the assembly min/max X bounds based on
+                        // template relative positions and effective per-subunit dimensions.
+                        let mut bounds_by_group: Vec<(u16, i32, i32)> = Vec::new();
+                        for grouped_entry in unit_defs_arr {
+                            let Some(grouped_pair) = grouped_entry.as_array() else {
+                                continue;
+                            };
+                            let Some(grouped_def) = grouped_pair.first() else {
+                                continue;
+                            };
+                            let Some(grouped_u64) = grouped_def
+                                .get("cortical_unit_index")
+                                .and_then(|v| v.as_u64())
+                            else {
+                                continue;
+                            };
+                            let Ok(grouped_u16) = u16::try_from(grouped_u64) else {
+                                continue;
+                            };
+                            let grouped_encoder_properties = grouped_pair.get(1);
+
+                            let mut assembly_min_x: Option<i32> = None;
+                            let mut assembly_max_x: Option<i32> = None;
+                            for (sub_index, unit_topology) in &topology {
+                                let sub_idx_usize = sub_index.get() as usize;
+                                let dimensions = resolve_sensory_dimensions_from_encoder_properties(
+                                    grouped_encoder_properties,
+                                    sub_idx_usize,
+                                    (
+                                        unit_topology.channel_dimensions_default[0] as usize,
+                                        unit_topology.channel_dimensions_default[1] as usize,
+                                        unit_topology.channel_dimensions_default[2] as usize,
+                                    ),
+                                );
+                                let rel_x = unit_topology.relative_position[0];
+                                let right_edge_x = rel_x.saturating_add(dimensions.0 as i32);
+
+                                assembly_min_x = Some(match assembly_min_x {
+                                    Some(current) => current.min(rel_x),
+                                    None => rel_x,
+                                });
+                                assembly_max_x = Some(match assembly_max_x {
+                                    Some(current) => current.max(right_edge_x),
+                                    None => right_edge_x,
+                                });
+                            }
+
+                            if let (Some(min_x), Some(max_x)) = (assembly_min_x, assembly_max_x) {
+                                bounds_by_group.push((grouped_u16, min_x, max_x));
+                            }
+                        }
+
+                        // Sort by cortical unit index so lower-index segmented assemblies stay left and
+                        // higher-index assemblies are shifted to the right with a fixed gap.
+                        bounds_by_group.sort_by_key(|(grouped_u16, _, _)| *grouped_u16);
+
+                        let mut offsets: HashMap<u16, i32> = HashMap::new();
+                        let mut previous_shifted_max_x: Option<i32> = None;
+                        for (grouped_u16, min_x, max_x) in bounds_by_group {
+                            let offset_x = if let Some(prev_max_x) = previous_shifted_max_x {
+                                prev_max_x + SEGMENTED_VISION_GROUP_X_GAP_VOXELS - min_x
+                            } else {
+                                0
+                            };
+                            previous_shifted_max_x = Some(max_x.saturating_add(offset_x));
+                            offsets.insert(grouped_u16, offset_x);
+                        }
+                        offsets
+                    } else {
+                        HashMap::new()
+                    };
+
+                for (i, cortical_id) in cortical_ids.iter().enumerate() {
+                    let cortical_id_b64 = cortical_id.as_base_64();
+                    let sub_index = CorticalSubUnitIndex::from(i as u8);
+                    let unit_topology = match topology.get(&sub_index) {
+                        Some(topology) => topology,
+                        None => {
+                            warn!(
+                                "⚠️ [API] Missing unit topology for sensory unit '{}' subunit {} (agent device_registrations); cannot auto-create/update '{}'",
+                                sensory_unit_key, i, cortical_id_b64
+                            );
+                            continue;
+                        }
+                    };
+                    let template_w = unit_topology.channel_dimensions_default[0] as usize;
+                    let template_h = unit_topology.channel_dimensions_default[1] as usize;
+                    let template_d = unit_topology.channel_dimensions_default[2] as usize;
+                    let mut expected_dimensions =
+                        resolve_sensory_dimensions_from_encoder_properties(
+                            encoder_properties,
+                            i,
+                            (template_w, template_h, template_d),
+                        );
+                    // Grouped scalar strips: one X column per device. Percentage
+                    // encoders only pin Z depth, so a non-template depth (e.g. 50)
+                    // must not skip the width expand or the IPU collapses to 1
+                    // device (Servo). The same expand applies to Proximity and
+                    // MiscData so N-channel encoder IPUs match motor OPU width,
+                    // and to RawIMU / SmartIMU, whose encoders write channel
+                    // `c` at `c * channel_width` (6 or 8 columns per site).
+                    if matches!(
+                        sensory_unit,
+                        SensoryCorticalUnit::Servo
+                            | SensoryCorticalUnit::Proximity
+                            | SensoryCorticalUnit::MiscData
+                            | SensoryCorticalUnit::RawIMU
+                            | SensoryCorticalUnit::SmartIMU
+                    ) {
+                        let per_channel_x = if sensory_unit == SensoryCorticalUnit::Servo {
+                            template_w
+                        } else {
+                            expected_dimensions.0
+                        };
+                        expected_dimensions = apply_grouped_scalar_encoder_width(
+                            expected_dimensions,
+                            per_channel_x,
+                            device_count,
+                        );
+                    }
+                    let group_x_offset = *segmented_group_x_offsets.get(&group_u16).unwrap_or(&0);
+                    let existing_segmented_yz =
+                        if sensory_unit == SensoryCorticalUnit::SegmentedVision {
+                            existing_segmented_vision_yz_by_subunit
+                                .as_ref()
+                                .and_then(|yz_by_subunit| yz_by_subunit.get(&(i as u8)).copied())
+                        } else {
+                            None
+                        };
+                    let base_expected_position = (
+                        unit_topology.relative_position[0] + group_x_offset,
+                        existing_segmented_yz
+                            .map(|(y, _)| y)
+                            .unwrap_or(unit_topology.relative_position[1]),
+                        existing_segmented_yz
+                            .map(|(_, z)| z)
+                            .unwrap_or(unit_topology.relative_position[2]),
+                    );
+                    let mut expected_position = base_expected_position;
+                    if sensory_unit == SensoryCorticalUnit::Servo {
+                        if let (Some(motor_gid), Some(ref tag)) = (
+                            motor_servo_group_id_u8_from_first_channel(unit_def),
+                            primary_sensor_tag_first_channel(unit_def),
+                        ) {
+                            if let Some(motor_sub) = servo_motor_subunit_index_for_servo_tag(tag) {
+                                if let Some((mx, my, mz)) = positional_servo_subarea_world_position
+                                    .get(&(motor_gid, motor_sub))
+                                    .copied()
+                                {
+                                    expected_position = (
+                                        mx + SERVO_ENCODER_X_OFFSET_FROM_MATCHED_MOTOR_VOXELS,
+                                        my,
+                                        mz,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    let legacy_default_name =
+                        build_friendly_unit_name(sensory_unit.get_friendly_name(), group_u16, i);
+                    let registration_default_name =
+                        build_sensory_registration_default_name(sensory_unit, group_u16, i);
+                    let resolved_base_name = resolve_registration_name_with_placeholders(
+                        unit_def,
+                        &registration_default_name,
+                        sensory_unit == SensoryCorticalUnit::CartesianPosition,
+                    );
+                    let resolved_name =
+                        if resolved_base_name == legacy_default_name || cortical_ids.len() == 1 {
+                            resolved_base_name.clone()
+                        } else {
+                            format!("{}-{}", resolved_base_name, i)
+                        };
+                    let exists = match connectome_service
+                        .cortical_area_exists(&cortical_id_b64)
+                        .await
+                    {
+                        Ok(v) => v,
+                        Err(e) => {
+                            warn!(
+                                "⚠️ [API] Failed to check cortical area existence for '{}': {}",
+                                cortical_id_b64, e
+                            );
+                            continue;
+                        }
+                    };
+
+                    if exists {
+                        // Area exists: reconcile structural properties from registrations.
+                        // Preserve user-defined layout by not mutating existing position.
+                        // This keeps pre-existing sensory areas aligned with declared capabilities.
+                        let current = match connectome_service
+                            .get_cortical_area(&cortical_id_b64)
+                            .await
+                        {
+                            Ok(v) => v,
+                            Err(e) => {
+                                warn!(
+                                    "⚠️ [API] Failed to fetch existing cortical area '{}' for potential rename: {}",
+                                    cortical_id_b64, e
+                                );
+                                continue;
+                            }
+                        };
+                        let current_dev_count = current
+                            .properties
+                            .get("dev_count")
+                            .and_then(|v| v.as_u64())
+                            .map(|u| u as usize)
+                            .or(current.dev_count);
+                        let expected_per_device =
+                            registration_per_device_dimensions(expected_dimensions, device_count);
+                        let dimensions_mismatch = current.dimensions != expected_dimensions;
+                        let dev_count_mismatch = current_dev_count != Some(device_count);
+                        let per_device_mismatch =
+                            current.cortical_dimensions_per_device != Some(expected_per_device);
+                        if dimensions_mismatch || dev_count_mismatch || per_device_mismatch {
+                            let changes =
+                                registration_dimension_changes(expected_dimensions, device_count);
+                            if let Err(e) = genome_service
+                                .update_cortical_area(&cortical_id_b64, changes)
+                                .await
+                            {
+                                warn!(
+                                    "⚠️ [API] Failed to update sensory cortical area '{}' dimensions/dev_count: {}",
+                                    cortical_id_b64, e
+                                );
+                            } else {
+                                info!(
+                                    "[API] Updated sensory cortical area '{}' to registration dimensions {:?} (dev_count {})",
+                                    cortical_id_b64, expected_dimensions, device_count
+                                );
+                            }
+                        }
+
+                        // DepthMap migration: if an existing area still carries legacy threshold
+                        // defaults (or no per-axis increment), reconcile it to the template
+                        // defaults so reconnects immediately reflect expected activation.
+                        if sensory_unit == SensoryCorticalUnit::DepthMap {
+                            let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
+                            if let Some(default_firing_threshold) =
+                                sensory_unit.get_default_firing_threshold()
+                            {
+                                // Legacy DepthMap areas may carry historical defaults from
+                                // previous templates (e.g., 150.0) or generic sensory defaults
+                                // inherited from older runtime state (e.g., 35.0). Reconcile both.
+                                let legacy_threshold = current.firing_threshold;
+                                const LEGACY_THRESHOLD_TOLERANCE: f64 = 1e-3;
+                                let should_migrate_threshold = (legacy_threshold - 150.0).abs()
+                                    <= LEGACY_THRESHOLD_TOLERANCE
+                                    || (legacy_threshold - 35.0).abs()
+                                        <= LEGACY_THRESHOLD_TOLERANCE;
+                                if should_migrate_threshold {
+                                    changes.insert(
+                                        "firing_threshold".to_string(),
+                                        serde_json::json!(default_firing_threshold),
+                                    );
+                                }
+                            }
+                            if let Some(default_firing_threshold_increment) =
+                                sensory_unit.get_default_firing_threshold_increment()
+                            {
+                                let current_increment = current.firing_threshold_increment;
+                                const LEGACY_INCREMENT_TOLERANCE: f64 = 1e-6;
+                                let is_legacy_zero_increment = current_increment[0].abs()
+                                    <= LEGACY_INCREMENT_TOLERANCE
+                                    && current_increment[1].abs() <= LEGACY_INCREMENT_TOLERANCE
+                                    && current_increment[2].abs() <= LEGACY_INCREMENT_TOLERANCE;
+                                if is_legacy_zero_increment {
+                                    changes.insert(
+                                        "firing_threshold_increment_x".to_string(),
+                                        serde_json::json!(default_firing_threshold_increment[0]),
+                                    );
+                                    changes.insert(
+                                        "firing_threshold_increment_y".to_string(),
+                                        serde_json::json!(default_firing_threshold_increment[1]),
+                                    );
+                                    changes.insert(
+                                        "firing_threshold_increment_z".to_string(),
+                                        serde_json::json!(default_firing_threshold_increment[2]),
+                                    );
+                                }
+                            }
+                            if !changes.is_empty() {
+                                if let Err(e) = genome_service
+                                    .update_cortical_area(&cortical_id_b64, changes)
+                                    .await
+                                {
+                                    warn!(
+                                        "⚠️ [API] Failed to migrate existing depth-map cortical area '{}' threshold defaults: {}",
+                                        cortical_id_b64, e
+                                    );
+                                }
+                            }
+                        }
+
+                        // If the area already exists but still has a placeholder name (often equal to the cortical_id),
+                        // update it to a deterministic friendly name so UIs (e.g., Brain Visualizer) show readable labels.
+                        // IMPORTANT: We only auto-rename if the current name is clearly a placeholder.
+                        if should_auto_rename(&current.name, &cortical_id_b64, &legacy_default_name)
+                        {
+                            let desired_name = resolved_name.clone();
+                            let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
+                            changes.insert(
+                                "name".to_string(),
+                                serde_json::Value::String(desired_name),
+                            );
+                            if let Err(e) = genome_service
+                                .update_cortical_area(&cortical_id_b64, changes)
+                                .await
+                            {
+                                warn!(
+                                    "⚠️ [API] Failed to auto-rename existing sensory cortical area '{}': {}",
+                                    cortical_id_b64, e
+                                );
+                            }
+                        }
+                        continue;
+                    }
+
+                    let friendly_name = resolved_name;
+                    let dimensions = expected_dimensions;
+                    let position = expected_position;
+                    let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
+                    properties.insert(
+                        "cortical_subunit_index".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(sub_index.get())),
+                    );
+                    properties.insert(
+                        "dev_count".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(device_count)),
+                    );
+                    let per_device =
+                        registration_per_device_dimensions(expected_dimensions, device_count);
+                    properties.insert(
+                        "cortical_dimensions_per_device".to_string(),
+                        serde_json::json!([per_device.0, per_device.1, per_device.2]),
+                    );
+                    if let Some(unit_name) = non_empty_string(unit_def.get("friendly_name")) {
+                        properties.insert(
+                            "registration_unit_friendly_name".to_string(),
+                            serde_json::Value::String(unit_name),
+                        );
+                    }
+                    if let Some(bundle_id) = first_grouping_property(unit_def, "bundle_id") {
+                        properties.insert(
+                            "registration_bundle_id".to_string(),
+                            serde_json::Value::String(bundle_id),
+                        );
+                    }
+                    if let Some(bundle_type) = first_grouping_property(unit_def, "bundle_type") {
+                        properties.insert(
+                            "registration_bundle_type".to_string(),
+                            serde_json::Value::String(bundle_type),
+                        );
+                    }
+                    if let Some(ref rid) = root_region_id {
+                        properties.insert(
+                            "parent_region_id".to_string(),
+                            serde_json::Value::String(rid.clone()),
+                        );
+                    }
+                    if let Some(default_firing_threshold) =
+                        sensory_unit.get_default_firing_threshold()
+                    {
+                        properties.insert(
+                            "firing_threshold".to_string(),
+                            serde_json::json!(default_firing_threshold),
+                        );
+                    }
+                    if let Some(default_firing_threshold_increment) =
+                        sensory_unit.get_default_firing_threshold_increment()
+                    {
+                        properties.insert(
+                            "firing_threshold_increment_x".to_string(),
+                            serde_json::json!(default_firing_threshold_increment[0]),
+                        );
+                        properties.insert(
+                            "firing_threshold_increment_y".to_string(),
+                            serde_json::json!(default_firing_threshold_increment[1]),
+                        );
+                        properties.insert(
+                            "firing_threshold_increment_z".to_string(),
+                            serde_json::json!(default_firing_threshold_increment[2]),
+                        );
+                    }
+                    if let Some(default_mp_charge_accumulation) =
+                        sensory_unit.get_default_mp_charge_accumulation()
+                    {
+                        properties.insert(
+                            "mp_charge_accumulation".to_string(),
+                            serde_json::json!(default_mp_charge_accumulation),
+                        );
+                    }
+
+                    to_create.push(CreateCorticalAreaParams {
+                        cortical_id: cortical_id_b64.clone(),
+                        name: friendly_name,
+                        dimensions,
+                        position,
+                        area_type: "sensory".to_string(),
+                        visible: None,
+                        sub_group: None,
+                        neurons_per_voxel: None,
+                        postsynaptic_current: None,
+                        plasticity_constant: None,
+                        degeneration: None,
+                        psp_uniform_distribution: None,
+                        firing_threshold_increment: None,
+                        firing_threshold_limit: None,
+                        consecutive_fire_count: None,
+                        snooze_period: None,
+                        refractory_period: None,
+                        leak_coefficient: None,
+                        leak_variability: None,
+                        burst_engine_active: None,
+                        properties: Some(properties),
+                    });
+                }
+            }
+        }
+    }
+
+    if to_create.is_empty() {
+        sync_connectome_cortical_ids_to_npu();
+        return;
+    }
+
+    info!(
+        "🦀 [API] Auto-creating {} missing cortical areas from device registrations",
+        to_create.len()
+    );
+
+    if let Err(e) = genome_service.create_cortical_areas(to_create).await {
+        warn!(
+            "⚠️ [API] Failed to auto-create cortical areas from device registrations: {}",
+            e
+        );
+    }
+    sync_connectome_cortical_ids_to_npu();
+}
+
+/// Existing areas skip create. Their NPU name-map entries still have to exist
+/// before sensory injection addresses them.
+fn sync_connectome_cortical_ids_to_npu() {
+    let manager = feagi_brain_development::ConnectomeManager::instance();
+    let manager = manager.read();
+    match manager.sync_cortical_ids_to_npu() {
+        Ok(count) => info!(
+            "[API] Synced {} cortical IDs into the NPU name map after agent auto-create",
+            count
+        ),
+        Err(error) => warn!(
+            "[API] Failed to sync cortical IDs into the NPU name map: {}",
+            error
+        ),
+    }
+}
+
+pub fn derive_motor_cortical_ids_from_device_registrations(
+    device_registrations: &serde_json::Value,
+) -> Result<HashSet<String>, String> {
+    let output_units = device_registrations
+        .get("output_units_and_decoder_properties")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| {
+            "device_registrations missing output_units_and_decoder_properties".to_string()
+        })?;
+
+    let mut cortical_ids: HashSet<String> = HashSet::new();
+
+    for (motor_unit_key, unit_defs) in output_units {
+        let motor_unit: MotorCorticalUnit = serde_json::from_value::<MotorCorticalUnit>(
+            serde_json::Value::String(motor_unit_key.clone()),
+        )
+        .map_err(|e| {
+            format!(
+                "Unable to parse MotorCorticalUnit key '{}': {}",
+                motor_unit_key, e
+            )
+        })?;
+
+        let unit_defs_arr = unit_defs
+            .as_array()
+            .ok_or_else(|| "Motor unit definitions must be an array".to_string())?;
+
+        for entry in unit_defs_arr {
+            let pair = entry
+                .as_array()
+                .ok_or_else(|| "Motor unit definition entries must be arrays".to_string())?;
+            let unit_def = pair
+                .first()
+                .ok_or_else(|| "Motor unit definition entry missing unit_def".to_string())?;
+            let group_u64 = unit_def
+                .get("cortical_unit_index")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| "Motor unit definition missing cortical_unit_index".to_string())?;
+            let group_u16: u16 = group_u64
+                .try_into()
+                .map_err(|_| "Motor unit cortical_unit_index out of range for u16".to_string())?;
+            let group: CorticalUnitIndex = group_u16.into();
+
+            let device_count = unit_def
+                .get("device_grouping")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            if device_count == 0 {
+                return Err(format!(
+                    "device_grouping is empty for motor unit '{}' group {}",
+                    motor_unit_key, group_u16
+                ));
+            }
+
+            let config = build_io_config_map_from_unit_def(unit_def).map_err(|e| {
+                format!(
+                    "Failed to build motor IO config map from registration for '{}' group {}: {}",
+                    motor_unit_key, group_u16, e
+                )
+            })?;
+            let unit_cortical_ids = motor_unit
+                .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(group, config)
+                .map_err(|e| format!("Failed to derive cortical IDs: {}", e))?;
+            for cortical_id in unit_cortical_ids {
+                cortical_ids.insert(cortical_id.as_base_64());
+            }
+        }
+    }
+
+    Ok(cortical_ids)
+}
+
+pub fn derive_sensory_cortical_ids_from_device_registrations(
+    device_registrations: &serde_json::Value,
+) -> Result<HashSet<String>, String> {
+    let input_units = device_registrations
+        .get("input_units_and_encoder_properties")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| {
+            "device_registrations missing input_units_and_encoder_properties".to_string()
+        })?;
+
+    let mut cortical_ids: HashSet<String> = HashSet::new();
+
+    for (sensory_unit_key, unit_defs) in input_units {
+        let sensory_unit: SensoryCorticalUnit = serde_json::from_value::<SensoryCorticalUnit>(
+            serde_json::Value::String(sensory_unit_key.clone()),
+        )
+        .map_err(|e| {
+            format!(
+                "Unable to parse SensoryCorticalUnit key '{}': {}",
+                sensory_unit_key, e
+            )
+        })?;
+
+        let unit_defs_arr = unit_defs
+            .as_array()
+            .ok_or_else(|| "Sensory unit definitions must be an array".to_string())?;
+
+        for entry in unit_defs_arr {
+            let pair = entry
+                .as_array()
+                .ok_or_else(|| "Sensory unit definition entries must be arrays".to_string())?;
+            let unit_def = pair
+                .first()
+                .ok_or_else(|| "Sensory unit definition entry missing unit_def".to_string())?;
+            let group_u64 = unit_def
+                .get("cortical_unit_index")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| "Sensory unit definition missing cortical_unit_index".to_string())?;
+            let group_u16: u16 = group_u64
+                .try_into()
+                .map_err(|_| "Sensory unit cortical_unit_index out of range for u16".to_string())?;
+            let group: CorticalUnitIndex = group_u16.into();
+
+            let device_count = unit_def
+                .get("device_grouping")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            if device_count == 0 {
+                return Err(format!(
+                    "device_grouping is empty for sensory unit '{}' group {}",
+                    sensory_unit_key, group_u16
+                ));
+            }
+
+            let config = build_io_config_map_from_unit_def(unit_def).map_err(|e| {
+                format!(
+                    "Failed to build sensory IO config map from registration for '{}' group {}: {}",
+                    sensory_unit_key, group_u16, e
+                )
+            })?;
+            let unit_cortical_ids = sensory_unit
+                .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(group, config)
+                .map_err(|e| format!("Failed to derive cortical IDs: {}", e))?;
+            for cortical_id in unit_cortical_ids {
+                cortical_ids.insert(cortical_id.as_base_64());
+            }
+        }
+    }
+
+    Ok(cortical_ids)
+}
+
+#[cfg(test)]
+mod count_output_registration_tests {
+    use super::{
+        motor_registration_device_count, per_channel_motor_dimensions_for_registration,
+        registered_motor_channel_dimensions,
+    };
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
+    use feagi_structures::genomic::MotorCorticalUnit;
+    use serde_json::json;
+
+    #[test]
+    fn count_output_uses_percentage_tuple_depth_when_present() {
+        let motor = MotorCorticalUnit::CountOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"Percentage": [100u32, "Linear", false, "D1"]});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (1, 1, 100));
+    }
+
+    #[test]
+    fn count_output_reads_neuron_depth_serde_object_in_percentage_tuple() {
+        let motor = MotorCorticalUnit::CountOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        // Matches `serde_json::to_value(JSONDecoderProperties::Percentage(NeuronDepth::new(100)...))`.
+        let dec = json!({"Percentage": [{"value": 100u32}, "Linear", false, "D1"]});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (1, 1, 100));
+    }
+
+    #[test]
+    fn count_output_clamps_depth_to_template_max() {
+        let motor = MotorCorticalUnit::CountOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"Percentage": [5000u32, "Linear", false, "D1"]});
+        let (_w, _h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!(d, 1024);
+    }
+
+    #[test]
+    fn count_output_falls_back_to_defaults_when_decoder_missing() {
+        let motor = MotorCorticalUnit::CountOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, None);
+        assert_eq!((w, h, d), (1, 1, 10));
+    }
+
+    #[test]
+    fn non_count_motor_ignores_decoder() {
+        let motor = MotorCorticalUnit::RotaryMotor;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"Percentage": [99u32, "Linear", false, "D1"]});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (1, 1, 9));
+    }
+
+    #[test]
+    fn positional_servo_absolute_reads_target_speed_depth() {
+        let motor = MotorCorticalUnit::PositionalServo;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({
+            "PositionalServoTargetSpeed": [{"value": 100u32}, "Linear", [0.2], 0.05]
+        });
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (1, 1, 100));
+    }
+
+    #[test]
+    fn positional_servo_incremental_keeps_width_two_and_reads_depth() {
+        let motor = MotorCorticalUnit::PositionalServo;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(1u8)).unwrap();
+        let dec = json!({
+            "PositionalServoTargetSpeed": [{"value": 100u32}, "Linear", [0.2], 0.05]
+        });
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (2, 1, 100));
+    }
+
+    #[test]
+    fn positional_servo_reads_legacy_variant_depth() {
+        let motor = MotorCorticalUnit::PositionalServo;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"PositionalServo": [100u32, "Linear"]});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (1, 1, 100));
+    }
+
+    #[test]
+    fn positional_servo_uses_template_depth_when_decoder_missing() {
+        let motor = MotorCorticalUnit::PositionalServo;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, None);
+        assert_eq!((w, h, d), (1, 1, 20));
+    }
+
+    #[test]
+    fn object_segmentation_uses_misc_data_decoder_dimensions() {
+        let motor = MotorCorticalUnit::ObjectSegmentation;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"MiscData": {"width": 128u32, "height": 96u32, "depth": 1u32}});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (128, 96, 1));
+    }
+
+    #[test]
+    fn object_segmentation_is_one_layer_even_for_a_class_depth_decoder() {
+        let motor = MotorCorticalUnit::ObjectSegmentation;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"MiscData": {"width": 128u32, "height": 96u32, "depth": 12u32}});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (128, 96, 1));
+    }
+
+    #[test]
+    fn object_segmentation_clamps_misc_data_to_template_bounds() {
+        let motor = MotorCorticalUnit::ObjectSegmentation;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"MiscData": {"width": 9999u32, "height": 9999u32, "depth": 9999u32}});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (4096, 4096, 1));
+    }
+
+    fn audio_spectrum_block(bin_count: u32, phase_steps: u32) -> serde_json::Value {
+        json!({"AudioSpectrum": {
+            "bin_count": bin_count,
+            "phase_steps": phase_steps,
+            "sample_rate_hz": 16000u32,
+            "window_size": 1024u32,
+            "hop_size": 512u32,
+            "spacing": "Linear",
+            "min_frequency_hz": 0u32,
+            "max_frequency_hz": 8000u32,
+            "magnitude_floor_db": -80i32,
+            "magnitude_ceiling_db": 0i32
+        }})
+    }
+
+    #[test]
+    fn audio_output_uses_registered_columns_and_phase_steps() {
+        let motor = MotorCorticalUnit::AudioOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = audio_spectrum_block(1025, 32);
+        let dims = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!(dims, (1025, 32, 1));
+    }
+
+    #[test]
+    fn audio_output_clamps_to_template_bounds() {
+        let motor = MotorCorticalUnit::AudioOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = audio_spectrum_block(9999, 9999);
+        let dims = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!(dims, (4097, 256, 1));
+    }
+
+    #[test]
+    fn object_segmentation_falls_back_to_template_when_no_misc_data_decoder() {
+        let motor = MotorCorticalUnit::ObjectSegmentation;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, None);
+        assert_eq!((w, h, d), (32, 32, 1));
+    }
+
+    #[test]
+    fn spatial_pointer_uses_fixed_xy_and_decoder_depth() {
+        let motor = MotorCorticalUnit::SpatialPointer;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"SpatialPointer": {"depth": 32u32}});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (3, 1, 32));
+    }
+
+    #[test]
+    fn spatial_pointer_incremental_honors_six_wide_decoder_width() {
+        let motor = MotorCorticalUnit::SpatialPointer;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"SpatialPointer": {"width": 6u32, "height": 1u32, "depth": 32u32}});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (6, 1, 32));
+    }
+
+    #[test]
+    fn spatial_pointer_axis_entries_are_one_cortical_device() {
+        let unit_def = json!({
+            "device_grouping": [
+                {"friendly_name": "x"},
+                {"friendly_name": "y"},
+                {"friendly_name": "z"}
+            ]
+        });
+        assert_eq!(
+            motor_registration_device_count(MotorCorticalUnit::SpatialPointer, &unit_def, None),
+            1
+        );
+    }
+
+    #[test]
+    fn spatial_pointer_speed_uses_one_device_per_axis_group() {
+        let unit_def = json!({
+            "device_grouping": [
+                {"friendly_name": "x"},
+                {"friendly_name": "y"},
+                {"friendly_name": "z"}
+            ]
+        });
+        let decoder = json!({"SpatialPointer": {"width": 1u32, "height": 1u32, "depth": 100u32}});
+        assert_eq!(
+            motor_registration_device_count(
+                MotorCorticalUnit::SpatialPointer,
+                &unit_def,
+                Some(&decoder),
+            ),
+            3
+        );
+    }
+
+    #[test]
+    fn image_enhancement_absolute_is_three_slider_columns() {
+        let motor = MotorCorticalUnit::DynamicImageProcessing;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let (w, h, d) = registered_motor_channel_dimensions(motor, ut, None, Some("Absolute"));
+        assert_eq!((w, h, d), (3, 1, 10));
+    }
+
+    #[test]
+    fn image_enhancement_incremental_is_six_slider_columns() {
+        let motor = MotorCorticalUnit::DynamicImageProcessing;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let (w, h, d) = registered_motor_channel_dimensions(motor, ut, None, Some("Incremental"));
+        assert_eq!((w, h, d), (6, 1, 10));
+    }
+
+    #[test]
+    fn image_enhancement_depth_follows_the_decoder() {
+        let motor = MotorCorticalUnit::DynamicImageProcessing;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({
+            "ImageFilteringSettings": [{"value": 12}, {"value": 12}, {"value": 12}, "Linear"]
+        });
+        let (w, h, d) =
+            registered_motor_channel_dimensions(motor, ut, Some(&dec), Some("Absolute"));
+        assert_eq!((w, h, d), (3, 1, 12));
+    }
+}
+
+#[cfg(test)]
+mod sensory_registration_frame_mode_tests {
+    use super::derive_sensory_cortical_ids_from_device_registrations;
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+        FrameChangeHandling, PercentageNeuronPositioning,
+    };
+    use feagi_structures::genomic::SensoryCorticalUnit;
+    use serde_json::json;
+
+    #[test]
+    fn derive_sensory_ids_honors_incremental_frame_for_servo() {
+        let registration = json!({
+            "input_units_and_encoder_properties": {
+                "Servo": [[
+                    {
+                        "cortical_unit_index": 60,
+                        "io_configuration_flags": {
+                            "frame_change_handling": "Incremental",
+                            "percentage_neuron_positioning": "Linear"
+                        },
+                        "device_grouping": [
+                            {
+                                "friendly_name": "servo_encoder_incremental_right_shoulder",
+                                "device_properties": {
+                                    "bundle_id": "jointvel_right_shoulder"
+                                }
+                            }
+                        ]
+                    },
+                    {}
+                ]]
+            }
+        });
+
+        let expected_incremental =
+            SensoryCorticalUnit::get_cortical_ids_array_for_servo_with_parameters(
+                FrameChangeHandling::Incremental,
+                PercentageNeuronPositioning::Linear,
+                CorticalUnitIndex::from(60u16),
+            )[0]
+            .as_base_64();
+
+        let derived = derive_sensory_cortical_ids_from_device_registrations(&registration)
+            .expect("derive sensory IDs");
+
+        assert!(
+            derived.contains(&expected_incremental),
+            "Expected derived sensory IDs to include incremental Servo cortical ID {}",
+            expected_incremental
+        );
+    }
+}
+
+#[cfg(test)]
+mod sensory_dimension_extraction_tests {
+    use super::{
+        apply_grouped_scalar_encoder_width, resolve_sensory_dimensions_from_encoder_properties,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn audio_input_area_follows_encoder_columns_and_phase_steps() {
+        let encoder = json!({"AudioSpectrum": {
+            "bin_count": 513u32,
+            "phase_steps": 16u32,
+            "sample_rate_hz": 16000u32,
+            "window_size": 1024u32,
+            "hop_size": 512u32,
+            "spacing": "Linear",
+            "min_frequency_hz": 0u32,
+            "max_frequency_hz": 8000u32,
+            "magnitude_floor_db": -80i32,
+            "magnitude_ceiling_db": 0i32
+        }});
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (1, 1, 1));
+        assert_eq!(resolved, (513, 16, 1));
+    }
+
+    #[test]
+    fn resolve_sensory_dimensions_reads_misc_data_encoder_dimensions() {
+        let encoder = json!({
+            "MiscData": {
+                "width": 160,
+                "height": 120,
+                "depth": 48
+            }
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (64, 64, 64));
+        assert_eq!(resolved, (160, 120, 48));
+    }
+
+    #[test]
+    fn resolve_sensory_dimensions_reads_percentage_encoder_depth() {
+        let encoder = json!({
+            "Percentage": [{"value": 20}, "Linear", false, "D1"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (6, 1, 10));
+        assert_eq!(resolved, (6, 1, 20));
+    }
+
+    #[test]
+    fn resolve_sensory_dimensions_reads_percentage3d_encoder_depth() {
+        let encoder = json!({
+            "Percentage": [{"value": 100}, "Linear", false, "D3"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (3, 1, 10));
+        assert_eq!(resolved, (3, 1, 100));
+    }
+
+    /// RawIMU sub-areas: the signed 3D encoder streams plus/minus per axis.
+    #[test]
+    fn raw_imu_signed_percentage3d_registers_six_columns() {
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Linear", true, "D3"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (3, 1, 10));
+        assert_eq!(resolved, (6, 1, 10));
+        // Two IMU sites on one unit: the encoder writes site `c` at `c * 6`.
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 2),
+            (12, 1, 10)
+        );
+    }
+
+    /// SmartIMU: the signed 4D quaternion encoder streams plus/minus per component.
+    #[test]
+    fn smart_imu_signed_percentage4d_registers_eight_columns() {
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Linear", true, "D4"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (4, 1, 10));
+        assert_eq!(resolved, (8, 1, 10));
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 1),
+            (8, 1, 10)
+        );
+    }
+
+    /// Fractional positioning uses the same plus/minus column layout.
+    #[test]
+    fn signed_percentage3d_fractional_registers_six_columns() {
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Fractional", true, "D3"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (3, 1, 10));
+        assert_eq!(resolved, (6, 1, 10));
+    }
+
+    /// Signed 1D Linear encodes the sign along Z in one column; width is untouched.
+    #[test]
+    fn signed_percentage1d_linear_keeps_single_column() {
+        let encoder = json!({
+            "Percentage": [{"value": 20}, "Linear", true, "D1"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (1, 1, 10));
+        assert_eq!(resolved, (1, 1, 20));
+    }
+
+    /// A malformed or short tuple falls back to the template width.
+    #[test]
+    fn signed_percentage_with_unknown_dimensionality_keeps_template_width() {
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Linear", true, "D9"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (3, 1, 10));
+        assert_eq!(resolved, (3, 1, 10));
+        let short = json!({ "Percentage": [{"value": 10}] });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&short), 0, (3, 1, 10));
+        assert_eq!(resolved, (3, 1, 10));
+    }
+
+    #[test]
+    fn servo_encoder_width_follows_joint_count_when_encoder_depth_differs() {
+        let template = (1, 1, 20);
+        let encoder = json!({
+            "Percentage": [{"value": 50}, "Linear", false, "D1"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, template);
+        assert_eq!(resolved, (1, 1, 50));
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, template.0, 6),
+            (6, 1, 50)
+        );
+    }
+
+    #[test]
+    fn proximity_encoder_width_follows_channel_count() {
+        let template = (1, 1, 10);
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Linear", false, "D1"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, template);
+        assert_eq!(resolved, (1, 1, 10));
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 232),
+            (232, 1, 10)
+        );
+    }
+
+    #[test]
+    fn miscdata_encoder_width_follows_channel_count() {
+        let encoder = json!({
+            "MiscData": {
+                "width": 1,
+                "height": 1,
+                "depth": 1
+            }
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (1, 1, 1));
+        assert_eq!(resolved, (1, 1, 1));
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 416),
+            (416, 1, 1)
+        );
+    }
+
+    #[test]
+    fn miscdata_volume_width_stays_per_channel_when_single_device() {
+        let encoder = json!({
+            "MiscData": {
+                "width": 160,
+                "height": 120,
+                "depth": 48
+            }
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (1, 1, 1));
+        assert_eq!(resolved, (160, 120, 48));
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 1),
+            (160, 120, 48)
+        );
+    }
+}
+
+#[cfg(test)]
+mod registration_dimension_change_tests {
+    use super::{registration_dimension_changes, registration_per_device_dimensions};
+    use serde_json::json;
+
+    #[test]
+    fn servo_encoder_registration_replaces_stale_per_device_depth() {
+        let expected = (6, 1, 20);
+        let device_count = 6;
+        assert_eq!(
+            registration_per_device_dimensions(expected, device_count),
+            (1, 1, 20)
+        );
+        let changes = registration_dimension_changes(expected, device_count);
+        assert_eq!(changes.get("dimensions"), Some(&json!([6, 1, 20])));
+        assert_eq!(
+            changes.get("cortical_dimensions_per_device"),
+            Some(&json!([1, 1, 20]))
+        );
+        assert_eq!(changes.get("dev_count"), Some(&json!(6)));
+    }
+
+    #[test]
+    fn cartesian_position_registration_keeps_axis_width_on_one_device() {
+        let expected = (3, 1, 100);
+        assert_eq!(registration_per_device_dimensions(expected, 1), (3, 1, 100));
+        let changes = registration_dimension_changes(expected, 1);
+        assert_eq!(
+            changes.get("cortical_dimensions_per_device"),
+            Some(&json!([3, 1, 100]))
+        );
+    }
+}
+
+#[cfg(test)]
+mod registration_name_helpers_tests {
+    use super::{
+        angular_pointer_world_position, build_motor_registration_default_name,
+        build_sensory_registration_default_name, resolve_registration_name_with_placeholders,
+        should_auto_rename, should_auto_rename_motor, spatial_pointer_world_position,
+        ANGULAR_POINTER_ABSOLUTE_POSITION_X, ANGULAR_POINTER_INCREMENTAL_POSITION_X,
+        SPATIAL_POINTER_INCREMENTAL_POSITION_X, SPATIAL_POINTER_SPEED_POSITION_X,
+    };
+    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+    use serde_json::json;
+
+    #[test]
+    fn should_auto_rename_placeholder_names() {
+        assert!(should_auto_rename("abc", "abc", "legacy"));
+        assert!(should_auto_rename("legacy", "abc", "legacy"));
+    }
+
+    #[test]
+    fn should_auto_rename_legacy_generated_rgbd_names() {
+        assert!(should_auto_rename(
+            "vsg_rgbd_camera_D02B5B0F9957BD6DD450FD3CC7FF6E29CBB78003_g0_depth",
+            "aWRwdAoAAAA=",
+            "Depth Map"
+        ));
+    }
+
+    #[test]
+    fn spatial_pointer_default_names_include_their_command_semantics() {
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::SpatialPointer,
+                0,
+                0,
+                Some("Absolute"),
+                Some(3),
+            ),
+            "Spatial Pointer Absolute"
+        );
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::SpatialPointer,
+                1,
+                0,
+                Some("Incremental"),
+                Some(6),
+            ),
+            "Spatial Pointer Incremental"
+        );
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::SpatialPointer,
+                3,
+                0,
+                Some("Absolute"),
+                Some(1),
+            ),
+            "Spatial Pointer Speed"
+        );
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::PositionalServo,
+                0,
+                2,
+                Some("Absolute"),
+                None,
+            ),
+            "Positional Servo Speed"
+        );
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::AngularPointer,
+                0,
+                0,
+                Some("Absolute"),
+                Some(3),
+            ),
+            "Angular Pointer Absolute"
+        );
+        assert_eq!(
+            build_motor_registration_default_name(
+                MotorCorticalUnit::AngularPointer,
+                1,
+                0,
+                Some("Incremental"),
+                Some(6),
+            ),
+            "Angular Pointer Incremental"
+        );
+    }
+
+    #[test]
+    fn should_auto_rename_generated_spatial_pointer_names() {
+        assert!(should_auto_rename(
+            "SpatialPointer_1",
+            "unused",
+            "Spatial Pointer-1-0"
+        ));
+        assert!(should_auto_rename(
+            "SpatialPointer_2",
+            "unused",
+            "Spatial Pointer-2-0"
+        ));
+        assert!(should_auto_rename(
+            "SpatialPointer_incremental_1",
+            "unused",
+            "Spatial Pointer-1-0"
+        ));
+        assert!(!should_auto_rename(
+            "custom pointer",
+            "unused",
+            "Spatial Pointer-1-0"
+        ));
+        assert!(!should_auto_rename(
+            "Spatial Pointer Absolute",
+            "unused",
+            "Spatial Pointer-1-0"
+        ));
+        assert!(should_auto_rename(
+            "CartesianPosition_2",
+            "unused",
+            "Cartesian Position Sensor-2-0"
+        ));
+        assert!(!should_auto_rename(
+            "Cartesian Position Sensor",
+            "unused",
+            "Cartesian Position Sensor-2-0"
+        ));
+        assert!(should_auto_rename_motor(
+            "Spatial Pointer Absolute",
+            "unused",
+            "Spatial Pointer-3-0",
+            "Spatial Pointer Speed"
+        ));
+        assert!(!should_auto_rename_motor(
+            "Spatial Pointer Absolute",
+            "unused",
+            "Spatial Pointer-2-0",
+            "Spatial Pointer Absolute"
+        ));
+        assert!(should_auto_rename_motor(
+            "PositionalServo_0-2",
+            "unused",
+            "Positional Servo-0-2",
+            "Positional Servo Speed"
+        ));
+    }
+
+    #[test]
+    fn cartesian_position_default_title_is_descriptive() {
+        assert_eq!(
+            build_sensory_registration_default_name(SensoryCorticalUnit::CartesianPosition, 2, 0),
+            "Cartesian Position Sensor"
+        );
+    }
+
+    #[test]
+    fn spatial_pointer_incremental_sits_right_of_absolute_template() {
+        let absolute = spatial_pointer_world_position([130, 0, -10], Some("Absolute"), Some(3));
+        let incremental =
+            spatial_pointer_world_position([130, 0, -10], Some("Incremental"), Some(6));
+        let speed = spatial_pointer_world_position([130, 0, -10], Some("Absolute"), Some(1));
+        assert_eq!(absolute, (130, 0, -10));
+        assert_eq!(
+            incremental,
+            (SPATIAL_POINTER_INCREMENTAL_POSITION_X, 0, -10)
+        );
+        assert_eq!(speed, (SPATIAL_POINTER_SPEED_POSITION_X, 0, -10));
+        assert_eq!(incremental.0, 145);
+        assert_eq!(speed.0, 160);
+    }
+
+    #[test]
+    fn angular_pointer_incremental_sits_right_of_absolute() {
+        let absolute = angular_pointer_world_position([175, 0, -10], Some("Absolute"));
+        let incremental = angular_pointer_world_position([175, 0, -10], Some("Incremental"));
+        assert_eq!(absolute, (ANGULAR_POINTER_ABSOLUTE_POSITION_X, 0, -10));
+        assert_eq!(
+            incremental,
+            (ANGULAR_POINTER_INCREMENTAL_POSITION_X, 0, -10)
+        );
+        assert_eq!(absolute.0, 175);
+        assert_eq!(incremental.0, 190);
+    }
+
+    #[test]
+    fn sdk_placeholder_friendly_names_do_not_override_cartesian_titles() {
+        let unit_def = json!({
+            "friendly_name": "SpatialPointer_1",
+            "device_grouping": [{"friendly_name": "SpatialPointer_1_ch0"}]
+        });
+        assert_eq!(
+            resolve_registration_name_with_placeholders(
+                &unit_def,
+                "Spatial Pointer Absolute",
+                true,
+            ),
+            "Spatial Pointer Absolute"
+        );
+        let sensor_def = json!({"friendly_name": "CartesianPosition_2"});
+        assert_eq!(
+            resolve_registration_name_with_placeholders(
+                &sensor_def,
+                "Cartesian Position Sensor",
+                true,
+            ),
+            "Cartesian Position Sensor"
+        );
+        let custom = json!({"friendly_name": "My TCP Pointer"});
+        assert_eq!(
+            resolve_registration_name_with_placeholders(&custom, "Spatial Pointer Absolute", true),
+            "My TCP Pointer"
+        );
+    }
+}
+
+#[cfg(test)]
+mod servo_encoder_registration_helpers_tests {
+    use super::{
+        motor_servo_group_id_u8_from_first_channel, primary_sensor_tag_first_channel,
+        servo_motor_subunit_index_for_servo_tag,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn servo_tag_maps_jointpos_jointvel_to_motor_subunits() {
+        assert_eq!(servo_motor_subunit_index_for_servo_tag("jointpos"), Some(0));
+        assert_eq!(servo_motor_subunit_index_for_servo_tag("jointvel"), Some(1));
+        assert_eq!(servo_motor_subunit_index_for_servo_tag("other"), None);
+    }
+
+    #[test]
+    fn reads_motor_servo_group_id_and_sensor_tag_from_first_channel() {
+        let unit_def = json!({
+            "device_grouping": [
+                {
+                    "device_properties": {
+                        "motor_servo_group_id": 2,
+                        "sensor_tag": "jointpos"
+                    }
+                }
+            ]
+        });
+        assert_eq!(
+            motor_servo_group_id_u8_from_first_channel(&unit_def),
+            Some(2)
+        );
+        assert_eq!(
+            primary_sensor_tag_first_channel(&unit_def).as_deref(),
+            Some("jointpos")
+        );
+    }
+}

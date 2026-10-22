@@ -8,6 +8,76 @@ use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
 use std::collections::HashMap;
 
+/// LTP/LTD multipliers are stored in the NPU as `i8` (aligns with effective range after
+/// `u8` clamping). Accept JSON integers or float-shaped whole numbers, then range-check.
+fn i8_ltd_ltp_from_json_value(v: &serde_json::Value, field: &str) -> Result<i8, ApiError> {
+    let n = v
+        .as_i64()
+        .or_else(|| v.as_f64().map(|f| f as i64))
+        .ok_or_else(|| {
+            ApiError::invalid_input(format!("{field} must be a number (integer-like)"))
+        })?;
+    i8::try_from(n).map_err(|_| {
+        ApiError::invalid_input(format!(
+            "{field} must be in i8 range {}..={} (got {})",
+            i8::MIN,
+            i8::MAX,
+            n
+        ))
+    })
+}
+
+/// Parse a numeric JSON value as f64 (accepts integer and float forms).
+fn f64_from_json_value(v: &serde_json::Value, field: &str) -> Result<f64, ApiError> {
+    v.as_f64()
+        .or_else(|| v.as_i64().map(|i| i as f64))
+        .ok_or_else(|| ApiError::invalid_input(format!("{field} must be numeric")))
+}
+
+/// Parse an integer-like JSON number as i64.
+///
+/// Accepts integer literals and float literals with zero fractional part (e.g. `1.0`),
+/// but rejects non-finite values and fractional values such as `1.5`.
+fn i64_from_integer_like_json_value(v: &serde_json::Value, field: &str) -> Result<i64, ApiError> {
+    if let Some(n) = v.as_i64() {
+        return Ok(n);
+    }
+    let f = v.as_f64().ok_or_else(|| {
+        ApiError::invalid_input(format!("{field} must be an integer-like number"))
+    })?;
+    if !f.is_finite() || f.fract() != 0.0 {
+        return Err(ApiError::invalid_input(format!(
+            "{field} must be an integer-like number"
+        )));
+    }
+    Ok(f as i64)
+}
+
+/// Read an optional integer-like object field. Missing and JSON null are absent.
+///
+/// GET mapping_properties must not 400 when a stored non-plastic rule omits
+/// `plasticity_constant` / LTP / LTD / window. PUT validation stays strict.
+fn optional_i64_field(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<Option<i64>, ApiError> {
+    match obj.get(field) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => Ok(Some(i64_from_integer_like_json_value(value, field)?)),
+    }
+}
+
+/// Read an optional i8 object field. Missing and JSON null are absent.
+fn optional_i8_field(
+    obj: &serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<Option<i8>, ApiError> {
+    match obj.get(field) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => Ok(Some(i8_ltd_ltp_from_json_value(value, field)?)),
+    }
+}
+
 /// POST /v1/cortical_mapping/afferents
 #[utoipa::path(
     post,
@@ -100,7 +170,8 @@ pub async fn post_mapping_properties(
         if let Some(arr) = conn.as_array() {
             // Array format:
             // [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag,
-            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window]
+            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window,
+            //  synaptic_delay_bursts]
             if arr.len() < 8 {
                 return Err(ApiError::invalid_input(format!(
                     "Invalid dstmap rule array (expected 8 elements including plasticity_window), got {}: {:?}",
@@ -113,24 +184,29 @@ pub async fn post_mapping_properties(
                 .as_str()
                 .ok_or_else(|| ApiError::invalid_input("morphology_id must be a string"))?;
             let morphology_scalar = arr[1].clone();
-            let psc_multiplier = arr[2].as_i64().ok_or_else(|| {
-                ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
-            })?;
+            let psc_multiplier = f64_from_json_value(&arr[2], "postSynapticCurrent_multiplier")?;
             let plasticity_flag = arr[3]
                 .as_bool()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
-            let plasticity_constant = arr[4]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
-            let ltp_multiplier = arr[5]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("ltp_multiplier must be an integer"))?;
-            let ltd_multiplier = arr[6]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("ltd_multiplier must be an integer"))?;
-            let plasticity_window = arr[7]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
+            let plasticity_constant =
+                i64_from_integer_like_json_value(&arr[4], "plasticity_constant")?;
+            let ltp_multiplier = i8_ltd_ltp_from_json_value(&arr[5], "ltp_multiplier")?;
+            let ltd_multiplier = i8_ltd_ltp_from_json_value(&arr[6], "ltd_multiplier")?;
+            let plasticity_window = i64_from_integer_like_json_value(&arr[7], "plasticity_window")?;
+
+            let synaptic_delay_bursts: u64 = if arr.len() >= 9 {
+                arr[8]
+                    .as_u64()
+                    .or_else(|| arr[8].as_i64().map(|i| i as u64))
+                    .ok_or_else(|| {
+                        ApiError::invalid_input(
+                            "synaptic_delay_bursts must be a non-negative integer",
+                        )
+                    })?
+            } else {
+                1
+            }
+            .max(1);
 
             formatted.push(serde_json::json!({
                 "morphology_id": morphology_id,
@@ -141,6 +217,7 @@ pub async fn post_mapping_properties(
                 "ltp_multiplier": ltp_multiplier,
                 "ltd_multiplier": ltd_multiplier,
                 "plasticity_window": plasticity_window,
+                "synaptic_delay_bursts": synaptic_delay_bursts,
             }));
         } else if let Some(obj) = conn.as_object() {
             // Dict format - strict schema (no implicit defaults)
@@ -152,34 +229,55 @@ pub async fn post_mapping_properties(
                 .get("morphology_scalar")
                 .cloned()
                 .ok_or_else(|| ApiError::invalid_input("morphology_scalar missing"))?;
-            let psc_multiplier = obj
-                .get("postSynapticCurrent_multiplier")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| {
-                    ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
-                })?;
+            let psc_multiplier = f64_from_json_value(
+                obj.get("postSynapticCurrent_multiplier").ok_or_else(|| {
+                    ApiError::invalid_input("postSynapticCurrent_multiplier missing")
+                })?,
+                "postSynapticCurrent_multiplier",
+            )?;
             let plasticity_flag = obj
                 .get("plasticity_flag")
                 .and_then(|v| v.as_bool())
                 .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
-            let plasticity_constant = obj
-                .get("plasticity_constant")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
-            let ltp_multiplier = obj
-                .get("ltp_multiplier")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("ltp_multiplier must be an integer"))?;
-            let ltd_multiplier = obj
-                .get("ltd_multiplier")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("ltd_multiplier must be an integer"))?;
-            let plasticity_window = obj
-                .get("plasticity_window")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
+            let plasticity_constant = optional_i64_field(obj, "plasticity_constant")?;
+            let ltp_multiplier = optional_i8_field(obj, "ltp_multiplier")?;
+            let ltd_multiplier = optional_i8_field(obj, "ltd_multiplier")?;
+            let plasticity_window = optional_i64_field(obj, "plasticity_window")?;
 
-            formatted.push(serde_json::json!({
+            let synaptic_delay_bursts: u64 = obj
+                .get("synaptic_delay_bursts")
+                .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
+                .unwrap_or(1)
+                .max(1);
+
+            // R-STDP optional fields. plasticity_mode is the canonical successor of
+            // plasticity_flag; when absent, downstream defaults to Stdp / Off based on the flag.
+            // The other three fields are only meaningful when plasticity_mode == "rstdp" and are
+            // validated downstream by the BDU.
+            let plasticity_mode = obj
+                .get("plasticity_mode")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let eligibility_decay_bursts =
+                obj.get("eligibility_decay_bursts").and_then(|v| v.as_u64());
+            let reward_source_area = obj
+                .get("reward_source_area")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let punishment_source_area = obj
+                .get("punishment_source_area")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            // Optional R-STDP / STDP weight ceiling. Validated downstream by the BDU; we only
+            // shape it here so the rule round-trips cleanly through GET.
+            let max_weight =
+                obj.get("max_weight")
+                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
+            let plasticity_eta =
+                obj.get("plasticity_eta")
+                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
+
+            let mut rule = serde_json::json!({
                 "morphology_id": morphology_id,
                 "morphology_scalar": morphology_scalar,
                 "postSynapticCurrent_multiplier": psc_multiplier,
@@ -188,7 +286,34 @@ pub async fn post_mapping_properties(
                 "ltp_multiplier": ltp_multiplier,
                 "ltd_multiplier": ltd_multiplier,
                 "plasticity_window": plasticity_window,
-            }));
+                "synaptic_delay_bursts": synaptic_delay_bursts,
+            });
+            let rule_obj = rule.as_object_mut().unwrap();
+            if let Some(mode) = plasticity_mode {
+                rule_obj.insert("plasticity_mode".to_string(), serde_json::json!(mode));
+            }
+            if let Some(decay) = eligibility_decay_bursts {
+                rule_obj.insert(
+                    "eligibility_decay_bursts".to_string(),
+                    serde_json::json!(decay),
+                );
+            }
+            if let Some(area) = reward_source_area {
+                rule_obj.insert("reward_source_area".to_string(), serde_json::json!(area));
+            }
+            if let Some(area) = punishment_source_area {
+                rule_obj.insert(
+                    "punishment_source_area".to_string(),
+                    serde_json::json!(area),
+                );
+            }
+            if let Some(mw) = max_weight {
+                rule_obj.insert("max_weight".to_string(), serde_json::json!(mw));
+            }
+            if let Some(eta) = plasticity_eta {
+                rule_obj.insert("plasticity_eta".to_string(), serde_json::json!(eta));
+            }
+            formatted.push(rule);
         }
     }
 
@@ -249,6 +374,7 @@ pub async fn put_mapping_properties(
         .await
         .map_err(|e| match e {
             feagi_services::types::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
+            feagi_services::types::ServiceError::Conflict(msg) => ApiError::conflict(msg),
             _ => ApiError::internal(format!("Failed to update cortical mapping: {}", e)),
         })?;
 
@@ -334,6 +460,52 @@ pub async fn get_mapping(
     Ok(Json(response))
 }
 
+/// GET /v1/cortical_mapping/twin_diagnostic
+/// Diagnose memory twin eligibility/status for a mapping pair in one call.
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_mapping/twin_diagnostic",
+    tag = "cortical_mapping",
+    params(
+        ("src_cortical_area" = String, Query, description = "Source cortical area ID (base64)"),
+        ("dst_cortical_area" = String, Query, description = "Destination cortical area ID (base64)")
+    ),
+    responses(
+        (status = 200, description = "Twin diagnostic payload", body = serde_json::Value),
+        (status = 400, description = "Invalid input")
+    )
+)]
+pub async fn get_twin_diagnostic(
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    use feagi_brain_development::ConnectomeManager;
+    use feagi_structures::genomic::cortical_area::CorticalID;
+
+    let src_area = params
+        .get("src_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("src_cortical_area required"))?;
+    let dst_area = params
+        .get("dst_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("dst_cortical_area required"))?;
+
+    let src_id = CorticalID::try_from_base_64(src_area).map_err(|e| {
+        ApiError::invalid_input(format!("Invalid src_cortical_area '{}': {}", src_area, e))
+    })?;
+    let dst_id = CorticalID::try_from_base_64(dst_area).map_err(|e| {
+        ApiError::invalid_input(format!("Invalid dst_cortical_area '{}': {}", dst_area, e))
+    })?;
+
+    let manager = ConnectomeManager::instance();
+    let diagnostic = manager
+        .read()
+        .diagnose_memory_twin_for_mapping(&src_id, &dst_id)
+        .map_err(|e| ApiError::invalid_input(format!("Twin diagnostic failed: {}", e)))?;
+
+    Ok(Json(serde_json::to_value(diagnostic).map_err(|e| {
+        ApiError::internal(format!("Failed to serialize twin diagnostic: {}", e))
+    })?))
+}
+
 /// GET /v1/cortical_mapping/mapping_list
 /// Get list of all cortical mappings
 #[utoipa::path(
@@ -374,24 +546,186 @@ pub async fn get_mapping_list(State(state): State<ApiState>) -> ApiResult<Json<V
 }
 
 /// DELETE /v1/cortical_mapping/mapping
-/// Delete a cortical mapping
+///
+/// Delete the cortical mapping between two areas. This clears the rule data on the source
+/// area, prunes all synapses from `src_cortical_area` to `dst_cortical_area`, and persists
+/// the change to the RuntimeGenome. Equivalent to `PUT /v1/cortical_mapping/mapping_properties`
+/// with `mapping_string=[]`, but exposes a clean DELETE semantic for clients that need to
+/// drop a mapping (and reset its learned synapse weights) without enumerating an empty
+/// rules array.
+///
+/// Source/target IDs are accepted as query string parameters to match the existing
+/// `GET /v1/cortical_mapping/mapping` route and avoid HTTP 415 surprises on bodyless DELETEs.
 #[utoipa::path(
     delete,
     path = "/v1/cortical_mapping/mapping",
     tag = "cortical_mapping",
+    params(
+        ("src_cortical_area" = String, Query, description = "Source cortical area ID"),
+        ("dst_cortical_area" = String, Query, description = "Destination cortical area ID")
+    ),
     responses(
-        (status = 200, description = "Mapping deleted", body = HashMap<String, String>)
+        (status = 200, description = "Mapping deleted", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Missing src_cortical_area or dst_cortical_area"),
+        (status = 404, description = "Cortical area not found"),
+        (status = 500, description = "Internal server error")
     )
 )]
 pub async fn delete_mapping(
-    State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Implement mapping deletion
-    Ok(Json(HashMap::from([(
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    use tracing::info;
+
+    let src_area = params
+        .get("src_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("src_cortical_area required"))?
+        .to_string();
+    let dst_area = params
+        .get("dst_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("dst_cortical_area required"))?
+        .to_string();
+
+    info!(
+        target: "feagi-api",
+        "DELETE cortical mapping: {} -> {}",
+        src_area,
+        dst_area
+    );
+
+    let connectome_service = state.connectome_service.as_ref();
+
+    // Reuse the canonical update path with empty rules. `update_cortical_mapping` is the
+    // single source of truth for: clearing the rule data, pruning synapses via the BDU
+    // `regenerate_synapses_for_mapping` codepath, refreshing the burst runner cache, and
+    // persisting to RuntimeGenome / region IO registry. Returning anything else here would
+    // diverge from the PUT-with-empty-rules behaviour and risk drift.
+    let synapse_count = connectome_service
+        .update_cortical_mapping(src_area.clone(), dst_area.clone(), Vec::new())
+        .await
+        .map_err(|e| match e {
+            feagi_services::types::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
+            feagi_services::types::ServiceError::Conflict(msg) => ApiError::conflict(msg),
+            _ => ApiError::internal(format!("Failed to delete cortical mapping: {}", e)),
+        })?;
+
+    info!(
+        target: "feagi-api",
+        "Cortical mapping deleted: {} -> {} ({} synapses remaining)",
+        src_area,
+        dst_area,
+        synapse_count
+    );
+
+    let mut response = HashMap::new();
+    response.insert(
         "message".to_string(),
-        "Mapping deletion not yet implemented".to_string(),
-    )])))
+        serde_json::json!(format!(
+            "Cortical mapping deleted from {} to {}",
+            src_area, dst_area
+        )),
+    );
+    response.insert("src_cortical_area".to_string(), serde_json::json!(src_area));
+    response.insert("dst_cortical_area".to_string(), serde_json::json!(dst_area));
+    response.insert(
+        "synapse_count".to_string(),
+        serde_json::json!(synapse_count),
+    );
+
+    Ok(Json(response))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        f64_from_json_value, i64_from_integer_like_json_value, optional_i64_field,
+        optional_i8_field,
+    };
+
+    #[test]
+    fn f64_parser_accepts_integer_and_float_json() {
+        let int_v = serde_json::json!(1);
+        let float_v = serde_json::json!(1.0);
+        assert_eq!(
+            f64_from_json_value(&int_v, "postSynapticCurrent_multiplier")
+                .expect("integer should parse"),
+            1.0
+        );
+        assert_eq!(
+            f64_from_json_value(&float_v, "postSynapticCurrent_multiplier")
+                .expect("float should parse"),
+            1.0
+        );
+    }
+
+    #[test]
+    fn f64_parser_rejects_non_numeric_json() {
+        let bad_v = serde_json::json!("1");
+        assert!(f64_from_json_value(&bad_v, "postSynapticCurrent_multiplier").is_err());
+    }
+
+    #[test]
+    fn i64_parser_accepts_integer_like_values() {
+        let int_v = serde_json::json!(3);
+        let float_int_v = serde_json::json!(3.0);
+        assert_eq!(
+            i64_from_integer_like_json_value(&int_v, "plasticity_constant")
+                .expect("integer should parse"),
+            3
+        );
+        assert_eq!(
+            i64_from_integer_like_json_value(&float_int_v, "plasticity_constant")
+                .expect("float-shaped integer should parse"),
+            3
+        );
+    }
+
+    #[test]
+    fn i64_parser_rejects_fractional_values() {
+        let fractional = serde_json::json!(3.5);
+        assert!(i64_from_integer_like_json_value(&fractional, "plasticity_constant").is_err());
+    }
+
+    #[test]
+    fn optional_integer_fields_treat_missing_and_null_as_absent() {
+        let missing = serde_json::json!({
+            "morphology_id": "projector",
+            "plasticity_flag": false
+        });
+        let obj = missing.as_object().expect("object");
+        assert_eq!(
+            optional_i64_field(obj, "plasticity_constant").expect("missing is ok"),
+            None
+        );
+        assert_eq!(
+            optional_i8_field(obj, "ltp_multiplier").expect("missing is ok"),
+            None
+        );
+
+        let with_null = serde_json::json!({"plasticity_window": null});
+        let null_obj = with_null.as_object().expect("object");
+        assert_eq!(
+            optional_i64_field(null_obj, "plasticity_window").expect("null is ok"),
+            None
+        );
+    }
+
+    #[test]
+    fn optional_integer_fields_parse_present_values() {
+        let present = serde_json::json!({
+            "plasticity_constant": 2,
+            "ltp_multiplier": 1
+        });
+        let obj = present.as_object().expect("object");
+        assert_eq!(
+            optional_i64_field(obj, "plasticity_constant").expect("present"),
+            Some(2)
+        );
+        assert_eq!(
+            optional_i8_field(obj, "ltp_multiplier").expect("present"),
+            Some(1)
+        );
+    }
 }
 
 /// POST /v1/cortical_mapping/batch_update

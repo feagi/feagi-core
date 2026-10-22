@@ -7,20 +7,54 @@
 use crate::amalgamation;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
-use feagi_services::types::LoadGenomeParams;
+use feagi_evolutionary::{
+    decode_genome_artifact, encode_genome_artifact,
+    validate_genome_artifact_file_name as validate_artifact_file_name, GENOME_ARTIFACT_MEDIA_TYPE,
+};
+use feagi_services::types::{GenomeInfo, LoadGenomeParams};
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
 
 #[cfg(feature = "http")]
 use axum::extract::Multipart;
+use axum::http::{header, HeaderMap, HeaderValue};
+
+fn validate_genome_artifact_file_name(file_name: Option<&str>) -> ApiResult<()> {
+    let file_name =
+        file_name.ok_or_else(|| ApiError::invalid_input("Genome upload requires a file name"))?;
+    validate_artifact_file_name(file_name)
+        .map_err(|error| ApiError::invalid_input(error.to_string()))
+}
+
+fn decode_genome_artifact_for_json_service(artifact: &[u8]) -> ApiResult<String> {
+    let genome = decode_genome_artifact(artifact)
+        .map_err(|error| ApiError::invalid_input(error.to_string()))?;
+    serde_json::to_string(&genome)
+        .map_err(|error| ApiError::internal(format!("Failed to serialize genome: {error}")))
+}
+
+fn genome_artifact_download_headers(file_name: &'static str) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(GENOME_ARTIFACT_MEDIA_TYPE),
+    );
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static(file_name),
+    );
+    headers
+}
 
 /// Multipart file upload schema for Swagger UI.
 ///
-/// This enables Swagger to show a file picker for endpoints that accept genome JSON files.
+/// This enables Swagger to show a file picker for `.genome` artifacts.
 #[derive(Debug, Clone, utoipa::ToSchema)]
 pub struct GenomeFileUploadForm {
-    /// Genome JSON file contents.
+    /// `.genome` artifact containing versioned genome JSON.
     #[schema(value_type = String, format = Binary)]
     pub file: String,
 }
@@ -84,6 +118,191 @@ fn queue_amalgamation_from_genome_json_str(
     );
 
     Ok(amalgamation_id)
+}
+
+struct GenomeTransitionFlagGuard {
+    in_progress: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Drop for GenomeTransitionFlagGuard {
+    fn drop(&mut self) {
+        self.in_progress.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Mirrors prioritized genome transition in [feagi_state_manager::GenomeState] for health_check.
+/// - [Self::enter][]: Loading
+/// - [Self::succeed][]: Loaded (call when transition fully finished, including post-load agent IO)
+/// - Drop without succeed: Error (failed or aborted transition)
+struct GenomeTransitionStateLifecycle;
+
+impl GenomeTransitionStateLifecycle {
+    fn enter() -> Self {
+        #[cfg(feature = "services")]
+        {
+            feagi_state_manager::StateManager::instance()
+                .read()
+                .set_genome_state(feagi_state_manager::GenomeState::Loading);
+        }
+        Self
+    }
+
+    fn succeed(self) {
+        #[cfg(feature = "services")]
+        {
+            feagi_state_manager::StateManager::instance()
+                .read()
+                .set_genome_state(feagi_state_manager::GenomeState::Loaded);
+        }
+        std::mem::forget(self);
+    }
+}
+
+impl Drop for GenomeTransitionStateLifecycle {
+    fn drop(&mut self) {
+        #[cfg(feature = "services")]
+        {
+            feagi_state_manager::StateManager::instance()
+                .read()
+                .set_genome_state(feagi_state_manager::GenomeState::Error);
+        }
+    }
+}
+
+/// Execute a genome load with strict priority over concurrent operations.
+///
+/// Guarantees:
+/// - Only one genome transition may run at a time.
+/// - Runtime is quiesced before load starts.
+/// - Runtime frequency is updated from genome physiology.
+/// - Runtime is restored to running state if it was running before transition.
+async fn load_genome_with_priority(
+    state: &ApiState,
+    params: LoadGenomeParams,
+    source: &str,
+) -> ApiResult<GenomeInfo> {
+    let _transition_lock = state.genome_transition_lock.try_lock().map_err(|_| {
+        ApiError::conflict(
+            "Another genome transition is already in progress; wait for it to finish",
+        )
+    })?;
+    state
+        .genome_transition_in_progress
+        .store(true, Ordering::SeqCst);
+    let _guard = GenomeTransitionFlagGuard {
+        in_progress: Arc::clone(&state.genome_transition_in_progress),
+    };
+    let genome_sm_lifecycle = GenomeTransitionStateLifecycle::enter();
+
+    tracing::info!(
+        target: "feagi-api",
+        "🛑 Entering prioritized genome transition from {}",
+        source
+    );
+
+    let runtime_service = state.runtime_service.as_ref();
+    #[cfg(feature = "feagi-agent")]
+    if let Some(handler) = &state.agent_handler {
+        let deregistered_ids = {
+            let mut guard = handler.lock().unwrap();
+            guard.force_deregister_all_agents("forced by genome transition")
+        };
+        for agent_id in &deregistered_ids {
+            runtime_service.unregister_motor_subscriptions(agent_id);
+            runtime_service.unregister_visualization_subscriptions(agent_id);
+        }
+        tracing::info!(
+            target: "feagi-api",
+            "🔌 Forced deregistration for {} agents before genome transition",
+            deregistered_ids.len()
+        );
+    }
+    // Strict transition barrier: guarantee no stale subscriptions survive.
+    runtime_service.clear_all_motor_subscriptions();
+    runtime_service.clear_all_visualization_subscriptions();
+
+    let runtime_status = runtime_service
+        .get_status()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get runtime status: {}", e)))?;
+    let runtime_was_running = runtime_status.is_running;
+
+    if runtime_was_running {
+        tracing::info!(
+            target: "feagi-api",
+            "Stopping burst engine before prioritized genome transition"
+        );
+        runtime_service.stop().await.map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to stop burst engine before genome transition: {}",
+                e
+            ))
+        })?;
+    }
+
+    let genome_service = state.genome_service.as_ref();
+    let load_result = genome_service.load_genome(params).await;
+    let genome_info = match load_result {
+        Ok(info) => info,
+        Err(e) => {
+            if runtime_was_running {
+                if let Err(restart_err) = runtime_service.start().await {
+                    tracing::warn!(
+                        target: "feagi-api",
+                        "Failed to restore runtime after failed genome load (source={}): {}",
+                        source,
+                        restart_err
+                    );
+                }
+            }
+            return Err(ApiError::internal(format!("Failed to load genome: {}", e)));
+        }
+    };
+
+    let burst_frequency_hz = 1.0 / genome_info.simulation_timestep;
+    runtime_service
+        .set_frequency(burst_frequency_hz)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to update burst frequency: {}", e)))?;
+
+    if runtime_was_running {
+        runtime_service.start().await.map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to restart burst engine after genome transition: {}",
+                e
+            ))
+        })?;
+    }
+
+    tracing::info!(
+        target: "feagi-api",
+        "✅ Prioritized genome transition completed from {}",
+        source
+    );
+
+    // Deterministic: create missing IO areas for any registered agents immediately after genome load.
+    // Fixes nondeterministic behavior where areas were missing on first run but appeared on restart.
+    #[cfg(feature = "feagi-agent")]
+    if let Some(handler) = &state.agent_handler {
+        let device_regs_list: Vec<serde_json::Value> = {
+            let guard = handler.lock().unwrap();
+            guard
+                .get_all_registered_agents()
+                .keys()
+                .filter_map(|sid| guard.get_device_registrations_by_agent(*sid).cloned())
+                .collect()
+        };
+        for device_regs in device_regs_list {
+            crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations(
+                state,
+                &device_regs,
+            )
+            .await;
+        }
+    }
+
+    genome_sm_lifecycle.succeed();
+    Ok(genome_info)
 }
 
 /// Inject the current runtime simulation timestep (seconds) into a genome JSON value.
@@ -241,23 +460,60 @@ pub async fn post_amalgamation_destination(
 
     // 2) Import cortical areas into that region.
     //
-    // Current deterministic behavior:
-    // - We import *only* cortical areas whose IDs do not exist in the current connectome.
-    // - We place them at an offset relative to the chosen origin.
-    // - We assign parent_region_id to the new region so the genome stays consistent.
-    //
-    // If a genome contains shared/global IDs (e.g., core areas), those will be skipped.
-    let imported_genome =
-        feagi_evolutionary::load_genome_from_json(&pending.genome_json).map_err(|e| {
+    // - Guest **Custom** and **Memory** cortical IDs are remapped to fresh IDs that do not
+    //   collide with the host (or with each other), and `cortical_mapping_dst` keys / brain
+    //   region membership are updated accordingly. This preserves the full guest circuit instead
+    //   of skipping shared template custom areas.
+    // - **Core** (`___death`, `___power`, `___fatig`) and **IPU/OPU** IDs are left canonical;
+    //   they are not duplicated if they already exist on the host (`skipped_existing_areas`).
+    // - We place areas at an offset relative to the chosen origin and set `parent_region_id`.
+    let mut imported_genome = feagi_evolutionary::load_genome_from_json(&pending.genome_json)
+        .map_err(|e| {
             ApiError::invalid_input(format!(
                 "Pending genome payload can no longer be parsed as a genome: {}",
                 e
             ))
         })?;
 
+    let host_cortical_ids: std::collections::HashSet<String> = connectome_service
+        .get_cortical_area_ids()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical area IDs: {}", e)))?
+        .into_iter()
+        .collect();
+
+    let remapped_guest_custom_memory_ids =
+        feagi_evolutionary::remap_guest_custom_memory_cortical_ids_for_amalgamation(
+            &mut imported_genome,
+            &host_cortical_ids,
+        )
+        .map_err(|e| {
+            ApiError::internal(format!(
+                "Amalgamation guest cortical ID remapping failed: {}",
+                e
+            ))
+        })?;
+    let guest_custom_memory_id_remap_count = remapped_guest_custom_memory_ids.len();
+
+    if guest_custom_memory_id_remap_count > 0 {
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Remapped {} guest Custom/Memory cortical IDs before import",
+            guest_custom_memory_id_remap_count
+        );
+    }
+
     let genome_service = state.genome_service.as_ref();
     let mut to_create: Vec<feagi_services::types::CreateCorticalAreaParams> = Vec::new();
     let mut skipped_existing: Vec<String> = Vec::new();
+    let mut cloned_region_member_ids: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+
+    // Get root region ID for IPU/OPU areas
+    let root_region_id = connectome_service
+        .get_root_region_id()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get root region ID: {}", e)))?;
 
     for area in imported_genome.cortical_areas.values() {
         let cortical_id = area.cortical_id.as_base_64();
@@ -276,14 +532,60 @@ pub async fn post_amalgamation_destination(
         }
 
         let mut props = area.properties.clone();
+
+        // Remove cortical_mapping_dst from properties - connections will be imported separately
+        props.remove("cortical_mapping_dst");
+
+        // Determine correct parent region based on area type
+        // IPU/OPU areas MUST go to root region, all others go to the amalgamation region
+        let area_type = area.cortical_id.as_cortical_type().map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to get cortical area type for {}: {}",
+                cortical_id, e
+            ))
+        })?;
+
+        let target_parent_region_id = match area_type {
+            feagi_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)
+            | feagi_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_) => {
+                // IPU/OPU areas go to root region
+                match root_region_id.as_ref() {
+                    Some(root_id) => {
+                        tracing::info!(
+                            target: "feagi-api",
+                            "🧬 [AMALGAMATION] IPU/OPU area {} will be placed in root region {}",
+                            cortical_id,
+                            root_id
+                        );
+                        root_id.clone()
+                    }
+                    None => {
+                        tracing::warn!(
+                            target: "feagi-api",
+                            "🧬 [AMALGAMATION] No root region found for IPU/OPU area {}, using amalgamation region",
+                            cortical_id
+                        );
+                        amalgamation_id.clone()
+                    }
+                }
+            }
+            _ => {
+                // Custom, Memory, Core areas go to amalgamation region
+                amalgamation_id.clone()
+            }
+        };
+
         props.insert(
             "parent_region_id".to_string(),
-            serde_json::json!(amalgamation_id.clone()),
+            serde_json::json!(target_parent_region_id),
         );
         props.insert(
             "amalgamation_source".to_string(),
             serde_json::json!("amalgamation_by_payload"),
         );
+        if target_parent_region_id == amalgamation_id {
+            cloned_region_member_ids.insert(cortical_id.clone());
+        }
 
         to_create.push(feagi_services::types::CreateCorticalAreaParams {
             cortical_id,
@@ -355,11 +657,316 @@ pub async fn post_amalgamation_destination(
         });
     }
 
+    let imported_new_area_count = to_create.len();
     if !to_create.is_empty() {
         genome_service
             .create_cortical_areas(to_create)
             .await
             .map_err(|e| ApiError::internal(format!("Failed to import cortical areas: {}", e)))?;
+    }
+
+    // 3) Import morphologies used by the imported areas' cortical mappings.
+    //
+    // Collect all morphology IDs referenced in the cortical_mapping_dst of imported areas,
+    // then import those morphologies from the imported genome into the current genome.
+    let imported_area_ids: std::collections::HashSet<String> = imported_genome
+        .cortical_areas
+        .keys()
+        .map(|id| id.as_base_64())
+        .filter(|id| !skipped_existing.contains(id))
+        .collect();
+
+    let mut required_morphologies: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+
+    // Scan imported areas' mappings to collect required morphology IDs
+    for area in imported_genome.cortical_areas.values() {
+        if !imported_area_ids.contains(&area.cortical_id.as_base_64()) {
+            continue;
+        }
+
+        let Some(cortical_mapping_dst) = area.properties.get("cortical_mapping_dst") else {
+            continue;
+        };
+        let Some(dst_map) = cortical_mapping_dst.as_object() else {
+            continue;
+        };
+
+        for mapping_data in dst_map.values() {
+            let Some(mapping_array) = mapping_data.as_array() else {
+                continue;
+            };
+
+            for rule in mapping_array {
+                // Extract morphology_id from rule (can be object or array format)
+                let morphology_id = if let Some(obj) = rule.as_object() {
+                    obj.get("morphology_id").and_then(|v| v.as_str())
+                } else if let Some(arr) = rule.as_array() {
+                    arr.first().and_then(|v| v.as_str())
+                } else {
+                    None
+                };
+
+                if let Some(morph_id) = morphology_id {
+                    required_morphologies.insert(morph_id.to_string());
+                }
+            }
+        }
+    }
+
+    // Import each required morphology if it doesn't already exist
+    let mut imported_morphology_count = 0;
+    let mut skipped_morphology_count = 0;
+
+    for morphology_id in &required_morphologies {
+        // Check if morphology already exists
+        let morphologies = connectome_service.get_morphologies().await.map_err(|e| {
+            ApiError::internal(format!("Failed to get existing morphologies: {}", e))
+        })?;
+
+        if morphologies.contains_key(morphology_id) {
+            skipped_morphology_count += 1;
+            continue;
+        }
+
+        // Get morphology from imported genome
+        let Some(morphology) = imported_genome.morphologies.get(morphology_id) else {
+            tracing::warn!(
+                target: "feagi-api",
+                "🧬 [AMALGAMATION] Morphology '{}' referenced in mappings but not found in imported genome",
+                morphology_id
+            );
+            continue;
+        };
+
+        // Import the morphology
+        match connectome_service
+            .create_morphology(morphology_id.clone(), morphology.clone())
+            .await
+        {
+            Ok(_) => {
+                tracing::debug!(
+                    target: "feagi-api",
+                    "🧬 [AMALGAMATION] Imported morphology '{}'",
+                    morphology_id
+                );
+                imported_morphology_count += 1;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "feagi-api",
+                    "🧬 [AMALGAMATION] Failed to import morphology '{}': {}",
+                    morphology_id,
+                    e
+                );
+            }
+        }
+    }
+
+    if imported_morphology_count > 0 {
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Imported {} morphologies (skipped {} existing)",
+            imported_morphology_count,
+            skipped_morphology_count
+        );
+    }
+
+    // 4) Import cortical mappings from the guest genome.
+    //
+    // **Source** must be a newly created area (in `imported_area_ids`). Sources that were skipped
+    // due to ID collision never have their outgoing mappings applied here.
+    // **Destination** must already exist in the connectome (newly created or pre-existing host area).
+    // So: new→new and new→host edges can be imported; skipped→* edges are not.
+
+    let mut imported_mapping_count = 0;
+    let mut skipped_mapping_count = 0;
+
+    for area in imported_genome.cortical_areas.values() {
+        let src_area_id = area.cortical_id.as_base_64();
+
+        // Skip if this area was not imported (already existed)
+        if !imported_area_ids.contains(&src_area_id) {
+            continue;
+        }
+
+        // Check if area has cortical_mapping_dst property
+        let Some(cortical_mapping_dst) = area.properties.get("cortical_mapping_dst") else {
+            continue;
+        };
+        let Some(dst_map) = cortical_mapping_dst.as_object() else {
+            continue;
+        };
+
+        // Import each mapping where destination exists in connectome
+        for (dst_area_id, mapping_data) in dst_map {
+            // Check if destination area exists in connectome (either newly imported or already existing)
+            let dst_exists = connectome_service
+                .cortical_area_exists(dst_area_id)
+                .await
+                .unwrap_or(false);
+
+            if !dst_exists {
+                // Skip external references to areas not in this brain
+                skipped_mapping_count += 1;
+                continue;
+            }
+
+            let Some(mapping_array) = mapping_data.as_array() else {
+                tracing::warn!(
+                    target: "feagi-api",
+                    "🧬 [AMALGAMATION] Invalid mapping data from {} to {}: not an array",
+                    src_area_id,
+                    dst_area_id
+                );
+                continue;
+            };
+
+            // Import the cortical mapping
+            match connectome_service
+                .update_cortical_mapping(
+                    src_area_id.clone(),
+                    dst_area_id.clone(),
+                    mapping_array.clone(),
+                )
+                .await
+            {
+                Ok(synapse_count) => {
+                    tracing::debug!(
+                        target: "feagi-api",
+                        "[AMALGAMATION] Imported mapping {} -> {} ({} synapses)",
+                        src_area_id,
+                        dst_area_id,
+                        synapse_count
+                    );
+                    imported_mapping_count += 1;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target: "feagi-api",
+                        "[AMALGAMATION] Failed to import mapping {} -> {}: {}",
+                        src_area_id,
+                        dst_area_id,
+                        e
+                    );
+                    skipped_mapping_count += 1;
+                }
+            }
+        }
+    }
+
+    if imported_mapping_count > 0 {
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Successfully imported {} cortical mappings (skipped {} external/missing mappings)",
+            imported_mapping_count,
+            skipped_mapping_count
+        );
+    } else if skipped_mapping_count > 0 {
+        tracing::warn!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] No internal mappings imported! Skipped {} mappings (all external or missing)",
+            skipped_mapping_count
+        );
+    } else {
+        // Neither imported nor skipped counts: usually empty/missing `cortical_mapping_dst` on
+        // **newly created** guest areas after parse (e.g. flat blueprint `dstmap-d` is `{}`).
+        let mut nonempty_dst_on_new = 0_usize;
+        let mut empty_dst_on_new = 0_usize;
+        let mut missing_dst_on_new = 0_usize;
+        for area in imported_genome.cortical_areas.values() {
+            let id = area.cortical_id.as_base_64();
+            if !imported_area_ids.contains(&id) {
+                continue;
+            }
+            match area.properties.get("cortical_mapping_dst") {
+                None => missing_dst_on_new += 1,
+                Some(v) => {
+                    if v.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+                        empty_dst_on_new += 1;
+                    } else {
+                        nonempty_dst_on_new += 1;
+                    }
+                }
+            }
+        }
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] No cortical mappings to import from guest (new areas: nonempty_dst={} empty_dst={} missing_dst={}; imported_new_areas={}; skipped_existing_areas={}). \
+             Areas skipped due to host ID collision do not replay guest wiring. \
+             For synapses on newly created areas, guest blueprint needs non-empty dstmap (cortical_mapping_dst) on those sources.",
+            nonempty_dst_on_new,
+            empty_dst_on_new,
+            missing_dst_on_new,
+            imported_new_area_count,
+            skipped_existing.len()
+        );
+    }
+
+    // Copy the source circuit's declared input/output roles onto the new region.
+    // Cross-region edges are stripped on export, so connectivity alone does not restore them.
+    let (mut designated_inputs, mut designated_outputs) =
+        feagi_evolutionary::designated_io_lists_for_cloned_circuit(&imported_genome);
+    designated_inputs.retain(|id| cloned_region_member_ids.contains(id));
+    designated_outputs.retain(|id| cloned_region_member_ids.contains(id));
+    if !designated_inputs.is_empty() || !designated_outputs.is_empty() {
+        let mut io_properties: HashMap<String, serde_json::Value> = HashMap::new();
+        io_properties.insert(
+            "designated_inputs".to_string(),
+            serde_json::json!(designated_inputs),
+        );
+        io_properties.insert(
+            "designated_outputs".to_string(),
+            serde_json::json!(designated_outputs),
+        );
+        if let Err(error) = connectome_service
+            .update_brain_region(&amalgamation_id, io_properties)
+            .await
+        {
+            tracing::warn!(
+                target: "feagi-api",
+                "Amalgamation created region {} but could not copy region IO designations: {}",
+                amalgamation_id,
+                error
+            );
+        }
+    }
+
+    // 5) Invalidate all relevant health_check hashes to force BV cache refresh.
+    //
+    // Amalgamation modifies:
+    // - Brain regions (new region created)
+    // - Cortical areas (new areas added)
+    // - Brain geometry (positions of new areas)
+    // - Morphologies (new morphologies imported)
+    // - Cortical mappings (new connections created)
+    //
+    // Incrementing these hashes signals BV to refresh its cached data without requiring a restart.
+    {
+        let state_manager = feagi_state_manager::StateManager::instance();
+        let state_manager = state_manager.read();
+
+        // Increment each relevant hash (adding 1 invalidates client cache)
+        state_manager
+            .set_brain_regions_hash(state_manager.get_brain_regions_hash().wrapping_add(1));
+        state_manager
+            .set_cortical_areas_hash(state_manager.get_cortical_areas_hash().wrapping_add(1));
+        state_manager
+            .set_brain_geometry_hash(state_manager.get_brain_geometry_hash().wrapping_add(1));
+        if imported_morphology_count > 0 {
+            state_manager
+                .set_morphologies_hash(state_manager.get_morphologies_hash().wrapping_add(1));
+        }
+        if imported_mapping_count > 0 {
+            state_manager.set_cortical_mappings_hash(
+                state_manager.get_cortical_mappings_hash().wrapping_add(1),
+            );
+        }
+
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Invalidated health_check hashes for BV cache refresh"
+        );
     }
 
     // Clear pending + write history entry
@@ -379,13 +986,7 @@ pub async fn post_amalgamation_destination(
         lock.pending = None;
     }
 
-    tracing::info!(
-        target: "feagi-api",
-        "🧬 [AMALGAMATION] Confirmed and cleared pending amalgamation id={} imported_areas={} skipped_existing_areas={}",
-        pending.summary.amalgamation_id,
-        if skipped_existing.is_empty() { "unknown".to_string() } else { "partial".to_string() },
-        skipped_existing.len()
-    );
+    let guest_cortical_area_count = imported_genome.cortical_areas.len();
 
     // Build a BV-compatible list response for brain regions (regions_members-like data, but as list).
     let regions = state
@@ -393,6 +994,19 @@ pub async fn post_amalgamation_destination(
         .list_brain_regions()
         .await
         .map_err(|e| ApiError::internal(format!("Failed to list brain regions: {}", e)))?;
+
+    let post_merge_brain_region_count = regions.len();
+    let post_merge_cortical_area_total = state
+        .connectome_service
+        .get_cortical_area_ids()
+        .await
+        .map(|ids| ids.len())
+        .map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to count cortical areas after amalgamation: {}",
+                e
+            ))
+        })?;
 
     let mut brain_regions: Vec<serde_json::Value> = Vec::new();
     for region in regions {
@@ -419,8 +1033,31 @@ pub async fn post_amalgamation_destination(
             "regions": region.child_regions,
             "inputs": region.properties.get("inputs").cloned().unwrap_or_else(|| serde_json::json!([])),
             "outputs": region.properties.get("outputs").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "designated_inputs": region.properties.get("designated_inputs").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "designated_outputs": region.properties.get("designated_outputs").cloned().unwrap_or_else(|| serde_json::json!([])),
         }));
     }
+
+    tracing::info!(
+        target: "feagi-api",
+        "🧬 [AMALGAMATION] Complete genome_title='{}' amalgamation_id={} \
+         guest_custom_memory_ids_remapped={} guest_cortical_areas={} new_cortical_areas_created={} cortical_areas_skipped_host_collision={} \
+         morphologies_imported={} morphologies_skipped_already_present={} \
+         cortical_mapping_rules_imported={} cortical_mapping_rules_skipped_unresolved_dst={} \
+         post_merge_brain_regions={} post_merge_cortical_areas_total={}",
+        pending.summary.genome_title,
+        pending.summary.amalgamation_id,
+        guest_custom_memory_id_remap_count,
+        guest_cortical_area_count,
+        imported_new_area_count,
+        skipped_existing.len(),
+        imported_morphology_count,
+        skipped_morphology_count,
+        imported_mapping_count,
+        skipped_mapping_count,
+        post_merge_brain_region_count,
+        post_merge_cortical_area_total,
+    );
 
     Ok(Json(HashMap::from([
         (
@@ -434,6 +1071,42 @@ pub async fn post_amalgamation_destination(
         (
             "skipped_existing_areas".to_string(),
             serde_json::json!(skipped_existing),
+        ),
+        (
+            "imported_new_area_count".to_string(),
+            serde_json::json!(imported_new_area_count),
+        ),
+        (
+            "guest_cortical_area_count".to_string(),
+            serde_json::json!(guest_cortical_area_count),
+        ),
+        (
+            "guest_custom_memory_id_remap_count".to_string(),
+            serde_json::json!(guest_custom_memory_id_remap_count),
+        ),
+        (
+            "imported_cortical_mappings".to_string(),
+            serde_json::json!(imported_mapping_count),
+        ),
+        (
+            "skipped_cortical_mappings".to_string(),
+            serde_json::json!(skipped_mapping_count),
+        ),
+        (
+            "imported_morphology_count".to_string(),
+            serde_json::json!(imported_morphology_count),
+        ),
+        (
+            "skipped_morphology_existing_count".to_string(),
+            serde_json::json!(skipped_morphology_count),
+        ),
+        (
+            "post_merge_brain_region_count".to_string(),
+            serde_json::json!(post_merge_brain_region_count),
+        ),
+        (
+            "post_merge_cortical_area_total".to_string(),
+            serde_json::json!(post_merge_cortical_area_total),
         ),
     ])))
 }
@@ -530,7 +1203,6 @@ async fn load_default_genome(
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     tracing::info!(target: "feagi-api", "🔄 Loading {} genome from embedded Rust genomes", genome_name);
     tracing::debug!(target: "feagi-api", "   State components available: genome_service=true, runtime_service=true");
-
     // Load genome from embedded Rust templates (no file I/O!)
     let genome_json = match genome_name {
         "barebones" => feagi_evolutionary::BAREBONES_GENOME_JSON,
@@ -548,35 +1220,15 @@ async fn load_default_genome(
     tracing::info!(target: "feagi-api","Using embedded {} genome ({} bytes), starting conversion...",
                    genome_name, genome_json.len());
 
-    // Load genome via service (which will automatically ensure core components)
-    let genome_service = state.genome_service.as_ref();
     let params = LoadGenomeParams {
         json_str: genome_json.to_string(),
     };
 
-    tracing::info!(target: "feagi-api","Calling genome service load_genome...");
-    let genome_info = genome_service
-        .load_genome(params)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to load genome: {}", e)))?;
+    tracing::info!(target: "feagi-api","Calling prioritized genome transition loader...");
+    let genome_info = load_genome_with_priority(&state, params, "default_genome_endpoint").await?;
 
     tracing::info!(target: "feagi-api","Successfully loaded {} genome: {} cortical areas, {} brain regions",
                genome_name, genome_info.cortical_area_count, genome_info.brain_region_count);
-
-    // CRITICAL: Update burst frequency from genome's simulation_timestep
-    // Genome specifies timestep in seconds, convert to Hz: frequency = 1 / timestep
-    let burst_frequency_hz = 1.0 / genome_info.simulation_timestep;
-    tracing::info!(target: "feagi-api","Updating burst frequency from genome: {} seconds timestep → {:.0} Hz",
-                   genome_info.simulation_timestep, burst_frequency_hz);
-
-    // Update runtime service with new frequency
-    let runtime_service = state.runtime_service.as_ref();
-    runtime_service
-        .set_frequency(burst_frequency_hz)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to update burst frequency: {}", e)))?;
-
-    tracing::info!(target: "feagi-api","✅ Burst frequency updated to {:.0} Hz from genome physiology", burst_frequency_hz);
 
     // Return response matching Python format
     let mut response = HashMap::new();
@@ -675,19 +1327,28 @@ pub async fn post_save(
     let genome_value: serde_json::Value = serde_json::from_str(&genome_json)
         .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
     let genome_value = inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
-    let genome_json = serde_json::to_string_pretty(&genome_value)
-        .map_err(|e| ApiError::internal(format!("Failed to serialize genome JSON: {}", e)))?;
+    let genome_artifact = encode_genome_artifact(&genome_value)
+        .map_err(|e| ApiError::internal(format!("Failed to encode genome artifact: {}", e)))?;
 
     // Determine file path
     let save_path = if let Some(path) = file_path {
-        path
+        validate_genome_artifact_file_name(
+            std::path::Path::new(&path)
+                .file_name()
+                .and_then(|value| value.to_str()),
+        )?;
+        std::path::PathBuf::from(path)
     } else {
-        // Default to genomes directory with timestamp
+        // Default: under configured data root (not cwd) so containers/read-only roots work.
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        format!("genomes/saved_genome_{}.json", timestamp)
+        state
+            .filesystem_data_root
+            .join("cache")
+            .join(".genome")
+            .join(format!("saved_genome_{}.genome", timestamp))
     };
 
     // Ensure parent directory exists
@@ -697,17 +1358,17 @@ pub async fn post_save(
     }
 
     // Write to file
-    fs::write(&save_path, genome_json)
+    fs::write(&save_path, genome_artifact)
         .map_err(|e| ApiError::internal(format!("Failed to write file: {}", e)))?;
 
-    info!("✅ Genome saved successfully to: {}", save_path);
+    info!("✅ Genome saved successfully to: {}", save_path.display());
 
     Ok(Json(HashMap::from([
         (
             "message".to_string(),
             "Genome saved successfully".to_string(),
         ),
-        ("file_path".to_string(), save_path),
+        ("file_path".to_string(), save_path.display().to_string()),
     ])))
 }
 
@@ -729,15 +1390,11 @@ pub async fn post_load(
         .ok_or_else(|| ApiError::invalid_input("genome_name required"))?;
 
     // Load genome from defaults
-    let genome_service = state.genome_service.as_ref();
     let params = feagi_services::LoadGenomeParams {
         json_str: format!("{{\"genome_title\": \"{}\"}}", genome_name),
     };
 
-    let genome_info = genome_service
-        .load_genome(params)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to load genome: {}", e)))?;
+    let genome_info = load_genome_with_priority(&state, params, "post_load").await?;
 
     let mut response = HashMap::new();
     response.insert(
@@ -765,17 +1422,12 @@ pub async fn post_upload(
     State(state): State<ApiState>,
     Json(genome_json): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    let genome_service = state.genome_service.as_ref();
-
     // Convert to JSON string
     let json_str = serde_json::to_string(&genome_json)
         .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
 
     let params = LoadGenomeParams { json_str };
-    let genome_info = genome_service
-        .load_genome(params)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to upload genome: {}", e)))?;
+    let genome_info = load_genome_with_priority(&state, params, "post_upload").await?;
 
     let mut response = HashMap::new();
     response.insert("success".to_string(), serde_json::json!(true));
@@ -795,16 +1447,21 @@ pub async fn post_upload(
     Ok(Json(response))
 }
 
-/// Download the current genome as a JSON document.
+/// Download the current genome as an encoded `.genome` artifact.
 #[utoipa::path(
     get,
     path = "/v1/genome/download",
     tag = "genome",
     responses(
-        (status = 200, description = "Genome JSON", body = HashMap<String, serde_json::Value>)
+        (
+            status = 200,
+            description = "Genome artifact",
+            body = HashMap<String, serde_json::Value>,
+            content_type = "application/vnd.feagi.genome+json"
+        )
     )
 )]
-pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde_json::Value>> {
+pub async fn get_download(State(state): State<ApiState>) -> ApiResult<(HeaderMap, Vec<u8>)> {
     info!("🦀 [API] GET /v1/genome/download - Downloading current genome");
     let genome_service = state.genome_service.as_ref();
 
@@ -827,18 +1484,47 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde
     // Ensure physiology.simulation_timestep reflects the *current* runtime timestep at download time.
     let simulation_timestep_s = get_current_runtime_simulation_timestep_s(&state).await?;
     let genome_value = inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
+    let genome_artifact = encode_genome_artifact(&genome_value)
+        .map_err(|e| ApiError::internal(format!("Failed to encode genome artifact: {}", e)))?;
 
     info!(
         "✅ Genome download complete, {} bytes",
-        genome_json_str.len()
+        genome_artifact.len()
     );
-    Ok(Json(genome_value))
+    Ok((
+        genome_artifact_download_headers("attachment; filename=\"feagi_genome.genome\""),
+        genome_artifact,
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn genome_artifact_file_name_requires_genome_extension() {
+        assert!(validate_genome_artifact_file_name(Some("brain.genome")).is_ok());
+        assert!(validate_genome_artifact_file_name(Some("brain.GENOME")).is_ok());
+        assert!(validate_genome_artifact_file_name(Some(r"C:\brains\brain.genome")).is_ok());
+        assert!(validate_genome_artifact_file_name(Some("brain.json")).is_err());
+        assert!(validate_genome_artifact_file_name(Some(".genome")).is_err());
+        assert!(validate_genome_artifact_file_name(None).is_err());
+    }
+
+    #[test]
+    fn genome_download_headers_use_artifact_contract() {
+        let headers =
+            genome_artifact_download_headers("attachment; filename=\"feagi_genome.genome\"");
+        assert_eq!(
+            headers.get(header::CONTENT_TYPE).unwrap(),
+            GENOME_ARTIFACT_MEDIA_TYPE
+        );
+        assert_eq!(
+            headers.get(header::CONTENT_DISPOSITION).unwrap(),
+            "attachment; filename=\"feagi_genome.genome\""
+        );
+    }
 
     #[test]
     fn test_inject_simulation_timestep_into_genome_updates_physio_key() {
@@ -944,22 +1630,33 @@ pub async fn post_clone(
     )])))
 }
 
-/// Reset genome to its default state, clearing all customizations.
+/// Reset genome to its default state, clearing all cortical areas and brain regions.
+/// Use before loading a new genome when "cortical area already exists" errors occur.
 #[utoipa::path(
     post,
     path = "/v1/genome/reset",
     tag = "genome",
     responses(
-        (status = 200, description = "Genome reset", body = HashMap<String, String>)
+        (status = 200, description = "Genome reset", body = HashMap<String, String>),
+        (status = 409, description = "Genome transition in progress"),
+        (status = 500, description = "Reset failed")
     )
 )]
-pub async fn post_reset(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Implement genome reset
+pub async fn post_reset(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    let _lock = state.genome_transition_lock.try_lock().map_err(|_| {
+        ApiError::conflict("Another genome transition is in progress; wait for it to finish")
+    })?;
+
+    let genome_service = state.genome_service.as_ref();
+    genome_service.reset_connectome().await.map_err(|e| {
+        tracing::error!(target: "feagi-api", "Genome reset failed: {}", e);
+        ApiError::internal(format!("Genome reset failed: {}", e))
+    })?;
+
+    info!(target: "feagi-api", "Genome reset complete - connectome cleared");
     Ok(Json(HashMap::from([(
         "message".to_string(),
-        "Genome reset not yet implemented".to_string(),
+        "Genome reset complete. Connectome cleared. Load a new genome to continue.".to_string(),
     )])))
 }
 
@@ -1138,6 +1835,7 @@ pub async fn get_cortical_template(
             }
             IOCorticalAreaConfigurationFlag::CartesianPlane(f) => ("CartesianPlane", f, None),
             IOCorticalAreaConfigurationFlag::Misc(f) => ("Misc", f, None),
+            IOCorticalAreaConfigurationFlag::PoseEstimation(f, _) => ("PoseEstimation", f, None),
         };
 
         let frame_str = match frame {
@@ -1228,7 +1926,7 @@ pub async fn get_cortical_template(
                 // Use unit index 0 for template enumeration (index does not affect IO flags).
                 let cortical_ids = motor_unit
                     .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-                        CorticalUnitIndex::from(0u8),
+                        CorticalUnitIndex::from(0u16),
                         map,
                     );
 
@@ -1343,7 +2041,7 @@ pub async fn get_cortical_template(
 
                 let cortical_ids = sensory_unit
                     .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-                        CorticalUnitIndex::from(0u8),
+                        CorticalUnitIndex::from(0u16),
                         map,
                     );
 
@@ -1416,12 +2114,41 @@ pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Jso
 }
 
 /// Download a specific brain region from the genome.
-#[utoipa::path(get, path = "/v1/genome/download_region", tag = "genome")]
+#[utoipa::path(
+    get,
+    path = "/v1/genome/download_region",
+    tag = "genome",
+    responses(
+        (
+            status = 200,
+            description = "Region genome artifact",
+            body = HashMap<String, serde_json::Value>,
+            content_type = "application/vnd.feagi.genome+json"
+        )
+    )
+)]
 pub async fn get_download_region(
-    State(_state): State<ApiState>,
-    Query(_params): Query<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    Ok(Json(HashMap::new()))
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<(HeaderMap, Vec<u8>)> {
+    let region_id = params
+        .get("region_id")
+        .cloned()
+        .ok_or_else(|| ApiError::invalid_input("region_id query parameter is required"))?;
+    let json_str = state
+        .genome_service
+        .export_region_genome(region_id)
+        .await
+        .map_err(ApiError::from)?;
+    let value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+        ApiError::internal(format!("Exported region genome JSON is invalid: {}", e))
+    })?;
+    let artifact = encode_genome_artifact(&value)
+        .map_err(|e| ApiError::internal(format!("Failed to encode region artifact: {}", e)))?;
+    Ok((
+        genome_artifact_download_headers("attachment; filename=\"feagi_region.genome\""),
+        artifact,
+    ))
 }
 
 /// Get the current genome number or generation identifier.
@@ -1507,17 +2234,12 @@ pub async fn post_amalgamation_by_upload(
         .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
     {
         if field.name() == Some("file") {
+            validate_genome_artifact_file_name(field.file_name())?;
             let bytes = field.bytes().await.map_err(|e| {
                 ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
             })?;
 
-            let json_str = std::str::from_utf8(&bytes).map_err(|e| {
-                ApiError::invalid_input(format!(
-                    "Uploaded file must be UTF-8 encoded JSON (decode error: {})",
-                    e
-                ))
-            })?;
-            genome_json = Some(json_str.to_string());
+            genome_json = Some(decode_genome_artifact_for_json_service(&bytes)?);
             break;
         }
     }
@@ -1578,17 +2300,12 @@ pub async fn post_upload_file(
         .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
     {
         if field.name() == Some("file") {
+            validate_genome_artifact_file_name(field.file_name())?;
             let bytes = field.bytes().await.map_err(|e| {
                 ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
             })?;
 
-            let json_str = std::str::from_utf8(&bytes).map_err(|e| {
-                ApiError::invalid_input(format!(
-                    "Uploaded file must be UTF-8 encoded JSON (decode error: {})",
-                    e
-                ))
-            })?;
-            genome_json = Some(json_str.to_string());
+            genome_json = Some(decode_genome_artifact_for_json_service(&bytes)?);
             break;
         }
     }
@@ -1596,11 +2313,9 @@ pub async fn post_upload_file(
     let json_str =
         genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
 
-    let genome_service = state.genome_service.as_ref();
-    let genome_info = genome_service
-        .load_genome(LoadGenomeParams { json_str })
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to upload genome from file: {}", e)))?;
+    let genome_info =
+        load_genome_with_priority(&state, LoadGenomeParams { json_str }, "post_upload_file")
+            .await?;
 
     let mut response = HashMap::new();
     response.insert("success".to_string(), serde_json::json!(true));

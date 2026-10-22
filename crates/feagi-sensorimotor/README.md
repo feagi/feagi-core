@@ -112,6 +112,49 @@ for segment in segmented.segments() {
 - **Gaze Properties**: Eye tracking data
 - **Misc Data**: Generic key-value pairs
 
+## Audio Spectrum
+
+`AudioInput` (IPU) and `AudioOutput` (OPU) carry one tick of audio as a spectrum. The unit
+reference is `aud`, and the areas use the `Misc` configuration flag.
+
+- X is the frequency column, Y is the quantized phase step, Z is 0.
+- Membrane potential is the column magnitude, mapped linearly from
+  `magnitude_floor_db` (0) to `magnitude_ceiling_db` (1). Quieter columns emit no neuron.
+- Stereo is a second unit index with the same properties.
+- On decode, every tick starts silent. When several phase rows fire in one column, the
+  row with the highest potential wins.
+
+`AudioSpectrumProperties` travels in the device registration, so FEAGI sizes the area as
+`bin_count x phase_steps x 1`:
+
+| Field | Meaning |
+|---|---|
+| `sample_rate_hz` | PCM rate the analyzer expects |
+| `window_size` | FFT length, power of two, 4 to 8192 |
+| `hop_size` | Samples per tick, at most half the window |
+| `spacing` | `Linear` or `Logarithmic` |
+| `min_frequency_hz`, `max_frequency_hz` | Band. Linear is fixed at 0 Hz to Nyquist |
+| `bin_count` | Columns. Linear is `window_size / 2 + 1` |
+| `phase_steps` | Y height, 1 to 256. 1 carries magnitude only |
+
+`data_types::processing::AudioSpectrumAnalyzer` turns PCM into one frame per hop.
+`AudioSpectrumSynthesizer` turns frames back into PCM by overlap-add. On the linear layout the
+output is the input delayed by `window_size - hop_size` samples, with error set by the phase
+resolution. On the logarithmic layout several FFT bins share a column, so playback is a
+resynthesis of the spectrum, not the input waveform.
+
+```rust
+use feagi_sensorimotor::data_types::processing::{AudioSpectrumAnalyzer, AudioSpectrumSynthesizer};
+use feagi_sensorimotor::data_types::AudioSpectrumProperties;
+
+// 16 kHz, 1024-sample window, 30 Hz ticks, 16 phase steps, -80..0 dB.
+let properties = AudioSpectrumProperties::new_linear(16000, 1024, 16000 / 30, 16, -80, 0)?;
+let mut analyzer = AudioSpectrumAnalyzer::new(properties)?;
+for frame in analyzer.push_samples(&pcm)? {
+    sensor_cache.audio_input_write(unit, channel, frame.into())?;
+}
+```
+
 ## Pipeline Stages
 
 Available pipeline stages:

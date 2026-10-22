@@ -12,27 +12,96 @@
 //! instead of tower::util::ServiceExt (which requires the "util" feature).
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use base64::{engine::general_purpose, Engine as _};
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::clients::{AgentRegistrationStatus, CommandControlAgent};
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::command_and_control::FeagiMessage;
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::server::auth::DummyAuth;
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::server::{AgentLivenessConfig, FeagiAgentHandler};
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::AgentCapabilities;
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::{AgentDescriptor, AuthToken};
+#[cfg(feature = "feagi-agent")]
+use feagi_api::common::agent_registration::{
+    auto_create_cortical_areas_from_device_registrations,
+    derive_motor_cortical_ids_from_device_registrations,
+    derive_sensory_cortical_ids_from_device_registrations,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_api::common::device_registration_store::build_device_registration_store_compare;
+use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
+use feagi_api::endpoints::agent::register_agent;
+use feagi_api::endpoints::cortical_area::delete_multi_cortical_area;
+#[cfg(feature = "feagi-agent")]
+use feagi_api::endpoints::genome::post_upload;
 use feagi_api::transports::http::server::{create_http_server, ApiState};
+use feagi_api::v1::AgentRegistrationRequest;
 use feagi_brain_development::ConnectomeManager;
+use feagi_evolutionary::templates::create_genome_with_core_areas;
+#[cfg(feature = "feagi-agent")]
+use feagi_io::protocol_implementations::websocket::websocket_std::{
+    FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties,
+    FeagiWebSocketServerRouterProperties,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_io::traits_and_enums::client::{FeagiClient, FeagiClientPusher};
+#[cfg(feature = "feagi-agent")]
+use feagi_io::AgentID;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::TracingMutex;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
 use feagi_npu_runtime::StdRuntime;
+#[cfg(feature = "feagi-agent")]
+use feagi_serialization::FeagiByteContainer;
+use feagi_services::change_ledger::{
+    ChangeLedger, ChangeLedgerConfig, RecordingConnectomeService, RecordingGenomeService,
+};
 use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     SystemServiceImpl,
 };
-use http_body_util::BodyExt;
+use feagi_services::types::{CreateBrainRegionParams, CreateCorticalAreaParams};
+#[cfg(feature = "feagi-agent")]
+use feagi_services::RuntimeService;
+use feagi_services::{ConnectomeService, GenomeService};
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::CorticalID;
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::SensoryCorticalUnit;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
-use std::sync::Arc;
+use std::collections::HashMap;
+#[cfg(feature = "feagi-agent")]
+use std::collections::HashSet;
+#[cfg(feature = "feagi-agent")]
+use std::net::{Ipv4Addr, SocketAddr, TcpListener};
+use std::sync::{Arc, Mutex, OnceLock};
+#[cfg(feature = "feagi-agent")]
+use std::time::{Duration, Instant};
 use tower::ServiceExt;
 // tower::util::ServiceExt requires the "util" feature which may not be enabled
 // Using axum's test utilities instead
 
-/// Helper to create a test server with initialized components
+/// Build ApiState with initialized components.
 /// Each test gets a fresh, isolated manager (no singleton conflicts)
-async fn create_test_server() -> axum::Router {
+fn build_test_state() -> ApiState {
+    if std::env::var("FEAGI_CONFIG_PATH").is_err() {
+        std::env::set_var(
+            "FEAGI_CONFIG_PATH",
+            "/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml",
+        );
+    }
+
     // Initialize NPU (fire_ledger_window=10)
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
@@ -50,11 +119,43 @@ async fn create_test_server() -> axum::Router {
     // Create services
     let genome_service_impl = Arc::new(GenomeServiceImpl::new(Arc::clone(&manager)));
     let current_genome = genome_service_impl.get_current_genome_arc();
+    let genome_load_counter = genome_service_impl.get_genome_load_counter_arc();
+    let genome_load_timestamp = genome_service_impl.get_genome_load_timestamp_arc();
+    {
+        let mut genome_guard = current_genome.write();
+        *genome_guard = Some(create_genome_with_core_areas(
+            "test-genome".to_string(),
+            "test".to_string(),
+        ));
+    }
     let genome_service = genome_service_impl;
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(
-        Arc::clone(&manager),
-        current_genome.clone(),
-    ));
+    let mut connectome_service_impl =
+        ConnectomeServiceImpl::new(Arc::clone(&manager), current_genome.clone());
+    connectome_service_impl.set_genome_load_signals(genome_load_counter, genome_load_timestamp);
+    let connectome_service_impl: Arc<dyn ConnectomeService + Send + Sync> =
+        Arc::new(connectome_service_impl);
+    let genome_config = feagi_config::GenomeConfig::default();
+    let change_ledger = Arc::new(
+        ChangeLedger::new(
+            ChangeLedgerConfig {
+                session_capacity: genome_config.change_ledger_session_capacity,
+                max_persisted_entries: genome_config.change_history_max_entries,
+                max_persisted_bytes: genome_config.change_history_max_bytes,
+                agent_id_max_length: genome_config.change_agent_id_max_length,
+            },
+            current_genome.clone(),
+        )
+        .expect("change ledger"),
+    );
+    let genome_service: Arc<dyn GenomeService + Send + Sync> =
+        Arc::new(RecordingGenomeService::new(
+            genome_service,
+            Arc::clone(&connectome_service_impl),
+            Arc::clone(&change_ledger),
+        ));
+    let connectome_service: Arc<dyn ConnectomeService + Send + Sync> = Arc::new(
+        RecordingConnectomeService::new(connectome_service_impl, Arc::clone(&change_ledger)),
+    );
     // For tests, use empty version info
     let version_info = feagi_services::types::VersionInfo::default();
     let system_service = Arc::new(SystemServiceImpl::new(
@@ -102,7 +203,7 @@ async fn create_test_server() -> axum::Router {
             Ok(feagi_services::RuntimeStatus {
                 is_running: false,
                 is_paused: false,
-                frequency_hz: 0.0,
+                frequency_hz: 1000.0,
                 burst_count: 0,
                 current_rate_hz: 0.0,
                 last_burst_neuron_count: 0,
@@ -182,11 +283,39 @@ async fn create_test_server() -> axum::Router {
             &self,
             _cortical_area_name: &str,
             _coordinates: &[(u32, u32, u32, f32)],
+            _mode: feagi_services::traits::runtime_service::ManualStimulationMode,
         ) -> feagi_services::ServiceResult<usize> {
             Err(feagi_services::ServiceError::NotImplemented(
                 "MockRuntimeService".to_string(),
             ))
         }
+
+        async fn register_motor_subscriptions(
+            &self,
+            _agent_id: &str,
+            _cortical_ids: Vec<String>,
+            _rate_hz: f64,
+        ) -> feagi_services::ServiceResult<()> {
+            Ok(())
+        }
+
+        async fn register_visualization_subscriptions(
+            &self,
+            _agent_id: &str,
+            _rate_hz: f64,
+        ) -> feagi_services::ServiceResult<()> {
+            Ok(())
+        }
+        fn unregister_motor_subscriptions(&self, _agent_id: &str) {}
+        fn unregister_visualization_subscriptions(&self, _agent_id: &str) {}
+        async fn reset_cortical_area_states(
+            &self,
+            cortical_indices: &[u32],
+        ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+            Ok(cortical_indices.iter().map(|&i| (i, 0)).collect())
+        }
+        fn clear_all_motor_subscriptions(&self) {}
+        fn clear_all_visualization_subscriptions(&self) {}
     }
 
     let runtime_service =
@@ -199,7 +328,10 @@ async fn create_test_server() -> axum::Router {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
-    let state = ApiState {
+    let (genome_transition_lock, genome_transition_in_progress) =
+        ApiState::init_genome_transition_controls();
+    let filesystem_data_root = ApiState::filesystem_data_root_from_config(std::path::Path::new(""));
+    ApiState {
         network_connection_info_provider: None,
         agent_service: None,
         analytics_service,
@@ -208,16 +340,636 @@ async fn create_test_server() -> axum::Router {
         neuron_service,
         runtime_service,
         system_service,
-        snapshot_service: None,
         feagi_session_timestamp,
+        filesystem_data_root,
         memory_stats_cache: None,
         amalgamation_state: ApiState::init_amalgamation_state(),
+        genome_transition_lock,
+        genome_transition_in_progress,
+        last_failed_mutation: ApiState::init_last_failed_mutation(),
+        change_ledger: Some(change_ledger),
         #[cfg(feature = "feagi-agent")]
-        agent_connectors: ApiState::init_agent_connectors(),
-    };
+        agent_handler: Some(ApiState::init_agent_registration_handler()),
+    }
+}
 
-    // Create router
+#[cfg(feature = "feagi-agent")]
+#[derive(Default)]
+struct RuntimeTransitionTracker {
+    motor_subscriptions: Mutex<HashSet<String>>,
+    visualization_subscriptions: Mutex<HashSet<String>>,
+}
+
+#[cfg(feature = "feagi-agent")]
+struct TrackingRuntimeService {
+    tracker: Arc<RuntimeTransitionTracker>,
+}
+
+#[cfg(feature = "feagi-agent")]
+impl TrackingRuntimeService {
+    fn new(tracker: Arc<RuntimeTransitionTracker>) -> Self {
+        Self { tracker }
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+#[async_trait::async_trait]
+impl feagi_services::RuntimeService for TrackingRuntimeService {
+    async fn start(&self) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn stop(&self) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn pause(&self) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn resume(&self) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn step(&self) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn get_status(&self) -> feagi_services::ServiceResult<feagi_services::RuntimeStatus> {
+        Ok(feagi_services::RuntimeStatus {
+            is_running: false,
+            is_paused: false,
+            frequency_hz: 1000.0,
+            burst_count: 0,
+            current_rate_hz: 0.0,
+            last_burst_neuron_count: 0,
+            avg_burst_time_ms: 0.0,
+        })
+    }
+    async fn set_frequency(&self, _frequency: f64) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn get_burst_count(&self) -> feagi_services::ServiceResult<u64> {
+        Ok(0)
+    }
+    async fn reset_burst_count(&self) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn get_fcl_snapshot(&self) -> feagi_services::ServiceResult<Vec<(u64, f32)>> {
+        Ok(vec![])
+    }
+    async fn get_fcl_snapshot_with_cortical_idx(
+        &self,
+    ) -> feagi_services::ServiceResult<Vec<(u64, u32, f32)>> {
+        Ok(vec![])
+    }
+    async fn get_fire_queue_sample(
+        &self,
+    ) -> feagi_services::ServiceResult<
+        std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
+    > {
+        Ok(std::collections::HashMap::new())
+    }
+    async fn get_fire_ledger_configs(&self) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+        Ok(vec![])
+    }
+    async fn configure_fire_ledger_window(
+        &self,
+        _cortical_id: u32,
+        _window_size: usize,
+    ) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn get_fcl_sampler_config(&self) -> feagi_services::ServiceResult<(f64, u32)> {
+        Ok((0.0, 0))
+    }
+    async fn set_fcl_sampler_config(
+        &self,
+        _sample_rate: Option<f64>,
+        _max_samples: Option<u32>,
+    ) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn get_area_fcl_sample_rate(
+        &self,
+        _cortical_id: u32,
+    ) -> feagi_services::ServiceResult<f64> {
+        Ok(0.0)
+    }
+    async fn set_area_fcl_sample_rate(
+        &self,
+        _cortical_id: u32,
+        _sample_rate: f64,
+    ) -> feagi_services::ServiceResult<()> {
+        Ok(())
+    }
+    async fn inject_sensory_by_coordinates(
+        &self,
+        _cortical_area_name: &str,
+        _coordinates: &[(u32, u32, u32, f32)],
+        _mode: feagi_services::traits::runtime_service::ManualStimulationMode,
+    ) -> feagi_services::ServiceResult<usize> {
+        Ok(0)
+    }
+    async fn register_motor_subscriptions(
+        &self,
+        agent_id: &str,
+        _cortical_ids: Vec<String>,
+        _rate_hz: f64,
+    ) -> feagi_services::ServiceResult<()> {
+        self.tracker
+            .motor_subscriptions
+            .lock()
+            .unwrap()
+            .insert(agent_id.to_string());
+        Ok(())
+    }
+    async fn register_visualization_subscriptions(
+        &self,
+        agent_id: &str,
+        _rate_hz: f64,
+    ) -> feagi_services::ServiceResult<()> {
+        self.tracker
+            .visualization_subscriptions
+            .lock()
+            .unwrap()
+            .insert(agent_id.to_string());
+        Ok(())
+    }
+    fn unregister_motor_subscriptions(&self, agent_id: &str) {
+        self.tracker
+            .motor_subscriptions
+            .lock()
+            .unwrap()
+            .remove(agent_id);
+    }
+    fn unregister_visualization_subscriptions(&self, agent_id: &str) {
+        self.tracker
+            .visualization_subscriptions
+            .lock()
+            .unwrap()
+            .remove(agent_id);
+    }
+    async fn reset_cortical_area_states(
+        &self,
+        cortical_indices: &[u32],
+    ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+        Ok(cortical_indices.iter().map(|&i| (i, 0)).collect())
+    }
+    fn clear_all_motor_subscriptions(&self) {
+        self.tracker.motor_subscriptions.lock().unwrap().clear();
+    }
+    fn clear_all_visualization_subscriptions(&self) {
+        self.tracker
+            .visualization_subscriptions
+            .lock()
+            .unwrap()
+            .clear();
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+fn wait_for_registered_agent(
+    handler: &Arc<Mutex<FeagiAgentHandler>>,
+    client: &mut CommandControlAgent,
+    timeout: Duration,
+) -> (
+    String,
+    feagi_io::traits_and_enums::shared::TransportProtocolEndpoint,
+) {
+    let deadline = Instant::now() + timeout;
+    loop {
+        {
+            let mut guard = handler.lock().unwrap();
+            guard
+                .poll_command_and_control()
+                .expect("command/control polling failed");
+        }
+        client
+            .poll_for_messages()
+            .expect("client poll_for_messages failed");
+        if let AgentRegistrationStatus::Registered(session_id, endpoints) =
+            client.registration_status()
+        {
+            let sensory_endpoint = endpoints
+                .get(&AgentCapabilities::SendSensorData)
+                .cloned()
+                .expect("registration response missing sensory endpoint");
+            return (session_id.to_base64(), sensory_endpoint);
+        }
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for agent registration"
+        );
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+fn wait_for_sensory_data(handler: &Arc<Mutex<FeagiAgentHandler>>, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        {
+            let mut guard = handler.lock().unwrap();
+            match guard.poll_agent_sensors() {
+                Ok(Some(_)) => return true,
+                Ok(None) => {}
+                Err(_) => return false,
+            }
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+fn reserve_free_port() -> u16 {
+    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
+        .expect("failed to bind ephemeral port");
+    listener
+        .local_addr()
+        .expect("failed to read local addr")
+        .port()
+}
+
+#[cfg(feature = "feagi-agent")]
+/// Helper to create a test server with initialized components
+async fn create_test_server() -> axum::Router {
+    let state = build_test_state();
     create_http_server(state)
+}
+
+#[cfg(feature = "feagi-agent")]
+static CONFIG_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+#[cfg(feature = "feagi-agent")]
+struct ConfigEnvGuard {
+    previous: Option<String>,
+    path: std::path::PathBuf,
+}
+
+#[cfg(feature = "feagi-agent")]
+impl Drop for ConfigEnvGuard {
+    fn drop(&mut self) {
+        if let Some(value) = self.previous.take() {
+            std::env::set_var("FEAGI_CONFIG_PATH", value);
+        } else {
+            std::env::remove_var("FEAGI_CONFIG_PATH");
+        }
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_nanos();
+    let path = std::path::PathBuf::from(format!("/tmp/feagi-config-{nanos}--temp.toml"));
+    let base_path =
+        std::path::PathBuf::from("/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml");
+    let base_contents =
+        std::fs::read_to_string(&base_path).expect("Failed to read base FEAGI config");
+    let mut contents = String::new();
+    let mut in_agent = false;
+    let mut injected = false;
+
+    for line in base_contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[agent]") {
+            in_agent = true;
+            contents.push_str(line);
+            contents.push('\n');
+            continue;
+        }
+        if in_agent && trimmed.starts_with('[') {
+            if !injected {
+                contents.push_str(&format!(
+                    "auto_create_missing_cortical_areas = {}\n",
+                    auto_create
+                ));
+                injected = true;
+            }
+            in_agent = false;
+        }
+        if in_agent && trimmed.starts_with("auto_create_missing_cortical_areas") {
+            contents.push_str(&format!(
+                "auto_create_missing_cortical_areas = {}\n",
+                auto_create
+            ));
+            injected = true;
+            continue;
+        }
+        contents.push_str(line);
+        contents.push('\n');
+    }
+
+    if in_agent && !injected {
+        contents.push_str(&format!(
+            "auto_create_missing_cortical_areas = {}\n",
+            auto_create
+        ));
+    }
+
+    std::fs::write(&path, contents).expect("Failed to write temp config");
+
+    let previous = std::env::var("FEAGI_CONFIG_PATH").ok();
+    std::env::set_var("FEAGI_CONFIG_PATH", &path);
+
+    ConfigEnvGuard { previous, path }
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "Vision": [
+                [
+                    {
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "output_units_and_decoder_properties": {
+            "RotaryMotor": [
+                [
+                    {
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+/// Multi-limb device_registrations: 4 limbs (groups 0-3), 3 PositionalServo channels per limb.
+#[cfg(feature = "feagi-agent")]
+fn sample_multi_limb_device_registrations() -> Value {
+    json!({
+        "output_units_and_decoder_properties": {
+            "PositionalServo": [
+                [
+                    {
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
+                    },
+                    {}
+                ],
+                [
+                    {
+                        "cortical_unit_index": 1,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
+                    },
+                    {}
+                ],
+                [
+                    {
+                        "cortical_unit_index": 2,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
+                    },
+                    {}
+                ],
+                [
+                    {
+                        "cortical_unit_index": 3,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_named_motor_device_registrations() -> Value {
+    json!({
+        "output_units_and_decoder_properties": {
+            "PositionalServo": [
+                [
+                    {
+                        "friendly_name": "front_left_leg",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [
+                            {
+                                "friendly_name": "front_left_hip",
+                                "device_properties": {
+                                    "bundle_id": "front_left_leg",
+                                    "bundle_type": "leg"
+                                }
+                            },
+                            {
+                                "friendly_name": "front_left_knee",
+                                "device_properties": {
+                                    "bundle_id": "front_left_leg",
+                                    "bundle_type": "leg"
+                                }
+                            }
+                        ]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_motor_device_registrations_with_io_flags() -> Value {
+    json!({
+        "output_units_and_decoder_properties": {
+            "RotaryMotor": [
+                [
+                    {
+                        "friendly_name": "arm_motor",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}, {"id": 1}],
+                        "io_configuration_flags": {
+                            "frame_change_handling": "Absolute",
+                            "percentage_neuron_positioning": "Linear"
+                        }
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_multi_segmented_vision_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "SegmentedVision": [
+                [
+                    {
+                        "friendly_name": "front_camera_segmented",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {
+                        "segment_xy_resolutions": {
+                            "lower_left": {"width": 32, "height": 32},
+                            "lower_middle": {"width": 32, "height": 32},
+                            "lower_right": {"width": 32, "height": 32},
+                            "middle_left": {"width": 32, "height": 32},
+                            "center": {"width": 128, "height": 128},
+                            "middle_right": {"width": 32, "height": 32},
+                            "upper_left": {"width": 32, "height": 32},
+                            "upper_middle": {"width": 32, "height": 32},
+                            "upper_right": {"width": 32, "height": 32}
+                        },
+                        "center_color_channel": "RGB",
+                        "peripheral_color_channels": "GrayScale"
+                    }
+                ],
+                [
+                    {
+                        "friendly_name": "rear_camera_segmented",
+                        "cortical_unit_index": 1,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {
+                        "segment_xy_resolutions": {
+                            "lower_left": {"width": 32, "height": 32},
+                            "lower_middle": {"width": 32, "height": 32},
+                            "lower_right": {"width": 32, "height": 32},
+                            "middle_left": {"width": 32, "height": 32},
+                            "center": {"width": 128, "height": 128},
+                            "middle_right": {"width": 32, "height": 32},
+                            "upper_left": {"width": 32, "height": 32},
+                            "upper_middle": {"width": 32, "height": 32},
+                            "upper_right": {"width": 32, "height": 32}
+                        },
+                        "center_color_channel": "RGB",
+                        "peripheral_color_channels": "GrayScale"
+                    }
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_depth_map_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "DepthMap": [
+                [
+                    {
+                        "friendly_name": "front_depth_camera",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}],
+                        "io_configuration_flags": {
+                            "frame_change_handling": "Absolute"
+                        }
+                    },
+                    {
+                        "dimension_x": 64,
+                        "dimension_y": 64,
+                        "dimension_z": 1
+                    }
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_segmented_vision_group1_only_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "SegmentedVision": [
+                [
+                    {
+                        "friendly_name": "rear_camera_segmented",
+                        "cortical_unit_index": 1,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {
+                        "segment_xy_resolutions": {
+                            "lower_left": {"width": 32, "height": 32},
+                            "lower_middle": {"width": 32, "height": 32},
+                            "lower_right": {"width": 32, "height": 32},
+                            "middle_left": {"width": 32, "height": 32},
+                            "center": {"width": 128, "height": 128},
+                            "middle_right": {"width": 32, "height": 32},
+                            "upper_left": {"width": 32, "height": 32},
+                            "upper_middle": {"width": 32, "height": 32},
+                            "upper_right": {"width": 32, "height": 32}
+                        },
+                        "center_color_channel": "RGB",
+                        "peripheral_color_channels": "GrayScale"
+                    }
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_named_sensory_only_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "Vision": [
+                [
+                    {
+                        "friendly_name": "head_camera",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [
+                            {
+                                "friendly_name": "rgb_camera",
+                                "device_properties": {
+                                    "bundle_id": "head_camera",
+                                    "bundle_type": "camera_rig"
+                                }
+                            }
+                        ]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_sensory_device_registrations_with_large_vision_encoder() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "Vision": [
+                [
+                    {
+                        "friendly_name": "head_camera",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {
+                        "CartesianPlane": {
+                            "image_resolution": {
+                                "width": 128,
+                                "height": 96
+                            },
+                            "color_space": "Gamma",
+                            "color_channel_layout": "RGBA"
+                        }
+                    }
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
 }
 
 /// Helper to make a request and get response as JSON
@@ -243,7 +995,9 @@ async fn request_json(
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
 
-    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
 
     let json: Value = if body_bytes.is_empty() {
         json!(null)
@@ -252,26 +1006,6 @@ async fn request_json(
     };
 
     (status, json)
-}
-
-// ============================================================================
-// NETWORK CONNECTION INFO
-// ============================================================================
-
-#[tokio::test]
-async fn test_network_connection_info_placeholder() {
-    let app = create_test_server().await;
-
-    let (status, response) = request_json(app, "GET", "/v1/network/connection_info", None).await;
-
-    assert_eq!(status, StatusCode::OK);
-    // When provider is None, placeholder is returned with expected structure
-    assert!(response.is_object());
-    assert!(response.get("api").is_some());
-    assert!(response.get("zmq").is_some());
-    assert!(response.get("websocket").is_some());
-    assert!(response.get("shm").is_some());
-    assert!(response.get("stream_status").is_some());
 }
 
 // ============================================================================
@@ -289,14 +1023,1683 @@ async fn test_health_endpoint() {
 }
 
 #[tokio::test]
+async fn test_modulator_by_id_routes_resolve() {
+    // axum 0.7 path parameters are `:name`; a `{name}` segment is matched literally, so these
+    // routes used to 404 with an empty body for every real id.
+    for path in [
+        "/v1/modulator/modulator/no_such_modulator",
+        "/v1/modulator/usage/no_such_modulator",
+    ] {
+        let app = create_test_server().await;
+        let (status, body) = request_json(app, "GET", path, None).await;
+        assert!(
+            !body.is_null(),
+            "{path}: expected an API response body, got an empty router miss ({status})"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_cortical_area_read_waits_for_genome_transition() {
+    let state = build_test_state();
+    let transition_lock = Arc::clone(&state.genome_transition_lock);
+    let transition_guard = transition_lock.lock_owned().await;
+    state
+        .genome_transition_in_progress
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let app = create_http_server(state);
+
+    let read_task = tokio::spawn(request_json(
+        app,
+        "GET",
+        "/v1/cortical_area/cortical_area_name_list",
+        None,
+    ));
+    tokio::task::yield_now().await;
+    assert!(
+        !read_task.is_finished(),
+        "cortical-area read must wait until the active genome transition completes"
+    );
+
+    drop(transition_guard);
+    let (status, _response) = read_task.await.expect("read task should complete");
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
 async fn test_system_status() {
     let app = create_test_server().await;
 
-    let (status, response) = request_json(app, "GET", "/v1/system/readiness_check", None).await;
+    let (status, response) = request_json(app, "GET", "/v1/monitoring/status", None).await;
 
     assert_eq!(status, StatusCode::OK);
     // Response should have burst_engine_active field
     assert!(response.is_object());
+}
+
+// ============================================================================
+// AGENT REGISTRATION TESTS
+// ============================================================================
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_register_agent_returns_session_and_endpoints() {
+    let _state = build_test_state();
+    let _descriptor = AgentDescriptor::new("neuraville", "api-test", 1).unwrap();
+    let agent_id = AgentID::new_random();
+    let auth_token = AuthToken::new([1u8; 32]).to_base64();
+
+    let device_registrations = json!({
+        "input_units_and_encoder_properties": { "camera": [] },
+        "output_units_and_decoder_properties": {},
+        "feedbacks": {}
+    });
+
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert("device_registrations".to_string(), device_registrations);
+
+    let request = AgentRegistrationRequest {
+        agent_type: "visualization".to_string(),
+        agent_id: agent_id.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(auth_token),
+        chosen_transport: None,
+    };
+
+    let response = register_agent(ApiStateExtract(_state), ApiJson(request))
+        .await
+        .expect("Registration should succeed");
+    let body = response.0;
+
+    assert!(body.success);
+    let transport = body.transport.expect("Expected transport payload");
+    assert!(transport.contains_key("session_id"));
+    let endpoints = transport
+        .get("endpoints")
+        .and_then(|value| value.as_object())
+        .expect("Expected endpoints in transport payload");
+    assert!(endpoints.contains_key("send_sensor_data"));
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_register_visualization_only_agent_returns_session_and_endpoints() {
+    let _state = build_test_state();
+    let agent_id = AgentID::new_random();
+    let auth_token = AuthToken::new([4u8; 32]).to_base64();
+
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert(
+        "visualization".to_string(),
+        json!({ "visualization_type": "3d_brain", "rate_hz": 20.0, "bridge_proxy": false }),
+    );
+
+    let request = AgentRegistrationRequest {
+        agent_type: "visualization".to_string(),
+        agent_id: agent_id.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(auth_token),
+        chosen_transport: None,
+    };
+
+    let response = register_agent(ApiStateExtract(_state), ApiJson(request))
+        .await
+        .expect("Visualization-only registration should succeed");
+    let body = response.0;
+
+    assert!(body.success);
+    let transport = body.transport.expect("Expected transport payload");
+    assert!(transport.contains_key("session_id"));
+    let endpoints = transport
+        .get("endpoints")
+        .and_then(|value| value.as_object())
+        .expect("Expected endpoints in transport payload");
+    assert!(endpoints.contains_key("receive_neuron_visualizations"));
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_register_agent_rejects_rate_above_burst_frequency() {
+    let _state = build_test_state();
+    let agent_id = AgentID::new_random();
+    let auth_token = AuthToken::new([2u8; 32]).to_base64();
+
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert(
+        "device_registrations".to_string(),
+        sample_device_registrations(),
+    );
+    capabilities.insert("motor".to_string(), json!({ "rate_hz": 2000.0 }));
+
+    let request = AgentRegistrationRequest {
+        agent_type: "motor".to_string(),
+        agent_id: agent_id.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(auth_token),
+        chosen_transport: None,
+    };
+
+    let result = register_agent(ApiStateExtract(_state), ApiJson(request)).await;
+    assert!(result.is_err());
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_register_agent_rejects_visualization_rate_above_burst_frequency() {
+    let _state = build_test_state();
+    let agent_id = AgentID::new_random();
+    let auth_token = AuthToken::new([3u8; 32]).to_base64();
+
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert(
+        "device_registrations".to_string(),
+        sample_device_registrations(),
+    );
+    capabilities.insert("visualization".to_string(), json!({ "rate_hz": 2000.0 }));
+
+    let request = AgentRegistrationRequest {
+        agent_type: "visualization".to_string(),
+        agent_id: agent_id.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(auth_token),
+        chosen_transport: None,
+    };
+
+    let result = register_agent(ApiStateExtract(_state), ApiJson(request)).await;
+    assert!(result.is_err());
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_disabled_skips_creation() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(false)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
+        .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    assert!(areas.is_empty());
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_enabled_creates_areas() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
+        .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    assert!(!areas.is_empty());
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_creates_all_limb_cortical_areas() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_multi_limb_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let motor_areas: Vec<_> = areas
+        .iter()
+        .filter(|a| a.area_type == "motor" || a.cortical_group == "OPU")
+        .collect();
+    assert_eq!(
+        motor_areas.len(),
+        12,
+        "Expected 12 PositionalServo areas (abs+inc+speed per limb), got {}",
+        motor_areas.len()
+    );
+    let mut abs_width_count = 0;
+    let mut inc_width_count = 0;
+    let mut speed_width_count = 0;
+    for area in &motor_areas {
+        if area.name.ends_with("-1") {
+            assert_eq!(
+                area.dimensions.0, 6,
+                "Incremental subunit width should be 6"
+            );
+            inc_width_count += 1;
+        } else if area.name.ends_with("-2") {
+            assert_eq!(area.dimensions.0, 3, "Speed subunit width should be 3");
+            speed_width_count += 1;
+        } else if area.name.ends_with("-0") {
+            assert_eq!(area.dimensions.0, 3, "Absolute subunit width should be 3");
+            abs_width_count += 1;
+        }
+        assert_eq!(
+            area.properties.get("dev_count").and_then(|v| v.as_u64()),
+            Some(3),
+            "Each limb area should have dev_count=3"
+        );
+    }
+    assert_eq!(abs_width_count, 4, "Expected 4 absolute limb areas");
+    assert_eq!(inc_width_count, 4, "Expected 4 incremental limb areas");
+    assert_eq!(speed_width_count, 4, "Expected 4 speed limb areas");
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_index() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_multi_segmented_vision_device_registrations();
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+
+    let mut group0_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+    let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+
+    for area in &areas {
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
+            continue;
+        };
+        let bytes = cortical_id.as_bytes();
+        if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+            continue;
+        }
+        let subunit_index = *cortical_id.io_cortical_sub_unit_index();
+        let group_index = *cortical_id.io_cortical_unit_index();
+        if group_index == 0 {
+            group0_by_subunit.insert(subunit_index, area.position);
+        } else if group_index == 1 {
+            group1_by_subunit.insert(subunit_index, area.position);
+        }
+    }
+
+    assert_eq!(
+        group0_by_subunit.len(),
+        9,
+        "Expected 9 segmented-vision subunits for group 0"
+    );
+    assert_eq!(
+        group1_by_subunit.len(),
+        9,
+        "Expected 9 segmented-vision subunits for group 1"
+    );
+
+    for subunit in 0u8..9u8 {
+        let pos0 = group0_by_subunit
+            .get(&subunit)
+            .expect("Missing segmented-vision subunit in group 0");
+        let pos1 = group1_by_subunit
+            .get(&subunit)
+            .expect("Missing segmented-vision subunit in group 1");
+
+        assert_eq!(
+            pos0.1, pos1.1,
+            "Expected Y to match template for both segmented groups (subunit {})",
+            subunit
+        );
+        assert_eq!(
+            pos0.2, pos1.2,
+            "Expected Z to match template for both segmented groups (subunit {})",
+            subunit
+        );
+        assert!(
+            pos1.0 > pos0.0,
+            "Expected group 1 subunit {} to be to the right of group 0 (x1={}, x0={})",
+            subunit,
+            pos1.0,
+            pos0.0
+        );
+    }
+
+    let group0_max_x = group0_by_subunit
+        .values()
+        .map(|(x, _, _)| *x)
+        .max()
+        .expect("Group 0 should not be empty");
+    let group1_min_x = group1_by_subunit
+        .values()
+        .map(|(x, _, _)| *x)
+        .min()
+        .expect("Group 1 should not be empty");
+    assert!(
+        group1_min_x > group0_max_x,
+        "Expected segmented-vision group 1 assembly to be placed to the right of group 0 assembly"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    // Seed the scene with an existing segmented-vision group (group 0) at custom Y/Z positions.
+    let mut config = serde_json::Map::new();
+    config.insert(
+        "frame_change_handling".to_string(),
+        serde_json::to_value(FrameChangeHandling::Absolute).expect("Serialize frame handling"),
+    );
+    config.insert(
+        "percentage_neuron_positioning".to_string(),
+        serde_json::to_value(PercentageNeuronPositioning::Linear)
+            .expect("Serialize percentage neuron positioning"),
+    );
+
+    let existing_ids = SensoryCorticalUnit::SegmentedVision
+        .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+            CorticalUnitIndex::from(0u16),
+            config,
+        )
+        .expect("Generate segmented-vision cortical IDs for group 0");
+
+    let mut existing_params: Vec<CreateCorticalAreaParams> = Vec::new();
+    for (subunit, cortical_id) in existing_ids.iter().enumerate() {
+        let subunit_i32 = subunit as i32;
+        existing_params.push(CreateCorticalAreaParams {
+            cortical_id: cortical_id.as_base_64(),
+            name: format!("seeded-segmented-{}", subunit),
+            dimensions: if subunit == 4 {
+                (128, 128, 3)
+            } else {
+                (32, 32, 1)
+            },
+            position: (-100 + subunit_i32, 200 + subunit_i32, -300 - subunit_i32),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        });
+    }
+
+    state
+        .genome_service
+        .create_cortical_areas(existing_params)
+        .await
+        .expect("Seed existing segmented-vision group");
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_segmented_vision_group1_only_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+
+    let mut group0_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+    let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+    for area in &areas {
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
+            continue;
+        };
+        let bytes = cortical_id.as_bytes();
+        if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+            continue;
+        }
+        let subunit_index = *cortical_id.io_cortical_sub_unit_index();
+        let group_index = *cortical_id.io_cortical_unit_index();
+        if group_index == 0 {
+            group0_by_subunit.insert(subunit_index, area.position);
+        } else if group_index == 1 {
+            group1_by_subunit.insert(subunit_index, area.position);
+        }
+    }
+
+    assert_eq!(
+        group0_by_subunit.len(),
+        9,
+        "Expected seeded group 0 subunits"
+    );
+    assert_eq!(
+        group1_by_subunit.len(),
+        9,
+        "Expected newly created group 1 subunits"
+    );
+
+    for subunit in 0u8..9u8 {
+        let pos0 = group0_by_subunit
+            .get(&subunit)
+            .expect("Missing seeded group 0 subunit");
+        let pos1 = group1_by_subunit
+            .get(&subunit)
+            .expect("Missing created group 1 subunit");
+
+        assert_eq!(
+            pos1.1, pos0.1,
+            "Expected group 1 subunit {} Y to align with existing segmented group",
+            subunit
+        );
+        assert_eq!(
+            pos1.2, pos0.2,
+            "Expected group 1 subunit {} Z to align with existing segmented group",
+            subunit
+        );
+        assert!(
+            pos1.0 > pos0.0,
+            "Expected group 1 subunit {} X to be to the right after horizontal expansion",
+            subunit
+        );
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existing_anchor_incomplete(
+) {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    // Seed an INCOMPLETE existing segmented-vision group (group 0): only one subunit.
+    let mut config = serde_json::Map::new();
+    config.insert(
+        "frame_change_handling".to_string(),
+        serde_json::to_value(FrameChangeHandling::Absolute).expect("Serialize frame handling"),
+    );
+    config.insert(
+        "percentage_neuron_positioning".to_string(),
+        serde_json::to_value(PercentageNeuronPositioning::Linear)
+            .expect("Serialize percentage neuron positioning"),
+    );
+    let existing_ids = SensoryCorticalUnit::SegmentedVision
+        .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+            CorticalUnitIndex::from(0u16),
+            config,
+        )
+        .expect("Generate segmented-vision cortical IDs for group 0");
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: existing_ids[0].as_base_64(),
+            name: "seeded-incomplete-segmented-0".to_string(),
+            dimensions: (32, 32, 1),
+            position: (999, 777, 555),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("Seed incomplete segmented-vision anchor");
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_segmented_vision_group1_only_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+
+    let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+    for area in &areas {
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
+            continue;
+        };
+        let bytes = cortical_id.as_bytes();
+        if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+            continue;
+        }
+        if *cortical_id.io_cortical_unit_index() == 1 {
+            group1_by_subunit.insert(*cortical_id.io_cortical_sub_unit_index(), area.position);
+        }
+    }
+
+    assert_eq!(
+        group1_by_subunit.len(),
+        9,
+        "Expected complete group 1 segmented-vision creation"
+    );
+
+    // Subunit 0 template-relative Y/Z for segmented vision is (-70, 0) in sensory template.
+    // With an incomplete anchor, Y/Z must come from template (not the seeded 777/555).
+    let subunit0 = group1_by_subunit
+        .get(&0)
+        .expect("Missing group 1 subunit 0");
+    assert_eq!(
+        subunit0.1, -70,
+        "Expected template Y when existing segmented anchor is incomplete"
+    );
+    assert_eq!(
+        subunit0.2, 0,
+        "Expected template Z when existing segmented anchor is incomplete"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_named_motor_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    assert!(
+        areas
+            .iter()
+            .any(|area| area.name.starts_with("front_left_leg")),
+        "Expected created motor area names to use registration friendly name"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_sets_firing_threshold_for_simple_vision() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
+        .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let vision_area = areas
+        .iter()
+        .find(|area| {
+            general_purpose::STANDARD
+                .decode(&area.cortical_id)
+                .ok()
+                .is_some_and(|bytes| bytes.len() == 8 && bytes[0] == b'i' && &bytes[1..4] == b"img")
+        })
+        .expect("Expected simple vision area to be auto-created");
+
+    assert_eq!(
+        vision_area.firing_threshold, 150.0,
+        "Expected simple vision auto-created area firing_threshold=150.0"
+    );
+    assert!(
+        !vision_area.mp_charge_accumulation,
+        "Expected simple vision auto-created area mp_charge_accumulation=false"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_sets_firing_threshold_for_segmented_vision() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_multi_segmented_vision_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+
+    let segmented_vision_areas: Vec<_> = areas
+        .iter()
+        .filter(|area| {
+            general_purpose::STANDARD
+                .decode(&area.cortical_id)
+                .ok()
+                .is_some_and(|bytes| bytes.len() == 8 && bytes[0] == b'i' && &bytes[1..4] == b"svi")
+        })
+        .collect();
+
+    assert!(
+        !segmented_vision_areas.is_empty(),
+        "Expected segmented vision areas to be auto-created"
+    );
+    for area in segmented_vision_areas {
+        assert_eq!(
+            area.firing_threshold, 150.0,
+            "Expected segmented vision area {} firing_threshold=150.0",
+            area.cortical_id
+        );
+        assert!(
+            !area.mp_charge_accumulation,
+            "Expected segmented vision area {} mp_charge_accumulation=false",
+            area.cortical_id
+        );
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_sets_depth_map_threshold_defaults() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    let registrations = sample_depth_map_device_registrations();
+    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving sensory cortical IDs for depth map");
+    let cortical_id = sensory_ids
+        .iter()
+        .next()
+        .cloned()
+        .expect("Expected derived depth map cortical ID");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let depth_area = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected depth map area to be auto-created");
+
+    assert_eq!(
+        depth_area.firing_threshold, 0.0001,
+        "Expected depth map auto-created area firing_threshold=0.0001"
+    );
+    assert_eq!(
+        depth_area.firing_threshold_increment,
+        [0.0, 0.0, 0.0],
+        "Depth map is one layer; depth rides on potential, not on graded Z thresholds"
+    );
+    assert_eq!(depth_area.dimensions.2, 1, "Depth map is one layer deep");
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_migrates_existing_depth_map_legacy_thresholds() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_depth_map_device_registrations();
+    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving sensory cortical IDs for depth map");
+    let cortical_id = sensory_ids
+        .iter()
+        .next()
+        .cloned()
+        .expect("Expected derived depth map cortical ID");
+
+    let mut props: HashMap<String, serde_json::Value> = HashMap::new();
+    props.insert("firing_threshold".to_string(), serde_json::json!(150.0));
+    props.insert(
+        "firing_threshold_increment_x".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert(
+        "firing_threshold_increment_y".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert(
+        "firing_threshold_increment_z".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert("dev_count".to_string(), serde_json::json!(1));
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "legacy_depth".to_string(),
+            dimensions: (64, 64, 64),
+            position: (-140, 30, 0),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(props),
+        }])
+        .await
+        .expect("Failed to pre-create legacy depth map area");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let depth_area = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected depth map area to exist after auto-create reconciliation");
+
+    assert_eq!(
+        depth_area.firing_threshold, 0.0001,
+        "Expected legacy depth map threshold to migrate to 0.0001"
+    );
+    assert_eq!(
+        depth_area.dimensions.2, 1,
+        "Expected legacy binned depth map to be resized to one layer"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_migrates_depth_map_threshold_from_legacy_35() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_depth_map_device_registrations();
+    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving sensory cortical IDs for depth map");
+    let cortical_id = sensory_ids
+        .iter()
+        .next()
+        .cloned()
+        .expect("Expected derived depth map cortical ID");
+
+    let mut props: HashMap<String, serde_json::Value> = HashMap::new();
+    props.insert("firing_threshold".to_string(), serde_json::json!(35.0));
+    props.insert(
+        "firing_threshold_increment_x".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert(
+        "firing_threshold_increment_y".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert(
+        "firing_threshold_increment_z".to_string(),
+        serde_json::json!(0.0),
+    );
+    props.insert("dev_count".to_string(), serde_json::json!(1));
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "legacy_depth_35".to_string(),
+            dimensions: (64, 64, 64),
+            position: (-140, 30, 0),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(props),
+        }])
+        .await
+        .expect("Failed to pre-create legacy depth map area");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let depth_area = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected depth map area to exist after auto-create reconciliation");
+
+    assert_eq!(
+        depth_area.firing_threshold, 0.0001,
+        "Expected legacy 35.0 depth map threshold to migrate to 0.0001"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_supports_sensory_only_registrations() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_named_sensory_only_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    assert!(
+        areas.iter().any(|area| area.name == "head_camera"),
+        "Expected sensory-only registration to create sensory area with registration name"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_properties() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_sensory_device_registrations_with_large_vision_encoder();
+    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving sensory cortical IDs");
+    let cortical_id = sensory_ids
+        .into_iter()
+        .next()
+        .expect("Expected a vision cortical ID");
+
+    // Pre-create an undersized sensory area to verify auto-create update logic expands it.
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "legacy_vision".to_string(),
+            dimensions: (64, 64, 3),
+            position: (-100, 30, 0),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("Failed to pre-create sensory area");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let resized = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected sensory area to exist after auto-create");
+
+    assert_eq!(
+        resized.dimensions,
+        (128, 96, 4),
+        "Expected sensory area dimensions to expand to encoder properties"
+    );
+    assert_eq!(
+        resized.position,
+        (-100, 30, 0),
+        "Existing sensory area position must remain unchanged during auto-create reconciliation"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_post_cortical_area_resizes_existing_segmented_tile_for_the_same_group() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let ids = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+        FrameChangeHandling::Absolute,
+        CorticalUnitIndex::from(0u16),
+    );
+    let mut seed_properties = HashMap::new();
+    seed_properties.insert("dev_count".to_string(), json!(1));
+    seed_properties.insert(
+        "cortical_dimensions_per_device".to_string(),
+        json!([8, 8, 1]),
+    );
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: ids[0].as_base_64(),
+            name: "partial-segmented".to_string(),
+            dimensions: (8, 8, 1),
+            position: (999, 777, 555),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(seed_properties),
+        }])
+        .await
+        .expect("Failed to seed one segmented-vision tile");
+
+    let data_type = IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute)
+        .to_data_type_configuration_flag();
+    let mut dimensions_by_subunit = serde_json::Map::new();
+    let mut data_type_configs_by_subunit = serde_json::Map::new();
+    for index in 0..9 {
+        let volume = if index == 4 {
+            json!([100, 80, 3])
+        } else {
+            json!([40, 24, 1])
+        };
+        dimensions_by_subunit.insert(index.to_string(), volume);
+        data_type_configs_by_subunit.insert(index.to_string(), json!(data_type));
+    }
+    let mut request = HashMap::new();
+    request.insert("cortical_id".to_string(), json!("isvi"));
+    request.insert("cortical_type".to_string(), json!("IPU"));
+    request.insert("group_id".to_string(), json!(0));
+    request.insert("device_count".to_string(), json!(1));
+    request.insert("coordinates_3d".to_string(), json!([0, 0, 0]));
+    request.insert(
+        "per_device_dimensions_by_subunit".to_string(),
+        Value::Object(dimensions_by_subunit),
+    );
+    request.insert(
+        "data_type_configs_by_subunit".to_string(),
+        Value::Object(data_type_configs_by_subunit),
+    );
+
+    let _response = feagi_api::endpoints::cortical_area::post_cortical_area(
+        ApiStateExtract(state.clone()),
+        ApiJson(request),
+    )
+    .await
+    .expect(
+        "Same-group segmented vision align should resize the existing tile and create the rest",
+    );
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let mut group0 = HashMap::new();
+    for area in areas {
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&area.cortical_id) else {
+            continue;
+        };
+        let bytes = cortical_id.as_bytes();
+        if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+            continue;
+        }
+        if *cortical_id.io_cortical_unit_index() != 0 {
+            continue;
+        }
+        group0.insert(
+            *cortical_id.io_cortical_sub_unit_index(),
+            (
+                area.dimensions.0,
+                area.dimensions.1,
+                area.dimensions.2,
+                area.position,
+            ),
+        );
+    }
+    assert_eq!(group0.len(), 9, "Expected all nine tiles of group 0");
+    assert_eq!(
+        group0.get(&0).copied(),
+        Some((40, 24, 1, (999, 777, 555))),
+        "Existing tile of the targeted group must be resized without moving it"
+    );
+    assert_eq!(
+        group0.get(&4).map(|tile| (tile.0, tile.1, tile.2)),
+        Some((100, 80, 3)),
+        "Missing center tile must be created at the registered size"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_preserves_existing_motor_area_position_while_reconciling_structure() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_motor_device_registrations_with_io_flags();
+    let motor_ids = derive_motor_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving motor cortical IDs");
+    let cortical_id = motor_ids
+        .into_iter()
+        .next()
+        .expect("Expected at least one motor cortical ID");
+    let preserved_position = (777, 888, 9);
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "legacy_motor".to_string(),
+            dimensions: (1, 1, 1),
+            position: preserved_position,
+            area_type: "motor".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("Failed to pre-create motor area");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let reconciled = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected motor area to exist after auto-create");
+
+    assert_eq!(
+        reconciled.position, preserved_position,
+        "Existing motor area position must remain unchanged during auto-create reconciliation"
+    );
+    assert_ne!(
+        reconciled.dimensions,
+        (1, 1, 1),
+        "Expected motor dimensions to reconcile from registration while preserving position"
+    );
+    assert_eq!(
+        reconciled
+            .properties
+            .get("dev_count")
+            .and_then(|v| v.as_u64()),
+        Some(2),
+        "Expected motor dev_count to reconcile from registration while preserving position"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_until_reregister() {
+    let tracker = Arc::new(RuntimeTransitionTracker::default());
+    let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
+        as Arc<dyn RuntimeService + Send + Sync>;
+
+    let mut state = build_test_state();
+    state.runtime_service = runtime_service.clone();
+    let handler = Arc::new(Mutex::new(feagi_agent::server::FeagiAgentHandler::new(
+        Box::new(feagi_agent::server::auth::DummyAuth {}),
+    )));
+    state.agent_handler = Some(Arc::clone(&handler));
+
+    let session_id = AgentID::new([7u8; AgentID::NUMBER_BYTES]);
+    let descriptor = AgentDescriptor::new("neuraville", "transition-test-agent", 1)
+        .expect("descriptor creation failed");
+    {
+        let mut guard = handler.lock().unwrap();
+        guard.register_logical_agent(
+            session_id,
+            descriptor.clone(),
+            vec![
+                AgentCapabilities::SendSensorData,
+                AgentCapabilities::ReceiveMotorData,
+            ],
+        );
+    }
+    let session_id_b64 = session_id.to_base64();
+    assert_eq!(
+        handler.lock().unwrap().get_all_registered_agents().len(),
+        1,
+        "expected an active registered agent before genome load"
+    );
+
+    runtime_service
+        .register_motor_subscriptions(&session_id_b64, vec!["b21vdAUAAAA=".to_string()], 10.0)
+        .await
+        .expect("failed to seed motor subscriptions");
+    runtime_service
+        .register_visualization_subscriptions(&session_id_b64, 10.0)
+        .await
+        .expect("failed to seed visualization subscriptions");
+
+    // Use a malformed genome payload so load fails fast while still exercising
+    // strict transition teardown logic that runs before genome parsing/loading.
+    let bad_genome_value = json!({"invalid": "payload"});
+    let transition_result =
+        post_upload(ApiStateExtract(state.clone()), ApiJson(bad_genome_value)).await;
+    assert!(
+        transition_result.is_err(),
+        "expected malformed genome upload to fail"
+    );
+
+    assert_eq!(
+        handler.lock().unwrap().get_all_registered_agents().len(),
+        0,
+        "agent list should be empty after genome transition"
+    );
+    assert!(
+        tracker.motor_subscriptions.lock().unwrap().is_empty(),
+        "motor subscriptions should be empty after genome transition"
+    );
+    assert!(
+        tracker
+            .visualization_subscriptions
+            .lock()
+            .unwrap()
+            .is_empty(),
+        "visualization subscriptions should be empty after genome transition"
+    );
+
+    // Before re-registration there is no active transport session, so handler
+    // polling cannot consume sensory frames.
+    {
+        let mut guard = handler.lock().unwrap();
+        assert!(
+            guard
+                .poll_agent_sensors()
+                .expect("polling sensory should not fail")
+                .is_none(),
+            "sensory must not be consumed after genome transition before re-registration"
+        );
+    }
+
+    // Re-registration path: a new logical session can be added after transition.
+    let new_session_id = AgentID::new([9u8; AgentID::NUMBER_BYTES]);
+    {
+        let mut guard = handler.lock().unwrap();
+        guard.register_logical_agent(
+            new_session_id,
+            descriptor,
+            vec![
+                AgentCapabilities::SendSensorData,
+                AgentCapabilities::ReceiveMotorData,
+            ],
+        );
+    }
+    assert_eq!(
+        handler.lock().unwrap().get_all_registered_agents().len(),
+        1,
+        "agent should reappear only after explicit re-registration"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_force_deregister_preserves_descriptor_device_registrations_for_reconnect() {
+    let mut handler = FeagiAgentHandler::new(Box::new(DummyAuth {}));
+    let descriptor =
+        AgentDescriptor::new("neuraville", "mujoco-agent", 1).expect("descriptor creation failed");
+    let initial_session = AgentID::new([3u8; AgentID::NUMBER_BYTES]);
+
+    handler.set_device_registrations_by_descriptor(
+        initial_session.to_base64(),
+        descriptor.clone(),
+        json!({
+            "outputs": {
+                "servo": {
+                    "type": "opu",
+                    "properties": {"feagi_index": 0}
+                }
+            }
+        }),
+    );
+    handler.register_logical_agent(
+        initial_session,
+        descriptor.clone(),
+        vec![AgentCapabilities::ReceiveMotorData],
+    );
+
+    let removed = handler.force_deregister_all_agents("test transition");
+    assert_eq!(removed.len(), 1, "expected one agent to be deregistered");
+    assert!(
+        handler.get_all_registered_agents().is_empty(),
+        "all active agent sessions must be removed"
+    );
+    assert!(
+        handler
+            .get_device_registrations_by_descriptor(&descriptor)
+            .is_some(),
+        "descriptor device registrations should persist for reconnect mapping"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[test]
+fn test_device_registration_store_compare_flags_stale_segmented_vision() {
+    let mut handler = FeagiAgentHandler::new(Box::new(DummyAuth {}));
+    let descriptor =
+        AgentDescriptor::new("neuraville", "Lite6", 1).expect("descriptor creation failed");
+    let session_id = AgentID::new([5u8; AgentID::NUMBER_BYTES]);
+    handler.set_device_registrations_by_descriptor(
+        session_id.to_base64(),
+        descriptor.clone(),
+        json!({
+            "input_units_and_encoder_properties": {
+                "SegmentedVision": [[
+                    {"friendly_name": "hand_bottom", "cortical_unit_index": 0},
+                    {}
+                ]]
+            },
+            "output_units_and_decoder_properties": {}
+        }),
+    );
+    handler.set_device_registrations_by_agent(
+        session_id,
+        json!({
+            "input_units_and_encoder_properties": {
+                "Vision": [[
+                    {"friendly_name": "scene_cam", "cortical_unit_index": 0},
+                    {}
+                ]]
+            },
+            "output_units_and_decoder_properties": {}
+        }),
+    );
+    handler.register_logical_agent(
+        session_id,
+        descriptor,
+        vec![AgentCapabilities::SendSensorData],
+    );
+
+    let compare = build_device_registration_store_compare(
+        handler.get_all_registered_agents(),
+        handler.get_device_registrations_by_descriptor_store(),
+        handler.get_device_registrations_by_agent_store(),
+        handler.get_descriptor_session_ids(),
+    );
+    assert_eq!(compare.count, 1);
+    assert_eq!(compare.mismatch_count, 1);
+    assert_eq!(compare.segmented_vision_descriptor_stale_count, 1);
+    let row = &compare.agents[0];
+    assert_eq!(row.poll_source, "descriptor");
+    assert!(row.segmented_vision_only_in_descriptor);
+    assert!(row
+        .keys_only_in_descriptor
+        .contains(&"SegmentedVision".to_string()));
+    assert!(row.keys_only_in_session.contains(&"Vision".to_string()));
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+#[ignore = "real transport path can hang in CI; run manually for websocket validation"]
+async fn test_genome_transition_realtime_transport_requires_reregistration() {
+    let tracker = Arc::new(RuntimeTransitionTracker::default());
+    let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
+        as Arc<dyn RuntimeService + Send + Sync>;
+
+    let mut state = build_test_state();
+    state.runtime_service = runtime_service.clone();
+    let host = Ipv4Addr::LOCALHOST.to_string();
+    let registration_port = reserve_free_port();
+    let sensory_port = reserve_free_port();
+    let motor_port = reserve_free_port();
+    let viz_port = reserve_free_port();
+    let registration_bind = format!("{host}:{registration_port}");
+    let registration_remote = format!("ws://{host}:{registration_port}");
+    let sensory_bind = format!("{host}:{sensory_port}");
+    let sensory_remote = format!("ws://{host}:{sensory_port}");
+    let motor_bind = format!("{host}:{motor_port}");
+    let motor_remote = format!("ws://{host}:{motor_port}");
+    let viz_bind = format!("{host}:{viz_port}");
+    let viz_remote = format!("ws://{host}:{viz_port}");
+
+    let mut test_handler = FeagiAgentHandler::new_with_liveness_config(
+        Box::new(DummyAuth {}),
+        AgentLivenessConfig::default(),
+    );
+    test_handler
+        .add_and_start_command_control_server(Box::new(
+            FeagiWebSocketServerRouterProperties::new_with_remote(
+                &registration_bind,
+                &registration_remote,
+            )
+            .expect("failed to create websocket router properties"),
+        ))
+        .expect("failed to start websocket command/control router");
+    test_handler.add_puller_server(Box::new(
+        FeagiWebSocketServerPullerProperties::new_with_remote(&sensory_bind, &sensory_remote)
+            .expect("failed to create websocket sensory puller properties"),
+    ));
+    test_handler.add_publisher_server(Box::new(
+        FeagiWebSocketServerPublisherProperties::new(&motor_bind, &motor_remote)
+            .expect("failed to create websocket motor publisher properties"),
+    ));
+    test_handler.add_publisher_server(Box::new(
+        FeagiWebSocketServerPublisherProperties::new(&viz_bind, &viz_remote)
+            .expect("failed to create websocket viz publisher properties"),
+    ));
+    let handler = Arc::new(Mutex::new(test_handler));
+    state.agent_handler = Some(Arc::clone(&handler));
+
+    let registration_endpoint = {
+        let guard = handler.lock().unwrap();
+        guard
+            .get_command_control_server_info()
+            .into_iter()
+            .next()
+            .expect("no command/control server available")
+            .get_agent_endpoint()
+    };
+
+    let mut client = CommandControlAgent::new(
+        registration_endpoint
+            .try_create_boxed_client_requester_properties()
+            .expect("failed to create requester properties"),
+    );
+    client.request_connect().expect("client connect failed");
+    client
+        .request_registration(
+            AgentDescriptor::new("neuraville", "transition-rt-agent", 1)
+                .expect("descriptor creation failed"),
+            AuthToken::new([0u8; 32]),
+            vec![
+                AgentCapabilities::SendSensorData,
+                AgentCapabilities::ReceiveMotorData,
+            ],
+        )
+        .expect("registration request failed");
+
+    let (session_id_b64, sensory_endpoint) =
+        wait_for_registered_agent(&handler, &mut client, Duration::from_secs(5));
+    assert_eq!(
+        handler.lock().unwrap().get_all_registered_agents().len(),
+        1,
+        "expected an active registered agent before genome load"
+    );
+
+    runtime_service
+        .register_motor_subscriptions(&session_id_b64, vec!["b21vdAUAAAA=".to_string()], 10.0)
+        .await
+        .expect("failed to seed motor subscriptions");
+    runtime_service
+        .register_visualization_subscriptions(&session_id_b64, 10.0)
+        .await
+        .expect("failed to seed visualization subscriptions");
+
+    let pusher_props = sensory_endpoint
+        .try_create_boxed_client_pusher_properties()
+        .expect("failed to create sensory pusher properties");
+    let mut sensory_pusher = pusher_props.as_boxed_client_pusher();
+    sensory_pusher
+        .request_connect()
+        .expect("sensory pusher connect failed");
+    let pre_payload: FeagiByteContainer = FeagiMessage::HeartBeat.into();
+    sensory_pusher
+        .publish_data(pre_payload.get_byte_ref())
+        .expect("failed to publish pre-load sensory payload");
+    assert!(
+        wait_for_sensory_data(&handler, Duration::from_secs(2)),
+        "expected sensory data to be consumed before genome transition"
+    );
+
+    let bad_genome_value = json!({"invalid": "payload"});
+    let transition_result =
+        post_upload(ApiStateExtract(state.clone()), ApiJson(bad_genome_value)).await;
+    assert!(
+        transition_result.is_err(),
+        "expected malformed genome upload to fail"
+    );
+
+    assert_eq!(
+        handler.lock().unwrap().get_all_registered_agents().len(),
+        0,
+        "agent list should be empty after genome transition"
+    );
+    assert!(
+        tracker.motor_subscriptions.lock().unwrap().is_empty(),
+        "motor subscriptions should be empty after genome transition"
+    );
+    assert!(
+        tracker
+            .visualization_subscriptions
+            .lock()
+            .unwrap()
+            .is_empty(),
+        "visualization subscriptions should be empty after genome transition"
+    );
+
+    let post_payload: FeagiByteContainer = FeagiMessage::HeartBeat.into();
+    let _ = sensory_pusher.publish_data(post_payload.get_byte_ref());
+    assert!(
+        !wait_for_sensory_data(&handler, Duration::from_millis(500)),
+        "sensory data must not be consumed after genome transition before re-registration"
+    );
+
+    let mut reconnected_client = CommandControlAgent::new(
+        registration_endpoint
+            .try_create_boxed_client_requester_properties()
+            .expect("failed to create requester properties for reconnect"),
+    );
+    reconnected_client
+        .request_connect()
+        .expect("reconnect client connect failed");
+    reconnected_client
+        .request_registration(
+            AgentDescriptor::new("neuraville", "transition-rt-agent", 1)
+                .expect("descriptor creation failed on reconnect"),
+            AuthToken::new([0u8; 32]),
+            vec![
+                AgentCapabilities::SendSensorData,
+                AgentCapabilities::ReceiveMotorData,
+            ],
+        )
+        .expect("reconnect registration request failed");
+    let (_new_session, new_sensory_endpoint) =
+        wait_for_registered_agent(&handler, &mut reconnected_client, Duration::from_secs(5));
+
+    let new_pusher_props = new_sensory_endpoint
+        .try_create_boxed_client_pusher_properties()
+        .expect("failed to create new sensory pusher properties");
+    let mut new_sensory_pusher = new_pusher_props.as_boxed_client_pusher();
+    new_sensory_pusher
+        .request_connect()
+        .expect("new sensory pusher connect failed");
+    let rereg_payload: FeagiByteContainer = FeagiMessage::HeartBeat.into();
+    new_sensory_pusher
+        .publish_data(rereg_payload.get_byte_ref())
+        .expect("failed to publish sensory payload after re-registration");
+    assert!(
+        wait_for_sensory_data(&handler, Duration::from_secs(2)),
+        "sensory data should be consumed again after re-registration"
+    );
 }
 
 // ============================================================================
@@ -308,22 +2711,26 @@ async fn test_create_cortical_area_success() {
     let app = create_test_server().await;
 
     let create_request = json!({
-        "cortical_id": "test01",
-        "name": "Test Area",
-        "dimensions": {
-            "width": 10,
-            "height": 10,
-            "depth": 1
+        "cortical_id": "iinf",
+        "cortical_type": "IPU",
+        "device_count": 1,
+        "coordinates_3d": [0, 0, 0],
+        "data_type_configs_by_subunit": {
+            "0": 0
         },
-        "area_type": "memory"
+        "neurons_per_voxel": 1
     });
 
-    let (status, response) =
-        request_json(app, "POST", "/v1/connectome/areas", Some(create_request)).await;
+    let (status, response) = request_json(
+        app,
+        "POST",
+        "/v1/cortical_area/cortical_area",
+        Some(create_request),
+    )
+    .await;
 
-    assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(response["cortical_id"], "test01");
-    assert_eq!(response["name"], "Test Area");
+    assert_eq!(status, StatusCode::OK, "response: {}", response);
+    assert!(response.get("cortical_id").is_some());
 }
 
 #[tokio::test]
@@ -332,18 +2739,23 @@ async fn test_create_cortical_area_invalid_id() {
 
     // Invalid ID (not 6 characters)
     let create_request = json!({
-        "cortical_id": "test",
-        "name": "Test Area",
-        "dimensions": {
-            "width": 10,
-            "height": 10,
-            "depth": 1
+        "cortical_id": "invalid",
+        "cortical_type": "IPU",
+        "device_count": 1,
+        "coordinates_3d": [0, 0, 0],
+        "data_type_configs_by_subunit": {
+            "0": 0
         },
-        "area_type": "memory"
+        "neurons_per_voxel": 1
     });
 
-    let (status, _response) =
-        request_json(app, "POST", "/v1/connectome/areas", Some(create_request)).await;
+    let (status, _response) = request_json(
+        app,
+        "POST",
+        "/v1/cortical_area/cortical_area",
+        Some(create_request),
+    )
+    .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -352,20 +2764,31 @@ async fn test_create_cortical_area_invalid_id() {
 async fn test_get_cortical_area_not_found() {
     let app = create_test_server().await;
 
-    let (status, _response) = request_json(app, "GET", "/v1/connectome/areas/notfnd", None).await;
+    let (status, response) = request_json(
+        app,
+        "GET",
+        "/v1/connectome/area_details?area_ids=notfnd",
+        None,
+    )
+    .await;
 
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(status, StatusCode::OK, "response: {}", response);
+    assert!(response.as_object().map(|o| o.is_empty()).unwrap_or(false));
 }
 
 #[tokio::test]
 async fn test_list_cortical_areas_empty() {
     let app = create_test_server().await;
 
-    let (status, response) = request_json(app, "GET", "/v1/connectome/areas", None).await;
+    let (status, response) =
+        request_json(app, "GET", "/v1/cortical_area/cortical_area_id_list", None).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(response.is_array());
-    assert_eq!(response.as_array().unwrap().len(), 0);
+    let cortical_ids = response
+        .get("cortical_ids")
+        .and_then(|v| v.as_array())
+        .expect("Expected cortical_ids array");
+    assert!(cortical_ids.is_empty());
 }
 
 #[tokio::test]
@@ -374,23 +2797,318 @@ async fn test_create_and_get_cortical_area() {
 
     // Create
     let create_request = json!({
-        "cortical_id": "area01",
-        "name": "Area 1",
-        "dimensions": {"width": 5, "height": 5, "depth": 1},
-        "area_type": "memory"
+        "cortical_id": "iinf",
+        "cortical_type": "IPU",
+        "device_count": 1,
+        "coordinates_3d": [0, 0, 0],
+        "data_type_configs_by_subunit": {
+            "0": 0
+        },
+        "neurons_per_voxel": 1
     });
 
-    let (status, _) = request_json(app, "POST", "/v1/connectome/areas", Some(create_request)).await;
-    assert_eq!(status, StatusCode::CREATED);
+    let (status, response) = request_json(
+        app,
+        "POST",
+        "/v1/cortical_area/cortical_area",
+        Some(create_request),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let created_id = response
+        .get("cortical_id")
+        .and_then(|v| v.as_str())
+        .expect("Expected cortical_id in response")
+        .to_string();
 
     // Get - need to recreate app because oneshot consumes it
     let app2 = create_test_server().await;
-    let (status2, _response2) =
-        request_json(app2, "GET", "/v1/connectome/areas/area01", None).await;
+    let (status2, response2) = request_json(
+        app2,
+        "GET",
+        &format!("/v1/connectome/area_details?area_ids={}", created_id),
+        None,
+    )
+    .await;
 
-    // This will fail because each test gets a fresh manager
-    // This demonstrates the isolation - which is good for parallel testing
-    assert_eq!(status2, StatusCode::NOT_FOUND);
+    // Fresh manager: created area not present
+    assert_eq!(status2, StatusCode::OK);
+    assert!(response2.as_object().map(|o| o.is_empty()).unwrap_or(false));
+}
+
+#[tokio::test]
+async fn test_io_dev_count_scales_x_and_per_device_stays_independent() {
+    let state = build_test_state();
+    let cortical_id = general_purpose::STANDARD.encode(*b"cDIMTEST");
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "io-dim-test".to_string(),
+            dimensions: (1, 1, 1),
+            position: (0, 0, 0),
+            area_type: "Custom".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("failed creating test area");
+
+    state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([
+                ("dev_count".to_string(), json!(3)),
+                (
+                    "cortical_dimensions_per_device".to_string(),
+                    json!([4, 5, 7]),
+                ),
+            ]),
+        )
+        .await
+        .expect("failed seeding per-device baseline");
+
+    let updated_float_dev_count = state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([("dev_count".to_string(), json!(2.0))]),
+        )
+        .await
+        .expect("failed updating float dev_count");
+    assert_eq!(
+        updated_float_dev_count.dimensions,
+        (8, 5, 7),
+        "float dev_count values should be parsed and scale only X"
+    );
+    assert_eq!(
+        updated_float_dev_count.cortical_dimensions_per_device,
+        Some((4, 5, 7)),
+        "float dev_count updates must not change per-device dimensions"
+    );
+
+    let updated_dev_count = state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([
+                ("dev_count".to_string(), json!(5)),
+                ("cortical_dimensions".to_string(), json!([12, 5, 7])),
+            ]),
+        )
+        .await
+        .expect("failed updating dev_count");
+    assert_eq!(
+        updated_dev_count.dimensions,
+        (20, 5, 7),
+        "dev_count must scale only X from per-device dimensions"
+    );
+    assert_eq!(
+        updated_dev_count.cortical_dimensions_per_device,
+        Some((4, 5, 7)),
+        "changing dev_count must not rewrite per-device dimensions"
+    );
+
+    let updated_per_device = state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([(
+                "cortical_dimensions_per_device".to_string(),
+                json!([6, 5, 7]),
+            )]),
+        )
+        .await
+        .expect("failed updating per-device dimensions");
+    assert_eq!(
+        updated_per_device.dimensions,
+        (30, 5, 7),
+        "per-device update must preserve Y/Z and apply dev_count on X only"
+    );
+    assert_eq!(
+        updated_per_device.dev_count,
+        Some(5),
+        "per-device update must not change dev_count"
+    );
+    assert_eq!(
+        updated_per_device.cortical_dimensions_per_device,
+        Some((6, 5, 7)),
+        "per-device dimensions should be stored and returned verbatim"
+    );
+}
+
+#[tokio::test]
+async fn test_registration_dimensions_replace_stale_per_device_depth() {
+    let state = build_test_state();
+    let cortical_id = general_purpose::STANDARD.encode(*b"cREGZ001");
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "servo-encoder-stale-z".to_string(),
+            dimensions: (6, 1, 10),
+            position: (0, 0, 0),
+            area_type: "sensory".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(HashMap::from([
+                ("dev_count".to_string(), json!(6)),
+                (
+                    "cortical_dimensions_per_device".to_string(),
+                    json!([1, 1, 10]),
+                ),
+            ])),
+        }])
+        .await
+        .expect("failed creating stale servo encoder area");
+
+    let updated = state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([
+                ("dimensions".to_string(), json!([6, 1, 20])),
+                ("dev_count".to_string(), json!(6)),
+                (
+                    "cortical_dimensions_per_device".to_string(),
+                    json!([1, 1, 20]),
+                ),
+            ]),
+        )
+        .await
+        .expect("failed applying registration dimensions");
+    assert_eq!(
+        updated.dimensions,
+        (6, 1, 20),
+        "registration z-depth must replace leftover genome per-device depth"
+    );
+    assert_eq!(
+        updated.cortical_dimensions_per_device,
+        Some((1, 1, 20)),
+        "registration must persist the new per-device depth"
+    );
+    assert_eq!(updated.dev_count, Some(6));
+}
+
+#[tokio::test]
+async fn test_delete_multi_cortical_area_success() {
+    let state = build_test_state();
+
+    let area_1 = general_purpose::STANDARD.encode(*b"cMDLT001");
+    let area_2 = general_purpose::STANDARD.encode(*b"cMDLT002");
+
+    let create_params_1 = CreateCorticalAreaParams {
+        cortical_id: area_1.clone(),
+        name: "multi-delete-area-1".to_string(),
+        dimensions: (1, 1, 1),
+        position: (0, 0, 0),
+        area_type: "Custom".to_string(),
+        visible: None,
+        sub_group: None,
+        neurons_per_voxel: None,
+        postsynaptic_current: None,
+        plasticity_constant: None,
+        degeneration: None,
+        psp_uniform_distribution: None,
+        firing_threshold_increment: None,
+        firing_threshold_limit: None,
+        consecutive_fire_count: None,
+        snooze_period: None,
+        refractory_period: None,
+        leak_coefficient: None,
+        leak_variability: None,
+        burst_engine_active: None,
+        properties: None,
+    };
+    let create_params_2 = CreateCorticalAreaParams {
+        cortical_id: area_2.clone(),
+        name: "multi-delete-area-2".to_string(),
+        dimensions: (1, 1, 1),
+        position: (1, 0, 0),
+        area_type: "Custom".to_string(),
+        visible: None,
+        sub_group: None,
+        neurons_per_voxel: None,
+        postsynaptic_current: None,
+        plasticity_constant: None,
+        degeneration: None,
+        psp_uniform_distribution: None,
+        firing_threshold_increment: None,
+        firing_threshold_limit: None,
+        consecutive_fire_count: None,
+        snooze_period: None,
+        refractory_period: None,
+        leak_coefficient: None,
+        leak_variability: None,
+        burst_engine_active: None,
+        properties: None,
+    };
+
+    state
+        .connectome_service
+        .create_cortical_area(create_params_1)
+        .await
+        .expect("Failed to create first cortical area for multi-delete test");
+    state
+        .connectome_service
+        .create_cortical_area(create_params_2)
+        .await
+        .expect("Failed to create second cortical area for multi-delete test");
+
+    let response = delete_multi_cortical_area(
+        ApiStateExtract(state.clone()),
+        ApiJson(vec![area_1.clone(), area_2.clone()]),
+    )
+    .await
+    .expect("Multi-delete endpoint should succeed");
+
+    let body = response.0;
+    assert_eq!(
+        body.get("message").map(String::as_str),
+        Some("Deleted 2 cortical areas")
+    );
+
+    let area_1_exists = state
+        .connectome_service
+        .cortical_area_exists(&area_1)
+        .await
+        .expect("Failed to check first cortical area existence");
+    let area_2_exists = state
+        .connectome_service
+        .cortical_area_exists(&area_2)
+        .await
+        .expect("Failed to check second cortical area existence");
+
+    assert!(!area_1_exists);
+    assert!(!area_2_exists);
 }
 
 // ============================================================================
@@ -425,14 +3143,154 @@ async fn test_genome_validate_minimal() {
 // ERROR FORMAT TESTS
 // ============================================================================
 
+/// Build a multipart/form-data body with field `file`.
+fn multipart_file_body(boundary: &str, file_name: &str, file_bytes: &[u8]) -> Vec<u8> {
+    let mut body = Vec::with_capacity(file_bytes.len() + 256);
+    body.extend_from_slice(
+        format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(file_bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+    body
+}
+
+#[tokio::test]
+async fn test_connectome_upload_accepts_payload_larger_than_axum_default_body_limit() {
+    let app = create_test_server().await;
+    let boundary = "----FEAGIConnectomeBoundary";
+    let oversized = vec![0u8; (2 * 1024 * 1024) + 1];
+    let request = Request::builder()
+        .uri("/v1/connectome/upload")
+        .method("POST")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(multipart_file_body(
+            boundary,
+            "oversize.connectome",
+            &oversized,
+        )))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_text = String::from_utf8_lossy(&body_bytes);
+
+    assert_ne!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "multipart connectome upload must not fail while buffering the body: {body_text}"
+    );
+    assert!(
+        !body_text.contains("Invalid multipart upload"),
+        "Axum default 2 MiB limit must not reject connectome multipart: status={status} body={body_text}"
+    );
+}
+
+#[tokio::test]
+async fn test_genome_upload_file_accepts_payload_larger_than_axum_default_body_limit() {
+    let app = create_test_server().await;
+    let boundary = "----FEAGIGenomeBoundary";
+    let oversized = vec![b'{'; (2 * 1024 * 1024) + 1];
+    let request = Request::builder()
+        .uri("/v1/genome/upload/file")
+        .method("POST")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .body(Body::from(multipart_file_body(
+            boundary,
+            "oversize.genome",
+            &oversized,
+        )))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_text = String::from_utf8_lossy(&body_bytes);
+
+    assert_ne!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "multipart genome upload must not fail while buffering the body: {body_text}"
+    );
+    assert!(
+        !body_text.contains("Invalid multipart upload"),
+        "Axum default 2 MiB limit must not reject genome multipart: status={status} body={body_text}"
+    );
+}
+
+#[tokio::test]
+async fn test_last_failed_mutation_records_failed_connectome_upload() {
+    let app = create_test_server().await;
+    let boundary = "----FEAGIConnectomeBoundary";
+    let payload = b"not-a-valid-connectome";
+    let upload = Request::builder()
+        .uri("/v1/connectome/upload")
+        .method("POST")
+        .header(
+            "content-type",
+            format!("multipart/form-data; boundary={boundary}"),
+        )
+        .header("content-length", payload.len().to_string())
+        .body(Body::from(multipart_file_body(
+            boundary,
+            "bad.connectome",
+            payload,
+        )))
+        .unwrap();
+
+    let upload_response = app.clone().oneshot(upload).await.unwrap();
+    assert!(
+        upload_response.status().as_u16() >= 400,
+        "invalid connectome must fail so last_failed_mutation has a record"
+    );
+
+    let (status, body) = request_json(app, "GET", "/v1/system/last_failed_mutation", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let mutation = body
+        .get("mutation")
+        .expect("mutation field required")
+        .as_object()
+        .expect("mutation object expected after failed upload");
+    assert_eq!(mutation["method"], "POST");
+    assert_eq!(mutation["path"], "/v1/connectome/upload");
+    assert!(mutation["status"].as_u64().unwrap() >= 400);
+    assert!(
+        mutation
+            .get("content_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .contains("multipart/form-data"),
+        "content_type should capture multipart upload: {mutation:?}"
+    );
+}
+
 #[tokio::test]
 async fn test_error_format_consistency() {
     let app = create_test_server().await;
 
     // All error responses should have consistent format
-    let (status, response) = request_json(app, "GET", "/v1/connectome/areas/notfnd", None).await;
+    let (status, response) = request_json(
+        app,
+        "POST",
+        "/v1/cortical_area/cortical_area",
+        Some(json!({})),
+    )
+    .await;
 
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(status, StatusCode::BAD_REQUEST);
     // Should have some error information
     assert!(response.is_object() || response.is_string());
 }
@@ -440,4 +3298,472 @@ async fn test_error_format_consistency() {
 #[test]
 fn test_compilation() {
     // This test just ensures the code compiles
+}
+
+// ============================================================================
+// GENOME CHANGE LEDGER TESTS
+// ============================================================================
+
+async fn seed_ledger_test_area(state: &ApiState, raw_id: &[u8; 8]) -> String {
+    let cortical_id = general_purpose::STANDARD.encode(raw_id);
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "ledger-area".to_string(),
+            dimensions: (1, 1, 1),
+            position: (0, 0, 0),
+            area_type: "Custom".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("seed ledger test area");
+    cortical_id
+}
+
+async fn request_json_as(
+    app: axum::Router,
+    method: &str,
+    path: &str,
+    agent_id: &str,
+    body: Value,
+) -> (StatusCode, Value) {
+    let request = Request::builder()
+        .uri(path)
+        .method(method)
+        .header("content-type", "application/json")
+        .header("x-feagi-agent-id", agent_id)
+        .body(Body::from(serde_json::to_vec(&body).unwrap()))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(json!(null)),
+    )
+}
+
+#[tokio::test]
+async fn test_genome_changes_record_http_caller_and_advance_health_sequence() {
+    let state = build_test_state();
+    let cortical_id = seed_ledger_test_area(&state, b"cLEDGER1").await;
+
+    let (status, _) = request_json_as(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_area/cortical_area",
+        "member-a",
+        json!({"cortical_id": cortical_id, "cortical_name": "renamed over http"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, page) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/genome/changes?since=0",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let changes = page["changes"].as_array().expect("changes array");
+    assert_eq!(changes.len(), 2, "seed create plus the HTTP update");
+    assert!(changes[0].get("agent_id").is_none(), "seed had no caller");
+    let update = &changes[1];
+    assert_eq!(update["agent_id"], "member-a");
+    assert_eq!(update["origin"], "local");
+    assert_eq!(update["operation"]["kind"], "update_cortical_area");
+    assert_eq!(update["operation"]["cortical_id"], cortical_id.as_str());
+    assert_eq!(update["targets"][0]["kind"], "cortical_area");
+    assert!(update["before"].is_object() && update["after"].is_object());
+
+    let (_, health) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/system/health_check",
+        None,
+    )
+    .await;
+    assert_eq!(health["genome_change_sequence"], page["latest_sequence"]);
+
+    let since = update["sequence"].as_u64().expect("sequence");
+    let (_, empty) = request_json(
+        create_http_server(state),
+        "GET",
+        &format!("/v1/genome/changes?since={since}"),
+        None,
+    )
+    .await;
+    assert!(empty["changes"].as_array().expect("array").is_empty());
+}
+
+#[tokio::test]
+async fn test_genome_changes_reject_invalid_agent_header_and_limit() {
+    let state = build_test_state();
+    let too_long = "a".repeat(
+        state
+            .change_ledger
+            .as_ref()
+            .expect("ledger")
+            .config()
+            .agent_id_max_length
+            + 1,
+    );
+    let (status, _) = request_json_as(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_area/cortical_area",
+        &too_long,
+        json!({"cortical_id": "x"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = request_json(
+        create_http_server(state),
+        "GET",
+        "/v1/genome/changes?since=0&limit=0",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_genome_change_applies_once_on_peer_instance() {
+    let source = build_test_state();
+    let peer = build_test_state();
+    let cortical_id = seed_ledger_test_area(&source, b"cLEDGER2").await;
+    seed_ledger_test_area(&peer, b"cLEDGER2").await;
+
+    let (status, _) = request_json_as(
+        create_http_server(source.clone()),
+        "PUT",
+        "/v1/cortical_area/cortical_area",
+        "member-a",
+        json!({"cortical_id": cortical_id, "cortical_name": "from source"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, page) = request_json(
+        create_http_server(source),
+        "GET",
+        "/v1/genome/changes?since=1",
+        None,
+    )
+    .await;
+    let change = page["changes"][0].clone();
+
+    let (status, applied) = request_json(
+        create_http_server(peer.clone()),
+        "POST",
+        "/v1/genome/changes/apply",
+        Some(change.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(applied["status"], "applied");
+
+    let (status, again) = request_json(
+        create_http_server(peer.clone()),
+        "POST",
+        "/v1/genome/changes/apply",
+        Some(change.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(again["status"], "already_applied");
+
+    let area = peer
+        .connectome_service
+        .get_cortical_area(&cortical_id)
+        .await
+        .expect("area on peer");
+    assert_eq!(area.name, "from source");
+    let recorded = peer
+        .change_ledger
+        .as_ref()
+        .expect("ledger")
+        .find(change["change_id"].as_str().expect("change id"))
+        .expect("recorded on peer");
+    assert_eq!(recorded.agent_id.as_deref(), Some("member-a"));
+    assert_eq!(
+        serde_json::to_value(recorded.origin).expect("origin"),
+        json!("replayed")
+    );
+}
+
+#[tokio::test]
+async fn test_genome_change_apply_rejects_markers_and_missing_targets() {
+    let state = build_test_state();
+    let marker = json!({
+        "change_id": "marker-1",
+        "group_id": "marker-1",
+        "timestamp_ms": 0,
+        "operation": {"kind": "connectome_reset"}
+    });
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/genome/changes/apply",
+        Some(marker),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let missing = json!({
+        "change_id": "missing-1",
+        "group_id": "missing-1",
+        "timestamp_ms": 0,
+        "operation": {"kind": "delete_brain_region", "region_id": "no-such-region"}
+    });
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/genome/changes/apply",
+        Some(missing),
+    )
+    .await;
+    assert!(
+        status.is_client_error(),
+        "missing target must be rejected, got {status}"
+    );
+    assert!(!state
+        .change_ledger
+        .as_ref()
+        .expect("ledger")
+        .contains_change_id("missing-1"));
+}
+
+#[tokio::test]
+async fn test_genome_changes_not_enabled_without_ledger() {
+    let mut state = build_test_state();
+    state.change_ledger = None;
+    let (status, _) = request_json(
+        create_http_server(state),
+        "GET",
+        "/v1/genome/changes?since=0",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+}
+
+#[tokio::test]
+async fn test_clone_replicates_stored_neural_parameters() {
+    let state = build_test_state();
+    let root_id = "550e8400-e29b-41d4-a716-446655440000";
+    let region_id = "550e8400-e29b-41d4-a716-446655440001";
+    state
+        .connectome_service
+        .create_brain_region(CreateBrainRegionParams {
+            region_id: root_id.to_string(),
+            name: "root".to_string(),
+            region_type: "Custom".to_string(),
+            parent_id: None,
+            properties: None,
+        })
+        .await
+        .expect("root region");
+    state
+        .connectome_service
+        .create_brain_region(CreateBrainRegionParams {
+            region_id: region_id.to_string(),
+            name: "circuit".to_string(),
+            region_type: "Custom".to_string(),
+            parent_id: Some(root_id.to_string()),
+            properties: None,
+        })
+        .await
+        .expect("circuit region");
+
+    let source_id = general_purpose::STANDARD.encode(b"csource1");
+    let mut properties = HashMap::new();
+    properties.insert("parent_region_id".to_string(), json!(region_id));
+    properties.insert("coordinate_2d".to_string(), json!([10, 20]));
+    properties.insert("2d_coordinate".to_string(), json!([10, 20]));
+    properties.insert("relative_coordinate".to_string(), json!([100, 0, 0]));
+    properties.insert("visible".to_string(), json!(false));
+    properties.insert("sub_group".to_string(), json!("assoc"));
+    properties.insert("cortical_group".to_string(), json!("CUSTOM"));
+    properties.insert("group_id".to_string(), json!("g1"));
+    properties.insert("sub_group_id".to_string(), json!("sg1"));
+    properties.insert("neurons_per_voxel".to_string(), json!(3));
+    properties.insert("postsynaptic_current".to_string(), json!(1.25));
+    properties.insert("postsynaptic_current_max".to_string(), json!(42.0));
+    properties.insert("plasticity_constant".to_string(), json!(0.4));
+    properties.insert("degeneration".to_string(), json!(0.15));
+    properties.insert("psp_uniform_distribution".to_string(), json!(true));
+    properties.insert("mp_driven_psp".to_string(), json!(true));
+    properties.insert("firing_threshold".to_string(), json!(2.5));
+    properties.insert("firing_threshold_increment_x".to_string(), json!(0.1));
+    properties.insert("firing_threshold_increment_y".to_string(), json!(0.2));
+    properties.insert("firing_threshold_increment_z".to_string(), json!(0.3));
+    properties.insert("firing_threshold_limit".to_string(), json!(9.0));
+    properties.insert("consecutive_fire_limit".to_string(), json!(4));
+    properties.insert("snooze_period".to_string(), json!(5));
+    properties.insert("refractory_period".to_string(), json!(2));
+    properties.insert("leak_coefficient".to_string(), json!(0.25));
+    properties.insert("leak_variability".to_string(), json!(0.05));
+    properties.insert("mp_charge_accumulation".to_string(), json!(true));
+    properties.insert("neuron_excitability".to_string(), json!(7.0));
+    properties.insert("burst_engine_active".to_string(), json!(true));
+    properties.insert("init_lifespan".to_string(), json!(9));
+    properties.insert("lifespan_growth_rate".to_string(), json!(1.5));
+    properties.insert("longterm_mem_threshold".to_string(), json!(6));
+    properties.insert("synapse_attractivity".to_string(), json!(77.0));
+    properties.insert("cortical_mapping_dst".to_string(), json!({}));
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: source_id.clone(),
+            name: "source-area".to_string(),
+            dimensions: (2, 3, 1),
+            position: (100, 0, 0),
+            area_type: "Custom".to_string(),
+            visible: Some(false),
+            sub_group: Some("assoc".to_string()),
+            neurons_per_voxel: Some(3),
+            postsynaptic_current: Some(1.25),
+            plasticity_constant: Some(0.4),
+            degeneration: Some(0.15),
+            psp_uniform_distribution: Some(true),
+            firing_threshold_increment: None,
+            firing_threshold_limit: Some(9.0),
+            consecutive_fire_count: Some(4),
+            snooze_period: Some(5),
+            refractory_period: Some(2),
+            leak_coefficient: Some(0.25),
+            leak_variability: Some(0.05),
+            burst_engine_active: Some(true),
+            properties: Some(properties),
+        }])
+        .await
+        .expect("create source area");
+
+    let response = feagi_api::endpoints::cortical_area::post_clone(
+        ApiStateExtract(state.clone()),
+        ApiJson(
+            feagi_api::endpoints::cortical_area::CloneCorticalAreaRequest {
+                source_area_id: source_id.clone(),
+                new_name: "cloned-area".to_string(),
+                coordinates_3d: [200, 0, 0],
+                coordinates_2d: [40, 50],
+                parent_region_id: Some(region_id.to_string()),
+                clone_cortical_mapping: false,
+            },
+        ),
+    )
+    .await
+    .expect("clone cortical area");
+    let new_area_id = response.0.get("new_area_id").expect("new area id").clone();
+
+    let source = state
+        .connectome_service
+        .get_cortical_area(&source_id)
+        .await
+        .expect("source area");
+    let cloned = state
+        .connectome_service
+        .get_cortical_area(&new_area_id)
+        .await
+        .expect("cloned area");
+
+    assert_eq!(cloned.name, "cloned-area");
+    assert_eq!(cloned.dimensions, source.dimensions);
+    assert_eq!(cloned.position, (200, 0, 0));
+    assert_eq!(cloned.visible, source.visible);
+    assert_eq!(cloned.sub_group, source.sub_group);
+    assert_eq!(cloned.neurons_per_voxel, source.neurons_per_voxel);
+    assert_eq!(cloned.postsynaptic_current, source.postsynaptic_current);
+    assert_eq!(
+        cloned.postsynaptic_current_max,
+        source.postsynaptic_current_max
+    );
+    assert_eq!(cloned.plasticity_constant, source.plasticity_constant);
+    assert_eq!(cloned.degeneration, source.degeneration);
+    assert_eq!(
+        cloned.psp_uniform_distribution,
+        source.psp_uniform_distribution
+    );
+    assert_eq!(cloned.mp_driven_psp, source.mp_driven_psp);
+    assert_eq!(cloned.firing_threshold, source.firing_threshold);
+    assert_eq!(
+        cloned.firing_threshold_increment,
+        source.firing_threshold_increment
+    );
+    assert_eq!(cloned.firing_threshold_limit, source.firing_threshold_limit);
+    assert_eq!(cloned.consecutive_fire_count, source.consecutive_fire_count);
+    assert_eq!(cloned.snooze_period, source.snooze_period);
+    assert_eq!(cloned.refractory_period, source.refractory_period);
+    assert_eq!(cloned.leak_coefficient, source.leak_coefficient);
+    assert_eq!(cloned.leak_variability, source.leak_variability);
+    assert_eq!(cloned.mp_charge_accumulation, source.mp_charge_accumulation);
+    assert_eq!(cloned.neuron_excitability, source.neuron_excitability);
+    assert_eq!(cloned.burst_engine_active, source.burst_engine_active);
+    assert_eq!(cloned.init_lifespan, source.init_lifespan);
+    assert_eq!(cloned.lifespan_growth_rate, source.lifespan_growth_rate);
+    assert_eq!(cloned.longterm_mem_threshold, source.longterm_mem_threshold);
+
+    let cloned_raw = state
+        .connectome_service
+        .get_cortical_area_properties(&new_area_id)
+        .await
+        .expect("cloned raw properties");
+    assert_eq!(cloned_raw.get("synapse_attractivity"), Some(&json!(77.0)));
+    assert_eq!(cloned_raw.get("cortical_group"), Some(&json!("CUSTOM")));
+    assert_eq!(cloned_raw.get("group_id"), Some(&json!("g1")));
+    assert_eq!(cloned_raw.get("sub_group_id"), Some(&json!("sg1")));
+    assert_eq!(cloned_raw.get("coordinate_2d"), Some(&json!([40, 50])));
+    assert_eq!(cloned_raw.get("2d_coordinate"), Some(&json!([40, 50])));
+    assert_eq!(
+        cloned_raw.get("relative_coordinate"),
+        Some(&json!([200, 0, 0]))
+    );
+    assert!(
+        cloned_raw
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+            .map(|map| map.is_empty())
+            .unwrap_or(true),
+        "mappings are reapplied separately, not copied as a stale destination map"
+    );
+}
+
+#[tokio::test]
+async fn test_saved_genome_carries_change_history() {
+    let state = build_test_state();
+    let cortical_id = seed_ledger_test_area(&state, b"cLEDGER3").await;
+    let saved = state
+        .genome_service
+        .save_genome(feagi_services::types::SaveGenomeParams {
+            genome_id: None,
+            genome_title: None,
+        })
+        .await
+        .expect("save");
+    let saved: Value = serde_json::from_str(&saved).expect("saved JSON");
+    let history = saved["change_history"].as_array().expect("history");
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0]["operation"]["kind"], "create_cortical_areas");
+    assert_eq!(history[0]["targets"][0]["id"], cortical_id.as_str());
 }

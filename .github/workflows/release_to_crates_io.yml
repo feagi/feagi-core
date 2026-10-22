@@ -21,7 +21,7 @@ on:
       indexing_delay_seconds:
         description: 'Seconds to wait after each publish for crates.io indexing'
         required: false
-        default: '90'
+        default: '40'
       verify_timeout_seconds:
         description: 'Max seconds to wait for crates.io verification'
         required: false
@@ -36,13 +36,11 @@ env:
 
 jobs:
   prep:
-    name: validate & version bump
+    name: validate & prepare
     runs-on: ubuntu-latest
     outputs:
       changed_crates: ${{ steps.version.outputs.changed_crates }}
       release_sha: ${{ steps.release_sha.outputs.release_sha }}
-      bump_pr_created: ${{ steps.bump_pr.outputs.bump_pr_created }}
-      bump_pr_url: ${{ steps.bump_pr.outputs.bump_pr_url }}
     env:
       PUBLISH_REF: ${{ github.event.inputs.ref || 'staging' }}
     steps:
@@ -76,33 +74,91 @@ jobs:
           fi
           echo "Using baseline tag: $BASELINE_TAG"
 
-      - name: Sync workspace from crates.io
+      - name: Guard - verify path dependency versions consistent
         run: |
-          echo "Syncing root and crate versions to match current crates.io..."
-          chmod +x scripts/sync-from-crates-io.sh
-          ./scripts/sync-from-crates-io.sh
+          set -euo pipefail
+          echo "Verifying workspace path dependency version consistency..."
+          WORKSPACE_VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
+          if [ -z "${WORKSPACE_VERSION}" ]; then
+            echo "Failed to detect [workspace.package] version from Cargo.toml"
+            exit 1
+          fi
+          ROOT_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
+          if [ -z "${ROOT_VERSION}" ]; then
+            echo "Failed to detect root [package] version from Cargo.toml"
+            exit 1
+          fi
+          if [ "${ROOT_VERSION}" != "${WORKSPACE_VERSION}" ]; then
+            echo "Root package version (${ROOT_VERSION}) must match workspace version (${WORKSPACE_VERSION})"
+            exit 1
+          fi
+          declare -A CRATE_VERSIONS
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+            name="$(grep -E '^[[:space:]]*name = ' "$manifest" | head -1 | sed 's/.*name = "\\([^"]*\\)".*/\1/' || true)"
+            [ -n "$name" ] || continue
+            if grep -qE '^[[:space:]]*version\.workspace = true' "$manifest"; then
+              ver="$WORKSPACE_VERSION"
+            else
+              ver="$(grep -E '^[[:space:]]*version = ' "$manifest" | head -1 | sed 's/.*version = "\\([^"]*\\)".*/\1/' || true)"
+            fi
+            [ -n "$ver" ] && CRATE_VERSIONS["$name"]="$ver"
+          done
+          mismatches=0
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+            # Match both path="../..." (subcrates) and path="crates/..." (root)
+            while IFS= read -r line; do
+              dep="$(echo "$line" | sed -n 's/^[[:space:]]*\([A-Za-z0-9_-][A-Za-z0-9_-]*\)[[:space:]]*=.*/\1/p')"
+              req="$(echo "$line" | sed -n 's/.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
+              path="$(echo "$line" | sed -n 's/.*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
+              [ -n "$dep" ] && [ -n "$req" ] && [ -n "$path" ] || continue
+              case "$path" in ../*|crates/*) ;; *) continue ;; esac
+              req="${req#=}"; req="${req#^}"
+              actual="${CRATE_VERSIONS[$dep]:-}"
+              [ -z "$actual" ] && continue
+              if [ "$req" != "$actual" ]; then
+                echo "Version mismatch in $manifest: $dep required $req actual $actual"
+                mismatches=$((mismatches + 1))
+              fi
+            done < <(grep -E 'path[[:space:]]*=[[:space:]]*"(\.\./|crates/)[^"]+"' "$manifest" || true)
+          done
+          if [ "$mismatches" -ne 0 ]; then
+            echo "Path dependency version consistency failed ($mismatches mismatch(es)). Fix Cargo.toml path deps to match crate versions."
+            exit 1
+          fi
+          echo "Workspace path dependency versions are consistent."
 
-      - name: Smart version detection and bumping
+      - name: Read workspace version (no bump; publish exact version from repo)
         id: version
         run: |
-          echo "Detecting changed crates and computing independent version bumps..."
-          chmod +x scripts/smart-version-bump.sh
-          chmod +x scripts/apply-version-bumps.sh
-          LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
-          VERSION_OUTPUT=$(ALLOW_DIRTY=true LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh)
-          echo "$VERSION_OUTPUT"
-          VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
-          CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
-          echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
-          echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
-          if [ -n "$VERSIONS_FILE" ] && [ -f "$VERSIONS_FILE" ]; then
-            echo "Applying version updates to Cargo.toml files..."
-            export VERSIONS_FILE="$VERSIONS_FILE"
-            ./scripts/apply-version-bumps.sh
-          else
-            echo "No version updates to apply."
+          set -euo pipefail
+          CURRENT=$(awk '
+            /^\[workspace\.package\]/ { in_ws=1; next }
+            /^\[/ { if (in_ws==1) exit }
+            in_ws==1 && /^version\s*=\s*"/ { gsub(/^version\s*=\s*"|"$/, ""); print; exit }
+          ' Cargo.toml)
+          if [ -z "$CURRENT" ]; then
+            echo "Failed to read [workspace.package] version from Cargo.toml"
+            exit 1
           fi
-          echo "Smart independent versioning complete"
+          CHANGED_CRATES="feagi-observability feagi-structures feagi-config feagi-npu-neural feagi-npu-runtime feagi-serialization feagi-state-manager feagi-npu-burst-engine feagi-npu-plasticity feagi-dataset-contracts feagi-evolutionary feagi-brain-development feagi-sensorimotor feagi-services feagi-io feagi-agent feagi-trainer feagi-api feagi-hal feagi"
+          echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "changed_crates=$CHANGED_CRATES" >> "$GITHUB_OUTPUT"
+          echo "Publishing exact workspace version: $CURRENT (no sync, no bump)"
+
       - name: Build release manifest
         id: manifest
         run: |
@@ -150,11 +206,13 @@ jobs:
                   "feagi-npu-plasticity": "crates/feagi-npu/plasticity",
                   "feagi-evolutionary": "crates/feagi-evolutionary",
                   "feagi-brain-development": "crates/feagi-brain-development",
+                  "feagi-dataset-contracts": "crates/feagi-dataset-contracts",
                   "feagi-io": "crates/feagi-io",
                   "feagi-sensorimotor": "crates/feagi-sensorimotor",
                   "feagi-services": "crates/feagi-services",
                   "feagi-api": "crates/feagi-api",
                   "feagi-agent": "crates/feagi-agent",
+                  "feagi-trainer": "crates/feagi-trainer",
                   "feagi-hal": "crates/feagi-hal",
                   "feagi": ".",
               }
@@ -192,13 +250,14 @@ jobs:
           name: feagi-release-manifest
           path: ${{ steps.manifest.outputs.manifest_path }}
 
-      - name: Guard - enforce bumps for changed crates
+      - name: Guard - workspace version must be newer than crates.io (developer must bump before run)
         run: |
           set -euo pipefail
-          echo "Verifying changed crates are version-bumped vs crates.io..."
+          echo "Verifying workspace version is greater than crates.io for changed crates..."
           LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
           python3 - <<'PY'
           import json
+          import re
           import subprocess
           import sys
           from pathlib import Path
@@ -217,20 +276,68 @@ jobs:
               else:
                   root_changed = True
 
-          def crate_name_and_version(manifest: Path):
+          def read_workspace_version(root: Path) -> str:
+              text = (root / "Cargo.toml").read_text(encoding="utf-8")
+              m = re.search(r"(?ms)^\[workspace\.package\].*?^version\s*=\s*\"([^\"]+)\"", text)
+              return m.group(1) if m else ""
+
+          def crate_name_and_version(manifest: Path, workspace_version: str):
               name = None
               version = None
               for line in manifest.read_text(encoding="utf-8").splitlines():
                   if line.startswith("name = "):
                       name = line.split('"', 2)[1]
-                  if line.startswith("version = "):
+                  if line.strip() == "version.workspace = true":
+                      version = workspace_version
+                  elif line.startswith("version = "):
                       version = line.split('"', 2)[1]
                   if name and version:
                       break
               return name, version
 
+          def _parse_semver(version: str):
+              m = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$", version)
+              if not m:
+                  return None
+              major, minor, patch, prerelease = m.groups()
+              pre_parts = ()
+              if prerelease:
+                  parsed = []
+                  for part in prerelease.split("."):
+                      if part.isdigit():
+                          parsed.append((0, int(part)))
+                      else:
+                          parsed.append((1, part))
+                  pre_parts = tuple(parsed)
+              return (int(major), int(minor), int(patch), pre_parts)
+
+          def _semver_gt(left: str, right: str) -> bool:
+              l = _parse_semver(left)
+              r = _parse_semver(right)
+              if l is None or r is None:
+                  # Deterministic fallback for non-semver strings
+                  return left > right
+              if l[:3] != r[:3]:
+                  return l[:3] > r[:3]
+              l_pre, r_pre = l[3], r[3]
+              # Stable release has higher precedence than any prerelease
+              if not l_pre and r_pre:
+                  return True
+              if l_pre and not r_pre:
+                  return False
+              if not l_pre and not r_pre:
+                  return False
+              # Both are prerelease: compare identifier by identifier
+              for li, ri in zip(l_pre, r_pre):
+                  if li == ri:
+                      continue
+                  # Numeric identifiers have lower precedence than non-numeric
+                  if li[0] != ri[0]:
+                      return li[0] < ri[0]
+                  return li[1] > ri[1]
+              return len(l_pre) > len(r_pre)
+
           def latest_on_crates_io(name: str):
-              import re as _re
               url = f"https://crates.io/api/v1/crates/{name}"
               with urlopen(url, timeout=20) as resp:
                   data = json.load(resp)
@@ -238,23 +345,25 @@ jobs:
                             if not v.get("yanked", False) and v.get("num")]
               if not candidates:
                   return ""
-              def _semver_key(s):
-                  return [int(p) if p.isdigit() else p for p in _re.split(r"[-.]", s)]
-              candidates.sort(key=_semver_key, reverse=True)
-              return candidates[0]
+              latest = candidates[0]
+              for candidate in candidates[1:]:
+                  if _semver_gt(candidate, latest):
+                      latest = candidate
+              return latest
 
           def version_gt(a: str, b: str) -> bool:
               if a == b:
                   return False
-              return sorted([a, b], key=lambda s: [int(x) if x.isdigit() else x for x in s.replace("-", ".").split(".")])[-1] == a
+              return _semver_gt(a, b)
 
           violations = []
+          workspace_version = read_workspace_version(root)
 
           for crate_dir in sorted(crate_paths):
               manifest = crate_dir / "Cargo.toml"
               if not manifest.exists():
                   continue
-              name, version = crate_name_and_version(manifest)
+              name, version = crate_name_and_version(manifest, workspace_version)
               if not name or not version:
                   continue
               published = latest_on_crates_io(name)
@@ -262,7 +371,7 @@ jobs:
                   violations.append(f"{name} local {version} not > crates.io {published}")
 
           if root_changed:
-              name, version = crate_name_and_version(root / "Cargo.toml")
+              name, version = crate_name_and_version(root / "Cargo.toml", workspace_version)
               if name and version:
                   published = latest_on_crates_io(name)
                   if published and not version_gt(version, published):
@@ -279,61 +388,6 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Guard - verify path dependency versions consistent
-        run: |
-          set -euo pipefail
-          echo "Verifying workspace path dependency version consistency..."
-          WORKSPACE_VERSION="$(
-            awk '
-              BEGIN { in_ws=0 }
-              /^\[workspace\.package\]/ { in_ws=1; next }
-              /^\[/ { if (in_ws==1) exit }
-              in_ws==1 && /^version = / {
-                gsub(/version = /, "", $0);
-                gsub(/"/, "", $0);
-                print $0;
-                exit
-              }
-            ' Cargo.toml
-          )"
-          if [ -z "${WORKSPACE_VERSION}" ]; then
-            echo "Failed to detect [workspace.package] version from Cargo.toml"
-            exit 1
-          fi
-          declare -A CRATE_VERSIONS
-          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
-            [ -f "$manifest" ] || continue
-            name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\\)\"/\\1/')"
-            [ -n "$name" ] || continue
-            if grep -qE '^version\\.workspace = true' "$manifest"; then
-              ver="$WORKSPACE_VERSION"
-            else
-              ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
-            fi
-            [ -n "$ver" ] && CRATE_VERSIONS["$name"]="$ver"
-          done
-          mismatches=0
-          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
-            [ -f "$manifest" ] || continue
-            # Match both path="../..." (subcrates) and path="crates/..." (root)
-            while IFS= read -r line; do
-              dep="$(echo "$line" | sed -n 's/^[[:space:]]*\([A-Za-z0-9_-][A-Za-z0-9_-]*\)[[:space:]]*=.*/\1/p')"
-              req="$(echo "$line" | sed -n 's/.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
-              path="$(echo "$line" | sed -n 's/.*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
-              [ -n "$dep" ] && [ -n "$req" ] && [ -n "$path" ] || continue
-              case "$path" in ../*|crates/*) ;; *) continue ;; esac
-              req="${req#=}"; req="${req#^}"
-              actual="${CRATE_VERSIONS[$dep]:-}"
-              [ -z "$actual" ] && continue
-              if [ "$req" != "$actual" ]; then
-                echo "Version mismatch in $manifest: $dep required $req actual $actual"
-                mismatches=$((mismatches + 1))
-              fi
-            done < <(grep -E 'path[[:space:]]*=[[:space:]]*"(\.\./|crates/)[^"]+"' "$manifest" || true)
-          done
-          [ "$mismatches" -eq 0 ] || exit 1
-          echo "Workspace path dependency versions are consistent."
-
       - name: Run Clippy (lib and tests only)
         run: cargo clippy --workspace --lib --tests -- -D warnings
 
@@ -346,107 +400,59 @@ jobs:
       - name: Build release
         run: cargo build --release --lib --verbose
 
-      - name: Commit and push version updates
-        id: bump_pr
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
-          git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml
-          if [ -n "$CHANGED_CRATES" ]; then
-            if git diff --cached --quiet; then
-              echo "Changed crates detected but no version updates staged"
-              exit 1
-            fi
-            echo "chore: bump versions for release (independent versioning)" > commit_msg.txt
-            echo "" >> commit_msg.txt
-            echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
-            COMMIT_MSG=$(cat commit_msg.txt)
-          else
-            if git diff --cached --quiet; then
-              echo "No changes to commit"
-              exit 0
-            fi
-            COMMIT_MSG="chore: release (no version changes)"
-          fi
-          git commit -m "$COMMIT_MSG"
-
-          if [ -n "$CHANGED_CRATES" ]; then
-            BRANCH_NAME="release/bump-${{ github.run_id }}"
-            git checkout -b "$BRANCH_NAME"
-            git push origin "$BRANCH_NAME"
-
-            PR_TITLE="chore: bump versions for release"
-            PR_BODY="Automated version bumps for crates changed on staging."
-            PR_URL=""
-            attempt=1
-            max_attempts=6
-            while [ "$attempt" -le "$max_attempts" ]; do
-              set +e
-              PR_URL="$(gh pr create --base "${{ env.PUBLISH_REF }}" --head "$BRANCH_NAME" --title "$PR_TITLE" --body "$PR_BODY" 2>/tmp/gh_pr_create_err.txt)"
-              pr_create_rc=$?
-              if [ "$pr_create_rc" -ne 0 ]; then
-                PR_URL="$(gh pr list --state open --head "$BRANCH_NAME" --json url -q '.[0].url' 2>/tmp/gh_pr_list_err.txt)"
-              fi
-              set -e
-
-              if [ -n "$PR_URL" ]; then
-                break
-              fi
-
-              if grep -q "HTTP 429" /tmp/gh_pr_create_err.txt /tmp/gh_pr_list_err.txt 2>/dev/null; then
-                echo "GitHub API throttled (attempt $attempt/$max_attempts). Waiting 60s..."
-                sleep 60
-              else
-                echo "Failed to create or find PR for $BRANCH_NAME"
-                cat /tmp/gh_pr_create_err.txt /tmp/gh_pr_list_err.txt 2>/dev/null || true
-                exit 1
-              fi
-              attempt=$((attempt + 1))
-            done
-
-            if [ -z "$PR_URL" ]; then
-              echo "Failed to create or find PR after retries"
-              exit 1
-            fi
-
-            echo "Using PR: $PR_URL"
-            echo "bump_pr_created=true" >> "$GITHUB_OUTPUT"
-            echo "bump_pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-            attempt=1
-            while [ "$attempt" -le "$max_attempts" ]; do
-              set +e
-              gh pr merge "$PR_URL" --merge --delete-branch 2>/tmp/gh_pr_merge_err.txt
-              pr_merge_rc=$?
-              set -e
-              if [ "$pr_merge_rc" -eq 0 ]; then
-                break
-              fi
-              if grep -q "HTTP 429" /tmp/gh_pr_merge_err.txt 2>/dev/null; then
-                echo "GitHub API throttled on merge (attempt $attempt/$max_attempts). Waiting 60s..."
-                sleep 60
-              else
-                echo "Failed to merge PR $PR_URL"
-                cat /tmp/gh_pr_merge_err.txt 2>/dev/null || true
-                exit 1
-              fi
-              attempt=$((attempt + 1))
-            done
-
-            if [ "$pr_merge_rc" -ne 0 ]; then
-              echo "Failed to merge PR after retries"
-              exit 1
-            fi
-            git fetch origin "${{ env.PUBLISH_REF }}"
-            git checkout "${{ env.PUBLISH_REF }}"
-            git pull --ff-only origin "${{ env.PUBLISH_REF }}"
-          else
-            git checkout "${{ env.PUBLISH_REF }}"
-            git pull --ff-only origin "${{ env.PUBLISH_REF }}"
-            echo "bump_pr_created=false" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Open a pull request for the crate graph snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Publish from the commit already on the release branch. staging
+          # rejects direct pushes (changes must go through a pull request).
+          BASE_SHA="$(git rev-parse HEAD)"
+          node scripts/generate-crate-graph.mjs
+          git add docs/crate-graphs
+          if git diff --cached --quiet; then
+            echo "Crate graph snapshot already recorded for this version."
+            exit 0
+          fi
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git commit -m "Record feagi-core crate graph snapshot for this release."
+          VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
+          if [ -z "${VERSION}" ]; then
+            echo "Failed to read workspace version for the crate graph branch"
+            exit 1
+          fi
+          BRANCH="crate-graph/v${VERSION}"
+          if git fetch origin "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"; then
+            git push --force-with-lease="refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}" origin "HEAD:refs/heads/${BRANCH}"
+          else
+            git push origin "HEAD:refs/heads/${BRANCH}"
+          fi
+          EXISTING="$(gh pr list --head "${BRANCH}" --base "${PUBLISH_REF}" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "${EXISTING}" ]; then
+            echo "Crate graph pull request already open: #${EXISTING}"
+          else
+            gh pr create \
+              --base "${PUBLISH_REF}" \
+              --head "${BRANCH}" \
+              --title "Record crate graph snapshot v${VERSION}" \
+              --body "Generated during the crates.io release. The release branch rejects direct pushes, so this snapshot lands through a pull request. The portal reads docs/crate-graphs from that branch after merge."
+          fi
+          git checkout --detach "${BASE_SHA}"
+
       - name: Set release SHA
         id: release_sha
         run: |
@@ -456,7 +462,6 @@ jobs:
     name: publish crates
     needs: [prep]
     runs-on: ubuntu-latest
-    if: false
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
       CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
@@ -532,11 +537,13 @@ jobs:
                   "feagi-npu-plasticity": "crates/feagi-npu/plasticity",
                   "feagi-evolutionary": "crates/feagi-evolutionary",
                   "feagi-brain-development": "crates/feagi-brain-development",
+                  "feagi-dataset-contracts": "crates/feagi-dataset-contracts",
                   "feagi-io": "crates/feagi-io",
                   "feagi-sensorimotor": "crates/feagi-sensorimotor",
                   "feagi-services": "crates/feagi-services",
                   "feagi-api": "crates/feagi-api",
                   "feagi-agent": "crates/feagi-agent",
+                  "feagi-trainer": "crates/feagi-trainer",
                   "feagi-hal": "crates/feagi-hal",
                   "feagi": ".",
               }
@@ -623,6 +630,12 @@ jobs:
         run: |
           chmod +x scripts/publish-crates-smart.sh
           ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-dataset-contracts
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-dataset-contracts
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
       - name: Publish feagi-evolutionary
         env:
           PUBLISH_SINGLE_CRATE: feagi-evolutionary
@@ -656,6 +669,12 @@ jobs:
       - name: Publish feagi-agent
         env:
           PUBLISH_SINGLE_CRATE: feagi-agent
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-trainer
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-trainer
         run: |
           chmod +x scripts/publish-crates-smart.sh
           ./scripts/publish-crates-smart.sh
@@ -739,37 +758,83 @@ jobs:
     name: tag & GitHub release
     needs: [prep, publish_crates]
     runs-on: ubuntu-latest
-    if: false
+    env:
+      RELEASE_SHA: ${{ needs.prep.outputs.release_sha }}
     steps:
+      - name: Guard - require release SHA
+        run: |
+          if [ -z "${RELEASE_SHA}" ]; then
+            echo "Missing release SHA from prep job"
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || 'staging' }}
+          ref: ${{ needs.prep.outputs.release_sha }}
           fetch-depth: 0
 
-      - name: Create release tag
-        id: tag
+      - name: Resolve release version from published commit
+        id: version
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          FEAGI_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
-          if [ -z "$FEAGI_VERSION" ]; then
-            echo "Failed to detect feagi version from Cargo.toml"
+          set -euo pipefail
+          ROOT_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
+          WORKSPACE_VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
+          if [ -z "${ROOT_VERSION}" ] || [ -z "${WORKSPACE_VERSION}" ]; then
+            echo "Failed to detect root/workspace versions from Cargo.toml"
             exit 1
           fi
-          TAG_NAME="v${FEAGI_VERSION}"
-          if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
-            echo "Release tag already exists: $TAG_NAME"
+          if [ "${ROOT_VERSION}" != "${WORKSPACE_VERSION}" ]; then
+            echo "Root/workspace version mismatch: root=${ROOT_VERSION} workspace=${WORKSPACE_VERSION}"
+            exit 1
+          fi
+          if [[ "${ROOT_VERSION}" == *-* ]]; then
+            IS_PRERELEASE=true
           else
-            echo "Creating release tag: $TAG_NAME"
-            git tag "$TAG_NAME"
+            IS_PRERELEASE=false
+          fi
+          TAG_NAME="v${ROOT_VERSION}"
+          echo "version=${ROOT_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${IS_PRERELEASE}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or validate release tag
+        id: tag
+        run: |
+          set -euo pipefail
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          TAG_NAME="${{ steps.version.outputs.tag_name }}"
+          RELEASE_SHA="${RELEASE_SHA}"
+          if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
+            TAG_SHA="$(git rev-list -n 1 "${TAG_NAME}")"
+            if [ "${TAG_SHA}" != "${RELEASE_SHA}" ]; then
+              echo "Existing tag ${TAG_NAME} points to ${TAG_SHA}, expected ${RELEASE_SHA}"
+              exit 1
+            fi
+            echo "Release tag already exists and matches published commit: $TAG_NAME"
+          else
+            echo "Creating release tag ${TAG_NAME} at ${RELEASE_SHA}"
+            git tag "$TAG_NAME" "$RELEASE_SHA"
             git push origin "$TAG_NAME"
           fi
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create GitHub Prerelease
+      - name: Create GitHub release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -777,9 +842,9 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag_name }}
           release_name: Release ${{ steps.tag.outputs.tag_name }}
           body: |
-            **FEAGI Core release (independent versioning)**
+            **FEAGI Core release (unified versioning)**
 
-            Only changed crates have been published to crates.io.
+            All crates published with the same umbrella version.
 
             ## Changed crates
 
@@ -792,10 +857,11 @@ jobs:
             ## Release info
 
             - **Tag:** ${{ steps.tag.outputs.tag_name }}
-            - **Ref:** ${{ github.event.inputs.ref || 'staging' }}
-            - **Commit:** ${{ github.sha }}
+            - **Version:** ${{ steps.version.outputs.version }}
+            - **Pre-release:** ${{ steps.version.outputs.is_prerelease }}
+            - **Commit:** ${{ needs.prep.outputs.release_sha }}
           draft: false
-          prerelease: true
+          prerelease: ${{ steps.version.outputs.is_prerelease }}
 
       - name: Notify success
         run: |

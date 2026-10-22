@@ -1,29 +1,36 @@
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{
-    ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality,
-    SegmentedImageFrameProperties,
+    AngularPointerProperties, ImageFrameProperties, MiscDataDimensions,
+    PercentageChannelDimensionality, PoseEstimationProperties, SegmentedImageFrameProperties,
+    SpatialPointerProperties,
 };
 use crate::data_types::{
-    GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
-    Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
-    SignedPercentage3D, SignedPercentage4D,
+    AudioSpectrumFrame, AudioSpectrumProperties, GazeProperties, ImageFilteringSettings,
+    ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D,
+    SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D,
+    SignedPercentage4D,
 };
 use crate::feedbacks::FeedbackRegistrar;
 use crate::neuron_voxel_coding::xyzp::decoders::{
+    AngularPointerNeuronVoxelXYZPDecoder, AudioSpectrumNeuronVoxelXYZPDecoder,
     GazePropertiesNeuronVoxelXYZPDecoder, ImageFilteringSettingsNeuronVoxelXYZPDecoder,
     MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder,
+    PoseEstimationNeuronVoxelXYZPDecoder, SpatialPointerNeuronVoxelXYZPDecoder,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::{
-    BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder,
-    MiscDataNeuronVoxelXYZPEncoder, PercentageNeuronVoxelXYZPEncoder,
-    SegmentedImageFrameNeuronVoxelXYZPEncoder,
+    AudioSpectrumNeuronVoxelXYZPEncoder, BooleanNeuronVoxelXYZPEncoder,
+    CartesianPlaneNeuronVoxelXYZPEncoder, MiscDataNeuronVoxelXYZPEncoder,
+    PercentageNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder,
 };
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::WrappedIOData;
 use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
+    CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex, CorticalUnitIndex,
+    NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
+};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::FeagiDataError;
@@ -32,7 +39,7 @@ use std::collections::HashMap;
 
 /// Top level JSON representation of registered devices and feedbacks
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct JSONInputOutputDefinition {
     input_units_and_encoder_properties:
         HashMap<SensoryCorticalUnit, Vec<(JSONUnitDefinition, JSONEncoderProperties)>>,
@@ -145,7 +152,7 @@ impl Default for JSONInputOutputDefinition {
 
 /// Defines a cortical unit. Does not include a COder Property directly since the type can vary
 /// between input and output
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct JSONUnitDefinition {
     pub(crate) friendly_name: Option<String>,
     pub(crate) cortical_unit_index: CorticalUnitIndex,
@@ -182,7 +189,7 @@ impl JSONUnitDefinition {
 }
 
 /// Defines a cortical unit's channel implementations
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct JSONDeviceGrouping {
     pub(crate) friendly_name: Option<String>,
     pub(crate) device_properties: JSONDeviceProperties,
@@ -193,7 +200,7 @@ pub struct JSONDeviceGrouping {
 /// Middleman for Encoders and Decoders
 //region Coder Properties
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum JSONEncoderProperties {
     Boolean,
     CartesianPlane(ImageFrameProperties),
@@ -205,6 +212,7 @@ pub enum JSONEncoderProperties {
         PercentageChannelDimensionality,
     ),
     SegmentedImageFrame(SegmentedImageFrameProperties),
+    AudioSpectrum(AudioSpectrumProperties),
 }
 
 impl JSONEncoderProperties {
@@ -284,6 +292,18 @@ impl JSONEncoderProperties {
                     number_channels,
                 )
             }
+            JSONEncoderProperties::AudioSpectrum(audio_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for AudioSpectrum!".to_string(),
+                    ));
+                }
+                AudioSpectrumNeuronVoxelXYZPEncoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *audio_properties,
+                    number_channels,
+                )
+            }
         }
     }
 
@@ -348,11 +368,14 @@ impl JSONEncoderProperties {
                     )?,
                 ))
             }
+            JSONEncoderProperties::AudioSpectrum(audio_properties) => Ok(
+                WrappedIOData::AudioSpectrumFrame(AudioSpectrumFrame::new(audio_properties)?),
+            ),
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum JSONDecoderProperties {
     CartesianPlane(ImageFrameProperties),
     MiscData(MiscDataDimensions),
@@ -362,6 +385,13 @@ pub enum JSONDecoderProperties {
         bool,
         PercentageChannelDimensionality,
     ),
+    /// Legacy positional-servo behavior: absolute commands take priority and
+    /// incremental commands integrate into the cached position.
+    PositionalServo(NeuronDepth, PercentageNeuronPositioning),
+    /// Capability-gated positional-servo behavior where the absolute area
+    /// provides the target, incremental nudges that target, and area 2
+    /// provides the unsigned speed limit. A silent speed area emits 1.0.
+    PositionalServoTargetSpeed(NeuronDepth, PercentageNeuronPositioning, Vec<f32>, f32),
     GazeProperties(NeuronDepth, NeuronDepth, PercentageNeuronPositioning), // eccentricity z depth, modularity z depth
     ImageFilteringSettings(
         NeuronDepth,
@@ -369,6 +399,10 @@ pub enum JSONDecoderProperties {
         NeuronDepth,
         PercentageNeuronPositioning,
     ), // brightness z depth, contrast z depth, diff z depth
+    SpatialPointer(SpatialPointerProperties),
+    AngularPointer(AngularPointerProperties),
+    PoseEstimation(PoseEstimationProperties),
+    AudioSpectrum(AudioSpectrumProperties),
 }
 
 impl JSONDecoderProperties {
@@ -422,6 +456,43 @@ impl JSONDecoderProperties {
                     *dimension_count,
                 )
             }
+            JSONDecoderProperties::PositionalServo(neuron_depth, percentage_neuron_positioning) => {
+                if cortical_ids.len() < 2 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected at least two cortical ids for PositionalServo!".to_string(),
+                    ));
+                }
+                crate::neuron_voxel_coding::xyzp::decoders::PositionalServoNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(), // Absolute
+                    *cortical_ids.get(1).unwrap(),  // Incremental
+                    *neuron_depth,
+                    number_channels,
+                    *percentage_neuron_positioning,
+                )
+            }
+            JSONDecoderProperties::PositionalServoTargetSpeed(
+                neuron_depth,
+                percentage_neuron_positioning,
+                default_speed_0_1_per_channel,
+                incremental_step_size_0_1,
+            ) => {
+                if cortical_ids.len() != 3 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected three cortical ids for PositionalServoTargetSpeed!".to_string(),
+                    ));
+                }
+                crate::neuron_voxel_coding::xyzp::decoders::PositionalServoNeuronVoxelXYZPDecoder::new_target_speed_box(
+                    *cortical_ids.first().unwrap(),
+                    *cortical_ids.get(1).unwrap(),
+                    *cortical_ids.get(2).unwrap(),
+                    *neuron_depth,
+                    *neuron_depth,
+                    number_channels,
+                    *percentage_neuron_positioning,
+                    default_speed_0_1_per_channel.clone(),
+                    *incremental_step_size_0_1,
+                )
+            }
             JSONDecoderProperties::GazeProperties(
                 eccentricity_neuron_depth,
                 modularity_neuron_depth,
@@ -435,38 +506,92 @@ impl JSONDecoderProperties {
                 GazePropertiesNeuronVoxelXYZPDecoder::new_box(
                     *cortical_ids.first().unwrap(), // Eccentricity
                     *cortical_ids.get(1).unwrap(),  // Modularity
-                    *eccentricity_neuron_depth,
-                    *modularity_neuron_depth,
+                    // Persisted properties store Z depth only, which is the two-column
+                    // eccentricity layout and the single modulation column.
+                    CorticalChannelDimensions::new(2, 1, u32::from(*eccentricity_neuron_depth))?,
+                    CorticalChannelDimensions::new(1, 1, u32::from(*modularity_neuron_depth))?,
                     number_channels,
                     *percentage_neuron_positioning,
                 )
             }
             JSONDecoderProperties::ImageFilteringSettings(
                 brightness_z_depth,
-                contrast_z_depth,
-                diff_z_depth,
+                _contrast_z_depth,
+                _diff_z_depth,
                 percentage_neuron_positioning,
             ) => {
-                if cortical_ids.len() != 3 {
+                if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected three cortical ids for ImageFilteringSettings!".to_string(),
+                        "Expected one cortical id for ImageFilteringSettings!".to_string(),
                     ));
                 }
                 ImageFilteringSettingsNeuronVoxelXYZPDecoder::new_box(
-                    *cortical_ids.first().unwrap(), // Brightness
-                    *cortical_ids.get(1).unwrap(),  // Contrast
-                    *cortical_ids.get(2).unwrap(),  // Diff threshold
+                    *cortical_ids.first().unwrap(),
                     *brightness_z_depth,
-                    *contrast_z_depth,
-                    *diff_z_depth,
                     number_channels,
                     *percentage_neuron_positioning,
+                )
+            }
+            JSONDecoderProperties::PoseEstimation(pose_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for PoseEstimation!".to_string(),
+                    ));
+                }
+                PoseEstimationNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *pose_properties,
+                    number_channels,
+                )
+            }
+            JSONDecoderProperties::SpatialPointer(pointer_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for SpatialPointer!".to_string(),
+                    ));
+                }
+                SpatialPointerNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *pointer_properties,
+                    number_channels,
+                )
+            }
+            JSONDecoderProperties::AngularPointer(pointer_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for AngularPointer!".to_string(),
+                    ));
+                }
+                AngularPointerNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *pointer_properties,
+                    number_channels,
+                )
+            }
+            JSONDecoderProperties::AudioSpectrum(audio_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for AudioSpectrum!".to_string(),
+                    ));
+                }
+                AudioSpectrumNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *audio_properties,
+                    number_channels,
                 )
             }
         }
     }
 
-    pub fn default_wrapped_value(&self) -> Result<WrappedIOData, FeagiDataError> {
+    /// Returns the initial cached value (and therefore the output slot type) for a decoder.
+    ///
+    /// `cortical_ids` is required because some areas (SpatialPointer) choose their decoded
+    /// output type from the area's configuration flag (`Percentage3D` for Absolute position
+    /// vs `SignedPercentage3D` for Incremental motion) rather than from the properties alone.
+    pub fn default_wrapped_value(
+        &self,
+        cortical_ids: &[CorticalID],
+    ) -> Result<WrappedIOData, FeagiDataError> {
         match self {
             JSONDecoderProperties::CartesianPlane(image_frame_properties) => {
                 Ok(WrappedIOData::ImageFrame(
@@ -526,6 +651,21 @@ impl JSONDecoderProperties {
             ) => Ok(WrappedIOData::GazeProperties(
                 GazeProperties::create_default_centered(),
             )),
+            JSONDecoderProperties::PositionalServo(
+                _neuron_depth,
+                _percentage_neuron_positioning,
+            ) => Ok(WrappedIOData::Percentage(
+                Percentage::new_from_0_1(0.5).expect("0.5 is always valid"),
+            )),
+            JSONDecoderProperties::PositionalServoTargetSpeed(
+                _neuron_depth,
+                _percentage_neuron_positioning,
+                _default_speed_0_1_per_channel,
+                _incremental_step_size_0_1,
+            ) => Ok(WrappedIOData::Percentage_2D(Percentage2D::new(
+                Percentage::new_from_0_1(0.5).expect("0.5 is always valid"),
+                Percentage::new_zero(),
+            ))),
             JSONDecoderProperties::ImageFilteringSettings(
                 _brightness,
                 _contrast,
@@ -534,6 +674,33 @@ impl JSONDecoderProperties {
             ) => Ok(WrappedIOData::ImageFilteringSettings(
                 ImageFilteringSettings::default(),
             )),
+            JSONDecoderProperties::PoseEstimation(pose_properties) => {
+                Ok(WrappedIOData::PoseEstimationData(
+                    crate::data_types::PoseEstimationData::new(pose_properties)?,
+                ))
+            }
+            JSONDecoderProperties::SpatialPointer(_pointer_properties) => {
+                // SpatialPointer's output type follows the area flag: Absolute decodes an
+                // unsigned position (Percentage3D); Incremental decodes a signed motion
+                // vector (SignedPercentage3D).
+                let cortical_id = cortical_ids.first().ok_or_else(|| {
+                    FeagiDataError::InternalError(
+                        "Expected one cortical id for SpatialPointer!".to_string(),
+                    )
+                })?;
+                match cortical_id.extract_io_data_flag()? {
+                    IOCorticalAreaConfigurationFlag::SignedPercentage3D(..) => Ok(
+                        WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero()),
+                    ),
+                    _ => Ok(WrappedIOData::Percentage_3D(Percentage3D::new_zero())),
+                }
+            }
+            JSONDecoderProperties::AngularPointer(_pointer_properties) => Ok(
+                WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero()),
+            ),
+            JSONDecoderProperties::AudioSpectrum(audio_properties) => Ok(
+                WrappedIOData::AudioSpectrumFrame(AudioSpectrumFrame::new(audio_properties)?),
+            ),
         }
     }
 }
@@ -550,7 +717,7 @@ pub type JSONDeviceProperties = HashMap<String, JSONDevicePropertyValue>;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum JSONDevicePropertyValue {
     String(String),
     Integer(i32),

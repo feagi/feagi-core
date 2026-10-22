@@ -41,7 +41,6 @@ pub struct FeagiConfig {
     pub visualization: VisualizationConfig,
     pub compression: CompressionConfig,
     pub memory_processing: MemoryProcessingConfig,
-    pub snapshot: SnapshotConfig,
 }
 
 /// System-level configuration
@@ -80,12 +79,25 @@ impl Default for SystemConfig {
 #[serde(default)]
 pub struct GenomeConfig {
     pub auto_recovery_on_validation_failure: bool,
+    /// Genome changes held in memory for `GET /v1/genome/changes` polling.
+    pub change_ledger_session_capacity: usize,
+    /// Changes kept in the genome's `change_history` section (oldest dropped first).
+    pub change_history_max_entries: usize,
+    /// Serialized JSON size of the genome's `change_history` section (oldest dropped
+    /// first). Keeps exported genomes, checkpoints, and connectomes small.
+    pub change_history_max_bytes: usize,
+    /// Longest accepted `X-FEAGI-Agent-Id` value, in bytes.
+    pub change_agent_id_max_length: usize,
 }
 
 impl Default for GenomeConfig {
     fn default() -> Self {
         Self {
             auto_recovery_on_validation_failure: true,
+            change_ledger_session_capacity: 10_000,
+            change_history_max_entries: 10_000,
+            change_history_max_bytes: 4 * 1024 * 1024,
+            change_agent_id_max_length: 128,
         }
     }
 }
@@ -94,7 +106,15 @@ impl Default for GenomeConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ApiConfig {
-    pub host: String,
+    /// Host/IP to bind the API server listener to.
+    ///
+    /// For local development, default is loopback (`127.0.0.1`) to reduce OS firewall prompts.
+    /// For external access, set to `0.0.0.0` (and configure `advertised_host` to a routable address).
+    pub bind_host: String,
+    /// Host/IP advertised to clients (e.g., via `/v1/network/connection_info`).
+    ///
+    /// This must be a routable address (never `0.0.0.0` / `::` / `*`).
+    pub advertised_host: String,
     pub port: u16,
     pub workers: usize,
     pub reload: bool,
@@ -103,7 +123,8 @@ pub struct ApiConfig {
 impl Default for ApiConfig {
     fn default() -> Self {
         Self {
-            host: "0.0.0.0".to_string(),
+            bind_host: "127.0.0.1".to_string(),
+            advertised_host: "127.0.0.1".to_string(),
             port: 8000,
             workers: 1,
             reload: false,
@@ -118,9 +139,19 @@ pub struct AgentConfig {
     pub registration_port: u16,
     pub sensory_port: u16,
     pub motor_port: u16,
-    pub host: String,
+    /// Host/IP to bind ZMQ agent endpoints to.
+    pub bind_host: String,
+    /// Host/IP advertised to agents for connecting to ZMQ agent endpoints.
+    pub advertised_host: String,
     /// Enable auto-creation of missing IPU/OPU cortical areas during agent registration
     pub auto_create_missing_cortical_areas: bool,
+    /// Period of the agent handler polling loop, in milliseconds.
+    ///
+    /// The loop moves sensory packets from the transports into the burst engine's
+    /// intake queue and stamps their arrival time. It must run well faster than the
+    /// burst rate: at a period near one burst, two packets from the same agent land
+    /// in one burst and the burst engine keeps only the newest.
+    pub polling_interval_ms: f64,
 }
 
 impl Default for AgentConfig {
@@ -129,8 +160,10 @@ impl Default for AgentConfig {
             registration_port: 30001,
             sensory_port: 5555, // NOTE: This is agent config (different from ports.zmq_sensory_port)
             motor_port: 5564,
-            host: "0.0.0.0".to_string(),
+            bind_host: "127.0.0.1".to_string(),
+            advertised_host: "127.0.0.1".to_string(),
             auto_create_missing_cortical_areas: true,
+            polling_interval_ms: 1.0,
         }
     }
 }
@@ -181,7 +214,10 @@ impl PortsConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ZmqConfig {
-    pub host: String,
+    /// Host/IP to bind ZMQ transport endpoints to.
+    pub bind_host: String,
+    /// Host/IP advertised to clients for connecting to ZMQ transport endpoints.
+    pub advertised_host: String,
     pub enabled: bool,
     pub polling_timeout: u64,
     pub message_buffer_size: usize,
@@ -196,7 +232,8 @@ pub struct ZmqConfig {
 impl Default for ZmqConfig {
     fn default() -> Self {
         Self {
-            host: "0.0.0.0".to_string(),
+            bind_host: "127.0.0.1".to_string(),
+            advertised_host: "127.0.0.1".to_string(),
             enabled: true,
             polling_timeout: 100,
             message_buffer_size: 100,
@@ -291,7 +328,10 @@ impl Default for RestStreamConfig {
 #[serde(default)]
 pub struct WebSocketConfig {
     pub enabled: bool,
-    pub host: String,
+    /// Host/IP to bind WebSocket transport endpoints to.
+    pub bind_host: String,
+    /// Host/IP advertised to clients for connecting to WebSocket transport endpoints.
+    pub advertised_host: String,
     pub sensory_port: u16,
     pub motor_port: u16,
     pub visualization_port: u16,
@@ -309,7 +349,8 @@ impl Default for WebSocketConfig {
     fn default() -> Self {
         Self {
             enabled: false, // Disabled by default
-            host: "0.0.0.0".to_string(),
+            bind_host: "127.0.0.1".to_string(),
+            advertised_host: "127.0.0.1".to_string(),
             sensory_port: 9051,
             motor_port: 9052,
             visualization_port: 9050,
@@ -527,6 +568,12 @@ pub struct BurstEngineConfig {
     pub memory_area_multiplier: f64,
     pub enable_preallocation: bool,
     pub enable_capacity_warnings: bool,
+    /// Frames queued per audio input stream (`iaud`) before the oldest is dropped.
+    ///
+    /// Audio input is ingested in order, one frame per burst, instead of newest-wins.
+    /// The queue absorbs two frames landing in one burst. Latency grows by one burst
+    /// per queued frame, so keep it small.
+    pub sequential_ingest_max_frames: usize,
     pub sleep: BurstEngineSleepConfig,
 }
 
@@ -539,6 +586,7 @@ impl Default for BurstEngineConfig {
             memory_area_multiplier: 2.0,
             enable_preallocation: true,
             enable_capacity_warnings: true,
+            sequential_ingest_max_frames: 10,
             sleep: BurstEngineSleepConfig::default(),
         }
     }
@@ -721,29 +769,6 @@ impl Default for SleepManagerConfig {
             fcl_low_activity_threshold: 5,
             monitor_interval_seconds: 2.0,
             gc_prune_inactive_after_bursts: 500,
-        }
-    }
-}
-
-/// Brain snapshot configuration
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(default)]
-pub struct SnapshotConfig {
-    pub output_dir: String,
-    pub temp_dir: String,
-    pub zip_compression: String,
-    pub default_format: String,
-    pub fc_compression: String,
-}
-
-impl Default for SnapshotConfig {
-    fn default() -> Self {
-        Self {
-            output_dir: "output/snapshots".to_string(),
-            temp_dir: "output/snapshots/tmp".to_string(),
-            zip_compression: "deflate".to_string(),
-            default_format: "zip".to_string(),
-            fc_compression: "store".to_string(),
         }
     }
 }

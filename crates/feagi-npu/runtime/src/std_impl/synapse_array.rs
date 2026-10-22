@@ -30,17 +30,32 @@ pub struct SynapseArray {
     /// Target neuron IDs
     pub target_neurons: Vec<u32>,
 
-    /// Synaptic weights (0-255)
-    pub weights: Vec<u8>,
+    /// Synaptic weights (`f32`)
+    pub weights: Vec<f32>,
 
-    /// Postsynaptic potentials / Conductances (0-255)
-    pub postsynaptic_potentials: Vec<u8>,
+    /// Postsynaptic potentials (`f32`)
+    pub postsynaptic_potentials: Vec<f32>,
 
     /// Synapse types (0=excitatory, 1=inhibitory)
     pub types: Vec<u8>,
 
+    /// Per-synapse packed edge flags (associative STDP, etc.)
+    pub edge_flags: Vec<u8>,
+
+    /// Per-synapse delay in whole bursts (`>= 1`).
+    pub delay_bursts: Vec<u8>,
+
     /// Valid synapse mask
     pub valid_mask: Vec<bool>,
+
+    /// Per-synapse R-STDP eligibility traces (`f32`). Initialized to 0.0 on synapse creation.
+    /// See `feagi_npu_runtime::SynapseStorage::eligibility_traces` for semantics.
+    pub eligibility_traces: Vec<f32>,
+
+    /// Modulation group per synapse. Empty until the first synaptic modulator allocates it.
+    pub modulation_groups: Vec<u16>,
+    /// True after the modulation-group column has been allocated.
+    pub modulation_groups_allocated: bool,
 
     /// Source index for fast lookup
     pub source_index: AHashMap<u32, Vec<usize>>,
@@ -56,7 +71,12 @@ impl SynapseArray {
             weights: Vec::with_capacity(capacity),
             postsynaptic_potentials: Vec::with_capacity(capacity),
             types: Vec::with_capacity(capacity),
+            edge_flags: Vec::with_capacity(capacity),
+            delay_bursts: Vec::with_capacity(capacity),
             valid_mask: Vec::with_capacity(capacity),
+            eligibility_traces: Vec::with_capacity(capacity),
+            modulation_groups: Vec::new(),
+            modulation_groups_allocated: false,
             source_index: AHashMap::new(),
         }
     }
@@ -66,11 +86,11 @@ impl SynapseArray {
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: SynapseType,
     ) {
-        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8)
+        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8, 0, 1)
             .expect("Failed to add synapse");
     }
 
@@ -128,11 +148,11 @@ impl SynapseStorage for SynapseArray {
         &self.target_neurons[..self.count]
     }
 
-    fn weights(&self) -> &[u8] {
+    fn weights(&self) -> &[f32] {
         &self.weights[..self.count]
     }
 
-    fn postsynaptic_potentials(&self) -> &[u8] {
+    fn postsynaptic_potentials(&self) -> &[f32] {
         &self.postsynaptic_potentials[..self.count]
     }
 
@@ -140,17 +160,29 @@ impl SynapseStorage for SynapseArray {
         &self.types[..self.count]
     }
 
+    fn edge_flags(&self) -> &[u8] {
+        &self.edge_flags[..self.count]
+    }
+
+    fn delay_bursts(&self) -> &[u8] {
+        &self.delay_bursts[..self.count]
+    }
+
     fn valid_mask(&self) -> &[bool] {
         &self.valid_mask[..self.count]
     }
 
+    fn eligibility_traces(&self) -> &[f32] {
+        &self.eligibility_traces[..self.count]
+    }
+
     // Mutable property accessors
-    fn weights_mut(&mut self) -> &mut [u8] {
+    fn weights_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.weights[..count]
     }
 
-    fn postsynaptic_potentials_mut(&mut self) -> &mut [u8] {
+    fn postsynaptic_potentials_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.postsynaptic_potentials[..count]
     }
@@ -158,6 +190,31 @@ impl SynapseStorage for SynapseArray {
     fn valid_mask_mut(&mut self) -> &mut [bool] {
         let count = self.count;
         &mut self.valid_mask[..count]
+    }
+
+    fn eligibility_traces_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.eligibility_traces[..count]
+    }
+
+    fn modulation_groups(&self) -> &[u16] {
+        &self.modulation_groups
+    }
+
+    fn ensure_modulation_groups(&mut self) {
+        if !self.modulation_groups_allocated {
+            self.modulation_groups = vec![0; self.count];
+            self.modulation_groups_allocated = true;
+        } else if self.modulation_groups.len() < self.count {
+            self.modulation_groups.resize(self.count, 0);
+        }
+    }
+
+    fn set_modulation_group(&mut self, index: usize, group: u16) {
+        self.ensure_modulation_groups();
+        if let Some(slot) = self.modulation_groups.get_mut(index) {
+            *slot = group;
+        }
     }
 
     // Metadata
@@ -174,10 +231,17 @@ impl SynapseStorage for SynapseArray {
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: u8,
+        edge_flag: u8,
+        delay_bursts: u8,
     ) -> Result<usize> {
+        if delay_bursts < 1 {
+            return Err(crate::traits::RuntimeError::InvalidParameters(
+                "delay_bursts must be >= 1".to_string(),
+            ));
+        }
         let idx = self.count;
 
         self.source_neurons.push(source);
@@ -185,7 +249,13 @@ impl SynapseStorage for SynapseArray {
         self.weights.push(weight);
         self.postsynaptic_potentials.push(psp);
         self.types.push(synapse_type);
+        self.edge_flags.push(edge_flag);
+        self.delay_bursts.push(delay_bursts);
         self.valid_mask.push(true);
+        self.eligibility_traces.push(0.0);
+        if self.modulation_groups_allocated {
+            self.modulation_groups.push(0);
+        }
 
         // Update index
         self.source_index.entry(source).or_default().push(idx);
@@ -198,13 +268,34 @@ impl SynapseStorage for SynapseArray {
         &mut self,
         sources: &[u32],
         targets: &[u32],
-        weights: &[u8],
-        psps: &[u8],
+        weights: &[f32],
+        psps: &[f32],
         types: &[u8],
+        edge_flags: Option<&[u8]>,
+        delays: &[u8],
     ) -> crate::traits::Result<()> {
         let batch_size = sources.len();
+        if let Some(flags) = edge_flags {
+            if flags.len() != batch_size {
+                return Err(crate::traits::RuntimeError::InvalidParameters(format!(
+                    "edge_flags length {} != batch size {}",
+                    flags.len(),
+                    batch_size
+                )));
+            }
+        }
+        if delays.len() != batch_size {
+            return Err(crate::traits::RuntimeError::InvalidParameters(format!(
+                "delays length {} != batch size {}",
+                delays.len(),
+                batch_size
+            )));
+        }
         for i in 0..batch_size {
-            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i])?;
+            let ef = edge_flags.map(|f| f[i]).unwrap_or(0);
+            self.add_synapse(
+                sources[i], targets[i], weights[i], psps[i], types[i], ef, delays[i],
+            )?;
         }
         Ok(())
     }
@@ -234,6 +325,40 @@ impl SynapseStorage for SynapseArray {
         Ok(removed)
     }
 
+    fn remove_synapses_touching_neuron(&mut self, neuron_id: u32) -> crate::traits::Result<usize> {
+        let mut removed = 0;
+        for idx in 0..self.count {
+            if self.valid_mask[idx]
+                && (self.source_neurons[idx] == neuron_id || self.target_neurons[idx] == neuron_id)
+            {
+                self.valid_mask[idx] = false;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+
+    fn remove_synapses_touching_marked_neurons(
+        &mut self,
+        neuron_marked: &[bool],
+    ) -> crate::traits::Result<usize> {
+        let mut removed = 0;
+        for idx in 0..self.count {
+            if !self.valid_mask[idx] {
+                continue;
+            }
+            let source = self.source_neurons[idx] as usize;
+            let target = self.target_neurons[idx] as usize;
+            let source_marked = neuron_marked.get(source).copied().unwrap_or(false);
+            let target_marked = neuron_marked.get(target).copied().unwrap_or(false);
+            if source_marked || target_marked {
+                self.valid_mask[idx] = false;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+
     fn remove_synapses_between(
         &mut self,
         source: u32,
@@ -252,7 +377,7 @@ impl SynapseStorage for SynapseArray {
         Ok(removed)
     }
 
-    fn update_weight(&mut self, idx: usize, new_weight: u8) -> crate::traits::Result<()> {
+    fn update_weight(&mut self, idx: usize, new_weight: f32) -> crate::traits::Result<()> {
         if idx >= self.count {
             return Err(crate::traits::RuntimeError::InvalidParameters(format!(
                 "Synapse index {} out of bounds (count: {})",
@@ -281,15 +406,15 @@ mod tests {
     #[test]
     fn test_add_synapse() {
         let mut array = SynapseArray::new(10);
-        array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory);
         assert_eq!(array.count, 1);
     }
 
     #[test]
     fn test_propagate_parallel() {
         let mut array = SynapseArray::new(10);
-        array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory);
-        array.add_synapse_simple(0, 2, 128, 255, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 2, 128.0, 255.0, SynapseType::Excitatory);
 
         let fired = std::vec![0];
         let contributions = array.propagate_parallel(&fired);
@@ -297,5 +422,16 @@ mod tests {
         assert_eq!(contributions.len(), 2);
         assert!(contributions.contains_key(&1));
         assert!(contributions.contains_key(&2));
+    }
+
+    #[test]
+    fn test_remove_synapses_touching_neuron_removes_both_directions() {
+        let mut array = SynapseArray::new(10);
+        array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory);
+        array.add_synapse_simple(1, 2, 255.0, 255.0, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 2, 255.0, 255.0, SynapseType::Excitatory);
+
+        assert_eq!(array.remove_synapses_touching_neuron(1).unwrap(), 2);
+        assert_eq!(array.valid_count(), 1);
     }
 }

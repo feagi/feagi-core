@@ -13,7 +13,9 @@
 //! Platform-agnostic synaptic algorithms merged from feagi-synapse crate.
 
 pub mod contribution;
+pub mod edge_flags;
 pub mod weight;
 
 pub use contribution::*;
+pub use edge_flags::*;
 pub use weight::*;

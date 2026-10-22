@@ -144,6 +144,26 @@ impl WasmConnectomeService {
             .and_then(|v| v.as_u64())
             .map(|u| u as u32);
 
+        let cid_bytes = cortical_id.as_bytes();
+        let is_io_area_wasm = cid_bytes.len() == 8
+            && (cid_bytes.first().copied() == Some(b'i')
+                || cid_bytes.first().copied() == Some(b'o'));
+        let cortical_subtype_field = if is_io_area_wasm {
+            String::from_utf8(cid_bytes[0..4].to_vec()).ok()
+        } else {
+            None
+        };
+        let wasm_subunit_id = if is_io_area_wasm {
+            cid_bytes.get(6).copied()
+        } else {
+            None
+        };
+        let wasm_cortical_unit_index = if is_io_area_wasm {
+            cid_bytes.get(7).copied()
+        } else {
+            None
+        };
+
         CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
             cortical_id_s: cortical_id.to_string(), // TODO: Decode base64 if needed
@@ -230,11 +250,12 @@ impl WasmConnectomeService {
             longterm_mem_threshold,
             temporal_depth,
             properties: area.properties.clone(),
-            cortical_subtype: None, // TODO: Extract from cortical_id if IPU/OPU
-            encoding_type: None,    // TODO: Extract from cortical_id if IPU/OPU
-            encoding_format: None,  // TODO: Extract from cortical_id if IPU/OPU
-            unit_id: None,          // TODO: Extract from cortical_id if IPU/OPU
-            group_id: None,         // TODO: Extract from cortical_id if IPU/OPU
+            cortical_subtype: cortical_subtype_field,
+            encoding_type: None,
+            encoding_format: None,
+            unit_id: wasm_cortical_unit_index,
+            subunit_id: wasm_subunit_id,
+            group_id: wasm_cortical_unit_index,
             coding_signage: None,
             coding_behavior: None,
             coding_type: None,
@@ -404,6 +425,10 @@ impl ConnectomeService for WasmConnectomeService {
         Ok(self.genome.brain_regions.contains_key(region_id))
     }
 
+    async fn get_root_region_id(&self) -> ServiceResult<Option<String>> {
+        Ok(self.genome.brain_regions_root.clone())
+    }
+
     async fn get_morphologies(
         &self,
     ) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>> {
@@ -439,6 +464,12 @@ impl ConnectomeService for WasmConnectomeService {
         ))
     }
 
+    async fn rename_morphology(&self, _old_id: &str, _new_id: &str) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
     async fn update_cortical_mapping(
         &self,
         _src_area_id: String,
@@ -447,6 +478,74 @@ impl ConnectomeService for WasmConnectomeService {
     ) -> ServiceResult<usize> {
         Err(ServiceError::NotImplemented(
             "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn upsert_classifier(
+        &self,
+        _classifier: feagi_structures::genomic::classifiers::Classifier,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn list_classifiers(&self) -> ServiceResult<Vec<ClassifierInfo>> {
+        Ok(self
+            .genome
+            .classifiers
+            .values()
+            .cloned()
+            .map(ClassifierInfo::from)
+            .collect())
+    }
+
+    async fn rekey_memory_twin_source(
+        &self,
+        _memory_area_id: &str,
+        _old_src_area_id: &str,
+        _new_src_area_id: &str,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn get_classifier(&self, classifier_id: &str) -> ServiceResult<ClassifierInfo> {
+        self.genome
+            .classifiers
+            .get(classifier_id)
+            .cloned()
+            .map(ClassifierInfo::from)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "classifier".to_string(),
+                id: classifier_id.to_string(),
+            })
+    }
+
+    async fn delete_classifier(&self, _classifier_id: &str) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    #[cfg(feature = "connectome-io")]
+    async fn export_connectome(
+        &self,
+        _mode: feagi_npu_neural::types::connectome::ConnectomePersistMode,
+    ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot> {
+        Err(ServiceError::NotImplemented(
+            "WASM connectome export is not supported".to_string(),
+        ))
+    }
+
+    #[cfg(feature = "connectome-io")]
+    async fn import_connectome(
+        &self,
+        _snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM connectome import is not supported".to_string(),
         ))
     }
 }

@@ -94,6 +94,25 @@ impl NeuronIdManager {
         Some(neuron_id)
     }
 
+    /// Reserve a specific memory-neuron ID so a restored LTM neuron keeps its original ID.
+    ///
+    /// Advances `next_memory_id` past `neuron_id` so later allocations cannot collide.
+    pub fn reserve_memory_neuron_id(&self, neuron_id: u32) -> bool {
+        if !Self::is_memory_neuron_id(neuron_id) {
+            return false;
+        }
+
+        let mut inner = self.inner.lock().unwrap();
+        if !inner.allocated_memory_ids.insert(neuron_id) {
+            return false;
+        }
+        inner.memory_allocated_count += 1;
+        if neuron_id >= inner.next_memory_id {
+            inner.next_memory_id = neuron_id.saturating_add(1);
+        }
+        true
+    }
+
     /// Deallocate a regular neuron ID for reuse
     pub fn deallocate_regular_neuron_id(&self, neuron_id: u32) -> bool {
         if !Self::is_regular_neuron_id(neuron_id) {
@@ -237,5 +256,16 @@ mod tests {
         // Counter tracks total allocated, not currently active
         let stats = manager.get_allocation_stats();
         assert_eq!(stats.regular_allocated, 1); // Counter not decremented
+    }
+
+    #[test]
+    fn test_reserve_memory_neuron_id_keeps_original_and_avoids_collision() {
+        let manager = NeuronIdManager::new();
+        assert!(manager.reserve_memory_neuron_id(50_000_042));
+        assert!(!manager.reserve_memory_neuron_id(50_000_042));
+        assert!(!manager.reserve_memory_neuron_id(1));
+
+        let next = manager.allocate_memory_neuron_id().unwrap();
+        assert_eq!(next, 50_000_043);
     }
 }

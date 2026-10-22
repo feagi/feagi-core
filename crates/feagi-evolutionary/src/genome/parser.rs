@@ -27,7 +27,7 @@ Parses FEAGI 2.1 genome JSON format into runtime data structures.
       "title": "...",
       "parent_region_id": null,
       "coordinate_3d": [x, y, z],
-      "areas": ["cortical_id1", ...],
+      "cortical_areas": ["cortical_id1", ...],
       "regions": ["child_region_id1", ...]
     }
   },
@@ -45,8 +45,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
 
+use crate::genome::migration::membership::fold_genome_region_membership;
 use crate::types::{EvoError, EvoResult};
 use feagi_structures::genomic::brain_regions::RegionID;
+use feagi_structures::genomic::classifiers::Classifier;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions as Dimensions,
@@ -68,11 +70,20 @@ pub struct ParsedGenome {
     /// Brain regions and hierarchy
     pub brain_regions: Vec<(BrainRegion, Option<String>)>, // (region, parent_id)
 
+    /// First-class classifier assemblies (parallel to brain_regions)
+    pub classifiers: Vec<Classifier>,
+
     /// Raw neuron morphologies (for later processing)
     pub neuron_morphologies: HashMap<String, Value>,
 
+    /// Raw modulator instances (for later processing)
+    pub modulators: HashMap<String, Value>,
+
     /// Raw physiology data (for later processing)
     pub physiology: Option<Value>,
+
+    /// Recorded structural changes, carried as-is (see `RuntimeGenome::change_history`)
+    pub change_history: Vec<Value>,
 }
 
 /// Raw genome JSON structure for deserialization
@@ -82,16 +93,29 @@ pub struct RawGenome {
     pub genome_title: Option<String>,
     pub genome_description: Option<String>,
     pub version: String,
+    /// Integer schema version. Optional on the wire so older genomes that
+    /// pre-date this field still deserialize. The authoritative resolver
+    /// is `crate::genome::schema::detect_schema_version` and consumers
+    /// MUST go through it instead of branching on this field directly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genome_schema_version: Option<u32>,
     pub blueprint: HashMap<String, RawCorticalArea>,
     #[serde(default)]
     pub brain_regions: HashMap<String, RawBrainRegion>,
     #[serde(default)]
+    pub classifiers: HashMap<String, RawClassifier>,
+    #[serde(default)]
     pub neuron_morphologies: HashMap<String, Value>,
+    #[serde(default)]
+    pub modulators: HashMap<String, Value>,
     #[serde(default)]
     pub physiology: Option<Value>,
     /// Root brain region ID (UUID string) - for O(1) root lookup
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
+    /// Recorded structural changes (optional; see `RuntimeGenome::change_history`)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub change_history: Vec<Value>,
 }
 
 /// Raw cortical area from blueprint
@@ -136,6 +160,12 @@ pub struct RawCorticalArea {
     pub lifespan_growth_rate: Option<f32>,
     pub init_lifespan: Option<u32>,
     pub temporal_depth: Option<u32>,
+    pub mp_learning_enabled: Option<bool>,
+    pub mp_change_mode: Option<String>,
+    pub mp_delta_quantization: Option<f32>,
+    pub mp_ratio_quantization: Option<f32>,
+    pub min_window_activity: Option<u32>,
+    pub scan_skip_density: Option<f32>,
     pub consecutive_fire_cnt_max: Option<u32>,
     pub snooze_length: Option<u32>,
 
@@ -147,16 +177,58 @@ pub struct RawCorticalArea {
 /// Raw brain region from genome
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RawBrainRegion {
+    #[serde(alias = "name")]
     pub title: Option<String>,
     pub description: Option<String>,
     pub parent_region_id: Option<String>,
     pub coordinate_2d: Option<Vec<i32>>,
     pub coordinate_3d: Option<Vec<i32>>,
+    /// Legacy wire key. Canonical saves use `cortical_areas`. Parse folds
+    /// `areas` into `cortical_areas` before this alias is applied, so a region
+    /// that still carries both names does not fail as a duplicate field.
+    #[serde(alias = "cortical_areas")]
     pub areas: Option<Vec<String>>,
     pub regions: Option<Vec<String>>,
     pub inputs: Option<Vec<String>>,
     pub outputs: Option<Vec<String>>,
+    /// Declared interface lists (persisted from RuntimeGenome / PUT region).
+    pub designated_inputs: Option<Vec<String>>,
+    pub designated_outputs: Option<Vec<String>>,
     pub signature: Option<String>,
+    /// v3 `serde_json::to_value(BrainRegion)` nests `inputs` / `designated_*` under `properties`.
+    pub properties: Option<HashMap<String, Value>>,
+}
+
+/// Raw classifier assembly from the top-level `classifiers` genome key.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RawClassifier {
+    #[serde(alias = "title")]
+    pub name: Option<String>,
+    pub parent_region_id: Option<String>,
+    #[serde(alias = "coordinate_3d")]
+    pub coordinates_3d: Option<Vec<i32>>,
+    #[serde(default)]
+    pub sample_area_ids: Vec<String>,
+    #[serde(default)]
+    pub class_bindings: Vec<feagi_structures::genomic::classifiers::ClassifierClassBinding>,
+    pub sample_memory_id: Option<String>,
+    pub class_memory_id: Option<String>,
+    pub error_area_id: Option<String>,
+    #[serde(default)]
+    pub reward_training: bool,
+    #[serde(default)]
+    pub answer_feedback_area_id: Option<String>,
+    #[serde(default)]
+    pub pain_area_id: Option<String>,
+    #[serde(default)]
+    pub pleasure_area_id: Option<String>,
+    #[serde(default)]
+    pub answer_latency_bursts: u32,
+    #[serde(default)]
+    pub learn_area_id: Option<String>,
+    #[serde(default)]
+    pub confidence_area_id: Option<String>,
+    pub properties: Option<HashMap<String, Value>>,
 }
 
 /// Convert cortical_mapping_dst keys from old format to base64
@@ -210,6 +282,18 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
         if bytes == *b"___fatig" {
             return Ok(CoreCorticalType::Fatigue.to_cortical_id());
         }
+        if bytes == *b"___pain_" {
+            return Ok(CoreCorticalType::Pain.to_cortical_id());
+        }
+        if bytes == *b"___pleas" {
+            return Ok(CoreCorticalType::Pleasure.to_cortical_id());
+        }
+        if bytes == *b"___fear_" {
+            return Ok(CoreCorticalType::Fear.to_cortical_id());
+        }
+        if bytes == *b"___hope_" {
+            return Ok(CoreCorticalType::Hope.to_cortical_id());
+        }
         return Ok(cortical_id);
     }
 
@@ -225,11 +309,27 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     if id_str == "___power" {
         return Ok(CoreCorticalType::Power.to_cortical_id());
     }
+    // 8-char padded form of ___pwr (from 6-char padding in legacy flat genomes)
+    if id_str == "___pwr__" {
+        return Ok(CoreCorticalType::Power.to_cortical_id());
+    }
     if id_str == "___death" {
         return Ok(CoreCorticalType::Death.to_cortical_id());
     }
     if id_str == "___fatig" {
         return Ok(CoreCorticalType::Fatigue.to_cortical_id());
+    }
+    if id_str == "___pain_" {
+        return Ok(CoreCorticalType::Pain.to_cortical_id());
+    }
+    if id_str == "___pleas" {
+        return Ok(CoreCorticalType::Pleasure.to_cortical_id());
+    }
+    if id_str == "___fear_" {
+        return Ok(CoreCorticalType::Fear.to_cortical_id());
+    }
+    if id_str == "___hope_" {
+        return Ok(CoreCorticalType::Hope.to_cortical_id());
     }
     if id_str == "_death" {
         return Ok(CoreCorticalType::Death.to_cortical_id());
@@ -237,22 +337,22 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     if id_str == "_fatigue" {
         return Ok(CoreCorticalType::Fatigue.to_cortical_id());
     }
+    if id_str == "_pain" {
+        return Ok(CoreCorticalType::Pain.to_cortical_id());
+    }
+    if id_str == "_pleasure" {
+        return Ok(CoreCorticalType::Pleasure.to_cortical_id());
+    }
+    if id_str == "_fear" {
+        return Ok(CoreCorticalType::Fear.to_cortical_id());
+    }
+    if id_str == "_hope" {
+        return Ok(CoreCorticalType::Hope.to_cortical_id());
+    }
 
-    // For non-core areas, handle 6-char and 8-char ASCII formats
-    if id_str.len() == 6 {
-        // Legacy 6-char non-core IDs: pad with underscores on the right
-        let mut bytes = [b'_'; 8];
-        bytes[..6].copy_from_slice(id_str.as_bytes());
-
-        CorticalID::try_from_bytes(&bytes).map_err(|e| {
-            EvoError::InvalidArea(format!("Failed to convert cortical_id '{}': {}", id_str, e))
-        })
-    } else if id_str.len() == 8 {
-        // Already 8 bytes - convert directly
-        let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(id_str.as_bytes());
-
-        CorticalID::try_from_bytes(&bytes).map_err(|e| {
+    // For non-core areas, use CorticalID's legacy ASCII parser (6-char and 8-char)
+    if id_str.len() == 6 || id_str.len() == 8 {
+        CorticalID::try_from_legacy_ascii(id_str).map_err(|e| {
             EvoError::InvalidArea(format!("Failed to convert cortical_id '{}': {}", id_str, e))
         })
     } else {
@@ -267,6 +367,37 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
 pub struct GenomeParser;
 
 impl GenomeParser {
+    /// Normalize cortical ID list properties (inputs, outputs, designated_*) to base64 strings.
+    fn normalize_brain_region_cortical_id_list_properties(region: &mut BrainRegion, keys: &[&str]) {
+        for key in keys {
+            let Some(val) = region.get_property(key) else {
+                continue;
+            };
+            let Some(arr) = val.as_array() else {
+                continue;
+            };
+            let mut out: Vec<String> = Vec::new();
+            for item in arr {
+                let Some(s) = item.as_str() else {
+                    continue;
+                };
+                match string_to_cortical_id(s) {
+                    Ok(cortical_id) => out.push(cortical_id.as_base_64()),
+                    Err(e) => {
+                        warn!(target: "feagi-evo",
+                            "Failed to convert brain region '{}' entry '{}': {}. Skipping.",
+                            key, s, e);
+                    }
+                }
+            }
+            if out.is_empty() {
+                region.properties.remove(*key);
+            } else {
+                region.add_property((*key).to_string(), serde_json::json!(out));
+            }
+        }
+    }
+
     /// Parse a genome JSON string into a ParsedGenome
     ///
     /// # Arguments
@@ -285,14 +416,21 @@ impl GenomeParser {
     /// - Data types are invalid
     ///
     pub fn parse(json_str: &str) -> EvoResult<ParsedGenome> {
-        // Deserialize raw genome
-        let raw: RawGenome = serde_json::from_str(json_str)
+        // Fold legacy `areas` into `cortical_areas` before struct decode.
+        // Serde treats the alias as the same field and rejects a region that
+        // still has both keys.
+        let mut genome_value: Value = serde_json::from_str(json_str)
+            .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
+        for note in fold_genome_region_membership(&mut genome_value).data_loss {
+            warn!(target: "feagi-evo", "[GENOME-PARSE] {}", note);
+        }
+        let raw: RawGenome = serde_json::from_value(genome_value)
             .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
 
-        // Validate version - support 2.x and 3.0 (3.0 is flat format with all IDs in base64)
-        if !raw.version.starts_with("2.") && raw.version != "3.0" {
+        // Validate version - support 2.x and 3.x (3.0 is flat format with base64 IDs)
+        if !raw.version.starts_with("2.") && !raw.version.starts_with("3.") && raw.version != "3" {
             return Err(EvoError::InvalidGenome(format!(
-                "Unsupported genome version: {}. Expected 2.x or 3.0",
+                "Unsupported genome version: {}. Expected 2.x or 3.x",
                 raw.version
             )));
         }
@@ -302,6 +440,7 @@ impl GenomeParser {
 
         // Parse brain regions
         let brain_regions = Self::parse_brain_regions(&raw.brain_regions)?;
+        let classifiers = Self::parse_classifiers(&raw.classifiers)?;
 
         Ok(ParsedGenome {
             genome_id: raw.genome_id.unwrap_or_else(|| "unknown".to_string()),
@@ -309,8 +448,11 @@ impl GenomeParser {
             version: raw.version,
             cortical_areas,
             brain_regions,
+            classifiers,
             neuron_morphologies: raw.neuron_morphologies,
+            modulators: raw.modulators,
             physiology: raw.physiology,
+            change_history: raw.change_history,
         })
     }
 
@@ -520,6 +662,30 @@ impl GenomeParser {
                 area.properties
                     .insert("temporal_depth".to_string(), serde_json::json!(v));
             }
+            if let Some(v) = raw_area.mp_learning_enabled {
+                area.properties
+                    .insert("mp_learning_enabled".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = &raw_area.mp_change_mode {
+                area.properties
+                    .insert("mp_change_mode".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.mp_delta_quantization {
+                area.properties
+                    .insert("mp_delta_quantization".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.mp_ratio_quantization {
+                area.properties
+                    .insert("mp_ratio_quantization".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.min_window_activity {
+                area.properties
+                    .insert("min_window_activity".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.scan_skip_density {
+                area.properties
+                    .insert("scan_skip_density".to_string(), serde_json::json!(v));
+            }
             if let Some(v) = raw_area.consecutive_fire_cnt_max {
                 area.properties
                     .insert("consecutive_fire_cnt_max".to_string(), serde_json::json!(v));
@@ -598,6 +764,13 @@ impl GenomeParser {
 
             let mut region = BrainRegion::new(region_id, title, region_type)?;
 
+            // v3 RuntimeGenome sections nest IO under `properties`; merge before list fields.
+            if let Some(props) = &raw_region.properties {
+                for (k, v) in props {
+                    region.add_property(k.clone(), v.clone());
+                }
+            }
+
             // Add cortical areas to region (using CorticalID directly)
             if let Some(areas) = &raw_region.areas {
                 for area_id in areas {
@@ -664,6 +837,51 @@ impl GenomeParser {
                 region.add_property("signature".to_string(), serde_json::json!(signature));
             }
 
+            if let Some(d) = &raw_region.designated_inputs {
+                let ids: Vec<String> = d
+                    .iter()
+                    .filter_map(|id| match string_to_cortical_id(id) {
+                        Ok(cortical_id) => Some(cortical_id.as_base_64()),
+                        Err(e) => {
+                            warn!(target: "feagi-evo",
+                                "Failed to convert designated_inputs entry '{}': {}. Skipping.",
+                                id, e);
+                            None
+                        }
+                    })
+                    .collect();
+                if !ids.is_empty() {
+                    region.add_property("designated_inputs".to_string(), serde_json::json!(ids));
+                }
+            }
+            if let Some(d) = &raw_region.designated_outputs {
+                let ids: Vec<String> = d
+                    .iter()
+                    .filter_map(|id| match string_to_cortical_id(id) {
+                        Ok(cortical_id) => Some(cortical_id.as_base_64()),
+                        Err(e) => {
+                            warn!(target: "feagi-evo",
+                                "Failed to convert designated_outputs entry '{}': {}. Skipping.",
+                                id, e);
+                            None
+                        }
+                    })
+                    .collect();
+                if !ids.is_empty() {
+                    region.add_property("designated_outputs".to_string(), serde_json::json!(ids));
+                }
+            }
+
+            Self::normalize_brain_region_cortical_id_list_properties(
+                &mut region,
+                &[
+                    "inputs",
+                    "outputs",
+                    "designated_inputs",
+                    "designated_outputs",
+                ],
+            );
+
             // Store parent_id for hierarchy construction
             let parent_id = raw_region.parent_region_id.clone();
             if let Some(ref parent_id_str) = parent_id {
@@ -679,11 +897,179 @@ impl GenomeParser {
 
         Ok(regions)
     }
+
+    fn parse_classifiers(
+        raw_classifiers: &HashMap<String, RawClassifier>,
+    ) -> EvoResult<Vec<Classifier>> {
+        let mut classifiers = Vec::with_capacity(raw_classifiers.len());
+        for (classifier_id, raw) in raw_classifiers {
+            let name = raw
+                .name
+                .clone()
+                .filter(|n| !n.trim().is_empty())
+                .ok_or_else(|| {
+                    EvoError::InvalidArea(format!("Classifier '{}' is missing name", classifier_id))
+                })?;
+            let parent_region_id = raw
+                .parent_region_id
+                .clone()
+                .filter(|n| !n.trim().is_empty())
+                .ok_or_else(|| {
+                    EvoError::InvalidArea(format!(
+                        "Classifier '{}' is missing parent_region_id",
+                        classifier_id
+                    ))
+                })?;
+            let coordinates_3d = match &raw.coordinates_3d {
+                Some(coords) if coords.len() == 3 => [coords[0], coords[1], coords[2]],
+                Some(coords) => {
+                    return Err(EvoError::InvalidArea(format!(
+                        "Classifier '{}' coordinates_3d must have 3 values, got {}",
+                        classifier_id,
+                        coords.len()
+                    )))
+                }
+                None => [0, 0, 0],
+            };
+            let sample_memory_id = raw.sample_memory_id.clone().ok_or_else(|| {
+                EvoError::InvalidArea(format!(
+                    "Classifier '{}' is missing sample_memory_id",
+                    classifier_id
+                ))
+            })?;
+            let class_memory_id = raw.class_memory_id.clone().ok_or_else(|| {
+                EvoError::InvalidArea(format!(
+                    "Classifier '{}' is missing class_memory_id",
+                    classifier_id
+                ))
+            })?;
+            let error_area_id = raw.error_area_id.clone().ok_or_else(|| {
+                EvoError::InvalidArea(format!(
+                    "Classifier '{}' is missing error_area_id",
+                    classifier_id
+                ))
+            })?;
+            let sample_area_ids = raw
+                .sample_area_ids
+                .iter()
+                .map(|id| id.trim().to_string())
+                .filter(|id| !id.is_empty())
+                .collect();
+            let class_bindings = raw
+                .class_bindings
+                .iter()
+                .filter(|binding| !binding.class_area_id.trim().is_empty())
+                .cloned()
+                .collect();
+            classifiers.push(Classifier {
+                classifier_id: classifier_id.clone(),
+                name,
+                parent_region_id,
+                coordinates_3d,
+                sample_area_ids,
+                class_bindings,
+                sample_memory_id,
+                class_memory_id,
+                error_area_id,
+                reward_training: raw.reward_training,
+                answer_feedback_area_id: raw.answer_feedback_area_id.clone(),
+                pain_area_id: raw.pain_area_id.clone(),
+                pleasure_area_id: raw.pleasure_area_id.clone(),
+                answer_latency_bursts: raw.answer_latency_bursts,
+                learn_area_id: raw.learn_area_id.clone(),
+                confidence_area_id: raw.confidence_area_id.clone(),
+                properties: raw.properties.clone().unwrap_or_default(),
+            });
+        }
+        Ok(classifiers)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_folds_legacy_areas_into_cortical_areas() {
+        let json = r#"{
+            "version": "2.1",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Power",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                },
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "areas": ["_power"],
+                    "cortical_areas": ["_death"]
+                }
+            }
+        }"#;
+
+        let parsed = GenomeParser::parse(json).unwrap();
+        let (region, _) = &parsed.brain_regions[0];
+        let ids: Vec<String> = region
+            .get_all_areas()
+            .into_iter()
+            .map(|id| id.as_base_64())
+            .collect();
+        assert!(ids.contains(&string_to_cortical_id("_power").unwrap().as_base_64()));
+        assert!(ids.contains(&string_to_cortical_id("_death").unwrap().as_base_64()));
+    }
+
+    #[test]
+    fn parse_accepts_cortical_areas_only_and_a_non_array_legacy_key() {
+        let cortical_only = r#"{
+            "version": "2.1",
+            "blueprint": {
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": { "title": "Root", "cortical_areas": ["_death"] }
+            }
+        }"#;
+        let parsed = GenomeParser::parse(cortical_only).unwrap();
+        let (region, _) = &parsed.brain_regions[0];
+        assert!(region.contains_area(&string_to_cortical_id("_death").unwrap()));
+
+        let dropped_legacy = r#"{
+            "version": "2.1",
+            "blueprint": {
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "areas": "not-a-list",
+                    "cortical_areas": ["_death"]
+                }
+            }
+        }"#;
+        let parsed = GenomeParser::parse(dropped_legacy).unwrap();
+        let (region, _) = &parsed.brain_regions[0];
+        assert_eq!(region.area_count(), 1);
+        assert!(region.contains_area(&string_to_cortical_id("_death").unwrap()));
+    }
 
     #[test]
     fn test_parse_minimal_genome() {
@@ -750,6 +1136,7 @@ mod tests {
         }"#;
 
         let parsed = GenomeParser::parse(json).unwrap();
+        assert!(parsed.classifiers.is_empty());
 
         assert_eq!(parsed.cortical_areas.len(), 2);
 
@@ -769,6 +1156,75 @@ mod tests {
         // Migration must map this deterministically to the core Power cortical ID.
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let id = string_to_cortical_id("___pwr").unwrap();
+        assert_eq!(
+            id.as_base_64(),
+            CoreCorticalType::Power.to_cortical_id().as_base_64()
+        );
+    }
+
+    #[test]
+    fn test_parse_raw_imu_magnetometer_wire_id() {
+        // Embodiment-registered Raw IMU magnetometer (subunit 2) from live FEAGI.
+        // Connectome auto-save must be able to rehydrate this into a runtime genome.
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {
+                "aXJpbScAAgA=": {
+                    "cortical_name": "feagi_body_imu__Abdomen-2",
+                    "block_boundaries": [3, 1, 10],
+                    "relative_coordinate": [90, 0, -10],
+                    "cortical_type": "IPU"
+                }
+            },
+            "brain_regions": {}
+        }"#;
+
+        let parsed = GenomeParser::parse(json).expect("Raw IMU magnetometer genome");
+        assert_eq!(parsed.cortical_areas.len(), 1);
+        assert_eq!(
+            parsed.cortical_areas[0].cortical_id.as_base_64(),
+            "aXJpbScAAgA="
+        );
+        parsed.cortical_areas[0]
+            .cortical_id
+            .as_cortical_type()
+            .expect("magnetometer IO flag must decode");
+    }
+
+    #[test]
+    fn test_parse_positional_servo_speed_wire_id() {
+        // Embodiment-registered Positional Servo Speed (subunit 2) from live FEAGI.
+        // Connectome auto-save must be able to rehydrate this into a runtime genome.
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {
+                "b3BzZSEAAAA=": {
+                    "cortical_name": "Positional Servo Speed",
+                    "block_boundaries": [6, 1, 20],
+                    "relative_coordinate": [-58, 0, -10],
+                    "cortical_type": "OPU"
+                }
+            },
+            "brain_regions": {}
+        }"#;
+
+        let parsed = GenomeParser::parse(json).expect("Positional Servo Speed genome");
+        assert_eq!(parsed.cortical_areas.len(), 1);
+        assert_eq!(
+            parsed.cortical_areas[0].cortical_id.as_base_64(),
+            "b3BzZSEAAAA="
+        );
+        parsed.cortical_areas[0]
+            .cortical_id
+            .as_cortical_type()
+            .expect("positional servo speed IO flag must decode");
+    }
+
+    #[test]
+    fn test_string_to_cortical_id_legacy_power_padded() {
+        // 8-char padded form ___pwr__ (from 6-char padding in legacy flat genomes).
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        let id = string_to_cortical_id("___pwr__").unwrap();
         assert_eq!(
             id.as_base_64(),
             CoreCorticalType::Power.to_cortical_id().as_base_64()
@@ -818,6 +1274,75 @@ mod tests {
                 "Should be classified as MEMORY type"
             );
         }
+    }
+
+    /// v3 save embeds IO lists under `properties`; loading must preserve designated_inputs for BV presets.
+    #[test]
+    fn test_parse_v3_brain_region_nested_properties_retains_designated_io() {
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Core",
+                    "block_boundaries": [10, 10, 10],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "550e8400-e29b-41d4-a716-446655440000": {
+                    "name": "Sub",
+                    "cortical_areas": ["_power"],
+                    "properties": {
+                        "designated_inputs": ["_power"],
+                        "designated_outputs": []
+                    }
+                }
+            }
+        }"#;
+
+        let parsed = GenomeParser::parse(json).unwrap();
+        assert_eq!(parsed.brain_regions.len(), 1);
+        let (region, _) = &parsed.brain_regions[0];
+        let di = region
+            .get_property("designated_inputs")
+            .and_then(|v| v.as_array())
+            .expect("designated_inputs");
+        assert_eq!(di.len(), 1);
+        assert_eq!(di[0].as_str().unwrap(), "X19fcG93ZXI=");
+    }
+
+    #[test]
+    fn test_parse_brain_region_plain_text_description() {
+        let json = r#"{
+            "version": "2.1",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Core",
+                    "block_boundaries": [10, 10, 10],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "description": "Holds core physiology and embodiment IO",
+                    "parent_region_id": null,
+                    "areas": ["_power"]
+                }
+            }
+        }"#;
+
+        let parsed = GenomeParser::parse(json).unwrap();
+        assert_eq!(parsed.brain_regions.len(), 1);
+        let (region, _) = &parsed.brain_regions[0];
+        assert_eq!(
+            region.get_property("description"),
+            Some(&serde_json::json!(
+                "Holds core physiology and embodiment IO"
+            ))
+        );
     }
 
     #[test]
@@ -903,5 +1428,104 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_parse_classifiers_key_parallel_to_regions() {
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {
+                "csample": {
+                    "cortical_name": "Sample",
+                    "cortical_type": "CUSTOM",
+                    "block_boundaries": [4, 4, 1],
+                    "relative_coordinate": [0, 0, 0]
+                },
+                "msmem1": {
+                    "cortical_name": "SampleMem",
+                    "cortical_type": "MEMORY",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [10, 0, 0]
+                },
+                "mcmem1": {
+                    "cortical_name": "ClassMem",
+                    "cortical_type": "MEMORY",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [20, 0, 0]
+                },
+                "cout1": {
+                    "cortical_name": "ClassOutput",
+                    "cortical_type": "CUSTOM",
+                    "block_boundaries": [1, 1, 4],
+                    "relative_coordinate": [30, 0, 0]
+                },
+                "cerr1": {
+                    "cortical_name": "Error",
+                    "cortical_type": "CUSTOM",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [40, 0, 0]
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "root",
+                    "parent_region_id": "",
+                    "coordinate_2d": [0, 0],
+                    "coordinate_3d": [0, 0, 0],
+                    "areas": ["csample", "msmem1", "mcmem1", "cout1", "cerr1"],
+                    "regions": [],
+                    "inputs": [],
+                    "outputs": []
+                }
+            },
+            "classifiers": {
+                "clf-1": {
+                    "name": "object_class",
+                    "parent_region_id": "root",
+                    "coordinates_3d": [30, 0, 0],
+                    "sample_area_ids": ["csample"],
+                    "class_bindings": [{
+                        "class_area_id": "cclass",
+                        "class_output_area_id": "cout1"
+                    }],
+                    "sample_memory_id": "msmem1",
+                    "class_memory_id": "mcmem1",
+                    "error_area_id": "cerr1"
+                }
+            }
+        }"#;
+
+        let parsed = GenomeParser::parse(json).expect("classifier genome");
+        assert_eq!(parsed.classifiers.len(), 1);
+        let classifier = &parsed.classifiers[0];
+        assert_eq!(classifier.classifier_id, "clf-1");
+        assert_eq!(classifier.name, "object_class");
+        assert_eq!(classifier.sample_memory_id, "msmem1");
+        assert_eq!(classifier.class_memory_id, "mcmem1");
+        assert_eq!(classifier.error_area_id, "cerr1");
+        assert_eq!(classifier.sample_area_ids, vec!["csample".to_string()]);
+        assert_eq!(classifier.class_bindings.len(), 1);
+        assert_eq!(classifier.class_bindings[0].class_output_area_id, "cout1");
+        assert!(classifier.owned_area_ids().contains(&"cerr1".to_string()));
+        assert!(classifier.owned_area_ids().contains(&"cout1".to_string()));
+    }
+
+    #[test]
+    fn test_parse_classifier_without_error_area_is_rejected() {
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {},
+            "brain_regions": {},
+            "classifiers": {
+                "clf-1": {
+                    "name": "object_class",
+                    "parent_region_id": "root",
+                    "sample_memory_id": "msmem1",
+                    "class_memory_id": "mcmem1"
+                }
+            }
+        }"#;
+        let error = GenomeParser::parse(json).expect_err("error_area_id is required");
+        assert!(error.to_string().contains("error_area_id"), "{error}");
     }
 }

@@ -41,6 +41,6 @@ pub use crate::synapse::SynapseType;
 // Re-export connectome types when std feature is enabled
 #[cfg(feature = "std")]
 pub use connectome::{
-    ConnectomeMetadata, ConnectomeSnapshot, ConnectomeStatistics, SerializableNeuronArray,
-    SerializableSynapseArray,
+    ConnectomeMetadata, ConnectomePersistMode, ConnectomeSnapshot, ConnectomeStatistics,
+    SerializableNeuronArray, SerializableSynapseArray,
 };

@@ -10,7 +10,14 @@
 //! - Regression test for "Parent region does not exist" bug
 
 use feagi_brain_development::models::brain_region_hierarchy::BrainRegionHierarchy;
+use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID, Neuroembryogenesis};
+use feagi_evolutionary::create_genome_with_core_morphologies;
+use feagi_npu_burst_engine::RustNPU;
+use feagi_npu_burst_engine::TracingMutex;
 use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
+use parking_lot::RwLock;
+use std::sync::Arc;
 
 /// Helper to create a root region with UUID
 fn create_root_region() -> BrainRegion {
@@ -55,6 +62,35 @@ fn test_root_region_uuid_storage() {
         "Root region should be retrievable by UUID string"
     );
     assert_eq!(retrieved.unwrap().region_id, root_id);
+}
+
+// ═══════════════════════════════════════════════════════════
+// Test: Omitted parent attaches under existing root (not a second top-level node)
+// ═══════════════════════════════════════════════════════════
+
+#[test]
+fn test_omitted_parent_defaults_to_root_when_root_exists() {
+    let mut hierarchy = BrainRegionHierarchy::new();
+
+    let root_region = create_root_region();
+    let root_id_str = root_region.region_id.to_string();
+
+    hierarchy
+        .add_region(root_region, None)
+        .expect("Failed to add root region");
+
+    let sub = create_subregion();
+    let sub_id_str = sub.region_id.to_string();
+
+    hierarchy
+        .add_region(sub, None)
+        .expect("Second region with omitted parent should attach under root");
+
+    assert_eq!(
+        hierarchy.get_parent(&sub_id_str),
+        Some(&root_id_str),
+        "Omitted parent must resolve to root_id, not a sibling of root"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -308,4 +344,99 @@ fn test_regions_stored_by_uuid_not_hardcoded() {
     let by_uuid = hierarchy.get_region(&root_id_str);
     assert!(by_uuid.is_some(), "Should be retrievable by UUID string");
     assert_eq!(by_uuid.unwrap().region_id.to_string(), root_id_str);
+}
+
+/// Isolated manager so this test does not share ConnectomeManager::instance() with others.
+fn isolated_neuroembryogenesis() -> (Neuroembryogenesis, Arc<RwLock<ConnectomeManager>>) {
+    let runtime = feagi_npu_runtime::StdRuntime;
+    let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
+    let npu_result =
+        RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).expect("Failed to create NPU");
+    let npu = Arc::new(TracingMutex::new(
+        feagi_npu_burst_engine::DynamicNPU::F32(npu_result),
+        "NestedRegionTestNPU",
+    ));
+    let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+        npu,
+    )));
+    let neuro = Neuroembryogenesis::new(manager.clone());
+    (neuro, manager)
+}
+
+fn region_with_parent(name: &str, parent_id: Option<&str>) -> BrainRegion {
+    let mut region = BrainRegion::new(RegionID::new(), name.to_string(), RegionType::Undefined)
+        .expect("Failed to create region");
+    if let Some(parent) = parent_id {
+        region.add_property("parent_region_id".to_string(), serde_json::json!(parent));
+    }
+    region
+}
+
+// ═══════════════════════════════════════════════════════════
+// Integration: nested region load must not depend on HashMap order
+// ═══════════════════════════════════════════════════════════
+
+#[test]
+fn test_develop_from_genome_accepts_nested_grandchild_region() {
+    let (mut neuro, manager) = isolated_neuroembryogenesis();
+
+    let mut genome = create_genome_with_core_morphologies(
+        "nested_region_genome".to_string(),
+        "Nested Region Genome".to_string(),
+    );
+
+    let cortical_id = CorticalID::try_from_bytes(b"cst_nest").unwrap();
+    let cortical_type = cortical_id
+        .as_cortical_type()
+        .expect("Failed to get cortical type");
+    let area = CorticalArea::new(
+        cortical_id,
+        0,
+        "Nested Test Area".to_string(),
+        CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+        (0, 0, 0).into(),
+        cortical_type,
+    )
+    .expect("Failed to create cortical area");
+    genome.cortical_areas.insert(cortical_id, area);
+
+    let root = region_with_parent("Root Brain Region", None);
+    let root_id = root.region_id.to_string();
+    let parent = region_with_parent("Look for people", Some(&root_id));
+    let parent_id = parent.region_id.to_string();
+    let grandchild = region_with_parent("Wave", Some(&parent_id));
+    let grandchild_id = grandchild.region_id.to_string();
+
+    // Insert grandchild first so a HashMap-unlucky walk would try Wave before its parent.
+    genome
+        .brain_regions
+        .insert(grandchild_id.clone(), grandchild);
+    genome.brain_regions.insert(parent_id.clone(), parent);
+    genome.brain_regions.insert(root_id.clone(), root);
+
+    neuro
+        .develop_from_genome(&genome)
+        .expect("Nested region genome must develop without Parent-region-does-not-exist");
+
+    let loaded = manager.read();
+    assert_eq!(
+        loaded.get_brain_region_ids().len(),
+        3,
+        "root, parent, and grandchild must all be registered"
+    );
+    assert_eq!(
+        loaded
+            .get_brain_region_hierarchy()
+            .get_parent(&parent_id)
+            .map(String::as_str),
+        Some(root_id.as_str())
+    );
+    assert_eq!(
+        loaded
+            .get_brain_region_hierarchy()
+            .get_parent(&grandchild_id)
+            .map(String::as_str),
+        Some(parent_id.as_str()),
+        "Wave must remain a child of Look for people"
+    );
 }

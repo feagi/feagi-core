@@ -276,8 +276,8 @@ fn test_leak_and_refractory_interaction() {
     let result1 = npu.process_burst().unwrap();
     assert!(result1.fired_neurons.contains(&neuron));
 
-    // During refractory, MP should still leak if neuron receives input
-    // Burst 2-4: In refractory, inject small amounts
+    // During refractory (Option B), membrane does not integrate input or leak here
+    // Burst 2-4: In refractory, inject small amounts (ignored for dynamics while countdown > 0)
     for _ in 2..=4 {
         npu.inject_sensory_with_potentials(&[(neuron, 10.0)]);
         let result = npu.process_burst().unwrap();
@@ -287,11 +287,10 @@ fn test_leak_and_refractory_interaction() {
         );
     }
 
-    // Burst 5: Out of refractory, but MP should have leaked significantly
-    // Need high injection to fire again
+    // Burst 5: Out of refractory; MP was frozen during refractory bursts (Option B)
     npu.inject_sensory_with_potentials(&[(neuron, 50.0)]);
     let _result5 = npu.process_burst().unwrap();
-    // May or may not fire depending on how much leaked during refractory
+    // Firing depends on threshold vs membrane after Option B refractory (no subthreshold integration while countdown > 0)
 }
 
 #[test]

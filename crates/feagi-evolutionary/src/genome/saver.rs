@@ -108,18 +108,22 @@ impl GenomeSaver {
                 },
             );
 
-            // Cortical areas in this region (convert CorticalID to base64 strings)
+            // Membership is saved only as cortical_areas. Legacy `areas` is a read-time input.
             let areas: Vec<String> = region
                 .cortical_areas
                 .iter()
                 .map(|id| id.as_base_64())
                 .collect();
-            region_data.insert("areas".to_string(), json!(areas));
 
-            // Add all properties from HashMap
+            // Add all properties from HashMap. Skip membership keys so a stored
+            // legacy `areas` property cannot be written beside cortical_areas.
             for (key, value) in &region.properties {
+                if key == "areas" || key == "cortical_areas" {
+                    continue;
+                }
                 region_data.insert(key.clone(), value.clone());
             }
+            region_data.insert("cortical_areas".to_string(), json!(areas));
 
             // Note: regions (child_regions) are not stored in properties - will be empty for now
             region_data.insert("regions".to_string(), json!(Vec::<String>::new()));
@@ -195,6 +199,59 @@ mod tests {
         assert_eq!(parsed["version"], "2.1");
         assert!(parsed["blueprint"].is_object());
         assert!(parsed["brain_regions"].is_object());
+        let root = &parsed["brain_regions"]["root"];
+        assert!(root.get("areas").is_none());
+        assert!(root.get("cortical_areas").is_some());
+    }
+
+    #[test]
+    fn save_writes_membership_only_as_cortical_areas() {
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use serde_json::json;
+
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let area = CorticalArea::new(
+            cortical_id,
+            0,
+            "Test Area".to_string(),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        let mut cortical_areas = HashMap::new();
+        cortical_areas.insert(cortical_id, area);
+
+        let mut region =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
+        region.add_area(cortical_id);
+        region.add_property("areas".to_string(), json!(["should-not-leak"]));
+        region.add_property(
+            "cortical_areas".to_string(),
+            json!(["should-not-replace-membership"]),
+        );
+        region.add_property("description".to_string(), json!("kept"));
+        let mut brain_regions = HashMap::new();
+        brain_regions.insert("root".to_string(), (region, None));
+
+        #[allow(deprecated)]
+        let json_text = GenomeSaver::save_to_json(
+            &cortical_areas,
+            &brain_regions,
+            Some("test-membership".to_string()),
+            Some("Membership".to_string()),
+        )
+        .unwrap();
+        let parsed: Value = serde_json::from_str(&json_text).unwrap();
+        let root = &parsed["brain_regions"]["root"];
+        assert!(root.get("areas").is_none());
+        assert_eq!(root["description"], "kept");
+        assert_eq!(root["cortical_areas"], json!([cortical_id.as_base_64()]));
+
+        let loaded = crate::genome::GenomeParser::parse(&json_text).unwrap();
+        let (loaded_region, _) = &loaded.brain_regions[0];
+        assert!(loaded_region.contains_area(&cortical_id));
+        assert_eq!(loaded_region.area_count(), 1);
     }
 
     #[test]

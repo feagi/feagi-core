@@ -53,8 +53,8 @@ fn create_test_genome(
             if synapse_idx < synapse_count {
                 synapse_array.source_neurons[synapse_idx] = source as u32;
                 synapse_array.target_neurons[synapse_idx] = target as u32;
-                synapse_array.weights[synapse_idx] = 128;
-                synapse_array.postsynaptic_potentials[synapse_idx] = 200;
+                synapse_array.weights[synapse_idx] = 128.0;
+                synapse_array.postsynaptic_potentials[synapse_idx] = 200.0;
                 synapse_array.types[synapse_idx] = 0;
                 synapse_array.valid_mask[synapse_idx] = true;
 

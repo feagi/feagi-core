@@ -33,10 +33,17 @@ impl FeagiSerializable for FeagiJSON {
 
         let json_string = self.borrow_json_value().to_string();
         let json_bytes = json_string.as_bytes();
-
-        // Write the JSON data as UTF-8 bytes
-        byte_destination[FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT..]
-            .copy_from_slice(json_bytes);
+        let header = FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT;
+        let end = header + json_bytes.len();
+        if end > byte_destination.len() {
+            return Err(FeagiDataError::SerializationError(format!(
+                "JSON serialization overflow: need {} bytes, have {}",
+                end,
+                byte_destination.len()
+            )));
+        }
+        // Write the JSON data as UTF-8 bytes (length may differ from get_number_of_bytes_needed due to serde_json formatting)
+        byte_destination[header..end].copy_from_slice(json_bytes);
         Ok(())
     }
 

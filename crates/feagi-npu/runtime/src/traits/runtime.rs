@@ -105,8 +105,16 @@ pub trait NeuronStorage: Send + Sync {
     /// Membrane potentials slice
     fn membrane_potentials(&self) -> &[Self::Value];
 
+    /// Fractional charge in `[0, 1)` kept beside each membrane byte.
+    ///
+    /// `f32` storage keeps this at 0 because the level already holds the full value.
+    fn membrane_fractions(&self) -> &[f32];
+
     /// Firing thresholds slice (minimum MP to fire)
     fn thresholds(&self) -> &[Self::Value];
+
+    /// Fractional part of each firing threshold, in `[0, 1)`.
+    fn threshold_fractions(&self) -> &[f32];
 
     /// Firing threshold limits slice (maximum MP to fire, 0 = no limit)
     fn threshold_limits(&self) -> &[Self::Value];
@@ -155,8 +163,14 @@ pub trait NeuronStorage: Send + Sync {
     /// Mutable membrane potentials slice
     fn membrane_potentials_mut(&mut self) -> &mut [Self::Value];
 
+    /// Mutable membrane fractions slice
+    fn membrane_fractions_mut(&mut self) -> &mut [f32];
+
     /// Mutable firing thresholds slice
     fn thresholds_mut(&mut self) -> &mut [Self::Value];
+
+    /// Mutable threshold fractions slice
+    fn threshold_fractions_mut(&mut self) -> &mut [f32];
 
     /// Mutable firing threshold limits slice
     fn threshold_limits_mut(&mut self) -> &mut [Self::Value];
@@ -193,6 +207,12 @@ pub trait NeuronStorage: Send + Sync {
 
     /// Mutable valid mask
     fn valid_mask_mut(&mut self) -> &mut [bool];
+
+    /// Drop cached coordinate and per-area neuron indexes for these cortical indices.
+    ///
+    /// Neuron deletion marks slots invalid. Leaving the caches in place makes later
+    /// sensory injection resolve coordinates to neurons that no longer exist.
+    fn invalidate_lookup_caches_for_areas(&mut self, _cortical_areas: &[u32]) {}
 
     // === Metadata ===
 
@@ -309,28 +329,60 @@ pub trait SynapseStorage: Send + Sync {
     /// Target neuron IDs slice
     fn target_neurons(&self) -> &[u32];
 
-    /// Synaptic weights slice (0-255, stored as u8)
-    fn weights(&self) -> &[u8];
+    /// Synaptic weights slice (`f32`, no fixed quantization)
+    fn weights(&self) -> &[f32];
 
-    /// Postsynaptic potentials slice (0-255)
-    fn postsynaptic_potentials(&self) -> &[u8];
+    /// Postsynaptic potentials slice (`f32`)
+    fn postsynaptic_potentials(&self) -> &[f32];
 
     /// Synapse types slice (0=excitatory, 1=inhibitory)
     fn types(&self) -> &[u8];
 
+    /// Per-synapse packed flags (same length as [`SynapseStorage::count`] active rows).
+    /// Semantics: `feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`, etc.
+    fn edge_flags(&self) -> &[u8];
+
+    /// Per-synapse delay in whole bursts (`>= 1`). Contribution from a fire at burst `T` is
+    /// applied at burst `T + delay_bursts`.
+    fn delay_bursts(&self) -> &[u8];
+
     /// Valid synapse mask
     fn valid_mask(&self) -> &[bool];
+
+    /// Per-synapse R-STDP eligibility trace `e_ij` (`f32`).
+    ///
+    /// Updated by the burst engine each burst with the same windowed correlation rule used
+    /// for STDP (LTP on co-fire, LTD on uncorrelated firing), but committed to weights only
+    /// when modulated by `R(t)` (the reward/punishment density). For `PlasticityMode::Stdp`
+    /// the trace is fully reset each burst (`R(t)=1`), preserving legacy STDP numerics.
+    ///
+    /// Length must equal [`SynapseStorage::count`]; entries for invalid synapses are unused.
+    fn eligibility_traces(&self) -> &[f32];
 
     // === Synapse Properties (Mutable) ===
 
     /// Mutable weights slice
-    fn weights_mut(&mut self) -> &mut [u8];
+    fn weights_mut(&mut self) -> &mut [f32];
 
     /// Mutable postsynaptic potentials slice
-    fn postsynaptic_potentials_mut(&mut self) -> &mut [u8];
+    fn postsynaptic_potentials_mut(&mut self) -> &mut [f32];
 
     /// Mutable valid mask
     fn valid_mask_mut(&mut self) -> &mut [bool];
+
+    /// Mutable eligibility traces slice (R-STDP). See [`SynapseStorage::eligibility_traces`].
+    fn eligibility_traces_mut(&mut self) -> &mut [f32];
+
+    /// Modulation group per synapse. Empty means the column is not allocated.
+    fn modulation_groups(&self) -> &[u16] {
+        &[]
+    }
+
+    /// Allocate the modulation-group column when the first synaptic modulator is used.
+    fn ensure_modulation_groups(&mut self) {}
+
+    /// Write one synapse's modulation group. No-op until the column is allocated.
+    fn set_modulation_group(&mut self, _index: usize, _group: u16) {}
 
     // === Metadata ===
 
@@ -342,27 +394,36 @@ pub trait SynapseStorage: Send + Sync {
 
     // === Synapse Creation ===
 
-    /// Add a single synapse
+    /// Add a single synapse (`edge_flag`: see `feagi_npu_neural::synapse::edge_flags`;
+    /// `delay_bursts`: `>= 1` whole bursts until PSP is applied to the target).
+    #[allow(clippy::too_many_arguments)]
     fn add_synapse(
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: u8,
+        edge_flag: u8,
+        delay_bursts: u8,
     ) -> Result<usize>;
 
     // === Batch Operations ===
 
-    /// Batch add synapses
+    /// Batch add synapses. When `edge_flags` is `Some`, its length must match the batch size;
+    /// each row sets the packed flag for that synapse (`None` = all zeros).
+    /// `delays` must match the batch size; each entry is `>= 1` bursts.
     #[cfg(any(feature = "std", feature = "alloc"))]
+    #[allow(clippy::too_many_arguments)]
     fn add_synapses_batch(
         &mut self,
         sources: &[u32],
         targets: &[u32],
-        weights: &[u8],
-        psps: &[u8],
+        weights: &[f32],
+        psps: &[f32],
         types: &[u8],
+        edge_flags: Option<&[u8]>,
+        delays: &[u8],
     ) -> Result<()>;
 
     // === Synapse Removal ===
@@ -373,13 +434,23 @@ pub trait SynapseStorage: Send + Sync {
     /// Remove all synapses from specific source neurons
     fn remove_synapses_from_sources(&mut self, source_neurons: &[u32]) -> Result<usize>;
 
+    /// Remove every incoming and outgoing synapse touching one neuron.
+    fn remove_synapses_touching_neuron(&mut self, neuron_id: u32) -> Result<usize>;
+
+    /// Remove every synapse whose source or target is marked.
+    ///
+    /// `neuron_marked[neuron_id]` is true for a neuron being deleted. One pass
+    /// over synapse storage keeps a structural rebuild from scanning the whole
+    /// synapse array once per neuron.
+    fn remove_synapses_touching_marked_neurons(&mut self, neuron_marked: &[bool]) -> Result<usize>;
+
     /// Remove synapses between specific source and target
     fn remove_synapses_between(&mut self, source: u32, target: u32) -> Result<usize>;
 
     // === Synapse Updates ===
 
     /// Update weight of a synapse
-    fn update_weight(&mut self, idx: usize, new_weight: u8) -> Result<()>;
+    fn update_weight(&mut self, idx: usize, new_weight: f32) -> Result<()>;
 
     // === Query Methods ===
 

@@ -3,12 +3,65 @@
 
 //! Region API Endpoints - Exact port from Python `/v1/region/*`
 
+use crate::amalgamation;
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, State};
 use feagi_services::types::CreateBrainRegionParams;
 use feagi_structures::genomic::brain_regions::RegionID;
 use std::collections::HashMap;
+use uuid::Uuid;
+
+fn queue_amalgamation_from_genome_json_str(
+    state: &ApiState,
+    genome_json: String,
+) -> Result<(String, [i32; 3]), ApiError> {
+    {
+        let lock = state.amalgamation_state.read();
+        if lock.pending.is_some() {
+            return Err(ApiError::invalid_input(
+                "Amalgamation already pending; cancel it first via /v1/genome/amalgamation_cancellation",
+            ));
+        }
+    }
+
+    let genome = feagi_evolutionary::load_genome_from_json(&genome_json)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid genome payload: {}", e)))?;
+
+    let circuit_size = amalgamation::compute_circuit_size_from_runtime_genome(&genome);
+    let amalgamation_id = Uuid::new_v4().to_string();
+    let genome_title = genome.metadata.genome_title.clone();
+
+    let summary = amalgamation::AmalgamationPendingSummary {
+        amalgamation_id: amalgamation_id.clone(),
+        genome_title,
+        circuit_size,
+    };
+
+    let pending = amalgamation::AmalgamationPending {
+        summary: summary.clone(),
+        genome_json,
+    };
+
+    {
+        let mut lock = state.amalgamation_state.write();
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+
+        lock.history.push(amalgamation::AmalgamationHistoryEntry {
+            amalgamation_id: summary.amalgamation_id.clone(),
+            genome_title: summary.genome_title.clone(),
+            circuit_size: summary.circuit_size,
+            status: "pending".to_string(),
+            timestamp_ms: now_ms,
+        });
+        lock.pending = Some(pending);
+    }
+
+    Ok((amalgamation_id, circuit_size))
+}
 
 /// GET /v1/region/regions_members
 ///
@@ -26,7 +79,9 @@ use std::collections::HashMap;
 ///     "areas": ["area1", "area2"],
 ///     "regions": [],
 ///     "inputs": [],
-///     "outputs": []
+///     "outputs": [],
+///     "designated_inputs": [],
+///     "designated_outputs": []
 ///   }
 /// }
 /// ```
@@ -80,11 +135,57 @@ pub async fn get_regions_members(
                     })
                     .unwrap_or_default();
 
+                // Declared region IO roles (persisted in genome `properties`; drives BV IO preset).
+                let designated_inputs = region
+                    .properties
+                    .get("designated_inputs")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect::<Vec<String>>()
+                    })
+                    .unwrap_or_default();
+
+                let designated_outputs = region
+                    .properties
+                    .get("designated_outputs")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect::<Vec<String>>()
+                    })
+                    .unwrap_or_default();
+
+                // Deleted areas can linger in these lists. Brain Visualizer resolves every
+                // input id to a cortical area, so only current members are returned.
+                let members: std::collections::HashSet<&str> =
+                    region.cortical_areas.iter().map(String::as_str).collect();
+                let inputs: Vec<String> = inputs
+                    .into_iter()
+                    .filter(|id| members.contains(id.as_str()))
+                    .collect();
+                let outputs: Vec<String> = outputs
+                    .into_iter()
+                    .filter(|id| members.contains(id.as_str()))
+                    .collect();
+                let designated_inputs: Vec<String> = designated_inputs
+                    .into_iter()
+                    .filter(|id| members.contains(id.as_str()))
+                    .collect();
+                let designated_outputs: Vec<String> = designated_outputs
+                    .into_iter()
+                    .filter(|id| members.contains(id.as_str()))
+                    .collect();
+
                 trace!(
                     target: "feagi-api",
-                    "Inputs: {} areas, Outputs: {} areas",
+                    "Inputs: {} areas, Outputs: {} areas, designated_in: {}, designated_out: {}",
                     inputs.len(),
-                    outputs.len()
+                    outputs.len(),
+                    designated_inputs.len(),
+                    designated_outputs.len()
                 );
 
                 // Extract coordinate_3d from properties (set by smart positioning in neuroembryogenesis)
@@ -119,14 +220,21 @@ pub async fn get_regions_members(
                     region.region_id.clone(),
                     serde_json::json!({
                         "title": region.name,
-                        "description": "",  // TODO: Add description field to BrainRegionInfo
+                        "description": region_description_from_properties(&region.properties),
                         "parent_region_id": region.parent_id,
                         "coordinate_2d": coordinate_2d,
                         "coordinate_3d": coordinate_3d,
                         "areas": region.cortical_areas,
                         "regions": region.child_regions,
                         "inputs": inputs,
-                        "outputs": outputs
+                        "outputs": outputs,
+                        "designated_inputs": designated_inputs,
+                        "designated_outputs": designated_outputs,
+                        "classifier_circuit": region
+                            .properties
+                            .get("classifier_circuit")
+                            .and_then(|value| value.as_bool())
+                            .unwrap_or(false),
                     }),
                 );
             }
@@ -297,20 +405,15 @@ pub async fn put_region(
     // Remove region_id from properties (it's not a property to update)
     request.remove("region_id");
 
-    // Update the brain region
-    match connectome_service
+    connectome_service
         .update_brain_region(&region_id, request)
         .await
-    {
-        Ok(_) => Ok(Json(HashMap::from([
-            ("message".to_string(), "Brain region updated".to_string()),
-            ("region_id".to_string(), region_id),
-        ]))),
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to update brain region: {}",
-            e
-        ))),
-    }
+        .map_err(ApiError::from)?;
+
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Brain region updated".to_string()),
+        ("region_id".to_string(), region_id),
+    ])))
 }
 
 /// DELETE /v1/region/region
@@ -343,10 +446,73 @@ pub async fn delete_region(
 /// POST /v1/region/clone
 #[utoipa::path(post, path = "/v1/region/clone", tag = "region")]
 pub async fn post_clone(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, serde_json::Value>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let source_region_id = req
+        .get("source_region_id")
+        .or_else(|| req.get("region_id"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::invalid_input("source_region_id required"))?
+        .to_string();
+
+    let region_name = req
+        .get("region_name")
+        .or_else(|| req.get("title"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::invalid_input("region_name required"))?
+        .to_string();
+
+    // Root region must never be cloneable.
+    let source_region = state
+        .connectome_service
+        .get_brain_region(&source_region_id)
+        .await
+        .map_err(ApiError::from)?;
+    if source_region.parent_id.is_none() {
+        return Err(ApiError::forbidden(
+            "Root region cannot be cloned. Only non-root regions are cloneable.",
+        ));
+    }
+
+    // Export selected non-root region subtree as genome JSON (equivalent to download_region payload).
+    let exported_json = state
+        .genome_service
+        .export_region_genome(source_region_id)
+        .await
+        .map_err(ApiError::from)?;
+
+    // Apply requested clone title so pending amalgamation is named exactly like export+reimport flow.
+    let mut exported_value: serde_json::Value = serde_json::from_str(&exported_json)
+        .map_err(|e| ApiError::internal(format!("Exported region JSON is invalid: {}", e)))?;
+    if let Some(obj) = exported_value.as_object_mut() {
+        obj.insert(
+            "genome_title".to_string(),
+            serde_json::Value::String(region_name.clone()),
+        );
+    }
+    let updated_exported_json = serde_json::to_string(&exported_value).map_err(|e| {
+        ApiError::internal(format!("Failed to serialize cloned region JSON: {}", e))
+    })?;
+
+    let (amalgamation_id, circuit_size) =
+        queue_amalgamation_from_genome_json_str(&state, updated_exported_json)?;
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            serde_json::Value::String("Region clone queued".to_string()),
+        ),
+        (
+            "amalgamation_id".to_string(),
+            serde_json::Value::String(amalgamation_id),
+        ),
+        ("circuit_size".to_string(), serde_json::json!(circuit_size)),
+    ])))
 }
 
 /// PUT /v1/region/relocate_members
@@ -398,9 +564,7 @@ pub async fn put_relocate_members(
         connectome_service
             .update_brain_region(&region_id, properties)
             .await
-            .map_err(|e| {
-                ApiError::internal(format!("Failed to update region {}: {}", region_id, e))
-            })?;
+            .map_err(ApiError::from)?;
 
         updated_regions.push(region_id);
     }
@@ -526,10 +690,12 @@ pub async fn get_region_detail(
         })
         .unwrap_or_else(|| serde_json::json!([0, 0]));
 
+    let description = region_description_from_properties(&region.properties);
+
     let mut response = HashMap::new();
     response.insert("region_id".to_string(), serde_json::json!(region.region_id));
     response.insert("title".to_string(), serde_json::json!(region.name));
-    response.insert("description".to_string(), serde_json::json!(""));
+    response.insert("description".to_string(), serde_json::json!(description));
     response.insert("coordinate_2d".to_string(), coordinate_2d);
     response.insert("coordinate_3d".to_string(), coordinate_3d);
     response.insert(
@@ -586,4 +752,46 @@ pub async fn put_change_cortical_area_region(
         "message".to_string(),
         "Cortical area region association change not yet implemented".to_string(),
     )])))
+}
+
+/// Plain-text region purpose from genome `properties.description`.
+/// Missing, null, or non-string values are an empty string (no invented text).
+fn region_description_from_properties(properties: &HashMap<String, serde_json::Value>) -> String {
+    properties
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::region_description_from_properties;
+    use std::collections::HashMap;
+
+    #[test]
+    fn description_from_string_property() {
+        let mut properties = HashMap::new();
+        properties.insert(
+            "description".to_string(),
+            serde_json::json!("Visual scanning circuit"),
+        );
+        assert_eq!(
+            region_description_from_properties(&properties),
+            "Visual scanning circuit"
+        );
+    }
+
+    #[test]
+    fn description_from_missing_property_is_empty() {
+        let properties = HashMap::new();
+        assert_eq!(region_description_from_properties(&properties), "");
+    }
+
+    #[test]
+    fn description_from_null_property_is_empty() {
+        let mut properties = HashMap::new();
+        properties.insert("description".to_string(), serde_json::Value::Null);
+        assert_eq!(region_description_from_properties(&properties), "");
+    }
 }

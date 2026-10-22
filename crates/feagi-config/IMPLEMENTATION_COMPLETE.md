@@ -28,7 +28,7 @@ feagi-core/crates/feagi-config/
 - `ZmqConfig`, `TimeoutsConfig`, `NeuralConfig`, `PlasticityConfig`
 - `BurstEngineConfig`, `ConnectomeConfig`, `ResourcesConfig`
 - `LoggingConfig`, `VisualizationConfig`, `CompressionConfig`
-- `MemoryProcessingConfig`, `SnapshotConfig`
+- `MemoryProcessingConfig`
 - All structs with proper `Default` implementations matching Python config
 
 #### ✅ 3-Tier Override System

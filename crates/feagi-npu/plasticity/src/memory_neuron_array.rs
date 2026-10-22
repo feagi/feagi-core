@@ -17,6 +17,7 @@
 //! - Efficient memory management with index reuse
 
 use crate::neuron_id_manager::{AllocationStats, NeuronIdManager};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// Memory neuron lifecycle configuration
@@ -44,6 +45,31 @@ impl Default for MemoryNeuronLifecycleConfig {
             max_reactivations: 1000,
         }
     }
+}
+
+/// Snapshot of a single memory neuron for API / inspection (plasticity array only).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemoryNeuronDetail {
+    pub neuron_id: u32,
+    pub cortical_area_idx: u32,
+    pub pattern_hash: Option<u64>,
+    pub is_longterm_memory: bool,
+    pub is_active: bool,
+    pub lifespan_current: u32,
+    pub lifespan_initial: u32,
+    pub lifespan_growth_rate: f32,
+    pub creation_burst: u64,
+    pub last_activation_burst: u64,
+    pub activation_count: u32,
+    /// Local occupancy hash used by `episodic_scan`. Independent of `pattern_hash`.
+    #[serde(default)]
+    pub spatial_signature: Option<u64>,
+    /// Class channels bound from the partner class memory area.
+    #[serde(default)]
+    pub class_channels: Vec<u32>,
+    /// Associative weight of each bound class channel. Absent weights are unset.
+    #[serde(default)]
+    pub class_channel_weights: Vec<(u32, f32)>,
 }
 
 /// Memory neuron array statistics
@@ -79,8 +105,10 @@ pub struct MemoryNeuronArray {
     last_activation_burst: Vec<u64>,
     activation_count: Vec<u32>,
 
-    // Pattern association (xxHash64 for fast, deterministic pattern identification)
-    pattern_hash_to_index: HashMap<u64, usize>,
+    // Pattern association (xxHash64 for fast, deterministic pattern identification).
+    // Keyed by (cortical_area_id, hash): memory areas fed the same upstream pattern
+    // compute the same hash but each owns an independent neuron.
+    pattern_hash_to_index: HashMap<(u32, u64), usize>,
     index_to_pattern_hash: HashMap<usize, u64>,
 
     // Index management
@@ -89,6 +117,16 @@ pub struct MemoryNeuronArray {
 
     // Area-specific tracking
     area_neuron_indices: HashMap<u32, HashSet<usize>>,
+
+    // Scan sidecar: local occupancy hash and bound class channels.
+    spatial_signature: HashMap<usize, u64>,
+    class_channels: HashMap<usize, HashSet<u32>>,
+    /// Associative weight for each bound class channel while reward training is on.
+    class_channel_weights: HashMap<usize, HashMap<u32, f32>>,
+    /// Decisions waiting for a later answer, and which pattern was already corrected.
+    presentation_ledger: crate::classifier_reward::PresentationLedger,
+    /// LTM-only index: (cortical_area_idx, spatial_signature) -> neuron indices.
+    spatial_ltm_index: HashMap<(u32, u64), Vec<usize>>,
 
     // Neuron ID manager
     id_manager: NeuronIdManager,
@@ -114,6 +152,11 @@ impl MemoryNeuronArray {
             next_available_index: 0,
             reusable_indices: HashSet::new(),
             area_neuron_indices: HashMap::new(),
+            spatial_signature: HashMap::new(),
+            class_channels: HashMap::new(),
+            class_channel_weights: HashMap::new(),
+            presentation_ledger: crate::classifier_reward::PresentationLedger::default(),
+            spatial_ltm_index: HashMap::new(),
             id_manager: NeuronIdManager::new(),
         }
     }
@@ -126,8 +169,11 @@ impl MemoryNeuronArray {
         current_burst: u64,
         config: &MemoryNeuronLifecycleConfig,
     ) -> Option<usize> {
-        // Check if pattern already exists
-        if let Some(&existing_idx) = self.pattern_hash_to_index.get(&pattern_hash) {
+        // Check if pattern already exists in this area
+        if let Some(&existing_idx) = self
+            .pattern_hash_to_index
+            .get(&(cortical_area_id, pattern_hash))
+        {
             if self.is_active[existing_idx] {
                 // Reactivate existing neuron instead
                 return self.reactivate_memory_neuron_internal(existing_idx, current_burst);
@@ -157,7 +203,8 @@ impl MemoryNeuronArray {
         self.activation_count[neuron_idx] = 1;
 
         // Register pattern association
-        self.pattern_hash_to_index.insert(pattern_hash, neuron_idx);
+        self.pattern_hash_to_index
+            .insert((cortical_area_id, pattern_hash), neuron_idx);
         self.index_to_pattern_hash.insert(neuron_idx, pattern_hash);
 
         // Add to area tracking
@@ -199,8 +246,11 @@ impl MemoryNeuronArray {
         Some(neuron_idx)
     }
 
-    /// Age all active memory neurons (vectorized operation)
-    pub fn age_memory_neurons(&mut self, _current_burst: u64) -> Vec<usize> {
+    /// Age short-term memory neurons that were not created or reactivated in `current_burst`.
+    ///
+    /// A neuron matched this burst keeps its full lifespan, so `init_lifespan` is the
+    /// number of later bursts it survives unseen and each repeat adds the growth rate.
+    pub fn age_memory_neurons(&mut self, current_burst: u64) -> Vec<usize> {
         let n = self.next_available_index;
         if n == 0 {
             return Vec::new();
@@ -210,7 +260,11 @@ impl MemoryNeuronArray {
 
         // Age eligible neurons
         for i in 0..n {
-            if self.is_active[i] && !self.is_longterm_memory[i] && self.lifespan_current[i] > 0 {
+            if self.is_active[i]
+                && !self.is_longterm_memory[i]
+                && self.lifespan_current[i] > 0
+                && self.last_activation_burst[i] != current_burst
+            {
                 self.lifespan_current[i] -= 1;
 
                 // Check if neuron died
@@ -244,6 +298,7 @@ impl MemoryNeuronArray {
                 && self.lifespan_current[i] >= longterm_threshold
             {
                 self.is_longterm_memory[i] = true;
+                self.index_spatial_ltm(i);
                 converted_indices.push(i);
             }
         }
@@ -283,6 +338,7 @@ impl MemoryNeuronArray {
                     && self.lifespan_current[neuron_idx] >= threshold
                 {
                     self.is_longterm_memory[neuron_idx] = true;
+                    self.index_spatial_ltm(neuron_idx);
                     converted_indices.push(neuron_idx);
                 }
             }
@@ -304,10 +360,205 @@ impl MemoryNeuronArray {
         }
     }
 
-    /// Find neuron index by pattern hash
-    pub fn find_neuron_by_pattern(&self, pattern_hash: &u64) -> Option<usize> {
+    /// Active short-term neurons (not marked LTM) in the area.
+    pub fn count_short_term_in_area(&self, cortical_area_id: u32) -> usize {
+        self.area_neuron_indices
+            .get(&cortical_area_id)
+            .map(|indices| {
+                indices
+                    .iter()
+                    .filter(|&&idx| {
+                        self.is_valid_index(idx)
+                            && self.is_active[idx]
+                            && !self.is_longterm_memory[idx]
+                    })
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Active long-term memory neurons in the area.
+    pub fn count_long_term_in_area(&self, cortical_area_id: u32) -> usize {
+        self.area_neuron_indices
+            .get(&cortical_area_id)
+            .map(|indices| {
+                indices
+                    .iter()
+                    .filter(|&&idx| {
+                        self.is_valid_index(idx)
+                            && self.is_active[idx]
+                            && self.is_longterm_memory[idx]
+                    })
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Stable-sorted active neuron IDs for the area, with pagination `(page_ids, total_count)`.
+    pub fn paginated_neuron_ids_in_area(
+        &self,
+        cortical_area_id: u32,
+        offset: usize,
+        limit: usize,
+    ) -> (Vec<u32>, usize) {
+        let mut ids = self.get_active_neurons_by_area(cortical_area_id);
+        ids.sort_unstable();
+        let total = ids.len();
+        let page = ids.into_iter().skip(offset).take(limit).collect();
+        (page, total)
+    }
+
+    fn find_neuron_index_by_global_id(&self, neuron_id: u32) -> Option<usize> {
+        (0..self.next_available_index).find(|&i| self.neuron_ids[i] == neuron_id)
+    }
+
+    /// Full detail for an active memory neuron by global neuron id, if present.
+    pub fn get_memory_neuron_detail(&self, neuron_id: u32) -> Option<MemoryNeuronDetail> {
+        let idx = self.find_neuron_index_by_global_id(neuron_id)?;
+        if !self.is_valid_index(idx) || !self.is_active[idx] {
+            return None;
+        }
+        Some(MemoryNeuronDetail {
+            neuron_id: self.neuron_ids[idx],
+            cortical_area_idx: self.cortical_area_ids[idx],
+            pattern_hash: self.index_to_pattern_hash.get(&idx).copied(),
+            is_longterm_memory: self.is_longterm_memory[idx],
+            is_active: self.is_active[idx],
+            lifespan_current: self.lifespan_current[idx],
+            lifespan_initial: self.lifespan_initial[idx],
+            lifespan_growth_rate: self.lifespan_growth_rate[idx],
+            creation_burst: self.creation_burst[idx],
+            last_activation_burst: self.last_activation_burst[idx],
+            activation_count: self.activation_count[idx],
+            spatial_signature: self.spatial_signature.get(&idx).copied(),
+            class_channels: self
+                .class_channels
+                .get(&idx)
+                .map(|set| {
+                    let mut channels: Vec<u32> = set.iter().copied().collect();
+                    channels.sort_unstable();
+                    channels
+                })
+                .unwrap_or_default(),
+            class_channel_weights: self
+                .class_channel_weights
+                .get(&idx)
+                .map(|weights| {
+                    let mut pairs: Vec<(u32, f32)> =
+                        weights.iter().map(|(&c, &w)| (c, w)).collect();
+                    pairs.sort_unstable_by_key(|(channel, _)| *channel);
+                    pairs
+                })
+                .unwrap_or_default(),
+        })
+    }
+
+    /// Active long-term memory neurons only. Short-term memory is never included.
+    pub fn export_long_term_memory_neurons(&self) -> Vec<MemoryNeuronDetail> {
+        (0..self.next_available_index)
+            .filter_map(|idx| {
+                if !self.is_valid_index(idx)
+                    || !self.is_active[idx]
+                    || !self.is_longterm_memory[idx]
+                {
+                    return None;
+                }
+                self.get_memory_neuron_detail(self.neuron_ids[idx])
+            })
+            .collect()
+    }
+
+    /// Replace the array with the given long-term memory neurons, restoring original IDs.
+    ///
+    /// Short-term entries in `neurons` are ignored. Existing STM/LTM state is discarded.
+    pub fn restore_long_term_memory_neurons(
+        &mut self,
+        neurons: &[MemoryNeuronDetail],
+    ) -> Result<usize, String> {
+        self.reset();
+        let mut restored = 0;
+        for detail in neurons {
+            if !detail.is_longterm_memory || !detail.is_active {
+                continue;
+            }
+            self.restore_long_term_memory_neuron(detail)?;
+            restored += 1;
+        }
+        Ok(restored)
+    }
+
+    fn restore_long_term_memory_neuron(
+        &mut self,
+        detail: &MemoryNeuronDetail,
+    ) -> Result<usize, String> {
+        if !NeuronIdManager::is_memory_neuron_id(detail.neuron_id) {
+            return Err(format!(
+                "Cannot restore LTM neuron {}: id is outside the memory range",
+                detail.neuron_id
+            ));
+        }
+        if !self.id_manager.reserve_memory_neuron_id(detail.neuron_id) {
+            return Err(format!(
+                "Cannot restore LTM neuron {}: id is already reserved",
+                detail.neuron_id
+            ));
+        }
+        let neuron_idx = self.get_available_index_internal().ok_or_else(|| {
+            format!(
+                "Cannot restore LTM neuron {}: memory array is at capacity {}",
+                detail.neuron_id, self.capacity
+            )
+        })?;
+
+        self.neuron_ids[neuron_idx] = detail.neuron_id;
+        self.cortical_area_ids[neuron_idx] = detail.cortical_area_idx;
+        self.is_active[neuron_idx] = true;
+        self.lifespan_current[neuron_idx] = detail.lifespan_current;
+        self.lifespan_initial[neuron_idx] = detail.lifespan_initial;
+        self.lifespan_growth_rate[neuron_idx] = detail.lifespan_growth_rate;
+        self.is_longterm_memory[neuron_idx] = true;
+        self.creation_burst[neuron_idx] = detail.creation_burst;
+        self.last_activation_burst[neuron_idx] = detail.last_activation_burst;
+        self.activation_count[neuron_idx] = detail.activation_count;
+
+        if let Some(pattern_hash) = detail.pattern_hash {
+            self.pattern_hash_to_index
+                .insert((detail.cortical_area_idx, pattern_hash), neuron_idx);
+            self.index_to_pattern_hash.insert(neuron_idx, pattern_hash);
+        }
+        if let Some(spatial_signature) = detail.spatial_signature {
+            self.spatial_signature.insert(neuron_idx, spatial_signature);
+        }
+        if !detail.class_channels.is_empty() {
+            self.class_channels
+                .insert(neuron_idx, detail.class_channels.iter().copied().collect());
+        }
+        if !detail.class_channel_weights.is_empty() {
+            self.class_channel_weights.insert(
+                neuron_idx,
+                detail.class_channel_weights.iter().copied().collect(),
+            );
+        }
+        if detail.is_longterm_memory {
+            self.index_spatial_ltm(neuron_idx);
+        }
+
+        self.area_neuron_indices
+            .entry(detail.cortical_area_idx)
+            .or_default()
+            .insert(neuron_idx);
+
+        Ok(neuron_idx)
+    }
+
+    /// Find the active neuron a memory area holds for a pattern hash
+    pub fn find_neuron_by_pattern(
+        &self,
+        cortical_area_id: u32,
+        pattern_hash: &u64,
+    ) -> Option<usize> {
         self.pattern_hash_to_index
-            .get(pattern_hash)
+            .get(&(cortical_area_id, *pattern_hash))
             .copied()
             .filter(|&idx| self.is_valid_index(idx) && self.is_active[idx])
     }
@@ -316,6 +567,15 @@ impl MemoryNeuronArray {
     pub fn get_neuron_id(&self, neuron_idx: usize) -> Option<u32> {
         if self.is_valid_index(neuron_idx) {
             Some(self.neuron_ids[neuron_idx])
+        } else {
+            None
+        }
+    }
+
+    /// Activations since creation. One means the neuron was created on this call.
+    pub fn get_activation_count(&self, neuron_idx: usize) -> Option<u32> {
+        if self.is_valid_index(neuron_idx) && self.is_active[neuron_idx] {
+            Some(self.activation_count[neuron_idx])
         } else {
             None
         }
@@ -332,6 +592,192 @@ impl MemoryNeuronArray {
 
     pub fn get_pattern_hash(&self, neuron_idx: usize) -> Option<u64> {
         self.index_to_pattern_hash.get(&neuron_idx).copied()
+    }
+
+    /// Store the scan occupancy hash. Indexed for LTM lookup only after conversion.
+    pub fn set_spatial_signature(&mut self, neuron_idx: usize, spatial_signature: u64) {
+        if !self.is_valid_index(neuron_idx) || !self.is_active[neuron_idx] {
+            return;
+        }
+        if let Some(previous) = self.spatial_signature.insert(neuron_idx, spatial_signature) {
+            if previous != spatial_signature {
+                self.remove_spatial_ltm_index(neuron_idx, previous);
+            }
+        }
+        if self.is_longterm_memory[neuron_idx] {
+            self.index_spatial_ltm(neuron_idx);
+        }
+    }
+
+    /// Bind a class channel onto a memory neuron (OR with existing channels).
+    pub fn bind_class_channel(&mut self, neuron_idx: usize, class_channel: u32) {
+        if !self.is_valid_index(neuron_idx) || !self.is_active[neuron_idx] {
+            return;
+        }
+        self.class_channels
+            .entry(neuron_idx)
+            .or_default()
+            .insert(class_channel);
+    }
+
+    /// Drop one class channel and its associative weight.
+    pub fn unbind_class_channel(&mut self, neuron_idx: usize, class_channel: u32) {
+        if let Some(channels) = self.class_channels.get_mut(&neuron_idx) {
+            channels.remove(&class_channel);
+            if channels.is_empty() {
+                self.class_channels.remove(&neuron_idx);
+            }
+        }
+        if let Some(weights) = self.class_channel_weights.get_mut(&neuron_idx) {
+            weights.remove(&class_channel);
+            if weights.is_empty() {
+                self.class_channel_weights.remove(&neuron_idx);
+            }
+        }
+    }
+
+    /// Record the starting associative weight the first time reward training sees a channel.
+    pub fn ensure_class_channel_weight(
+        &mut self,
+        neuron_idx: usize,
+        class_channel: u32,
+        initial: f32,
+    ) {
+        if initial <= 0.0 {
+            return;
+        }
+        self.class_channel_weights
+            .entry(neuron_idx)
+            .or_default()
+            .entry(class_channel)
+            .or_insert(initial);
+    }
+
+    /// Move one class-channel associative weight. A result at or below zero unbinds the channel.
+    ///
+    /// A channel that has no stored weight starts from `initial` before `delta` is applied.
+    pub fn apply_class_channel_delta(
+        &mut self,
+        neuron_idx: usize,
+        class_channel: u32,
+        delta: f32,
+        max_weight: f32,
+        initial: f32,
+    ) -> f32 {
+        let current = self
+            .class_channel_weights
+            .get(&neuron_idx)
+            .and_then(|weights| weights.get(&class_channel).copied())
+            .unwrap_or(initial);
+        let mut next = current + delta;
+        if next < 0.0 {
+            next = 0.0;
+        }
+        if max_weight.is_finite() {
+            next = next.min(max_weight);
+        }
+        if next <= 0.0 {
+            self.unbind_class_channel(neuron_idx, class_channel);
+            return 0.0;
+        }
+        self.bind_class_channel(neuron_idx, class_channel);
+        self.class_channel_weights
+            .entry(neuron_idx)
+            .or_default()
+            .insert(class_channel, next);
+        next
+    }
+
+    pub fn presentation_ledger_mut(&mut self) -> &mut crate::classifier_reward::PresentationLedger {
+        &mut self.presentation_ledger
+    }
+
+    pub fn class_channel_weight(&self, neuron_idx: usize, class_channel: u32) -> Option<f32> {
+        self.class_channel_weights
+            .get(&neuron_idx)
+            .and_then(|weights| weights.get(&class_channel).copied())
+    }
+
+    pub fn get_class_channels(&self, neuron_idx: usize) -> Vec<u32> {
+        self.class_channels
+            .get(&neuron_idx)
+            .map(|set| {
+                let mut channels: Vec<u32> = set.iter().copied().collect();
+                channels.sort_unstable();
+                channels
+            })
+            .unwrap_or_default()
+    }
+
+    /// Active long-term memory neuron indices in an area.
+    pub fn active_ltm_indices_in_area(&self, cortical_area_id: u32) -> Vec<usize> {
+        self.area_neuron_indices
+            .get(&cortical_area_id)
+            .map(|indices| {
+                indices
+                    .iter()
+                    .copied()
+                    .filter(|&idx| {
+                        self.is_valid_index(idx)
+                            && self.is_active[idx]
+                            && self.is_longterm_memory[idx]
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// LTM neurons in `cortical_area_id` whose spatial signature matches.
+    pub fn find_ltm_by_spatial_signature(
+        &self,
+        cortical_area_id: u32,
+        spatial_signature: u64,
+    ) -> Vec<usize> {
+        self.spatial_ltm_index
+            .get(&(cortical_area_id, spatial_signature))
+            .map(|indices| {
+                indices
+                    .iter()
+                    .copied()
+                    .filter(|&idx| {
+                        self.is_valid_index(idx)
+                            && self.is_active[idx]
+                            && self.is_longterm_memory[idx]
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn index_spatial_ltm(&mut self, neuron_idx: usize) {
+        let Some(&spatial_signature) = self.spatial_signature.get(&neuron_idx) else {
+            return;
+        };
+        let area_id = self.cortical_area_ids[neuron_idx];
+        let key = (area_id, spatial_signature);
+        let entries = self.spatial_ltm_index.entry(key).or_default();
+        if !entries.contains(&neuron_idx) {
+            entries.push(neuron_idx);
+        }
+    }
+
+    fn remove_spatial_ltm_index(&mut self, neuron_idx: usize, spatial_signature: u64) {
+        let area_id = self.cortical_area_ids[neuron_idx];
+        let key = (area_id, spatial_signature);
+        if let Some(entries) = self.spatial_ltm_index.get_mut(&key) {
+            entries.retain(|&idx| idx != neuron_idx);
+            if entries.is_empty() {
+                self.spatial_ltm_index.remove(&key);
+            }
+        }
+    }
+
+    fn clear_scan_sidecars(&mut self, neuron_idx: usize) {
+        if let Some(spatial_signature) = self.spatial_signature.remove(&neuron_idx) {
+            self.remove_spatial_ltm_index(neuron_idx, spatial_signature);
+        }
+        self.class_channels.remove(&neuron_idx);
+        self.class_channel_weights.remove(&neuron_idx);
     }
 
     /// Get comprehensive statistics
@@ -376,7 +822,7 @@ impl MemoryNeuronArray {
             std::mem::size_of::<f32>() +       // float32 array
             std::mem::size_of::<u64>() * 2 +   // uint64 arrays
             std::mem::size_of::<bool>() * 2    // bool arrays
-        ) + self.pattern_hash_to_index.len() * (8 + 8)  // Pattern hash mappings (u64 + usize)
+        ) + self.pattern_hash_to_index.len() * (4 + 8 + 8)  // Pattern mappings ((u32, u64) + usize)
           + self.area_neuron_indices.len() * 64; // Area tracking overhead
 
         MemoryNeuronStats {
@@ -420,13 +866,15 @@ impl MemoryNeuronArray {
         let neuron_id = self.neuron_ids[neuron_idx];
         self.id_manager.deallocate_memory_neuron_id(neuron_id);
 
+        let area_id = self.cortical_area_ids[neuron_idx];
+
         // Remove pattern association
         if let Some(pattern_hash) = self.index_to_pattern_hash.remove(&neuron_idx) {
-            self.pattern_hash_to_index.remove(&pattern_hash);
+            self.pattern_hash_to_index.remove(&(area_id, pattern_hash));
         }
+        self.clear_scan_sidecars(neuron_idx);
 
         // Remove from area tracking
-        let area_id = self.cortical_area_ids[neuron_idx];
         if let Some(indices) = self.area_neuron_indices.get_mut(&area_id) {
             indices.remove(&neuron_idx);
         }
@@ -441,6 +889,39 @@ impl MemoryNeuronArray {
     }
 
     /// Reset array state (for testing)
+    /// Deactivate all memory neurons in a specific cortical area
+    pub fn reset_cortical_area(&mut self, cortical_area_id: u32) -> usize {
+        let Some(neuron_indices) = self.area_neuron_indices.get(&cortical_area_id) else {
+            return 0;
+        };
+
+        let indices_to_reset: Vec<usize> = neuron_indices.iter().copied().collect();
+        let mut reset_count = 0;
+
+        for neuron_idx in indices_to_reset {
+            if !self.is_valid_index(neuron_idx) || !self.is_active[neuron_idx] {
+                continue;
+            }
+
+            self.is_active[neuron_idx] = false;
+            self.is_longterm_memory[neuron_idx] = false;
+            self.lifespan_current[neuron_idx] = 0;
+            self.lifespan_initial[neuron_idx] = 0;
+            self.lifespan_growth_rate[neuron_idx] = 0.0;
+            self.activation_count[neuron_idx] = 0;
+            self.creation_burst[neuron_idx] = 0;
+            self.last_activation_burst[neuron_idx] = 0;
+            self.cleanup_dead_neuron_internal(neuron_idx);
+
+            reset_count += 1;
+        }
+
+        // Remove area tracking
+        self.area_neuron_indices.remove(&cortical_area_id);
+
+        reset_count
+    }
+
     pub fn reset(&mut self) {
         self.neuron_ids.fill(0);
         self.cortical_area_ids.fill(0);
@@ -456,6 +937,11 @@ impl MemoryNeuronArray {
         self.pattern_hash_to_index.clear();
         self.index_to_pattern_hash.clear();
         self.area_neuron_indices.clear();
+        self.spatial_signature.clear();
+        self.class_channels.clear();
+        self.class_channel_weights.clear();
+        self.presentation_ledger = crate::classifier_reward::PresentationLedger::default();
+        self.spatial_ltm_index.clear();
 
         self.next_available_index = 0;
         self.reusable_indices.clear();
@@ -591,8 +1077,79 @@ mod tests {
         assert!(!array.is_active[idx]);
 
         // Pattern should no longer be findable
-        let found = array.find_neuron_by_pattern(&pattern_hash);
+        let found = array.find_neuron_by_pattern(100, &pattern_hash);
         assert!(found.is_none());
+    }
+
+    #[test]
+    fn neuron_matched_this_burst_is_not_aged() {
+        let mut array = MemoryNeuronArray::new(16);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 1,
+            ..Default::default()
+        };
+        let idx = array.create_memory_neuron(7, 100, 5, &config).unwrap();
+
+        assert!(array.age_memory_neurons(5).is_empty());
+        assert_eq!(array.lifespan_current[idx], 1);
+
+        assert_eq!(array.age_memory_neurons(6), vec![idx]);
+    }
+
+    /// Per-burst order used by the plasticity service: promote, match, then age.
+    fn run_burst(
+        array: &mut MemoryNeuronArray,
+        configs: &HashMap<u32, MemoryNeuronLifecycleConfig>,
+        burst: u64,
+        pattern_seen: bool,
+    ) -> Vec<usize> {
+        let config = configs[&100];
+        let converted = array.check_longterm_conversion_by_area(configs, config.longterm_threshold);
+        if pattern_seen {
+            array.create_memory_neuron(42, 100, burst, &config);
+        }
+        array.age_memory_neurons(burst);
+        converted
+    }
+
+    #[test]
+    fn lifespan_one_growth_one_reaches_ltm_when_pattern_repeats() {
+        let mut array = MemoryNeuronArray::new(16);
+        let configs = HashMap::from([(
+            100u32,
+            MemoryNeuronLifecycleConfig {
+                initial_lifespan: 1,
+                lifespan_growth_rate: 1.0,
+                longterm_threshold: 3,
+                max_reactivations: 1000,
+            },
+        )]);
+
+        for burst in 0..3 {
+            assert!(run_burst(&mut array, &configs, burst, true).is_empty());
+        }
+        let converted = run_burst(&mut array, &configs, 3, true);
+        assert_eq!(converted.len(), 1);
+        assert!(array.is_longterm_memory[converted[0]]);
+    }
+
+    #[test]
+    fn lifespan_one_pattern_seen_once_dies_after_one_unseen_burst() {
+        let mut array = MemoryNeuronArray::new(16);
+        let configs = HashMap::from([(
+            100u32,
+            MemoryNeuronLifecycleConfig {
+                initial_lifespan: 1,
+                lifespan_growth_rate: 1.0,
+                longterm_threshold: 3,
+                max_reactivations: 1000,
+            },
+        )]);
+
+        run_burst(&mut array, &configs, 0, true);
+        assert!(array.find_neuron_by_pattern(100, &42).is_some());
+        run_burst(&mut array, &configs, 1, false);
+        assert!(array.find_neuron_by_pattern(100, &42).is_none());
     }
 
     #[test]
@@ -718,12 +1275,12 @@ mod tests {
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
 
-        let found = array.find_neuron_by_pattern(&pattern_hash);
+        let found = array.find_neuron_by_pattern(100, &pattern_hash);
         assert_eq!(found, Some(idx));
 
         // Different pattern should not be found
         let pattern_hash2 = 0x0202020202020202u64;
-        let found2 = array.find_neuron_by_pattern(&pattern_hash2);
+        let found2 = array.find_neuron_by_pattern(100, &pattern_hash2);
         assert_eq!(found2, None);
     }
 
@@ -836,6 +1393,70 @@ mod tests {
     }
 
     #[test]
+    fn test_reset_cortical_area() {
+        let mut array = MemoryNeuronArray::new(1000);
+        let config = MemoryNeuronLifecycleConfig::default();
+
+        // Create neurons in area 5
+        let pattern1 = 0x0101010101010101u64;
+        let pattern2 = 0x0202020202020202u64;
+        array.create_memory_neuron(pattern1, 5, 0, &config);
+        array.create_memory_neuron(pattern2, 5, 0, &config);
+
+        // Create neurons in area 6
+        let pattern3 = 0x0303030303030303u64;
+        array.create_memory_neuron(pattern3, 6, 0, &config);
+
+        // Verify initial state
+        assert_eq!(array.get_active_neurons_by_area(5).len(), 2);
+        assert_eq!(array.get_active_neurons_by_area(6).len(), 1);
+
+        // Reset area 5
+        let reset_count = array.reset_cortical_area(5);
+        assert_eq!(reset_count, 2);
+
+        // Verify area 5 is empty
+        assert_eq!(array.get_active_neurons_by_area(5).len(), 0);
+
+        // Verify area 6 is unchanged
+        assert_eq!(array.get_active_neurons_by_area(6).len(), 1);
+
+        // Verify pattern hashes are cleared for area 5
+        assert!(!array.pattern_hash_to_index.contains_key(&(5, pattern1)));
+        assert!(!array.pattern_hash_to_index.contains_key(&(5, pattern2)));
+
+        // Verify area 6 pattern still exists
+        assert!(array.pattern_hash_to_index.contains_key(&(6, pattern3)));
+    }
+
+    #[test]
+    fn test_same_pattern_in_two_areas_gets_independent_neurons() {
+        let mut array = MemoryNeuronArray::new(16);
+        let config = MemoryNeuronLifecycleConfig::default();
+        let hash = 0xABCDu64;
+
+        let a = array.create_memory_neuron(hash, 100, 0, &config).unwrap();
+        let b = array.create_memory_neuron(hash, 101, 0, &config).unwrap();
+        assert_ne!(a, b, "each area owns its own neuron for a shared pattern");
+        assert_ne!(array.get_neuron_id(a), array.get_neuron_id(b));
+        assert_eq!(array.get_cortical_area_id(a), Some(100));
+        assert_eq!(array.get_cortical_area_id(b), Some(101));
+        assert_eq!(array.find_neuron_by_pattern(100, &hash), Some(a));
+        assert_eq!(array.find_neuron_by_pattern(101, &hash), Some(b));
+        assert_eq!(array.find_neuron_by_pattern(102, &hash), None);
+
+        // Seeing the pattern again in area 100 reactivates only area 100's neuron.
+        assert_eq!(array.create_memory_neuron(hash, 100, 1, &config), Some(a));
+        assert_eq!(array.get_activation_count(a), Some(2));
+        assert_eq!(array.get_activation_count(b), Some(1));
+
+        // Resetting one area leaves the other's neuron and mapping intact.
+        assert_eq!(array.reset_cortical_area(100), 1);
+        assert_eq!(array.find_neuron_by_pattern(100, &hash), None);
+        assert_eq!(array.find_neuron_by_pattern(101, &hash), Some(b));
+    }
+
+    #[test]
     fn test_reset() {
         let mut array = MemoryNeuronArray::new(1000);
         let config = MemoryNeuronLifecycleConfig::default();
@@ -877,5 +1498,113 @@ mod tests {
 
         array.reactivate_memory_neuron(idx, 2);
         assert_eq!(array.lifespan_current[idx], 20);
+    }
+
+    #[test]
+    fn test_st_ltm_counts_and_pagination_and_detail() {
+        let mut array = MemoryNeuronArray::new(1000);
+        let config = MemoryNeuronLifecycleConfig::default();
+
+        for i in 0..5 {
+            array
+                .create_memory_neuron(i as u64, 7, 0, &config)
+                .expect("create");
+        }
+        assert_eq!(array.count_short_term_in_area(7), 5);
+        assert_eq!(array.count_long_term_in_area(7), 0);
+
+        array.is_longterm_memory[0] = true;
+        assert_eq!(array.count_short_term_in_area(7), 4);
+        assert_eq!(array.count_long_term_in_area(7), 1);
+
+        let (page0, total) = array.paginated_neuron_ids_in_area(7, 0, 2);
+        assert_eq!(total, 5);
+        assert_eq!(page0.len(), 2);
+
+        let nid = page0[0];
+        let detail = array.get_memory_neuron_detail(nid).expect("detail");
+        assert_eq!(detail.neuron_id, nid);
+        assert_eq!(detail.cortical_area_idx, 7);
+        assert!(detail.pattern_hash.is_some());
+    }
+
+    #[test]
+    fn export_and_restore_preserves_only_long_term_memory() {
+        let mut array = MemoryNeuronArray::new(1000);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 10,
+            lifespan_growth_rate: 5.0,
+            longterm_threshold: 20,
+            max_reactivations: 1000,
+        };
+
+        let stm_idx = array.create_memory_neuron(0x11, 3, 0, &config).unwrap();
+        let ltm_idx = array.create_memory_neuron(0x22, 3, 0, &config).unwrap();
+        array.lifespan_current[ltm_idx] = 25;
+        let converted = array.check_longterm_conversion(20);
+        assert_eq!(converted, vec![ltm_idx]);
+        assert!(!array.is_longterm_memory[stm_idx]);
+
+        let ltm_id = array.neuron_ids[ltm_idx];
+        let exported = array.export_long_term_memory_neurons();
+        assert_eq!(exported.len(), 1);
+        assert_eq!(exported[0].neuron_id, ltm_id);
+        assert!(exported[0].is_longterm_memory);
+
+        let mut restored = MemoryNeuronArray::new(1000);
+        let count = restored
+            .restore_long_term_memory_neurons(&exported)
+            .unwrap();
+        assert_eq!(count, 1);
+        let restored_ids: Vec<u32> = restored
+            .export_long_term_memory_neurons()
+            .iter()
+            .map(|n| n.neuron_id)
+            .collect();
+        assert_eq!(restored_ids, vec![ltm_id]);
+        assert_eq!(restored.get_active_neurons_by_area(3).len(), 1);
+
+        let stm_only = vec![MemoryNeuronDetail {
+            neuron_id: 50_000_099,
+            cortical_area_idx: 3,
+            pattern_hash: Some(0x33),
+            is_longterm_memory: false,
+            is_active: true,
+            lifespan_current: 10,
+            lifespan_initial: 10,
+            lifespan_growth_rate: 5.0,
+            creation_burst: 0,
+            last_activation_burst: 0,
+            activation_count: 1,
+            spatial_signature: None,
+            class_channels: Vec::new(),
+            class_channel_weights: Vec::new(),
+        }];
+        let skipped = restored
+            .restore_long_term_memory_neurons(&stm_only)
+            .unwrap();
+        assert_eq!(skipped, 0);
+        assert!(restored.export_long_term_memory_neurons().is_empty());
+    }
+
+    #[test]
+    fn spatial_signature_indexes_only_long_term_memory() {
+        let mut array = MemoryNeuronArray::new(100);
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 100,
+            longterm_threshold: 100,
+            ..Default::default()
+        };
+        let idx = array.create_memory_neuron(0x11, 3, 0, &config).unwrap();
+        array.set_spatial_signature(idx, 0xABCD);
+        assert!(array.find_ltm_by_spatial_signature(3, 0xABCD).is_empty());
+
+        let converted = array.check_longterm_conversion(100);
+        assert_eq!(converted, vec![idx]);
+        assert_eq!(array.find_ltm_by_spatial_signature(3, 0xABCD), vec![idx]);
+
+        array.bind_class_channel(idx, 2);
+        array.bind_class_channel(idx, 2);
+        assert_eq!(array.get_class_channels(idx), vec![2]);
     }
 }

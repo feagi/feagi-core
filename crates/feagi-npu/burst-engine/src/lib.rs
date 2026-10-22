@@ -86,6 +86,8 @@ pub mod async_burst_loop; // Pure Rust burst loop
 pub mod backend;
 #[cfg(feature = "std")]
 pub mod burst_loop_runner;
+pub use burst_loop_runner::SensoryIntake;
+pub mod chain_latency_trace;
 pub mod fire_ledger;
 pub mod fire_structures;
 pub mod fq_sampler;
@@ -95,11 +97,19 @@ pub mod neural_dynamics;
 pub mod tracing_mutex;
 // Neuron models moved to feagi-neural::models (Phase 2b)
 pub mod dynamic_npu;
+pub mod modulator_engine;
 pub mod npu;
+pub mod output_rate_gate;
 pub mod parameter_update_queue;
+/// Intrinsic firing-rate homeostasis via LIF `leak_coefficient` (opt-in areas only; see `neural/docs/rate_modulated_leak.md`).
+pub mod rate_modulated_leak;
+pub mod runtime_taps;
 pub mod sensory; // Rust sensory injection system
-                 // Disabled - uses DynamicNPU
-                 // pub mod sleep; // Sleep manager for energy efficiency and memory optimization
+pub mod sequential_ingest;
+// Disabled - uses DynamicNPU
+// pub mod sleep; // Sleep manager for energy efficiency and memory optimization
+pub mod sparse_memory_lif;
+pub mod synaptic_arrival_schedule;
 pub mod synaptic_propagation;
 pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
 
@@ -120,9 +130,24 @@ pub use fq_sampler::*;
 pub use neural_dynamics::*;
 // Neuron models now in feagi-neural::models
 pub use npu::*;
-pub use parameter_update_queue::{ParameterUpdate, ParameterUpdateQueue};
+pub use parameter_update_queue::{
+    increment_from_parameter_update, is_firing_threshold_increment_param,
+    is_firing_threshold_param, json_number_as_f32, merge_firing_threshold_increment,
+    parse_firing_threshold_increment, should_rewrite_threshold_gradient, ParameterUpdate,
+    ParameterUpdateQueue,
+};
+pub use rate_modulated_leak::{RateModulatedLeakConfig, RateModulatedLeakRegistry};
+pub use runtime_taps::{
+    AgentPublishStats, AreaActivity as TapAreaActivity, BurstActivitySummary, BurstTaps,
+    MotorOutputTap, SensorInputTap, TapSample,
+};
 pub use sensory::*;
 // pub use sleep::*;
+pub use sparse_memory_lif::{
+    MemoryAssociativeLifParams, MemoryAssociativeLifParamsByArea, MemoryAssociativeLifState,
+    SparseMemoryAssociativeLifStates,
+};
+pub use synaptic_arrival_schedule::*;
 pub use synaptic_propagation::*;
 pub use viz_shm_writer::*;
 

@@ -13,6 +13,16 @@ Licensed under the Apache License, Version 2.0
 use crate::types::*;
 use async_trait::async_trait;
 
+/// Manual stimulation injection behavior.
+///
+/// - `Candidate`: inject into FCL candidates (normal dynamics path)
+/// - `ForceFire`: stage neurons to be emitted in next burst fire queue
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ManualStimulationMode {
+    Candidate,
+    ForceFire,
+}
+
 /// Runtime control service (transport-agnostic)
 #[async_trait]
 pub trait RuntimeService: Send + Sync {
@@ -210,5 +220,66 @@ pub trait RuntimeService: Send + Sync {
         &self,
         cortical_id: &str,
         xyzp_data: &[(u32, u32, u32, f32)],
+        mode: ManualStimulationMode,
     ) -> ServiceResult<usize>;
+
+    /// Register motor subscriptions with per-agent rate limits.
+    ///
+    /// # Arguments
+    /// * `agent_id` - Unique agent identifier
+    /// * `cortical_ids` - List of cortical IDs to subscribe to
+    /// * `rate_hz` - Motor publish rate (Hz)
+    ///
+    async fn register_motor_subscriptions(
+        &self,
+        agent_id: &str,
+        cortical_ids: Vec<String>,
+        rate_hz: f64,
+    ) -> ServiceResult<()>;
+
+    /// Register visualization subscriptions with per-agent rate limits.
+    ///
+    /// # Arguments
+    /// * `agent_id` - Unique agent identifier
+    /// * `rate_hz` - Visualization publish rate (Hz)
+    ///
+    async fn register_visualization_subscriptions(
+        &self,
+        agent_id: &str,
+        rate_hz: f64,
+    ) -> ServiceResult<()>;
+
+    /// Unregister motor subscriptions for a disconnected agent.
+    ///
+    /// Called when an agent is deregistered (e.g. descriptor replacement, timeout).
+    fn unregister_motor_subscriptions(&self, agent_id: &str);
+
+    /// Unregister visualization subscriptions for a disconnected agent.
+    ///
+    /// Called when an agent is deregistered (e.g. descriptor replacement, timeout).
+    fn unregister_visualization_subscriptions(&self, agent_id: &str);
+
+    /// Reset live neural state for cortical areas by **cortical index** (NPU internal index).
+    ///
+    /// Clears membrane potentials, refractory state, consecutive fire counters, and removes
+    /// matching neurons from the fire-candidate list for each area.
+    ///
+    /// # Returns
+    /// `(cortical_idx, neurons_reset)` per requested index.
+    async fn reset_cortical_area_states(
+        &self,
+        cortical_indices: &[u32],
+    ) -> ServiceResult<Vec<(u32, usize)>>;
+
+    /// Remove all motor subscriptions.
+    ///
+    /// Used by strict genome transitions to ensure no stale agent-session
+    /// subscriptions remain after genome replacement.
+    fn clear_all_motor_subscriptions(&self);
+
+    /// Remove all visualization subscriptions.
+    ///
+    /// Used by strict genome transitions to ensure no stale visualization
+    /// subscribers remain after genome replacement.
+    fn clear_all_visualization_subscriptions(&self);
 }

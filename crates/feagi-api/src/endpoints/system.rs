@@ -43,6 +43,10 @@ pub struct HealthCheckResponse {
     pub genome_availability: bool,
     pub genome_validity: Option<bool>,
     pub brain_readiness: bool,
+    /// True while a prioritized genome load/upload is in progress (StateManager genome state is Loading).
+    pub genome_loading: bool,
+    /// Genome lifecycle: missing, loading, loaded, saving, or error.
+    pub genome_state: String,
     pub feagi_session: Option<i64>,
     pub fitness: Option<f64>,
     pub cortical_area_count: Option<i32>,
@@ -71,12 +75,23 @@ pub struct HealthCheckResponse {
     /// Hash of cortical mappings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_mappings_hash: Option<u64>,
+    /// Hash of first-class genome classifiers (parallel to brain_regions)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub classifiers_hash: Option<u64>,
     /// Hash of agent data (ids, capabilities, connection properties)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_data_hash: Option<u64>,
+    /// Advances when synaptic plasticity commits a weight change or creates a synapse.
+    /// Eligibility traces and unchanged weights do not advance it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub synaptic_plasticity_generation: Option<u64>,
     /// Root brain region ID (UUID string) for O(1) root lookup
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
+    /// Latest genome change ledger sequence; advances on every recorded change.
+    /// Poll `GET /v1/genome/changes?since=<previous>` when it moves.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub genome_change_sequence: Option<u64>,
     /// Fatigue information (index, active state, and breakdown of contributing elements)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fatigue: Option<FatigueInfo>,
@@ -182,7 +197,10 @@ pub async fn get_health_check(
     let influxdb_availability = false; // TODO: Get from monitoring service
     let latest_changes_saved_externally = false; // TODO: Get from state manager
     let genome_availability = health.cortical_area_count > 0;
-    let genome_validity = Some(health.brain_readiness);
+    // Real genome validity comes from the chain report, written by the
+    // loader into core state. Falls back to `None` until a genome has
+    // been loaded in this process. See `SystemHealth::genome_validity`.
+    let genome_validity = health.genome_validity;
 
     // Get FEAGI session timestamp (unique identifier for this FEAGI instance)
     let feagi_session = Some(state.feagi_session_timestamp);
@@ -255,6 +273,14 @@ pub async fn get_health_check(
     #[cfg(not(feature = "services"))]
     let brain_regions_root = None; // WASM: Use connectome service instead
 
+    #[cfg(feature = "services")]
+    let genome_change_sequence = state
+        .change_ledger
+        .as_ref()
+        .map(|ledger| ledger.latest_sequence());
+    #[cfg(not(feature = "services"))]
+    let genome_change_sequence = None;
+
     // Get fatigue information from state manager
     // Note: feagi-state-manager is included in the "services" feature
     #[cfg(feature = "services")]
@@ -291,17 +317,36 @@ pub async fn get_health_check(
         brain_geometry_hash,
         morphologies_hash,
         cortical_mappings_hash,
+        classifiers_hash,
         agent_data_hash,
+        synaptic_plasticity_generation,
+        genome_loading,
+        genome_state,
     ) = {
+        use feagi_state_manager::GenomeState;
         let state_manager = feagi_state_manager::StateManager::instance();
         let state_manager = state_manager.read();
+        let gs = state_manager.get_genome_state();
+        let genome_state = match gs {
+            GenomeState::Missing => "missing",
+            GenomeState::Loading => "loading",
+            GenomeState::Loaded => "loaded",
+            GenomeState::Saving => "saving",
+            GenomeState::Error => "error",
+        }
+        .to_string();
+        let genome_loading = gs == GenomeState::Loading;
         (
             Some(state_manager.get_brain_regions_hash()),
             Some(state_manager.get_cortical_areas_hash()),
             Some(state_manager.get_brain_geometry_hash()),
             Some(state_manager.get_morphologies_hash()),
             Some(state_manager.get_cortical_mappings_hash()),
+            Some(state_manager.get_classifiers_hash()),
             Some(state_manager.get_agent_data_hash()),
+            Some(state_manager.get_synaptic_plasticity_generation()),
+            genome_loading,
+            genome_state,
         )
     };
 
@@ -315,6 +360,8 @@ pub async fn get_health_check(
         genome_availability,
         genome_validity,
         brain_readiness: health.brain_readiness,
+        genome_loading,
+        genome_state,
         feagi_session,
         fitness,
         cortical_area_count: Some(health.cortical_area_count as i32),
@@ -333,8 +380,11 @@ pub async fn get_health_check(
         brain_geometry_hash,
         morphologies_hash,
         cortical_mappings_hash,
+        classifiers_hash,
         agent_data_hash,
+        synaptic_plasticity_generation,
         brain_regions_root, // NEW: Root region ID for O(1) lookup
+        genome_change_sequence,
         fatigue,
     }))
 }
@@ -721,6 +771,156 @@ pub async fn get_unique_logs(
     response.insert("logs".to_string(), Vec::new());
 
     Ok(Json(response))
+}
+
+// ============================================================================
+// LOG TAIL (in-process tracing ring buffer)
+// ============================================================================
+
+/// Single log record returned from the ring buffer.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct LogTailRecord {
+    pub timestamp_ms: i64,
+    pub level: String,
+    pub target: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub file: String,
+    pub line: u32,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fields: Option<serde_json::Value>,
+}
+
+/// Response payload for `GET /v1/system/log_tail`.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct LogTailResponse {
+    /// True when the in-process log ring buffer is enabled. False indicates the
+    /// `FEAGI_LOG_RING_BUFFER_CAPACITY` environment variable is set to 0 or the
+    /// initialiser has not yet run.
+    pub enabled: bool,
+    /// Configured ring buffer capacity (records).
+    pub capacity: usize,
+    /// Records that matched the supplied filters, oldest first.
+    pub records: Vec<LogTailRecord>,
+    /// Number of records returned (matches `records.len()`).
+    pub returned: usize,
+}
+
+/// Compact record of the most recent failed mutating HTTP request.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct LastFailedMutation {
+    /// HTTP method (`POST`, `PUT`, `PATCH`, or `DELETE`).
+    pub method: String,
+    /// Request path (for example `/v1/connectome/upload`).
+    pub path: String,
+    /// HTTP status code (>= 400).
+    pub status: u16,
+    /// Request `Content-Type` header when present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_type: Option<String>,
+    /// Request `Content-Length` header when present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_length: Option<u64>,
+    /// Truncated API error message from the response body when parseable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+    /// Unix timestamp in milliseconds when the failure was recorded.
+    pub timestamp_ms: i64,
+}
+
+/// Response for `GET /v1/system/last_failed_mutation`.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct LastFailedMutationResponse {
+    /// Most recent failed mutation, or `null` when none have been recorded.
+    pub mutation: Option<LastFailedMutation>,
+}
+
+/// Return the most recent failed mutating API request for this FEAGI process.
+///
+/// Agents use this after an upload/load failure while health remains healthy:
+/// body-limit and multipart parse errors leave no useful signal in health_check.
+#[utoipa::path(
+    get,
+    path = "/v1/system/last_failed_mutation",
+    tag = "system",
+    responses(
+        (status = 200, description = "Last failed mutation or null", body = LastFailedMutationResponse)
+    )
+)]
+pub async fn get_last_failed_mutation(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<LastFailedMutationResponse>> {
+    let mutation = state.last_failed_mutation.lock().clone();
+    Ok(Json(LastFailedMutationResponse { mutation }))
+}
+
+/// Get a tail of recent log messages from FEAGI's in-process tracing ring buffer.
+///
+/// Filters (all optional, AND'd together):
+/// * `since_ts_ms` - only records with `timestamp_ms >= since_ts_ms`
+/// * `level`       - minimum severity (`TRACE` < `DEBUG` < `INFO` < `WARN` < `ERROR`)
+/// * `target_prefix` - only records whose tracing target starts with this prefix
+/// * `message_contains` - case-insensitive substring match on the log message
+/// * `limit`       - cap on returned record count (most recent records win)
+///
+/// The buffer is bounded; old records are dropped when capacity is exceeded.
+/// Capacity is controlled by `FEAGI_LOG_RING_BUFFER_CAPACITY` (default 2000,
+/// set to 0 to disable).
+#[utoipa::path(
+    get,
+    path = "/v1/system/log_tail",
+    tag = "system",
+    params(
+        ("since_ts_ms" = Option<i64>, Query, description = "Only return records emitted at or after this Unix timestamp (ms)"),
+        ("level" = Option<String>, Query, description = "Minimum severity (TRACE/DEBUG/INFO/WARN/ERROR)"),
+        ("target_prefix" = Option<String>, Query, description = "Restrict to tracing targets starting with this prefix"),
+        ("message_contains" = Option<String>, Query, description = "Case-insensitive substring match on the log message"),
+        ("limit" = Option<usize>, Query, description = "Maximum number of records to return")
+    ),
+    responses(
+        (status = 200, description = "Recent log records", body = LogTailResponse)
+    )
+)]
+pub async fn get_log_tail(
+    State(_state): State<ApiState>,
+    axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
+) -> ApiResult<Json<LogTailResponse>> {
+    let since_ts_ms = query.get("since_ts_ms").and_then(|v| v.parse::<i64>().ok());
+    let level = query.get("level").map(|v| v.as_str());
+    let target_prefix = query.get("target_prefix").map(|v| v.as_str());
+    let message_contains = query.get("message_contains").map(|v| v.as_str());
+    let limit = query.get("limit").and_then(|v| v.parse::<usize>().ok());
+
+    let Some(ring) = feagi_observability::global_ring() else {
+        return Ok(Json(LogTailResponse {
+            enabled: false,
+            capacity: 0,
+            records: Vec::new(),
+            returned: 0,
+        }));
+    };
+
+    let snap = ring.snapshot(since_ts_ms, level, target_prefix, limit, message_contains);
+    let records: Vec<LogTailRecord> = snap
+        .into_iter()
+        .map(|r| LogTailRecord {
+            timestamp_ms: r.timestamp_ms,
+            level: r.level,
+            target: r.target,
+            file: r.file,
+            line: r.line,
+            message: r.message,
+            fields: r.fields,
+        })
+        .collect();
+    let returned = records.len();
+
+    Ok(Json(LogTailResponse {
+        enabled: true,
+        capacity: ring.capacity(),
+        records,
+        returned,
+    }))
 }
 
 /// Configure logging settings including log level and output destinations.

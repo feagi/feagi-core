@@ -31,7 +31,7 @@
 ```
 User launches FEAGI binary (pure Rust):
     ↓
-$ ./feagi --config feagi_configuration.toml --genome brain.json
+$ ./feagi --config feagi_configuration.toml --genome brain.genome
     ↓
 ┌─────────────────────────────────────────────────────────┐
 │  FEAGI Main (Rust Binary)                              │
@@ -329,7 +329,7 @@ gpu_threshold = 1000000
 use_gpu = true
 EOF
 
-./feagi --config test_config_gpu.toml --genome large_genome.json
+./feagi --config test_config_gpu.toml --genome large.genome
 
 # Expected log (large genome):
 # 🎮 Creating NPU with backend: Auto
@@ -489,7 +489,7 @@ cargo test --test gpu_config_integration_test --features gpu
 
 **Manual Test 1: Small Genome (CPU Expected)**
 ```bash
-cat > small_genome.json << EOF
+cat > small.genome << EOF
 {
   "genome_title": "Small Test",
   "blueprint": {
@@ -503,7 +503,7 @@ cat > small_genome.json << EOF
 }
 EOF
 
-./feagi --config feagi_configuration.toml --genome small_genome.json 2>&1 | grep "Backend selected"
+./feagi --config feagi_configuration.toml --genome small.genome 2>&1 | grep "Backend selected"
 ```
 
 **Expected**: `✓ Backend selected: CPU (SIMD)`
@@ -512,7 +512,7 @@ EOF
 
 **Manual Test 2: Large Genome (GPU Expected)**
 ```bash
-cat > large_genome.json << EOF
+cat > large.genome << EOF
 {
   "genome_title": "Large Test",
   "blueprint": {
@@ -526,7 +526,7 @@ cat > large_genome.json << EOF
 }
 EOF
 
-./feagi --config feagi_configuration.toml --genome large_genome.json 2>&1 | grep "Backend selected"
+./feagi --config feagi_configuration.toml --genome large.genome 2>&1 | grep "Backend selected"
 ```
 
 **Expected** (if GPU available): `✓ Backend selected: WGPU (Apple M4 Pro - Metal)`
@@ -539,7 +539,7 @@ EOF
 # [resources]
 # use_gpu = false
 
-./feagi --config feagi_configuration.toml --genome large_genome.json 2>&1 | grep "Backend selected"
+./feagi --config feagi_configuration.toml --genome large.genome 2>&1 | grep "Backend selected"
 ```
 
 **Expected**: `✓ Backend selected: CPU (SIMD)` (even for large genome)

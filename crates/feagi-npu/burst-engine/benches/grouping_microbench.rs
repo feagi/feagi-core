@@ -69,7 +69,7 @@ fn group_presized(
 fn group_parallel(data: Vec<(NeuronId, CorticalId, Contribution)>) -> PropagationResult {
     data.into_par_iter()
         .fold(
-            || AHashMap::<CorticalId, Vec<(NeuronId, Contribution)>>::new(),
+            AHashMap::<CorticalId, Vec<(NeuronId, Contribution)>>::new,
             |mut acc, (neuron_id, cortical_id, contribution)| {
                 acc.entry(cortical_id)
                     .or_default()
@@ -77,15 +77,12 @@ fn group_parallel(data: Vec<(NeuronId, CorticalId, Contribution)>) -> Propagatio
                 acc
             },
         )
-        .reduce(
-            || AHashMap::new(),
-            |mut a, b| {
-                for (cortical_id, mut contribs) in b {
-                    a.entry(cortical_id).or_default().append(&mut contribs);
-                }
-                a
-            },
-        )
+        .reduce(AHashMap::new, |mut a, b| {
+            for (cortical_id, mut contribs) in b {
+                a.entry(cortical_id).or_default().append(&mut contribs);
+            }
+            a
+        })
 }
 
 // Strategy 4: Sort then group

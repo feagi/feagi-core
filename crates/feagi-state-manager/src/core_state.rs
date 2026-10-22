@@ -119,7 +119,11 @@ pub struct MemoryMappedState {
     pub api_state: AtomicU8,
     pub zmq_state: AtomicU8,
     pub brain_readiness: AtomicU8,
-    pub _reserved1: AtomicU8,
+    /// Genome validity (tri-state: 0 = unknown / no genome loaded,
+    /// 1 = invalid (loaded but failed latest validator), 2 = valid).
+    /// Set by genome-loading paths from `ChainResult.is_blocking_clean()`.
+    /// Consumers map back to `Option<bool>` via `get_genome_validity`.
+    pub genome_validity: AtomicU8,
 
     // Counters (8 bytes)
     pub agent_count: AtomicU32,
@@ -170,7 +174,7 @@ impl MemoryMappedState {
             api_state: AtomicU8::new(ServiceState::Unavailable as u8),
             zmq_state: AtomicU8::new(ServiceState::Unavailable as u8),
             brain_readiness: AtomicU8::new(0),
-            _reserved1: AtomicU8::new(0),
+            genome_validity: AtomicU8::new(0),
 
             agent_count: AtomicU32::new(0),
             burst_frequency: AtomicU32::new(0),
@@ -269,6 +273,32 @@ impl MemoryMappedState {
         self.increment_version();
     }
 
+    /// Get genome validity (atomic read).
+    ///
+    /// Returns `None` when no genome has been loaded yet in this process,
+    /// `Some(true)` when the latest-loaded genome's chain report was
+    /// blocking-clean, and `Some(false)` when the latest-loaded genome
+    /// had blocking validator errors (running in degraded mode).
+    pub fn get_genome_validity(&self) -> Option<bool> {
+        match self.genome_validity.load(Ordering::Acquire) {
+            1 => Some(false),
+            2 => Some(true),
+            _ => None,
+        }
+    }
+
+    /// Set genome validity (atomic write). Pass `None` to reset to the
+    /// "no genome loaded" state, e.g. during shutdown or unload.
+    pub fn set_genome_validity(&self, validity: Option<bool>) {
+        let encoded = match validity {
+            None => 0u8,
+            Some(false) => 1u8,
+            Some(true) => 2u8,
+        };
+        self.genome_validity.store(encoded, Ordering::Release);
+        self.increment_version();
+    }
+
     // ===== Statistics Accessors =====
 
     /// Get agent count (atomic read)
@@ -290,11 +320,21 @@ impl MemoryMappedState {
     }
 
     /// Decrement agent count (atomic)
+    /// Uses compare-exchange loop to prevent u32 underflow wrap (fetch_sub wraps on underflow).
     pub fn decrement_agent_count(&self) -> u32 {
-        let new_count = self
-            .agent_count
-            .fetch_sub(1, Ordering::AcqRel)
-            .saturating_sub(1);
+        let mut current = self.agent_count.load(Ordering::Acquire);
+        let new_count = loop {
+            let next = current.saturating_sub(1);
+            match self.agent_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break next,
+                Err(actual) => current = actual,
+            }
+        };
         self.increment_version();
         new_count
     }
@@ -330,11 +370,21 @@ impl MemoryMappedState {
     }
 
     /// Subtract from neuron count (atomic decrement)
+    /// Uses compare-exchange loop to prevent u32 underflow wrap (fetch_sub wraps on underflow).
     pub fn subtract_neuron_count(&self, delta: u32) -> u32 {
-        let new_count = self
-            .neuron_count
-            .fetch_sub(delta, Ordering::AcqRel)
-            .saturating_sub(delta);
+        let mut current = self.neuron_count.load(Ordering::Acquire);
+        let new_count = loop {
+            let next = current.saturating_sub(delta);
+            match self.neuron_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break next,
+                Err(actual) => current = actual,
+            }
+        };
         self.increment_version();
         new_count
     }
@@ -358,11 +408,21 @@ impl MemoryMappedState {
     }
 
     /// Subtract from synapse count (atomic decrement)
+    /// Uses compare-exchange loop to prevent u32 underflow wrap (fetch_sub wraps on underflow).
     pub fn subtract_synapse_count(&self, delta: u32) -> u32 {
-        let new_count = self
-            .synapse_count
-            .fetch_sub(delta, Ordering::AcqRel)
-            .saturating_sub(delta);
+        let mut current = self.synapse_count.load(Ordering::Acquire);
+        let new_count = loop {
+            let next = current.saturating_sub(delta);
+            match self.synapse_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break next,
+                Err(actual) => current = actual,
+            }
+        };
         self.increment_version();
         new_count
     }
@@ -423,11 +483,21 @@ impl MemoryMappedState {
     }
 
     /// Subtract from regular neuron count (atomic decrement)
+    /// Uses compare-exchange loop to prevent u32 underflow wrap (fetch_sub wraps on underflow).
     pub fn subtract_regular_neuron_count(&self, delta: u32) -> u32 {
-        let new_count = self
-            .regular_neuron_count
-            .fetch_sub(delta, Ordering::AcqRel)
-            .saturating_sub(delta);
+        let mut current = self.regular_neuron_count.load(Ordering::Acquire);
+        let new_count = loop {
+            let next = current.saturating_sub(delta);
+            match self.regular_neuron_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break next,
+                Err(actual) => current = actual,
+            }
+        };
         self.increment_version();
         new_count
     }
@@ -451,11 +521,21 @@ impl MemoryMappedState {
     }
 
     /// Subtract from memory neuron count (atomic decrement)
+    /// Uses compare-exchange loop to prevent u32 underflow wrap (fetch_sub wraps on underflow).
     pub fn subtract_memory_neuron_count(&self, delta: u32) -> u32 {
-        let new_count = self
-            .memory_neuron_count
-            .fetch_sub(delta, Ordering::AcqRel)
-            .saturating_sub(delta);
+        let mut current = self.memory_neuron_count.load(Ordering::Acquire);
+        let new_count = loop {
+            let next = current.saturating_sub(delta);
+            match self.memory_neuron_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break next,
+                Err(actual) => current = actual,
+            }
+        };
         self.increment_version();
         new_count
     }
@@ -643,6 +723,23 @@ mod tests {
     }
 
     #[test]
+    fn test_genome_validity_tri_state() {
+        let state = MemoryMappedState::new();
+        // Fresh state => no genome loaded yet.
+        assert_eq!(state.get_genome_validity(), None);
+
+        state.set_genome_validity(Some(true));
+        assert_eq!(state.get_genome_validity(), Some(true));
+
+        state.set_genome_validity(Some(false));
+        assert_eq!(state.get_genome_validity(), Some(false));
+
+        // Explicit reset (unload / shutdown) returns to `None`.
+        state.set_genome_validity(None);
+        assert_eq!(state.get_genome_validity(), None);
+    }
+
+    #[test]
     fn test_version_increment() {
         let state = MemoryMappedState::new();
         let v1 = state.get_version();
@@ -667,6 +764,51 @@ mod tests {
         assert_eq!(state.get_neuron_count(), 1_000_000);
         assert_eq!(state.get_synapse_count(), 50_000_000);
         assert_eq!(state.get_cortical_area_count(), 100);
+    }
+
+    /// Verifies subtract operations saturate at 0 instead of u32 underflow wrap.
+    /// Bug: fetch_sub wraps on underflow, producing values near 2^32 (e.g. 4294881316).
+    #[test]
+    fn test_subtract_underflow_saturates() {
+        let state = MemoryMappedState::new();
+
+        state.set_neuron_count(1000);
+        state.set_regular_neuron_count(1000);
+        state.set_synapse_count(500);
+        state.set_memory_neuron_count(200);
+
+        // Subtract more than we have - must saturate at 0, not wrap
+        state.subtract_neuron_count(5000);
+        assert_eq!(
+            state.get_neuron_count(),
+            0,
+            "neuron_count must not underflow"
+        );
+
+        state.subtract_regular_neuron_count(5000);
+        assert_eq!(
+            state.get_regular_neuron_count(),
+            0,
+            "regular_neuron_count must not underflow"
+        );
+
+        state.subtract_synapse_count(1000);
+        assert_eq!(
+            state.get_synapse_count(),
+            0,
+            "synapse_count must not underflow"
+        );
+
+        state.subtract_memory_neuron_count(500);
+        assert_eq!(
+            state.get_memory_neuron_count(),
+            0,
+            "memory_neuron_count must not underflow"
+        );
+
+        // Decrement agent from 0 - must stay 0
+        state.decrement_agent_count();
+        assert_eq!(state.get_agent_count(), 0, "agent_count must not underflow");
     }
 
     #[test]

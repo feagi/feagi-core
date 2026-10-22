@@ -11,6 +11,10 @@ Moved from feagi-core/crates/feagi-bdu/src/models/brain_region.rs
 mod region_id;
 pub use region_id::RegionID;
 
+/// Canonical display name of the genome tree root. Brain Visualizer and
+/// neuroembryogenesis treat a region with this exact name as the unique root.
+pub const ROOT_BRAIN_REGION_NAME: &str = "Root Brain Region";
+
 use crate::genomic::cortical_area::CorticalID;
 use crate::FeagiDataError;
 use serde::{Deserialize, Serialize};

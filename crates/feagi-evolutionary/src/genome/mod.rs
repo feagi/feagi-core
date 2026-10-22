@@ -5,8 +5,9 @@
 Genome I/O and manipulation for FEAGI Evolution.
 
 This module handles:
-- Parsing genome JSON files (genotype)
-- Saving genome state back to JSON
+- Decoding and encoding external genome artifacts
+- Parsing genome schema documents (genotype)
+- Saving genome state
 - Genome validation
 - Genome transformation/mutation (future)
 
@@ -14,19 +15,97 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+pub mod artifact;
 pub mod converter;
 pub mod loader;
+pub mod migration;
 pub mod migrator;
+pub mod normalizers;
 pub mod parser;
+pub mod region_export;
 pub mod runtime_saver;
 pub mod saver;
+pub mod schema;
 pub mod signatures;
+pub mod validators;
 
 // Re-export main types
+pub use artifact::{
+    decode_genome_artifact, encode_genome_artifact, validate_genome_artifact_file_name,
+    GenomeArtifactCodec, GenomeArtifactEncoding, JsonGenomeArtifactCodec,
+    GENOME_ARTIFACT_EXTENSION, GENOME_ARTIFACT_MEDIA_TYPE,
+};
 pub use converter::to_runtime_genome;
-pub use loader::{load_genome_from_file, load_genome_from_json, peek_quantization_precision};
+pub use loader::{
+    load_genome_artifact_with_report, load_genome_from_artifact, load_genome_from_file,
+    load_genome_from_json, load_genome_value_with_report, load_genome_with_report,
+    load_genome_with_report_from_file, migrate_genome_json_to_current,
+    migrate_genome_value_to_current, peek_quantization_precision,
+};
+pub use migration::{
+    ChainRegistry, ChainResult, ChainRunner, MigrationError, MigrationStepDiagnostics, Migrator,
+    V2ToV3Migrator, V3ToV4Migrator, V4ToV5Migrator, V5ToV6Migrator,
+};
 pub use migrator::{map_old_id_to_new, migrate_genome, MigrationResult};
+pub use normalizers::{NormalizationDiagnostics, Normalizer, V3Normalizer, V6Normalizer};
 pub use parser::{GenomeParser, ParsedGenome};
+pub use region_export::{
+    apply_genome_title_to_unique_top_circuit, subset_runtime_genome_for_region_branch,
+    wrap_parentless_regions_under_named_root,
+};
 pub use runtime_saver::{save_genome_to_file, save_genome_to_json};
 pub use saver::GenomeSaver;
+pub use schema::{
+    detect_schema_version, GenomeSchemaVersion, CURRENT_SCHEMA_VERSION, MIN_SCHEMA_VERSION,
+};
 pub use signatures::generate_signatures;
+pub use validators::{
+    V3Validator, V4Validator, V5Validator, V6Validator, ValidationReport, Validator,
+};
+
+/// Build the canonical chain registry: the **full** migrator chain, all
+/// normalizers, and all validators known to this crate.
+///
+/// This is what `loader.rs` uses internally and what external consumers
+/// (`nrs-composer` per decision #6) should import as their starting point.
+/// Composers may then drop validators outside their retention window
+/// before invoking the runner.
+///
+/// Adding a new schema version: register the new `vN -> vN+1` migrator
+/// here, register its `vN+1` validator and (optionally) `vN+1` normalizer,
+/// and bump `CURRENT_SCHEMA_VERSION` in `schema/version.rs`. See
+/// `feagi-evolutionary/src/genome/README.md` for the full procedure.
+pub fn default_chain_registry() -> ChainRegistry {
+    let mut registry = ChainRegistry::new();
+
+    registry
+        .register_migrator(Box::new(V2ToV3Migrator::new()))
+        .expect("V2ToV3Migrator is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
+        .register_migrator(Box::new(V3ToV4Migrator::new()))
+        .expect("V3ToV4Migrator is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
+        .register_migrator(Box::new(V4ToV5Migrator::new()))
+        .expect("V4ToV5Migrator is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
+        .register_migrator(Box::new(V5ToV6Migrator::new()))
+        .expect("V5ToV6Migrator is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
+        .register_normalizer(Box::new(V3Normalizer::new()))
+        .expect("V3Normalizer is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry
+        .register_normalizer(Box::new(V6Normalizer::new()))
+        .expect("V6Normalizer is well-formed; this expect is the registry contract violation we want to crash on");
+
+    registry.register_validator(Box::new(V3Validator::new()));
+    registry.register_validator(Box::new(V4Validator::new()));
+    registry.register_validator(Box::new(V5Validator::new()));
+    registry.register_validator(Box::new(V6Validator::new()));
+
+    registry
+}

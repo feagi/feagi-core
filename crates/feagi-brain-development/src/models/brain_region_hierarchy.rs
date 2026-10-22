@@ -69,7 +69,7 @@ impl BrainRegionHierarchy {
     /// # Arguments
     ///
     /// * `region` - The region to add
-    /// * `parent_id` - Optional parent region ID (None for root)
+    /// * `parent_id` - Optional parent region ID (`None` = become root if no root yet, else attach under the existing root)
     ///
     /// # Errors
     ///
@@ -96,8 +96,21 @@ impl BrainRegionHierarchy {
             )));
         }
 
+        // Resolve parent: omitting parent means "become root" only when no root exists yet;
+        // otherwise attach under the single root (BV expects one root; everything else is a child).
+        let resolved_parent: Option<String> = match parent_id {
+            Some(p) => Some(p),
+            None => {
+                if self.root_id.is_none() {
+                    None
+                } else {
+                    self.root_id.clone()
+                }
+            }
+        };
+
         // Validate parent exists (if specified)
-        if let Some(ref parent) = parent_id {
+        if let Some(ref parent) = resolved_parent {
             if !self.regions.contains_key(parent) {
                 return Err(BduError::InvalidArea(format!(
                     "Parent region {} does not exist",
@@ -110,7 +123,7 @@ impl BrainRegionHierarchy {
         self.regions.insert(region_id_str.clone(), region);
 
         // Update parent/child maps
-        if let Some(parent) = parent_id {
+        if let Some(parent) = resolved_parent {
             self.parent_map
                 .insert(region_id_str.clone(), parent.clone());
             self.children_map
@@ -123,6 +136,17 @@ impl BrainRegionHierarchy {
         }
 
         Ok(())
+    }
+
+    /// Remove every region and reset parent/child maps.
+    ///
+    /// Used when a full connectome import replaces the live hierarchy. Incremental
+    /// `remove_region` cannot delete the root, so import must clear first.
+    pub fn clear(&mut self) {
+        self.regions.clear();
+        self.parent_map.clear();
+        self.children_map.clear();
+        self.root_id = None;
     }
 
     /// Remove a region and reassign its children to its parent
@@ -379,11 +403,24 @@ impl BrainRegionHierarchy {
         self.regions.len()
     }
 
-    /// Get all regions as a cloned HashMap
+    /// Get all regions as a cloned HashMap with parent relationships embedded.
     ///
-    /// This is useful for extracting all brain regions to sync with RuntimeGenome
+    /// Each returned `BrainRegion` has `properties["parent_region_id"]` set from the
+    /// hierarchy's `parent_map` so that the serialized genome preserves the tree
+    /// structure without the caller needing access to the separate parent map.
     pub fn get_all_regions(&self) -> HashMap<String, BrainRegion> {
-        self.regions.clone()
+        let mut regions = self.regions.clone();
+        for (region_id, region) in &mut regions {
+            if let Some(parent_id) = self.parent_map.get(region_id) {
+                region
+                    .properties
+                    .insert("parent_region_id".to_string(), serde_json::json!(parent_id));
+            } else {
+                // Root region: ensure no stale parent_region_id lingers
+                region.properties.remove("parent_region_id");
+            }
+        }
+        regions
     }
 }
 
@@ -426,6 +463,40 @@ mod tests {
 
         assert_eq!(hierarchy.region_count(), 2);
         assert_eq!(hierarchy.get_parent(&visual_id), Some(&root_id));
+    }
+
+    #[test]
+    fn test_cannot_remove_root() {
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
+
+        let mut hierarchy = BrainRegionHierarchy::with_root(root);
+        let root_id = hierarchy.get_root_id().unwrap().clone();
+
+        let err = hierarchy.remove_region(&root_id).expect_err("root stays");
+        assert!(
+            format!("{err}").contains("Cannot remove root region"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(hierarchy.region_count(), 1);
+    }
+
+    #[test]
+    fn test_clear_removes_root_and_children() {
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
+
+        let mut hierarchy = BrainRegionHierarchy::with_root(root);
+        let root_id = hierarchy.get_root_id().unwrap().clone();
+
+        let child =
+            BrainRegion::new(RegionID::new(), "Child".to_string(), RegionType::Undefined).unwrap();
+        hierarchy.add_region(child, Some(root_id)).unwrap();
+
+        hierarchy.clear();
+
+        assert_eq!(hierarchy.region_count(), 0);
+        assert!(hierarchy.get_root_id().is_none());
     }
 
     #[test]
@@ -542,5 +613,62 @@ mod tests {
         // Try to make visual a child of v1 (would create cycle)
         let result = hierarchy.change_parent(&visual_id, &v1_id);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_all_regions_embeds_parent_region_id() {
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
+
+        let mut hierarchy = BrainRegionHierarchy::with_root(root);
+        let root_id = hierarchy.get_root_id().unwrap().clone();
+
+        let child =
+            BrainRegion::new(RegionID::new(), "Child".to_string(), RegionType::Undefined).unwrap();
+        let child_id = child.region_id.to_string();
+
+        let grandchild = BrainRegion::new(
+            RegionID::new(),
+            "Grandchild".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap();
+        let grandchild_id = grandchild.region_id.to_string();
+
+        hierarchy.add_region(child, Some(root_id.clone())).unwrap();
+        hierarchy
+            .add_region(grandchild, Some(child_id.clone()))
+            .unwrap();
+
+        let exported = hierarchy.get_all_regions();
+
+        // Root must NOT have parent_region_id
+        let root_region = &exported[&root_id];
+        assert!(
+            !root_region.properties.contains_key("parent_region_id"),
+            "Root region should not have parent_region_id"
+        );
+
+        // Child must have parent_region_id pointing to root
+        let child_region = &exported[&child_id];
+        assert_eq!(
+            child_region
+                .properties
+                .get("parent_region_id")
+                .and_then(|v| v.as_str()),
+            Some(root_id.as_str()),
+            "Child region parent_region_id should point to root"
+        );
+
+        // Grandchild must have parent_region_id pointing to child
+        let grandchild_region = &exported[&grandchild_id];
+        assert_eq!(
+            grandchild_region
+                .properties
+                .get("parent_region_id")
+                .and_then(|v| v.as_str()),
+            Some(child_id.as_str()),
+            "Grandchild region parent_region_id should point to child"
+        );
     }
 }

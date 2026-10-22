@@ -43,9 +43,11 @@ mod cuda_small_realistic_tests {
             npu.add_synapse(
                 NeuronId(0),                 // power neuron
                 NeuronId(1 + target_offset), // Area A neurons
-                SynapticWeight(10),
-                SynapticPsp(5),
+                SynapticWeight(10.0),
+                SynapticPsp(5.0),
                 SynapseType::Excitatory,
+                0,
+                1,
             )
             .unwrap();
         }
@@ -56,9 +58,11 @@ mod cuda_small_realistic_tests {
                 npu.add_synapse(
                     NeuronId(1 + src_offset),                     // Area A
                     NeuronId(101 + dst_offset * 10 + src_offset), // Area B
-                    SynapticWeight(10),
-                    SynapticPsp(1),
+                    SynapticWeight(10.0),
+                    SynapticPsp(1.0),
                     SynapseType::Excitatory,
+                    0,
+                    1,
                 )
                 .unwrap();
             }
@@ -69,9 +73,11 @@ mod cuda_small_realistic_tests {
             npu.add_synapse(
                 NeuronId(101 + src_offset), // Area B
                 NeuronId(201),              // Area C gauge
-                SynapticWeight(1),
-                SynapticPsp(1),
+                SynapticWeight(1.0),
+                SynapticPsp(1.0),
                 SynapseType::Excitatory,
+                0,
+                1,
             )
             .unwrap();
         }
@@ -105,9 +111,11 @@ mod cuda_small_realistic_tests {
             npu.add_synapse(
                 NeuronId(0),
                 NeuronId(1 + target_offset),
-                SynapticWeight(10),
-                SynapticPsp(5),
+                SynapticWeight(10.0),
+                SynapticPsp(5.0),
                 SynapseType::Excitatory,
+                0,
+                1,
             )
             .unwrap();
         }
@@ -117,9 +125,11 @@ mod cuda_small_realistic_tests {
                 npu.add_synapse(
                     NeuronId(1 + src_offset),
                     NeuronId(101 + dst_offset * 10 + src_offset),
-                    SynapticWeight(10),
-                    SynapticPsp(1),
+                    SynapticWeight(10.0),
+                    SynapticPsp(1.0),
                     SynapseType::Excitatory,
+                    0,
+                    1,
                 )
                 .unwrap();
             }
@@ -129,9 +139,11 @@ mod cuda_small_realistic_tests {
             npu.add_synapse(
                 NeuronId(101 + src_offset),
                 NeuronId(201),
-                SynapticWeight(1),
-                SynapticPsp(1),
+                SynapticWeight(1.0),
+                SynapticPsp(1.0),
                 SynapseType::Excitatory,
+                0,
+                1,
             )
             .unwrap();
         }

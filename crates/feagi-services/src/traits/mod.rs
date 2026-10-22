@@ -18,7 +18,6 @@ pub mod genome_service;
 pub mod neuron_service;
 pub mod registration_handler;
 pub mod runtime_service;
-pub mod snapshot_service;
 pub mod system_service;
 
 // Re-export for convenience
@@ -28,5 +27,4 @@ pub use connectome_service::ConnectomeService;
 pub use genome_service::GenomeService;
 pub use neuron_service::NeuronService;
 pub use runtime_service::RuntimeService;
-pub use snapshot_service::*;
 pub use system_service::SystemService;

@@ -7,10 +7,10 @@
 //!
 //! ## Features
 //! - ✅ `no_std` compatible
-//! - ✅ Fixed-size arrays (no heap allocation)
+//! - ✅ Fixed-capacity arrays (heap-backed so they are not placed on the thread stack)
 //! - ✅ Single-threaded execution
 //! - ✅ Deterministic performance
-//! - ✅ < 1 KB stack usage
+//! - ✅ Compile-time storage of [`EMBEDDED_NEURON_CAPACITY`] neurons and [`EMBEDDED_SYNAPSE_CAPACITY`] synapses
 //!
 //! ## Targets
 //! - ESP32 (FreeRTOS or bare-metal)
@@ -25,6 +25,28 @@
 
 #[cfg(feature = "std")]
 extern crate std;
+
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+
+/// Compile-time neuron slots in [`EmbeddedRuntime`] storage.
+pub const EMBEDDED_NEURON_CAPACITY: usize = 10_000;
+
+/// Compile-time synapse slots in [`EmbeddedRuntime`] storage.
+pub const EMBEDDED_SYNAPSE_CAPACITY: usize = 50_000;
+
+/// Heap-allocate `[T; N]` filled with `value`.
+///
+/// `Vec` grows on the heap. Building `[T; N]` and moving it into `Box` would
+/// put the full array on the stack first.
+pub(crate) fn boxed_repeat<T: Copy, const N: usize>(value: T) -> Box<[T; N]> {
+    let mut values = Vec::with_capacity(N);
+    values.resize(N, value);
+    let slice = values.into_boxed_slice();
+    let raw = Box::into_raw(slice).cast::<[T; N]>();
+    // SAFETY: `values.len() == N`, and `[T; N]` is layout-compatible with `N` contiguous `T`s.
+    unsafe { Box::from_raw(raw) }
+}
 
 pub mod neuron_array;
 pub mod runtime;

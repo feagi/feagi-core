@@ -63,8 +63,8 @@ fn test_byte_container_overwrite_bytes() {
     let empty_bytes_len = empty_bytes.len();
     assert_eq!(
         empty_bytes_len,
-        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
-    ); // This should be the global header only
+        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT
+    ); // Global header + session ID
     byte_container
         .overwrite_byte_data_with_single_struct_data(&source_neurons, 0)
         .unwrap();
@@ -223,7 +223,7 @@ fn test_byte_container_with_sensory_cortical_id() {
     let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
         FrameChangeHandling::Absolute,
         PercentageNeuronPositioning::Linear,
-        CorticalUnitIndex::from(0u8),
+        CorticalUnitIndex::from(0u16),
     )[0];
 
     let dimensions = CorticalAreaDimensions::new(5, 5, 3).unwrap();
@@ -254,7 +254,7 @@ fn test_byte_container_with_segmented_vision() {
     let cortical_ids =
         SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
             FrameChangeHandling::Incremental,
-            CorticalUnitIndex::from(2u8),
+            CorticalUnitIndex::from(2u16),
         );
 
     let dimensions = CorticalAreaDimensions::new(4, 4, 2).unwrap();
@@ -294,7 +294,7 @@ fn test_empty_byte_container() {
     assert_eq!(container.try_get_number_contained_structures().unwrap(), 0);
     assert_eq!(
         container.get_number_of_bytes_used(),
-        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
+        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT
     );
     assert!(container.get_contained_struct_types().is_empty());
 }

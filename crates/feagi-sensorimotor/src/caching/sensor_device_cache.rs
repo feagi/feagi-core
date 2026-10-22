@@ -5,9 +5,17 @@ use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
+use crate::data_types::{AudioSpectrumFrame, AudioSpectrumProperties};
+// Several of these symbols are referenced only from inside the
+// `sensor_unit_functions!` macro after `@generate_similar_functions`
+// expansion; the compiler sees them as required only when at least one
+// template targets the corresponding arm. Imports therefore enumerate every
+// data-type the macro can name today (`Percentage`, `RawIMU`,
+// `SignedPercentage4D`, ...). Removing one will surface as an "unresolved
+// type" error inside the macro expansion, not at this `use` line.
 use crate::data_types::{
-    GazeProperties, ImageFrame, MiscData, Percentage, Percentage3D, SegmentedImageFrame,
-    SignedPercentage4D,
+    GazeProperties, ImageFrame, MiscData, Percentage, Percentage3D, RawIMU, SegmentedImageFrame,
+    SignedPercentage3D, SignedPercentage4D, RAW_IMU_SUBUNIT_COUNT,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
@@ -42,6 +50,9 @@ macro_rules! sensor_unit_functions {
                     accepted_wrapped_io_data_type: $accepted_wrapped_io_data_type:ident,
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
+                    $(default_firing_threshold: $default_firing_threshold:expr,)?
+                    $(default_firing_threshold_increment: [$default_firing_threshold_increment_x:expr, $default_firing_threshold_increment_y:expr, $default_firing_threshold_increment_z:expr],)?
+                    $(default_mp_charge_accumulation: $default_mp_charge_accumulation:expr,)?
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
@@ -279,7 +290,14 @@ macro_rules! sensor_unit_functions {
                     "percentage_neuron_positioning": percentage_neuron_positioning
                 }).as_object().unwrap().clone();
 
-                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                // Initial cache slot must wrap the same data type the arm
+                // declares so subsequent _write calls type-check. Previously
+                // this fell through to WrappedIOData::Percentage, which
+                // poisoned the cache slot's type for any future Percentage_3D
+                // sensor; harmless until now because no template targeted
+                // this arm. Use the canonical blank-data factory to keep this
+                // arm symmetric with SignedPercentage_4D / RawIMU.
+                let initial_val: WrappedIOData = WrappedIOType::Percentage_3D.create_blank_data_of_type()?;
                 self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
@@ -318,13 +336,159 @@ macro_rules! sensor_unit_functions {
                     "percentage_neuron_positioning": percentage_neuron_positioning
                 }).as_object().unwrap().clone();
 
-                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                // Initial cache slot must wrap SignedPercentage_4D so that
+                // subsequent SmartIMU writes (the first user of this arm)
+                // pass the type guard in _write. Without this the cache
+                // slot was being seeded with WrappedIOData::Percentage, and
+                // any 4D signed quaternion write was rejected at runtime.
+                let initial_val: WrappedIOData = WrappedIOType::SignedPercentage_4D.create_blank_data_of_type()?;
                 self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
         sensor_unit_functions!(@generate_similar_functions $sensory_unit, SignedPercentage4D);
+    };
+
+    // Arm for WrappedIOType::RawIMU
+    //
+    // Raw IMU is a composite, multi-sub-area sensor unit. ONE cache entry per
+    // (RawIMU, unit_index) holds the latest 3-axis signed-percentage values for
+    // accelerometer, gyroscope, and magnetometer; the encoder spreads them
+    // across the 3 sub-cortical-areas at burst time. Cortical-area sub-index
+    // ordering (0=accel, 1=gyro, 2=mag) MUST match the template entry and
+    // [`RawIMU::get_ordered_sub_components`].
+    (@generate_functions
+        $sensory_unit:ident,
+        RawIMU
+    ) => {
+        ::paste::paste! {
+            pub fn [<$sensory_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                z_neuron_resolution: NeuronDepth,
+                percentage_neuron_positioning: PercentageNeuronPositioning,
+            ) -> Result<(), FeagiDataError> {
+                let cortical_ids: [CorticalID; RAW_IMU_SUBUNIT_COUNT] =
+                    SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        unit,
+                    );
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> =
+                    RawIMUNeuronVoxelXYZPEncoder::new_box(
+                        cortical_ids,
+                        z_neuron_resolution,
+                        number_channels,
+                        percentage_neuron_positioning,
+                    )?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                })
+                .as_object()
+                .unwrap()
+                .clone();
+
+                let initial_val: WrappedIOData = WrappedIOType::RawIMU.create_blank_data_of_type()?;
+                self.register(
+                    SensoryCorticalUnit::$sensory_unit,
+                    unit,
+                    encoder,
+                    io_props,
+                    number_channels,
+                    initial_val,
+                )?;
+                Ok(())
+            }
+
+            // Partial-write API for the Raw IMU composite.
+            //
+            // The whole-composite `_write` (generated below by
+            // `@generate_similar_functions`) overwrites all three sub-axes
+            // every call. Real-world IMUs frequently expose only a subset
+            // of (accel, gyro, mag); writing the missing axis as zero each
+            // tick is an implicit fallback the project policy forbids.
+            // The three helpers below perform a read-modify-write on the
+            // pre-processed cache slot so that absent axes literally retain
+            // whatever was previously written (the registered initial zero
+            // until/unless the controller writes them). Sub-component
+            // ordering is delegated to `RawIMU::set_*`, which is the
+            // single source of truth for axis identity.
+            pub fn [<$sensory_unit:snake _write_accelerometer>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                channel: CorticalChannelIndex,
+                accelerometer: SignedPercentage3D,
+            ) -> Result<(), FeagiDataError> {
+                const SENSOR_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$sensory_unit;
+                let mut current: RawIMU = {
+                    let cached: &WrappedIOData =
+                        self.try_read_preprocessed_cached_value(SENSOR_TYPE, unit, channel)?;
+                    cached.try_into()?
+                };
+                current.set_accelerometer(accelerometer);
+                self.try_update_value(
+                    SENSOR_TYPE,
+                    unit,
+                    channel,
+                    WrappedIOData::RawIMU(current),
+                    Instant::now(),
+                )?;
+                Ok(())
+            }
+
+            pub fn [<$sensory_unit:snake _write_gyroscope>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                channel: CorticalChannelIndex,
+                gyroscope: SignedPercentage3D,
+            ) -> Result<(), FeagiDataError> {
+                const SENSOR_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$sensory_unit;
+                let mut current: RawIMU = {
+                    let cached: &WrappedIOData =
+                        self.try_read_preprocessed_cached_value(SENSOR_TYPE, unit, channel)?;
+                    cached.try_into()?
+                };
+                current.set_gyroscope(gyroscope);
+                self.try_update_value(
+                    SENSOR_TYPE,
+                    unit,
+                    channel,
+                    WrappedIOData::RawIMU(current),
+                    Instant::now(),
+                )?;
+                Ok(())
+            }
+
+            pub fn [<$sensory_unit:snake _write_magnetometer>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                channel: CorticalChannelIndex,
+                magnetometer: SignedPercentage3D,
+            ) -> Result<(), FeagiDataError> {
+                const SENSOR_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$sensory_unit;
+                let mut current: RawIMU = {
+                    let cached: &WrappedIOData =
+                        self.try_read_preprocessed_cached_value(SENSOR_TYPE, unit, channel)?;
+                    cached.try_into()?
+                };
+                current.set_magnetometer(magnetometer);
+                self.try_update_value(
+                    SENSOR_TYPE,
+                    unit,
+                    channel,
+                    WrappedIOData::RawIMU(current),
+                    Instant::now(),
+                )?;
+                Ok(())
+            }
+        }
+
+        sensor_unit_functions!(@generate_similar_functions $sensory_unit, RawIMU);
     };
 
     // Arm for WrappedIOType::SegmentedImageFrame
@@ -426,6 +590,36 @@ macro_rules! sensor_unit_functions {
         }
 
         sensor_unit_functions!(@generate_similar_functions $sensory_unit, ImageFrame);
+    };
+
+    // Arm for WrappedIOType::AudioSpectrumFrame
+    (@generate_functions
+        $sensory_unit:ident,
+        AudioSpectrumFrame
+    ) => {
+        ::paste::paste! {
+            pub fn [<$sensory_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                audio_properties: AudioSpectrumProperties,
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, unit)[0];
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = AudioSpectrumNeuronVoxelXYZPEncoder::new_box(cortical_id, audio_properties, number_channels)?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
+                let initial_val: WrappedIOData = WrappedIOType::AudioSpectrumFrame(Some(audio_properties)).create_blank_data_of_type()?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        sensor_unit_functions!(@generate_similar_functions $sensory_unit, AudioSpectrumFrame);
     };
 }
 

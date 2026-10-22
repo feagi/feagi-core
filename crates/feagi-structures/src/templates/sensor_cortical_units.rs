@@ -64,9 +64,9 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
-                #[doc = "Servo position sensor for monitoring actuator position."]
+                #[doc = "Servo encoder feedback for monitoring actuator position."]
                 Servo => {
-                    friendly_name: "Servo Sensor",
+                    friendly_name: "Servo Encoder",
                     accepted_wrapped_io_data_type: Percentage,
                     cortical_id_unit_reference: *b"svm",
                     number_cortical_areas: 1,
@@ -75,7 +75,7 @@ macro_rules! sensor_cortical_units {
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [25, 0, -10], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [25, 0, -10], channel_dimensions_default: [1, 1, 20], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -106,9 +106,9 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
-                #[doc = "Miscellaneous sensor that does not fit existing templates."]
+                #[doc = "Miscellaneous input that does not fit existing templates."]
                 MiscData => {
-                    friendly_name: "Miscellaneous Sensor",
+                    friendly_name: "Miscellaneous Input",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"mis",
                     number_cortical_areas: 1,
@@ -116,7 +116,7 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [30, 10, -20], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [220, 0, -30], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
                     }
                 },
 
@@ -132,7 +132,7 @@ macro_rules! sensor_cortical_units {
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
                         // 1x1x16 default: one token per FEAGI tick, encoded into 16 bitplanes (supports GPT-2 vocab via token_id+1 offset).
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [55, 0, -10], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [70, 0, -100], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
                     }
                 },
 
@@ -148,7 +148,7 @@ macro_rules! sensor_cortical_units {
                     },
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [100, 0, -20], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [110, 0, -30], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -158,15 +158,50 @@ macro_rules! sensor_cortical_units {
                     accepted_wrapped_io_data_type: ImageFrame,
                     cortical_id_unit_reference: *b"img",
                     number_cortical_areas: 1,
+                    default_firing_threshold: 150.0,
+                    default_mp_charge_accumulation: false,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::CartesianPlane(frame_change_handling), relative_position: [-100, 30, 0], channel_dimensions_default: [64, 64, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
+                        0 => (IOCorticalAreaConfigurationFlag::CartesianPlane(frame_change_handling), relative_position: [-100, 30, 0], channel_dimensions_default: [128, 128, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
                     }
                 },
 
 
+
+                #[doc = "Depth map input. One Z layer: X/Y encode sensor canvas topology and the potential is normalized depth in (0, 1]. Zero means no return."]
+                DepthMap => {
+                    friendly_name: "Depth Map",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"dpt",
+                    number_cortical_areas: 1,
+                    default_firing_threshold: 0.0001,
+                    default_mp_charge_accumulation: false,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-140, 30, 0], channel_dimensions_default: [64, 64, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1])
+                    }
+                },
+
+                #[doc = "Object semantic-segmentation labels. One Z layer: X/Y encode the source pixel and the potential is (class_id + 1) / class_count. Zero means unlabeled."]
+                ObjectSegmentationInput => {
+                    friendly_name: "Object Segmentation",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"seg",
+                    number_cortical_areas: 1,
+                    default_firing_threshold: 0.0001,
+                    default_mp_charge_accumulation: false,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-170, 0, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1])
+                    }
+                },
 
                 #[doc = "Segmented vision processing, with a higher resolution center and lower resolution peripherals"]
                 SegmentedVision => {
@@ -174,6 +209,8 @@ macro_rules! sensor_cortical_units {
                     accepted_wrapped_io_data_type: SegmentedImageFrame,
                     cortical_id_unit_reference: *b"svi",
                     number_cortical_areas: 9,
+                    default_firing_threshold: 150.0,
+                    default_mp_charge_accumulation: false,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
@@ -191,40 +228,76 @@ macro_rules! sensor_cortical_units {
                 },
 
 
-                #[doc = "Accelerometer, allows for relative tracking of position and motion"]
-                Accelerometer => {
-                    friendly_name: "Accelerometer",
-                    accepted_wrapped_io_data_type: Percentage_3D,
-                    cortical_id_unit_reference: *b"acc",
-                    number_cortical_areas: 1,
+                #[doc = "Raw IMU: composite linear-vector sensor with three sub-cortical-areas (accelerometer + gyroscope + magnetometer), each a 3-axis signed percentage."]
+                RawIMU => {
+                    friendly_name: "Raw IMU",
+                    accepted_wrapped_io_data_type: RawIMU,
+                    cortical_id_unit_reference: *b"rim",
+                    number_cortical_areas: 3,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [70, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])
+                        // Sub-area order is contractual: 0 = accelerometer, 1 = gyroscope, 2 = magnetometer.
+                        // Width 6 per channel: the signed 3D encoder streams a plus and a minus column per axis.
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [70, 0, -10], channel_dimensions_default: [6, 1, 10], channel_dimensions_min: [6, 1, 1], channel_dimensions_max: [6, 1, 1024]), // Accelerometer
+                        1 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [80, 0, -10], channel_dimensions_default: [6, 1, 10], channel_dimensions_min: [6, 1, 1], channel_dimensions_max: [6, 1, 1024]), // Gyroscope
+                        2 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [90, 0, -10], channel_dimensions_default: [6, 1, 10], channel_dimensions_min: [6, 1, 1], channel_dimensions_max: [6, 1, 1024])  // Magnetometer
                     }
                 },
 
 
 
-                #[doc = "Gyroscope (Quaternion), Allows for tracking rotation without gimbal lock"]
-                Gyroscope => {
-                    friendly_name: "Gyroscope",
+                #[doc = "Smart IMU: orientation as a unit quaternion (w/x/y/z) in a single 4-axis signed-percentage sub-area."]
+                SmartIMU => {
+                    friendly_name: "Smart IMU",
                     accepted_wrapped_io_data_type: SignedPercentage_4D,
-                    cortical_id_unit_reference: *b"gyq",
+                    cortical_id_unit_reference: *b"sim",
                     number_cortical_areas: 1,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), relative_position: [80, 0, -10], channel_dimensions_default: [4, 1, 10], channel_dimensions_min: [4, 1, 1], channel_dimensions_max: [4, 1, 1024])
+                        // Width 8 per channel: the signed 4D encoder streams a plus and a minus column per quaternion component.
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), relative_position: [100, 0, -10], channel_dimensions_default: [8, 1, 10], channel_dimensions_min: [8, 1, 1], channel_dimensions_max: [8, 1, 1024])
                     }
                 },
 
+                #[doc = "Cartesian position sensor: an absolute 3D position (x/y/z), each axis normalized to an unsigned percentage [0, 1] over a controller-defined workspace. Sensor-side counterpart of the SpatialPointer OPU's Absolute mode."]
+                CartesianPosition => {
+                    friendly_name: "Cartesian Position Sensor",
+                    accepted_wrapped_io_data_type: Percentage_3D,
+                    cortical_id_unit_reference: *b"cpo",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [115, 0, -10], channel_dimensions_default: [3, 1, 100], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])
+                    }
+                },
 
-
+                #[doc = "Audio spectrum input. X is the frequency column, Y is the quantized phase step, and membrane potential is the column magnitude on the registered decibel scale. Stereo uses a second unit index."]
+                AudioInput => {
+                    friendly_name: "Audio Input",
+                    accepted_wrapped_io_data_type: AudioSpectrumFrame,
+                    cortical_id_unit_reference: *b"aud",
+                    number_cortical_areas: 1,
+                    default_firing_threshold: 0.01,
+                    default_mp_charge_accumulation: false,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        // 513x16x1 default: linear 1024-sample window with 16 phase steps.
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-100, -60, 0], channel_dimensions_default: [513, 16, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4097, 256, 1])
+                    }
+                },
 
             }
         }

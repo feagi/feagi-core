@@ -1,0 +1,122 @@
+# Publish one or more feagi-core crates that were never released at the current
+# workspace version (catch-up). Uses empty CHANGED_CRATES so already-published
+# crates are skipped instead of failing fail_already_published.
+#
+# Typical use: feagi-dataset-contracts then feagi-trainer at 0.0.35 after the
+# main release already shipped the other workspace crates.
+name: Publish crates.io catch-up
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or ref to checkout and publish from
+        required: false
+        default: staging
+      target:
+        description: Which crate(s) to publish (trainer requires dataset-contracts on crates.io first)
+        required: true
+        type: choice
+        options:
+          - feagi-dataset-contracts
+          - feagi-trainer
+          - both-in-order
+      dry_run:
+        description: Package only (cargo publish --dry-run); no upload
+        required: false
+        type: boolean
+        default: false
+      indexing_delay_seconds:
+        description: Seconds to wait after dataset-contracts before publishing trainer (both-in-order only)
+        required: false
+        default: "90"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: publish catch-up
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      # Empty CHANGED_CRATES: skip already-published crates; publish only missing ones.
+      CHANGED_CRATES: ""
+      DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+      DELAY_SECONDS: ${{ inputs.indexing_delay_seconds }}
+    steps:
+      - name: Guard - require crates.io token
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN}" ]; then
+            echo "Missing secret CARGO_PUSH_TOKEN (mapped to CARGO_REGISTRY_TOKEN)."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Show workspace version
+        run: |
+          VERSION=$(awk '
+            /^\[workspace\.package\]/ { in_ws=1; next }
+            /^\[/ { if (in_ws==1) exit }
+            in_ws==1 && /^version = / {
+              gsub(/version = |"/, "", $0)
+              print $0
+              exit
+            }
+          ' Cargo.toml)
+          echo "Workspace version: ${VERSION}"
+          echo "Target: ${{ inputs.target }}"
+          echo "Dry run: ${DRY_RUN}"
+
+      - name: Publish feagi-dataset-contracts
+        if: inputs.target == 'feagi-dataset-contracts' || inputs.target == 'both-in-order'
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          PUBLISH_SINGLE_CRATE=feagi-dataset-contracts ./scripts/publish-crates-smart.sh
+
+      - name: Wait for crates.io indexing
+        if: inputs.target == 'both-in-order' && inputs.dry_run == false
+        run: sleep "${{ inputs.indexing_delay_seconds }}"
+
+      - name: Publish feagi-trainer
+        if: inputs.target == 'feagi-trainer' || inputs.target == 'both-in-order'
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          PUBLISH_SINGLE_CRATE=feagi-trainer ./scripts/publish-crates-smart.sh
+
+      - name: Verify published versions on crates.io
+        if: inputs.dry_run == false
+        run: |
+          set -euo pipefail
+          VERSION=$(awk '
+            /^\[workspace\.package\]/ { in_ws=1; next }
+            /^\[/ { if (in_ws==1) exit }
+            in_ws==1 && /^version = / {
+              gsub(/version = |"/, "", $0)
+              print $0
+              exit
+            }
+          ' Cargo.toml)
+          case "${{ inputs.target }}" in
+            feagi-dataset-contracts) CRATES="feagi-dataset-contracts" ;;
+            feagi-trainer) CRATES="feagi-trainer" ;;
+            both-in-order) CRATES="feagi-dataset-contracts feagi-trainer" ;;
+          esac
+          for crate in ${CRATES}; do
+            code=$(curl -sL -o /dev/null -w "%{http_code}" \
+              -H "User-Agent: feagi-catchup-publish/1.0" \
+              "https://crates.io/api/v1/crates/${crate}/${VERSION}")
+            if [ "${code}" != "200" ]; then
+              echo "Expected ${crate} ${VERSION} on crates.io (HTTP ${code})."
+              echo "Indexing may still be in progress; retry verification in a few minutes."
+              exit 1
+            fi
+            echo "OK: ${crate} ${VERSION} on crates.io"
+          done

@@ -68,11 +68,13 @@ crate_path_for() {
         feagi-npu-plasticity) echo "crates/feagi-npu/plasticity" ;;
         feagi-evolutionary) echo "crates/feagi-evolutionary" ;;
         feagi-brain-development) echo "crates/feagi-brain-development" ;;
+        feagi-dataset-contracts) echo "crates/feagi-dataset-contracts" ;;
         feagi-io) echo "crates/feagi-io" ;;
         feagi-sensorimotor) echo "crates/feagi-sensorimotor" ;;
         feagi-services) echo "crates/feagi-services" ;;
         feagi-api) echo "crates/feagi-api" ;;
         feagi-agent) echo "crates/feagi-agent" ;;
+        feagi-trainer) echo "crates/feagi-trainer" ;;
         feagi-hal) echo "crates/feagi-hal" ;;
         feagi) echo "." ;;
         *) return 1 ;;
@@ -90,16 +92,40 @@ CRATE_ORDER=(
     "feagi-state-manager"
     "feagi-npu-burst-engine"
     "feagi-npu-plasticity"
+    "feagi-dataset-contracts"
     "feagi-evolutionary"
     "feagi-brain-development"
     "feagi-sensorimotor"
     "feagi-services"
     "feagi-io"
     "feagi-agent"
+    "feagi-trainer"
     "feagi-api"
     "feagi-hal"
     "feagi"
 )
+
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(pwd)}"
+
+# Resolve crate version (workspace or explicit) for unified versioning
+get_crate_version() {
+    local crate_path="$1"
+    local manifest
+    if [ "$crate_path" = "." ]; then
+        manifest="$WORKSPACE_ROOT/Cargo.toml"
+    else
+        manifest="$WORKSPACE_ROOT/$crate_path/Cargo.toml"
+    fi
+    if [ ! -f "$manifest" ]; then
+        echo ""
+        return
+    fi
+    if grep -q '^version\.workspace = true' "$manifest" 2>/dev/null; then
+        awk '/^\[workspace\.package\]/{p=1;next} /^\[/{p=0} p && /^version = /{gsub(/version = |"/,""); print; exit}' "$WORKSPACE_ROOT/Cargo.toml"
+    else
+        grep '^version = ' "$manifest" | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs
+    fi
+}
 
 # ============================================================================
 # Check if crate is already published on crates.io
@@ -109,12 +135,8 @@ CRATE_ORDER=(
 is_already_published() {
     local crate_name=$1
     local crate_path=$2
-
-    # Get version from Cargo.toml (trim whitespace)
-    cd "$crate_path" 2>/dev/null || return 1
     local version
-    version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs)
-    cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+    version="$(get_crate_version "$crate_path")"
 
     [ -n "$version" ] || { echo "false"; return; }
 
@@ -145,8 +167,14 @@ should_publish_crate() {
     local crate_name=$1
     local crate_path=$2
     
-    # CRITICAL: Check crates.io FIRST - if already published, always skip
+    # If this crate changed but its version is already on crates.io, we cannot
+    # republish the same version. Fail fast instead of skipping and breaking
+    # downstream crates that resolve dependencies from crates.io during packaging.
     if [ "$(is_already_published "$crate_name" "$crate_path")" = "true" ]; then
+        if [ -n "$CHANGED_CRATES_LIST" ] && [[ " ${CHANGED_CRATES_LIST} " == *" ${crate_name} "* ]]; then
+            echo "fail_already_published"
+            return
+        fi
         echo "skip_published"
         return
     fi
@@ -176,8 +204,10 @@ should_publish_crate() {
 
 # ============================================================================
 # Validate all crates that will be published (cargo package) before any publish.
-# Uses [patch.crates-io] so resolution uses local workspace, not crates.io.
-# Surfaces ALL packaging failures at once instead of failing mid-flow.
+# --no-verify: sibling crates at this version are not on crates.io yet.
+# `cargo package` without it resolves `=version` path deps from the index and
+# fails before the dependency-ordered publish can upload them.
+# The per-crate publish step still packages with verification after deps exist.
 # ============================================================================
 
 validate_all_packages() {
@@ -200,6 +230,12 @@ validate_all_packages() {
             continue
         fi
         publish_decision=$(should_publish_crate "$crate_name" "$crate_path")
+        if [ "$publish_decision" = "fail_already_published" ]; then
+            version="$(get_crate_version "$crate_path")"
+            echo -e "${RED}Version conflict:${NC} $crate_name v$version is already on crates.io but is listed in CHANGED_CRATES."
+            echo -e "${YELLOW}Bump its version before publishing this release.${NC}"
+            return 1
+        fi
         if [ "$publish_decision" = "skip_published" ] || [ "$publish_decision" = "skip_unchanged" ]; then
             continue
         fi
@@ -212,22 +248,6 @@ validate_all_packages() {
         return 0
     fi
 
-    # Create .cargo/config.toml with [patch.crates-io] so cargo package uses local deps
-    mkdir -p .cargo
-    ROOT_ABS="$(cd "$WORKSPACE_ROOT" && pwd)"
-    {
-        echo "[patch.crates-io]"
-        for crate_name in "${CRATE_ORDER[@]}"; do
-            path="$(crate_path_for "$crate_name")" || continue
-            [ -f "${path}/Cargo.toml" ] || [ "$path" = "." ] && [ -f "Cargo.toml" ] || continue
-            if [ "$path" = "." ]; then
-                echo "feagi = { path = \"${ROOT_ABS}\" }"
-            else
-                echo "${crate_name} = { path = \"${ROOT_ABS}/${path}\" }"
-            fi
-        done
-    } > .cargo/config.toml
-
     VALIDATE_FAILED=()
     for crate_name in "${to_validate[@]}"; do
         crate_path="$(crate_path_for "$crate_name")"
@@ -236,7 +256,7 @@ validate_all_packages() {
             cd "$crate_path"
         fi
         set +e
-        pkg_output="$(cargo package --allow-dirty --quiet 2>&1)"
+        pkg_output="$(cargo package --allow-dirty --no-verify --quiet 2>&1)"
         pkg_rc=$?
         set -e
         cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
@@ -249,9 +269,6 @@ validate_all_packages() {
             echo -e "${GREEN}OK${NC}"
         fi
     done
-
-    rm -f .cargo/config.toml
-    rmdir .cargo 2>/dev/null || true
 
     if [ ${#VALIDATE_FAILED[@]} -gt 0 ]; then
         echo ""
@@ -287,8 +304,9 @@ publish_crate() {
         cd "$crate_path"
     fi
     
-    # Get version
-    local version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+    # Get version (workspace or explicit)
+    local version
+    version="$(get_crate_version "$crate_path")"
     echo "   Version: $version"
     
     # Package first to verify
@@ -346,8 +364,6 @@ publish_crate() {
 # Main execution
 # ============================================================================
 
-WORKSPACE_ROOT=$(pwd)
-
 echo -e "${BLUE}Starting publication process...${NC}"
 echo ""
 
@@ -389,12 +405,15 @@ for crate_name in "${CRATE_ORDER[@]}"; do
     # Check if crate should be published
     publish_decision=$(should_publish_crate "$crate_name" "$crate_path")
     
-    if [ "$publish_decision" = "skip_published" ]; then
-        # Get version for display
-        cd "$crate_path" 2>/dev/null || continue
-        version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-        cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
-        echo -e "${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
+    if [ "$publish_decision" = "fail_already_published" ]; then
+        version="$(get_crate_version "$crate_path")"
+        echo -e "${RED}Version conflict:${NC} $crate_name v$version is already on crates.io but is listed in CHANGED_CRATES."
+        echo -e "${YELLOW}Bump its version before publishing this release.${NC}"
+        FAILED_CRATES+=("$crate_name")
+        continue
+    elif [ "$publish_decision" = "skip_published" ]; then
+        version="$(get_crate_version "$crate_path")"
+        echo -e "${YELLOW}Skipping $crate_name v$version (already published on crates.io)${NC}"
         SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
         continue
     elif [ "$publish_decision" = "skip_unchanged" ]; then

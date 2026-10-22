@@ -324,23 +324,31 @@ mod cuda_realistic_genome_tests {
             .collect();
 
         // Add synapses to CPU NPU
-        let (cpu_synapse_count, _) = cpu_npu.add_synapses_batch(
-            source_neurons.clone(),
-            target_neurons.clone(),
-            weights.clone(),
-            psps.clone(),
-            synapse_types.clone(),
-        );
+        cpu_npu
+            .add_synapses_batch(
+                source_neurons.clone(),
+                target_neurons.clone(),
+                weights.clone(),
+                psps.clone(),
+                synapse_types.clone(),
+                None,
+            )
+            .expect("add_synapses_batch CPU");
+        let cpu_synapse_count = cpu_npu.get_synapse_count();
         println!("   Added {} synapses to CPU NPU", cpu_synapse_count);
 
         // Add synapses to CUDA NPU
-        let (cuda_synapse_count, _) = cuda_npu.add_synapses_batch(
-            source_neurons,
-            target_neurons,
-            weights,
-            psps,
-            synapse_types,
-        );
+        cuda_npu
+            .add_synapses_batch(
+                source_neurons,
+                target_neurons,
+                weights,
+                psps,
+                synapse_types,
+                None,
+            )
+            .expect("add_synapses_batch CUDA");
+        let cuda_synapse_count = cuda_npu.get_synapse_count();
         println!("   Added {} synapses to CUDA NPU", cuda_synapse_count);
 
         // Track metrics

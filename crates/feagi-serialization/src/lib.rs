@@ -33,6 +33,6 @@ mod feagi_byte_structure_type;
 mod feagi_serializable;
 pub mod implementations;
 
-pub use feagi_byte_container::FeagiByteContainer;
+pub use feagi_byte_container::{AgentIdentifier, FeagiByteContainer};
 pub use feagi_byte_structure_type::FeagiByteStructureType;
 pub use feagi_serializable::FeagiSerializable;

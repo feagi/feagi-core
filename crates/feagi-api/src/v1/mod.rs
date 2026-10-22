@@ -20,7 +20,6 @@ pub mod outputs_dtos;
 pub mod physiology_dtos;
 pub mod runtime_dtos;
 pub mod simulation_dtos;
-pub mod snapshot_dtos;
 pub mod training_dtos;
 pub mod visualization_dtos;
 
@@ -42,6 +41,5 @@ pub use outputs_dtos::*;
 pub use physiology_dtos::*;
 pub use runtime_dtos::*;
 pub use simulation_dtos::*;
-pub use snapshot_dtos::*;
 pub use training_dtos::*;
 pub use visualization_dtos::*;

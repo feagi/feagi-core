@@ -35,6 +35,18 @@ impl GenomeService for WasmGenomeService {
         ))
     }
 
+    async fn export_region_genome(&self, region_id: String) -> ServiceResult<String> {
+        let subset =
+            feagi_evolutionary::subset_runtime_genome_for_region_branch(&self.genome, &region_id)
+                .map_err(|e| match e {
+                feagi_evolutionary::EvoError::InvalidRegion(msg) => ServiceError::InvalidInput(msg),
+                other => ServiceError::Internal(other.to_string()),
+            })?;
+        feagi_evolutionary::save_genome_to_json(&subset).map_err(|e| {
+            ServiceError::Internal(format!("Failed to serialize region genome: {}", e))
+        })
+    }
+
     async fn get_genome_info(&self) -> ServiceResult<GenomeInfo> {
         Ok(GenomeInfo {
             genome_id: self.genome.metadata.genome_id.clone(),
@@ -74,6 +86,70 @@ impl GenomeService for WasmGenomeService {
         &self,
         _params: Vec<CreateCorticalAreaParams>,
     ) -> ServiceResult<Vec<CorticalAreaInfo>> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn list_modulator_types(&self) -> ServiceResult<Vec<String>> {
+        Ok(feagi_structures::genomic::ModulatorKind::all()
+            .iter()
+            .map(|kind| kind.as_str().to_string())
+            .collect())
+    }
+
+    async fn list_modulators(&self) -> ServiceResult<serde_json::Value> {
+        Ok(self.genome.modulators.to_json())
+    }
+
+    async fn get_modulator(&self, id: &str) -> ServiceResult<serde_json::Value> {
+        self.genome
+            .modulators
+            .get(id)
+            .map(|instance| instance.to_json())
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "modulator".to_string(),
+                id: id.to_string(),
+            })
+    }
+
+    async fn create_modulator(
+        &self,
+        _id: String,
+        _write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<serde_json::Value> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn update_modulator(
+        &self,
+        _id: &str,
+        _write: feagi_evolutionary::ModulatorWrite,
+    ) -> ServiceResult<serde_json::Value> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn rename_modulator(&self, _old_id: &str, _new_id: String) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn modulator_usage(&self, id: &str) -> ServiceResult<serde_json::Value> {
+        if !self.genome.modulators.contains(id) {
+            return Err(ServiceError::NotFound {
+                resource: "modulator".to_string(),
+                id: id.to_string(),
+            });
+        }
+        Ok(serde_json::json!({ "areas": [], "mappings": [] }))
+    }
+
+    async fn delete_modulator(&self, _id: &str, _force: bool) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented(
             "WASM mode is read-only".to_string(),
         ))

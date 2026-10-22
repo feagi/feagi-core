@@ -29,7 +29,7 @@ use std::sync::Arc;
 pub struct AmalgamationPendingSummary {
     pub amalgamation_id: String,
     pub genome_title: String,
-    /// Dimensions of the imported circuit bounding box (x,y,z).
+    /// Footprint of the imported circuit's input, output, and conflict plates (x, y, z).
     pub circuit_size: [i32; 3],
 }
 
@@ -64,61 +64,101 @@ pub fn new_shared_state() -> SharedAmalgamationState {
     Arc::new(RwLock::new(AmalgamationState::default()))
 }
 
-/// Compute a circuit bounding-box size (x,y,z) from a parsed RuntimeGenome.
+/// Plate layout constants from Brain Visualizer `UI_BrainMonitor_BrainRegion3D.gd`.
+/// The import shadow uses the same plate row those constants draw.
+const PLATE_PLACEHOLDER_WIDTH: i32 = 5;
+const PLATE_PLACEHOLDER_DEPTH: i32 = 5;
+const PLATE_AREA_BUFFER: i32 = 8;
+const PLATE_SIDE_MARGIN: i32 = 2;
+const PLATE_FRONT_BACK_MARGIN: i32 = 2;
+const PLATE_HEIGHT: i32 = 1;
+const PLATE_GAP: i32 = 1;
+
+/// Width, depth, and thickness of one input, output, or conflict plate.
 ///
-/// Bounding box is computed over all cortical areas:
-/// - min corner = min(position)
-/// - max corner = max(position + dimensions)
-/// - size = max - min (per axis)
+/// An empty plate is the placeholder. A plate with areas is wide enough for
+/// their widths plus the gaps and side margins, and deep enough for the
+/// deepest area plus the front and back margins. Plate thickness stays fixed.
+fn plate_footprint(area_widths_and_depths: &[(i32, i32)]) -> (i32, i32) {
+    if area_widths_and_depths.is_empty() {
+        return (PLATE_PLACEHOLDER_WIDTH, PLATE_PLACEHOLDER_DEPTH);
+    }
+    let mut total_width: i32 = 0;
+    let mut max_depth: i32 = 0;
+    for (width, depth) in area_widths_and_depths {
+        total_width = total_width.saturating_add(*width);
+        max_depth = max_depth.max(*depth);
+    }
+    let count = area_widths_and_depths.len() as i32;
+    let plate_width = total_width
+        .saturating_add((count - 1).saturating_mul(PLATE_AREA_BUFFER))
+        .saturating_add(PLATE_SIDE_MARGIN.saturating_mul(2));
+    let plate_depth = max_depth.saturating_add(PLATE_FRONT_BACK_MARGIN.saturating_mul(2));
+    (plate_width, plate_depth)
+}
+
+fn area_width_depth(
+    genome: &feagi_evolutionary::RuntimeGenome,
+    cortical_id_b64: &str,
+) -> Option<(i32, i32)> {
+    use feagi_structures::genomic::cortical_area::CorticalID;
+    let cortical_id = CorticalID::try_from_base_64(cortical_id_b64).ok()?;
+    let area = genome.cortical_areas.get(&cortical_id)?;
+    Some((area.dimensions.width as i32, area.dimensions.depth as i32))
+}
+
+/// Import shadow size from the circuit's designated input, output, and conflict plates.
 ///
-/// If there are no cortical areas, size is [0,0,0].
+/// Internal areas that are not designated inputs or outputs do not change the size.
+/// An area listed as both input and output is a conflict and is drawn on its own plate.
+/// With no designated input or output, the size is the two empty plates side by side.
 pub fn compute_circuit_size_from_runtime_genome(
     genome: &feagi_evolutionary::RuntimeGenome,
 ) -> [i32; 3] {
-    let mut any = false;
-    let mut min_x: i32 = 0;
-    let mut min_y: i32 = 0;
-    let mut min_z: i32 = 0;
-    let mut max_x: i32 = 0;
-    let mut max_y: i32 = 0;
-    let mut max_z: i32 = 0;
+    let (designated_inputs, designated_outputs) =
+        feagi_evolutionary::designated_io_lists_for_cloned_circuit(genome);
+    let input_ids: std::collections::HashSet<&str> =
+        designated_inputs.iter().map(String::as_str).collect();
+    let output_ids: std::collections::HashSet<&str> =
+        designated_outputs.iter().map(String::as_str).collect();
 
-    for area in genome.cortical_areas.values() {
-        let x0 = area.position.x;
-        let y0 = area.position.y;
-        let z0 = area.position.z;
+    let mut input_areas: Vec<(i32, i32)> = Vec::new();
+    let mut output_areas: Vec<(i32, i32)> = Vec::new();
+    let mut conflict_areas: Vec<(i32, i32)> = Vec::new();
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
 
-        let x1 = x0.saturating_add(area.dimensions.width as i32);
-        let y1 = y0.saturating_add(area.dimensions.height as i32);
-        let z1 = z0.saturating_add(area.dimensions.depth as i32);
-
-        if !any {
-            any = true;
-            min_x = x0;
-            min_y = y0;
-            min_z = z0;
-            max_x = x1;
-            max_y = y1;
-            max_z = z1;
-        } else {
-            min_x = min_x.min(x0);
-            min_y = min_y.min(y0);
-            min_z = min_z.min(z0);
-            max_x = max_x.max(x1);
-            max_y = max_y.max(y1);
-            max_z = max_z.max(z1);
+    for cortical_id in designated_inputs.iter().chain(designated_outputs.iter()) {
+        if !seen.insert(cortical_id.as_str()) {
+            continue;
+        }
+        let in_inputs = input_ids.contains(cortical_id.as_str());
+        let in_outputs = output_ids.contains(cortical_id.as_str());
+        let Some(width_depth) = area_width_depth(genome, cortical_id) else {
+            continue;
+        };
+        if in_inputs && in_outputs {
+            conflict_areas.push(width_depth);
+        } else if in_inputs {
+            input_areas.push(width_depth);
+        } else if in_outputs {
+            output_areas.push(width_depth);
         }
     }
 
-    if !any {
-        return [0, 0, 0];
+    let (input_width, input_depth) = plate_footprint(&input_areas);
+    let (output_width, output_depth) = plate_footprint(&output_areas);
+    let mut width = input_width
+        .saturating_add(PLATE_GAP)
+        .saturating_add(output_width);
+    let mut depth = input_depth.max(output_depth);
+    if !conflict_areas.is_empty() {
+        let (conflict_width, conflict_depth) = plate_footprint(&conflict_areas);
+        width = width
+            .saturating_add(PLATE_GAP)
+            .saturating_add(conflict_width);
+        depth = depth.max(conflict_depth);
     }
-
-    [
-        max_x.saturating_sub(min_x),
-        max_y.saturating_sub(min_y),
-        max_z.saturating_sub(min_z),
-    ]
+    [width, PLATE_HEIGHT, depth]
 }
 
 /// Convert a pending summary to the `health_check` JSON shape.
@@ -134,45 +174,147 @@ pub fn pending_summary_to_health_json(summary: &AmalgamationPendingSummary) -> V
 mod tests {
     use super::*;
 
-    #[test]
-    fn compute_circuit_size_empty_genome_is_zero() {
-        let genome =
-            feagi_evolutionary::templates::create_minimal_genome("g".to_string(), "t".to_string());
-        assert_eq!(compute_circuit_size_from_runtime_genome(&genome), [0, 0, 0]);
+    fn load_test_genome(json: serde_json::Value) -> feagi_evolutionary::RuntimeGenome {
+        feagi_evolutionary::load_genome_from_json(&json.to_string()).expect("valid genome json")
     }
 
     #[test]
-    fn compute_circuit_size_single_area_matches_block_boundaries() {
-        // One area at [1,1,1] with dims [2,3,4] -> size should be [2,3,4].
-        let json = serde_json::json!({
+    fn compute_circuit_size_without_designated_io_is_empty_plates() {
+        let genome =
+            feagi_evolutionary::templates::create_minimal_genome("g".to_string(), "t".to_string());
+        // Two empty plates (5 wide, 5 deep) with the 1-voxel gap between them.
+        assert_eq!(
+            compute_circuit_size_from_runtime_genome(&genome),
+            [11, 1, 5]
+        );
+    }
+
+    #[test]
+    fn compute_circuit_size_ignores_undesignated_internal_areas() {
+        let genome = load_test_genome(serde_json::json!({
             "genome_id": "test",
             "genome_title": "Test Genome",
-            "genome_description": "",
             "version": "2.1",
             "blueprint": {
-                "X19fcG93ZXI=": { // "___power" base64 (core-ish, but valid cortical id)
-                    "cortical_name": "Area",
-                    "block_boundaries": [2, 3, 4],
-                    "relative_coordinate": [1, 1, 1],
+                "X19fcG93ZXI=": {
+                    "cortical_name": "Huge internal",
+                    "block_boundaries": [40, 8, 30],
+                    "relative_coordinate": [100, 0, 100],
                     "cortical_type": "CUSTOM"
                 }
             },
             "brain_regions": {
-                "root": {
-                    "title": "Root",
+                "550e8400-e29b-41d4-a716-446655440000": {
+                    "title": "Root Brain Region",
                     "parent_region_id": null,
-                    "coordinate_3d": [0, 0, 0],
                     "areas": ["X19fcG93ZXI="],
-                    "regions": []
+                    "regions": ["550e8400-e29b-41d4-a716-446655440001"]
+                },
+                "550e8400-e29b-41d4-a716-446655440001": {
+                    "title": "Gate",
+                    "parent_region_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "areas": ["X19fcG93ZXI="],
+                    "designated_inputs": [],
+                    "designated_outputs": []
                 }
             },
-            "physiology": {
-                "simulation_timestep": 0.025
-            }
-        })
-        .to_string();
+            "physiology": { "simulation_timestep": 0.025 }
+        }));
+        assert_eq!(
+            compute_circuit_size_from_runtime_genome(&genome),
+            [11, 1, 5]
+        );
+    }
 
-        let genome = feagi_evolutionary::load_genome_from_json(&json).expect("valid genome json");
-        assert_eq!(compute_circuit_size_from_runtime_genome(&genome), [2, 3, 4]);
+    #[test]
+    fn compute_circuit_size_matches_input_and_output_plates() {
+        // Input area width 2, depth 4. Output area width 1, depth 2.
+        // Input plate: width 2+4=6, depth 4+4=8. Output plate: width 1+4=5, depth 2+4=6.
+        // Row: 6 + 1 gap + 5 = 12 wide, deepest plate is 8.
+        let genome = load_test_genome(serde_json::json!({
+            "genome_id": "test",
+            "genome_title": "Test Genome",
+            "version": "2.1",
+            "blueprint": {
+                "X19fcG93ZXI=": {
+                    "cortical_name": "Input",
+                    "block_boundaries": [2, 3, 4],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CUSTOM"
+                },
+                "X19fZGVhdGg=": {
+                    "cortical_name": "Output",
+                    "block_boundaries": [1, 1, 2],
+                    "relative_coordinate": [50, 0, 50],
+                    "cortical_type": "CUSTOM"
+                },
+                "X19fZmF0aWc=": {
+                    "cortical_name": "Internal",
+                    "block_boundaries": [40, 8, 30],
+                    "relative_coordinate": [200, 0, 200],
+                    "cortical_type": "CUSTOM"
+                }
+            },
+            "brain_regions": {
+                "550e8400-e29b-41d4-a716-446655440000": {
+                    "title": "Root Brain Region",
+                    "parent_region_id": null,
+                    "areas": [],
+                    "regions": ["550e8400-e29b-41d4-a716-446655440001"]
+                },
+                "550e8400-e29b-41d4-a716-446655440001": {
+                    "title": "Gate",
+                    "parent_region_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "areas": ["X19fcG93ZXI=", "X19fZGVhdGg=", "X19fZmF0aWc="],
+                    "designated_inputs": ["X19fcG93ZXI="],
+                    "designated_outputs": ["X19fZGVhdGg="]
+                }
+            },
+            "physiology": { "simulation_timestep": 0.025 }
+        }));
+        assert_eq!(
+            compute_circuit_size_from_runtime_genome(&genome),
+            [12, 1, 8]
+        );
+    }
+
+    #[test]
+    fn compute_circuit_size_puts_shared_area_on_conflict_plate() {
+        // The shared area leaves the input and output plates empty and adds a conflict plate.
+        // Empty + gap + empty + gap + conflict(width 2+4=6, depth 4+4=8)
+        // = 5+1+5+1+6 = 18 wide, depth 8.
+        let genome = load_test_genome(serde_json::json!({
+            "genome_id": "test",
+            "genome_title": "Test Genome",
+            "version": "2.1",
+            "blueprint": {
+                "X19fcG93ZXI=": {
+                    "cortical_name": "Shared",
+                    "block_boundaries": [2, 1, 4],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CUSTOM"
+                }
+            },
+            "brain_regions": {
+                "550e8400-e29b-41d4-a716-446655440000": {
+                    "title": "Root Brain Region",
+                    "parent_region_id": null,
+                    "areas": [],
+                    "regions": ["550e8400-e29b-41d4-a716-446655440001"]
+                },
+                "550e8400-e29b-41d4-a716-446655440001": {
+                    "title": "Gate",
+                    "parent_region_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "areas": ["X19fcG93ZXI="],
+                    "designated_inputs": ["X19fcG93ZXI="],
+                    "designated_outputs": ["X19fcG93ZXI="]
+                }
+            },
+            "physiology": { "simulation_timestep": 0.025 }
+        }));
+        assert_eq!(
+            compute_circuit_size_from_runtime_genome(&genome),
+            [18, 1, 8]
+        );
     }
 }

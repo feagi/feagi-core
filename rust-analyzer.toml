@@ -1,0 +1,4 @@
+# Keep rust-analyzer check artifacts out of cargo target/
+# so rust-analyzer and cargo do not mint duplicate incremental sessions.
+[cargo]
+targetDir = true

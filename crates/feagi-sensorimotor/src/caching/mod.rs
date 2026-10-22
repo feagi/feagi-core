@@ -6,5 +6,5 @@
 mod motor_device_cache;
 mod sensor_device_cache;
 
-pub use motor_device_cache::MotorDeviceCache;
+pub use motor_device_cache::{DecodedMotorValue, MotorDeviceCache};
 pub use sensor_device_cache::SensorDeviceCache;

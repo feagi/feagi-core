@@ -56,8 +56,15 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         brain_regions.insert(region.region_id.to_string(), region);
     }
 
+    let mut classifiers = HashMap::new();
+    for classifier in parsed.classifiers {
+        classifiers.insert(classifier.classifier_id.clone(), classifier);
+    }
+
     // Parse morphologies
     let morphologies = parse_morphologies(&parsed.neuron_morphologies)?;
+    let modulators =
+        crate::modulators::parse_modulator_registry(Some(&serde_json::json!(parsed.modulators)))?;
 
     // Parse physiology
     let physiology = parse_physiology(&parsed.physiology)?;
@@ -74,15 +81,20 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         &parsed.physiology,
     )?;
 
-    Ok(RuntimeGenome {
+    let mut genome = RuntimeGenome {
         metadata,
         cortical_areas,
         brain_regions,
+        classifiers,
         morphologies,
+        modulators,
         physiology,
         signatures,
         stats,
-    })
+        change_history: parsed.change_history,
+    };
+    genome.apply_classifier_required_mappings();
+    Ok(genome)
 }
 
 /// Parse neuron morphologies into MorphologyRegistry
@@ -97,13 +109,42 @@ fn parse_morphologies(raw_morphologies: &HashMap<String, Value>) -> EvoResult<Mo
     Ok(registry)
 }
 
+/// Infer morphology type from parameters structure (backward compat for legacy genomes missing 'type').
+fn infer_morphology_type_from_params(params: &Value) -> Option<String> {
+    let params_obj = params.as_object();
+    match params_obj {
+        Some(obj) => {
+            if obj.contains_key("vectors") {
+                return Some("vectors".to_string());
+            }
+            if obj.contains_key("patterns") {
+                return Some("patterns".to_string());
+            }
+            if obj.contains_key("src_seed") {
+                return Some("composite".to_string());
+            }
+            if obj.is_empty() || obj.contains_key("function") {
+                return Some("functions".to_string());
+            }
+        }
+        None => return Some("functions".to_string()),
+    }
+    None
+}
+
 /// Parse a single morphology
 fn parse_single_morphology(value: &Value) -> EvoResult<Morphology> {
     let morphology_type_str = value["type"]
         .as_str()
-        .ok_or_else(|| EvoError::InvalidGenome("Morphology missing 'type' field".to_string()))?;
+        .map(|s| s.to_string())
+        .or_else(|| infer_morphology_type_from_params(&value["parameters"]))
+        .ok_or_else(|| {
+            EvoError::InvalidGenome(
+                "Morphology missing 'type' field and parameters do not allow inference".to_string(),
+            )
+        })?;
 
-    let morphology_type = match morphology_type_str {
+    let morphology_type = match morphology_type_str.as_str() {
         "vectors" => MorphologyType::Vectors,
         "patterns" => MorphologyType::Patterns,
         "functions" => MorphologyType::Functions,
@@ -247,7 +288,7 @@ fn parse_morphology_parameters(
     }
 }
 
-/// Parse pattern elements (handles *, ?, !, and integer values)
+/// Parse pattern elements (handles *, ?, !, directional, offset, range, and integer values)
 fn parse_pattern_elements(value: &Value) -> EvoResult<Vec<PatternElement>> {
     let array = value
         .as_array()
@@ -256,17 +297,8 @@ fn parse_pattern_elements(value: &Value) -> EvoResult<Vec<PatternElement>> {
     let mut elements = Vec::new();
     for elem in array {
         let pattern_elem = if let Some(s) = elem.as_str() {
-            match s {
-                "*" => PatternElement::Wildcard,
-                "?" => PatternElement::Skip,
-                "!" => PatternElement::Exclude,
-                _ => {
-                    return Err(EvoError::InvalidGenome(format!(
-                        "Unknown pattern element: {}",
-                        s
-                    )))
-                }
-            }
+            PatternElement::parse_string(s)
+                .ok_or_else(|| EvoError::InvalidGenome(format!("Unknown pattern element: {}", s)))?
         } else if let Some(i) = elem.as_i64() {
             PatternElement::Value(i as i32)
         } else {
@@ -372,6 +404,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_parse_morphology_missing_type_inferred_from_vectors() {
+        let json = serde_json::json!({
+            "parameters": {
+                "vectors": [[1, 0, 0], [0, 1, 0]]
+            },
+            "class": "custom"
+        });
+
+        let morphology = parse_single_morphology(&json).unwrap();
+        assert_eq!(morphology.morphology_type, MorphologyType::Vectors);
+    }
+
+    #[test]
     fn test_parse_vector_morphology() {
         let json = serde_json::json!({
             "type": "vectors",
@@ -405,6 +450,42 @@ mod tests {
         assert_eq!(elements[2], PatternElement::Skip);
         assert_eq!(elements[3], PatternElement::Exclude);
         assert_eq!(elements[4], PatternElement::Value(5));
+    }
+
+    #[test]
+    fn test_parse_pattern_elements_directional() {
+        let json = serde_json::json!(["?+", "?-", "?+=", "?-="]);
+        let elements = parse_pattern_elements(&json).unwrap();
+
+        assert_eq!(elements.len(), 4);
+        assert_eq!(elements[0], PatternElement::DirectionPositive);
+        assert_eq!(elements[1], PatternElement::DirectionNegative);
+        assert_eq!(elements[2], PatternElement::DirectionPositiveInclusive);
+        assert_eq!(elements[3], PatternElement::DirectionNegativeInclusive);
+    }
+
+    #[test]
+    fn test_parse_pattern_elements_offset_and_range() {
+        let json = serde_json::json!(["?+3", "?-2", "?-1:?+1"]);
+        let elements = parse_pattern_elements(&json).unwrap();
+
+        assert_eq!(elements.len(), 3);
+        assert_eq!(elements[0], PatternElement::Offset(3));
+        assert_eq!(elements[1], PatternElement::Offset(-2));
+        assert_eq!(elements[2], PatternElement::Range(-1, 1));
+    }
+
+    #[test]
+    fn test_parse_pattern_elements_absolute_range() {
+        let json = serde_json::json!(["1..98", "*", "*"]);
+        let elements = parse_pattern_elements(&json).unwrap();
+
+        assert_eq!(elements.len(), 3);
+        assert_eq!(elements[0], PatternElement::AbsoluteRange(1, 98));
+        assert_eq!(elements[1], PatternElement::Wildcard);
+        assert_eq!(elements[2], PatternElement::Wildcard);
+        let serialized = serde_json::to_value(&elements[0]).unwrap();
+        assert_eq!(serialized, serde_json::json!("1..98"));
     }
 
     #[test]

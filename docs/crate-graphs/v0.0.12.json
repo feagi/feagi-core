@@ -1,0 +1,410 @@
+{
+  "version": "0.0.12",
+  "generated_at": "2026-06-19T01:30:05.875Z",
+  "crates": [
+    {
+      "id": "feagi",
+      "label": "feagi  (umbrella)",
+      "category": "umbrella",
+      "description": "Framework for Evolutionary Artificial General Intelligence - Bio-Inspired Neural Computation"
+    },
+    {
+      "id": "feagi-agent",
+      "label": "feagi-agent",
+      "category": "io",
+      "description": "Client library for building FEAGI agents in Rust"
+    },
+    {
+      "id": "feagi-api",
+      "label": "feagi-api",
+      "category": "services",
+      "description": "FEAGI REST API layer with HTTP and ZMQ transport adapters"
+    },
+    {
+      "id": "feagi-brain-development",
+      "label": "feagi-brain-development",
+      "category": "algorithms",
+      "description": "Brain Development Utilities - Synaptogenesis and Connectivity"
+    },
+    {
+      "id": "feagi-config",
+      "label": "feagi-config",
+      "category": "foundation",
+      "description": "Configuration loader for FEAGI - Cross-platform TOML-based configuration with override support"
+    },
+    {
+      "id": "feagi-dataset-contracts",
+      "label": "feagi-dataset-contracts",
+      "category": "foundation",
+      "description": "Shared, dependency-light data contracts for FEAGI dataset/experience interchange (Apache-2.0)"
+    },
+    {
+      "id": "feagi-evolutionary",
+      "label": "feagi-evolutionary",
+      "category": "algorithms",
+      "description": "Evolution and Genome Management - Genotype operations for FEAGI"
+    },
+    {
+      "id": "feagi-hal",
+      "label": "feagi-hal",
+      "category": "hal",
+      "description": "Hardware Abstraction Layer (HAL) for FEAGI embedded systems - platform abstraction and implementations"
+    },
+    {
+      "id": "feagi-io",
+      "label": "feagi-io",
+      "category": "io",
+      "description": "FEAGI I/O System"
+    },
+    {
+      "id": "feagi-npu-burst-engine",
+      "label": "feagi-npu-burst-engine",
+      "category": "npu",
+      "description": "High-performance burst engine for FEAGI neural processing"
+    },
+    {
+      "id": "feagi-npu-neural",
+      "label": "feagi-npu-neural",
+      "category": "npu",
+      "description": "Platform-agnostic neural computation: types, algorithms, and neuron models"
+    },
+    {
+      "id": "feagi-npu-plasticity",
+      "label": "feagi-npu-plasticity",
+      "category": "npu",
+      "description": "FEAGI plasticity algorithms - STDP and memory formation"
+    },
+    {
+      "id": "feagi-npu-runtime",
+      "label": "feagi-npu-runtime",
+      "category": "npu",
+      "description": "Runtime abstraction traits and implementations for FEAGI neural processing across platforms"
+    },
+    {
+      "id": "feagi-observability",
+      "label": "feagi-observability",
+      "category": "foundation",
+      "description": "Unified observability infrastructure for FEAGI (logging, telemetry, profiling)"
+    },
+    {
+      "id": "feagi-sensorimotor",
+      "label": "feagi-sensorimotor",
+      "category": "io",
+      "description": "Sensorimotor System - Data processing, caching, and neuron voxel encoding for FEAGI agents (sensory input and motor output)"
+    },
+    {
+      "id": "feagi-serialization",
+      "label": "feagi-serialization",
+      "category": "foundation",
+      "description": "Adds serialization and deserialization to select Feagi Data Structures."
+    },
+    {
+      "id": "feagi-services",
+      "label": "feagi-services",
+      "category": "services",
+      "description": "FEAGI Service Layer - Stable application boundary for transport adapters"
+    },
+    {
+      "id": "feagi-state-manager",
+      "label": "feagi-state-manager",
+      "category": "foundation",
+      "description": "Runtime state management for FEAGI - cross-platform, RTOS-compatible"
+    },
+    {
+      "id": "feagi-structures",
+      "label": "feagi-structures",
+      "category": "foundation",
+      "description": "The most core library, defines the basic data types used by FEAGI, as well as some processors to modify them"
+    },
+    {
+      "id": "feagi-trainer",
+      "label": "feagi-trainer",
+      "category": "training",
+      "description": "FEAGI Trainer - open-source train/evaluate/benchmark engine for FEAGI spiking neural brains"
+    }
+  ],
+  "required_edges": [
+    {
+      "from": "feagi-evolutionary",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-npu-neural",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-serialization",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-io",
+      "to": "feagi-agent"
+    },
+    {
+      "from": "feagi-sensorimotor",
+      "to": "feagi-agent"
+    },
+    {
+      "from": "feagi-serialization",
+      "to": "feagi-agent"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi-agent"
+    },
+    {
+      "from": "feagi-config",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-evolutionary",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-npu-neural",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-observability",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-serialization",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-services",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-evolutionary",
+      "to": "feagi-brain-development"
+    },
+    {
+      "from": "feagi-npu-neural",
+      "to": "feagi-brain-development"
+    },
+    {
+      "from": "feagi-observability",
+      "to": "feagi-brain-development"
+    },
+    {
+      "from": "feagi-state-manager",
+      "to": "feagi-brain-development"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi-brain-development"
+    },
+    {
+      "from": "feagi-npu-burst-engine",
+      "to": "feagi-brain-development"
+    },
+    {
+      "from": "feagi-npu-burst-engine",
+      "to": "feagi-brain-development"
+    },
+    {
+      "from": "feagi-npu-neural",
+      "to": "feagi-evolutionary"
+    },
+    {
+      "from": "feagi-observability",
+      "to": "feagi-evolutionary"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi-evolutionary"
+    },
+    {
+      "from": "feagi-npu-neural",
+      "to": "feagi-hal"
+    },
+    {
+      "from": "feagi-npu-runtime",
+      "to": "feagi-hal"
+    },
+    {
+      "from": "feagi-serialization",
+      "to": "feagi-io"
+    },
+    {
+      "from": "feagi-npu-neural",
+      "to": "feagi-npu-burst-engine"
+    },
+    {
+      "from": "feagi-observability",
+      "to": "feagi-npu-burst-engine"
+    },
+    {
+      "from": "feagi-serialization",
+      "to": "feagi-npu-burst-engine"
+    },
+    {
+      "from": "feagi-state-manager",
+      "to": "feagi-npu-burst-engine"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi-npu-burst-engine"
+    },
+    {
+      "from": "feagi-npu-burst-engine",
+      "to": "feagi-npu-plasticity"
+    },
+    {
+      "from": "feagi-npu-neural",
+      "to": "feagi-npu-plasticity"
+    },
+    {
+      "from": "feagi-npu-neural",
+      "to": "feagi-npu-runtime"
+    },
+    {
+      "from": "feagi-serialization",
+      "to": "feagi-sensorimotor"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi-sensorimotor"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi-serialization"
+    },
+    {
+      "from": "feagi-brain-development",
+      "to": "feagi-services"
+    },
+    {
+      "from": "feagi-evolutionary",
+      "to": "feagi-services"
+    },
+    {
+      "from": "feagi-npu-neural",
+      "to": "feagi-services"
+    },
+    {
+      "from": "feagi-observability",
+      "to": "feagi-services"
+    },
+    {
+      "from": "feagi-state-manager",
+      "to": "feagi-services"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi-services"
+    },
+    {
+      "from": "feagi-dataset-contracts",
+      "to": "feagi-trainer"
+    },
+    {
+      "from": "feagi-sensorimotor",
+      "to": "feagi-trainer"
+    },
+    {
+      "from": "feagi-structures",
+      "to": "feagi-trainer"
+    }
+  ],
+  "optional_edges": [
+    {
+      "from": "feagi-agent",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-brain-development",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-io",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-npu-burst-engine",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-npu-plasticity",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-sensorimotor",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-services",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-state-manager",
+      "to": "feagi"
+    },
+    {
+      "from": "feagi-agent",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-brain-development",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-io",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-npu-burst-engine",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-npu-plasticity",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-state-manager",
+      "to": "feagi-api"
+    },
+    {
+      "from": "feagi-npu-plasticity",
+      "to": "feagi-brain-development"
+    },
+    {
+      "from": "feagi-npu-runtime",
+      "to": "feagi-npu-burst-engine"
+    },
+    {
+      "from": "feagi-state-manager",
+      "to": "feagi-npu-plasticity"
+    },
+    {
+      "from": "feagi-npu-burst-engine",
+      "to": "feagi-services"
+    },
+    {
+      "from": "feagi-npu-plasticity",
+      "to": "feagi-services"
+    },
+    {
+      "from": "feagi-agent",
+      "to": "feagi-trainer"
+    },
+    {
+      "from": "feagi-io",
+      "to": "feagi-trainer"
+    },
+    {
+      "from": "feagi-serialization",
+      "to": "feagi-trainer"
+    }
+  ]
+}

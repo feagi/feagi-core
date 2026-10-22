@@ -108,6 +108,7 @@ impl From<ServiceError> for ApiError {
                 ApiError::new(format!("{} '{}' already exists", resource, id))
                     .with_code(ApiErrorCode::Conflict)
             }
+            ServiceError::Conflict(msg) => ApiError::conflict(msg),
             ServiceError::Internal(msg) => ApiError::new(msg).with_code(ApiErrorCode::Internal),
             ServiceError::Forbidden(msg) => ApiError::new(msg).with_code(ApiErrorCode::Forbidden),
             ServiceError::Backend(msg) => ApiError::new(msg).with_code(ApiErrorCode::Internal),

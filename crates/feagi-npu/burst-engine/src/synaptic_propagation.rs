@@ -38,27 +38,48 @@
 //! - Python: ~165ms for 12K neurons
 //! - Rust Target: <3ms (50-100x speedup)
 
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::SynapseStorage;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use rayon::prelude::*;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Once, OnceLock};
 
 // Use platform-agnostic synaptic algorithms (now in feagi-neural)
-use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType as FeagiSynapseType};
-use tracing::trace;
+use feagi_npu_neural::synapse::{
+    compute_synaptic_contribution, SynapseType as FeagiSynapseType, SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+};
+use tracing::debug;
+
+/// Global id range for plasticity memory neurons (must match NPU / plasticity).
+const MEMORY_NEURON_ID_START: u32 = 50_000_000;
 
 /// Runtime-gated tracing config for synaptic propagation.
 /// Enable with:
-/// - FEAGI_NPU_TRACE_SYNAPSE=1
-///   Optional filters:
-/// - FEAGI_NPU_TRACE_SRC=<u32 neuron_id>
-/// - FEAGI_NPU_TRACE_DST=<u32 neuron_id>
+/// - `FEAGI_NPU_TRACE_SYNAPSE=1`
+///
+/// **Anti-spam:** at least one of:
+/// - `FEAGI_NPU_TRACE_SRC=<u32>` — source neuron id
+/// - `FEAGI_NPU_TRACE_DST=<u32>` — target neuron id
+/// - `FEAGI_NPU_TRACE_CORTICAL_ID=<base64>` — target neuron's cortical area id (e.g. genome key)
+///
+/// Per-synapse lines require `FEAGI_NPU_TRACE_SYNAPSE_VERBOSE=1`. Otherwise one summary line per
+/// propagation call counts matching edges (avoids log flooding).
+///
+/// When `FEAGI_NPU_TRACE_CORTICAL_ID` is set, synapses **from** `_power` are included if they
+/// target that area (so power → area feedforward is visible).
+///
+/// ## @npu-debug-instrumentation (cleanup)
+/// Verbose gating and summary line: remove or simplify after root-cause.
 struct SynapseTraceCfg {
     enabled: bool,
     src_filter: Option<u32>,
     dst_filter: Option<u32>,
+    /// Filter by postsynaptic cortical id (matches `neuron_to_area` for target neuron).
+    dst_cortical_id_filter: Option<CorticalID>,
+    /// When false, emit a single `[SYNAPSE]` summary count instead of per-edge lines.
+    synapse_verbose: bool,
 }
 
 fn synapse_trace_cfg() -> &'static SynapseTraceCfg {
@@ -77,11 +98,51 @@ fn synapse_trace_cfg() -> &'static SynapseTraceCfg {
             .ok()
             .and_then(|v| v.parse().ok());
 
-        SynapseTraceCfg {
+        let dst_cortical_id_filter = std::env::var("FEAGI_NPU_TRACE_CORTICAL_ID")
+            .ok()
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .and_then(|s| match CorticalID::try_from_base_64(&s) {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    tracing::warn!(
+                        target: "feagi-npu-trace",
+                        "FEAGI_NPU_TRACE_CORTICAL_ID is invalid ({}); cortical id filter disabled",
+                        e
+                    );
+                    None
+                }
+            });
+
+        let synapse_verbose = std::env::var("FEAGI_NPU_TRACE_SYNAPSE_VERBOSE")
+            .ok()
+            .as_deref()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let cfg = SynapseTraceCfg {
             enabled,
             src_filter,
             dst_filter,
+            dst_cortical_id_filter,
+            synapse_verbose,
+        };
+
+        static WARN_NO_FOCUS: Once = Once::new();
+        if cfg.enabled
+            && cfg.src_filter.is_none()
+            && cfg.dst_filter.is_none()
+            && cfg.dst_cortical_id_filter.is_none()
+        {
+            WARN_NO_FOCUS.call_once(|| {
+                tracing::warn!(
+                    target: "feagi-npu-trace",
+                    "FEAGI_NPU_TRACE_SYNAPSE is set but neither FEAGI_NPU_TRACE_SRC, FEAGI_NPU_TRACE_DST, nor FEAGI_NPU_TRACE_CORTICAL_ID — synapse traces disabled (anti-spam)."
+                );
+            });
         }
+
+        cfg
     })
 }
 
@@ -101,6 +162,30 @@ pub type SynapseIndex = AHashMap<NeuronId, Vec<usize>>;
 /// Propagation result: cortical area → list of (target_neuron, contribution)
 pub type PropagationResult = AHashMap<CorticalID, Vec<(NeuronId, SynapticContribution)>>;
 
+/// PSP contributions and associative-memory PSP sums split by synaptic delay (whole bursts).
+#[derive(Debug, Default, Clone)]
+pub struct DelayedPropagationResult {
+    /// `delay_bursts` → same shape as [`PropagationResult`].
+    pub fcl_by_delay: AHashMap<u32, PropagationResult>,
+    /// `delay_bursts` → memory-neuron id → associative PSP sum.
+    pub memory_associative_by_delay: AHashMap<u32, AHashMap<u32, f32>>,
+}
+
+fn fold_contributions_by_delay(
+    rows: Vec<(u32, NeuronId, CorticalID, SynapticContribution)>,
+) -> AHashMap<u32, PropagationResult> {
+    let mut by_delay: AHashMap<u32, PropagationResult> = AHashMap::new();
+    for (delay, target, cortical, c) in rows {
+        by_delay
+            .entry(delay)
+            .or_default()
+            .entry(cortical)
+            .or_default()
+            .push((target, c));
+    }
+    by_delay
+}
+
 /// High-performance synaptic propagation engine
 pub struct SynapticPropagationEngine {
     /// Pre-built index: source neuron → synapse indices
@@ -113,6 +198,21 @@ pub struct SynapticPropagationEngine {
     /// When false: PSP is divided among all outgoing synapses
     /// When true: Full PSP value is applied to each synapse
     pub area_psp_uniform_distribution: AHashMap<CorticalID, bool>,
+    /// Cortical Area -> configured baseline PSP for that source area.
+    /// Used to restore per-synapse PSP on cortical runtime reset.
+    pub area_postsynaptic_current: AHashMap<CorticalID, f32>,
+    /// Cortical Area -> degeneration coefficient (PSP decrement per source fire)
+    /// Values <= 0 are treated as disabled and removed from the map.
+    pub area_degeneration: AHashMap<CorticalID, f32>,
+    /// Conditional gate mappings: (src_area, dst_area) -> gate_area CorticalID.
+    /// Synapses belonging to a gated mapping produce zero contribution when the
+    /// gate area has no firing activity in the current burst (transistor semantics).
+    gate_mappings: AHashMap<(CorticalID, CorticalID), CorticalID>,
+    /// Set of (src_area, dst_area) pairs whose gate is currently closed (no activity
+    /// in the gate area this burst). Updated before each propagation call by the NPU.
+    closed_gates: AHashSet<(CorticalID, CorticalID)>,
+    /// Transmission-gain factors indexed by modulation group. Empty means every factor is 1.
+    transmission_factors: Vec<f32>,
     /// Performance stats
     total_propagations: u64,
     total_synapses_processed: u64,
@@ -145,10 +245,50 @@ impl SynapticPropagationEngine {
             neuron_to_area: AHashMap::new(),
             area_mp_driven_psp: AHashMap::new(),
             area_psp_uniform_distribution: AHashMap::new(),
+            area_postsynaptic_current: AHashMap::new(),
+            area_degeneration: AHashMap::new(),
+            gate_mappings: AHashMap::new(),
+            closed_gates: AHashSet::new(),
+            transmission_factors: Vec::new(),
             total_propagations: 0,
             total_synapses_processed: 0,
             last_profile: None,
         }
+    }
+
+    /// Replace the transmission-gain table used by the next propagation.
+    pub fn set_transmission_factors(&mut self, factors: Vec<f32>) {
+        self.transmission_factors = factors;
+    }
+
+    /// Clear transmission scaling so every synapse contributes its unscaled PSP.
+    pub fn clear_transmission_factors(&mut self) {
+        self.transmission_factors.clear();
+    }
+
+    fn scale_transmission<S: feagi_npu_runtime::SynapseStorage>(
+        &self,
+        synapse_storage: &S,
+        syn_idx: usize,
+        contribution: f32,
+    ) -> f32 {
+        if self.transmission_factors.is_empty() {
+            return contribution;
+        }
+        let group = synapse_storage
+            .modulation_groups()
+            .get(syn_idx)
+            .copied()
+            .unwrap_or(0);
+        if group == 0 {
+            return contribution;
+        }
+        let factor = self
+            .transmission_factors
+            .get(group as usize)
+            .copied()
+            .unwrap_or(1.0);
+        contribution * factor
     }
 
     /// Returns the most recent propagation profile, if any.
@@ -206,6 +346,72 @@ impl SynapticPropagationEngine {
             .insert(cortical_id, enabled);
     }
 
+    /// Set configured baseline PSP values for cortical areas.
+    ///
+    /// Values <= 0 are retained as-is to preserve explicit user intent.
+    pub fn set_postsynaptic_current_flags(&mut self, flags: AHashMap<CorticalID, f32>) {
+        self.area_postsynaptic_current = flags;
+    }
+
+    /// Set configured baseline PSP for one cortical area.
+    pub fn set_postsynaptic_current_flag(&mut self, cortical_id: CorticalID, postsynaptic: f32) {
+        self.area_postsynaptic_current
+            .insert(cortical_id, postsynaptic);
+    }
+
+    /// Set degeneration coefficients for cortical areas.
+    ///
+    /// Coefficients <= 0 disable degeneration for that area and are omitted.
+    pub fn set_degeneration_flags(&mut self, mut flags: AHashMap<CorticalID, f32>) {
+        flags.retain(|_, v| *v > 0.0);
+        self.area_degeneration = flags;
+    }
+
+    /// Set degeneration coefficient for a single cortical area (in-place).
+    ///
+    /// Coefficients <= 0 disable degeneration for that area.
+    pub fn set_degeneration_flag(&mut self, cortical_id: CorticalID, degeneration: f32) {
+        if degeneration > 0.0 {
+            self.area_degeneration.insert(cortical_id, degeneration);
+        } else {
+            self.area_degeneration.remove(&cortical_id);
+        }
+    }
+
+    /// Register a conditional gate on a mapping: synapses from `src_area` to `dst_area`
+    /// will produce zero contribution unless `gate_area` has firing activity in the
+    /// current burst.
+    pub fn register_gate_mapping(
+        &mut self,
+        src_area: CorticalID,
+        dst_area: CorticalID,
+        gate_area: CorticalID,
+    ) {
+        self.gate_mappings.insert((src_area, dst_area), gate_area);
+    }
+
+    /// Remove the conditional gate from a mapping.
+    pub fn unregister_gate_mapping(&mut self, src_area: CorticalID, dst_area: CorticalID) {
+        self.gate_mappings.remove(&(src_area, dst_area));
+    }
+
+    /// Returns true if any gate mappings are registered.
+    pub fn has_gate_mappings(&self) -> bool {
+        !self.gate_mappings.is_empty()
+    }
+
+    /// Returns a reference to the gate mappings for external gate-state computation.
+    pub fn gate_mappings(&self) -> &AHashMap<(CorticalID, CorticalID), CorticalID> {
+        &self.gate_mappings
+    }
+
+    /// Update the set of closed gates for the current burst. Called by the NPU before
+    /// each propagation pass with the set of (src, dst) pairs whose gate area had no
+    /// firing activity.
+    pub fn set_closed_gates(&mut self, closed: AHashSet<(CorticalID, CorticalID)>) {
+        self.closed_gates = closed;
+    }
+
     /// Compute synaptic propagation for a set of fired neurons
     ///
     /// This is the MAIN PERFORMANCE-CRITICAL function that replaces the Python bottleneck.
@@ -213,7 +419,7 @@ impl SynapticPropagationEngine {
     /// # Parameters
     /// - `fired_neurons`: List of neurons that fired this burst
     /// - `synapse_storage`: Synapse array (weights, PSPs, types)
-    /// - `neuron_membrane_potentials`: Source neuron → membrane potential (0-255)
+    /// - `neuron_membrane_potentials`: Source neuron → firing-time membrane potential (`f32`)
     ///   Used when `mp_driven_psp` is enabled for the source cortical area
     ///
     /// # Performance Notes
@@ -221,14 +427,23 @@ impl SynapticPropagationEngine {
     /// - SIMD-friendly vectorized calculations
     /// - ZERO-COPY: Works directly with StdSynapseArray (no allocation overhead)
     /// - Cache-friendly data access patterns
-    pub fn propagate(
+    ///
+    /// `memory_associative_psp_out`: when `Some`, sums PSP from [`SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`]
+    /// synapses targeting memory-neuron ids (sparse associative LIF input; see `sparse_memory_lif`).
+    ///
+    /// Returns contributions split by per-synapse `delay_bursts` (see [`DelayedPropagationResult`]).
+    pub fn propagate_delayed(
         &mut self,
         fired_neurons: &[NeuronId],
         synapse_storage: &impl SynapseStorage,
-        neuron_membrane_potentials: &AHashMap<NeuronId, u8>,
-    ) -> Result<PropagationResult> {
+        neuron_membrane_potentials: &AHashMap<NeuronId, f32>,
+    ) -> Result<DelayedPropagationResult> {
         let profile_enabled = tracing::enabled!(tracing::Level::DEBUG);
         let trace_cfg = synapse_trace_cfg();
+        let synapse_verbose = trace_cfg.synapse_verbose;
+        let has_focus = trace_cfg.src_filter.is_some()
+            || trace_cfg.dst_filter.is_some()
+            || trace_cfg.dst_cortical_id_filter.is_some();
         let total_start = profile_enabled.then(std::time::Instant::now);
         self.total_propagations += 1;
 
@@ -245,7 +460,7 @@ impl SynapticPropagationEngine {
                 total_ms: 0.0,
                 rayon_threads: rayon::current_num_threads(),
             });
-            return Ok(AHashMap::new());
+            return Ok(DelayedPropagationResult::default());
         }
 
         // PHASE 1: GATHER - Collect all synapse indices for fired neurons (parallel)
@@ -275,7 +490,7 @@ impl SynapticPropagationEngine {
                     .unwrap_or(0.0),
                 rayon_threads: rayon::current_num_threads(),
             });
-            return Ok(AHashMap::new());
+            return Ok(DelayedPropagationResult::default());
         }
 
         let total_synapses = synapse_indices.len();
@@ -283,64 +498,99 @@ impl SynapticPropagationEngine {
 
         let use_fast_path = self.area_mp_driven_psp.is_empty()
             && self.area_psp_uniform_distribution.is_empty()
+            && self.closed_gates.is_empty()
             && !trace_cfg.enabled;
 
         if use_fast_path {
             let compute_start = profile_enabled.then(std::time::Instant::now);
-            let contributions: Vec<(NeuronId, CorticalID, SynapticContribution)> = synapse_indices
+            let contributions: Vec<(u32, NeuronId, CorticalID, SynapticContribution)> =
+                synapse_indices
+                    .par_iter()
+                    .filter_map(|&syn_idx| {
+                        let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
+                        let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
+                        let delay_bursts = synapse_storage.delay_bursts()[syn_idx].max(1) as u32;
+                        let weight = synapse_storage.weights()[syn_idx];
+                        let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
+                        let synapse_type = match synapse_storage.types()[syn_idx] {
+                            0 => FeagiSynapseType::Excitatory,
+                            _ => FeagiSynapseType::Inhibitory,
+                        };
+
+                        Some((
+                            delay_bursts,
+                            target_neuron,
+                            cortical_area,
+                            SynapticContribution(compute_synaptic_contribution(
+                                weight,
+                                psp,
+                                synapse_type,
+                            )),
+                        ))
+                    })
+                    .collect();
+            let compute_ms = compute_start
+                .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+                .unwrap_or(0.0);
+
+            let assoc_by_delay: AHashMap<u32, AHashMap<u32, f32>> = synapse_indices
                 .par_iter()
                 .filter_map(|&syn_idx| {
-                    let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
-                    let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
+                    if !synapse_storage.valid_mask()[syn_idx] {
+                        return None;
+                    }
+                    let target = NeuronId(synapse_storage.target_neurons()[syn_idx]);
+                    if target.0 < MEMORY_NEURON_ID_START {
+                        return None;
+                    }
+                    if (synapse_storage.edge_flags()[syn_idx] & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY)
+                        == 0
+                    {
+                        return None;
+                    }
+                    let delay_bursts = synapse_storage.delay_bursts()[syn_idx].max(1) as u32;
                     let weight = synapse_storage.weights()[syn_idx];
                     let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
                     let synapse_type = match synapse_storage.types()[syn_idx] {
                         0 => FeagiSynapseType::Excitatory,
                         _ => FeagiSynapseType::Inhibitory,
                     };
-
-                    Some((
-                        target_neuron,
-                        cortical_area,
-                        SynapticContribution(compute_synaptic_contribution(
-                            weight,
-                            psp,
-                            synapse_type,
-                        )),
-                    ))
+                    let c = compute_synaptic_contribution(weight, psp, synapse_type);
+                    Some((delay_bursts, target.0, c))
                 })
-                .collect();
-            let compute_ms = compute_start
-                .map(|start| start.elapsed().as_secs_f64() * 1000.0)
-                .unwrap_or(0.0);
-
-            let group_start = profile_enabled.then(std::time::Instant::now);
-            let result: PropagationResult = contributions
-                .into_par_iter()
                 .fold(
-                    AHashMap::<CorticalID, Vec<(NeuronId, SynapticContribution)>>::new,
-                    |mut acc, (target_neuron, cortical_area, contribution)| {
-                        acc.entry(cortical_area)
-                            .or_default()
-                            .push((target_neuron, contribution));
+                    AHashMap::<u32, AHashMap<u32, f32>>::new,
+                    |mut acc, (delay, id, v)| {
+                        *acc.entry(delay).or_default().entry(id).or_insert(0.0) += v;
                         acc
                     },
                 )
-                .reduce(AHashMap::new, |mut a, b| {
-                    for (cortical_id, mut contribs) in b {
-                        a.entry(cortical_id).or_default().append(&mut contribs);
+                .reduce(AHashMap::<u32, AHashMap<u32, f32>>::new, |mut a, b| {
+                    for (delay, inner) in b {
+                        let e = a.entry(delay).or_default();
+                        for (k, v) in inner {
+                            *e.entry(k).or_insert(0.0) += v;
+                        }
                     }
                     a
                 });
+
+            let group_start = profile_enabled.then(std::time::Instant::now);
+            let fcl_by_delay = fold_contributions_by_delay(contributions);
             let group_ms = group_start
                 .map(|start| start.elapsed().as_secs_f64() * 1000.0)
                 .unwrap_or(0.0);
+
+            let contrib_count: usize = fcl_by_delay
+                .values()
+                .map(|v| v.values().map(|x| x.len()).sum::<usize>())
+                .sum();
 
             self.last_profile = Some(PropagationProfile {
                 fired_neurons: fired_neurons.len(),
                 synapse_indices: total_synapses,
                 unique_sources: 0,
-                contributions: result.values().map(|v| v.len()).sum(),
+                contributions: contrib_count,
                 gather_ms,
                 metadata_ms: 0.0,
                 compute_ms,
@@ -351,7 +601,10 @@ impl SynapticPropagationEngine {
                 rayon_threads: rayon::current_num_threads(),
             });
 
-            return Ok(result);
+            return Ok(DelayedPropagationResult {
+                fcl_by_delay,
+                memory_associative_by_delay: assoc_by_delay,
+            });
         }
 
         // PRE-COMPUTE: Source neuron metadata (area, properties, synapse counts)
@@ -366,6 +619,15 @@ impl SynapticPropagationEngine {
         let metadata_start = profile_enabled.then(std::time::Instant::now);
         let source_metadata: AHashMap<NeuronId, SourceNeuronMetadata> = synapse_indices
             .par_iter()
+            // CRITICAL: `synapse_indices` comes from `self.synapse_index`, which is only rebuilt
+            // via an explicit `rebuild_synapse_index()` call (see `remove_synapse` /
+            // `remove_synapses_between` / `remove_synapses_from_sources_to_targets` docs). Between
+            // a deletion and the next rebuild, stale (invalid) indices remain in the index. The
+            // contribution loop below already skips invalid synapses via `valid_mask`, but this
+            // outgoing-synapse count feeds the `psp_uniform_distribution = false` divisor, so it
+            // must also exclude invalid synapses or surviving synapses get short-changed (PSP
+            // divided by a stale, inflated count).
+            .filter(|&&syn_idx| synapse_storage.valid_mask()[syn_idx])
             .map(|&syn_idx| NeuronId(synapse_storage.source_neurons()[syn_idx]))
             .fold(
                 AHashMap::<NeuronId, (Option<CorticalID>, usize)>::new,
@@ -416,13 +678,16 @@ impl SynapticPropagationEngine {
         // This is where Python spent 165ms doing inefficient numpy ops
         // ZERO-COPY: Access StdSynapseArray fields directly (Structure-of-Arrays)
         let compute_start = profile_enabled.then(std::time::Instant::now);
-        let contributions: Vec<(NeuronId, CorticalID, SynapticContribution)> = synapse_indices
+        let synapse_match_count = AtomicUsize::new(0);
+        let contributions: Vec<(u32, NeuronId, CorticalID, SynapticContribution)> = synapse_indices
             .par_iter()
             .filter_map(|&syn_idx| {
                 // Skip invalid synapses (already filtered by build_synapse_index, but double-check)
                 if !synapse_storage.valid_mask()[syn_idx] {
                     return None;
                 }
+
+                let delay_bursts = synapse_storage.delay_bursts()[syn_idx].max(1) as u32;
 
                 // Get target neuron from SoA
                 let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
@@ -436,9 +701,28 @@ impl SynapticPropagationEngine {
                 // Get pre-computed source neuron metadata (eliminates 4 HashMap lookups per synapse!)
                 let source_meta = source_metadata.get(&source_neuron)?;
 
-                // Logging: exclude power sources to avoid noise (cortical_idx=1 maps to _power).
+                // Conditional gate check: if this (src_area, dst_area) pair has a closed
+                // gate, the synapse contributes nothing (transistor OFF state).
+                if self.closed_gates.contains(&(source_meta.area, cortical_area)) {
+                    return None;
+                }
+
+                // Logging: exclude power sources unless tracing a destination cortical area (then
+                // power→area drive is often relevant).
+                let has_focus = trace_cfg.src_filter.is_some()
+                    || trace_cfg.dst_filter.is_some()
+                    || trace_cfg.dst_cortical_id_filter.is_some();
+                let dst_cortical_ok = trace_cfg
+                    .dst_cortical_id_filter
+                    .as_ref()
+                    .map(|id| *id == cortical_area)
+                    .unwrap_or(true);
+                let power_src = source_meta.area == *power_cortical_id();
+                let allow_power_src = trace_cfg.dst_cortical_id_filter.is_some() && dst_cortical_ok;
                 let allow_trace = trace_cfg.enabled
-                    && source_meta.area != *power_cortical_id()
+                    && has_focus
+                    && dst_cortical_ok
+                    && (!power_src || allow_power_src)
                     && trace_cfg
                         .src_filter
                         .map(|id| id == source_neuron.0)
@@ -486,55 +770,133 @@ impl SynapticPropagationEngine {
                         base_contribution
                     }
                 };
+                let final_contribution =
+                    self.scale_transmission(synapse_storage, syn_idx, final_contribution);
 
                 if allow_trace {
-                    trace!(
-                        target: "feagi-npu-trace",
-                        "[SYNAPSE] syn_idx={} src={} dst={} src_area={:?} dst_area={:?} type={:?} weight={} psp_used={} mp_driven={} uniform={} outgoing={} base_contrib={:.3} final_contrib={:.3}",
-                        syn_idx,
-                        source_neuron.0,
-                        target_neuron.0,
-                        source_meta.area,
-                        cortical_area,
-                        synapse_type,
-                        weight,
-                        base_psp,
-                        source_meta.mp_driven,
-                        source_meta.uniform,
-                        source_meta.synapse_count,
-                        base_contribution,
-                        final_contribution
-                    );
+                    if synapse_verbose {
+                        debug!(
+                            target: "feagi-npu-trace",
+                            "[SYNAPSE] syn_idx={} src={} dst={} src_area={:?} dst_area={:?} type={:?} weight={} psp_used={} mp_driven={} uniform={} outgoing={} base_contrib={:.3} final_contrib={:.3}",
+                            syn_idx,
+                            source_neuron.0,
+                            target_neuron.0,
+                            source_meta.area,
+                            cortical_area,
+                            synapse_type,
+                            weight,
+                            base_psp,
+                            source_meta.mp_driven,
+                            source_meta.uniform,
+                            source_meta.synapse_count,
+                            base_contribution,
+                            final_contribution
+                        );
+                    } else {
+                        synapse_match_count.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
 
-                Some((target_neuron, cortical_area, SynapticContribution(final_contribution)))
+                Some((
+                    delay_bursts,
+                    target_neuron,
+                    cortical_area,
+                    SynapticContribution(final_contribution),
+                ))
             })
             .collect();
+
+        let assoc_by_delay: AHashMap<u32, AHashMap<u32, f32>> = synapse_indices
+            .par_iter()
+            .filter_map(|&syn_idx| {
+                if !synapse_storage.valid_mask()[syn_idx] {
+                    return None;
+                }
+                let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
+                if target_neuron.0 < MEMORY_NEURON_ID_START {
+                    return None;
+                }
+                if (synapse_storage.edge_flags()[syn_idx] & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY) == 0 {
+                    return None;
+                }
+                let target_area = self.neuron_to_area.get(&target_neuron)?;
+                let delay_bursts = synapse_storage.delay_bursts()[syn_idx].max(1) as u32;
+                let source_neuron = NeuronId(synapse_storage.source_neurons()[syn_idx]);
+                let source_meta = source_metadata.get(&source_neuron)?;
+
+                if self.closed_gates.contains(&(source_meta.area, *target_area)) {
+                    return None;
+                }
+
+                let base_psp = if source_meta.mp_driven {
+                    *neuron_membrane_potentials.get(&source_neuron).unwrap_or_else(|| {
+                        panic!(
+                            "Invariant violation: missing membrane potential for source neuron {} (mp_driven_psp=true). Refusing fallback to 0.",
+                            source_neuron.0
+                        )
+                    })
+                } else {
+                    synapse_storage.postsynaptic_potentials()[syn_idx]
+                };
+                let weight = synapse_storage.weights()[syn_idx];
+                let synapse_type = match synapse_storage.types()[syn_idx] {
+                    0 => FeagiSynapseType::Excitatory,
+                    _ => FeagiSynapseType::Inhibitory,
+                };
+                let base_contribution =
+                    compute_synaptic_contribution(weight, base_psp, synapse_type);
+                let final_contribution = if source_meta.uniform {
+                    base_contribution
+                } else if source_meta.synapse_count > 1 {
+                    base_contribution / source_meta.synapse_count as f32
+                } else {
+                    base_contribution
+                };
+                let final_contribution =
+                    self.scale_transmission(synapse_storage, syn_idx, final_contribution);
+                Some((delay_bursts, target_neuron.0, final_contribution))
+            })
+            .fold(
+                AHashMap::<u32, AHashMap<u32, f32>>::new,
+                |mut acc, (delay, id, v)| {
+                    *acc.entry(delay).or_default().entry(id).or_insert(0.0) += v;
+                    acc
+                },
+            )
+            .reduce(
+                AHashMap::<u32, AHashMap<u32, f32>>::new,
+                |mut a, b| {
+                    for (delay, inner) in b {
+                        let e = a.entry(delay).or_default();
+                        for (k, v) in inner {
+                            *e.entry(k).or_insert(0.0) += v;
+                        }
+                    }
+                    a
+                },
+            );
+
+        if trace_cfg.enabled && has_focus && !synapse_verbose {
+            let n = synapse_match_count.load(Ordering::Relaxed);
+            if n > 0 {
+                debug!(
+                    target: "feagi-npu-trace",
+                    "[SYNAPSE] synapses_matching_focus count={}",
+                    n
+                );
+            }
+        }
         let compute_ms = compute_start
             .map(|start| start.elapsed().as_secs_f64() * 1000.0)
             .unwrap_or(0.0);
 
-        // PHASE 3: GROUP - Group by cortical area (PARALLEL fold-reduce)
-        // Optimization: Use rayon parallel fold-reduce for 8-12× speedup on large datasets
-        // Sequential was taking 258ms for 1.6M synapses - this should reduce to 20-30ms
+        // PHASE 3: GROUP - Group by delay then cortical area
         let group_start = profile_enabled.then(std::time::Instant::now);
-        let result: PropagationResult = contributions
-            .into_par_iter()
-            .fold(
-                AHashMap::<CorticalID, Vec<(NeuronId, SynapticContribution)>>::new,
-                |mut acc, (target_neuron, cortical_area, contribution)| {
-                    acc.entry(cortical_area)
-                        .or_default()
-                        .push((target_neuron, contribution));
-                    acc
-                },
-            )
-            .reduce(AHashMap::new, |mut a, b| {
-                for (cortical_id, mut contribs) in b {
-                    a.entry(cortical_id).or_default().append(&mut contribs);
-                }
-                a
-            });
+        let fcl_by_delay = fold_contributions_by_delay(contributions);
+        let contrib_count: usize = fcl_by_delay
+            .values()
+            .map(|v| v.values().map(|x| x.len()).sum::<usize>())
+            .sum();
         let group_ms = group_start
             .map(|start| start.elapsed().as_secs_f64() * 1000.0)
             .unwrap_or(0.0);
@@ -543,7 +905,7 @@ impl SynapticPropagationEngine {
             fired_neurons: fired_neurons.len(),
             synapse_indices: total_synapses,
             unique_sources: source_metadata.len(),
-            contributions: result.values().map(|v| v.len()).sum(),
+            contributions: contrib_count,
             gather_ms,
             metadata_ms,
             compute_ms,
@@ -554,7 +916,32 @@ impl SynapticPropagationEngine {
             rayon_threads: rayon::current_num_threads(),
         });
 
-        Ok(result)
+        Ok(DelayedPropagationResult {
+            fcl_by_delay,
+            memory_associative_by_delay: assoc_by_delay,
+        })
+    }
+
+    /// Legacy single-burst (`delay_bursts == 1`) projection for tests and callers that expect
+    /// the pre-delay [`PropagationResult`] shape.
+    pub fn propagate(
+        &mut self,
+        fired_neurons: &[NeuronId],
+        synapse_storage: &impl SynapseStorage,
+        neuron_membrane_potentials: &AHashMap<NeuronId, f32>,
+        memory_associative_psp_out: Option<&mut AHashMap<u32, f32>>,
+    ) -> Result<PropagationResult> {
+        let mut delayed =
+            self.propagate_delayed(fired_neurons, synapse_storage, neuron_membrane_potentials)?;
+        if let Some(out) = memory_associative_psp_out {
+            out.clear();
+            if let Some(m) = delayed.memory_associative_by_delay.remove(&1) {
+                for (k, v) in m {
+                    out.insert(k, v);
+                }
+            }
+        }
+        Ok(delayed.fcl_by_delay.remove(&1).unwrap_or_default())
     }
 
     /// Get performance statistics
@@ -586,10 +973,15 @@ mod tests {
             count: 3,
             source_neurons: vec![1, 1, 2],    // Raw u32 values
             target_neurons: vec![10, 11, 10], // Raw u32 values
-            weights: vec![255, 128, 200],     // Raw u8 values
-            postsynaptic_potentials: vec![255, 255, 200], // Raw u8 PSP values
-            types: vec![0, 1, 0],             // 0=excitatory, 1=inhibitory
+            weights: vec![255.0, 128.0, 200.0],
+            postsynaptic_potentials: vec![255.0, 255.0, 200.0],
+            types: vec![0, 1, 0], // 0=excitatory, 1=inhibitory
+            edge_flags: vec![0, 0, 0],
+            delay_bursts: vec![1, 1, 1],
             valid_mask: vec![true, true, true],
+            eligibility_traces: vec![0.0, 0.0, 0.0],
+            modulation_groups: Vec::new(),
+            modulation_groups_allocated: false,
             source_index: ahash::AHashMap::new(),
         };
 
@@ -626,7 +1018,9 @@ mod tests {
         // Propagate from neuron 1
         let fired = vec![NeuronId(1)];
         let neuron_mps = AHashMap::new(); // Empty MPs for this test
-        let result = engine.propagate(&fired, &synapses, &neuron_mps).unwrap();
+        let result = engine
+            .propagate(&fired, &synapses, &neuron_mps, None)
+            .unwrap();
 
         // Should have 2 contributions in area 1
         assert_eq!(result.len(), 1);
@@ -657,7 +1051,9 @@ mod tests {
         // Propagate from multiple neurons in parallel
         let fired = vec![NeuronId(1), NeuronId(2)];
         let neuron_mps = AHashMap::new(); // Empty MPs for this test
-        let result = engine.propagate(&fired, &synapses, &neuron_mps).unwrap();
+        let result = engine
+            .propagate(&fired, &synapses, &neuron_mps, None)
+            .unwrap();
 
         let area1_id = CoreCorticalType::Power.to_cortical_id();
         let area1_contributions = result.get(&area1_id).unwrap();

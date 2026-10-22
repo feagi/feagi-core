@@ -94,6 +94,12 @@ impl CorticalChangeClassifier {
             "position",
             // Visualization-only aggregation control (BV/UI-driven)
             "visualization_voxel_granularity",
+            // Field-to-twin index used by classifier episodic_scan injection.
+            "memory_twin_areas",
+            // Modulator subscriptions and spike-train flag: plain properties pushed to the
+            // burst engine by `sync_modulators_from_genome`; no neuron or synapse rebuild.
+            "modulators",
+            "spike_train",
             // IO coding updates (cortical ID remap)
             "coding_signage",
             "coding_behavior",
@@ -157,6 +163,11 @@ impl CorticalChangeClassifier {
             "init_lifespan",
             "neuron_init_lifespan",
             "temporal_depth",
+            // MP learning / change encoding modes for memory areas
+            "mp_learning_enabled",
+            "mp_change_mode",
+            "mp_delta_quantization",
+            "mp_ratio_quantization",
             // Membrane potential
             "mp_charge_accumulation",
             "neuron_mp_charge_accumulation",
@@ -170,6 +181,8 @@ impl CorticalChangeClassifier {
             "plasticity_constant",
             // Burst engine
             "burst_engine_active",
+            // Opt-in LIF homeostatic leak (JSON object; no synapse rebuild)
+            "rate_modulated_leak",
         ]
         .iter()
         .copied()

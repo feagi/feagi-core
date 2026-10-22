@@ -129,6 +129,29 @@ pub struct CorticalAreaInfo {
     /// Omitted for non-memory areas.
     #[serde(rename = "temporal_depth", skip_serializing_if = "Option::is_none")]
     pub temporal_depth: Option<u32>,
+    /// Whether membrane potential learning is enabled for this memory area.
+    /// Omitted for non-memory areas.
+    #[serde(
+        rename = "mp_learning_enabled",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mp_learning_enabled: Option<bool>,
+    /// Change-based MP encoding ("none", "mp_differential", "mp_ratio").
+    /// Omitted for non-memory areas.
+    #[serde(rename = "mp_change_mode", skip_serializing_if = "Option::is_none")]
+    pub mp_change_mode: Option<String>,
+    /// Differential rounding step in MP units. Omitted for non-memory areas.
+    #[serde(
+        rename = "mp_delta_quantization",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mp_delta_quantization: Option<f32>,
+    /// Ratio rounding step in percent per compounding bucket. Omitted for non-memory areas.
+    #[serde(
+        rename = "mp_ratio_quantization",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mp_ratio_quantization: Option<f32>,
     pub properties: HashMap<String, serde_json::Value>,
 
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)
@@ -144,13 +167,21 @@ pub struct CorticalAreaInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding_format: Option<String>,
 
-    /// Unit ID (0, 1, 2, ...) - only for IPU/OPU
+    /// Cortical unit index (`CorticalUnitIndex`): little-endian u16 in bytes 6-7
+    /// of the 8-byte cortical ID — which instance of this I/O cortical unit type
+    /// (aligns with motor/sensory grouping on the wire and with Brain Visualizer `unit_id`).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub unit_id: Option<u8>,
+    pub unit_id: Option<u16>,
 
-    /// Group ID (0, 1, 2, ...) - only for IPU/OPU
+    /// Cortical sub-unit index (`CorticalSubUnitIndex`): flag bits 4-7 — which cortical
+    /// area inside a multi-area unit (e.g. vision segments). Matches Brain Visualizer `subunit_id`.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub group_id: Option<u8>,
+    pub subunit_id: Option<u8>,
+
+    /// Same as [`Self::unit_id`] (CorticalUnitIndex, bytes 6-7). Kept for clients that
+    /// already read `group_id` from older API responses.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<u16>,
 
     /// IO coding signage (e.g., "Percentage Signed", "Percentage Unsigned")
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -255,6 +286,60 @@ pub struct BrainRegionInfo {
     pub cortical_areas: Vec<String>,
     pub child_regions: Vec<String>,
     pub properties: HashMap<String, serde_json::Value>,
+}
+
+/// First-class genome classifier. Its areas live in the circuit region
+/// named by `parent_region_id`. That circuit may sit under root.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClassifierInfo {
+    pub classifier_id: String,
+    pub name: String,
+    pub parent_region_id: String,
+    pub coordinates_3d: [i32; 3],
+    pub sample_area_ids: Vec<String>,
+    pub class_bindings: Vec<feagi_structures::genomic::classifiers::ClassifierClassBinding>,
+    pub sample_memory_id: String,
+    pub class_memory_id: String,
+    pub error_area_id: String,
+    #[serde(default)]
+    pub reward_training: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer_feedback_area_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pain_area_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pleasure_area_id: Option<String>,
+    #[serde(default)]
+    pub answer_latency_bursts: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub learn_area_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence_area_id: Option<String>,
+    pub properties: HashMap<String, serde_json::Value>,
+}
+
+impl From<feagi_structures::genomic::classifiers::Classifier> for ClassifierInfo {
+    fn from(classifier: feagi_structures::genomic::classifiers::Classifier) -> Self {
+        Self {
+            classifier_id: classifier.classifier_id,
+            name: classifier.name,
+            parent_region_id: classifier.parent_region_id,
+            coordinates_3d: classifier.coordinates_3d,
+            sample_area_ids: classifier.sample_area_ids,
+            class_bindings: classifier.class_bindings,
+            sample_memory_id: classifier.sample_memory_id,
+            class_memory_id: classifier.class_memory_id,
+            error_area_id: classifier.error_area_id,
+            reward_training: classifier.reward_training,
+            answer_feedback_area_id: classifier.answer_feedback_area_id,
+            pain_area_id: classifier.pain_area_id,
+            pleasure_area_id: classifier.pleasure_area_id,
+            answer_latency_bursts: classifier.answer_latency_bursts,
+            learn_area_id: classifier.learn_area_id,
+            confidence_area_id: classifier.confidence_area_id,
+            properties: classifier.properties,
+        }
+    }
 }
 
 /// Parameters for creating a brain region
@@ -363,6 +448,13 @@ pub struct ConnectivityStats {
 pub struct SystemHealth {
     pub burst_engine_active: bool,
     pub brain_readiness: bool,
+    /// Validity of the most-recently-loaded genome according to the
+    /// `CURRENT_SCHEMA_VERSION` validator. `None` means no genome has
+    /// been loaded yet; `Some(false)` means a genome was loaded but
+    /// carried blocking validator errors (running in degraded mode).
+    /// Sourced from the core state's `genome_validity` atomic, which
+    /// genome-loading paths set from `ChainResult.is_blocking_clean()`.
+    pub genome_validity: Option<bool>,
     pub neuron_count: usize,
     pub neuron_capacity: usize,
     pub synapse_capacity: usize,

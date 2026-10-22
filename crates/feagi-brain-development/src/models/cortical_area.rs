@@ -62,8 +62,13 @@ pub trait CorticalAreaExt {
     /// Get property as u16 with default
     fn get_u16_property(&self, key: &str, default: u16) -> u16;
 
-    /// Get property as f32 with default
+    /// Get property as f32 with default.
+    /// NOTE: Incurs precision loss. Use `get_f64_property` when building API responses.
     fn get_f32_property(&self, key: &str, default: f32) -> f32;
+
+    /// Get property as f64 with default, preserving full precision from the stored JSON value.
+    /// Prefer this over `get_f32_property() as f64` when building DTOs / API responses.
+    fn get_f64_property(&self, key: &str, default: f64) -> f64;
 
     /// Get property as bool with default
     fn get_bool_property(&self, key: &str, default: bool) -> bool;
@@ -89,7 +94,8 @@ pub trait CorticalAreaExt {
     /// Get postsynaptic_current from properties
     fn postsynaptic_current(&self) -> f32;
 
-    /// Get psp_uniform_distribution from properties
+    /// Get psp_uniform_distribution from properties (defaults to true for Power and memory
+    /// cortical areas, false for other types when the key is absent)
     fn psp_uniform_distribution(&self) -> bool;
 
     /// Get degeneration from properties
@@ -255,6 +261,13 @@ impl CorticalAreaExt for CorticalArea {
             .unwrap_or(default)
     }
 
+    fn get_f64_property(&self, key: &str, default: f64) -> f64 {
+        self.properties
+            .get(key)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(default)
+    }
+
     fn get_bool_property(&self, key: &str, default: bool) -> bool {
         self.properties
             .get(key)
@@ -290,6 +303,7 @@ impl CorticalAreaExt for CorticalArea {
                     CorticalAreaType::Memory(_) => Some("MEMORY".to_string()),
                     CorticalAreaType::Custom(_) => Some("CUSTOM".to_string()),
                     CorticalAreaType::Core(_) => Some("CORE".to_string()),
+                    CorticalAreaType::Modulator => Some("MODULATOR".to_string()),
                 }
             })
     }
@@ -314,7 +328,14 @@ impl CorticalAreaExt for CorticalArea {
     }
 
     fn psp_uniform_distribution(&self) -> bool {
-        self.get_bool_property("psp_uniform_distribution", false)
+        let default = matches!(
+            self.cortical_type,
+            feagi_structures::genomic::cortical_area::CorticalAreaType::Memory(_)
+                | feagi_structures::genomic::cortical_area::CorticalAreaType::Core(
+                    CoreCorticalType::Power
+                )
+        );
+        self.get_bool_property("psp_uniform_distribution", default)
     }
 
     fn degeneration(&self) -> f32 {
@@ -468,5 +489,29 @@ mod tests {
             Some(&serde_json::json!("visual"))
         );
         assert_eq!(area.get_property("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_power_defaults_zero_degeneration_and_psp_uniform() {
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type = cortical_id
+            .as_cortical_type()
+            .expect("Failed to get cortical type");
+        let dims = CorticalAreaDimensions::new(1, 1, 1).unwrap();
+        let area = CorticalArea::new(
+            cortical_id,
+            1,
+            "Brain_Power".to_string(),
+            dims,
+            (0, 0, -20).into(),
+            cortical_type,
+        )
+        .unwrap();
+
+        assert_eq!(area.degeneration(), 0.0);
+        assert!(
+            area.psp_uniform_distribution(),
+            "Power must default to PSP uniformity when the genome omits the flag"
+        );
     }
 }

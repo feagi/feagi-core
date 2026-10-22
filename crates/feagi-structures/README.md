@@ -19,14 +19,6 @@
 - **Templates**: Predefined templates for sensor and motor cortical units
 - **Error Handling**: Comprehensive error types for data validation
 
-## Installation
-
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-feagi-structures = "0.0.1-beta.1"
-```
 
 ## Usage
 
@@ -88,8 +80,6 @@ Contributions are welcome! Please see the [main repository](https://github.com/f
 
 ## Links
 
-- **Homepage**: https://feagi.org
-- **Repository**: https://github.com/feagi/feagi-core
-- **Documentation**: https://docs.rs/feagi-data-structures
-- **Issue Tracker**: https://github.com/feagi/feagi-core/issues
+- **[Discord](https://discord.gg/PTVC8fyGN8)**
+- **[Website](https://neuraville.com/feagi)**
 

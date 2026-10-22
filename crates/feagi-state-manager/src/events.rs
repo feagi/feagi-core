@@ -22,7 +22,7 @@ pub struct EventChannel {
     _phantom: std::marker::PhantomData<()>,
 }
 
-#[cfg(all(feature = "no_std", not(target_family = "wasm")))]
+#[cfg(all(feature = "no_std", not(feature = "std"), not(target_family = "wasm")))]
 pub struct EventChannel {
     // TODO: heapless::spsc implementation
     _phantom: std::marker::PhantomData<()>,

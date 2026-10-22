@@ -1,16 +1,22 @@
 // TODO there is a bug on all encoders in that they will send all channel data even if not updated since scratch is cleared only if channel is active!
+mod audio_spectrum;
 mod boolean;
 mod cartesian_plane;
 mod misc_data;
 mod percentage_encoder;
+mod raw_imu;
 mod segmented_image_frame;
 
+#[allow(unused_imports)]
+pub(crate) use audio_spectrum::AudioSpectrumNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
 pub(crate) use boolean::BooleanNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
 pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
+pub(crate) use raw_imu::RawIMUNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
 pub(crate) use segmented_image_frame::SegmentedImageFrameNeuronVoxelXYZPEncoder;
 

@@ -1,0 +1,539 @@
+//! Image-frame encoder selector over `feagi-sensorimotor` vision coders.
+//!
+//! Selects FEAGI's Cartesian-plane vision coder (`Vision` template) and writes a resized RGB
+//! [`ImageFrame`] into the sensory cache before encoding to neuron voxels. When
+//! `encoder_profile.segmentation_teacher` is set, also writes the sample mask onto the
+//! Object Segmentation Input IPU (`iseg`, W×H×1). Each labeled pixel's potential is
+//! `(class_id + 1) / class_count`. Ignore-label pixels are omitted.
+//! A class teacher (`encoder_profile.teacher`) is clamped on Train only; val/test write an
+//! empty teacher so the class IPU does not receive labels during evaluation.
+
+use std::time::Instant;
+
+use feagi_sensorimotor::data_pipeline::PipelineStageProperties;
+use feagi_sensorimotor::data_types::descriptors::{
+    ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution,
+    SegmentedImageFrameProperties, SegmentedXYImageResolutions,
+};
+use feagi_sensorimotor::data_types::processing::ImageFrameProcessor;
+use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D};
+use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
+use feagi_sensorimotor::ConnectorCache;
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
+};
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::SensoryCorticalUnit;
+use feagi_structures::neuron_voxels::class_potential::encode_class_potential;
+use feagi_structures::neuron_voxels::xyzp::{
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+};
+
+use crate::binding::encoder::EncoderPlugin;
+use crate::binding::population_encoder::PopulationEncoder;
+use crate::binding::profile::{EncoderBindingProfile, SegmentedVisionBinding, VisionLayout};
+use crate::contracts::common::{PluginId, PluginRef};
+use crate::contracts::ir_sample::{IRSample, Payload, TypedTarget};
+use crate::error::TrainerError;
+
+/// Sensory cortical unit index this encoder writes to for the vision slice.
+const VISION_SENSORY_UNIT: u16 = 0;
+/// Sensory unit index for the iseg mask teacher. Distinct type from vision, same group 0.
+const ISEG_SENSORY_UNIT: u16 = 0;
+
+/// Stateless selector that encodes PNG/JPEG image bytes via FEAGI vision coding.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ImageFrameEncoder;
+
+impl ImageFrameEncoder {
+    /// Creates a new selector.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Cortical ID the mask teacher writes. Must match ensure_io Object Segmentation Input unit 0.
+    pub fn iseg_cortical_id() -> CorticalID {
+        SensoryCorticalUnit::get_cortical_ids_array_for_object_segmentation_input_with_parameters(
+            FrameChangeHandling::Absolute,
+            CorticalUnitIndex::from(ISEG_SENSORY_UNIT),
+        )[0]
+    }
+
+    fn image_properties(
+        profile: &EncoderBindingProfile,
+    ) -> Result<ImageFrameProperties, TrainerError> {
+        let width = profile.image_width.ok_or_else(|| {
+            TrainerError::Config("image encoder requires encoder_profile.image_width".to_string())
+        })?;
+        let height = profile.image_height.ok_or_else(|| {
+            TrainerError::Config("image encoder requires encoder_profile.image_height".to_string())
+        })?;
+        let resolution = ImageXYResolution::new(width, height).map_err(map_err)?;
+        ImageFrameProperties::new(resolution, ColorSpace::Gamma, ColorChannelLayout::RGB)
+            .map_err(map_err)
+    }
+
+    /// One voxel per kept pixel at `(x, y, 0)` whose potential encodes the class.
+    /// Ignore pixels are omitted.
+    fn write_iseg_mask(
+        width: u32,
+        height: u32,
+        class_count: u32,
+        labels: &[u8],
+        ignore_label: Option<u8>,
+    ) -> Result<NeuronVoxelXYZPArrays, TrainerError> {
+        let expected_len = (width as usize)
+            .checked_mul(height as usize)
+            .ok_or_else(|| TrainerError::Config("iseg mask dimensions overflow".to_string()))?;
+        if labels.len() != expected_len {
+            return Err(TrainerError::Config(format!(
+                "iseg mask length {} does not match {width}x{height}",
+                labels.len()
+            )));
+        }
+        let mut arrays = NeuronVoxelXYZPArrays::new();
+        for y in 0..height {
+            for x in 0..width {
+                let label = labels[(y as usize) * (width as usize) + (x as usize)];
+                if ignore_label == Some(label) {
+                    continue;
+                }
+                let class_id = u32::from(label);
+                if class_id >= class_count {
+                    return Err(TrainerError::Config(format!(
+                        "iseg class {label} is outside class count {class_count}"
+                    )));
+                }
+                let potential = encode_class_potential(class_id, class_count).map_err(map_err)?;
+                arrays.push_raw(x, y, 0, potential);
+            }
+        }
+        Ok(arrays)
+    }
+}
+
+fn gaze_properties(binding: &SegmentedVisionBinding) -> Result<GazeProperties, TrainerError> {
+    let x = Percentage::new_from_0_1(binding.gaze_eccentricity_x as f32).map_err(map_err)?;
+    let y = Percentage::new_from_0_1(binding.gaze_eccentricity_y as f32).map_err(map_err)?;
+    let modulation = Percentage::new_from_0_1(binding.gaze_modulation as f32).map_err(map_err)?;
+    Ok(GazeProperties::new(Percentage2D::new(x, y), modulation))
+}
+
+fn map_err<E: std::fmt::Display>(e: E) -> TrainerError {
+    TrainerError::Config(e.to_string())
+}
+
+impl EncoderPlugin for ImageFrameEncoder {
+    type Frame = CorticalMappedXYZPNeuronVoxels;
+
+    fn plugin_ref(&self) -> PluginRef {
+        PluginRef {
+            id: PluginId("encoder.image_frame".to_string()),
+            version: "1.0.0".to_string(),
+        }
+    }
+
+    fn encode(
+        &mut self,
+        sample: &IRSample,
+        profile: &EncoderBindingProfile,
+    ) -> Result<Self::Frame, TrainerError> {
+        let png_bytes = match &sample.payload {
+            Payload::Bytes(bytes) => bytes,
+            other => {
+                return Err(TrainerError::Config(format!(
+                    "image encoder requires a bytes payload, got {other:?}"
+                )))
+            }
+        };
+
+        let image_props = Self::image_properties(profile)?;
+        let frame =
+            ImageFrame::new_from_png_bytes(png_bytes, &ColorSpace::Gamma).map_err(map_err)?;
+        image_props
+            .verify_image_frame_matches_properties(&frame)
+            .map_err(map_err)?;
+
+        let cache = ConnectorCache::new();
+        let unit = CorticalUnitIndex::from(VISION_SENSORY_UNIT);
+        let mut sensor_cache = cache.get_sensor_cache();
+        let channel_count = CorticalChannelCount::new(profile.channels).map_err(map_err)?;
+        match profile.vision_layout {
+            VisionLayout::Simple => {
+                sensor_cache
+                    .vision_register(
+                        unit,
+                        channel_count,
+                        FrameChangeHandling::Absolute,
+                        image_props,
+                    )
+                    .map_err(map_err)?;
+                sensor_cache
+                    .vision_replace_all_stages(
+                        unit,
+                        CorticalChannelIndex::from(0u32),
+                        vec![PipelineStageProperties::new_image_frame_processor(
+                            ImageFrameProcessor::new(image_props),
+                        )],
+                    )
+                    .map_err(map_err)?;
+                sensor_cache
+                    .vision_write(
+                        unit,
+                        CorticalChannelIndex::from(0u32),
+                        WrappedIOData::ImageFrame(frame),
+                    )
+                    .map_err(map_err)?;
+            }
+            VisionLayout::Segmented => {
+                let segmented = profile.segmented_vision.as_ref().ok_or_else(|| {
+                    TrainerError::Config(
+                        "segmented vision requires encoder_profile.segmented_vision".to_string(),
+                    )
+                })?;
+                segmented.validate()?;
+                let resolution = image_props.get_image_resolution();
+                if resolution.width < 3 || resolution.height < 3 {
+                    return Err(TrainerError::Config(
+                        "segmented vision source width and height must be at least 3".to_string(),
+                    ));
+                }
+                let center =
+                    ImageXYResolution::new(segmented.center_width, segmented.center_height)
+                        .map_err(map_err)?;
+                let peripheral =
+                    ImageXYResolution::new(segmented.peripheral_width, segmented.peripheral_height)
+                        .map_err(map_err)?;
+                let segmented_props = SegmentedImageFrameProperties::new(
+                    SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+                        center, peripheral,
+                    ),
+                    ColorChannelLayout::RGB,
+                    ColorChannelLayout::RGB,
+                    ColorSpace::Gamma,
+                );
+                sensor_cache
+                    .segmented_vision_register(
+                        unit,
+                        channel_count,
+                        FrameChangeHandling::Absolute,
+                        image_props,
+                        segmented_props,
+                        gaze_properties(segmented)?,
+                    )
+                    .map_err(map_err)?;
+                sensor_cache
+                    .segmented_vision_write(
+                        unit,
+                        CorticalChannelIndex::from(0u32),
+                        WrappedIOData::ImageFrame(frame),
+                    )
+                    .map_err(map_err)?;
+            }
+        }
+        sensor_cache
+            .encode_all_sensors_to_neurons(Instant::now())
+            .map_err(map_err)?;
+        let mut neurons = sensor_cache.get_neurons().clone();
+        if profile.teacher.is_some() && profile.segmentation_teacher.is_some() {
+            return Err(TrainerError::Config(
+                "image encoder cannot write a class teacher and an iseg mask teacher together"
+                    .to_string(),
+            ));
+        }
+        if let Some(teacher) = &profile.teacher {
+            let teacher_arrays =
+                PopulationEncoder::encode_class_teacher(&sample.split, &sample.target, teacher)?;
+            neurons.insert(
+                PopulationEncoder::misc_cortical_id(teacher.unit),
+                teacher_arrays,
+            );
+        }
+        if let Some(teacher) = &profile.segmentation_teacher {
+            teacher.validate()?;
+            let Some(TypedTarget::SegmentationMask {
+                width,
+                height,
+                labels,
+                ignore_label,
+            }) = &sample.target
+            else {
+                return Err(TrainerError::Config(
+                    "image encoder segmentation_teacher requires a SegmentationMask target"
+                        .to_string(),
+                ));
+            };
+            if *width != teacher.mask_width || *height != teacher.mask_height {
+                return Err(TrainerError::Config(format!(
+                    "iseg mask {}x{} does not match teacher {}x{}",
+                    width, height, teacher.mask_width, teacher.mask_height
+                )));
+            }
+            let arrays = Self::write_iseg_mask(
+                teacher.mask_width,
+                teacher.mask_height,
+                teacher.class_count,
+                labels,
+                *ignore_label,
+            )?;
+            neurons.insert(Self::iseg_cortical_id(), arrays);
+        }
+        Ok(neurons)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::binding::encoding_scheme::EncodingScheme;
+    use crate::binding::profile::{ClassTeacherBinding, SegmentationTeacherBinding};
+    use crate::contracts::common::{DatasetVersionId, Modality, OutputType, SampleId, Split};
+    use crate::contracts::ir_sample::SCHEMA_VERSION;
+    use image::{ImageFormat, Rgb, RgbImage};
+    use std::collections::BTreeMap;
+    use std::io::Cursor;
+
+    fn rgb_png(width: u32, height: u32) -> Vec<u8> {
+        let img = RgbImage::from_fn(width, height, |x, y| {
+            Rgb([(x % 256) as u8, (y % 256) as u8, 80])
+        });
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
+            .expect("png");
+        bytes
+    }
+
+    fn vision_profile(width: u32, height: u32) -> EncoderBindingProfile {
+        EncoderBindingProfile {
+            cortical_area_id: "simple_vision".to_string(),
+            cortical_name: Some("Image Vision IPU".to_string()),
+            channels: 1,
+            scheme: EncodingScheme::PopulationSingleSpike {
+                bins: 1,
+                spacing: crate::binding::encoding_scheme::BinSpacing::Linear,
+            },
+            image_width: Some(width),
+            image_height: Some(height),
+            vision_layout: crate::binding::profile::VisionLayout::Simple,
+            stream: None,
+            teacher: None,
+            segmentation_teacher: None,
+            segmented_vision: None,
+        }
+    }
+
+    fn sample(png: Vec<u8>, target: Option<TypedTarget>) -> IRSample {
+        IRSample {
+            schema_version: SCHEMA_VERSION,
+            sample_id: SampleId("s".to_string()),
+            dataset_version_id: DatasetVersionId("d".to_string()),
+            split: Split::Train,
+            modality: Modality::Image,
+            payload: Payload::Bytes(png),
+            target,
+            output_type: OutputType::SegmentationMask,
+            coordinate_frame: None,
+            timestamp: None,
+            metadata: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn segmented_vision_encode_writes_the_center_tile() {
+        use crate::binding::profile::{SegmentedVisionBinding, VisionLayout};
+        let mut profile = vision_profile(8, 8);
+        profile.vision_layout = VisionLayout::Segmented;
+        profile.segmented_vision = Some(SegmentedVisionBinding {
+            center_width: 4,
+            center_height: 4,
+            peripheral_width: 2,
+            peripheral_height: 2,
+            gaze_eccentricity_x: 0.5,
+            gaze_eccentricity_y: 0.5,
+            gaze_modulation: 0.5,
+        });
+        let mut encoder = ImageFrameEncoder::new();
+        let frame = encoder
+            .encode(&sample(rgb_png(8, 8), None), &profile)
+            .expect("encode");
+        let center =
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                FrameChangeHandling::Absolute,
+                CorticalUnitIndex::from(0u16),
+            )[4];
+        assert!(
+            frame.get_neurons_of(&center).is_some(),
+            "segmented vision must write the center tile"
+        );
+    }
+
+    #[test]
+    fn vision_only_encode_omits_iseg() {
+        let profile = vision_profile(2, 2);
+        let mut encoder = ImageFrameEncoder::new();
+        let frame = encoder
+            .encode(&sample(rgb_png(2, 2), None), &profile)
+            .expect("encode");
+        assert!(
+            frame
+                .get_neurons_of(&ImageFrameEncoder::iseg_cortical_id())
+                .is_none(),
+            "vision-only encode must not write iseg"
+        );
+    }
+
+    #[test]
+    fn segmentation_teacher_writes_class_voxels_and_skips_ignore() {
+        let mut profile = vision_profile(2, 2);
+        profile.segmentation_teacher = Some(SegmentationTeacherBinding {
+            cortical_area_id: "object_segmentation_input".to_string(),
+            cortical_name: Some("Image Segmentation Input IPU".to_string()),
+            mask_width: 2,
+            mask_height: 2,
+            class_count: 3,
+        });
+        let target = TypedTarget::SegmentationMask {
+            width: 2,
+            height: 2,
+            // (0,0)=class 0, (1,0)=class 2, (0,1)=ignore, (1,1)=class 1
+            labels: vec![0, 2, 255, 1],
+            ignore_label: Some(255),
+        };
+        let mut encoder = ImageFrameEncoder::new();
+        let frame = encoder
+            .encode(&sample(rgb_png(2, 2), Some(target)), &profile)
+            .expect("encode");
+        let teacher = frame
+            .get_neurons_of(&ImageFrameEncoder::iseg_cortical_id())
+            .expect("iseg");
+        let mut voxels: Vec<_> = teacher
+            .iter()
+            .map(|n| {
+                (
+                    n.neuron_voxel_coordinate.x,
+                    n.neuron_voxel_coordinate.y,
+                    n.neuron_voxel_coordinate.z,
+                    n.potential,
+                )
+            })
+            .collect();
+        voxels.sort_by_key(|v| (v.1, v.0, v.2));
+        assert_eq!(
+            voxels,
+            vec![
+                (0, 0, 0, 1.0 / 3.0),
+                (1, 0, 0, 3.0 / 3.0),
+                (1, 1, 0, 2.0 / 3.0)
+            ],
+            "one layer; each pixel's potential is (class + 1) / class_count"
+        );
+    }
+
+    #[test]
+    fn segmentation_teacher_rejects_class_outside_count() {
+        let mut profile = vision_profile(2, 1);
+        profile.segmentation_teacher = Some(SegmentationTeacherBinding {
+            cortical_area_id: "object_segmentation_input".to_string(),
+            cortical_name: None,
+            mask_width: 2,
+            mask_height: 1,
+            class_count: 2,
+        });
+        let target = TypedTarget::SegmentationMask {
+            width: 2,
+            height: 1,
+            labels: vec![0, 2],
+            ignore_label: None,
+        };
+        let err = ImageFrameEncoder::new()
+            .encode(&sample(rgb_png(2, 1), Some(target)), &profile)
+            .expect_err("class 2 of 2");
+        assert!(err.to_string().contains("class count"), "{err}");
+    }
+
+    fn class_sample(png: Vec<u8>, split: Split) -> IRSample {
+        IRSample {
+            schema_version: SCHEMA_VERSION,
+            sample_id: SampleId("s".to_string()),
+            dataset_version_id: DatasetVersionId("d".to_string()),
+            split,
+            modality: Modality::Image,
+            payload: Payload::Bytes(png),
+            target: Some(TypedTarget::Class {
+                class_id: 3,
+                label: None,
+            }),
+            output_type: OutputType::Class,
+            coordinate_frame: None,
+            timestamp: None,
+            metadata: BTreeMap::new(),
+        }
+    }
+
+    fn class_teacher_profile(width: u32, height: u32) -> EncoderBindingProfile {
+        let mut profile = vision_profile(width, height);
+        profile.teacher = Some(ClassTeacherBinding {
+            unit: 1,
+            cortical_area_id: "image_class_teacher".to_string(),
+            cortical_name: Some("Image Class Teacher IPU".to_string()),
+            class_count: 10,
+        });
+        profile
+    }
+
+    #[test]
+    fn class_teacher_on_train_writes_the_class_voxel() {
+        let profile = class_teacher_profile(2, 2);
+        let mut encoder = ImageFrameEncoder::new();
+        let frame = encoder
+            .encode(&class_sample(rgb_png(2, 2), Split::Train), &profile)
+            .expect("encode");
+        let teacher = frame
+            .get_neurons_of(&PopulationEncoder::misc_cortical_id(1))
+            .expect("teacher");
+        let voxels: Vec<_> = teacher
+            .iter()
+            .map(|n| {
+                (
+                    n.neuron_voxel_coordinate.x,
+                    n.neuron_voxel_coordinate.y,
+                    n.neuron_voxel_coordinate.z,
+                    n.potential,
+                )
+            })
+            .collect();
+        assert_eq!(voxels, vec![(0, 0, 3, 1.0)]);
+    }
+
+    #[test]
+    fn class_teacher_on_test_is_silent() {
+        let profile = class_teacher_profile(2, 2);
+        let mut encoder = ImageFrameEncoder::new();
+        let frame = encoder
+            .encode(&class_sample(rgb_png(2, 2), Split::Test), &profile)
+            .expect("encode");
+        let teacher = frame
+            .get_neurons_of(&PopulationEncoder::misc_cortical_id(1))
+            .expect("teacher");
+        assert_eq!(teacher.len(), 0);
+    }
+
+    #[test]
+    fn segmentation_teacher_without_mask_is_an_error() {
+        let mut profile = vision_profile(2, 2);
+        profile.segmentation_teacher = Some(SegmentationTeacherBinding {
+            cortical_area_id: "object_segmentation_input".to_string(),
+            cortical_name: None,
+            mask_width: 2,
+            mask_height: 2,
+            class_count: 2,
+        });
+        let mut encoder = ImageFrameEncoder::new();
+        let err = encoder
+            .encode(&sample(rgb_png(2, 2), None), &profile)
+            .expect_err("missing mask");
+        assert!(err.to_string().contains("SegmentationMask"));
+    }
+}

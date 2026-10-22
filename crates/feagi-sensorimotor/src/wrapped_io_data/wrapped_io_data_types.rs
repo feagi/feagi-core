@@ -1,7 +1,7 @@
 use crate::data_types::{
-    GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
-    Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
-    SignedPercentage3D, SignedPercentage4D,
+    AudioSpectrumFrame, GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage,
+    Percentage2D, Percentage3D, Percentage4D, PoseEstimationData, RawIMU, SegmentedImageFrame,
+    SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D,
 };
 use feagi_structures::FeagiDataError;
 
@@ -111,7 +111,10 @@ define_wrapped_io_data_enum!(
     SignedPercentage_4D: SignedPercentage4D => "{}",
     ImageFrame: ImageFrame => "{}",
     SegmentedImageFrame: SegmentedImageFrame => "{}",
+    RawIMU: RawIMU => "{}",
     MiscData: MiscData => "{}",
     GazeProperties: GazeProperties => "{}",
-    ImageFilteringSettings: ImageFilteringSettings => "{}"
+    ImageFilteringSettings: ImageFilteringSettings => "{}",
+    PoseEstimationData: PoseEstimationData => "{}",
+    AudioSpectrumFrame: AudioSpectrumFrame => "{}"
 );

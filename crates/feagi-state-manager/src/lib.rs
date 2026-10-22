@@ -66,7 +66,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(feature = "no_std")]
+#[cfg(all(feature = "no_std", not(feature = "std")))]
 extern crate alloc;
 
 // Module structure
@@ -443,6 +443,16 @@ impl StateManager {
         self.hash_state.set_cortical_mappings_hash(value)
     }
 
+    /// Get classifiers hash.
+    pub fn get_classifiers_hash(&self) -> u64 {
+        self.hash_state.get_classifiers_hash()
+    }
+
+    /// Set classifiers hash.
+    pub fn set_classifiers_hash(&self, value: u64) {
+        self.hash_state.set_classifiers_hash(value)
+    }
+
     /// Get agent data hash.
     pub fn get_agent_data_hash(&self) -> u64 {
         self.hash_state.get_agent_data_hash()
@@ -451,6 +461,16 @@ impl StateManager {
     /// Set agent data hash.
     pub fn set_agent_data_hash(&self, value: u64) {
         self.hash_state.set_agent_data_hash(value)
+    }
+
+    /// Generation of committed synaptic plasticity (weight changes and new learned synapses).
+    pub fn get_synaptic_plasticity_generation(&self) -> u64 {
+        self.hash_state.get_synaptic_plasticity_generation()
+    }
+
+    /// Advance the synaptic plasticity generation by one committed burst.
+    pub fn note_synaptic_plasticity_change(&self) {
+        self.hash_state.note_synaptic_plasticity_change()
     }
 
     // ===== Agent Management =====

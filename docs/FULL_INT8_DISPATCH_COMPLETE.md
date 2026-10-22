@@ -72,7 +72,7 @@ if !type_name.contains(expected_type) {
 
 ```python
 # Python determines precision from genome
-genome = load_genome("my_genome.json")
+genome = load_genome("my_brain.genome")
 precision = genome["physiology"]["quantization_precision"]  # "int8"
 
 # Create NPU with matching precision
@@ -254,7 +254,7 @@ let manager = Arc::new(RwLock::new(
 let mut neuro = Neuroembryogenesis::<INT8Value>::new(manager);
 
 // Load genome (can specify "int8" in physiology)
-let genome = load_genome("my_genome.json")?;
+let genome = load_genome("my_brain.genome")?;
 
 // Develop connectome with INT8!
 neuro.develop_from_genome(&genome)?;

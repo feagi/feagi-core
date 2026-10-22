@@ -15,7 +15,7 @@ use crate::{Result, StateError};
 #[cfg(all(feature = "std", not(target_family = "wasm")))]
 use parking_lot::RwLock;
 
-#[cfg(all(feature = "no_std", not(target_family = "wasm")))]
+#[cfg(all(feature = "no_std", not(feature = "std"), not(target_family = "wasm")))]
 use spin::RwLock;
 
 #[cfg(all(target_family = "wasm", not(feature = "wasm-threaded")))]
@@ -28,7 +28,7 @@ use wasm_sync::Mutex;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-#[cfg(feature = "no_std")]
+#[cfg(all(feature = "no_std", not(feature = "std")))]
 use ahash::AHashMap as HashMap;
 
 /// Agent type
@@ -173,12 +173,12 @@ impl AgentRegistry {
 }
 
 /// Agent registry for no_std platforms (spin::RwLock)
-#[cfg(all(feature = "no_std", not(target_family = "wasm")))]
+#[cfg(all(feature = "no_std", not(feature = "std"), not(target_family = "wasm")))]
 pub struct AgentRegistry {
     agents: RwLock<HashMap<String, AgentInfo>>,
 }
 
-#[cfg(all(feature = "no_std", not(target_family = "wasm")))]
+#[cfg(all(feature = "no_std", not(feature = "std"), not(target_family = "wasm")))]
 impl AgentRegistry {
     pub fn new() -> Self {
         Self {

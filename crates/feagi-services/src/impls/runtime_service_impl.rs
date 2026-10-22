@@ -12,12 +12,14 @@ Licensed under the Apache License, Version 2.0
 
 use std::sync::Arc;
 
+use ahash::AHashSet;
 use async_trait::async_trait;
 use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use tracing::{debug, info, warn};
 
+use crate::traits::runtime_service::ManualStimulationMode;
 use crate::traits::RuntimeService;
 use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
 
@@ -27,11 +29,41 @@ use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
 pub struct RuntimeServiceImpl {
     burst_runner: Arc<RwLock<BurstLoopRunner>>,
     paused: Arc<RwLock<bool>>,
+    /// Only present when `plasticity` feature is enabled (used in `reset_cortical_area_states`).
+    #[cfg(feature = "plasticity")]
+    plasticity_service: Option<Arc<dyn std::any::Any + Send + Sync>>,
 }
 
 impl RuntimeServiceImpl {
     /// Create a new RuntimeServiceImpl
     pub fn new(burst_runner: Arc<RwLock<BurstLoopRunner>>) -> Self {
+        Self {
+            burst_runner,
+            paused: Arc::new(RwLock::new(false)),
+            #[cfg(feature = "plasticity")]
+            plasticity_service: None,
+        }
+    }
+
+    /// Create a new RuntimeServiceImpl with plasticity support
+    #[cfg(feature = "plasticity")]
+    pub fn new_with_plasticity(
+        burst_runner: Arc<RwLock<BurstLoopRunner>>,
+        plasticity_service: Arc<feagi_npu_plasticity::PlasticityService>,
+    ) -> Self {
+        Self {
+            burst_runner,
+            paused: Arc::new(RwLock::new(false)),
+            plasticity_service: Some(plasticity_service as Arc<dyn std::any::Any + Send + Sync>),
+        }
+    }
+
+    /// Create a new RuntimeServiceImpl with plasticity support (stub for no_plasticity builds)
+    #[cfg(not(feature = "plasticity"))]
+    pub fn new_with_plasticity(
+        burst_runner: Arc<RwLock<BurstLoopRunner>>,
+        _plasticity_service: Arc<dyn std::any::Any + Send + Sync>,
+    ) -> Self {
         Self {
             burst_runner,
             paused: Arc::new(RwLock::new(false)),
@@ -60,7 +92,9 @@ impl RuntimeService for RuntimeServiceImpl {
         info!(target: "feagi-services", "Stopping burst engine");
 
         let mut runner = self.burst_runner.write();
-        runner.stop();
+        runner
+            .stop_strict()
+            .map_err(|e| ServiceError::Backend(format!("Failed to stop burst engine: {}", e)))?;
 
         // Clear paused flag
         *self.paused.write() = false;
@@ -179,6 +213,62 @@ impl RuntimeService for RuntimeServiceImpl {
         Err(ServiceError::NotImplemented(
             "Burst count reset not yet implemented".to_string(),
         ))
+    }
+
+    async fn register_motor_subscriptions(
+        &self,
+        agent_id: &str,
+        cortical_ids: Vec<String>,
+        rate_hz: f64,
+    ) -> ServiceResult<()> {
+        if rate_hz <= 0.0 {
+            return Err(ServiceError::InvalidInput(
+                "Motor rate must be greater than 0".to_string(),
+            ));
+        }
+
+        let cortical_set: AHashSet<String> = cortical_ids.into_iter().collect();
+        let runner = self.burst_runner.read();
+        runner
+            .register_motor_subscriptions_with_rate(agent_id.to_string(), cortical_set, rate_hz)
+            .map_err(|e| ServiceError::InvalidInput(e.to_string()))
+    }
+
+    async fn register_visualization_subscriptions(
+        &self,
+        agent_id: &str,
+        rate_hz: f64,
+    ) -> ServiceResult<()> {
+        if rate_hz <= 0.0 {
+            return Err(ServiceError::InvalidInput(
+                "Visualization rate must be greater than 0".to_string(),
+            ));
+        }
+
+        let runner = self.burst_runner.read();
+        runner
+            .register_visualization_subscriptions_with_rate(agent_id.to_string(), rate_hz)
+            .map_err(|e| ServiceError::InvalidInput(e.to_string()))
+    }
+
+    fn unregister_motor_subscriptions(&self, agent_id: &str) {
+        let runner = self.burst_runner.read();
+        runner.unregister_motor_subscriptions(agent_id);
+    }
+
+    fn unregister_visualization_subscriptions(&self, agent_id: &str) {
+        let runner = self.burst_runner.read();
+        runner.unregister_visualization_subscriptions(agent_id);
+    }
+
+    fn clear_all_motor_subscriptions(&self) {
+        let runner = self.burst_runner.read();
+        runner.clear_all_motor_subscriptions();
+    }
+
+    fn clear_all_visualization_subscriptions(&self) {
+        let runner = self.burst_runner.read();
+        runner.clear_all_visualization_subscriptions();
     }
 
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>> {
@@ -324,6 +414,7 @@ impl RuntimeService for RuntimeServiceImpl {
         &self,
         cortical_id: &str,
         xyzp_data: &[(u32, u32, u32, f32)],
+        mode: ManualStimulationMode,
     ) -> ServiceResult<usize> {
         // Parse cortical ID from base64 string
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id).map_err(|e| {
@@ -349,7 +440,14 @@ impl RuntimeService for RuntimeServiceImpl {
                 "[NPU-LOCK] RUNTIME-SERVICE: Lock acquired for manual stimulation (waited {:.2}ms)",
                 lock_wait.as_secs_f64() * 1000.0
             );
-            let result = npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data);
+            let result = match mode {
+                ManualStimulationMode::Candidate => {
+                    npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data)
+                }
+                ManualStimulationMode::ForceFire => {
+                    npu_lock.inject_force_fire_by_coordinates(&cortical_id_typed, xyzp_data)
+                }
+            };
             let lock_hold_duration = lock_start.elapsed();
             debug!(
                 "[NPU-LOCK] RUNTIME-SERVICE: Releasing lock after manual stimulation (held for {:.2}ms)",
@@ -362,12 +460,55 @@ impl RuntimeService for RuntimeServiceImpl {
             warn!(target: "feagi-services",
                 "No neurons found for injection: cortical_id={}, coordinates={}",
                 cortical_id, xyzp_data.len());
-        } else if injected_count > 0 {
-            info!(target: "feagi-services",
-                "Injected {} neurons into FCL for cortical area {}",
-                injected_count, cortical_id);
         }
 
         Ok(injected_count)
+    }
+
+    async fn reset_cortical_area_states(
+        &self,
+        cortical_indices: &[u32],
+    ) -> ServiceResult<Vec<(u32, usize)>> {
+        if cortical_indices.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let runner = self.burst_runner.read();
+        let npu = runner.get_npu();
+        let mut npu_lock = npu
+            .lock()
+            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {e}")))?;
+
+        let mut results: Vec<(u32, usize)> = Vec::with_capacity(cortical_indices.len());
+        for &idx in cortical_indices {
+            let count = npu_lock.reset_cortical_area_runtime_state(idx);
+            results.push((idx, count));
+        }
+
+        // Release NPU lock before calling plasticity service
+        drop(npu_lock);
+        drop(runner);
+
+        // Reset memory neurons if plasticity service is available
+        #[cfg(feature = "plasticity")]
+        if let Some(plasticity_any) = &self.plasticity_service {
+            if let Some(plasticity_service) =
+                plasticity_any.downcast_ref::<feagi_npu_plasticity::PlasticityService>()
+            {
+                for &idx in cortical_indices {
+                    let memory_neuron_count = plasticity_service.reset_memory_neurons_in_area(idx);
+                    if memory_neuron_count > 0 {
+                        info!(
+                            target: "feagi-services",
+                            "Reset {} memory neurons in cortical area {}",
+                            memory_neuron_count,
+                            idx
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(results)
     }
 }

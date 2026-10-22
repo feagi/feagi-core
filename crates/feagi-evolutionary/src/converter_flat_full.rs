@@ -16,6 +16,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{EvoError, EvoResult};
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use tracing::warn;
@@ -52,6 +53,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     // Also map _group to cortical_group for classification (needed by neuroembryogenesis)
     ("_group-t", "cortical_group"),
     ("dstmap-d", "cortical_mapping_dst"),
+    ("hmlk-d", "rate_modulated_leak"),
     ("de_gen-f", "degeneration"),
     ("pspuni-b", "psp_uniform_distribution"),
     ("mp_acc-b", "mp_charge_accumulation"),
@@ -61,9 +63,18 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("mem_gr-i", "lifespan_growth_rate"),
     ("mem_ls-i", "init_lifespan"),
     ("tmpdpt-i", "temporal_depth"),
+    ("mplrn-b", "mp_learning_enabled"),
+    ("mpchg-t", "mp_change_mode"),
+    ("mpdlq-f", "mp_delta_quantization"),
+    ("mprtq-f", "mp_ratio_quantization"),
+    ("mnwin-i", "min_window_activity"),
+    ("scnsk-f", "scan_skip_density"),
     ("excite-f", "neuron_excitability"),
     ("devcnt-i", "dev_count"),
     ("twinrf-t", "memory_twin_of"),
+    ("brsten-b", "burst_engine_active"),
+    ("spktrn-b", "spike_train"),
+    ("modls-d", "modulators"),
 ];
 
 /// Build property mapping lookup table
@@ -141,6 +152,7 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
 
         // Process all flat keys for this cortical area
         process_area_properties(cortical_id, flat_blueprint, &property_map, &mut area_data)?;
+        apply_power_area_defaults(cortical_id, flat_blueprint, &mut area_data);
 
         // Apply visualization_voxel_granularity override if present
         if let Some(override_value) = visualization_overrides.get(cortical_id) {
@@ -168,6 +180,9 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
     if let Some(morphologies) = flat_genome.get("neuron_morphologies") {
         hierarchical.insert("neuron_morphologies".to_string(), morphologies.clone());
     }
+    if let Some(modulators) = flat_genome.get("modulators") {
+        hierarchical.insert("modulators".to_string(), modulators.clone());
+    }
 
     if let Some(physiology) = flat_genome.get("physiology") {
         hierarchical.insert("physiology".to_string(), physiology.clone());
@@ -190,7 +205,25 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
         }
     }
 
-    hierarchical.insert("brain_regions".to_string(), json!({}));
+    // Preserve brain_regions from flat v3 exports (RuntimeGenome save). Previously this was always
+    // `{}`, which dropped region IO designations and membership when loading flat blueprints.
+    if let Some(br) = flat_genome.get("brain_regions") {
+        hierarchical.insert("brain_regions".to_string(), br.clone());
+    } else {
+        hierarchical.insert("brain_regions".to_string(), json!({}));
+    }
+
+    if let Some(root) = flat_genome.get("brain_regions_root") {
+        hierarchical.insert("brain_regions_root".to_string(), root.clone());
+    }
+    if let Some(classifiers) = flat_genome.get("classifiers") {
+        hierarchical.insert("classifiers".to_string(), classifiers.clone());
+    } else {
+        hierarchical.insert("classifiers".to_string(), json!({}));
+    }
+    if let Some(history) = flat_genome.get("change_history") {
+        hierarchical.insert("change_history".to_string(), history.clone());
+    }
 
     Ok(Value::Object(hierarchical))
 }
@@ -208,6 +241,41 @@ fn extract_cortical_areas(
     }
 
     Ok(areas)
+}
+
+/// True for canonical and legacy Power cortical IDs used in default genomes.
+fn is_power_cortical_id(cortical_id: &str) -> bool {
+    matches!(cortical_id, "_power" | "___pwr" | "___power" | "___pwr__")
+        || cortical_id == CoreCorticalType::Power.to_cortical_id().as_base_64()
+}
+
+/// Whether the flat blueprint already defines `suffix` for `cortical_id`.
+fn area_has_flat_suffix(
+    flat_blueprint: &serde_json::Map<String, Value>,
+    cortical_id: &str,
+    suffix: &str,
+) -> bool {
+    let prefix = format!("_____10c-{}-", cortical_id);
+    flat_blueprint
+        .keys()
+        .any(|key| key.starts_with(&prefix) && key.ends_with(suffix))
+}
+
+/// Power defaults: no synapse degeneration, full PSP on every outgoing synapse.
+fn apply_power_area_defaults(
+    cortical_id: &str,
+    flat_blueprint: &serde_json::Map<String, Value>,
+    area_data: &mut serde_json::Map<String, Value>,
+) {
+    if !is_power_cortical_id(cortical_id) {
+        return;
+    }
+    if !area_has_flat_suffix(flat_blueprint, cortical_id, "de_gen-f") {
+        area_data.insert("degeneration".to_string(), json!(0.0));
+    }
+    if !area_has_flat_suffix(flat_blueprint, cortical_id, "pspuni-b") {
+        area_data.insert("psp_uniform_distribution".to_string(), json!(true));
+    }
 }
 
 /// Parse cortical ID from flat key: "_____10c-AREA1-cx-property-type"
@@ -515,18 +583,32 @@ fn process_dstmap(
 
             // Parse rule (flat array format):
             // [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag,
-            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window]
+            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window,
+            //  synaptic_delay_bursts]
             //
-            // NOTE: We do not maintain backward compatibility here. If a genome uses the array
-            // representation it must include the full parameter set (including plasticity_window).
-            if rule_array.len() < 8 {
-                warn!(
-                    target: "feagi-evo",
-                    "Invalid mapping recipe format (need 8 elements, including plasticity_window): {:?}",
-                    rule_array
-                );
-                continue;
-            }
+            // Backward compatibility: 4-element legacy format is extended with defaults
+            // (plasticity_constant=0, ltp_multiplier=0, ltd_multiplier=0, plasticity_window=0,
+            //  synaptic_delay_bursts=1).
+            let plasticity_constant = rule_array
+                .get(4)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(0)));
+            let ltp_multiplier = rule_array
+                .get(5)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(0)));
+            let ltd_multiplier = rule_array
+                .get(6)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(0)));
+            let plasticity_window = rule_array
+                .get(7)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(0)));
+            let synaptic_delay_bursts = rule_array
+                .get(8)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(1)));
 
             let mut rule_dict = serde_json::Map::new();
 
@@ -537,12 +619,11 @@ fn process_dstmap(
                 rule_array[2].clone(),
             );
             rule_dict.insert("plasticity_flag".to_string(), rule_array[3].clone());
-
-            // Plasticity parameters (required in new design)
-            rule_dict.insert("plasticity_constant".to_string(), rule_array[4].clone());
-            rule_dict.insert("ltp_multiplier".to_string(), rule_array[5].clone());
-            rule_dict.insert("ltd_multiplier".to_string(), rule_array[6].clone());
-            rule_dict.insert("plasticity_window".to_string(), rule_array[7].clone());
+            rule_dict.insert("plasticity_constant".to_string(), plasticity_constant);
+            rule_dict.insert("ltp_multiplier".to_string(), ltp_multiplier);
+            rule_dict.insert("ltd_multiplier".to_string(), ltd_multiplier);
+            rule_dict.insert("plasticity_window".to_string(), plasticity_window);
+            rule_dict.insert("synaptic_delay_bursts".to_string(), synaptic_delay_bursts);
 
             converted_rules.push(Value::Object(rule_dict));
         }
@@ -566,11 +647,20 @@ fn process_dstmap(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn test_property_map_completeness() {
         let map = build_property_map();
-        assert_eq!(map.len(), 40); // All 40 property mappings
+        let unique_flat_keys: HashSet<&str> = PROPERTY_MAPPINGS
+            .iter()
+            .map(|(flat_key, _)| *flat_key)
+            .collect();
+        assert_eq!(
+            map.len(),
+            unique_flat_keys.len(),
+            "lookup table size must match unique flat keys (duplicate flat keys keep last hierarchical target)"
+        );
         assert!(map.contains_key("__name-t"));
         assert!(map.contains_key("dstmap-d"));
         assert!(map.contains_key("fire_t-f"));
@@ -581,8 +671,8 @@ mod tests {
     fn test_dstmap_parsing() {
         let dstmap_flat = json!({
             "dest_area": [
-                ["block_to_block", 1, 1.0, true, 1, 1, 1, 4],
-                ["projector", 2, 0.5, false, 1, 1, 1, 1]
+                ["block_to_block", 1, 1.0, true, 1, 1, 1, 4, 3],
+                ["projector", 2, 0.5, false, 1, 1, 1, 1, 5]
             ]
         });
 
@@ -596,9 +686,38 @@ mod tests {
         assert_eq!(dest_rules[0]["morphology_id"], "block_to_block");
         assert_eq!(dest_rules[0]["plasticity_constant"], 1);
         assert_eq!(dest_rules[0]["plasticity_window"], 4);
+        assert_eq!(dest_rules[0]["synaptic_delay_bursts"], 3);
         assert_eq!(dest_rules[1]["morphology_id"], "projector");
         assert_eq!(dest_rules[1]["plasticity_constant"], 1);
         assert_eq!(dest_rules[1]["plasticity_window"], 1);
+        assert_eq!(dest_rules[1]["synaptic_delay_bursts"], 5);
+    }
+
+    #[test]
+    fn test_dstmap_parsing_legacy_4_element_backward_compat() {
+        // Legacy 4-element format: [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag]
+        let dstmap_flat = json!({
+            "dest_area": [
+                ["motor_backward", [1, 1, 1], 1, false],
+                ["block_to_block", [1, 1, 1], 1, false]
+            ]
+        });
+
+        let mut area_data = serde_json::Map::new();
+        process_dstmap(&dstmap_flat, &mut area_data).unwrap();
+
+        let dstmap = area_data.get("cortical_mapping_dst").unwrap();
+        let dest_rules = dstmap.get("dest_area").unwrap().as_array().unwrap();
+
+        assert_eq!(dest_rules.len(), 2);
+        assert_eq!(dest_rules[0]["morphology_id"], "motor_backward");
+        assert_eq!(dest_rules[0]["plasticity_flag"], false);
+        assert_eq!(dest_rules[0]["plasticity_constant"], 0);
+        assert_eq!(dest_rules[0]["ltp_multiplier"], 0);
+        assert_eq!(dest_rules[0]["ltd_multiplier"], 0);
+        assert_eq!(dest_rules[0]["plasticity_window"], 0);
+        assert_eq!(dest_rules[0]["synaptic_delay_bursts"], 1);
+        assert_eq!(dest_rules[1]["synaptic_delay_bursts"], 1);
     }
 
     #[test]
@@ -665,5 +784,31 @@ mod tests {
             area.get("relative_coordinate").unwrap(),
             &json!([10, 0, -20])
         );
+    }
+
+    #[test]
+    fn test_power_defaults_when_flat_keys_omitted() {
+        let flat = json!({
+            "version": "2.0",
+            "blueprint": {
+                "_____10c-_power-cx-__name-t": "Brain_Power",
+                "_____10c-_power-cx-___bbx-i": 1,
+                "_____10c-_power-cx-___bby-i": 1,
+                "_____10c-_power-cx-___bbz-i": 1
+            },
+            "neuron_morphologies": {},
+            "physiology": {}
+        });
+
+        let hierarchical = convert_flat_to_hierarchical_full(&flat).unwrap();
+        let area = hierarchical
+            .get("blueprint")
+            .and_then(|v| v.as_object())
+            .and_then(|bp| bp.get("_power"))
+            .and_then(|v| v.as_object())
+            .unwrap();
+
+        assert_eq!(area.get("degeneration").unwrap(), &json!(0.0));
+        assert_eq!(area.get("psp_uniform_distribution").unwrap(), &json!(true));
     }
 }

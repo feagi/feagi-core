@@ -315,9 +315,9 @@ fn test_synapse_operations() {
     manager.create_synapse(
         neuron1,
         neuron2,
-        128, // weight
-        200, // conductance
-        0,   // excitatory
+        128.0, // weight
+        200.0, // conductance
+        0,     // excitatory
     ).expect("Failed to create synapse");
     
     // Verify synapse exists
@@ -325,8 +325,8 @@ fn test_synapse_operations() {
         .expect("Synapse should exist");
     
     let (weight, conductance, syn_type) = synapse;
-    assert_eq!(weight, 128);
-    assert_eq!(conductance, 200);
+    assert_eq!(weight, 128.0);
+    assert_eq!(conductance, 200.0);
     assert_eq!(syn_type, 0); // excitatory
     
     println!("Synapse: weight={}, conductance={}, type={}", weight, conductance, syn_type);
@@ -508,7 +508,7 @@ fn test_save_and_load_brain_state() {
     ).expect("Failed to create neuron");
     
     // Create a synapse
-    manager.create_synapse(neuron1, neuron2, 128, 200, 0)
+    manager.create_synapse(neuron1, neuron2, 128.0, 200.0, 0)
         .expect("Failed to create synapse");
     
     // Save brain state to JSON

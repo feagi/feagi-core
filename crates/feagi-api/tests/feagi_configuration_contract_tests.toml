@@ -1,0 +1,32 @@
+# Minimal config for feagi-api contract tests. Uses high ephemeral-range ports to avoid "Address already in use".
+# Used when FEAGI_CONFIG_PATH points to this file (see contract_tests.rs).
+# Ports in 50100-50199 are in the IANA dynamic/private range and unlikely to be in use.
+
+[ports]
+zmq_sensory_port = 50150
+zmq_motor_port = 50151
+zmq_visualization_port = 50152
+zmq_rest_port = 50153
+zmq_req_rep_port = 50154
+zmq_pub_sub_port = 50155
+zmq_push_pull_port = 50156
+
+[zmq]
+bind_host = "127.0.0.1"
+advertised_host = "127.0.0.1"
+enabled = true
+
+[websocket]
+bind_host = "127.0.0.1"
+advertised_host = "127.0.0.1"
+enabled = true
+sensory_port = 50160
+motor_port = 50161
+visualization_port = 50162
+registration_port = 50163
+rest_api_port = 50164
+
+[transports]
+available = ["zmq", "websocket"]
+default = "zmq"
+allow_mixed = true

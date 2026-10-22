@@ -16,6 +16,7 @@ mod expander;
 pub mod patterns;
 mod projector;
 mod reducer;
+mod rotator_z;
 mod trivial;
 mod vectors;
 
@@ -27,5 +28,6 @@ pub use patterns::{
 };
 pub use projector::{syn_projector, syn_projector_batch, ProjectorParams};
 pub use reducer::syn_reducer_x;
+pub use rotator_z::syn_rotator_z;
 pub use trivial::{syn_last_to_first, syn_lateral_pairs_x, syn_randomizer};
 pub use vectors::{apply_vector_offset, match_vectors_batch};

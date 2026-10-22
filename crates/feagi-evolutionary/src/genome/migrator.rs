@@ -18,6 +18,8 @@ use crate::{EvoError, EvoResult};
 use serde_json::Value;
 use std::collections::HashMap;
 
+use super::parser::string_to_cortical_id;
+
 fn is_legacy_io_shorthand(id: &str) -> bool {
     id.len() == 6 && (id.starts_with('i') || id.starts_with('o'))
 }
@@ -167,6 +169,57 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         }
     }
 
+    // Collect cortical IDs from brain_regions (areas, inputs, outputs, designated IO)
+    if let Some(brain_regions) = genome_json.get("brain_regions").and_then(|v| v.as_object()) {
+        for region in brain_regions.values() {
+            if let Some(region_obj) = region.as_object() {
+                for arr_key in [
+                    "areas",
+                    "cortical_areas",
+                    "inputs",
+                    "outputs",
+                    "designated_inputs",
+                    "designated_outputs",
+                ] {
+                    if let Some(Value::Array(arr)) = region_obj.get(arr_key) {
+                        for item in arr {
+                            if let Some(id) = item.as_str() {
+                                cortical_ids.insert(id.to_string());
+                            }
+                        }
+                    }
+                }
+                if let Some(Value::Object(props)) = region_obj.get("properties") {
+                    for arr_key in [
+                        "inputs",
+                        "outputs",
+                        "designated_inputs",
+                        "designated_outputs",
+                    ] {
+                        if let Some(Value::Array(arr)) = props.get(arr_key) {
+                            for item in arr {
+                                if let Some(id) = item.as_str() {
+                                    cortical_ids.insert(id.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Collect cortical IDs from cortical_mapping_dst keys in each blueprint area
+    for area_data in blueprint.values() {
+        if let Some(area_obj) = area_data.as_object() {
+            if let Some(Value::Object(dstmap)) = area_obj.get("cortical_mapping_dst") {
+                for dst_id in dstmap.keys() {
+                    cortical_ids.insert(dst_id.clone());
+                }
+            }
+        }
+    }
+
     // Collect already-used base64 cortical IDs to avoid collisions when allocating MiscData group IDs.
     let mut used_base64: HashSet<String> = HashSet::new();
     for id in cortical_ids.iter() {
@@ -221,7 +274,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                     };
 
                     if let Some(idx) = tile_idx {
-                        let group_index: CorticalUnitIndex = 0.into();
+                        let group_index: CorticalUnitIndex = 0u16.into();
                         let segmented =
                             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                                 FrameChangeHandling::Absolute,
@@ -251,9 +304,8 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                     // migrate to a supported MiscData IPU cortical ID with a unique group ID.
                     if name == "vision_ipu" {
                         // Allocate the smallest available MiscData IPU group deterministically.
-                        for group_u16 in 0u16..=u8::MAX as u16 {
-                            let group_u8 = group_u16 as u8;
-                            let group_index: CorticalUnitIndex = group_u8.into();
+                        for group_u16 in 0u16..=u16::MAX {
+                            let group_index: CorticalUnitIndex = group_u16.into();
                             let new_id = SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
                                 FrameChangeHandling::Absolute,
                                 group_index,
@@ -269,7 +321,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                             result.cortical_ids_migrated += 1;
                             result.warnings.push(format!(
                                 "Legacy base64 vision cortical ID '{}' (subtype=mis, name='{}') migrated to MiscData IPU(group={}) → '{}'",
-                                id, name, group_u8, new_id
+                                id, name, group_u16, new_id
                             ));
                             break;
                         }
@@ -288,6 +340,17 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         }
 
         if !needs_migration(id) {
+            // Catch-all: use string_to_cortical_id (CorticalID) for any convertible ID
+            if !result.id_mapping.contains_key(id) {
+                if let Ok(cid) = string_to_cortical_id(id) {
+                    let new_id = cid.as_base_64();
+                    if !used_base64.contains(&new_id) {
+                        used_base64.insert(new_id.clone());
+                        result.id_mapping.insert(id.clone(), new_id);
+                        result.cortical_ids_migrated += 1;
+                    }
+                }
+            }
             continue;
         }
 
@@ -304,6 +367,17 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
             continue;
         }
 
+        // Catch-all: use string_to_cortical_id (CorticalID) for any remaining convertible ID
+        if let Ok(cid) = string_to_cortical_id(id) {
+            let new_id = cid.as_base_64();
+            if !used_base64.contains(&new_id) {
+                used_base64.insert(new_id.clone());
+                result.id_mapping.insert(id.clone(), new_id);
+                result.cortical_ids_migrated += 1;
+                continue;
+            }
+        }
+
         result.warnings.push(format!(
             "Cannot auto-migrate cortical ID: '{}' - no mapping defined",
             id
@@ -317,6 +391,37 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
     Ok(())
 }
 
+/// Extract 3-char subtype from legacy 6-char IO shorthand (e.g. i__acc -> "acc", o__mot -> "mot").
+fn extract_legacy_io_subtype(id: &str) -> Option<&str> {
+    if id.len() == 6 {
+        id.get(3..6)
+    } else {
+        None
+    }
+}
+
+/// Convert legacy IPU/OPU shorthand to custom cortical area when no supported IO match exists.
+/// Preserves i/o in byte 1 so that i___id and o___id produce distinct custom IDs.
+fn legacy_io_to_custom_base64(old_id: &str) -> EvoResult<String> {
+    use feagi_structures::genomic::cortical_area::CorticalID;
+    let custom_str = if let (Some(first), Some(rest)) = (old_id.chars().next(), old_id.get(1..)) {
+        if first == 'i' || first == 'o' {
+            format!("c{}{}", first, rest)
+        } else {
+            old_id.to_string()
+        }
+    } else {
+        old_id.to_string()
+    };
+    let cid = CorticalID::try_from_legacy_ascii(&custom_str).map_err(|e| {
+        EvoError::InvalidGenome(format!(
+            "Failed to convert legacy IO '{}' to custom: {}",
+            old_id, e
+        ))
+    })?;
+    Ok(cid.as_base_64())
+}
+
 fn apply_legacy_io_shorthand_migration(
     legacy_ids: &[String],
     used_base64: &mut std::collections::HashSet<String>,
@@ -326,17 +431,14 @@ fn apply_legacy_io_shorthand_migration(
     use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
     use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 
-    // Deterministic rule set (requested):
+    // Rule set:
     // - Special-case known legacy segmented-vision shorthands iv00?? → SegmentedVision tile.
-    // - Any other legacy IO shorthand starting with i/o → map to MiscData IPU/OPU.
-    // - If multiple unknown shorthands exist, allocate distinct MiscData group IDs (CorticalUnitIndex)
-    //   per-domain (IPU vs OPU). These are independent objects and should not share group counters.
-    //   Skip any collisions with already-used base64 cortical IDs.
+    // - For other legacy IO shorthands: first check if subtype matches a supported IPU/OPU type.
+    // - If match found → use the supported IO area.
+    // - If NO match → convert to custom area (not MiscData).
     let frame_handling = FrameChangeHandling::Absolute;
 
     let mut exceptions: Vec<String> = Vec::new();
-    let mut next_group_ipu: u16 = 0;
-    let mut next_group_opu: u16 = 0;
 
     for old_id in legacy_ids.iter() {
         if old_id.starts_with("iv00") && old_id.len() == 6 {
@@ -362,7 +464,7 @@ fn apply_legacy_io_shorthand_migration(
             };
 
             if let Some(idx) = tile_idx {
-                let group_index: CorticalUnitIndex = 0.into();
+                let group_index: CorticalUnitIndex = 0u16.into();
                 let segmented =
                     SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                         frame_handling,
@@ -384,54 +486,78 @@ fn apply_legacy_io_shorthand_migration(
         }
 
         let is_input = old_id.starts_with('i');
-        let next_group = if is_input {
-            &mut next_group_ipu
-        } else {
-            &mut next_group_opu
-        };
-        loop {
-            if *next_group > u8::MAX as u16 {
-                return Err(EvoError::InvalidGenome(
-                    "Unable to allocate unique MiscData group ID for legacy IO shorthands"
-                        .to_string(),
+
+        // Deprecated IPU subtypes that must be silently dropped per project
+        // policy (see IMU redesign: standalone Accelerometer 'acc' and quaternion
+        // Gyroscope 'gyq' were superseded by RawIMU 'rim' and SmartIMU 'sim',
+        // which carry sub-area structure that legacy single-area IDs cannot
+        // represent). We refuse to auto-migrate to a custom or any other area;
+        // the migrated genome will contain no cortical area for these IDs.
+        if let Some(subtype) = extract_legacy_io_subtype(old_id) {
+            if is_input && (subtype == "acc" || subtype == "gyq") {
+                result.warnings.push(format!(
+                    "Dropping deprecated IPU '{}' (subtype '{}'): no automatic mapping; \
+                     reconfigure as RawIMU (rim) or SmartIMU (sim) sub-areas.",
+                    old_id, subtype
                 ));
-            }
-            let group_u8 = *next_group as u8;
-            let group_index: CorticalUnitIndex = group_u8.into();
-
-            let new_id = if is_input {
-                SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
-                    frame_handling,
-                    group_index,
-                )[0]
-                .as_base_64()
-            } else {
-                MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
-                    frame_handling,
-                    group_index,
-                )[0]
-                .as_base_64()
-            };
-
-            *next_group += 1;
-
-            if used_base64.contains(&new_id) {
                 continue;
             }
+        }
 
-            used_base64.insert(new_id.clone());
-            result.id_mapping.insert(old_id.clone(), new_id.clone());
-            result.cortical_ids_migrated += 1;
+        // First: check if subtype matches a supported IPU/OPU type in feagi-structures
+        let supported_match = extract_legacy_io_subtype(old_id).and_then(|subtype| {
+            if is_input {
+                SensoryCorticalUnit::try_from_legacy_subtype(subtype)
+            } else {
+                MotorCorticalUnit::try_from_legacy_subtype(subtype)
+            }
+            .map(|cid| cid.as_base_64())
+        });
 
-            exceptions.push(format!(
-                "Legacy {} shorthand '{}' not recognized; mapped to {} MiscData (group={}) → '{}'",
-                if is_input { "IPU" } else { "OPU" },
-                old_id,
-                if is_input { "IPU" } else { "OPU" },
-                group_u8,
-                new_id
-            ));
-            break;
+        if let Some(ref new_id) = supported_match {
+            if !used_base64.contains(new_id) {
+                used_base64.insert(new_id.clone());
+                result.id_mapping.insert(old_id.clone(), new_id.clone());
+                result.cortical_ids_migrated += 1;
+                exceptions.push(format!(
+                    "Legacy {} shorthand '{}' matched supported IO type → '{}'",
+                    if is_input { "IPU" } else { "OPU" },
+                    old_id,
+                    new_id
+                ));
+                continue;
+            }
+        }
+
+        // No supported match (or collision): convert to custom area
+        match legacy_io_to_custom_base64(old_id) {
+            Ok(new_id) => {
+                if !used_base64.contains(&new_id) {
+                    used_base64.insert(new_id.clone());
+                    result.id_mapping.insert(old_id.clone(), new_id.clone());
+                    result.cortical_ids_migrated += 1;
+                    exceptions.push(format!(
+                        "Legacy {} shorthand '{}' not in supported IO types; mapped to custom → '{}'",
+                        if is_input { "IPU" } else { "OPU" },
+                        old_id,
+                        new_id
+                    ));
+                } else {
+                    exceptions.push(format!(
+                        "Legacy {} shorthand '{}' not in supported IO types; custom ID collision, skipped",
+                        if is_input { "IPU" } else { "OPU" },
+                        old_id
+                    ));
+                }
+            }
+            Err(e) => {
+                result.warnings.push(format!(
+                    "Legacy {} shorthand '{}' could not be migrated: {}",
+                    if is_input { "IPU" } else { "OPU" },
+                    old_id,
+                    e
+                ));
+            }
         }
     }
 
@@ -480,6 +606,11 @@ fn needs_migration(id: &str) -> bool {
         return true;
     }
 
+    // Legacy 8-char padded core shorthands (e.g. ___pwr padded to ___pwr__)
+    if id == "___pwr__" {
+        return true;
+    }
+
     // Legacy IO shorthands (6-char ASCII) lacking FDP IO metadata (bytes 4-5).
     // Examples: iv00_C, i___id, o___id
     if is_legacy_io_shorthand(id) {
@@ -520,7 +651,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                     // Generate proper 8-byte ID using SensoryCorticalUnit
                     // Priority: Absolute over Incremental (segmented vision doesn't use positioning)
                     let frame_handling = FrameChangeHandling::Absolute;
-                    let group_index: CorticalUnitIndex = 0.into();
+                    let group_index: CorticalUnitIndex = 0u16.into();
                     let cortical_ids =
                         SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                             frame_handling,
@@ -545,7 +676,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 // Priority: Absolute over Incremental, Linear over Fractional
                 let frame_handling = FrameChangeHandling::Absolute;
                 let positioning = PercentageNeuronPositioning::Linear;
-                let group_index: CorticalUnitIndex = 0.into();
+                let group_index: CorticalUnitIndex = 0u16.into();
                 let cortical_ids =
                     MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
                         frame_handling,
@@ -573,7 +704,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 // Priority: Absolute over Incremental, Linear over Fractional
                 let frame_handling = FrameChangeHandling::Absolute;
                 let positioning = PercentageNeuronPositioning::Linear;
-                let group_index: CorticalUnitIndex = 0.into();
+                let group_index: CorticalUnitIndex = 0u16.into();
                 let cortical_ids =
                     MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
                         frame_handling,
@@ -607,6 +738,16 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
     }
     // Legacy shorthand used by older FEAGI genomes: "___pwr" (6-char) refers to core Power.
     if old_id == "___pwr" {
+        let new_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
+        tracing::debug!(
+            "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)",
+            old_id,
+            new_id
+        );
+        return Some(new_id);
+    }
+    // 8-char padded form of ___pwr (from parser 6-char padding path in legacy genomes)
+    if old_id == "___pwr__" {
         let new_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
         tracing::debug!(
             "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)",
@@ -683,16 +824,21 @@ fn migrate_brain_regions(result: &mut MigrationResult) -> EvoResult<()> {
         .ok_or_else(|| EvoError::InvalidGenome("Genome is not an object".to_string()))?;
 
     if let Some(brain_regions_value) = genome.get_mut("brain_regions") {
+        if brain_regions_value.is_null() {
+            *brain_regions_value = Value::Object(serde_json::Map::new());
+        }
         if let Some(brain_regions) = brain_regions_value.as_object_mut() {
             for region in brain_regions.values_mut() {
                 if let Some(region_obj) = region.as_object_mut() {
-                    // Migrate "areas" array
-                    if let Some(areas_value) = region_obj.get_mut("areas") {
-                        if let Some(areas) = areas_value.as_array_mut() {
-                            for area_id in areas.iter_mut() {
-                                if let Some(old_id) = area_id.as_str() {
-                                    if let Some(new_id) = result.id_mapping.get(old_id) {
-                                        *area_id = Value::String(new_id.clone());
+                    // Migrate "areas" / "cortical_areas" arrays
+                    for areas_key in ["areas", "cortical_areas"] {
+                        if let Some(areas_value) = region_obj.get_mut(areas_key) {
+                            if let Some(areas) = areas_value.as_array_mut() {
+                                for area_id in areas.iter_mut() {
+                                    if let Some(old_id) = area_id.as_str() {
+                                        if let Some(new_id) = result.id_mapping.get(old_id) {
+                                            *area_id = Value::String(new_id.clone());
+                                        }
                                     }
                                 }
                             }
@@ -719,6 +865,43 @@ fn migrate_brain_regions(result: &mut MigrationResult) -> EvoResult<()> {
                                 if let Some(old_id) = output_id.as_str() {
                                     if let Some(new_id) = result.id_mapping.get(old_id) {
                                         *output_id = Value::String(new_id.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Migrate designated IO arrays (same shape as inputs/outputs)
+                    for key in ["designated_inputs", "designated_outputs"] {
+                        if let Some(val) = region_obj.get_mut(key) {
+                            if let Some(arr) = val.as_array_mut() {
+                                for entry in arr.iter_mut() {
+                                    if let Some(old_id) = entry.as_str() {
+                                        if let Some(new_id) = result.id_mapping.get(old_id) {
+                                            *entry = Value::String(new_id.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // v3 nested properties
+                    if let Some(Value::Object(props)) = region_obj.get_mut("properties") {
+                        for key in [
+                            "inputs",
+                            "outputs",
+                            "designated_inputs",
+                            "designated_outputs",
+                        ] {
+                            if let Some(val) = props.get_mut(key) {
+                                if let Some(arr) = val.as_array_mut() {
+                                    for entry in arr.iter_mut() {
+                                        if let Some(old_id) = entry.as_str() {
+                                            if let Some(new_id) = result.id_mapping.get(old_id) {
+                                                *entry = Value::String(new_id.clone());
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -783,7 +966,7 @@ mod tests {
         use feagi_structures::genomic::SensoryCorticalUnit;
 
         // IPU migrations - should return base64 IDs with Absolute frame handling
-        let group_index: CorticalUnitIndex = 0.into();
+        let group_index: CorticalUnitIndex = 0u16.into();
         let frame_handling = FrameChangeHandling::Absolute;
         let expected_svi0 =
             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
@@ -840,6 +1023,14 @@ mod tests {
             Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
         );
         assert_eq!(
+            map_old_id_to_new("___pwr"),
+            Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
+        );
+        assert_eq!(
+            map_old_id_to_new("___pwr__"),
+            Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
+        );
+        assert_eq!(
             map_old_id_to_new("_death"),
             Some(CoreCorticalType::Death.to_cortical_id().as_base_64())
         );
@@ -860,6 +1051,7 @@ mod tests {
         assert!(needs_migration("iic000"));
         assert!(needs_migration("omot00"));
         assert!(needs_migration("_power"));
+        assert!(needs_migration("___pwr__"));
 
         // Should NOT migrate - use types from feagi-data-processing
         assert!(!needs_migration("svi0____"));
@@ -868,6 +1060,70 @@ mod tests {
             &CoreCorticalType::Power.to_cortical_id().to_string()
         ));
         assert!(!needs_migration("custom01"));
+    }
+
+    #[test]
+    fn test_migrate_brain_regions_null_becomes_empty_object() {
+        let genome = json!({
+            "version": "2.0",
+            "blueprint": {
+                "_____10c-iv00_C-cx-__name-t": "Central vision sensor",
+            },
+            "brain_regions": null,
+            "neuron_morphologies": {},
+            "physiology": {}
+        });
+        let result = migrate_genome(&genome).expect("Migration failed");
+        let br = result
+            .genome
+            .get("brain_regions")
+            .expect("brain_regions key present after migration");
+        assert!(
+            br.is_object(),
+            "brain_regions should be an object after migration, got {:?}",
+            br
+        );
+    }
+
+    #[test]
+    fn test_migrate_six_char_catch_all() {
+        // Generic 6-char IDs must be converted to base64 via CorticalID (not string padding)
+        let genome = json!({
+            "genome_id": "test",
+            "version": "2.1",
+            "blueprint": {
+                "custom": {
+                    "cortical_name": "Custom Area",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CUSTOM"
+                }
+            },
+            "brain_regions": {}
+        });
+
+        let result = migrate_genome(&genome).expect("Migration failed");
+
+        assert_eq!(result.cortical_ids_migrated, 1);
+        let new_id = result
+            .id_mapping
+            .get("custom")
+            .expect("custom should be mapped");
+        // New ID must be valid base64 (CorticalID format) via string_to_cortical_id
+        assert!(
+            string_to_cortical_id(new_id).is_ok(),
+            "new_id '{}' must be valid base64 CorticalID",
+            new_id
+        );
+        assert_ne!(new_id, "custom__", "must use base64, not string padding");
+
+        let new_blueprint = result
+            .genome
+            .get("blueprint")
+            .and_then(|v| v.as_object())
+            .expect("Blueprint missing");
+        assert!(new_blueprint.contains_key(new_id));
+        assert!(!new_blueprint.contains_key("custom"));
     }
 
     #[test]
@@ -970,8 +1226,8 @@ mod tests {
     fn test_migrate_legacy_io_shorthands_to_segmented_center_and_misc() {
         // Minimal flat-format genome blueprint containing legacy IO shorthands seen in older FEAGI:
         // - iv00_C: legacy central vision sensor shorthand (should map to SegmentedVision center)
-        // - i___id: legacy IPU shorthand (unknown template) -> MiscData IPU
-        // - o___id: legacy OPU shorthand (unknown template) -> MiscData OPU
+        // - i___id: legacy IPU shorthand (unknown template) -> custom area (no supported match)
+        // - o___id: legacy OPU shorthand (unknown template) -> custom area (no supported match)
         let genome = json!({
             "version": "2.0",
             "blueprint": {
@@ -993,13 +1249,13 @@ mod tests {
         let expected_center =
             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                 FrameChangeHandling::Absolute,
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
             )[4]
             .as_base_64();
 
         assert_eq!(result.id_mapping.get("iv00_C").unwrap(), &expected_center);
 
-        // Unknown shorthands → distinct MiscData group IDs (deterministic allocation).
+        // Unknown shorthands → distinct custom area IDs (preserves i/o in byte 1).
         let i_mapped = result.id_mapping.get("i___id").expect("i___id mapped");
         let o_mapped = result.id_mapping.get("o___id").expect("o___id mapped");
         assert_ne!(i_mapped, o_mapped);
@@ -1036,7 +1292,7 @@ mod tests {
         let expected =
             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                 FrameChangeHandling::Absolute,
-                CorticalUnitIndex::from(0u8),
+                CorticalUnitIndex::from(0u16),
             )[6]
             .as_base_64();
 

@@ -36,7 +36,7 @@ My initial analysis assumed:
 ├──────────────────────────────────────────────────────────────┤
 │  Option 1: Full Server                                      │
 │    $ ./feagi --config feagi_configuration.toml \            │
-│              --genome essential_genome.json                  │
+│              --genome essential.genome                       │
 │                                                              │
 │  Option 2: Standalone Inference                              │
 │    $ ./feagi-inference-engine \                             │

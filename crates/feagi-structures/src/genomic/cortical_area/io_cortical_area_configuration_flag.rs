@@ -8,10 +8,16 @@ pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
 /// Define the indexes of various bit flags
 pub mod bit_indexes {
-    // Bits 0-7 -> Enum
+    // Bits 0-3 -> Enum variant discriminant
+    // Bits 4-7 -> CorticalSubUnitIndex (0-15). Unit index lives in cortical ID bytes 6-7.
     pub const FRAME_CHANGE_HANDLING: usize = 8;
     pub const PERCENTAGE_NEURON_POSITIONING: usize = 9;
-    // Bit 10-15 -> RESERVED
+    // Bits 4-7 -> CorticalSubUnitIndex (0-15). Variant discriminant uses bits 0-3.
+    // Bits 10-12 -> PoseSchema (3 bits, used only by PoseEstimation variant)
+    pub const POSE_SCHEMA_START: usize = 10;
+    pub const POSE_SCHEMA_MASK: u16 = 0b111; // 3 bits
+    pub const CORTICAL_SUB_UNIT_INDEX: usize = 4;
+    pub const CORTICAL_SUB_UNIT_INDEX_MASK: u16 = 0b1111;
 }
 
 /// Different types of Input/Output cortical areas exist, and have their own nested configurations. This enum defines that
@@ -28,13 +34,14 @@ pub enum IOCorticalAreaConfigurationFlag {
     SignedPercentage4D(FrameChangeHandling, PercentageNeuronPositioning),
     CartesianPlane(FrameChangeHandling),
     Misc(FrameChangeHandling),
+    PoseEstimation(FrameChangeHandling, PoseSchema),
 }
 
 impl IOCorticalAreaConfigurationFlag {
     pub const fn try_from_data_type_configuration_flag(
         value: IOCorticalAreaConfigurationFlagBitmask,
     ) -> Result<Self, FeagiDataError> {
-        let variant = value & 0xFF; // Bits 0-7
+        let variant = value & 0x0F; // Bits 0-3; bits 4-7 hold CorticalSubUnitIndex
         let frame_handling = (value >> bit_indexes::FRAME_CHANGE_HANDLING) & 0x01;
         let positioning = (value >> bit_indexes::PERCENTAGE_NEURON_POSITIONING) & 0x01;
 
@@ -85,7 +92,6 @@ impl IOCorticalAreaConfigurationFlag {
                 positioning_enum,
             )),
             9 => {
-                // CartesianPlane doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
                     return Err(FeagiDataError::ConstError(
                         "CartesianPlane variant does not support positioning parameter",
@@ -96,7 +102,6 @@ impl IOCorticalAreaConfigurationFlag {
                 ))
             }
             10 => {
-                // Misc doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
                     return Err(FeagiDataError::ConstError(
                         "Misc variant does not support positioning parameter",
@@ -104,39 +109,81 @@ impl IOCorticalAreaConfigurationFlag {
                 }
                 Ok(IOCorticalAreaConfigurationFlag::Misc(frame_handling_enum))
             }
+            11 => {
+                if positioning != 0 {
+                    return Err(FeagiDataError::ConstError(
+                        "PoseEstimation variant does not support positioning parameter",
+                    ));
+                }
+                let pose_schema_bits =
+                    (value >> bit_indexes::POSE_SCHEMA_START) & bit_indexes::POSE_SCHEMA_MASK;
+                let pose_schema = match pose_schema_bits {
+                    0 => PoseSchema::HumanBody,
+                    1 => PoseSchema::HumanHand,
+                    2 => PoseSchema::HumanFace,
+                    3 => PoseSchema::Quadruped,
+                    4 => PoseSchema::Avian,
+                    5 => PoseSchema::Arthropod,
+                    6 => PoseSchema::Object6DoF,
+                    7 => PoseSchema::Custom,
+                    _ => return Err(FeagiDataError::ConstError("Invalid PoseSchema bits")),
+                };
+                Ok(IOCorticalAreaConfigurationFlag::PoseEstimation(
+                    frame_handling_enum,
+                    pose_schema,
+                ))
+            }
             _ => Err(FeagiDataError::ConstError("Invalid variant type!")),
         }
     }
 
     pub const fn to_data_type_configuration_flag(&self) -> IOCorticalAreaConfigurationFlagBitmask {
-        let (variant, frame_handling, positioning) = match self {
-            IOCorticalAreaConfigurationFlag::Boolean => (0u16, None, None),
-            IOCorticalAreaConfigurationFlag::Percentage(f, p) => (1u16, Some(*f), Some(*p)),
-            IOCorticalAreaConfigurationFlag::Percentage2D(f, p) => (2u16, Some(*f), Some(*p)),
-            IOCorticalAreaConfigurationFlag::Percentage3D(f, p) => (3u16, Some(*f), Some(*p)),
-            IOCorticalAreaConfigurationFlag::Percentage4D(f, p) => (4u16, Some(*f), Some(*p)),
-            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => (5u16, Some(*f), Some(*p)),
-            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => (6u16, Some(*f), Some(*p)),
-            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => (7u16, Some(*f), Some(*p)),
-            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => (8u16, Some(*f), Some(*p)),
-            IOCorticalAreaConfigurationFlag::CartesianPlane(f) => (9u16, Some(*f), None),
-            IOCorticalAreaConfigurationFlag::Misc(f) => (10u16, Some(*f), None),
+        let (variant, frame_handling, positioning, pose_schema) = match self {
+            IOCorticalAreaConfigurationFlag::Boolean => (0u16, None, None, None),
+            IOCorticalAreaConfigurationFlag::Percentage(f, p) => (1u16, Some(*f), Some(*p), None),
+            IOCorticalAreaConfigurationFlag::Percentage2D(f, p) => (2u16, Some(*f), Some(*p), None),
+            IOCorticalAreaConfigurationFlag::Percentage3D(f, p) => (3u16, Some(*f), Some(*p), None),
+            IOCorticalAreaConfigurationFlag::Percentage4D(f, p) => (4u16, Some(*f), Some(*p), None),
+            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => {
+                (5u16, Some(*f), Some(*p), None)
+            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => {
+                (6u16, Some(*f), Some(*p), None)
+            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => {
+                (7u16, Some(*f), Some(*p), None)
+            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => {
+                (8u16, Some(*f), Some(*p), None)
+            }
+            IOCorticalAreaConfigurationFlag::CartesianPlane(f) => (9u16, Some(*f), None, None),
+            IOCorticalAreaConfigurationFlag::Misc(f) => (10u16, Some(*f), None, None),
+            IOCorticalAreaConfigurationFlag::PoseEstimation(f, s) => {
+                (11u16, Some(*f), None, Some(*s))
+            }
         };
 
         let frame_bits = match frame_handling {
             Some(FrameChangeHandling::Absolute) => 0u16,
             Some(FrameChangeHandling::Incremental) => 1u16,
-            None => 0u16, // Not applicable for Bool
+            None => 0u16,
         };
 
         let positioning_bits = match positioning {
             Some(PercentageNeuronPositioning::Linear) => 0u16,
             Some(PercentageNeuronPositioning::Fractional) => 1u16,
-            None => 0u16, // Not applicable for Bool/CartesianPlane/Misc
+            None => 0u16,
         };
 
-        // Pack: variant (8 bits) | frame_handling (1 bit)| positioning (1 bit) << 5
-        variant | (frame_bits << 8) | (positioning_bits << 9)
+        let pose_schema_bits = match pose_schema {
+            Some(s) => s.to_bits(),
+            None => 0u16,
+        };
+
+        variant
+            | (frame_bits << bit_indexes::FRAME_CHANGE_HANDLING)
+            | (positioning_bits << bit_indexes::PERCENTAGE_NEURON_POSITIONING)
+            | (pose_schema_bits << bit_indexes::POSE_SCHEMA_START)
     }
 
     pub const fn as_io_cortical_id(
@@ -146,9 +193,13 @@ impl IOCorticalAreaConfigurationFlag {
         cortical_unit_index: CorticalUnitIndex,
         cortical_sub_unit_index: CorticalSubUnitIndex,
     ) -> CorticalID {
-        let data_type_configuration: IOCorticalAreaConfigurationFlagBitmask =
+        let sub_unit = cortical_sub_unit_index.get() as u16;
+        let mut data_type_configuration: IOCorticalAreaConfigurationFlagBitmask =
             self.to_data_type_configuration_flag();
+        data_type_configuration |= (sub_unit & bit_indexes::CORTICAL_SUB_UNIT_INDEX_MASK)
+            << bit_indexes::CORTICAL_SUB_UNIT_INDEX;
         let data_type_configuration_bytes: [u8; 2] = data_type_configuration.to_le_bytes();
+        let unit_index_bytes: [u8; 2] = cortical_unit_index.get().to_le_bytes();
 
         let cortical_id_bytes: [u8; CorticalID::NUMBER_OF_BYTES] = [
             if is_input { b'i' } else { b'o' },
@@ -157,8 +208,8 @@ impl IOCorticalAreaConfigurationFlag {
             cortical_unit_identifier[2],
             data_type_configuration_bytes[0],
             data_type_configuration_bytes[1],
-            cortical_sub_unit_index.get(),
-            cortical_unit_index.get(),
+            unit_index_bytes[0],
+            unit_index_bytes[1],
         ];
 
         CorticalID {
@@ -219,6 +270,9 @@ impl fmt::Display for IOCorticalAreaConfigurationFlag {
                 write!(f, "CartesianPlane({})", frame)
             }
             IOCorticalAreaConfigurationFlag::Misc(frame) => write!(f, "Misc({})", frame),
+            IOCorticalAreaConfigurationFlag::PoseEstimation(frame, schema) => {
+                write!(f, "PoseEstimation({}, {})", frame, schema)
+            }
         }
     }
 }
@@ -259,6 +313,50 @@ impl fmt::Display for PercentageNeuronPositioning {
     }
 }
 
+/// Returns the area configuration flag for a SpatialPointer cortical area.
+///
+/// Voxel layout depends on frame-change mode:
+/// - `Absolute` is `3×1×depth` (one X column per XYZ axis) and emits an unsigned
+///   position (`Percentage3D`, each axis in `[0, 1]`).
+/// - `Incremental` is `6×1×depth` (X+/X−, Y+/Y−, Z+/Z−) and emits a signed
+///   motion vector (`SignedPercentage3D`, each axis in `[-1, 1]`, `0` meaning
+///   no motion). Linear Z encoding uses low Z as the large increment.
+///
+/// Signedness is therefore fully determined by the frame-change mode; there is no valid
+/// "absolute + signed" or "incremental + unsigned" combination.
+pub const fn spatial_pointer_io_flag(
+    frame_change_handling: FrameChangeHandling,
+    percentage_neuron_positioning: PercentageNeuronPositioning,
+) -> IOCorticalAreaConfigurationFlag {
+    match frame_change_handling {
+        FrameChangeHandling::Absolute => IOCorticalAreaConfigurationFlag::Percentage3D(
+            frame_change_handling,
+            percentage_neuron_positioning,
+        ),
+        FrameChangeHandling::Incremental => IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+            frame_change_handling,
+            percentage_neuron_positioning,
+        ),
+    }
+}
+
+/// Returns the area configuration flag for an AngularPointer cortical area.
+///
+/// Both Absolute and Incremental emit a signed 3-vector (`SignedPercentage3D`,
+/// each axis in `[-1, 1]`, `0` meaning center / no motion):
+/// - `Absolute` is `3×1×depth` (one X column per yaw/pitch/roll axis). Linear
+///   Z encoding maps low Z to `+1` and high Z to `-1`.
+/// - `Incremental` is `6×1×depth` (yaw+/yaw−, pitch+/pitch−, roll+/roll−).
+pub const fn angular_pointer_io_flag(
+    frame_change_handling: FrameChangeHandling,
+    percentage_neuron_positioning: PercentageNeuronPositioning,
+) -> IOCorticalAreaConfigurationFlag {
+    IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+        frame_change_handling,
+        percentage_neuron_positioning,
+    )
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum FrameChangeHandling {
     #[default]
@@ -289,6 +387,80 @@ impl fmt::Display for FrameChangeHandling {
         match self {
             FrameChangeHandling::Absolute => write!(f, "Absolute"),
             FrameChangeHandling::Incremental => write!(f, "Incremental"),
+        }
+    }
+}
+
+/// Pose estimation schema encoded in the cortical ID (bits 10-12, 3 bits = 8 values).
+/// The super class identifies the joint topology; combined with Z depth it uniquely
+/// determines the sub-class (e.g. HumanBody + Z=17 = COCO-17).
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum PoseSchema {
+    #[default]
+    HumanBody,
+    HumanHand,
+    HumanFace,
+    Quadruped,
+    Avian,
+    Arthropod,
+    Object6DoF,
+    Custom,
+}
+
+impl PoseSchema {
+    pub const fn to_bits(self) -> u16 {
+        match self {
+            PoseSchema::HumanBody => 0,
+            PoseSchema::HumanHand => 1,
+            PoseSchema::HumanFace => 2,
+            PoseSchema::Quadruped => 3,
+            PoseSchema::Avian => 4,
+            PoseSchema::Arthropod => 5,
+            PoseSchema::Object6DoF => 6,
+            PoseSchema::Custom => 7,
+        }
+    }
+
+    pub const fn try_from_bits(bits: u16) -> Result<Self, FeagiDataError> {
+        match bits {
+            0 => Ok(PoseSchema::HumanBody),
+            1 => Ok(PoseSchema::HumanHand),
+            2 => Ok(PoseSchema::HumanFace),
+            3 => Ok(PoseSchema::Quadruped),
+            4 => Ok(PoseSchema::Avian),
+            5 => Ok(PoseSchema::Arthropod),
+            6 => Ok(PoseSchema::Object6DoF),
+            7 => Ok(PoseSchema::Custom),
+            _ => Err(FeagiDataError::ConstError("Invalid PoseSchema bits")),
+        }
+    }
+
+    pub fn try_from_serde_map(
+        map: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<PoseSchema, FeagiDataError> {
+        let val = map
+            .get("pose_schema")
+            .ok_or(FeagiDataError::DeserializationError(
+                "Unable to extract pose_schema!".to_string(),
+            ))?;
+        let output: PoseSchema = serde_json::from_value(val.clone()).map_err(|_err| {
+            FeagiDataError::DeserializationError("Unable to extract pose_schema!".to_string())
+        })?;
+        Ok(output)
+    }
+}
+
+impl fmt::Display for PoseSchema {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PoseSchema::HumanBody => write!(f, "HumanBody"),
+            PoseSchema::HumanHand => write!(f, "HumanHand"),
+            PoseSchema::HumanFace => write!(f, "HumanFace"),
+            PoseSchema::Quadruped => write!(f, "Quadruped"),
+            PoseSchema::Avian => write!(f, "Avian"),
+            PoseSchema::Arthropod => write!(f, "Arthropod"),
+            PoseSchema::Object6DoF => write!(f, "Object6DoF"),
+            PoseSchema::Custom => write!(f, "Custom"),
         }
     }
 }

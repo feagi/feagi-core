@@ -11,6 +11,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+use feagi_structures::genomic::classifiers::Classifier;
 use feagi_structures::genomic::cortical_area::CorticalArea;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::BrainRegion;
@@ -29,8 +30,15 @@ pub struct RuntimeGenome {
     /// Brain regions (by region_id)
     pub brain_regions: HashMap<String, BrainRegion>,
 
+    /// Classifier assemblies (by classifier_id). Parallel to `brain_regions`;
+    /// not a region and not exportable as a circuit.
+    pub classifiers: HashMap<String, Classifier>,
+
     /// Morphology registry
     pub morphologies: MorphologyRegistry,
+
+    /// Modulator instances. Each instance owns one driver cortical area.
+    pub modulators: crate::modulators::ModulatorRegistry,
 
     /// Physiology configuration
     pub physiology: PhysiologyConfig,
@@ -40,6 +48,78 @@ pub struct RuntimeGenome {
 
     /// Statistics
     pub stats: GenomeStats,
+
+    /// Recorded structural changes (optional top-level `change_history` key).
+    ///
+    /// Opaque entries owned by the change ledger in `feagi-services`; the genome only
+    /// carries them. Never part of `signatures`.
+    pub change_history: Vec<serde_json::Value>,
+}
+
+impl RuntimeGenome {
+    /// Add every rule a classifier requires that its mapping lists lack.
+    ///
+    /// The classifier record is authoritative for its sample, class, and
+    /// associative edges. Existing rules are left as they are.
+    /// Returns the number of rules added.
+    pub fn apply_classifier_required_mappings(&mut self) -> usize {
+        let mut added = 0usize;
+        for classifier in self.classifiers.values() {
+            let Some(associative_window) =
+                CorticalID::try_from_base_64(&classifier.sample_memory_id)
+                    .ok()
+                    .and_then(|id| self.cortical_areas.get(&id))
+                    .and_then(|area| crate::extract_memory_properties(&area.properties))
+                    .map(|props| props.temporal_depth)
+            else {
+                continue;
+            };
+            for mapping in classifier.required_mappings() {
+                let Ok(dst_id) = CorticalID::try_from_base_64(&mapping.dst_area_id) else {
+                    continue;
+                };
+                if !self.cortical_areas.contains_key(&dst_id) {
+                    continue;
+                }
+                let Ok(src_id) = CorticalID::try_from_base_64(&mapping.src_area_id) else {
+                    continue;
+                };
+                let Some(src_area) = self.cortical_areas.get_mut(&src_id) else {
+                    continue;
+                };
+                let Some(mapping_dst) = src_area
+                    .properties
+                    .entry("cortical_mapping_dst".to_string())
+                    .or_insert_with(|| serde_json::json!({}))
+                    .as_object_mut()
+                else {
+                    continue;
+                };
+                let Some(rules) = mapping_dst
+                    .entry(mapping.dst_area_id.clone())
+                    .or_insert_with(|| serde_json::json!([]))
+                    .as_array_mut()
+                else {
+                    continue;
+                };
+                let present = rules.iter().any(|rule| {
+                    rule.get("morphology_id").and_then(|v| v.as_str())
+                        == Some(mapping.morphology_id.as_str())
+                });
+                if present {
+                    continue;
+                }
+                rules.push(
+                    feagi_structures::genomic::classifiers::classifier_mapping_rule(
+                        &mapping.morphology_id,
+                        associative_window,
+                    ),
+                );
+                added += 1;
+            }
+        }
+        added
+    }
 }
 
 /// Genome metadata
@@ -161,7 +241,7 @@ pub enum MorphologyParameters {
     },
 }
 
-/// Pattern element: exact value, wildcard (*), skip (?), or exclude (!)
+/// Pattern element: exact value, wildcard (*), skip (?), exclude (!), relative, or `N..M`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatternElement {
     /// Exact coordinate value
@@ -172,6 +252,20 @@ pub enum PatternElement {
     Skip, // "?"
     /// Exclude - exclude this coordinate
     Exclude, // "!"
+    /// All coordinates strictly above source on this axis
+    DirectionPositive, // "?+"
+    /// All coordinates strictly below source on this axis
+    DirectionNegative, // "?-"
+    /// All coordinates at or above source on this axis
+    DirectionPositiveInclusive, // "?+="
+    /// All coordinates at or below source on this axis
+    DirectionNegativeInclusive, // "?-="
+    /// Single coordinate at offset from source
+    Offset(i32), // "?+N" or "?-N"
+    /// Inclusive range relative to source [src+lo, src+hi]
+    Range(i32, i32), // "?-A:?+B"
+    /// Inclusive absolute range [N, M]
+    AbsoluteRange(i32, i32), // "N..M"
 }
 
 // Custom serialization to convert PatternElement back to JSON properly
@@ -185,6 +279,33 @@ impl Serialize for PatternElement {
             PatternElement::Wildcard => serializer.serialize_str("*"),
             PatternElement::Skip => serializer.serialize_str("?"),
             PatternElement::Exclude => serializer.serialize_str("!"),
+            PatternElement::DirectionPositive => serializer.serialize_str("?+"),
+            PatternElement::DirectionNegative => serializer.serialize_str("?-"),
+            PatternElement::DirectionPositiveInclusive => serializer.serialize_str("?+="),
+            PatternElement::DirectionNegativeInclusive => serializer.serialize_str("?-="),
+            PatternElement::Offset(off) => {
+                if *off >= 0 {
+                    serializer.serialize_str(&format!("?+{}", off))
+                } else {
+                    serializer.serialize_str(&format!("?{}", off))
+                }
+            }
+            PatternElement::Range(lo, hi) => {
+                let lo_str = if *lo >= 0 {
+                    format!("?+{}", lo)
+                } else {
+                    format!("?{}", lo)
+                };
+                let hi_str = if *hi >= 0 {
+                    format!("?+{}", hi)
+                } else {
+                    format!("?{}", hi)
+                };
+                serializer.serialize_str(&format!("{}:{}", lo_str, hi_str))
+            }
+            PatternElement::AbsoluteRange(lo, hi) => {
+                serializer.serialize_str(&format!("{}..{}", lo, hi))
+            }
         }
     }
 }
@@ -206,19 +327,75 @@ impl<'de> Deserialize<'de> for PatternElement {
                     ))
                 }
             }
-            serde_json::Value::String(s) => match s.as_str() {
-                "*" => Ok(PatternElement::Wildcard),
-                "?" => Ok(PatternElement::Skip),
-                "!" => Ok(PatternElement::Exclude),
-                _ => Err(serde::de::Error::custom(format!(
-                    "Unknown pattern element: {}",
-                    s
-                ))),
-            },
+            serde_json::Value::String(s) => Self::parse_string(&s)
+                .ok_or_else(|| serde::de::Error::custom(format!("Unknown pattern element: {}", s))),
             _ => Err(serde::de::Error::custom(
                 "Pattern element must be number or string",
             )),
         }
+    }
+}
+
+impl PatternElement {
+    /// Parse a pattern element from its string representation.
+    pub fn parse_string(s: &str) -> Option<Self> {
+        match s {
+            "*" => Some(PatternElement::Wildcard),
+            "?" => Some(PatternElement::Skip),
+            "!" => Some(PatternElement::Exclude),
+            "?+" => Some(PatternElement::DirectionPositive),
+            "?-" => Some(PatternElement::DirectionNegative),
+            "?+=" => Some(PatternElement::DirectionPositiveInclusive),
+            "?-=" => Some(PatternElement::DirectionNegativeInclusive),
+            _ => {
+                if let Some(range) = Self::try_parse_range(s) {
+                    return Some(range);
+                }
+                if let Some(abs_range) = Self::try_parse_absolute_range(s) {
+                    return Some(abs_range);
+                }
+                if let Some(offset) = Self::try_parse_offset(s) {
+                    return Some(offset);
+                }
+                None
+            }
+        }
+    }
+
+    fn try_parse_range(s: &str) -> Option<Self> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+        let lo = Self::extract_relative_offset(parts[0])?;
+        let hi = Self::extract_relative_offset(parts[1])?;
+        Some(PatternElement::Range(lo, hi))
+    }
+
+    fn try_parse_absolute_range(s: &str) -> Option<Self> {
+        let idx = s.find("..")?;
+        if s[idx + 2..].contains("..") {
+            return None;
+        }
+        let lo = s[..idx].parse::<i32>().ok()?;
+        let hi = s[idx + 2..].parse::<i32>().ok()?;
+        Some(PatternElement::AbsoluteRange(lo, hi))
+    }
+
+    fn try_parse_offset(s: &str) -> Option<Self> {
+        let offset = Self::extract_relative_offset(s)?;
+        Some(PatternElement::Offset(offset))
+    }
+
+    fn extract_relative_offset(s: &str) -> Option<i32> {
+        if !s.starts_with('?') {
+            return None;
+        }
+        let rest = &s[1..];
+        if rest.is_empty() || rest == "+" || rest == "-" || rest == "+=" || rest == "-=" {
+            return None;
+        }
+        rest.parse::<i32>().ok()
     }
 }
 
@@ -324,6 +501,157 @@ mod tests {
         assert_eq!(registry.count(), 1);
         assert!(registry.contains("test_morph"));
         assert!(registry.get("test_morph").is_some());
+    }
+
+    fn classifier_genome(sample_to_memory_rules: Vec<serde_json::Value>) -> RuntimeGenome {
+        use feagi_structures::genomic::classifiers::Classifier;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CustomCorticalType, MemoryCorticalType,
+        };
+
+        let area = |id: &str, is_memory: bool| {
+            let kind = if is_memory {
+                CorticalAreaType::Memory(MemoryCorticalType::Memory)
+            } else {
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire)
+            };
+            let mut area = CorticalArea::new(
+                CorticalID::try_from_base_64(id).expect("id"),
+                0,
+                id.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).expect("dims"),
+                (0, 0, 0).into(),
+                kind,
+            )
+            .expect("area");
+            if is_memory {
+                area.properties
+                    .insert("is_mem_type".to_string(), serde_json::json!(true));
+                area.properties
+                    .insert("temporal_depth".to_string(), serde_json::json!(2));
+            }
+            area
+        };
+        let mut sample = area("Y01OSVNUX9w=", false);
+        sample.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({ "bU1OSVNUXx8=": sample_to_memory_rules }),
+        );
+        let mut cortical_areas = HashMap::new();
+        for a in [
+            sample,
+            area("Y01OSVNUX+E=", false),
+            area("Y01OSVNUX8Y=", false),
+            area("bU1OSVNUXx8=", true),
+            area("bU1OSVNUXyA=", true),
+        ] {
+            cortical_areas.insert(a.cortical_id, a);
+        }
+        let classifier = Classifier {
+            classifier_id: "clf".to_string(),
+            name: "clf".to_string(),
+            parent_region_id: "region".to_string(),
+            coordinates_3d: [0, 0, 0],
+            sample_area_ids: vec!["Y01OSVNUX9w=".to_string()],
+            class_bindings: vec![
+                feagi_structures::genomic::classifiers::ClassifierClassBinding {
+                    class_area_id: "Y01OSVNUX+E=".to_string(),
+                    class_output_area_id: "Y01OSVNUX8Y=".to_string(),
+                },
+            ],
+            sample_memory_id: "bU1OSVNUXx8=".to_string(),
+            class_memory_id: "bU1OSVNUXyA=".to_string(),
+            error_area_id: "err".to_string(),
+            reward_training: false,
+            answer_feedback_area_id: None,
+            pain_area_id: None,
+            pleasure_area_id: None,
+            answer_latency_bursts: 0,
+            learn_area_id: None,
+            confidence_area_id: None,
+            properties: HashMap::new(),
+        };
+        RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "t".to_string(),
+                genome_title: "t".to_string(),
+                genome_description: String::new(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas,
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::from([("clf".to_string(), classifier)]),
+            morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        }
+    }
+
+    fn morphologies(genome: &RuntimeGenome, src: &str, dst: &str) -> Vec<String> {
+        genome.cortical_areas[&CorticalID::try_from_base_64(src).unwrap()]
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|m| m.get(dst))
+            .and_then(|r| r.as_array())
+            .map(|rules| {
+                rules
+                    .iter()
+                    .filter_map(|r| r["morphology_id"].as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn missing_classifier_edges_are_restored() {
+        use feagi_structures::genomic::classifiers::classifier_mapping_rule;
+        let mut genome = classifier_genome(vec![classifier_mapping_rule("classifier_sample", 2)]);
+
+        let added = genome.apply_classifier_required_mappings();
+
+        assert_eq!(
+            morphologies(&genome, "Y01OSVNUX9w=", "bU1OSVNUXx8="),
+            vec!["classifier_sample".to_string()]
+        );
+        assert_eq!(
+            morphologies(&genome, "Y01OSVNUX+E=", "bU1OSVNUXyA="),
+            vec!["classifier_class".to_string()]
+        );
+        let assoc = morphologies(&genome, "bU1OSVNUXx8=", "bU1OSVNUXyA=");
+        assert_eq!(assoc, vec!["associative_memory".to_string()]);
+        let assoc_rule = &genome.cortical_areas
+            [&CorticalID::try_from_base_64("bU1OSVNUXx8=").unwrap()]
+            .properties["cortical_mapping_dst"]["bU1OSVNUXyA="][0];
+        assert_eq!(assoc_rule["plasticity_window"], serde_json::json!(2));
+        assert_eq!(added, 2);
+    }
+
+    #[test]
+    fn complete_classifier_edges_are_left_unchanged() {
+        use feagi_structures::genomic::classifiers::classifier_mapping_rule;
+        let mut genome = classifier_genome(vec![classifier_mapping_rule("classifier_sample", 2)]);
+        genome.apply_classifier_required_mappings();
+        let before = genome.cortical_areas.clone();
+
+        assert_eq!(genome.apply_classifier_required_mappings(), 0);
+        for (id, area) in &before {
+            assert_eq!(
+                area.properties.get("cortical_mapping_dst"),
+                genome.cortical_areas[id]
+                    .properties
+                    .get("cortical_mapping_dst")
+            );
+        }
     }
 
     #[test]

@@ -283,6 +283,38 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
                 cortical_id_display
             ));
         }
+
+        validate_memory_mp_encoding(&area.properties, &cortical_id_display, result);
+    }
+}
+
+/// Validate MP encoding settings of a memory area.
+///
+/// Change modes need at least two frames; shallower windows are disabled at
+/// registration, so they are reported here as a warning rather than an error.
+fn validate_memory_mp_encoding(
+    properties: &std::collections::HashMap<String, Value>,
+    cortical_id_display: &str,
+    result: &mut ValidationResult,
+) {
+    let Some(mem_props) = crate::extract_memory_properties(properties) else {
+        return;
+    };
+    if let Err(e) = crate::validate_memory_mp_properties(properties) {
+        result.add_error(format!(
+            "Memory area '{}' has invalid MP encoding: {}",
+            cortical_id_display, e
+        ));
+        return;
+    }
+    if mem_props.mp_change_mode != crate::MpChangeMode::None && mem_props.temporal_depth < 2 {
+        result.add_warning(format!(
+            "Memory area '{}' uses {}='{}' with temporal_depth={}; change encoding needs temporal_depth >= 2 and will be disabled",
+            cortical_id_display,
+            crate::MP_CHANGE_MODE_KEY,
+            mem_props.mp_change_mode.as_str(),
+            mem_props.temporal_depth
+        ));
     }
 }
 
@@ -335,6 +367,11 @@ fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
     let valid_core_ids: Vec<String> = vec![
         CoreCorticalType::Power.to_cortical_id().to_string(), // "___power"
         CoreCorticalType::Death.to_cortical_id().to_string(), // "___death"
+        CoreCorticalType::Fatigue.to_cortical_id().to_string(), // "___fatig"
+        CoreCorticalType::Pain.to_cortical_id().to_string(),  // "___pain_"
+        CoreCorticalType::Pleasure.to_cortical_id().to_string(), // "___pleas"
+        CoreCorticalType::Fear.to_cortical_id().to_string(),  // "___fear_"
+        CoreCorticalType::Hope.to_cortical_id().to_string(),  // "___hope_"
     ];
 
     if !valid_core_ids.contains(&display.to_string()) {
@@ -360,6 +397,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
         "tac", // Tactile
         "olf", // Olfactory
         "vis", // Vision (generic)
+        "dpt", // DepthMap
     ];
 
     // Known valid OPU prefixes from feagi-data-processing templates
@@ -641,6 +679,45 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
         }
     }
 
+    for (classifier_id, classifier) in &genome.classifiers {
+        if classifier.name.trim().is_empty() {
+            result.add_error(format!("Classifier '{}' has an empty name", classifier_id));
+        }
+        if !genome
+            .brain_regions
+            .contains_key(&classifier.parent_region_id)
+        {
+            result.add_error(format!(
+                "Classifier '{}' references unknown parent_region_id '{}'",
+                classifier_id, classifier.parent_region_id
+            ));
+        }
+        for area_id in classifier.owned_area_ids() {
+            if crate::genome::parser::string_to_cortical_id(&area_id)
+                .ok()
+                .and_then(|id| genome.cortical_areas.get(&id).map(|_| ()))
+                .is_none()
+            {
+                result.add_error(format!(
+                    "Classifier '{}' references missing owned area '{}'",
+                    classifier_id, area_id
+                ));
+            }
+        }
+        for area_id in classifier.input_area_ids() {
+            if crate::genome::parser::string_to_cortical_id(&area_id)
+                .ok()
+                .and_then(|id| genome.cortical_areas.get(&id).map(|_| ()))
+                .is_none()
+            {
+                result.add_error(format!(
+                    "Classifier '{}' references missing input area '{}'",
+                    classifier_id, area_id
+                ));
+            }
+        }
+    }
+
     // Validate composite morphology references
     for (morphology_id, morphology) in genome.morphologies.iter() {
         if let MorphologyParameters::Composite {
@@ -678,7 +755,9 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),
@@ -687,6 +766,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         let result = validate_genome(&genome);
@@ -709,7 +789,9 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "abc123".to_string(),
@@ -718,6 +800,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         };
 
         // Add a valid cortical area (use CoreCorticalType::Power)
@@ -815,6 +898,47 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_validate_classifier_requires_parent_region() {
+        let mut genome = create_minimal_genome();
+        genome.classifiers.insert(
+            "clf-1".to_string(),
+            feagi_structures::genomic::classifiers::Classifier {
+                classifier_id: "clf-1".to_string(),
+                name: "demo".to_string(),
+                parent_region_id: "missing".to_string(),
+                coordinates_3d: [0, 0, 0],
+                sample_area_ids: Vec::new(),
+                class_bindings: vec![
+                    feagi_structures::genomic::classifiers::ClassifierClassBinding {
+                        class_area_id: "cclass".to_string(),
+                        class_output_area_id: "cout1".to_string(),
+                    },
+                ],
+                sample_memory_id: "msmem1".to_string(),
+                class_memory_id: "mcmem1".to_string(),
+                error_area_id: "cerr1".to_string(),
+                reward_training: false,
+                answer_feedback_area_id: None,
+                pain_area_id: None,
+                pleasure_area_id: None,
+                answer_latency_bursts: 0,
+                learn_area_id: None,
+                confidence_area_id: None,
+                properties: HashMap::new(),
+            },
+        );
+        let result = validate_genome(&genome);
+        assert!(result
+            .errors
+            .iter()
+            .any(|error| error.contains("unknown parent_region_id")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|error| error.contains("missing owned area")));
+    }
+
     fn create_minimal_genome() -> RuntimeGenome {
         RuntimeGenome {
             metadata: GenomeMetadata {
@@ -827,7 +951,9 @@ mod tests {
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
             morphologies: MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
             physiology: PhysiologyConfig::default(),
             signatures: GenomeSignatures {
                 genome: "0".to_string(),
@@ -836,6 +962,7 @@ mod tests {
                 morphologies: None,
             },
             stats: GenomeStats::default(),
+            change_history: Vec::new(),
         }
     }
 }

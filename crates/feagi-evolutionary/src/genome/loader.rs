@@ -11,16 +11,41 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+use super::artifact::decode_genome_artifact;
+use super::migration::ChainResult;
 use super::{converter::to_runtime_genome, GenomeParser};
 use crate::{EvoResult, RuntimeGenome};
 use serde_json::Value;
 use std::fs;
 use std::path::Path;
 
-/// Load a genome from a JSON file
+/// Load a genome from an external `.genome` artifact.
 pub fn load_genome_from_file<P: AsRef<Path>>(path: P) -> EvoResult<RuntimeGenome> {
-    let json_str = fs::read_to_string(path)?;
-    load_genome_from_json(&json_str)
+    let artifact = fs::read(path)?;
+    load_genome_from_artifact(&artifact)
+}
+
+/// Load a genome artifact and return the chain report alongside
+/// the runtime genome. See [`load_genome_with_report`] for semantics.
+pub fn load_genome_with_report_from_file<P: AsRef<Path>>(
+    path: P,
+) -> EvoResult<(RuntimeGenome, ChainResult)> {
+    let artifact = fs::read(path)?;
+    load_genome_artifact_with_report(&artifact)
+}
+
+/// Load external genome artifact bytes using the current explicit codec.
+pub fn load_genome_from_artifact(artifact: &[u8]) -> EvoResult<RuntimeGenome> {
+    let (genome, _report) = load_genome_artifact_with_report(artifact)?;
+    Ok(genome)
+}
+
+/// Load external genome artifact bytes and return the schema-chain report.
+pub fn load_genome_artifact_with_report(
+    artifact: &[u8],
+) -> EvoResult<(RuntimeGenome, ChainResult)> {
+    let genome_value = decode_genome_artifact(artifact)?;
+    load_genome_value_with_report(genome_value)
 }
 
 /// Peek at genome's quantization precision without full parsing
@@ -30,14 +55,14 @@ pub fn load_genome_from_file<P: AsRef<Path>>(path: P) -> EvoResult<RuntimeGenome
 /// NPU before loading the full genome.
 ///
 /// # Returns
-/// - `"fp32"` or `"f32"` → f32 precision
-/// - `"int8"` → INT8 quantization
-/// - `"fp16"` or `"f16"` → f16 precision (future)
+/// - `"fp32"` or `"f32"` -> f32 precision
+/// - `"int8"` -> INT8 quantization
+/// - `"fp16"` or `"f16"` -> f16 precision (future)
 /// - If field is missing or unparseable, returns `"int8"` (default)
 ///
 /// # Example
 /// ```rust,ignore
-/// let precision = peek_quantization_precision("genome.json")?;
+/// let precision = peek_quantization_precision("brain.genome")?;
 /// let npu = match precision.as_str() {
 ///     "fp32" | "f32" => DynamicNPUGeneric::F32(RustNPU::<f32>::new(...)?),
 ///     "int8" => DynamicNPUGeneric::INT8(RustNPU::<INT8Value>::new(...)?),
@@ -47,98 +72,197 @@ pub fn load_genome_from_file<P: AsRef<Path>>(path: P) -> EvoResult<RuntimeGenome
 pub fn peek_quantization_precision<P: AsRef<Path>>(path: P) -> EvoResult<String> {
     let json_str = fs::read_to_string(path)?;
 
-    // Parse to generic JSON Value
-    let json_value: Value = serde_json::from_str(&json_str).map_err(|e| {
-        crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e))
-    })?;
+    let json_value: Value = serde_json::from_str(&json_str)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
 
-    // Try to extract quantization_precision from genome_physiology
     let precision = json_value
         .get("genome_physiology")
         .and_then(|p| p.get("quantization_precision"))
         .and_then(|q| q.as_str())
-        .unwrap_or("int8"); // Default to INT8 if not found
+        .unwrap_or("int8");
 
     Ok(precision.to_lowercase())
 }
 
-/// Load a genome from a JSON string
+/// Load a genome from a JSON string.
+///
+/// Convenience wrapper over [`load_genome_with_report`] that discards the
+/// chain report. Final-version validator errors are **not** treated as
+/// hard failures by this function; they are logged at `warn` level and
+/// the `RuntimeGenome` is returned anyway so the caller can proceed in
+/// degraded mode. Callers that need to react to validator errors (show
+/// a banner, reject the load, etc.) must use
+/// [`load_genome_with_report`] and inspect `ChainResult.blocking_errors`.
+///
+/// Only hard I/O / JSON / parse failures propagate as `Err` here.
 pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
-    // Parse JSON to Value first to check format
-    let json_value: Value = serde_json::from_str(json_str).map_err(|e| {
-        crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e))
+    let (genome, _report) = load_genome_with_report(json_str)?;
+    Ok(genome)
+}
+
+/// Load a genome from a JSON string and return the chain report alongside
+/// the runtime genome.
+///
+/// Pipeline:
+/// 1. Deserialize JSON.
+/// 2. If the top-level shape is the flat (encoded-key) form, expand it to
+///    the hierarchical form. Representation coercion, not schema
+///    migration; runs before schema-version detection.
+/// 3. Hand the hierarchical `Value` to the chain runner. The chain
+///    detects the schema version, walks `vN -> vLatest`, applies each
+///    registered migrator and normalizer, and runs the `vLatest`
+///    validator. See `feagi-core/docs/GENOME_SCHEMA_VERSIONING.md`.
+/// 4. Re-serialize the chain output, parse to `ParsedGenome`, and
+///    convert to `RuntimeGenome`.
+///
+/// Validator semantics: the library **never** turns a validation error
+/// into a load failure. It returns both the `RuntimeGenome` and the
+/// `ChainResult` so the consumer can decide whether to (a) proceed and
+/// notify the user, (b) drop problematic elements and run degraded (see
+/// `genome_validity` in the FEAGI health endpoint), or (c) reject the
+/// load at its own layer. Hard `Err` returns here are reserved for I/O,
+/// JSON parse, or structural failures where there is no `RuntimeGenome`
+/// to return at all.
+pub fn load_genome_with_report(json_str: &str) -> EvoResult<(RuntimeGenome, ChainResult)> {
+    let json_value: Value = serde_json::from_str(json_str)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
+    load_genome_value_with_report(json_value)
+}
+
+/// Load a decoded genome document and return the schema-chain report.
+///
+/// Artifact codecs terminate before this function. Schema migration and
+/// validation therefore remain independent from the external representation.
+pub fn load_genome_value_with_report(
+    genome_value: Value,
+) -> EvoResult<(RuntimeGenome, ChainResult)> {
+    let (migrated_json, report) = migrate_genome_value_to_current(genome_value)?;
+
+    let migrated_json_str = serde_json::to_string(&migrated_json).map_err(|e| {
+        crate::types::EvoError::InvalidGenome(format!("Failed to serialize migrated genome: {e}"))
     })?;
 
-    // Check if genome is in flat format and convert if needed
+    let parsed = GenomeParser::parse(&migrated_json_str).map_err(|e| {
+        tracing::error!(target: "feagi-evo", "GenomeParser::parse failed: {}", e);
+        e
+    })?;
+
+    let runtime_genome = to_runtime_genome(parsed, &migrated_json_str).map_err(|e| {
+        tracing::error!(target: "feagi-evo", "to_runtime_genome failed: {}", e);
+        e
+    })?;
+
+    Ok((runtime_genome, report))
+}
+
+/// Migrate and normalize genome JSON to the current schema without
+/// converting it into runtime structures.
+///
+/// Connectome-lite migration uses this API so the embedded genome and all
+/// semantic connectome references can be upgraded atomically.
+pub fn migrate_genome_json_to_current(json_str: &str) -> EvoResult<(Value, ChainResult)> {
+    let json_value: Value = serde_json::from_str(json_str)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
+    migrate_genome_value_to_current(json_value)
+}
+
+/// Migrate and normalize a decoded genome document to the current schema.
+pub fn migrate_genome_value_to_current(json_value: Value) -> EvoResult<(Value, ChainResult)> {
     let hierarchical_json = if is_flat_format(&json_value) {
-        // Convert flat format to hierarchical format
-        crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value)?
+        crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value).map_err(|e| {
+            tracing::error!(target: "feagi-evo", "convert_flat_to_hierarchical_full failed: {}", e);
+            e
+        })?
     } else {
         json_value
     };
 
-    // CRITICAL: Migrate old cortical ID formats to new feagi-data-processing compliant format
-    // This converts old IDs like iic000 → svi0____, _power → ___power, etc.
-    let migrated_json = match crate::genome::migrator::migrate_genome(&hierarchical_json) {
-        Ok(migration_result) => {
-            if migration_result.cortical_ids_migrated > 0 {
-                tracing::info!(
-                    "🔄 [GENOME-LOAD] Migrated {} cortical IDs from old format to new format",
-                    migration_result.cortical_ids_migrated
-                );
-                // Log some example migrations for debugging
-                for (old_id, new_id) in migration_result.id_mapping.iter().take(5) {
-                    tracing::info!("🔄 [GENOME-LOAD]   Example: '{}' → '{}'", old_id, new_id);
-                }
-                if !migration_result.warnings.is_empty() {
-                    for warning in &migration_result.warnings {
-                        tracing::warn!("⚠️  [GENOME-LOAD] Migration warning: {}", warning);
-                    }
-                }
-            } else {
-                tracing::debug!("🔄 [GENOME-LOAD] No cortical IDs needed migration");
-            }
-            migration_result.genome
-        }
-        Err(e) => {
-            tracing::warn!(
-                "⚠️  [GENOME-LOAD] Migration failed: {}, continuing without migration",
-                e
-            );
-            hierarchical_json
-        }
-    };
-
-    // Convert back to JSON string for parsing
-    let hierarchical_json_str = serde_json::to_string(&migrated_json).map_err(|e| {
-        crate::types::EvoError::InvalidGenome(format!(
-            "Failed to serialize converted genome: {}",
-            e
-        ))
-    })?;
-
-    // Parse JSON to ParsedGenome
-    let parsed = GenomeParser::parse(&hierarchical_json_str)?;
-
-    // Convert to RuntimeGenome
-    let mut runtime_genome = to_runtime_genome(parsed, &hierarchical_json_str)?;
-
-    // CRITICAL: Auto-fix common issues before validation
-    // This prevents genomes with 0 dimensions or 0 per_voxel_neuron_cnt from failing
-    let fixes_applied = crate::validator::auto_fix_genome(&mut runtime_genome);
-    if fixes_applied > 0 {
-        tracing::info!(
-            "🔧 [GENOME-LOAD] Applied {} auto-fixes to genome",
-            fixes_applied
-        );
-    }
-
-    Ok(runtime_genome)
+    run_default_chain(hierarchical_json)
 }
 
-/// Check if genome is in flat format
-/// Flat format has blueprint keys like "_____10c-_power-cx-subgrp-t" (with underscores)
-/// Hierarchical format has blueprint keys like "cortical_id" that map to objects
+/// Run the default chain registry on `hierarchical_json` to bring it to
+/// `CURRENT_SCHEMA_VERSION`. Logs migrators, normalizers, and advisory
+/// warnings. Returns the migrated `Value` alongside the full
+/// `ChainResult` so downstream callers can decide how to react to
+/// blocking errors (never converted to `Err` here).
+fn run_default_chain(mut hierarchical_json: Value) -> EvoResult<(Value, ChainResult)> {
+    use crate::genome::default_chain_registry;
+    use crate::genome::migration::ChainRunner;
+    use crate::genome::schema::CURRENT_SCHEMA_VERSION;
+
+    let registry = default_chain_registry();
+    let runner = ChainRunner::new(&registry);
+
+    let result = runner
+        .run_to(&mut hierarchical_json, CURRENT_SCHEMA_VERSION)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Genome chain failed: {e}")))?;
+
+    if !result.migrators_applied.is_empty() {
+        tracing::info!(
+            target: "feagi-evo",
+            "[GENOME-LOAD] Migrated v{} -> v{} via {:?}",
+            result.from_version.as_u32(),
+            result.to_version.as_u32(),
+            result.migrators_applied
+        );
+        for diag in &result.per_step_diagnostics {
+            for transform in &diag.transformations {
+                tracing::debug!(
+                    target: "feagi-evo",
+                    "[GENOME-LOAD]   v{} -> v{}: {}",
+                    diag.from_version.as_u32(),
+                    diag.to_version.as_u32(),
+                    transform
+                );
+            }
+        }
+    }
+
+    if !result.normalizers_applied.is_empty() {
+        for diag in &result.per_normalizer_diagnostics {
+            if !diag.is_clean() {
+                tracing::info!(
+                    target: "feagi-evo",
+                    "[GENOME-LOAD] Normalizer at v{} applied {} corrections",
+                    diag.schema_version.as_u32(),
+                    diag.transformations.len()
+                );
+                for transform in &diag.transformations {
+                    tracing::debug!(target: "feagi-evo", "[GENOME-LOAD]   {}", transform);
+                }
+            }
+        }
+    }
+
+    for warning in &result.advisory_warnings {
+        tracing::debug!(target: "feagi-evo", "[GENOME-LOAD] advisory: {}", warning);
+    }
+
+    // Policy: validator errors are reports, not exceptions. Log at warn
+    // so operators see them without the library deciding the recovery
+    // path. Consumers inspect `ChainResult.blocking_errors` via
+    // `load_genome_with_report` and route to the `genome_validity`
+    // health-check flag or their own UI.
+    if !result.is_blocking_clean() {
+        tracing::warn!(
+            target: "feagi-evo",
+            "[GENOME-LOAD] Genome v{} has {} blocking validator error(s); returning genome anyway (consumer decides)",
+            result.to_version.as_u32(),
+            result.blocking_errors.len()
+        );
+        for err in &result.blocking_errors {
+            tracing::warn!(target: "feagi-evo", "[GENOME-LOAD]   blocking: {}", err);
+        }
+    }
+
+    Ok((hierarchical_json, result))
+}
+
+/// Check if genome is in flat format.
+///
+/// Flat format has blueprint keys like `_____10c-_power-cx-subgrp-t`
+/// (encoded underscore/hyphen keys). Hierarchical format has blueprint
+/// keys like `cortical_id` that map to objects.
 fn is_flat_format(genome_value: &Value) -> bool {
     let blueprint = match genome_value.get("blueprint") {
         Some(bp) => bp,
@@ -150,21 +274,15 @@ fn is_flat_format(genome_value: &Value) -> bool {
         None => return false,
     };
 
-    // Check if any keys look like flat format (contain multiple underscores and hyphens)
-    // Flat format keys typically look like: "_____10c-_power-cx-subgrp-t"
-    // Hierarchical format keys are simple IDs like: "cortical_id"
-    blueprint_obj.keys().any(|key| {
-        // Flat format keys typically have:
-        // - Multiple underscores at start
-        // - Hyphens separating parts
-        // - Ending with a single letter suffix like "-t", "-i", "-f", "-b", "-d"
-        key.starts_with("___") && key.contains('-') && key.len() > 20
-    })
+    blueprint_obj
+        .keys()
+        .any(|key| key.starts_with("___") && key.contains('-') && key.len() > 20)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::genome::parser::string_to_cortical_id;
 
     #[test]
     fn test_load_minimal_genome() {
@@ -206,5 +324,178 @@ mod tests {
         assert_eq!(genome.metadata.version, "2.0");
         assert_eq!(genome.cortical_areas.len(), 1);
         assert_eq!(genome.physiology.simulation_timestep, 0.025);
+    }
+
+    #[test]
+    fn load_with_report_surfaces_chain_metadata() {
+        // v2.0 genome -> chain should run V2ToV3Migrator and stamp v3.
+        let json = r#"{
+            "genome_id": "t1",
+            "genome_title": "t",
+            "genome_description": "t",
+            "version": "2.0",
+            "blueprint": {},
+            "brain_regions": {},
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "stats": { "innate_cortical_area_count": 0, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+            "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+            "timestamp": 0.0
+        }"#;
+
+        let (_genome, report) = load_genome_with_report(json).unwrap();
+        assert_eq!(report.from_version.as_u32(), 2);
+        assert_eq!(report.to_version.as_u32(), 6);
+        assert_eq!(
+            report.migrators_applied,
+            vec!["v2_to_v3", "v3_to_v4", "v4_to_v5", "v5_to_v6"]
+        );
+        // V4Validator is a placeholder today; clean report expected.
+        assert!(report.is_blocking_clean());
+    }
+
+    #[test]
+    fn load_folds_duplicate_region_membership_keys() {
+        // Production connectome saves failed here: a region with both `areas`
+        // and `cortical_areas` made serde report duplicate field `areas`.
+        let json = r#"{
+            "genome_id": "t-both",
+            "genome_title": "t",
+            "genome_description": "t",
+            "version": "2.0",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Power",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                },
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "areas": ["_power"],
+                    "cortical_areas": ["_death"]
+                }
+            },
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "stats": { "innate_cortical_area_count": 2, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+            "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+            "timestamp": 0.0
+        }"#;
+
+        let (genome, report) = load_genome_with_report(json).unwrap();
+        assert!(report.is_blocking_clean());
+        assert_eq!(report.to_version.as_u32(), 6);
+        let (migrated, _) = migrate_genome_json_to_current(json).unwrap();
+        assert!(migrated["brain_regions"]["root"].get("areas").is_none());
+        let membership = migrated["brain_regions"]["root"]["cortical_areas"]
+            .as_array()
+            .unwrap();
+        let death_id = string_to_cortical_id("_death").unwrap();
+        let power_id = string_to_cortical_id("_power").unwrap();
+        let death_pos = membership_position(membership, "_death", &death_id);
+        let power_pos = membership_position(membership, "_power", &power_id);
+        assert!(death_pos < power_pos);
+        assert_eq!(genome.brain_regions.len(), 1);
+        let region = genome.brain_regions.values().next().unwrap();
+        assert!(region.contains_area(&death_id));
+        assert!(region.contains_area(&power_id));
+        assert_eq!(region.area_count(), 2);
+    }
+
+    fn membership_position(
+        membership: &[serde_json::Value],
+        raw_id: &str,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+    ) -> usize {
+        let encoded = cortical_id.as_base_64();
+        membership
+            .iter()
+            .position(|value| value.as_str() == Some(raw_id) || value.as_str() == Some(&encoded))
+            .expect("membership id")
+    }
+
+    #[test]
+    fn load_folds_areas_on_a_genome_already_stamped_current() {
+        let json = r#"{
+            "genome_schema_version": 6,
+            "genome_id": "t-current",
+            "genome_title": "t",
+            "genome_description": "t",
+            "version": "2.0",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Power",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                },
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "areas": ["_power"],
+                    "cortical_areas": ["_death"]
+                }
+            },
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "stats": { "innate_cortical_area_count": 2, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+            "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+            "timestamp": 0.0
+        }"#;
+
+        let (genome, report) = load_genome_with_report(json).unwrap();
+        assert!(report.is_blocking_clean());
+        assert_eq!(report.from_version.as_u32(), 6);
+        assert_eq!(report.to_version.as_u32(), 6);
+        assert!(report.migrators_applied.is_empty());
+        assert!(report.normalizers_applied.contains(&"v6_normalizer"));
+        let (migrated, _) = migrate_genome_json_to_current(json).unwrap();
+        assert!(migrated["brain_regions"]["root"].get("areas").is_none());
+        let region = genome.brain_regions.values().next().unwrap();
+        assert!(region.contains_area(&string_to_cortical_id("_death").unwrap()));
+        assert!(region.contains_area(&string_to_cortical_id("_power").unwrap()));
+    }
+
+    #[test]
+    fn load_never_hard_fails_on_validator_errors() {
+        // This test pins the policy: the library does not convert
+        // validator errors into Err. If V3Validator ever gains rules
+        // that fail for this input, this test must keep passing because
+        // the error is in `report.blocking_errors`, not `Err`.
+        let json = r#"{
+            "genome_id": "t2",
+            "genome_title": "t",
+            "genome_description": "t",
+            "version": "3.0",
+            "genome_schema_version": 3,
+            "blueprint": {},
+            "brain_regions": {},
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "stats": { "innate_cortical_area_count": 0, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+            "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+            "timestamp": 0.0
+        }"#;
+        let result = load_genome_with_report(json);
+        assert!(
+            result.is_ok(),
+            "load_genome_with_report must not turn validator output into Err"
+        );
     }
 }

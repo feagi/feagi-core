@@ -10,8 +10,11 @@
 //! This abstraction allows FEAGI to run plasticity optimally on different backends
 //! without code duplication or runtime overhead.
 
+use crate::memory_neuron_array::MemoryNeuronDetail;
 use crate::memory_stats_cache::MemoryStatsCache;
-use crate::service::{PlasticityCommand, PlasticityConfig, PlasticityService};
+use crate::service::{
+    MemoryCorticalAreaRuntimeInfo, PlasticityCommand, PlasticityConfig, PlasticityService,
+};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, warn};
 
@@ -44,6 +47,7 @@ pub trait PlasticityExecutor: Send + Sync {
     /// * `temporal_depth` - Number of historical timesteps to consider
     /// * `upstream_areas` - Cortical indices of areas that project to this memory area
     /// * `lifecycle_config` - Optional lifecycle configuration for memory neurons
+    /// * `mp_mode` - How upstream membrane potentials are used (replay learning or change encoding)
     fn register_memory_area(
         &self,
         area_idx: u32,
@@ -51,7 +55,11 @@ pub trait PlasticityExecutor: Send + Sync {
         temporal_depth: u32,
         upstream_areas: Vec<u32>,
         lifecycle_config: Option<crate::MemoryNeuronLifecycleConfig>,
+        mp_mode: crate::MemoryMpMode,
     );
+
+    /// Attach scan configuration to a registered kernel memory area.
+    fn configure_memory_scan(&self, area_idx: u32, scan: Option<crate::MemoryScanConfig>);
 
     /// Start the executor (for async implementations)
     ///
@@ -114,10 +122,118 @@ impl AsyncPlasticityExecutor {
         self.memory_stats_cache.clone()
     }
 
+    /// Get a reference to the underlying PlasticityService (for RuntimeService wiring)
+    pub fn get_service(&self) -> Option<PlasticityService> {
+        self.service.lock().ok()?.as_ref().cloned()
+    }
+
     pub fn enqueue_commands_for_test(&self, commands: Vec<crate::PlasticityCommand>) {
         if let Some(service) = self.service.lock().unwrap().as_ref() {
             service.enqueue_commands_for_test(commands);
         }
+    }
+
+    /// ST/LTM counts and upstream pattern cache size for a memory cortical index.
+    pub fn memory_cortical_area_runtime_info(
+        &self,
+        cortical_idx: u32,
+    ) -> Option<MemoryCorticalAreaRuntimeInfo> {
+        self.service
+            .lock()
+            .ok()?
+            .as_ref()
+            .map(|s| s.memory_cortical_area_runtime_info(cortical_idx))
+    }
+
+    /// Plasticity snapshot for a memory neuron by global id.
+    pub fn memory_neuron_detail(&self, neuron_id: u32) -> Option<MemoryNeuronDetail> {
+        self.service
+            .lock()
+            .ok()?
+            .as_ref()
+            .and_then(|s| s.memory_neuron_detail(neuron_id))
+    }
+
+    /// Active long-term memory neurons only (STM is excluded).
+    pub fn export_long_term_memory_neurons(&self) -> Result<Vec<MemoryNeuronDetail>, String> {
+        let guard = self
+            .service
+            .lock()
+            .map_err(|_| "Failed to lock plasticity service".to_string())?;
+        let service = guard
+            .as_ref()
+            .ok_or_else(|| "Plasticity service is not initialized".to_string())?;
+        Ok(service.export_long_term_memory_neurons())
+    }
+
+    /// Replace in-memory STM/LTM state with restored long-term memory neurons.
+    pub fn restore_long_term_memory_neurons(
+        &self,
+        neurons: &[MemoryNeuronDetail],
+    ) -> Result<usize, String> {
+        let guard = self
+            .service
+            .lock()
+            .map_err(|_| "Failed to lock plasticity service".to_string())?;
+        let service = guard
+            .as_ref()
+            .ok_or_else(|| "Plasticity service is not initialized".to_string())?;
+        service.restore_long_term_memory_neurons(neurons)
+    }
+
+    /// Stop pattern detection for one cortical index and delete its memory neurons.
+    pub fn unregister_memory_area(&self, area_idx: u32) {
+        let Ok(guard) = self.service.lock() else {
+            warn!(
+                "[PLASTICITY-EXEC] Failed to lock service while unregistering area_idx={}",
+                area_idx
+            );
+            return;
+        };
+        if let Some(service) = guard.as_ref() {
+            service.unregister_memory_area(area_idx);
+        }
+    }
+
+    /// Remove runtime registrations tied to the previous cortical index map.
+    pub fn clear_memory_area_registrations(&self) -> Result<(), String> {
+        let guard = self
+            .service
+            .lock()
+            .map_err(|_| "Failed to lock plasticity service".to_string())?;
+        let service = guard
+            .as_ref()
+            .ok_or_else(|| "Plasticity service is not initialized".to_string())?;
+        service.clear_memory_area_registrations();
+        Ok(())
+    }
+
+    /// Discard all memory neurons and registrations before a new genome is built.
+    ///
+    /// Returns the number of memory neurons discarded.
+    pub fn reset_all_memory_state(&self) -> Result<usize, String> {
+        let guard = self
+            .service
+            .lock()
+            .map_err(|_| "Failed to lock plasticity service".to_string())?;
+        let service = guard
+            .as_ref()
+            .ok_or_else(|| "Plasticity service is not initialized".to_string())?;
+        Ok(service.reset_all_memory_state())
+    }
+
+    /// Active memory neuron ids for a cortical area (sorted), paginated: `(page, total)`.
+    pub fn paginated_memory_neuron_ids_in_area(
+        &self,
+        cortical_idx: u32,
+        offset: usize,
+        limit: usize,
+    ) -> Option<(Vec<u32>, usize)> {
+        let guard = self.service.lock().ok()?;
+        let service = guard.as_ref()?;
+        let array_arc = service.get_memory_neuron_array();
+        let array = array_arc.lock().ok()?;
+        Some(array.paginated_neuron_ids_in_area(cortical_idx, offset, limit))
     }
 }
 
@@ -184,6 +300,13 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
                         }
                         PlasticityCommand::UpdateWeightsDelta { .. } => {}
                         PlasticityCommand::UpdateStateCounters { .. } => {}
+                        PlasticityCommand::ResetMemoryNeuronsInArea { cortical_idx } => {
+                            debug!(
+                                target: "plasticity",
+                                "[PLASTICITY-EXEC] ResetMemoryNeuronsInArea cortical_idx={}",
+                                cortical_idx
+                            );
+                        }
                     }
                 }
             }
@@ -200,6 +323,7 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
         temporal_depth: u32,
         upstream_areas: Vec<u32>,
         lifecycle_config: Option<crate::MemoryNeuronLifecycleConfig>,
+        mp_mode: crate::MemoryMpMode,
     ) {
         if let Some(service) = self.service.lock().unwrap().as_mut() {
             service.register_memory_area(
@@ -208,7 +332,14 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
                 temporal_depth,
                 upstream_areas,
                 lifecycle_config,
+                mp_mode,
             );
+        }
+    }
+
+    fn configure_memory_scan(&self, area_idx: u32, scan: Option<crate::MemoryScanConfig>) {
+        if let Some(service) = self.service.lock().unwrap().as_mut() {
+            service.configure_memory_scan(area_idx, scan);
         }
     }
 
@@ -290,7 +421,12 @@ impl PlasticityExecutor for SyncPlasticityExecutor {
         _temporal_depth: u32,
         _upstream_areas: Vec<u32>,
         _lifecycle_config: Option<crate::MemoryNeuronLifecycleConfig>,
+        _mp_mode: crate::MemoryMpMode,
     ) {
+        unimplemented!("SyncPlasticityExecutor not yet implemented");
+    }
+
+    fn configure_memory_scan(&self, _area_idx: u32, _scan: Option<crate::MemoryScanConfig>) {
         unimplemented!("SyncPlasticityExecutor not yet implemented");
     }
 }

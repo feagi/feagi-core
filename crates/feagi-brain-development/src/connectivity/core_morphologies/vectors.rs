@@ -20,10 +20,11 @@ pub fn apply_vectors_morphology_with_dimensions(
     dst_area_id: u32,
     vectors: Vec<(i32, i32, i32)>,
     dst_dimensions: (usize, usize, usize),
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
+    delay_bursts: u8,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -59,16 +60,19 @@ pub fn apply_vectors_morphology_with_dimensions(
                 // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
                 #[allow(clippy::collapsible_if)]
                 if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
+                    // Within-call dedup: prevent the same morphology rule from producing
+                    // duplicate synapses when multiple vectors collapse to the same target
+                    // (e.g. after bounds clamping).
                     if !seen_pairs.insert((src_nid, dst_nid)) {
                         continue;
                     }
-                    if npu
-                        .get_outgoing_synapses(src_nid)
-                        .iter()
-                        .any(|(target, _, _, _)| *target == dst_nid)
-                    {
-                        continue;
-                    }
+                    // NOTE: We intentionally do NOT skip creating a synapse when an
+                    // outgoing synapse to the same target already exists. Separate
+                    // morphology rules within a cortical mapping (e.g. a `projector`
+                    // and a `block_to_block` both declared for the same src->dst pair)
+                    // are parallel connections whose weights/PSPs are additive at
+                    // propagation time. Dropping the second synapse loses the caller's
+                    // configured post-synaptic current multiplier.
                     if rng.gen_range(0..100) < synapse_attractivity
                         && npu
                             .add_synapse(
@@ -77,6 +81,8 @@ pub fn apply_vectors_morphology_with_dimensions(
                                 SynapticWeight(weight),
                                 SynapticPsp(psp),
                                 synapse_type,
+                                0,
+                                delay_bursts,
                             )
                             .is_ok()
                     {
@@ -101,10 +107,11 @@ pub fn apply_vectors_morphology(
     src_area_id: u32,
     dst_area_id: u32,
     vectors: Vec<(i32, i32, i32)>,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
+    delay_bursts: u8,
 ) -> BduResult<u32> {
     use crate::connectivity::core_morphologies::common::calculate_area_dimensions;
     let dst_dimensions = calculate_area_dimensions(npu, dst_area_id);
@@ -118,5 +125,6 @@ pub fn apply_vectors_morphology(
         psp,
         synapse_attractivity,
         synapse_type,
+        delay_bursts,
     )
 }

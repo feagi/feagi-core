@@ -1,7 +1,10 @@
 use crate::genomic::cortical_area::cortical_area_type::{
     CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType,
 };
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::genomic::cortical_area::descriptors::{CorticalSubUnitIndex, CorticalUnitIndex};
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    bit_indexes, IOCorticalAreaConfigurationFlag,
+};
 use crate::FeagiDataError;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -15,6 +18,7 @@ macro_rules! match_bytes_by_cortical_type {
 
         brain_input => $brain_input:block,
         brain_output => $brain_output:block,
+        modulator => $modulator:block,
         invalid => $invalid:block,
     ) => {
         match $cortical_id_bytes[0] {
@@ -23,6 +27,7 @@ macro_rules! match_bytes_by_cortical_type {
             b'_' => $core,
             b'i' => $brain_input,
             b'o' => $brain_output,
+            b'g' => $modulator,
             _ => $invalid,
         }
     };
@@ -62,6 +67,9 @@ impl CorticalID {
                 // TODO more checks
                 Ok(CorticalID {bytes: *bytes})
             },
+            modulator => {
+                Ok(CorticalID {bytes: *bytes})
+            },
             invalid => {
                 Err(FeagiDataError::DeserializationError("Unable to deserialize cortical ID bytes as any possible type!".into()))
             },
@@ -93,6 +101,40 @@ impl CorticalID {
         bytes.copy_from_slice(&decoded);
         Self::try_from_bytes(&bytes)
     }
+
+    /// Parse legacy 6-char or 8-char ASCII cortical ID strings.
+    /// Normalizes uppercase first byte (C/M/I/O) to lowercase for compatibility with legacy genomes.
+    /// Any other invalid first byte (e.g. v, 0) is treated as custom cortical area ('c').
+    pub fn try_from_legacy_ascii(id_str: &str) -> Result<Self, FeagiDataError> {
+        let mut bytes = [b'_'; Self::CORTICAL_ID_LENGTH];
+        let len = id_str.len().min(8);
+        bytes[..len].copy_from_slice(&id_str.as_bytes()[..len]);
+        bytes[0] = match bytes[0] {
+            b'C' => b'c',
+            b'M' => b'm',
+            b'I' => b'i',
+            b'O' => b'o',
+            b'G' => b'g',
+            b'c' | b'm' | b'_' | b'i' | b'o' | b'g' => bytes[0],
+            _ => b'c',
+        };
+        Self::try_from_bytes(&bytes)
+    }
+
+    /// Cortical id for a modulator driver area.
+    ///
+    /// Prefix byte `g` marks the modulator area type. `serial` is stored in the
+    /// last four bytes so each instance can own a distinct driver.
+    pub fn modulator_driver(serial: u32) -> Self {
+        let mut bytes = *b"g_______";
+        bytes[4..8].copy_from_slice(&serial.to_le_bytes());
+        CorticalID { bytes }
+    }
+
+    /// True when this id uses the modulator driver prefix.
+    pub fn is_modulator_driver(&self) -> bool {
+        self.bytes[0] == b'g'
+    }
     //endregion
 
     //region export
@@ -113,6 +155,21 @@ impl CorticalID {
         IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(data_type_config)
     }
 
+    /// Cortical unit (group) index packed as little-endian u16 in bytes 6-7.
+    #[inline]
+    pub fn io_cortical_unit_index(&self) -> CorticalUnitIndex {
+        CorticalUnitIndex::from(u16::from_le_bytes([self.bytes[6], self.bytes[7]]))
+    }
+
+    /// Cortical sub-unit index packed in flag bits 4-7 of bytes 4-5.
+    #[inline]
+    pub fn io_cortical_sub_unit_index(&self) -> CorticalSubUnitIndex {
+        let flags = u16::from_le_bytes([self.bytes[4], self.bytes[5]]);
+        let subunit = ((flags >> bit_indexes::CORTICAL_SUB_UNIT_INDEX)
+            & bit_indexes::CORTICAL_SUB_UNIT_INDEX_MASK) as u8;
+        CorticalSubUnitIndex::from(subunit)
+    }
+
     pub fn as_cortical_type(&self) -> Result<CorticalAreaType, FeagiDataError> {
         match_bytes_by_cortical_type!(self.bytes,
             custom => {
@@ -131,6 +188,9 @@ impl CorticalID {
             },
             brain_output => {
                 Ok(CorticalAreaType::BrainOutput(self.extract_io_data_flag()?))
+            },
+            modulator => {
+                Ok(CorticalAreaType::Modulator)
             },
             invalid => {
                 Err(FeagiDataError::InternalError("Attempted to convert an invalid cortical ID instantiated object to cortical type!".into()))
@@ -170,27 +230,19 @@ impl CorticalID {
         }
     }
 
-    /// Extract unit ID from cortical ID (typically byte 4)
-    /// Returns None for CORE/CUSTOM/MEMORY areas
-    pub fn extract_unit_id(&self) -> Option<u8> {
+    /// Extract cortical unit (group) index from an IO cortical ID.
+    /// Returns None for CORE/CUSTOM/MEMORY areas.
+    pub fn extract_unit_id(&self) -> Option<u16> {
         if self.bytes[0] == b'i' || self.bytes[0] == b'o' {
-            // Byte 4 typically contains unit ID (0-9 as ASCII)
-            let byte = self.bytes[4];
-            if byte.is_ascii_digit() {
-                Some(byte - b'0')
-            } else if byte == b'_' || byte == 0 {
-                Some(0)
-            } else {
-                None
-            }
+            Some(*self.io_cortical_unit_index())
         } else {
             None
         }
     }
 
-    /// Extract group ID from cortical ID (similar to unit ID, but may be in different byte)
-    /// For now, returns the same as unit_id
-    pub fn extract_group_id(&self) -> Option<u8> {
+    /// Extract cortical unit (group) index from an IO cortical ID.
+    /// Returns None for CORE/CUSTOM/MEMORY areas.
+    pub fn extract_group_id(&self) -> Option<u16> {
         self.extract_unit_id()
     }
 
@@ -295,8 +347,33 @@ mod tests {
     }
 
     #[test]
+    fn test_try_from_legacy_ascii_uppercase() {
+        // Legacy genomes may use uppercase C/M/I/O for custom/memory/IPU/OPU
+        let id = CorticalID::try_from_legacy_ascii("C03bbb").unwrap();
+        assert_eq!(id.bytes[0], b'c');
+        assert_eq!(&id.bytes[1..6], b"03bbb");
+    }
+
+    #[test]
+    fn test_try_from_legacy_ascii_invalid_as_custom() {
+        // visioA, visioB, 0_45de etc. treated as custom cortical areas
+        for s in ["visioA", "visioB", "0_45de"] {
+            let id = CorticalID::try_from_legacy_ascii(s).unwrap();
+            assert_eq!(id.bytes[0], b'c');
+        }
+    }
+
+    #[test]
     fn test_u64_with_various_core_types() {
-        let core_types = [CoreCorticalType::Power, CoreCorticalType::Death];
+        let core_types = [
+            CoreCorticalType::Power,
+            CoreCorticalType::Death,
+            CoreCorticalType::Fatigue,
+            CoreCorticalType::Pain,
+            CoreCorticalType::Pleasure,
+            CoreCorticalType::Fear,
+            CoreCorticalType::Hope,
+        ];
 
         for core_type in &core_types {
             let id = core_type.to_cortical_id();

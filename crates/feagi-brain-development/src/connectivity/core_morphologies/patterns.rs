@@ -21,10 +21,11 @@ pub fn apply_patterns_morphology(
     src_area_id: u32,
     dst_area_id: u32,
     patterns: Vec<(Pattern3D, Pattern3D)>,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
+    delay_bursts: u8,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -72,6 +73,8 @@ pub fn apply_patterns_morphology(
                             SynapticWeight(weight),
                             SynapticPsp(psp),
                             synapse_type,
+                            0,
+                            delay_bursts,
                         )
                         .is_ok()
                 {

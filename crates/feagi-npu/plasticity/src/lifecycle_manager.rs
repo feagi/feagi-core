@@ -126,6 +126,7 @@ impl PlasticityLifecycleManager {
         temporal_depth: u32,
         upstream_areas: Vec<u32>,
         lifecycle_config: Option<crate::memory_neuron_array::MemoryNeuronLifecycleConfig>,
+        mp_learning_enabled: bool,
     ) {
         // Increment count
         {
@@ -141,7 +142,7 @@ impl PlasticityLifecycleManager {
 
         // Register with the service
         if let Some(service) = self.service.lock().unwrap().as_ref() {
-            service.register_memory_area(area_idx, area_name, temporal_depth, upstream_areas, lifecycle_config);
+            service.register_memory_area(area_idx, area_name, temporal_depth, upstream_areas, lifecycle_config, mp_learning_enabled);
         }
     }
 
@@ -226,7 +227,7 @@ mod tests {
         assert!(!manager.is_running());
 
         // Register a memory area (should auto-start)
-        manager.register_memory_area(0, "mem_00".to_string(), 3, vec![1, 2], None);
+        manager.register_memory_area(0, "mem_00".to_string(), 3, vec![1, 2], None, false);
         
         assert!(manager.is_running());
 

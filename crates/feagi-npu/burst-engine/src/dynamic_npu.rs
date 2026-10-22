@@ -9,6 +9,7 @@ use crate::backend::{CPUBackend, ComputeBackend};
 use crate::npu::RustNPU;
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::{NeuronStorage, Runtime, SynapseStorage};
+use std::sync::Arc;
 
 // Import StdRuntime for the default type alias
 #[cfg(feature = "std")]
@@ -142,22 +143,26 @@ where
                 y,
                 z,
             ),
-            DynamicNPUGeneric::INT8(npu) => npu.add_neuron(
-                INT8Value::from_f32(threshold),
-                INT8Value::from_f32(threshold_limit),
-                leak_coefficient,
-                INT8Value::from_f32(resting_potential),
-                neuron_type,
-                refractory_period,
-                excitability,
-                consecutive_fire_limit,
-                snooze_period,
-                mp_charge_accumulation,
-                cortical_area,
-                x,
-                y,
-                z,
-            ),
+            DynamicNPUGeneric::INT8(npu) => {
+                let neuron_id = npu.add_neuron(
+                    INT8Value::split_charge(threshold).0,
+                    INT8Value::from_f32(threshold_limit),
+                    leak_coefficient,
+                    INT8Value::from_f32(resting_potential),
+                    neuron_type,
+                    refractory_period,
+                    excitability,
+                    consecutive_fire_limit,
+                    snooze_period,
+                    mp_charge_accumulation,
+                    cortical_area,
+                    x,
+                    y,
+                    z,
+                )?;
+                npu.write_threshold_charges(neuron_id.0 as usize, &[threshold]);
+                Ok(neuron_id)
+            }
         }
     }
 
@@ -180,25 +185,37 @@ where
         z_coords: Vec<u32>,
     ) -> (u32, Vec<usize>) {
         match self {
-            DynamicNPUGeneric::F32(npu) => npu.add_neurons_batch(
-                thresholds,
-                threshold_limits,
-                leak_coefficients,
-                resting_potentials,
-                neuron_types,
-                refractory_periods,
-                excitabilities,
-                consecutive_fire_limits,
-                snooze_periods,
-                mp_charge_accumulations,
-                cortical_areas,
-                x_coords,
-                y_coords,
-                z_coords,
-            ),
+            DynamicNPUGeneric::F32(npu) => {
+                let exact_thresholds = thresholds.clone();
+                let start_idx = npu.neuron_storage.read().unwrap().count();
+                let created = npu.add_neurons_batch(
+                    thresholds,
+                    threshold_limits,
+                    leak_coefficients,
+                    resting_potentials,
+                    neuron_types,
+                    refractory_periods,
+                    excitabilities,
+                    consecutive_fire_limits,
+                    snooze_periods,
+                    mp_charge_accumulations,
+                    cortical_areas,
+                    x_coords,
+                    y_coords,
+                    z_coords,
+                );
+                if created.1.is_empty() {
+                    npu.write_threshold_charges(start_idx, &exact_thresholds);
+                }
+                created
+            }
             DynamicNPUGeneric::INT8(npu) => {
-                let thresholds_int8: Vec<INT8Value> =
-                    thresholds.into_iter().map(INT8Value::from_f32).collect();
+                let exact_thresholds = thresholds.clone();
+                let start_idx = npu.neuron_storage.read().unwrap().count();
+                let thresholds_int8: Vec<INT8Value> = thresholds
+                    .into_iter()
+                    .map(|value| INT8Value::split_charge(value).0)
+                    .collect();
                 let threshold_limits_int8: Vec<INT8Value> = threshold_limits
                     .into_iter()
                     .map(INT8Value::from_f32)
@@ -207,7 +224,7 @@ where
                     .into_iter()
                     .map(INT8Value::from_f32)
                     .collect();
-                npu.add_neurons_batch(
+                let created = npu.add_neurons_batch(
                     thresholds_int8,
                     threshold_limits_int8,
                     leak_coefficients,
@@ -222,11 +239,16 @@ where
                     x_coords,
                     y_coords,
                     z_coords,
-                )
+                );
+                if created.1.is_empty() {
+                    npu.write_threshold_charges(start_idx, &exact_thresholds);
+                }
+                created
             }
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_synapse(
         &mut self,
         source: NeuronId,
@@ -234,8 +256,21 @@ where
         weight: SynapticWeight,
         psp: SynapticPsp,
         synapse_type: SynapseType,
+        edge_flag: u8,
+        delay_bursts: u8,
     ) -> Result<usize> {
-        dispatch_mut!(self, add_synapse(source, target, weight, psp, synapse_type))
+        dispatch_mut!(
+            self,
+            add_synapse(
+                source,
+                target,
+                weight,
+                psp,
+                synapse_type,
+                edge_flag,
+                delay_bursts
+            )
+        )
     }
 
     pub fn get_neurons_in_cortical_area(&self, cortical_idx: u32) -> Vec<u32> {
@@ -252,6 +287,10 @@ where
 
     pub fn get_synapse_count(&self) -> usize {
         dispatch!(self, get_synapse_count())
+    }
+
+    pub fn count_synapses_with_edge_flag_bits(&self, mask: u8) -> usize {
+        dispatch!(self, count_synapses_with_edge_flag_bits(mask))
     }
 
     pub fn get_cortical_area_neuron_count(&self, cortical_area: u32) -> usize {
@@ -272,6 +311,17 @@ where
         xyzp_data: &[(u32, u32, u32, f32)],
     ) -> usize {
         dispatch_mut!(self, inject_sensory_xyzp_by_id(cortical_id, xyzp_data))
+    }
+
+    pub fn inject_force_fire_by_coordinates(
+        &mut self,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+        xyzp_data: &[(u32, u32, u32, f32)],
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            inject_force_fire_by_coordinates(cortical_id, xyzp_data)
+        )
     }
 
     pub fn inject_sensory_xyzp_arrays_by_id(
@@ -296,8 +346,41 @@ where
         dispatch_mut!(self, set_power_amount(amount))
     }
 
+    /// Replace NPU arrays from a connectome snapshot (see [`RustNPU::apply_connectome_snapshot`]).
+    #[cfg(feature = "connectome-io")]
+    pub fn apply_connectome_snapshot(
+        &mut self,
+        snapshot: &feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    ) -> Result<()> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.apply_connectome_snapshot(snapshot),
+            DynamicNPUGeneric::INT8(npu) => npu.apply_connectome_snapshot(snapshot),
+        }
+    }
+
     pub fn set_fatigue_active(&mut self, active: bool) {
         dispatch_mut!(self, set_fatigue_active(active))
+    }
+
+    pub fn set_memory_neuron_assoc_predicate(
+        &self,
+        pred: Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.set_memory_neuron_assoc_predicate(pred),
+            DynamicNPUGeneric::INT8(npu) => npu.set_memory_neuron_assoc_predicate(pred),
+        }
+    }
+
+    /// Forwards to `RustNPU::set_memory_neuron_longterm_predicate` on the active variant.
+    pub fn set_memory_neuron_longterm_predicate(
+        &self,
+        pred: Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.set_memory_neuron_longterm_predicate(pred),
+            DynamicNPUGeneric::INT8(npu) => npu.set_memory_neuron_longterm_predicate(pred),
+        }
     }
 
     pub fn is_fatigue_active(&self) -> bool {
@@ -306,6 +389,11 @@ where
 
     pub fn get_burst_count(&self) -> u64 {
         dispatch!(self, get_burst_count())
+    }
+
+    /// Reset all NPU runtime state for loading a fresh genome.
+    pub fn reset_for_new_genome(&mut self) -> Result<()> {
+        dispatch_mut!(self, reset_for_new_genome())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -493,12 +581,22 @@ where
         dispatch!(self, get_neuron_id_at_coordinate(cortical_area, x, y, z))
     }
 
-    pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> u32 {
+    pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> Option<u32> {
         dispatch!(self, get_neuron_cortical_area(neuron_id))
     }
 
     pub fn delete_neuron(&mut self, neuron_id: u32) -> bool {
         dispatch_mut!(self, delete_neuron(neuron_id))
+    }
+
+    /// Delete many neurons with one synapse-storage pass. See `RustNPU::delete_neurons`.
+    pub fn delete_neurons(&mut self, neuron_ids: &[u32]) -> usize {
+        dispatch_mut!(self, delete_neurons(neuron_ids))
+    }
+
+    /// Cortical area index for each neuron id. See `RustNPU::cortical_area_indices_for`.
+    pub fn cortical_area_indices_for(&self, neuron_ids: &[u32]) -> Vec<Option<u32>> {
+        dispatch!(self, cortical_area_indices_for(neuron_ids))
     }
 
     pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
@@ -517,15 +615,39 @@ where
 
     pub fn update_neuron_threshold(&mut self, neuron_id: u32, threshold: f32) -> bool {
         match self {
-            DynamicNPUGeneric::F32(npu) => npu.update_neuron_threshold(neuron_id, threshold),
+            DynamicNPUGeneric::F32(npu) => npu.update_neuron_threshold_charge(neuron_id, threshold),
             DynamicNPUGeneric::INT8(npu) => {
-                npu.update_neuron_threshold(neuron_id, INT8Value::from_f32(threshold))
+                npu.update_neuron_threshold_charge(neuron_id, threshold)
             }
         }
     }
 
     pub fn update_cortical_area_leak(&mut self, cortical_area: u32, leak: f32) -> usize {
         dispatch_mut!(self, update_cortical_area_leak(cortical_area, leak))
+    }
+
+    /// See [`crate::rate_modulated_leak`].
+    pub fn sync_rate_modulated_leak_from_cortical_property(
+        &mut self,
+        cortical_idx: u32,
+        value: &serde_json::Value,
+        base_leak: f32,
+        neuron_global_indices: Vec<usize>,
+    ) {
+        dispatch_mut!(
+            self,
+            sync_rate_modulated_leak_from_cortical_property(
+                cortical_idx,
+                value,
+                base_leak,
+                neuron_global_indices
+            )
+        );
+    }
+
+    /// Remove a cortical area from the homeostat registry.
+    pub fn remove_rate_modulated_leak(&mut self, cortical_idx: u32) {
+        dispatch_mut!(self, remove_rate_modulated_leak(cortical_idx));
     }
 
     pub fn update_cortical_area_excitability(
@@ -568,6 +690,33 @@ where
         }
     }
 
+    pub fn remove_synapses_touching_neuron_ids(&mut self, neuron_ids: &[u32]) -> usize {
+        dispatch_mut!(self, remove_synapses_touching_neuron_ids(neuron_ids))
+    }
+
+    pub fn clear_memory_replay_frames(&mut self, neuron_ids: &[u32]) {
+        dispatch_mut!(self, clear_memory_replay_frames(neuron_ids));
+    }
+
+    pub fn clear_sparse_memory_associative_state(&mut self, neuron_ids: &[u32]) {
+        dispatch_mut!(self, clear_sparse_memory_associative_state(neuron_ids));
+    }
+
+    pub fn dynamic_memory_neuron_ids_in_area(&self, cortical_idx: u32) -> Vec<u32> {
+        dispatch!(self, dynamic_memory_neuron_ids_in_area(cortical_idx))
+    }
+
+    pub fn forget_dynamic_memory_neuron_mappings(&mut self, cortical_idx: u32) -> usize {
+        dispatch_mut!(self, forget_dynamic_memory_neuron_mappings(cortical_idx))
+    }
+
+    pub fn clear_memory_area_activation_records(&mut self, cortical_idx: u32, neuron_ids: &[u32]) {
+        dispatch_mut!(
+            self,
+            clear_memory_area_activation_records(cortical_idx, neuron_ids)
+        );
+    }
+
     pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
         dispatch_mut!(self, remove_synapse(source, target))
     }
@@ -583,6 +732,14 @@ where
         )
     }
 
+    pub fn remove_synapses_between(
+        &mut self,
+        sources: Vec<NeuronId>,
+        targets: Vec<NeuronId>,
+    ) -> usize {
+        dispatch_mut!(self, remove_synapses_between(sources, targets))
+    }
+
     pub fn update_synapse_weight(
         &mut self,
         source: NeuronId,
@@ -592,8 +749,51 @@ where
         dispatch_mut!(self, update_synapse_weight(source, target, new_weight))
     }
 
+    pub fn set_synapse_eligibility_trace(&mut self, synapse_idx: usize, trace: f32) -> bool {
+        dispatch_mut!(self, set_synapse_eligibility_trace(synapse_idx, trace))
+    }
+
     pub fn rebuild_synapse_index(&mut self) {
         dispatch_mut!(self, rebuild_synapse_index())
+    }
+
+    pub fn set_modulator_bindings(&self, bindings: Vec<crate::modulator_engine::ModulatorBinding>) {
+        dispatch!(self, set_modulator_bindings(bindings))
+    }
+
+    pub fn set_modulator_area_subscriptions(
+        &self,
+        subscriptions: ahash::AHashMap<u32, Vec<String>>,
+    ) {
+        dispatch!(self, set_modulator_area_subscriptions(subscriptions))
+    }
+
+    pub fn set_spike_train_areas(&self, areas: ahash::AHashSet<u32>) {
+        dispatch!(self, set_spike_train_areas(areas))
+    }
+
+    pub fn modulator_area_subscriptions(&self, cortical_idx: u32) -> Vec<String> {
+        dispatch!(self, modulator_area_subscriptions(cortical_idx))
+    }
+
+    pub fn set_homeostatic_leak_areas(&self, areas: ahash::AHashSet<u32>) {
+        dispatch!(self, set_homeostatic_leak_areas(areas))
+    }
+
+    pub fn allocate_modulation_group(&self, instance_ids: &[String]) -> u16 {
+        dispatch!(self, allocate_modulation_group(instance_ids))
+    }
+
+    pub fn authored_reward_signal(&self, driver_cortical_idx: u32) -> Option<f32> {
+        dispatch!(self, authored_reward_signal(driver_cortical_idx))
+    }
+
+    pub fn stamp_synapse_modulation_group(&self, start: usize, end: usize, group: u16) {
+        dispatch!(self, stamp_synapse_modulation_group(start, end, group))
+    }
+
+    pub fn synapse_count(&self) -> usize {
+        dispatch!(self, synapse_count())
     }
 
     /// Rebuild power neuron cache (useful after major structural changes)
@@ -621,6 +821,29 @@ where
         dispatch_mut!(
             self,
             unregister_stdp_mapping(src_cortical_idx, dst_cortical_idx)
+        )
+    }
+
+    pub fn register_gate_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        gate_cortical_idx: u32,
+    ) -> Result<()> {
+        dispatch_mut!(
+            self,
+            register_gate_mapping(src_cortical_idx, dst_cortical_idx, gate_cortical_idx)
+        )
+    }
+
+    pub fn unregister_gate_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> bool {
+        dispatch_mut!(
+            self,
+            unregister_gate_mapping(src_cortical_idx, dst_cortical_idx)
         )
     }
 
@@ -658,16 +881,43 @@ where
         dispatch!(self, get_neuron_property_u16_by_index(idx, property))
     }
 
-    pub fn get_incoming_synapses(&self, _neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_mp_charge_accumulation_at(&self, idx: usize) -> Option<bool> {
+        dispatch!(self, get_mp_charge_accumulation_at(idx))
+    }
+
+    pub fn get_neuron_type_at(&self, idx: usize) -> Option<i32> {
+        dispatch!(self, get_neuron_type_at(idx))
+    }
+
+    pub fn get_mp_driven_psp_for_cortical(
+        &self,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+    ) -> bool {
+        dispatch!(self, get_mp_driven_psp_for_cortical(cortical_id))
+    }
+
+    pub fn get_psp_uniform_distribution_for_cortical(
+        &self,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+    ) -> bool {
+        dispatch!(self, get_psp_uniform_distribution_for_cortical(cortical_id))
+    }
+
+    pub fn get_incoming_synapses(&self, _neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
         dispatch!(self, get_incoming_synapses(_neuron_id))
     }
 
-    pub fn get_outgoing_synapses(&self, _neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_outgoing_synapses(&self, _neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
         dispatch!(self, get_outgoing_synapses(_neuron_id))
     }
 
     pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
         dispatch!(self, get_cortical_area_name(area_id))
+    }
+
+    /// Resolve registered cortical name (typically `CorticalID::as_base_64()`) to runtime `cortical_idx`.
+    pub fn get_cortical_area_id(&self, cortical_name: &str) -> Option<u32> {
+        dispatch!(self, get_cortical_area_id(cortical_name))
     }
 
     pub fn update_cortical_area_threshold(&mut self, cortical_area: u32, threshold: f32) -> usize {
@@ -748,6 +998,30 @@ where
         )
     }
 
+    /// Reset membrane potentials to zero for all neurons in one cortical area (sparse vs whole brain).
+    pub fn reset_membrane_potentials_for_cortical_area(&mut self, cortical_area: u32) -> usize {
+        dispatch_mut!(
+            self,
+            reset_membrane_potentials_for_cortical_area(cortical_area)
+        )
+    }
+
+    /// Clear FCL entries and reset membrane / refractory / consecutive-fire state for one cortical area.
+    pub fn reset_cortical_area_runtime_state(&mut self, cortical_area: u32) -> usize {
+        dispatch_mut!(self, reset_cortical_area_runtime_state(cortical_area))
+    }
+
+    /// Remove pending delayed synaptic PSP and associative-memory schedule entries for these targets.
+    pub fn scrub_synaptic_arrival_schedule_for_neuron_targets(
+        &mut self,
+        neuron_ids: &ahash::AHashSet<u32>,
+    ) {
+        dispatch_mut!(
+            self,
+            scrub_synaptic_arrival_schedule_for_neuron_targets(neuron_ids)
+        )
+    }
+
     /// Update postsynaptic potential (PSP) for all existing outgoing synapses
     /// from neurons in a given cortical area.
     ///
@@ -755,7 +1029,7 @@ where
     pub fn update_cortical_area_postsynaptic_current(
         &mut self,
         cortical_area: u32,
-        postsynaptic_potential: u8,
+        postsynaptic_potential: f32,
     ) -> usize {
         dispatch_mut!(
             self,
@@ -766,7 +1040,7 @@ where
     pub fn update_stdp_mapping_psp_for_source(
         &mut self,
         src_cortical_idx: u32,
-        new_psp: u8,
+        new_psp: f32,
     ) -> usize {
         dispatch_mut!(
             self,
@@ -822,6 +1096,29 @@ where
         }
     }
 
+    pub fn inject_memory_neuron_to_fcl_with_kind(
+        &mut self,
+        neuron_id: u32,
+        cortical_idx: u32,
+        potential: f32,
+        fire_kind: u8,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.inject_memory_neuron_to_fcl_with_kind(
+                neuron_id,
+                cortical_idx,
+                potential,
+                fire_kind,
+            ),
+            DynamicNPUGeneric::INT8(npu) => npu.inject_memory_neuron_to_fcl_with_kind(
+                neuron_id,
+                cortical_idx,
+                potential,
+                fire_kind,
+            ),
+        }
+    }
+
     /// Register a dynamic (non-storage-backed) neuron’s cortical mapping (needed for memory neurons).
     pub fn register_dynamic_neuron_mapping(
         &mut self,
@@ -850,6 +1147,52 @@ where
         }
     }
 
+    /// Get stored replay frames for a memory neuron (for EMA averaging on reactivation).
+    pub fn get_memory_replay_frames(
+        &self,
+        neuron_id: u32,
+    ) -> Option<std::sync::Arc<Vec<crate::npu::MemoryReplayFrame>>> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.get_memory_replay_frames(neuron_id),
+            DynamicNPUGeneric::INT8(npu) => npu.get_memory_replay_frames(neuron_id),
+        }
+    }
+
+    /// Export all stored replay frames. The service layer keeps LTM ids only.
+    pub fn export_memory_replay_frames(&self) -> Vec<(u32, Vec<crate::npu::MemoryReplayFrame>)> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.export_memory_replay_frames(),
+            DynamicNPUGeneric::INT8(npu) => npu.export_memory_replay_frames(),
+        }
+    }
+
+    /// Restore replay frames after connectome apply.
+    pub fn restore_memory_replay_frames(
+        &mut self,
+        frames: &[(u32, Vec<crate::npu::MemoryReplayFrame>)],
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.restore_memory_replay_frames(frames),
+            DynamicNPUGeneric::INT8(npu) => npu.restore_memory_replay_frames(frames),
+        }
+    }
+
+    /// Query the replay twin registered for one memory/upstream pair.
+    pub fn get_memory_twin_mapping(
+        &self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+    ) -> Option<(u32, f32)> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.get_memory_twin_mapping(memory_area_idx, upstream_area_idx)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.get_memory_twin_mapping(memory_area_idx, upstream_area_idx)
+            }
+        }
+    }
+
     /// Register the twin cortical area mapping for memory replay.
     pub fn register_memory_twin_mapping(
         &mut self,
@@ -874,6 +1217,70 @@ where
         }
     }
 
+    /// Queue a class-map stamp onto a twin for a future burst.
+    pub fn schedule_replay_injection(
+        &self,
+        target_burst: u64,
+        twin_area_idx: u32,
+        coords: Vec<(u32, u32, u32)>,
+        membrane_potentials: Option<Vec<f32>>,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.schedule_replay_injection(
+                target_burst,
+                twin_area_idx,
+                coords,
+                membrane_potentials,
+            ),
+            DynamicNPUGeneric::INT8(npu) => npu.schedule_replay_injection(
+                target_burst,
+                twin_area_idx,
+                coords,
+                membrane_potentials,
+            ),
+        }
+    }
+
+    /// Queue coords that fire on `target_burst` with exactly the given potentials.
+    pub fn schedule_valued_force_fire(
+        &self,
+        target_burst: u64,
+        area_idx: u32,
+        coords: Vec<(u32, u32, u32)>,
+        potentials: Vec<f32>,
+    ) -> Result<()> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.schedule_valued_force_fire(target_burst, area_idx, coords, potentials)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.schedule_valued_force_fire(target_burst, area_idx, coords, potentials)
+            }
+        }
+    }
+
+    /// Replace classifier error watches on the active NPU.
+    pub fn set_classifier_error_watches(&self, watches: Vec<crate::npu::ClassifierErrorWatch>) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.set_classifier_error_watches(watches),
+            DynamicNPUGeneric::INT8(npu) => npu.set_classifier_error_watches(watches),
+        }
+    }
+
+    /// Remove the replay target owned by one memory/upstream cortical-area pair.
+    ///
+    /// Returns `true` when a runtime replay route was present.
+    pub fn unregister_memory_twin_mapping(
+        &mut self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+    ) -> bool {
+        dispatch_mut!(
+            self,
+            unregister_memory_twin_mapping(memory_area_idx, upstream_area_idx)
+        )
+    }
+
     pub fn configure_fire_ledger_window(
         &mut self,
         cortical_idx: u32,
@@ -893,6 +1300,115 @@ where
         match self {
             DynamicNPUGeneric::F32(npu) => npu.get_all_fire_ledger_configs(),
             DynamicNPUGeneric::INT8(npu) => npu.get_all_fire_ledger_configs(),
+        }
+    }
+
+    pub fn enable_fire_ledger_mp_archival(&mut self, cortical_idx: u32) -> Result<()> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.enable_fire_ledger_mp_archival(cortical_idx),
+            DynamicNPUGeneric::INT8(npu) => npu.enable_fire_ledger_mp_archival(cortical_idx),
+        }
+    }
+
+    pub fn get_fire_ledger_dense_window_mp(
+        &self,
+        cortical_idx: u32,
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, ahash::AHashMap<u32, f32>)>> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.get_fire_ledger_dense_window_mp(cortical_idx, end_timestep, depth)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.get_fire_ledger_dense_window_mp(cortical_idx, end_timestep, depth)
+            }
+        }
+    }
+
+    pub fn configure_episodic_memory_fire_ledger_window(
+        &mut self,
+        cortical_idx: u32,
+        window_size: usize,
+    ) -> Result<()> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.configure_episodic_memory_fire_ledger_window(cortical_idx, window_size)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.configure_episodic_memory_fire_ledger_window(cortical_idx, window_size)
+            }
+        }
+    }
+
+    pub fn get_episodic_memory_fire_ledger_window_size(&self, cortical_idx: u32) -> Result<usize> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.get_episodic_memory_fire_ledger_window_size(cortical_idx)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.get_episodic_memory_fire_ledger_window_size(cortical_idx)
+            }
+        }
+    }
+
+    pub fn get_episodic_memory_fire_ledger_dense_window_bitmaps(
+        &self,
+        cortical_idx: u32,
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, roaring::RoaringBitmap)>> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu
+                .get_episodic_memory_fire_ledger_dense_window_bitmaps(
+                    cortical_idx,
+                    end_timestep,
+                    depth,
+                ),
+            DynamicNPUGeneric::INT8(npu) => npu
+                .get_episodic_memory_fire_ledger_dense_window_bitmaps(
+                    cortical_idx,
+                    end_timestep,
+                    depth,
+                ),
+        }
+    }
+
+    pub fn get_all_episodic_memory_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.get_all_episodic_memory_fire_ledger_configs(),
+            DynamicNPUGeneric::INT8(npu) => npu.get_all_episodic_memory_fire_ledger_configs(),
+        }
+    }
+
+    pub fn set_memory_associative_lif_params(
+        &mut self,
+        cortical_idx: u32,
+        params: crate::MemoryAssociativeLifParams,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.set_memory_associative_lif_params(cortical_idx, params)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.set_memory_associative_lif_params(cortical_idx, params)
+            }
+        }
+    }
+
+    /// See [`crate::npu::RustNPU::fired_neuron_ids_if_queue_timestep`].
+    pub fn fired_neuron_ids_if_queue_timestep(
+        &self,
+        cortical_idx: u32,
+        timestep: u64,
+    ) -> Option<Vec<u32>> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.fired_neuron_ids_if_queue_timestep(cortical_idx, timestep)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.fired_neuron_ids_if_queue_timestep(cortical_idx, timestep)
+            }
         }
     }
 
@@ -968,6 +1484,24 @@ where
         )
     }
 
+    pub fn set_postsynaptic_current_flags(
+        &mut self,
+        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, f32>,
+    ) {
+        dispatch_mut!(self, set_postsynaptic_current_flags(flags))
+    }
+
+    pub fn set_postsynaptic_current_flag(
+        &mut self,
+        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        postsynaptic: f32,
+    ) {
+        dispatch_mut!(
+            self,
+            set_postsynaptic_current_flag(cortical_id, postsynaptic)
+        )
+    }
+
     pub fn set_mp_driven_psp_flags(
         &mut self,
         flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, bool>,
@@ -981,6 +1515,21 @@ where
         enabled: bool,
     ) {
         dispatch_mut!(self, set_mp_driven_psp_flag(cortical_id, enabled))
+    }
+
+    pub fn set_degeneration_flags(
+        &mut self,
+        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, f32>,
+    ) {
+        dispatch_mut!(self, set_degeneration_flags(flags))
+    }
+
+    pub fn set_degeneration_flag(
+        &mut self,
+        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        degeneration: f32,
+    ) {
+        dispatch_mut!(self, set_degeneration_flag(cortical_id, degeneration))
     }
 }
 

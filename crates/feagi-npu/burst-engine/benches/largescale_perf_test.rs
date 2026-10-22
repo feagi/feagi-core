@@ -46,8 +46,8 @@ fn create_large_genome(
                 synapse_array.add_synapse_simple(
                     source as u32,
                     target as u32,
-                    128,
-                    200,
+                    128.0,
+                    200.0,
                     if i % 4 == 0 {
                         feagi_npu_neural::synapse::SynapseType::Inhibitory
                     } else {
@@ -119,7 +119,7 @@ fn bench_largescale_propagation(c: &mut Criterion) {
         area_bytes[1] = 1;
         let area_id = CorticalID::try_from_bytes(&area_bytes).expect("Failed to create CorticalID");
         for i in 0..neuron_count {
-            neuron_to_area.insert(NeuronId(i as u32), area_id.clone());
+            neuron_to_area.insert(NeuronId(i as u32), area_id);
         }
         engine.set_neuron_mapping(neuron_to_area);
         println!("   ✅ Set neuron mapping");
@@ -127,8 +127,8 @@ fn bench_largescale_propagation(c: &mut Criterion) {
         // Set area flags (all false for simplicity)
         let mut mp_flags = AHashMap::new();
         let mut uniform_flags = AHashMap::new();
-        mp_flags.insert(area_id.clone(), false);
-        uniform_flags.insert(area_id.clone(), false);
+        mp_flags.insert(area_id, false);
+        uniform_flags.insert(area_id, false);
         engine.set_mp_driven_psp_flags(mp_flags);
         engine.set_psp_uniform_distribution_flags(uniform_flags);
         println!("   ✅ Set area flags");
@@ -148,6 +148,7 @@ fn bench_largescale_propagation(c: &mut Criterion) {
                         black_box(&fired_neurons),
                         black_box(&synapse_array),
                         black_box(&neuron_membrane_potentials),
+                        None,
                     );
                     let elapsed = start.elapsed();
 

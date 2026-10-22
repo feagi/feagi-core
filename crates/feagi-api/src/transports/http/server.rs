@@ -8,15 +8,19 @@
 
 use axum::{
     body::Body,
-    extract::State,
-    http::{Request, StatusCode},
+    extract::{DefaultBodyLimit, State},
+    http::{Method, Request, StatusCode},
     middleware::{self, Next},
     response::{Html, IntoResponse, Json, Redirect, Response},
     routing::{get, put},
     Router,
 };
 use http_body_util::BodyExt;
+use parking_lot::Mutex;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
@@ -26,6 +30,16 @@ use utoipa::OpenApi;
 use crate::amalgamation;
 #[cfg(feature = "http")]
 use crate::openapi::ApiDoc;
+#[cfg(feature = "feagi-agent")]
+use feagi_config::load_config;
+#[cfg(feature = "feagi-agent")]
+use feagi_io::protocol_implementations::websocket::websocket_std::{
+    FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_io::protocol_implementations::zmq::{
+    FeagiZmqServerPublisherProperties, FeagiZmqServerPullerProperties,
+};
 #[cfg(feature = "services")]
 use feagi_services::traits::{AgentService, SystemService};
 #[cfg(feature = "services")]
@@ -46,48 +60,208 @@ pub struct ApiState {
     pub neuron_service: Arc<dyn NeuronService + Send + Sync>,
     pub runtime_service: Arc<dyn RuntimeService + Send + Sync>,
     pub system_service: Arc<dyn SystemService + Send + Sync>,
-    pub snapshot_service: Option<Arc<dyn feagi_services::SnapshotService + Send + Sync>>,
     /// FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
     /// This is a unique identifier for each FEAGI instance/session
     pub feagi_session_timestamp: i64,
+    /// Base directory for default API filesystem writes when the client omits a path
+    /// (e.g. `POST /v1/genome/save` without `file_path`). Default genome files go under
+    /// `{filesystem_data_root}/cache/.genome/` (aligned with feagi-python-sdk `~/.feagi/cache`).
+    /// Set from `[system].data_dir` / `FEAGI_DATA_DIR` at startup; when unset, resolves to
+    /// `{user_home}/.feagi` (native) so writes do not use cwd or OS temp (see
+    /// [`ApiState::filesystem_data_root_from_config`]).
+    pub filesystem_data_root: PathBuf,
     /// Memory area stats cache (updated by plasticity service, read by health check)
     pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
     /// In-memory amalgamation state (pending request + history), surfaced via health_check.
     pub amalgamation_state: amalgamation::SharedAmalgamationState,
-    /// Device registration connectors per agent (for export/import functionality)
+    /// Exclusive lock for genome transition operations (load/upload/reload).
+    pub genome_transition_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Indicates whether a prioritized genome transition is currently in progress.
+    pub genome_transition_in_progress: Arc<AtomicBool>,
+    /// Most recent failed mutating HTTP request (POST/PUT/PATCH/DELETE with status >= 400).
+    ///
+    /// Surfaced by `GET /v1/system/last_failed_mutation` so agents can diagnose
+    /// upload/body-limit failures without scraping process logs.
+    pub last_failed_mutation: Arc<Mutex<Option<crate::endpoints::system::LastFailedMutation>>>,
+    /// Genome change ledger (who changed what, when). `None` disables the
+    /// `/v1/genome/changes*` endpoints.
+    #[cfg(feature = "services")]
+    pub change_ledger: Option<Arc<feagi_services::change_ledger::ChangeLedger>>,
+    /// Agent handler for device registrations and transport management
     #[cfg(feature = "feagi-agent")]
-    pub agent_connectors: Arc<
-        parking_lot::RwLock<
-            std::collections::HashMap<
-                feagi_agent::sdk::AgentDescriptor,
-                Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
-            >,
-        >,
-    >,
+    pub agent_handler: Option<Arc<std::sync::Mutex<feagi_agent::server::FeagiAgentHandler>>>,
 }
 
 impl ApiState {
-    /// Initialize agent_connectors field (empty HashMap)
+    /// Initialize the agent handler (deprecated - use external initialization).
     #[cfg(feature = "feagi-agent")]
-    pub fn init_agent_connectors() -> Arc<
-        parking_lot::RwLock<
-            std::collections::HashMap<
-                feagi_agent::sdk::AgentDescriptor,
-                Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
-            >,
-        >,
-    > {
-        Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()))
+    pub fn init_agent_registration_handler(
+    ) -> Arc<std::sync::Mutex<feagi_agent::server::FeagiAgentHandler>> {
+        let config = load_config(None, None).expect("Failed to load FEAGI configuration");
+        let liveness_config = feagi_agent::server::AgentLivenessConfig {
+            heartbeat_timeout: Duration::from_millis(config.zmq.client_heartbeat_timeout),
+            stale_check_interval: Duration::from_millis(config.zmq.polling_timeout),
+        };
+        let mut handler = feagi_agent::server::FeagiAgentHandler::new_with_liveness_config(
+            Box::new(feagi_agent::server::auth::DummyAuth {}),
+            liveness_config,
+        );
+        let available_transports: Vec<String> = config
+            .transports
+            .available
+            .iter()
+            .map(|transport| transport.to_lowercase())
+            .collect();
+
+        if available_transports
+            .iter()
+            .any(|transport| transport == "zmq")
+        {
+            let sensory_address =
+                format_tcp_endpoint(&config.zmq.bind_host, config.ports.zmq_sensory_port);
+            let sensory_adv_address =
+                format_tcp_endpoint(&config.zmq.advertised_host, config.ports.zmq_sensory_port);
+            let motor_address =
+                format_tcp_endpoint(&config.zmq.bind_host, config.ports.zmq_motor_port);
+            let motor_adv_address =
+                format_tcp_endpoint(&config.zmq.advertised_host, config.ports.zmq_motor_port);
+            let visualization_address =
+                format_tcp_endpoint(&config.zmq.bind_host, config.ports.zmq_visualization_port);
+            let visualization_adv_address = format_tcp_endpoint(
+                &config.zmq.advertised_host,
+                config.ports.zmq_visualization_port,
+            );
+
+            let sensory =
+                FeagiZmqServerPullerProperties::new(&sensory_address, &sensory_adv_address)
+                    .expect("Failed to create ZMQ sensory puller properties");
+            handler.add_puller_server(Box::new(sensory));
+
+            let motor = FeagiZmqServerPublisherProperties::new(&motor_address, &motor_adv_address)
+                .expect("Failed to create ZMQ motor publisher properties");
+            let visualization = FeagiZmqServerPublisherProperties::new(
+                &visualization_address,
+                &visualization_adv_address,
+            )
+            .expect("Failed to create ZMQ visualization publisher properties");
+            handler.add_publisher_server(Box::new(motor));
+            handler.add_publisher_server(Box::new(visualization));
+        }
+
+        if available_transports
+            .iter()
+            .any(|transport| transport == "websocket" || transport == "ws")
+        {
+            let sensory_address =
+                format_ws_address(&config.websocket.bind_host, config.websocket.sensory_port);
+            let sensory_adv_address = format_ws_address(
+                &config.websocket.advertised_host,
+                config.websocket.sensory_port,
+            );
+            let motor_address =
+                format_ws_address(&config.websocket.bind_host, config.websocket.motor_port);
+            let motor_adv_address = format_ws_address(
+                &config.websocket.advertised_host,
+                config.websocket.motor_port,
+            );
+            let visualization_address = format_ws_address(
+                &config.websocket.bind_host,
+                config.websocket.visualization_port,
+            );
+            let visualization_adv_address = format_ws_address(
+                &config.websocket.advertised_host,
+                config.websocket.visualization_port,
+            );
+
+            let sensory = FeagiWebSocketServerPullerProperties::new_with_remote(
+                &sensory_address,
+                &sensory_adv_address,
+            )
+            .expect("Failed to create WebSocket sensory puller properties");
+            handler.add_puller_server(Box::new(sensory));
+
+            let motor =
+                FeagiWebSocketServerPublisherProperties::new(&motor_address, &motor_adv_address)
+                    .expect("Failed to create WebSocket motor publisher properties");
+            let visualization = FeagiWebSocketServerPublisherProperties::new(
+                &visualization_address,
+                &visualization_adv_address,
+            )
+            .expect("Failed to create WebSocket visualization publisher properties");
+            handler.add_publisher_server(Box::new(motor));
+            handler.add_publisher_server(Box::new(visualization));
+        }
+
+        Arc::new(std::sync::Mutex::new(handler))
     }
 
     /// Initialize amalgamation_state field (empty state).
     pub fn init_amalgamation_state() -> amalgamation::SharedAmalgamationState {
         amalgamation::new_shared_state()
     }
+
+    /// Initialize synchronization primitives for strict genome transitions.
+    pub fn init_genome_transition_controls() -> (Arc<tokio::sync::Mutex<()>>, Arc<AtomicBool>) {
+        (
+            Arc::new(tokio::sync::Mutex::new(())),
+            Arc::new(AtomicBool::new(false)),
+        )
+    }
+
+    /// Empty slot for the last failed mutating API request.
+    pub fn init_last_failed_mutation(
+    ) -> Arc<Mutex<Option<crate::endpoints::system::LastFailedMutation>>> {
+        Arc::new(Mutex::new(None))
+    }
+
+    /// Resolve the base directory for default on-disk API writes (e.g. genome save without `file_path`).
+    ///
+    /// - If `[system].data_dir` is set (including via **`FEAGI_DATA_DIR`**), returns that path as-is.
+    /// - Otherwise returns **`{user_home}/.feagi`**, matching feagi-python-sdk `FeagiPaths` and
+    ///   feagi-desktop runtime layout. If the home directory cannot be resolved, falls back to
+    ///   `std::env::temp_dir().join("feagi")`.
+    /// - **wasm32:** `/tmp/feagi` (no portable home in browser WASM).
+    ///
+    /// Callers append subpaths such as `cache/.genome` for default genome JSON files.
+    pub fn filesystem_data_root_from_config(data_dir: &std::path::Path) -> PathBuf {
+        if !data_dir.as_os_str().is_empty() {
+            data_dir.to_path_buf()
+        } else {
+            #[cfg(target_arch = "wasm32")]
+            {
+                PathBuf::from("/tmp/feagi")
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                dirs::home_dir()
+                    .map(|h| h.join(".feagi"))
+                    .unwrap_or_else(|| std::env::temp_dir().join("feagi"))
+            }
+        }
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+fn format_tcp_endpoint(host: &str, port: u16) -> String {
+    if host.contains(':') {
+        format!("tcp://[{host}]:{port}")
+    } else {
+        format!("tcp://{host}:{port}")
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+fn format_ws_address(host: &str, port: u16) -> String {
+    if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
 }
 
 /// Create the main HTTP server application
 pub fn create_http_server(state: ApiState) -> Router {
+    let middleware_state = state.clone();
     Router::new()
         // Root redirect to custom Swagger UI
         .route("/", get(root_redirect))
@@ -113,6 +287,18 @@ pub fn create_http_server(state: ApiState) -> Router {
         .with_state(state)
 
         // Add middleware
+        .layer(middleware::from_fn_with_state(
+            middleware_state.clone(),
+            attribute_genome_changes,
+        ))
+        .layer(middleware::from_fn_with_state(
+            middleware_state.clone(),
+            reject_during_genome_transition,
+        ))
+        .layer(middleware::from_fn_with_state(
+            middleware_state,
+            record_failed_mutations,
+        ))
         .layer(middleware::from_fn(log_request_response_bodies))
         .layer(create_cors_layer())
         .layer(
@@ -156,18 +342,64 @@ pub fn create_http_server(state: ApiState) -> Router {
         )
 }
 
+/// Hold read requests until an active genome transition has completed.
+///
+/// A read may invoke legacy auto-healing paths, so allowing it to observe a
+/// partially reconstructed connectome can mutate transition state. Holding the
+/// shared transition lock keeps reads observational until the new brain is ready.
+async fn reject_during_genome_transition(
+    State(state): State<ApiState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let path = request.uri().path();
+    let method = request.method();
+
+    if *method == Method::GET && !is_transition_allowed_route(path, method) {
+        let _read_guard = state.genome_transition_lock.lock().await;
+        return next.run(request).await;
+    }
+
+    let transition_in_progress = state.genome_transition_in_progress.load(Ordering::SeqCst);
+
+    if transition_in_progress && !is_transition_allowed_route(path, method) {
+        let payload = crate::common::ApiError::conflict(
+            "Genome transition in progress: request rejected to preserve deterministic load semantics",
+        );
+        return (StatusCode::CONFLICT, Json(payload)).into_response();
+    }
+
+    next.run(request).await
+}
+
+fn is_transition_allowed_route(path: &str, method: &Method) -> bool {
+    if path.starts_with("/v1/genome/upload")
+        || path.starts_with("/v1/genome/load")
+        || path.starts_with("/v1/genome/amalgamation")
+    {
+        return true;
+    }
+
+    matches!(
+        (method, path),
+        (&Method::GET, "/v1/system/health_check") | (&Method::GET, "/v1/system/readiness_check")
+    )
+}
+
 /// Create V1 API router - Match Python structure EXACTLY
 /// Format: /v1/{module}/{snake_case_endpoint}
 fn create_v1_router() -> Router<ApiState> {
-    use crate::endpoints::agent::*; // Import agent functions for routes
+    use crate::endpoints::agent;
     use crate::endpoints::burst_engine;
     use crate::endpoints::connectome;
     use crate::endpoints::cortical_area;
     use crate::endpoints::cortical_mapping;
     use crate::endpoints::evolution;
     use crate::endpoints::genome;
+    use crate::endpoints::genome_changes;
     use crate::endpoints::input;
     use crate::endpoints::insight;
+    use crate::endpoints::modulator;
     use crate::endpoints::monitoring;
     use crate::endpoints::morphology;
     use crate::endpoints::network;
@@ -176,25 +408,27 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::physiology;
     use crate::endpoints::region;
     use crate::endpoints::simulation;
+    use crate::endpoints::system;
     use crate::endpoints::training;
-    use crate::endpoints::visualization;
-    use crate::endpoints::{agent, system};
+    use crate::endpoints::visualization; //use crate::endpoints::{agent, system};
 
     Router::new()
-        // ===== AGENT MODULE (14 endpoints) =====
-        .route("/agent/register", axum::routing::post(register_agent))
-        .route("/agent/heartbeat", axum::routing::post(heartbeat))
-        .route("/agent/list", get(list_agents))
-        .route("/agent/properties", get(get_agent_properties))
+        // ===== AGENT MODULE =====
         .route(
-            "/agent/properties/:agent_id",
-            get(agent::get_agent_properties_path),
+            "/agent/register",
+            axum::routing::post(agent::register_agent),
         )
-        .route("/agent/shared_mem", get(get_shared_memory))
-        .route("/agent/deregister", axum::routing::delete(deregister_agent))
+        .route("/agent/heartbeat", axum::routing::post(agent::heartbeat))
+        .route("/agent/list", get(agent::list_agents))
+        .route("/agent/properties", get(agent::get_agent_properties))
+        .route("/agent/shared_mem", get(agent::get_shared_memory))
+        .route(
+            "/agent/deregister",
+            axum::routing::delete(agent::deregister_agent),
+        )
         .route(
             "/agent/manual_stimulation",
-            axum::routing::post(manual_stimulation),
+            axum::routing::post(agent::manual_stimulation),
         )
         .route(
             "/agent/fq_sampler_status",
@@ -205,7 +439,15 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/capabilities/all",
             get(agent::get_all_agent_capabilities),
         )
+        .route(
+            "/agent/device_registration_store",
+            get(agent::get_device_registration_store),
+        )
         .route("/agent/info/:agent_id", get(agent::get_agent_info))
+        .route(
+            "/agent/properties/:agent_id",
+            get(agent::get_agent_properties_path),
+        )
         .route(
             "/agent/configure",
             axum::routing::post(agent::post_configure),
@@ -252,6 +494,11 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route("/system/processes", get(system::get_processes))
         .route("/system/unique_logs", get(system::get_unique_logs))
+        .route("/system/log_tail", get(system::get_log_tail))
+        .route(
+            "/system/last_failed_mutation",
+            get(system::get_last_failed_mutation),
+        )
         .route("/system/logs", axum::routing::post(system::post_logs))
         .route(
             "/system/beacon/subscribers",
@@ -345,6 +592,25 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(cortical_area::post_custom_cortical_area),
         )
         .route(
+            "/cortical_area/classifier",
+            axum::routing::post(cortical_area::post_classifier),
+        )
+        .route(
+            "/cortical_area/classifiers",
+            axum::routing::get(cortical_area::list_classifiers),
+        )
+        .route(
+            "/cortical_area/classifier/:classifier_id/field",
+            axum::routing::post(cortical_area::post_classifier_field)
+                .delete(cortical_area::delete_classifier_field),
+        )
+        .route(
+            "/cortical_area/classifier/:classifier_id",
+            axum::routing::get(cortical_area::get_classifier)
+                .put(cortical_area::update_classifier)
+                .delete(cortical_area::delete_classifier),
+        )
+        .route(
             "/cortical_area/clone",
             axum::routing::post(cortical_area::post_clone),
         )
@@ -387,7 +653,11 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route(
             "/cortical_area/voxel_neurons",
-            axum::routing::post(cortical_area::post_voxel_neurons),
+            get(cortical_area::get_voxel_neurons).post(cortical_area::post_voxel_neurons),
+        )
+        .route(
+            "/cortical_area/memory",
+            get(cortical_area::get_memory_cortical_area),
         )
         .route(
             "/cortical_area/cortical_area_index_list",
@@ -419,6 +689,26 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(cortical_area::post_mapping_restrictions_between_areas),
         )
         .route("/cortical_area/coord_3d", put(cortical_area::put_coord_3d))
+        .route("/modulator/types", get(modulator::get_modulator_types))
+        .route("/modulator/modulators", get(modulator::get_modulators))
+        .route(
+            "/modulator/modulator/:modulator_id",
+            get(modulator::get_modulator),
+        )
+        .route(
+            "/modulator/modulator",
+            axum::routing::post(modulator::post_modulator)
+                .put(modulator::put_modulator)
+                .delete(modulator::delete_modulator),
+        )
+        .route(
+            "/modulator/rename",
+            axum::routing::put(modulator::put_rename_modulator),
+        )
+        .route(
+            "/modulator/usage/:modulator_id",
+            get(modulator::get_modulator_usage),
+        )
         // ===== MORPHOLOGY MODULE (14 endpoints) =====
         .route(
             "/morphology/morphology_list",
@@ -438,6 +728,10 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(morphology::post_morphology)
                 .put(morphology::put_morphology)
                 .delete(morphology::delete_morphology_by_name),
+        )
+        .route(
+            "/morphology/rename",
+            axum::routing::put(morphology::put_rename_morphology),
         )
         .route(
             "/morphology/morphology_properties",
@@ -510,6 +804,10 @@ fn create_v1_router() -> Router<ApiState> {
         .route(
             "/cortical_mapping/mapping_list",
             get(cortical_mapping::get_mapping_list),
+        )
+        .route(
+            "/cortical_mapping/twin_diagnostic",
+            get(cortical_mapping::get_twin_diagnostic),
         )
         .route(
             "/cortical_mapping/batch_update",
@@ -603,6 +901,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_cortical_area_neurons),
         )
         .route(
+            "/connectome/:cortical_area_id/synapses/incoming",
+            get(connectome::get_area_synapses_incoming),
+        )
+        .route(
             "/connectome/:cortical_area_id/synapses",
             get(connectome::get_area_synapses),
         )
@@ -627,6 +929,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_neuron_properties_at_query),
         )
         .route(
+            "/connectome/memory_neuron",
+            get(connectome::get_memory_neuron),
+        )
+        .route(
             "/connectome/area_neurons",
             get(connectome::get_area_neurons_query),
         )
@@ -644,12 +950,37 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_download_connectome),
         )
         .route(
+            "/connectome/download-bytes",
+            get(connectome::get_download_connectome_bytes),
+        )
+        .route(
             "/connectome/download-cortical-area/:cortical_area",
             get(connectome::get_download_cortical_area),
         )
         .route(
+            "/connectome/directory",
+            get(connectome::get_connectome_directory),
+        )
+        // Connectome artifacts routinely exceed Axum's default 2 MiB body
+        // limit. Leave size policy to connectome validation, not HTTP framing.
+        .route(
             "/connectome/upload",
-            axum::routing::post(connectome::post_upload_connectome),
+            axum::routing::post(connectome::post_upload_connectome)
+                .layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/connectome/validate",
+            axum::routing::post(connectome::post_validate_connectome)
+                .layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/connectome/migrate",
+            axum::routing::post(connectome::post_migrate_connectome)
+                .layer(DefaultBodyLimit::disable()),
+        )
+        .route(
+            "/connectome/upload-saved",
+            axum::routing::post(connectome::post_upload_connectome_saved),
         )
         .route(
             "/connectome/upload-cortical-area",
@@ -668,6 +999,10 @@ fn create_v1_router() -> Router<ApiState> {
         .route(
             "/burst_engine/fire_queue",
             get(burst_engine::get_fire_queue),
+        )
+        .route(
+            "/burst_engine/fire_queue/detailed",
+            get(burst_engine::get_fire_queue_detailed),
         )
         .route(
             "/burst_engine/fire_queue/neuron",
@@ -785,7 +1120,10 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/genome/timestamp", get(genome::get_timestamp))
         .route("/genome/save", axum::routing::post(genome::post_save))
         .route("/genome/load", axum::routing::post(genome::post_load))
-        .route("/genome/upload", axum::routing::post(genome::post_upload))
+        .route(
+            "/genome/upload",
+            axum::routing::post(genome::post_upload).layer(DefaultBodyLimit::disable()),
+        )
         .route("/genome/download", get(genome::get_download))
         .route("/genome/properties", get(genome::get_properties))
         .route(
@@ -806,6 +1144,11 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(genome::post_export_format),
         )
         .route("/genome/amalgamation", get(genome::get_amalgamation))
+        .route("/genome/changes", get(genome_changes::get_changes))
+        .route(
+            "/genome/changes/apply",
+            axum::routing::post(genome_changes::post_apply_change),
+        )
         .route(
             "/genome/amalgamation_history",
             get(genome::get_amalgamation_history_exact),
@@ -823,23 +1166,27 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route(
             "/genome/amalgamation_by_payload",
-            axum::routing::post(genome::post_amalgamation_by_payload),
+            axum::routing::post(genome::post_amalgamation_by_payload)
+                .layer(DefaultBodyLimit::disable()),
         )
+        // Genome multipart / large JSON uploads exceed Axum's default 2 MiB body
+        // limit. Size policy stays with genome validation, not HTTP framing.
         .route(
             "/genome/amalgamation_by_upload",
-            axum::routing::post(genome::post_amalgamation_by_upload),
+            axum::routing::post(genome::post_amalgamation_by_upload)
+                .layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/genome/append-file",
-            axum::routing::post(genome::post_append_file),
+            axum::routing::post(genome::post_append_file).layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/genome/upload/file",
-            axum::routing::post(genome::post_upload_file),
+            axum::routing::post(genome::post_upload_file).layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/genome/upload/file/edit",
-            axum::routing::post(genome::post_upload_file_edit),
+            axum::routing::post(genome::post_upload_file_edit).layer(DefaultBodyLimit::disable()),
         )
         .route(
             "/genome/upload/string",
@@ -897,8 +1244,16 @@ fn create_v1_router() -> Router<ApiState> {
             "/input/configure",
             axum::routing::post(input::post_configure),
         )
+        .route(
+            "/input/sensor_snapshot/last",
+            get(input::get_sensor_snapshot_last),
+        )
         // ===== OUTPUTS MODULE (2 endpoints) - Python uses /v1/output (singular)
         .route("/output/targets", get(outputs::get_targets))
+        .route(
+            "/output/motor_snapshot/last",
+            get(outputs::get_motor_snapshot_last),
+        )
         .route(
             "/output/configure",
             axum::routing::post(outputs::post_configure),
@@ -992,32 +1347,21 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(visualization::post_heartbeat),
         )
         .route("/visualization/status", get(visualization::get_status))
-        // ===== MONITORING MODULE (4 endpoints) =====
+        // ===== MONITORING MODULE (5 endpoints) =====
         .route("/monitoring/status", get(monitoring::get_status))
         .route("/monitoring/metrics", get(monitoring::get_metrics))
         .route("/monitoring/data", get(monitoring::get_data))
         .route("/monitoring/performance", get(monitoring::get_performance))
+        .route(
+            "/monitoring/cortical_activity",
+            get(monitoring::get_cortical_activity),
+        )
         // ===== EVOLUTION MODULE (3 endpoints) =====
         .route("/evolution/status", get(evolution::get_status))
         .route(
             "/evolution/config",
             axum::routing::post(evolution::post_config),
         )
-        // ===== SNAPSHOT MODULE (12 endpoints) =====
-        // TODO: Implement snapshot endpoints
-        // .route("/snapshot/create", axum::routing::post(snapshot::post_create))
-        // .route("/snapshot/restore", axum::routing::post(snapshot::post_restore))
-        // .route("/snapshot/", get(snapshot::get_list))
-        // .route("/snapshot/:snapshot_id", axum::routing::delete(snapshot::delete_snapshot))
-        // .route("/snapshot/:snapshot_id/artifact/:fmt", get(snapshot::get_artifact))
-        // .route("/snapshot/compare", axum::routing::post(snapshot::post_compare))
-        // .route("/snapshot/upload", axum::routing::post(snapshot::post_upload))
-        // // Python uses /v1/snapshots/* (note the S)
-        // .route("/snapshots/connectome", axum::routing::post(snapshot::post_snapshots_connectome))
-        // .route("/snapshots/connectome/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_connectome_restore))
-        // .route("/snapshots/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_restore))
-        // .route("/snapshots/:snapshot_id", axum::routing::delete(snapshot::delete_snapshots_by_id))
-        // .route("/snapshots/:snapshot_id/artifact/:fmt", get(snapshot::get_snapshots_artifact))
         // ===== NETWORK MODULE (3 endpoints) =====
         .route("/network/status", get(network::get_status))
         .route("/network/config", axum::routing::post(network::post_config))
@@ -1050,6 +1394,156 @@ fn create_cors_layer() -> CorsLayer {
         .allow_headers(Any)
 }
 
+/// Maximum characters retained from a failed mutation response body.
+const FAILED_MUTATION_ERROR_PREVIEW_CHARS: usize = 500;
+
+/// Paths that must never overwrite the last-failed-mutation slot.
+fn is_failed_mutation_excluded_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/v1/system/last_failed_mutation"
+            | "/v1/system/health_check"
+            | "/v1/system/readiness_check"
+            | "/v1/system/log_tail"
+    )
+}
+
+/// Extract a compact error string from a JSON API error body when present.
+fn error_message_from_response_body(bytes: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    let message = value
+        .get("message")
+        .and_then(|v| v.as_str())
+        .or_else(|| value.get("error").and_then(|v| v.as_str()))?;
+    let trimmed = message.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let preview: String = trimmed
+        .chars()
+        .take(FAILED_MUTATION_ERROR_PREVIEW_CHARS)
+        .collect();
+    Some(preview)
+}
+
+/// Record the most recent failed mutating HTTP request for agent diagnostics.
+/// Attribute genome changes made while handling this request.
+///
+/// Reads the caller identity from `X-FEAGI-Agent-Id` (rejecting an invalid value
+/// with 400) and gives every change the request records one shared group id.
+async fn attribute_genome_changes(
+    State(state): State<ApiState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    use feagi_services::change_ledger::{with_change_context, ChangeContext};
+
+    let Some(ledger) = state.change_ledger.as_ref() else {
+        return next.run(request).await;
+    };
+    let agent_id = match request
+        .headers()
+        .get(crate::endpoints::genome_changes::AGENT_ID_HEADER)
+    {
+        None => None,
+        Some(raw) => {
+            let validated = raw
+                .to_str()
+                .map_err(|_| {
+                    crate::common::ApiError::invalid_input("X-FEAGI-Agent-Id must be visible ASCII")
+                })
+                .and_then(|value| {
+                    ledger
+                        .validate_agent_id(value)
+                        .map_err(crate::common::ApiError::from)
+                });
+            match validated {
+                Ok(agent_id) => Some(agent_id),
+                Err(error) => return error.into_response(),
+            }
+        }
+    };
+    let context = ChangeContext {
+        agent_id,
+        group_id: Some(uuid::Uuid::now_v7().to_string()),
+        replay: None,
+    };
+    with_change_context(context, next.run(request)).await
+}
+
+async fn record_failed_mutations(
+    State(state): State<ApiState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let method = request.method().clone();
+    let path = request.uri().path().to_string();
+    let content_type = request
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.to_string());
+    let content_length = request
+        .headers()
+        .get(axum::http::header::CONTENT_LENGTH)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok());
+
+    let response = next.run(request).await;
+
+    let is_mutation = matches!(
+        method,
+        Method::POST | Method::PUT | Method::PATCH | Method::DELETE
+    );
+    if !is_mutation || response.status().as_u16() < 400 || is_failed_mutation_excluded_path(&path) {
+        return response;
+    }
+
+    let status = response.status().as_u16();
+    let (parts, body) = response.into_parts();
+    let body_bytes = match body.collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => {
+            return Response::from_parts(parts, Body::empty());
+        }
+    };
+    let error_message = error_message_from_response_body(&body_bytes);
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0);
+
+    *state.last_failed_mutation.lock() = Some(crate::endpoints::system::LastFailedMutation {
+        method: method.as_str().to_string(),
+        path,
+        status,
+        content_type,
+        content_length,
+        error_message,
+        timestamp_ms,
+    });
+
+    Response::from_parts(parts, Body::from(body_bytes))
+}
+
+/// True when the request is a `multipart/form-data` upload.
+///
+/// Artifact endpoints (connectome/genome files) must keep the original body
+/// stream. Buffering them here duplicates large payloads and can hide the
+/// real upload size from later extractors.
+fn is_multipart_form_request(parts: &axum::http::request::Parts) -> bool {
+    parts
+        .headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|content_type| content_type.split(';').next())
+        .is_some_and(|media_type| {
+            media_type
+                .trim()
+                .eq_ignore_ascii_case("multipart/form-data")
+        })
+}
+
 /// Middleware to log request and response bodies for debugging
 async fn log_request_response_bodies(
     request: Request<Body>,
@@ -1059,30 +1553,26 @@ async fn log_request_response_bodies(
 
     // Only log bodies for POST/PUT/PATCH/DELETE requests
     let should_log_request = matches!(parts.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE");
+    let pass_through_body = !should_log_request || is_multipart_form_request(&parts);
 
-    let body_bytes = if should_log_request {
-        // Collect body bytes
+    let request = if pass_through_body {
+        Request::from_parts(parts, body)
+    } else {
         match body.collect().await {
             Ok(collected) => {
                 let bytes = collected.to_bytes();
-                // Log request body if it's JSON
                 if let Ok(body_str) = String::from_utf8(bytes.to_vec()) {
                     if !body_str.is_empty() {
                         tracing::trace!(target: "feagi-api", "Request body: {}", body_str);
                     }
                 }
-                bytes
+                Request::from_parts(parts, Body::from(bytes))
             }
             Err(_) => {
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
-    } else {
-        axum::body::Bytes::new()
     };
-
-    // Reconstruct request with original body
-    let request = Request::from_parts(parts, Body::from(body_bytes));
 
     // Call the next handler
     let response = next.run(request).await;

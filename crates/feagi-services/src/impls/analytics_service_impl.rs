@@ -62,9 +62,19 @@ impl AnalyticsService for AnalyticsServiceImpl {
         // This prevents the Brain Visualizer from exiting loading screen prematurely
         let brain_readiness = cortical_area_count > 0 && burst_engine_active;
 
+        // Genome validity is written by the loader (`GenomeServiceImpl`)
+        // from the chain report; read it lock-free from core state. See
+        // `feagi-state-manager::MemoryMappedState::genome_validity`.
+        let genome_validity = {
+            let instance = StateManager::instance();
+            let manager = instance.read();
+            manager.get_core_state().get_genome_validity()
+        };
+
         Ok(SystemHealth {
             burst_engine_active,
             brain_readiness,
+            genome_validity,
             neuron_count,
             neuron_capacity,
             synapse_capacity,
@@ -210,9 +220,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
         let state_manager_instance = StateManager::instance();
-        let state_manager = state_manager_instance
-            .try_read()
-            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
+        let state_manager = state_manager_instance.read();
         let core_state = state_manager.get_core_state();
         let count = core_state.get_neuron_count() as usize;
 
@@ -224,9 +232,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
         let state_manager_instance = StateManager::instance();
-        let state_manager = state_manager_instance
-            .try_read()
-            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
+        let state_manager = state_manager_instance.read();
         let core_state = state_manager.get_core_state();
         let count = core_state.get_synapse_count() as usize;
 
@@ -273,9 +279,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO iteration, NO locks, NO NPU access
         let state_manager_instance = StateManager::instance();
-        let state_manager = state_manager_instance
-            .try_read()
-            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
+        let state_manager = state_manager_instance.read();
         let core_state = state_manager.get_core_state();
         let count = core_state.get_regular_neuron_count() as usize;
 
@@ -287,9 +291,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO iteration, NO locks, NO NPU access
         let state_manager_instance = StateManager::instance();
-        let state_manager = state_manager_instance
-            .try_read()
-            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
+        let state_manager = state_manager_instance.read();
         let core_state = state_manager.get_core_state();
         let count = core_state.get_memory_neuron_count() as usize;
 
