@@ -146,6 +146,26 @@ impl<const METHOD_TYPE_U8: FeagiRequestMessageU8> FeagiRequestMessage<METHOD_TYP
             .collect()
     }
 
+    /// The type of the path parameters, `()` when the path has none
+    pub fn parameters_type(&self, names: &FeagiRequestMessageRustStructNames) -> syn::Type {
+        if self.is_parameter_struct_generated() {
+            let name = names.feagi_message_parameter_specification_struct_name();
+            syn::parse_quote!(#name)
+        } else {
+            unit_type()
+        }
+    }
+
+    /// The type of the request payload, `()` when the message has no payload fields
+    pub fn payload_type(&self, names: &FeagiRequestMessageRustStructNames) -> syn::Type {
+        if self.is_payload_struct_generated() {
+            let name = names.feagi_message_payload_specification_struct_name();
+            syn::parse_quote!(#name)
+        } else {
+            unit_type()
+        }
+    }
+
     /// The type of the response error
     pub fn response_error_type(&self, names: &FeagiRequestMessageRustStructNames) -> proc_macro2::TokenStream {
         self.error.error_type(&names.feagi_message_error_struct_name())

@@ -3,7 +3,7 @@
 //! `define_request_message_category`, the requester and responder here are shared by all of them
 
 use crate::feagi_message::feagi_message_path::configurables::FeagiMessagePathConfigurables;
-use crate::feagi_message::request::feagi_request_descriptor::FeagiRequestMessageDescriptor;
+use crate::feagi_message::request::feagi_request_descriptor::{FeagiMessageEnum, FeagiRequestMessageDescriptor};
 use crate::feagi_message::request::feagi_request_message::FeagiRequestMessage;
 use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError, FeagiRequestError};
 use crate::parallelism::feagi_channel::recycling::Recyclable;
@@ -21,8 +21,29 @@ pub trait FeagiRequestCategory: Sized {
 
     /// Has a variant holding each message of this category
     type RequestEnum: Recyclable;
-    /// Has a variant holding the response (or error) of each message of this category
-    type ResponseEnum: Recyclable;
+    /// Has a variant holding the response (or error) of each message of this category.
+    /// Serializes as just the response payload, or the error, it holds
+    type ResponseEnum: Recyclable + serde::Serialize;
+
+    /// Which message of this category a path is, with the path parameters parsed from it. The
+    /// payload is not decoded yet
+    type PathMatch;
+
+    /// Finds the message of `method` whose path (base path included) is `segments`, the already
+    /// decoded segments of a request path. Walks the category's paths as a tree, so the cost
+    /// grows with the path's length rather than the number of messages
+    fn match_message_path(configurables: &Self::Configurables, method: FeagiMessageEnum, segments: &[&str]) -> Option<Self::PathMatch>;
+
+    /// Whether any message of this category, of any method, has the path `segments`. Tells a
+    /// request of the wrong method apart from one for a path that doesn't exist
+    fn message_path_exists(configurables: &Self::Configurables, segments: &[&str]) -> bool;
+
+    /// Decodes the matched message's payload with `decoder`, and builds the request. `None`
+    /// if the payload could not be decoded
+    fn decode_request<Decoder: FeagiRequestPayloadDecoder>(path_match: Self::PathMatch, decoder: Decoder) -> Option<Self::RequestEnum>;
+
+    /// Whether `response` is the error of a message, rather than its response payload
+    fn response_is_error(response: &Self::ResponseEnum) -> bool;
     /// The runtime set path segments shared by all messages of this category
     type Configurables: FeagiMessagePathConfigurables + 'static;
     /// `Some` for categories that declare no configurables, so their (empty) configurables
@@ -53,6 +74,13 @@ pub trait FeagiRequestCategory: Sized {
 
     // This struct should be zero sized, no fields!
 
+}
+
+/// Where a request's payload comes from (a URL query, a json body, a zenoh payload, ...).
+/// Decodes it into whichever payload type the matched message takes
+pub trait FeagiRequestPayloadDecoder {
+    /// `None` if the payload is not a valid `Payload`
+    fn decode_payload<Payload: serde::de::DeserializeOwned>(self) -> Option<Payload>;
 }
 
 /// Response to a message `Message`, or the error that message responded with

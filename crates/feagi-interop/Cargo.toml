@@ -27,7 +27,7 @@ alloc = [
 ]
 
 transport_rest = [
-    "picoserve"
+    "picoserve", "serde-json-core"
 ]
 
 transport_ws = []
@@ -63,6 +63,7 @@ zenoh = { workspace = true, optional = true, features = ["default", "unstable", 
 # Optionally Used
 serde_json = { workspace = true, optional = true }
 picoserve = { workspace = true, optional = true }
+serde-json-core = { workspace = true, optional = true }
 
 
 

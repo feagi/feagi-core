@@ -177,6 +177,7 @@ ohkami = {version = "0.24.9"}
 smol = {version = "2.0.2"}
 byteorder = {version = "1.5.0"}
 picoserve = { version = "0.20.1", default-features = false, features = ["json"] } # TODO review features
+serde-json-core = { version = "0.6.0", default-features = false }
 
 
 

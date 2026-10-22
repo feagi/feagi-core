@@ -207,6 +207,80 @@ fn messages_describe_their_paths_and_fields() {
     assert_eq!(configurables().configurable_str("other"), None);
 }
 
+//region Path Matcher
+
+/// Decodes payloads from json text, as a transport would from its own source
+struct JsonText(&'static str);
+
+impl feagi_basis::feagi_message::request::feagi_request_message_category::FeagiRequestPayloadDecoder for JsonText {
+    fn decode_payload<Payload: serde::de::DeserializeOwned>(self) -> Option<Payload> {
+        serde_json::from_str(self.0).ok()
+    }
+}
+
+fn match_path(method: FeagiMessageEnum, path: &str) -> Option<CoffeeShopPathMatch> {
+    let segments: Vec<&str> = path.split('/').collect();
+    CoffeeShopRequestCategory::match_message_path(configurables(), method, &segments)
+}
+
+use feagi_basis::feagi_message::request::feagi_request_descriptor::FeagiMessageEnum;
+
+#[test]
+fn matcher_finds_the_message_of_the_method_at_a_path() {
+    assert!(matches!(
+        match_path(FeagiMessageEnum::Read, "shops/downtown/orders/7"),
+        Some(CoffeeShopPathMatch::ReadOrder(ReadOrderFeagiRequestMessageParameters { order_id: 7 }))
+    ));
+    assert!(matches!(match_path(FeagiMessageEnum::Read, "shops/downtown/status"), Some(CoffeeShopPathMatch::ReadStatus(()))));
+    assert!(matches!(match_path(FeagiMessageEnum::Create, "shops/downtown/orders"), Some(CoffeeShopPathMatch::CreateOrder(()))));
+}
+
+#[test]
+fn matcher_finds_nothing_for_other_methods_or_paths() {
+    // The path exists, but not for this method
+    assert!(match_path(FeagiMessageEnum::Delete, "shops/downtown/orders/7").is_none());
+    assert!(match_path(FeagiMessageEnum::Create, "shops/downtown/status").is_none());
+    // A different configurable value, a parameter that doesn't parse, a path too long or too short
+    assert!(match_path(FeagiMessageEnum::Read, "shops/uptown/status").is_none());
+    assert!(match_path(FeagiMessageEnum::Read, "shops/downtown/orders/seven").is_none());
+    assert!(match_path(FeagiMessageEnum::Read, "shops/downtown/status/extra").is_none());
+    assert!(match_path(FeagiMessageEnum::Read, "shops/downtown").is_none());
+}
+
+#[test]
+fn matcher_tells_whether_a_path_exists_for_any_method() {
+    let exists = |path: &str| CoffeeShopRequestCategory::message_path_exists(configurables(), &path.split('/').collect::<Vec<_>>());
+    assert!(exists("shops/downtown/orders/7"));
+    assert!(exists("shops/downtown/orders"));
+    assert!(!exists("shops/downtown/orders/seven"));
+    assert!(!exists("shops/uptown/orders"));
+    assert!(!exists("shops/downtown"));
+}
+
+#[test]
+fn matched_path_decodes_into_the_category_request() {
+    let path_match = match_path(FeagiMessageEnum::Read, "shops/downtown/orders/7").unwrap();
+    let request = CoffeeShopRequestCategory::decode_request(path_match, JsonText(r#"{"include_price":true}"#));
+    assert!(matches!(request, Some(CoffeeShopRequests::ReadOrder(message)) if message.order_id == 7 && message.include_price));
+
+    // The payload must be what the matched message takes
+    let path_match = match_path(FeagiMessageEnum::Create, "shops/downtown/orders").unwrap();
+    assert!(CoffeeShopRequestCategory::decode_request(path_match, JsonText(r#"{"include_price":true}"#)).is_none());
+}
+
+#[test]
+fn responses_serialize_as_their_payload_or_error() {
+    let ok = CoffeeShopResponses::ReadOrder(Ok(ReadOrderFeagiRequestMessageResponse { drink: 2, price: None }));
+    assert_eq!(serde_json::to_string(&ok).unwrap(), r#"{"drink":2,"price":null}"#);
+    assert!(!CoffeeShopRequestCategory::response_is_error(&ok));
+
+    let error = CoffeeShopResponses::ReadOrder(Err(ReadOrderFeagiRequestMessageError::OrderNotFound));
+    assert_eq!(serde_json::to_string(&error).unwrap(), r#""OrderNotFound""#);
+    assert!(CoffeeShopRequestCategory::response_is_error(&error));
+}
+
+//endregion
+
 #[test]
 fn message_path_is_parsed_into_its_parameters() {
     let parse = |path: &str| ReadOrderFeagiRequestMessagePath::parse_message_path(configurables(), path.split('/'));

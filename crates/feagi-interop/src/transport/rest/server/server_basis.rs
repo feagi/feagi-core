@@ -107,13 +107,12 @@ pub mod routing {
     use feagi_basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathConfigurables;
     use feagi_basis::feagi_message::feagi_message_path::FeagiMessagePath;
     use feagi_basis::feagi_message::request::feagi_request_descriptor::{FeagiMessageEnum, FeagiRequestMessageDescriptor};
-    use feagi_basis::feagi_message::request::feagi_request_message::FeagiRequestMessage;
-    use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiRequestCategory};
+    use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiRequestCategory, FeagiRequestPayloadDecoder};
     use feagi_basis::feagi_message::request::feagi_request_message_grouping::{FeagiConfiguredCategoryRequester, NCat, NMDes, NNull};
     use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
-    use picoserve::extract::{FromRequest, JsonWithUnescapeBufferSize};
     use picoserve::io::Read;
     use picoserve::request::{Path, Request};
+    use picoserve::url_encoded::UrlEncodedString;
     use picoserve::response::{IntoResponse, Json, ResponseWriter, StatusCode};
     use picoserve::routing::PathRouterService;
     use picoserve::ResponseSent;
@@ -136,15 +135,22 @@ pub mod routing {
         }
     }
 
+    /// The message method a REST method is for, or `None` if no message uses it
+    pub fn message_method(http_method: &str) -> Option<FeagiMessageEnum> {
+        match http_method {
+            "GET" => Some(FeagiMessageEnum::Read),
+            "POST" => Some(FeagiMessageEnum::Create),
+            "PUT" => Some(FeagiMessageEnum::Edit),
+            "DELETE" => Some(FeagiMessageEnum::Delete),
+            "PATCH" => Some(FeagiMessageEnum::Patch),
+            _ => None,
+        }
+    }
+
     /// Whether a route handled a request, or gives it back for the next route to try
     pub enum RouteOutcome<'r, R: Read, W: ResponseWriter> {
         Handled(Result<ResponseSent, W::Error>),
-        NotHandled {
-            request: Request<'r, R>,
-            response_writer: W,
-            /// Some route had this path, but not this method
-            path_matched: bool,
-        },
+        NotHandled { request: Request<'r, R>, response_writer: W },
     }
 
     //region Group
@@ -181,18 +187,14 @@ pub mod routing {
             }
             let segments: heapless::Vec<&str, MAX_PATH_SEGMENTS> = decoded_segments.iter().map(|segment| segment.as_str()).collect();
 
-            match self.routes.try_handle(&segments, request, response_writer).await {
+            let method = message_method(request.parts.method());
+            match self.routes.try_handle(&segments, method, request, response_writer).await {
                 RouteOutcome::Handled(result) => result,
-                RouteOutcome::NotHandled {
-                    request,
-                    response_writer,
-                    path_matched: true,
-                } => write_status(request, response_writer, StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed").await,
-                RouteOutcome::NotHandled {
-                    request,
-                    response_writer,
-                    path_matched: false,
-                } => write_status(request, response_writer, StatusCode::NOT_FOUND, "Not Found").await,
+                // Only on a miss: was it the method, or the path
+                RouteOutcome::NotHandled { request, response_writer } if self.routes.any_path_matches(&segments) => {
+                    write_status(request, response_writer, StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed").await
+                }
+                RouteOutcome::NotHandled { request, response_writer } => write_status(request, response_writer, StatusCode::NOT_FOUND, "Not Found").await,
             }
         }
     }
@@ -216,15 +218,23 @@ pub mod routing {
         pub response_payload_fields: &'static [FeagiFieldDescription],
     }
 
-    /// Tries the routes of each category in turn. Implemented for the `NCat` chain of a group's
+    /// Tries the categories in turn. Implemented for the `NCat` chain of a group's
     /// `FeagiConfiguredCategoryRequester`s
     pub trait RestCategoryRoutes {
+        /// Handles the request with the message of `method` at `segments`, if there is one. Each
+        /// category finds its message with its generated path matcher, and only the category
+        /// that matches awaits anything, so futures nest once per category rather than once per
+        /// message
         async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
             &self,
             segments: &[&str],
+            method: Option<FeagiMessageEnum>,
             request: Request<'r, R>,
             response_writer: W,
         ) -> RouteOutcome<'r, R, W>;
+
+        /// Whether any message, of any method, is at `segments`
+        fn any_path_matches(&self, segments: &[&str]) -> bool;
 
         /// Describes route `index`, counting across all categories in order, or `None` past
         /// the last route
@@ -232,60 +242,58 @@ pub mod routing {
     }
 
     impl RestCategoryRoutes for NNull {
-        fn route_description(&self, _index: usize) -> Option<RouteDescription<'_>> {
-            None
-        }
-
         async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
             &self,
             _segments: &[&str],
+            _method: Option<FeagiMessageEnum>,
             request: Request<'r, R>,
             response_writer: W,
         ) -> RouteOutcome<'r, R, W> {
-            RouteOutcome::NotHandled {
-                request,
-                response_writer,
-                path_matched: false,
-            }
+            RouteOutcome::NotHandled { request, response_writer }
+        }
+
+        fn any_path_matches(&self, _segments: &[&str]) -> bool {
+            false
+        }
+
+        fn route_description(&self, _index: usize) -> Option<RouteDescription<'_>> {
+            None
         }
     }
 
     impl<Category, Channels, Tail> RestCategoryRoutes for NCat<FeagiConfiguredCategoryRequester<Category, Channels>, Tail>
     where
         Category: FeagiRequestCategory,
-        Category::NestedMessageDescriptors: RestMessageRoutes<Category, Channels>,
+        Category::NestedMessageDescriptors: RestMessageDescriptions<Category>,
         Channels: FeagiRequestResponseChannelBackend,
+        FeagiCategoryRequester<Category, Channels>: Clone,
         Tail: RestCategoryRoutes,
     {
         async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
             &self,
             segments: &[&str],
+            method: Option<FeagiMessageEnum>,
             request: Request<'r, R>,
             response_writer: W,
         ) -> RouteOutcome<'r, R, W> {
-            let outcome = <Category::NestedMessageDescriptors as RestMessageRoutes<Category, Channels>>::try_handle(
-                &self.head.requester,
-                self.head.configurables,
-                segments,
-                request,
-                response_writer,
-            )
-            .await;
-            let RouteOutcome::NotHandled {
-                request,
-                response_writer,
-                path_matched,
-            } = outcome
-            else {
-                return outcome;
-            };
-            with_path_matched(self.tail.try_handle(segments, request, response_writer).await, path_matched)
+            let path_match = method.and_then(|method| Category::match_message_path(self.head.configurables, method, segments));
+            match (path_match, method) {
+                (Some(path_match), Some(method)) => {
+                    RouteOutcome::Handled(respond_to_message::<Category, Channels, R, W>(&self.head.requester, path_match, method, request, response_writer).await)
+                }
+                // Categories may share a base path, so the rest are still tried
+                _ => self.tail.try_handle(segments, method, request, response_writer).await,
+            }
+        }
+
+        fn any_path_matches(&self, segments: &[&str]) -> bool {
+            Category::message_path_exists(self.head.configurables, segments) || self.tail.any_path_matches(segments)
         }
 
         fn route_description(&self, index: usize) -> Option<RouteDescription<'_>> {
-            let route_count = <Category::NestedMessageDescriptors as RestMessageRoutes<Category, Channels>>::ROUTE_COUNT;
+            let route_count = <Category::NestedMessageDescriptors as RestMessageDescriptions<Category>>::ROUTE_COUNT;
             if index < route_count {
-                return <Category::NestedMessageDescriptors as RestMessageRoutes<Category, Channels>>::route_description(self.head.configurables, index);
+                return <Category::NestedMessageDescriptors as RestMessageDescriptions<Category>>::route_description(self.head.configurables, index);
             }
             self.tail.route_description(index - route_count)
         }
@@ -295,21 +303,9 @@ pub mod routing {
 
     //region Message
 
-    /// Tries the route of each message of a category in turn. Implemented for the `NMDes`
-    /// chain of the category
-    pub trait RestMessageRoutes<Category, Channels>
-    where
-        Category: FeagiRequestCategory,
-        Channels: FeagiRequestResponseChannelBackend,
-    {
-        async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
-            requester: &FeagiCategoryRequester<Category, Channels>,
-            configurables: &Category::Configurables,
-            segments: &[&str],
-            request: Request<'r, R>,
-            response_writer: W,
-        ) -> RouteOutcome<'r, R, W>;
-
+    /// Describes the routes of a category's messages, for documentation. Implemented for the
+    /// `NMDes` chain of the category
+    pub trait RestMessageDescriptions<Category: FeagiRequestCategory> {
         /// How many messages, and so routes, the chain has
         const ROUTE_COUNT: usize;
 
@@ -317,57 +313,20 @@ pub mod routing {
         fn route_description(configurables: &Category::Configurables, index: usize) -> Option<RouteDescription<'_>>;
     }
 
-    impl<Category, Channels> RestMessageRoutes<Category, Channels> for NNull
-    where
-        Category: FeagiRequestCategory,
-        Channels: FeagiRequestResponseChannelBackend,
-    {
+    impl<Category: FeagiRequestCategory> RestMessageDescriptions<Category> for NNull {
         const ROUTE_COUNT: usize = 0;
 
         fn route_description(_configurables: &Category::Configurables, _index: usize) -> Option<RouteDescription<'_>> {
             None
         }
-
-        async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
-            _requester: &FeagiCategoryRequester<Category, Channels>,
-            _configurables: &Category::Configurables,
-            _segments: &[&str],
-            request: Request<'r, R>,
-            response_writer: W,
-        ) -> RouteOutcome<'r, R, W> {
-            RouteOutcome::NotHandled {
-                request,
-                response_writer,
-                path_matched: false,
-            }
-        }
     }
 
-    impl<Descriptor, Tail, Category, Channels> RestMessageRoutes<Category, Channels> for NMDes<Descriptor, Tail>
+    impl<Descriptor, Tail, Category> RestMessageDescriptions<Category> for NMDes<Descriptor, Tail>
     where
         Descriptor: FeagiRequestMessageDescriptor<Category = Category>,
-        Tail: RestMessageRoutes<Category, Channels>,
+        Tail: RestMessageDescriptions<Category>,
         Category: FeagiRequestCategory,
-        Channels: FeagiRequestResponseChannelBackend,
-        FeagiCategoryRequester<Category, Channels>: Clone,
     {
-        async fn try_handle<'r, R: Read, W: ResponseWriter<Error = R::Error>>(
-            requester: &FeagiCategoryRequester<Category, Channels>,
-            configurables: &Category::Configurables,
-            segments: &[&str],
-            request: Request<'r, R>,
-            response_writer: W,
-        ) -> RouteOutcome<'r, R, W> {
-            let Some(parameters) = Descriptor::MessagePath::parse_message_path(configurables, segments.iter().copied()) else {
-                return Tail::try_handle(requester, configurables, segments, request, response_writer).await;
-            };
-            if request.parts.method() != http_method(Descriptor::METHOD) {
-                let outcome = Tail::try_handle(requester, configurables, segments, request, response_writer).await;
-                return with_path_matched(outcome, true);
-            }
-            RouteOutcome::Handled(respond_to_message::<Descriptor, Category, Channels, R, W>(requester, parameters, request, response_writer).await)
-        }
-
         const ROUTE_COUNT: usize = 1 + Tail::ROUTE_COUNT;
 
         fn route_description(configurables: &Category::Configurables, index: usize) -> Option<RouteDescription<'_>> {
@@ -387,47 +346,52 @@ pub mod routing {
         }
     }
 
-    /// Builds the message from the request, sends it through the category channel, and writes
-    /// back the response
-    async fn respond_to_message<Descriptor, Category, Channels, R, W>(
+    /// Decodes the matched message's payload from the request, sends the request through the
+    /// category channel, and writes back the response
+    async fn respond_to_message<Category, Channels, R, W>(
         requester: &FeagiCategoryRequester<Category, Channels>,
-        parameters: Descriptor::Parameters,
+        path_match: Category::PathMatch,
+        method: FeagiMessageEnum,
         mut request: Request<'_, R>,
         response_writer: W,
     ) -> Result<ResponseSent, W::Error>
     where
-        Descriptor: FeagiRequestMessageDescriptor<Category = Category>,
         Category: FeagiRequestCategory,
         Channels: FeagiRequestResponseChannelBackend,
         FeagiCategoryRequester<Category, Channels>: Clone,
         R: Read,
         W: ResponseWriter<Error = R::Error>,
     {
-        let Some(request_payload) = decode_request_payload::<<Descriptor::Message as FeagiRequestMessage>::DescriptorRequestPayload, R>(
-            Descriptor::METHOD,
-            &mut request,
-        )
-        .await
-        else {
+        // Read messages take their payload from the URL query, all others from a json body
+        let category_request = if method == FeagiMessageEnum::Read {
+            Category::decode_request(path_match, RestPayload::Query(request.parts.query().unwrap_or_default()))
+        } else if request.body_connection.content_length() == 0 {
+            Category::decode_request(path_match, RestPayload::Empty)
+        } else {
+            match request.body_connection.body().read_all().await {
+                Ok(body) => Category::decode_request(path_match, RestPayload::Json(body)),
+                Err(_) => None,
+            }
+        };
+        let Some(category_request) = category_request else {
             return write_status(request, response_writer, StatusCode::BAD_REQUEST, "Request payload could not be parsed").await;
         };
-        let message = Descriptor::Message::compose(parameters, request_payload);
 
         // A clone has its own reply channel, so concurrent requests to the same category do not
         // share one
-        let response = requester.clone().request(message).await;
+        let response = requester.clone().make_request(category_request).await;
 
         let connection = request.body_connection.finalize().await?;
         match response {
-            Ok(Ok(response_payload)) => Json(response_payload).write_to(connection, response_writer).await,
             // TODO per error status codes
-            Ok(Err(message_error)) => {
-                Json(message_error)
+            Ok(response) if Category::response_is_error(&response) => {
+                Json(response)
                     .into_response()
                     .with_status_code(StatusCode::BAD_REQUEST)
                     .write_to(connection, response_writer)
                     .await
             }
+            Ok(response) => Json(response).write_to(connection, response_writer).await,
             Err(channel_error) => {
                 (StatusCode::SERVICE_UNAVAILABLE, format_args!("{channel_error}\r\n"))
                     .write_to(connection, response_writer)
@@ -436,22 +400,24 @@ pub mod routing {
         }
     }
 
-    /// Read messages take their payload from the URL query, all others from a json body. A
-    /// payload of `()` may also be left out entirely
-    async fn decode_request_payload<Payload: serde::de::DeserializeOwned, R: Read>(method: FeagiMessageEnum, request: &mut Request<'_, R>) -> Option<Payload> {
-        if matches!(method, FeagiMessageEnum::Read) {
-            let query = request.parts.query().unwrap_or_default();
-            return picoserve::url_encoded::deserialize_form(query).ok().or_else(deserialize_nothing);
-        }
+    /// Where a REST request's payload comes from
+    enum RestPayload<'a> {
+        /// The URL query, for Read messages
+        Query(UrlEncodedString<'a>),
+        /// A json body
+        Json(&'a [u8]),
+        /// No body was sent
+        Empty,
+    }
 
-        if request.body_connection.content_length() == 0 {
-            return deserialize_nothing();
+    impl FeagiRequestPayloadDecoder for RestPayload<'_> {
+        fn decode_payload<Payload: serde::de::DeserializeOwned>(self) -> Option<Payload> {
+            match self {
+                RestPayload::Query(query) => picoserve::url_encoded::deserialize_form(query).ok().or_else(deserialize_nothing),
+                RestPayload::Json(body) => serde_json_core::from_slice_escaped(body, &mut [0; JSON_UNESCAPE_BUFFER_LEN]).ok().map(|(payload, _)| payload),
+                RestPayload::Empty => deserialize_nothing(),
+            }
         }
-        let parts = request.parts;
-        <JsonWithUnescapeBufferSize<Payload, JSON_UNESCAPE_BUFFER_LEN> as FromRequest<'_, (), Payload>>::from_request(&(), parts, request.body_connection.body())
-            .await
-            .ok()
-            .map(|JsonWithUnescapeBufferSize(payload)| payload)
     }
 
     /// The payload of a request that sent none. Only succeeds for `()`
@@ -460,22 +426,6 @@ pub mod routing {
     }
 
     //endregion
-
-    /// Marks a not handled outcome as having matched the path, if `path_matched`
-    fn with_path_matched<'r, R: Read, W: ResponseWriter>(outcome: RouteOutcome<'r, R, W>, path_matched: bool) -> RouteOutcome<'r, R, W> {
-        match outcome {
-            RouteOutcome::NotHandled {
-                request,
-                response_writer,
-                path_matched: matched_later,
-            } => RouteOutcome::NotHandled {
-                request,
-                response_writer,
-                path_matched: path_matched || matched_later,
-            },
-            handled => handled,
-        }
-    }
 
     /// Answers with only a status and a short message
     async fn write_status<R: Read, W: ResponseWriter<Error = R::Error>>(

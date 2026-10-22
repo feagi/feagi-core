@@ -1,6 +1,7 @@
 use crate::common::{alloc_gated, basis_path, parse_optional_comma, parse_property_colon_member};
 use crate::feagi_messages::message_path_element::MessagePathElement;
-use crate::feagi_messages::request_response::common_structs::FeagiRequestMessageU8;
+use crate::feagi_messages::request_response::common_structs::{FeagiRequestMessageMethod, FeagiRequestMessageU8};
+use crate::feagi_messages::request_response::feagi_request_message_matcher::{generate_matcher, GeneratedMatcher, MatcherMessage};
 use crate::feagi_messages::request_response::feagi_request_message::FeagiRequestMessage;
 use crate::feagi_messages::request_response::feagi_request_message_path::message_path_elements;
 use heck::ToPascalCase;
@@ -207,11 +208,17 @@ impl FeagiRequestMessageCategory {
         let marker = &context.category_marker_name;
         let configurables = &context.configurables_struct_name;
 
+        let serde = quote!(#basis::__private::serde);
+        let entries: Vec<&CategoryEntry> = entries.collect();
+
         let mut request_variants = proc_macro2::TokenStream::new();
         let mut response_variants = proc_macro2::TokenStream::new();
+        let mut response_serialize_arms = proc_macro2::TokenStream::new();
+        let mut response_error_arms = proc_macro2::TokenStream::new();
         let mut froms = proc_macro2::TokenStream::new();
         let mut descriptors = Vec::new();
-        for entry in entries {
+        let mut matcher_messages = Vec::new();
+        for entry in entries.iter().copied() {
             let variant = entry.names.category_enum_variant_name();
             let message = entry.names.feagi_message_struct_name();
             let response_payload = &entry.response_payload_type;
@@ -225,8 +232,30 @@ impl FeagiRequestMessageCategory {
                     }
                 }
             });
+            response_serialize_arms.extend(quote! {
+                #response_enum::#variant(::core::result::Result::Ok(response_payload)) => #serde::Serialize::serialize(response_payload, serializer),
+                #response_enum::#variant(::core::result::Result::Err(response_error)) => #serde::Serialize::serialize(response_error, serializer),
+            });
+            response_error_arms.extend(quote! {
+                #response_enum::#variant(::core::result::Result::Err(_)) => true,
+            });
             descriptors.push(entry.names.feagi_message_descriptor_struct_name());
+            matcher_messages.push(MatcherMessage {
+                variant,
+                method: entry.method.clone(),
+                elements: entry.path_elements.iter().map(MessagePathElement::duplicate).collect(),
+                parameters_type: entry.parameters_type.clone(),
+                has_parameters: entry.has_parameters,
+                payload_type: entry.payload_type.clone(),
+                message_struct: message,
+            });
         }
+
+        let path_match_enum = format_ident!("{}PathMatch", self.calculate_feagi_category_struct_names().base_name);
+        let GeneratedMatcher {
+            path_match_enum: path_match_enum_tokens,
+            trait_functions: matcher_functions,
+        } = generate_matcher(&path_match_enum, request_enum, configurables, &context.base_path_elements, &matcher_messages);
 
         let nested_descriptors = descriptors
             .iter()
@@ -283,6 +312,18 @@ impl FeagiRequestMessageCategory {
                 }
             }
 
+            /// Serializes as just the response payload, or the error, it holds
+            impl #serde::Serialize for #response_enum {
+                fn serialize<S: #serde::Serializer>(&self, serializer: S) -> ::core::result::Result<S::Ok, S::Error> {
+                    match self {
+                        #response_enum::Nothing => serializer.serialize_unit(),
+                        #response_serialize_arms
+                    }
+                }
+            }
+
+            #path_match_enum_tokens
+
             #[doc = #category_description]
             #[derive(Clone, Copy, Debug)]
             pub struct #marker;
@@ -293,6 +334,17 @@ impl FeagiRequestMessageCategory {
                 const BASE_PATH: &'static str = #base_path;
                 type RequestEnum = #request_enum;
                 type ResponseEnum = #response_enum;
+                type PathMatch = #path_match_enum;
+
+                #matcher_functions
+
+                fn response_is_error(response: &#response_enum) -> bool {
+                    match response {
+                        #response_error_arms
+                        _ => false,
+                    }
+                }
+
                 type Configurables = #configurables;
                 const EMPTY_CONFIGURABLES: ::core::option::Option<&'static #configurables> = #empty_configurables;
                 type NestedMessageDescriptors = #nested_descriptors;
@@ -334,6 +386,12 @@ struct CategoryEntry<'a> {
     alloc_only: bool,
     response_payload_type: syn::Type,
     response_error_type: proc_macro2::TokenStream,
+    method: FeagiRequestMessageMethod,
+    /// The message's path, without the base path
+    path_elements: &'a [MessagePathElement],
+    parameters_type: syn::Type,
+    has_parameters: bool,
+    payload_type: syn::Type,
     generate_items: Box<dyn Fn(&FeagiRequestMessageCategoryContext) -> proc_macro2::TokenStream + 'a>,
 }
 
@@ -346,6 +404,11 @@ fn collect_entries<'a, const METHOD: FeagiRequestMessageU8>(messages: &'a IndexM
             alloc_only: message.alloc_only,
             response_payload_type: message.response_payload_type(&names),
             response_error_type: message.response_error_type(&names),
+            method: FeagiRequestMessageMethod::from_u8(METHOD),
+            path_elements: message.path.elements(),
+            parameters_type: message.parameters_type(&names),
+            has_parameters: message.is_parameter_struct_generated(),
+            payload_type: message.payload_type(&names),
             generate_items: Box::new(move |context| message.generate_rust_message_items(&item_names, context)),
             names,
         });

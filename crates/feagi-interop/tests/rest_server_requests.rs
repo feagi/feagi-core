@@ -92,8 +92,12 @@ fn rest_server_sends_requests_through_category_channels() {
     // A message's own error
     assert_eq!(http("GET", "/shops/downtown/orders/8", None), (400, r#""OrderNotFound""#.into()));
 
-    // The path exists, but not with this method
+    // The path exists, but not with this method, including methods no message uses
     assert_eq!(http("PUT", "/shops/downtown/orders/7", None).0, 405);
+    assert_eq!(http("OPTIONS", "/shops/downtown/orders/7", None).0, 405);
+
+    // Only the category's base path is not a message
+    assert_eq!(http("GET", "/shops/downtown", None).0, 404);
 
     // Paths that are not a message, through a different configurable or a parameter that does not parse
     assert_eq!(http("GET", "/shops/uptown/status", None).0, 404);

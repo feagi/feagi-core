@@ -776,6 +776,7 @@ dependencies = [
  "paste",
  "picoserve",
  "serde",
+ "serde-json-core",
  "serde_json",
  "thingbuf",
  "thiserror 2.0.21",
