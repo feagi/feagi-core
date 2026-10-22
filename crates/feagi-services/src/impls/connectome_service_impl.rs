@@ -403,6 +403,17 @@ fn io_coding_options_for_unit(cortical_id: &CorticalID) -> Option<IOCodingOption
 /// - When `mapping_data` is empty: remove the destination entry, and if the
 ///   container becomes empty remove `cortical_mapping_dst` entirely.
 /// - When `mapping_data` is non-empty: insert/overwrite the destination entry.
+fn rule_modulator_ids(rule: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
+    rule.get("modulators")
+        .and_then(|value| value.as_array())
+        .map(|list| {
+            list.iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn update_cortical_mapping_dst_in_properties(
     properties: &mut HashMap<String, serde_json::Value>,
     dst_area_id: &str,
@@ -1177,63 +1188,21 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .cloned()
                 .collect();
 
-            // 1) Incoming side: src → deleted_id. For every other area mapping to the doomed area,
-            //    clear rules and prune the resulting orphan synapses out of the NPU.
-            for src_id in &cortical_ids {
-                if src_id == &cortical_id_typed {
-                    continue;
-                }
-                let has_mapping = manager
-                    .get_cortical_area(src_id)
-                    .and_then(|area| area.properties.get("cortical_mapping_dst"))
-                    .and_then(|value| value.as_object())
-                    .map(|mapping| mapping.contains_key(&deleted_id_base64))
-                    .unwrap_or(false);
-                if has_mapping {
-                    manager
-                        .update_cortical_mapping(src_id, &cortical_id_typed, Vec::new())
-                        .map_err(ServiceError::from)?;
-                    let pruned = manager
-                        .regenerate_synapses_for_mapping(src_id, &cortical_id_typed)
-                        .map_err(|e| {
-                            ServiceError::Backend(format!(
-                                "Failed to prune synapses for {} -> {}: {}",
-                                src_id, cortical_id_typed, e
-                            ))
-                        })?;
-                    pruned_incoming_synapses = pruned_incoming_synapses.saturating_add(pruned);
-                    removed_mapping_count += 1;
-                }
-            }
-
-            // 2) Outgoing side: deleted_id → dst. Same treatment so the doomed area leaves no
-            //    orphan synapses pointing into still-live targets.
-            let outgoing_targets: Vec<CorticalID> = manager
-                .get_cortical_area(&cortical_id_typed)
-                .and_then(|area| area.properties.get("cortical_mapping_dst"))
-                .and_then(|value| value.as_object())
-                .map(|mapping| {
-                    mapping
-                        .keys()
-                        .filter_map(|k| CorticalID::try_from_base_64(k).ok())
-                        .collect()
-                })
-                .unwrap_or_default();
-            for dst_id in outgoing_targets {
-                manager
-                    .update_cortical_mapping(&cortical_id_typed, &dst_id, Vec::new())
-                    .map_err(ServiceError::from)?;
-                let pruned = manager
-                    .regenerate_synapses_for_mapping(&cortical_id_typed, &dst_id)
-                    .map_err(|e| {
-                        ServiceError::Backend(format!(
-                            "Failed to prune synapses for {} -> {}: {}",
-                            cortical_id_typed, dst_id, e
-                        ))
-                    })?;
-                pruned_outgoing_synapses = pruned_outgoing_synapses.saturating_add(pruned);
-                removed_mapping_count += 1;
-            }
+            // 1) + 2) Clear every mapping into and out of the doomed area and prune their
+            //    synapses. The helper tolerates stale entries (a side with no cortical idx has
+            //    nothing to prune) and restores already-cleared rules if pruning fails, so a
+            //    failed delete leaves unrelated mappings as they were.
+            let (cleared, pruned_in, pruned_out) = manager
+                .detach_cortical_area_mappings(&cortical_id_typed)
+                .map_err(|e| {
+                    ServiceError::Backend(format!(
+                        "Failed to prune synapses for mappings of {}: {}",
+                        cortical_id_typed, e
+                    ))
+                })?;
+            removed_mapping_count += cleared;
+            pruned_incoming_synapses = pruned_incoming_synapses.saturating_add(pruned_in);
+            pruned_outgoing_synapses = pruned_outgoing_synapses.saturating_add(pruned_out);
 
             // 3) Upstream-cortical-areas property cleanup on every remaining area. Done while
             //    the deleted_idx is still valid (post-removal we'd have to scan numerically).
@@ -2761,6 +2730,51 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         if let Some(value) = existing.get("synaptic_delay_bursts") {
                             normalized.insert("synaptic_delay_bursts".to_string(), value.clone());
                         }
+                    }
+                }
+                // Runtime reward comes from `synaptic.reward` modulator instances listed in
+                // the rule's `modulators`. The pre-v4 `reward_source_area` /
+                // `punishment_source_area` fields are stored but never read by the burst
+                // engine, so accepting them would silently produce a mapping that never learns.
+                let legacy_reward_fields: Vec<&str> =
+                    ["reward_source_area", "punishment_source_area"]
+                        .into_iter()
+                        .filter(|key| normalized.get(*key).is_some_and(|v| !v.is_null()))
+                        .collect();
+                if !legacy_reward_fields.is_empty() {
+                    return Err(ServiceError::InvalidInput(format!(
+                        "{} on mapping {} -> {} is not applied at runtime (genome schema v4 \
+                         removed it). Create a `synaptic.reward` modulator whose driver area is \
+                         fed by that source and list its id in the rule's `modulators` array.",
+                        legacy_reward_fields.join(" / "),
+                        src_area_id,
+                        dst_area_id
+                    )));
+                }
+                let plasticity_mode = normalized
+                    .get("plasticity_mode")
+                    .and_then(|v| v.as_str())
+                    .map(|mode| mode.to_ascii_lowercase());
+                if matches!(plasticity_mode.as_deref(), Some("rstdp") | Some("r-stdp")) {
+                    let has_reward_modulator = {
+                        let genome = self.current_genome.read();
+                        let ids = rule_modulator_ids(&normalized);
+                        genome.as_ref().is_some_and(|genome| {
+                            ids.iter().any(|id| {
+                                genome.modulators.get(id).is_some_and(|instance| {
+                                    instance.kind
+                                        == feagi_structures::genomic::ModulatorKind::Reward
+                                })
+                            })
+                        })
+                    };
+                    if !has_reward_modulator {
+                        return Err(ServiceError::InvalidInput(format!(
+                            "plasticity_mode 'rstdp' on mapping {} -> {} needs at least one \
+                             `synaptic.reward` modulator id in the rule's `modulators` array; \
+                             without one R(t) is always 0 and no weight ever changes.",
+                            src_area_id, dst_area_id
+                        )));
                     }
                 }
                 if plasticity_flag || is_associative {
@@ -5015,6 +5029,111 @@ mod tests {
         assert_eq!(count, 2);
         assert_eq!(value["nested"]["morphology_id"], "new_id");
         assert_eq!(value["arr"][0], "new_id");
+    }
+
+    #[tokio::test]
+    async fn mapping_rejects_legacy_reward_fields_and_rstdp_without_reward_modulator(
+    ) -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
+        let mk = |bytes: &[u8; 8], name: &str| {
+            CorticalArea::new(
+                CorticalID::try_from_bytes(bytes).unwrap(),
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap()
+        };
+        let src = mk(b"crwdsrc1", "src");
+        let dst = mk(b"crwddst1", "dst");
+        let reward = mk(b"crwdrew1", "reward");
+        let src_id = src.cortical_id;
+        let dst_id = dst.cortical_id;
+        let reward_id = reward.cortical_id;
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(src.clone())?;
+            manager.add_cortical_area(dst.clone())?;
+            manager.add_cortical_area(reward.clone())?;
+        }
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: String::new(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(src_id, src), (dst_id, dst), (reward_id, reward)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let svc =
+            ConnectomeServiceImpl::new(connectome.clone(), Arc::new(RwLock::new(Some(genome))));
+
+        let base = serde_json::json!({
+            "morphology_id": "projector",
+            "morphology_scalar": [1, 1, 1],
+            "postSynapticCurrent_multiplier": 1.0,
+            "plasticity_flag": true,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1,
+            "plasticity_window": 10,
+            "plasticity_mode": "rstdp",
+            "eligibility_decay_bursts": 20
+        });
+
+        let mut legacy = base.clone();
+        legacy["reward_source_area"] = serde_json::json!(reward_id.as_base_64());
+        let err = svc
+            .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![legacy])
+            .await
+            .expect_err("reward_source_area must be rejected");
+        match err {
+            crate::types::ServiceError::InvalidInput(message) => {
+                assert!(message.contains("reward_source_area"), "{message}");
+                assert!(message.contains("synaptic.reward"), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+
+        let err = svc
+            .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![base])
+            .await
+            .expect_err("rstdp without a synaptic.reward modulator must be rejected");
+        match err {
+            crate::types::ServiceError::InvalidInput(message) => {
+                assert!(message.contains("synaptic.reward"), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+        Ok(())
     }
 
     #[tokio::test]

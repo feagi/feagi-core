@@ -3875,6 +3875,108 @@ impl ConnectomeManager {
         Ok(())
     }
 
+    /// Clear every mapping rule into and out of `area_id` and prune the synapses they created.
+    ///
+    /// Used before an area is removed. A side that has no cortical idx (an area that was
+    /// already dropped from the NPU index, or a stale `cortical_mapping_dst` entry) has no
+    /// synapses to prune, so its rules are cleared without touching the NPU instead of
+    /// failing the whole operation. If pruning does fail, every rule cleared so far is put
+    /// back before the error returns, so unrelated mappings stay intact.
+    ///
+    /// Returns `(cleared_mappings, pruned_incoming_synapses, pruned_outgoing_synapses)`.
+    pub fn detach_cortical_area_mappings(
+        &mut self,
+        area_id: &CorticalID,
+    ) -> BduResult<(usize, usize, usize)> {
+        let area_b64 = area_id.as_base_64();
+        let mut pairs: Vec<(CorticalID, CorticalID, Vec<serde_json::Value>)> = Vec::new();
+        for (src_id, src_area) in &self.cortical_areas {
+            if src_id == area_id {
+                continue;
+            }
+            if let Some(rules) = src_area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|value| value.as_object())
+                .and_then(|mapping| mapping.get(&area_b64))
+                .and_then(|value| value.as_array())
+            {
+                pairs.push((*src_id, *area_id, rules.clone()));
+            }
+        }
+        if let Some(mapping) = self
+            .cortical_areas
+            .get(area_id)
+            .and_then(|area| area.properties.get("cortical_mapping_dst"))
+            .and_then(|value| value.as_object())
+        {
+            for (dst_b64, rules) in mapping {
+                let Ok(dst_id) = CorticalID::try_from_base_64(dst_b64) else {
+                    continue;
+                };
+                let rules = rules.as_array().cloned().unwrap_or_default();
+                pairs.push((*area_id, dst_id, rules));
+            }
+        }
+
+        let mut cleared: Vec<(CorticalID, CorticalID, Vec<serde_json::Value>)> = Vec::new();
+        let mut pruned_incoming = 0usize;
+        let mut pruned_outgoing = 0usize;
+        for (src_id, dst_id, rules) in pairs {
+            let step = (|| -> BduResult<usize> {
+                self.update_cortical_mapping(&src_id, &dst_id, Vec::new())?;
+                let both_indexed = self.cortical_id_to_idx.contains_key(&src_id)
+                    && self.cortical_id_to_idx.contains_key(&dst_id);
+                if !both_indexed {
+                    warn!(
+                        target: "feagi-bdu",
+                        "Mapping {} -> {} cleared without synapse pruning: one side has no cortical idx (stale entry)",
+                        src_id, dst_id
+                    );
+                    return Ok(0);
+                }
+                self.regenerate_synapses_for_mapping(&src_id, &dst_id)
+            })();
+            match step {
+                Ok(pruned) => {
+                    if &dst_id == area_id {
+                        pruned_incoming += pruned;
+                    } else {
+                        pruned_outgoing += pruned;
+                    }
+                    cleared.push((src_id, dst_id, rules));
+                }
+                Err(err) => {
+                    // Restore the rule arrays already removed so other mappings keep their
+                    // genome state; their synapses were pruned only when regeneration ran,
+                    // which re-creates them from the restored rules.
+                    for (src_id, dst_id, rules) in cleared.iter().rev() {
+                        if let Err(restore_err) =
+                            self.update_cortical_mapping(src_id, dst_id, rules.clone())
+                        {
+                            warn!(
+                                target: "feagi-bdu",
+                                "Failed to restore mapping {} -> {} after detach error: {}",
+                                src_id, dst_id, restore_err
+                            );
+                            continue;
+                        }
+                        if let Err(regen_err) = self.regenerate_synapses_for_mapping(src_id, dst_id)
+                        {
+                            warn!(
+                                target: "feagi-bdu",
+                                "Failed to regenerate restored mapping {} -> {}: {}",
+                                src_id, dst_id, regen_err
+                            );
+                        }
+                    }
+                    return Err(err);
+                }
+            }
+        }
+        Ok((cleared.len(), pruned_incoming, pruned_outgoing))
+    }
+
     /// Enforce the directed memory retrieval contract for outbound memory mappings.
     ///
     /// A memory area can connect to a non-memory area only through associative plasticity,
@@ -4722,6 +4824,16 @@ impl ConnectomeManager {
             resolve_optional_area("reward_source_area", &reward_source_area_id)?;
         let punishment_source_area =
             resolve_optional_area("punishment_source_area", &punishment_source_area_id)?;
+        if reward_source_area.is_some() || punishment_source_area.is_some() {
+            warn!(
+                target: "feagi-bdu",
+                "Mapping {} -> {} carries reward_source_area / punishment_source_area; the burst \
+                 engine computes R(t) only from `synaptic.reward` modulators listed in the rule's \
+                 `modulators`, so these fields only feed the wireheading lint (schema v4 migrates \
+                 them to Reward instances)",
+                src_area_id, dst_area_id
+            );
+        }
 
         // Off-mode mappings are skipped (no NPU registration, no fire-ledger tracking).
         if matches!(
@@ -11726,6 +11838,275 @@ mod tests {
             .ensure_memory_twin_area(&mem_id, &kernel_id)
             .is_err());
         assert!(manager.get_cortical_area(&auto_twin_id).is_none());
+    }
+
+    fn manager_with_npu() -> (
+        ConnectomeManager,
+        std::sync::Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 10_000, 10_000, 10).unwrap();
+        let dyn_npu = std::sync::Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+        (manager, dyn_npu)
+    }
+
+    fn custom_area_1x1x1(
+        bytes: &[u8; 8],
+        name: &str,
+    ) -> crate::models::cortical_area::CorticalArea {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        crate::models::cortical_area::CorticalArea::new(
+            CorticalID::try_from_bytes(bytes).unwrap(),
+            0,
+            name.to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap()
+    }
+
+    /// Item 6: a `cortical_mapping_dst` entry whose destination was dropped from the index
+    /// (what `delete_modulator` used to leave behind) must not abort the cascade or touch
+    /// unrelated mappings.
+    #[test]
+    fn test_detach_mappings_tolerates_stale_destination_and_keeps_other_synapses() {
+        let (mut manager, dyn_npu) = manager_with_npu();
+        let src = custom_area_1x1x1(b"cdetsrc1", "src");
+        let sink = custom_area_1x1x1(b"cdetsnk1", "sink");
+        let stale = custom_area_1x1x1(b"cdetstl1", "stale");
+        let (src_id, sink_id, stale_id) = (src.cortical_id, sink.cortical_id, stale.cortical_id);
+        manager.add_cortical_area(src).unwrap();
+        manager.add_cortical_area(sink).unwrap();
+        manager.add_cortical_area(stale).unwrap();
+        let s0 = manager
+            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let k0 = manager
+            .add_neuron(
+                &sink_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )
+            .unwrap();
+        manager.create_synapse(s0, k0, 1.0, 1.0, 0).unwrap();
+        dyn_npu.lock().unwrap().rebuild_synapse_index();
+        manager
+            .update_cortical_mapping(
+                &src_id,
+                &sink_id,
+                vec![serde_json::json!({"morphology_id": "all_to_all"})],
+            )
+            .unwrap();
+        manager
+            .update_cortical_mapping(
+                &src_id,
+                &stale_id,
+                vec![serde_json::json!({"morphology_id": "all_to_all"})],
+            )
+            .unwrap();
+        assert_eq!(
+            dyn_npu
+                .lock()
+                .unwrap()
+                .get_outgoing_synapses(s0 as u32)
+                .len(),
+            1,
+            "precondition: src -> sink synapse exists"
+        );
+        // Thin delete: area and idx gone, mapping entry on `src` left behind.
+        manager.remove_cortical_area(&stale_id).unwrap();
+
+        let (cleared, pruned_in, pruned_out) = manager
+            .detach_cortical_area_mappings(&stale_id)
+            .expect("stale destination must not abort the detach");
+        assert_eq!((cleared, pruned_in, pruned_out), (1, 0, 0));
+
+        let src_mapping = manager
+            .get_cortical_area(&src_id)
+            .unwrap()
+            .properties
+            .get("cortical_mapping_dst")
+            .cloned()
+            .unwrap();
+        assert!(src_mapping.get(stale_id.as_base_64()).is_none());
+        assert!(src_mapping.get(sink_id.as_base_64()).is_some());
+        let outgoing = dyn_npu.lock().unwrap().get_outgoing_synapses(s0 as u32);
+        assert_eq!(outgoing.len(), 1, "src -> sink synapse must survive");
+    }
+
+    /// Item 1: a MEMORY area mapped to a CUSTOM area with `associative_memory` starts with
+    /// no synapses and grows one per co-firing (memory neuron, destination neuron) pair.
+    #[test]
+    fn test_memory_to_custom_associative_mapping_learns_synapses_on_cofire() {
+        use feagi_npu_burst_engine::fire_structures::FIRE_KIND_EPISODIC_MEMORY;
+        use feagi_npu_neural::types::NeuronId;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
+        };
+        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+
+        let (mut manager, dyn_npu) = manager_with_npu();
+        let mem_id = CorticalID::try_from_bytes(b"mmemcus1").unwrap();
+        let mut mem_area = crate::models::cortical_area::CorticalArea::new(
+            mem_id,
+            0,
+            "Memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem_area
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem_area
+            .properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+        let dst = custom_area_1x1x1(b"cmemdst1", "Drive");
+        let dst_id = dst.cortical_id;
+        manager.add_cortical_area(mem_area).unwrap();
+        manager.add_cortical_area(dst).unwrap();
+        let d0 = manager
+            .add_neuron(
+                &dst_id,
+                0,
+                0,
+                0,
+                1.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                false,
+            )
+            .unwrap();
+
+        manager
+            .update_cortical_mapping(
+                &mem_id,
+                &dst_id,
+                vec![serde_json::json!({
+                    "morphology_id": "associative_memory",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1.0,
+                    "plasticity_flag": true,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 1,
+                })],
+            )
+            .unwrap();
+        let created = manager
+            .regenerate_synapses_for_mapping(&mem_id, &dst_id)
+            .unwrap();
+        assert_eq!(
+            created, 0,
+            "associative rules start without physical synapses"
+        );
+
+        let mem_idx = manager.get_cortical_idx(&mem_id).unwrap();
+        let dst_idx = manager.get_cortical_idx(&dst_id).unwrap();
+        {
+            let npu = dyn_npu.lock().unwrap();
+            let tracked = npu.get_all_fire_ledger_configs();
+            assert!(tracked.iter().any(|(idx, _)| *idx == mem_idx));
+            assert!(tracked.iter().any(|(idx, _)| *idx == dst_idx));
+        }
+
+        let mem_neuron = MEMORY_NEURON_ID_START + 1;
+        let mut npu = dyn_npu.lock().unwrap();
+        npu.register_dynamic_neuron_mapping(mem_neuron, mem_id);
+        for _ in 0..3 {
+            npu.inject_memory_neuron_to_fcl_with_kind(
+                mem_neuron,
+                mem_idx,
+                2.0,
+                FIRE_KIND_EPISODIC_MEMORY,
+            );
+            npu.inject_sensory_with_potentials(&[(NeuronId(d0 as u32), 128.0)]);
+            npu.process_burst().unwrap();
+        }
+        let out = npu.get_outgoing_synapses(mem_neuron);
+        assert_eq!(
+            out.len(),
+            1,
+            "co-firing must create the memory -> destination synapse"
+        );
+        assert_eq!(out[0].0, d0 as u32);
+    }
+
+    /// Item 7: a block_to_block self-mapping with delay 1 keeps a neuron firing every burst.
+    #[test]
+    fn test_block_to_block_self_mapping_fires_every_burst() {
+        use feagi_npu_neural::types::NeuronId;
+        let (mut manager, dyn_npu) = manager_with_npu();
+        let mut area = custom_area_1x1x1(b"cselfmap", "Osc");
+        area.properties
+            .insert("postsynaptic_current".to_string(), serde_json::json!(30.0));
+        area.properties
+            .insert("firing_threshold".to_string(), serde_json::json!(0.1));
+        let area_id = area.cortical_id;
+        manager.add_cortical_area(area).unwrap();
+        let n = manager
+            .add_neuron(
+                &area_id,
+                0,
+                0,
+                0,
+                0.1,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                false,
+            )
+            .unwrap();
+        manager
+            .update_cortical_mapping(
+                &area_id,
+                &area_id,
+                vec![serde_json::json!({
+                    "morphology_id": "block_to_block",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1.0,
+                    "plasticity_flag": false,
+                    "synaptic_delay_bursts": 1,
+                })],
+            )
+            .unwrap();
+        let created = manager
+            .regenerate_synapses_for_mapping(&area_id, &area_id)
+            .unwrap();
+        assert_eq!(created, 1);
+
+        let mut npu = dyn_npu.lock().unwrap();
+        npu.inject_sensory_with_potentials(&[(NeuronId(n as u32), 1.0)]);
+        let pattern: Vec<bool> = (0..8)
+            .map(|_| {
+                npu.process_burst()
+                    .unwrap()
+                    .fired_neurons
+                    .contains(&NeuronId(n as u32))
+            })
+            .collect();
+        assert!(
+            pattern.iter().all(|fired| *fired),
+            "self-mapped neuron must fire on every burst, got {pattern:?}"
+        );
     }
 
     #[test]

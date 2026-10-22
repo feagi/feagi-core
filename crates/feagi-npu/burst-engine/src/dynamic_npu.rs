@@ -772,6 +772,10 @@ where
         dispatch!(self, set_spike_train_areas(areas))
     }
 
+    pub fn modulator_area_subscriptions(&self, cortical_idx: u32) -> Vec<String> {
+        dispatch!(self, modulator_area_subscriptions(cortical_idx))
+    }
+
     pub fn set_homeostatic_leak_areas(&self, areas: ahash::AHashSet<u32>) {
         dispatch!(self, set_homeostatic_leak_areas(areas))
     }
