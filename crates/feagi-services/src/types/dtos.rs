@@ -230,6 +230,34 @@ pub struct CorticalAreaInfo {
     /// Example: For 512×512×22 area, granularity might be (16, 16, 16) → 32×32×2 = 2,048 chunks
     /// Default is (1, 1, 1) - always serialized so BV knows the value
     pub visualization_voxel_granularity: Option<(u32, u32, u32)>,
+
+    /// Sensor cadence hold (input areas only). When `true`, the burst engine re-injects
+    /// this area's previous frame for exactly one burst when no new frame arrived; a
+    /// longer gap goes silent on the burst after. Without the hold an IPU that gets no
+    /// payload in a burst has no fire candidates that burst (sensory injection is
+    /// per-burst; membrane potential does not carry over for the gap). The value here is
+    /// the effective one: the stored `sensory_hold_last_frame` property, or the sensory
+    /// unit template default (true for scalar sensors such as IMU, encoder, proximity,
+    /// battery, analog; false for vision, audio, boolean/digital inputs). `None` for
+    /// non-input areas. Writable through `PUT /v1/cortical_area/cortical_area` as a
+    /// metadata change (no structural rebuild).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sensory_hold_last_frame: Option<bool>,
+}
+
+/// Effective `sensory_hold_last_frame` for a [`CorticalAreaInfo`]: `Some` for input areas
+/// (explicit property or sensory unit template default), `None` otherwise.
+pub fn sensory_hold_last_frame_for_info(
+    cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+    properties: &HashMap<String, serde_json::Value>,
+) -> Option<bool> {
+    if cortical_id.as_bytes()[0] != b'i' {
+        return None;
+    }
+    Some(feagi_structures::genomic::resolve_sensory_hold_last_frame(
+        cortical_id,
+        properties,
+    ))
 }
 
 /// Parameters for creating a cortical area

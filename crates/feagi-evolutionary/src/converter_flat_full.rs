@@ -77,6 +77,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("brsten-b", "burst_engine_active"),
     ("spktrn-b", "spike_train"),
     ("modls-d", "modulators"),
+    ("snhold-b", "sensory_hold_last_frame"),
 ];
 
 /// Build property mapping lookup table

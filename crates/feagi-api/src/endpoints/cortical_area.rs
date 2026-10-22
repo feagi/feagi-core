@@ -739,6 +739,8 @@ pub async fn get_cortical_area_geometry(
                         "parent_region_id": area.parent_region_id,
                         // Visualization voxel granularity for large-area rendering (optional)
                         "visualization_voxel_granularity": area.visualization_voxel_granularity.map(|(x, y, z)| serde_json::json!([x, y, z])),
+                        // Sensor cadence hold (input areas only; effective value incl. template default)
+                        "sensory_hold_last_frame": area.sensory_hold_last_frame,
                         "scan_twin": geometry_scan_twin_flag(&area.properties),
                         "classifier_role": geometry_classifier_role(&area.properties),
                         "temporal_depth": area.temporal_depth,
@@ -1309,6 +1311,11 @@ pub async fn post_cortical_area(
                     serde_json::json!(default_mp_charge_accumulation),
                 );
             }
+            // Sensor cadence hold: scalar sensors hold their last frame for one burst.
+            properties.insert(
+                feagi_structures::genomic::SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+                serde_json::json!(sensory_unit.get_default_sensory_hold_last_frame()),
+            );
         }
 
         let area_name = request

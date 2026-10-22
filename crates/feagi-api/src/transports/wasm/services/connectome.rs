@@ -264,6 +264,10 @@ impl WasmConnectomeService {
             dev_count: None,
             cortical_dimensions_per_device: None,
             visualization_voxel_granularity: None,
+            sensory_hold_last_frame: feagi_services::types::sensory_hold_last_frame_for_info(
+                &area.cortical_id,
+                &area.properties,
+            ),
         }
     }
 }

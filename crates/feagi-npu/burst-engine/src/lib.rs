@@ -105,6 +105,7 @@ pub mod parameter_update_queue;
 pub mod rate_modulated_leak;
 pub mod runtime_taps;
 pub mod sensory; // Rust sensory injection system
+pub mod sensory_hold; // Sensor cadence hold (re-inject last IPU frame for one burst)
 pub mod sequential_ingest;
 // Disabled - uses DynamicNPU
 // pub mod sleep; // Sleep manager for energy efficiency and memory optimization

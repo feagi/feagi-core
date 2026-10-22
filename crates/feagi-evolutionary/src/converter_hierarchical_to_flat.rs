@@ -338,6 +338,7 @@ fn convert_properties_to_flat(
         ("burst_engine_active", ("brsten-b", "cx")),
         ("spike_train", ("spktrn-b", "cx")),
         ("modulators", ("modls-d", "cx")),
+        ("sensory_hold_last_frame", ("snhold-b", "cx")),
     ]
     .iter()
     .cloned()
