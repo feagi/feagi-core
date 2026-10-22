@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rust toolchain (stable)
+      - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Print Rust/Cargo versions
