@@ -824,6 +824,41 @@ where
         )
     }
 
+    pub fn set_stdp_mapping_frozen(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        frozen: bool,
+    ) -> bool {
+        dispatch_mut!(
+            self,
+            set_stdp_mapping_frozen(src_cortical_idx, dst_cortical_idx, frozen)
+        )
+    }
+
+    pub fn is_stdp_mapping_frozen(
+        &self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> Option<bool> {
+        dispatch!(
+            self,
+            is_stdp_mapping_frozen(src_cortical_idx, dst_cortical_idx)
+        )
+    }
+
+    pub fn reset_synapse_weights_between_areas(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        weight: f32,
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            reset_synapse_weights_between_areas(src_cortical_idx, dst_cortical_idx, weight)
+        )
+    }
+
     pub fn register_gate_mapping(
         &mut self,
         src_cortical_idx: u32,

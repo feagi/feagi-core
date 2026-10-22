@@ -814,6 +814,15 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(cortical_mapping::post_batch_update),
         )
         .route(
+            "/cortical_mapping/reset_weights",
+            axum::routing::post(cortical_mapping::post_reset_weights),
+        )
+        .route(
+            "/cortical_mapping/plasticity_frozen",
+            get(cortical_mapping::get_plasticity_frozen)
+                .put(cortical_mapping::put_plasticity_frozen),
+        )
+        .route(
             "/cortical_mapping/mapping",
             axum::routing::post(cortical_mapping::post_mapping).put(cortical_mapping::put_mapping),
         )

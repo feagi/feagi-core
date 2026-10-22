@@ -218,6 +218,10 @@ pub struct StdpMappingParams {
     pub instance_reward: bool,
     /// Synaptic modulator group stamped onto this mapping's synapses. `0` means none.
     pub modulation_group: u16,
+    /// When `true` the end-of-burst plasticity pass skips this mapping entirely: no
+    /// eligibility-trace update, no weight commit, no associative synapse synthesis. The
+    /// rule and its registration stay in place so unfreezing resumes learning in place.
+    pub frozen: bool,
 }
 
 impl Default for StdpMappingParams {
@@ -239,6 +243,7 @@ impl Default for StdpMappingParams {
             plasticity_eta: 1.0,
             instance_reward: false,
             modulation_group: 0,
+            frozen: false,
         }
     }
 }
@@ -5642,6 +5647,90 @@ impl<
         self.stdp_mappings.write().unwrap().remove(&key).is_some()
     }
 
+    /// Freeze or unfreeze plasticity on a registered mapping A→B without touching its rule.
+    ///
+    /// Returns `false` when no plastic mapping is registered for the pair.
+    pub fn set_stdp_mapping_frozen(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        frozen: bool,
+    ) -> bool {
+        let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
+        match self.stdp_mappings.write().unwrap().get_mut(&key) {
+            Some(params) => {
+                params.frozen = frozen;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// `Some(frozen)` for a registered plastic mapping A→B, `None` when none is registered.
+    pub fn is_stdp_mapping_frozen(&self, src_cortical_idx: u32, dst_cortical_idx: u32) -> Option<bool> {
+        let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
+        self.stdp_mappings
+            .read()
+            .unwrap()
+            .get(&key)
+            .map(|params| params.frozen)
+    }
+
+    /// Set every valid synapse whose source lies in `src_cortical_idx` and whose target lies
+    /// in `dst_cortical_idx` back to `weight`, clearing its eligibility trace.
+    ///
+    /// Dynamic memory neurons (ids outside dense storage) are resolved through the
+    /// propagation engine's neuron-to-area map so learned associative synapses are covered.
+    /// Returns the number of synapses touched. Bumps the synaptic plasticity generation so
+    /// readers that cache weights refresh.
+    pub fn reset_synapse_weights_between_areas(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        weight: f32,
+    ) -> usize {
+        let mut touched = 0usize;
+        {
+            let mut synapse_storage = self.synapse_storage.write().unwrap();
+            let neuron_storage = self.neuron_storage.read().unwrap();
+            let propagation_engine = self.propagation_engine.read().unwrap();
+            let cortical_area_for_neuron = |neuron_id: usize| {
+                if neuron_id < neuron_storage.count() && neuron_storage.valid_mask()[neuron_id] {
+                    return Some(neuron_storage.cortical_areas()[neuron_id]);
+                }
+                if neuron_id >= MEMORY_NEURON_ID_START as usize {
+                    return propagation_engine
+                        .neuron_to_area
+                        .get(&NeuronId(neuron_id as u32))
+                        .and_then(|id| self.get_cortical_area_id(id.as_base_64().as_str()));
+                }
+                None
+            };
+            for syn_idx in 0..synapse_storage.count() {
+                if !synapse_storage.valid_mask()[syn_idx] {
+                    continue;
+                }
+                let src = synapse_storage.source_neurons()[syn_idx] as usize;
+                let dst = synapse_storage.target_neurons()[syn_idx] as usize;
+                if cortical_area_for_neuron(src) != Some(src_cortical_idx)
+                    || cortical_area_for_neuron(dst) != Some(dst_cortical_idx)
+                {
+                    continue;
+                }
+                synapse_storage.weights_mut()[syn_idx] = weight;
+                synapse_storage.eligibility_traces_mut()[syn_idx] = 0.0;
+                touched += 1;
+            }
+        }
+        if touched > 0 {
+            let state = feagi_state_manager::StateManager::instance();
+            if let Some(manager) = state.try_read() {
+                manager.note_synaptic_plasticity_change();
+            };
+        }
+        touched
+    }
+
     /// Register a conditional gate on a cortical mapping A→B.
     ///
     /// When registered, all synapses from `src_cortical_idx` to `dst_cortical_idx` will
@@ -5828,7 +5917,16 @@ impl<
         burst_timestep: u64,
         fire_ledger: &crate::fire_ledger::FireLedger,
     ) -> Result<()> {
-        let mappings = self.stdp_mappings.read().unwrap().clone();
+        // Frozen mappings keep their registration (and ledger tracking) but are invisible
+        // to this pass, so their weights, traces and synapse set stay exactly as they are.
+        let mappings: AHashMap<CorticalMappingKey, StdpMappingParams> = self
+            .stdp_mappings
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|(_, params)| !params.frozen)
+            .map(|(key, params)| (*key, params.clone()))
+            .collect();
         if mappings.is_empty() {
             return Ok(());
         }

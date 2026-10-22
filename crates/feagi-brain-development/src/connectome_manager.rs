@@ -3875,6 +3875,200 @@ impl ConnectomeManager {
         Ok(())
     }
 
+    /// Rules stored for the mapping `src -> dst`, if the mapping exists.
+    pub fn get_mapping_rules(
+        &self,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+    ) -> Option<Vec<serde_json::Value>> {
+        let mapping_dst = self
+            .cortical_areas
+            .get(src_area_id)?
+            .properties
+            .get("cortical_mapping_dst")?
+            .as_object()?;
+        Self::get_mapping_rules_for_destination(mapping_dst, dst_area_id).cloned()
+    }
+
+    /// A rule takes part in plasticity when it is flagged plastic or is an associative
+    /// memory rule (the same test the STDP registration path applies).
+    fn mapping_rule_is_plastic(rule: &serde_json::Map<String, serde_json::Value>) -> bool {
+        rule.get("plasticity_flag")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+            || rule.get("morphology_id").and_then(|v| v.as_str()) == Some("associative_memory")
+    }
+
+    /// Put every synapse of `src -> dst` back to the rule's initial weight
+    /// (`postSynapticCurrent_multiplier`, sign folded into the synapse type) and clear
+    /// its eligibility trace. The mapping rule itself is left untouched.
+    ///
+    /// `morphology_id` selects which rule supplies the weight when the mapping carries
+    /// several; without it the first rule is used. Synapses are not tagged by rule, so
+    /// every synapse of the pair gets that one weight.
+    ///
+    /// Returns `(synapses_reset, weight)`.
+    pub fn reset_mapping_weights(
+        &mut self,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+        morphology_id: Option<&str>,
+    ) -> BduResult<(usize, f32)> {
+        let rules = self
+            .get_mapping_rules(src_area_id, dst_area_id)
+            .ok_or_else(|| {
+                BduError::InvalidArea(format!(
+                    "No mapping from {} to {}",
+                    src_area_id.as_base_64(),
+                    dst_area_id.as_base_64()
+                ))
+            })?;
+        let rule = match morphology_id {
+            Some(wanted) => rules
+                .iter()
+                .find(|rule| rule.get("morphology_id").and_then(|v| v.as_str()) == Some(wanted))
+                .ok_or_else(|| {
+                    BduError::InvalidMorphology(format!(
+                        "Mapping {} -> {} has no rule with morphology_id '{}'",
+                        src_area_id.as_base_64(),
+                        dst_area_id.as_base_64(),
+                        wanted
+                    ))
+                })?,
+            None => rules.first().ok_or_else(|| {
+                BduError::InvalidArea(format!(
+                    "Mapping {} -> {} has no rules",
+                    src_area_id.as_base_64(),
+                    dst_area_id.as_base_64()
+                ))
+            })?,
+        };
+        let (weight, _psp, _synapse_type, _delay) =
+            self.resolve_synapse_params_for_rule(src_area_id, rule)?;
+        let src_idx = *self.cortical_id_to_idx.get(src_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!("No cortical idx for source area {}", src_area_id))
+        })?;
+        let dst_idx = *self.cortical_id_to_idx.get(dst_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!(
+                "No cortical idx for destination area {}",
+                dst_area_id
+            ))
+        })?;
+        let npu_arc = self
+            .npu
+            .clone()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        let touched = npu_arc
+            .lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?
+            .reset_synapse_weights_between_areas(src_idx, dst_idx, weight);
+        tracing::info!(
+            target: "feagi-bdu",
+            "Reset {} synapse weight(s) on mapping {} -> {} to {}",
+            touched,
+            src_area_id.as_base_64(),
+            dst_area_id.as_base_64(),
+            weight
+        );
+        Ok((touched, weight))
+    }
+
+    /// Freeze or unfreeze plasticity on `src -> dst` without changing its rule parameters.
+    ///
+    /// `plasticity_frozen` is written onto every plastic rule of the mapping (so it survives
+    /// genome save/load and is visible in the mapping listing) and the NPU registration is
+    /// flipped so the end-of-burst plasticity pass skips the mapping. No synapse is pruned
+    /// or regenerated, so learned weights are kept.
+    ///
+    /// Returns the number of plastic rules updated; errors when the mapping has none.
+    pub fn set_mapping_plasticity_frozen(
+        &mut self,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+        frozen: bool,
+    ) -> BduResult<usize> {
+        let mut plastic_rules = 0usize;
+        {
+            let src_area = self.cortical_areas.get_mut(src_area_id).ok_or_else(|| {
+                BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+            })?;
+            let rules = src_area
+                .properties
+                .get_mut("cortical_mapping_dst")
+                .and_then(|v| v.as_object_mut())
+                .and_then(|map| map.get_mut(&dst_area_id.as_base_64()))
+                .and_then(|v| v.as_array_mut())
+                .ok_or_else(|| {
+                    BduError::InvalidArea(format!(
+                        "No mapping from {} to {}",
+                        src_area_id.as_base_64(),
+                        dst_area_id.as_base_64()
+                    ))
+                })?;
+            for rule in rules.iter_mut() {
+                let Some(obj) = rule.as_object_mut() else {
+                    continue;
+                };
+                if Self::mapping_rule_is_plastic(obj) {
+                    obj.insert("plasticity_frozen".to_string(), serde_json::json!(frozen));
+                    plastic_rules += 1;
+                }
+            }
+        }
+        if plastic_rules == 0 {
+            return Err(BduError::InvalidMorphology(format!(
+                "Mapping {} -> {} has no plastic rule to freeze",
+                src_area_id.as_base_64(),
+                dst_area_id.as_base_64()
+            )));
+        }
+        self.refresh_cortical_mappings_hash();
+
+        let src_idx = self.cortical_id_to_idx.get(src_area_id).copied();
+        let dst_idx = self.cortical_id_to_idx.get(dst_area_id).copied();
+        if let (Some(npu_arc), Some(src_idx), Some(dst_idx)) = (self.npu.clone(), src_idx, dst_idx)
+        {
+            let registered = npu_arc
+                .lock()
+                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?
+                .set_stdp_mapping_frozen(src_idx, dst_idx, frozen);
+            if !registered {
+                // A plastic rule whose plasticity_mode is `off` is not registered; the flag is
+                // still stored so it applies when the mode is switched on.
+                tracing::warn!(
+                    target: "feagi-bdu",
+                    "Mapping {} -> {} is not registered for plasticity in the NPU; plasticity_frozen={} stored on the rule only",
+                    src_area_id.as_base_64(),
+                    dst_area_id.as_base_64(),
+                    frozen
+                );
+            }
+        }
+        tracing::info!(
+            target: "feagi-bdu",
+            "Plasticity on mapping {} -> {} is now {}",
+            src_area_id.as_base_64(),
+            dst_area_id.as_base_64(),
+            if frozen { "frozen" } else { "active" }
+        );
+        Ok(plastic_rules)
+    }
+
+    /// `Some(true)` when any plastic rule of `src -> dst` carries `plasticity_frozen: true`,
+    /// `Some(false)` for a mapping without the flag, `None` when there is no mapping.
+    pub fn mapping_plasticity_frozen(
+        &self,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+    ) -> Option<bool> {
+        let rules = self.get_mapping_rules(src_area_id, dst_area_id)?;
+        Some(rules.iter().any(|rule| {
+            rule.get("plasticity_frozen")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        }))
+    }
+
     /// Clear every mapping rule into and out of `area_id` and prune the synapses they created.
     ///
     /// Used before an area is removed. A side that has no cortical idx (an area that was
@@ -4121,14 +4315,20 @@ impl ConnectomeManager {
                 src_area_id,
                 dst_area_id
             );
+            // Dynamic memory neurons live outside dense neuron storage but their learned
+            // associative synapses sit in the same synapse array; without them the prune
+            // leaves those synapses (and their plastic weights) behind, so deleting and
+            // recreating a mapping restores the old weights.
             let sources: Vec<NeuronId> = npu
                 .get_neurons_in_cortical_area(src_idx)
                 .into_iter()
+                .chain(npu.dynamic_memory_neuron_ids_in_area(src_idx))
                 .map(NeuronId)
                 .collect();
             let targets: Vec<NeuronId> = npu
                 .get_neurons_in_cortical_area(dst_idx)
                 .into_iter()
+                .chain(npu.dynamic_memory_neuron_ids_in_area(dst_idx))
                 .map(NeuronId)
                 .collect();
             (sources, targets)
@@ -4862,6 +5062,10 @@ impl ConnectomeManager {
             max_weight,
             plasticity_eta,
             instance_reward,
+            frozen: rule_obj
+                .get("plasticity_frozen")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
             modulation_group: {
                 let ids = rule_modulator_ids(rule_obj);
                 let group = npu_lock.allocate_modulation_group(&ids);
@@ -14033,5 +14237,164 @@ mod tests {
             Some("sample_memory")
         );
         assert!(manager.build_memory_scan_config(&mem_id).is_none());
+    }
+
+    fn stdp_rule(weight: f64) -> serde_json::Value {
+        serde_json::json!({
+            "morphology_id": "projector",
+            "morphology_scalar": [1, 1, 1],
+            "postSynapticCurrent_multiplier": weight,
+            "plasticity_flag": true,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1,
+            "plasticity_window": 1,
+        })
+    }
+
+    /// Deleting a plastic mapping between two dense areas must drop its synapses, and
+    /// recreating the mapping must start from the rule's initial weight, not the learned one.
+    #[test]
+    fn test_delete_then_recreate_dense_plastic_mapping_resets_weights() {
+        use feagi_npu_neural::types::{NeuronId, SynapticWeight};
+        let (mut manager, dyn_npu) = manager_with_npu();
+        let src = custom_area_1x1x1(b"cwrsrc01", "src");
+        let dst = custom_area_1x1x1(b"cwrdst01", "dst");
+        let (src_id, dst_id) = (src.cortical_id, dst.cortical_id);
+        manager.add_cortical_area(src).unwrap();
+        manager.add_cortical_area(dst).unwrap();
+        let s0 = manager
+            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let t0 = manager
+            .add_neuron(&dst_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, vec![stdp_rule(2.0)])
+            .unwrap();
+        let created = manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
+            .unwrap();
+        assert_eq!(created, 1);
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            assert!(npu.update_synapse_weight(
+                NeuronId(s0 as u32),
+                NeuronId(t0 as u32),
+                SynapticWeight(9.0)
+            ));
+            assert_eq!(npu.get_outgoing_synapses(s0 as u32)[0].1, 9.0);
+        }
+
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, Vec::new())
+            .unwrap();
+        manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
+            .unwrap();
+        {
+            let npu = dyn_npu.lock().unwrap();
+            assert!(npu.get_outgoing_synapses(s0 as u32).is_empty());
+            assert_eq!(npu.get_synapse_count(), 0);
+        }
+
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, vec![stdp_rule(2.0)])
+            .unwrap();
+        manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
+            .unwrap();
+        let npu = dyn_npu.lock().unwrap();
+        let out = npu.get_outgoing_synapses(s0 as u32);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].1, 2.0, "recreated synapse must carry the rule weight");
+    }
+
+    /// A synapse learned from a dynamic memory neuron (id outside dense neuron storage)
+    /// must be pruned when its mapping is deleted. Before the fix the prune only looked at
+    /// dense neurons, so the learned synapse and its weight survived delete + recreate.
+    #[test]
+    fn test_delete_associative_mapping_prunes_memory_neuron_synapses() {
+        use feagi_npu_burst_engine::fire_structures::FIRE_KIND_EPISODIC_MEMORY;
+        use feagi_npu_neural::types::NeuronId;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
+        };
+        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+
+        let (mut manager, dyn_npu) = manager_with_npu();
+        let mem_id = CorticalID::try_from_bytes(b"mmemdel1").unwrap();
+        let mut mem_area = crate::models::cortical_area::CorticalArea::new(
+            mem_id,
+            0,
+            "Memory".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem_area
+            .properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        mem_area
+            .properties
+            .insert("temporal_depth".to_string(), serde_json::json!(1));
+        let dst = custom_area_1x1x1(b"cmemdel1", "Drive");
+        let dst_id = dst.cortical_id;
+        manager.add_cortical_area(mem_area).unwrap();
+        manager.add_cortical_area(dst).unwrap();
+        let d0 = manager
+            .add_neuron(
+                &dst_id, 0, 0, 0, 1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, false,
+            )
+            .unwrap();
+        let rule = serde_json::json!({
+            "morphology_id": "associative_memory",
+            "morphology_scalar": [1, 1, 1],
+            "postSynapticCurrent_multiplier": 1.0,
+            "plasticity_flag": true,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1,
+            "plasticity_window": 1,
+        });
+        manager
+            .update_cortical_mapping(&mem_id, &dst_id, vec![rule.clone()])
+            .unwrap();
+        manager
+            .regenerate_synapses_for_mapping(&mem_id, &dst_id)
+            .unwrap();
+        let mem_idx = manager.get_cortical_idx(&mem_id).unwrap();
+
+        let mem_neuron = MEMORY_NEURON_ID_START + 1;
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.register_dynamic_neuron_mapping(mem_neuron, mem_id);
+            for _ in 0..3 {
+                npu.inject_memory_neuron_to_fcl_with_kind(
+                    mem_neuron,
+                    mem_idx,
+                    2.0,
+                    FIRE_KIND_EPISODIC_MEMORY,
+                );
+                npu.inject_sensory_with_potentials(&[(NeuronId(d0 as u32), 128.0)]);
+                npu.process_burst().unwrap();
+            }
+            assert_eq!(npu.get_outgoing_synapses(mem_neuron).len(), 1);
+        }
+
+        manager
+            .update_cortical_mapping(&mem_id, &dst_id, Vec::new())
+            .unwrap();
+        manager
+            .regenerate_synapses_for_mapping(&mem_id, &dst_id)
+            .unwrap();
+        let npu = dyn_npu.lock().unwrap();
+        assert!(
+            npu.get_outgoing_synapses(mem_neuron).is_empty(),
+            "learned memory -> destination synapse must not survive mapping deletion"
+        );
+        assert_eq!(npu.get_synapse_count(), 0);
     }
 }

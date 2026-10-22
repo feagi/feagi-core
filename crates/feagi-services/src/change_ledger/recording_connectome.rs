@@ -276,6 +276,45 @@ impl ConnectomeService for RecordingConnectomeService {
         Ok(synapses)
     }
 
+    async fn reset_mapping_weights(
+        &self,
+        src_area_id: &str,
+        dst_area_id: &str,
+        morphology_id: Option<&str>,
+    ) -> ServiceResult<(usize, f32)> {
+        // Runtime weights are not genome state; nothing to record.
+        self.inner
+            .reset_mapping_weights(src_area_id, dst_area_id, morphology_id)
+            .await
+    }
+
+    async fn set_mapping_plasticity_frozen(
+        &self,
+        src_area_id: &str,
+        dst_area_id: &str,
+        frozen: bool,
+    ) -> ServiceResult<()> {
+        let before = mapping_rules(self.inner.as_ref(), src_area_id, dst_area_id).await;
+        self.inner
+            .set_mapping_plasticity_frozen(src_area_id, dst_area_id, frozen)
+            .await?;
+        let after = mapping_rules(self.inner.as_ref(), src_area_id, dst_area_id).await;
+        let mapping_data = after
+            .as_ref()
+            .and_then(|rules| rules.as_array().cloned())
+            .unwrap_or_default();
+        self.record(
+            GenomeChangeOperation::UpdateCorticalMapping {
+                src_area_id: src_area_id.to_string(),
+                dst_area_id: dst_area_id.to_string(),
+                mapping_data,
+            },
+            before,
+            after,
+        );
+        Ok(())
+    }
+
     #[cfg(feature = "connectome-io")]
     async fn export_connectome(
         &self,
