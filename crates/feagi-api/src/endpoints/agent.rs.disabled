@@ -1419,3 +1419,77 @@ pub async fn import_device_registrations(
         }))
     }
 }
+
+/// `GET /v1/agent/registration_diff?agent_id=<base64>`
+///
+/// Declared vs live geometry for every cortical area an agent's stored device
+/// registrations resolve to. Without `agent_id`, every agent with stored
+/// registrations is listed; with it, only that agent (empty list when it has none).
+///
+/// Response: `{ "agents": [ { "agent_id", "areas": [ { "cortical_id" (base64),
+/// "name", "direction" ("ipu" | "opu"), "declared_dimensions" [x,y,z],
+/// "declared_per_device_dimensions" [x,y,z], "declared_device_count",
+/// "live_dimensions" [x,y,z] | null, "live_per_device_dimensions" [x,y,z] | null,
+/// "live_device_count" | null, "matches" } ] } ] }`.
+///
+/// "declared" is derived exactly as auto-create derives the area it would build
+/// (encoder widths, grouped scalar strips, device counts); "live" is the connectome's
+/// current area (null when it does not exist). `matches` is false whenever any of
+/// dimensions, per-device dimensions or device count differ, including a live area
+/// the user widened beyond its registration (re-registration keeps that width).
+#[utoipa::path(
+    get,
+    path = "/v1/agent/registration_diff",
+    params(
+        ("agent_id" = Option<String>, Query, description = "Base64 agent ID; all agents when absent")
+    ),
+    responses(
+        (status = 200, description = "Declared vs live area geometry per agent", body = RegistrationDiffResponse),
+        (status = 400, description = "Invalid agent_id"),
+        (status = 500, description = "agent_handler is not configured")
+    ),
+    tag = "agent"
+)]
+pub async fn get_registration_diff(
+    State(state): State<ApiState>,
+    Query(query): Query<RegistrationDiffQuery>,
+) -> ApiResult<Json<RegistrationDiffResponse>> {
+    #[cfg(feature = "feagi-agent")]
+    {
+        use crate::common::agent_registration::diff_device_registrations;
+
+        let agent_filter = match query.agent_id.as_deref().map(str::trim) {
+            Some(id) if !id.is_empty() => Some(parse_agent_id_base64(id)?),
+            _ => None,
+        };
+        let handler = state
+            .agent_handler
+            .as_ref()
+            .ok_or_else(|| ApiError::internal("agent_handler is not configured"))?;
+        // Clone the registrations out so the std mutex is not held across awaits.
+        let registrations: Vec<(String, serde_json::Value)> = {
+            let handler_guard = handler.lock().unwrap();
+            let mut rows: Vec<(String, serde_json::Value)> = handler_guard
+                .get_device_registrations_by_agent_store()
+                .iter()
+                .filter(|(agent_id, _)| agent_filter.map_or(true, |wanted| **agent_id == wanted))
+                .map(|(agent_id, regs)| (agent_id.to_base64(), regs.clone()))
+                .collect();
+            rows.sort_by(|a, b| a.0.cmp(&b.0));
+            rows
+        };
+
+        let mut agents = Vec::with_capacity(registrations.len());
+        for (agent_id, regs) in registrations {
+            let areas = diff_device_registrations(&state, &regs).await;
+            agents.push(RegistrationDiffAgent { agent_id, areas });
+        }
+        Ok(Json(RegistrationDiffResponse { agents }))
+    }
+
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        let _ = (state, query);
+        Ok(Json(RegistrationDiffResponse { agents: Vec::new() }))
+    }
+}
