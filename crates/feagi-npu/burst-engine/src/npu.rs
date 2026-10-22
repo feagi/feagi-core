@@ -4472,6 +4472,14 @@ impl<
             .set_area_subscriptions(subscriptions);
     }
 
+    /// Modulator instance ids a cortical area subscribes to, as pushed into the engine.
+    pub fn modulator_area_subscriptions(&self, cortical_idx: u32) -> Vec<String> {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .area_subscriptions(cortical_idx)
+    }
+
     /// Cortical indices whose neurons run the spike-train state machine.
     pub fn set_spike_train_areas(&self, areas: AHashSet<u32>) {
         self.modulator_engine
@@ -5993,19 +6001,30 @@ impl<
             .modulator_engine
             .lock()
             .map_err(|_| FeagiError::RuntimeError("modulator engine lock poisoned".to_string()))?;
+        let mut reward_gated_mappings: AHashSet<CorticalMappingKey> = AHashSet::new();
         let reward_signals: AHashMap<CorticalMappingKey, f32> = {
             let mut reward_signals: AHashMap<CorticalMappingKey, f32> =
                 AHashMap::with_capacity(mappings.len());
             for (key, params) in &mappings {
+                // A mapping that subscribes to `synaptic.reward` is reward-gated in every
+                // plastic mode: plain Hebbian LTP must not run while the reward driver is
+                // silent, otherwise the subscription has no effect in `stdp` mode.
+                let reward_gated = matches!(params.plasticity_mode, PlasticityMode::RStdp)
+                    || modulators.group_has_reward(params.modulation_group);
                 let r = match params.plasticity_mode {
                     PlasticityMode::Off => continue,
-                    PlasticityMode::Stdp => modulators.learning_factor(params.modulation_group),
-                    PlasticityMode::RStdp => {
+                    PlasticityMode::Stdp | PlasticityMode::RStdp if reward_gated => {
                         modulators.reward_for_group(params.modulation_group)
                             * modulators.learning_factor(params.modulation_group)
                     }
+                    PlasticityMode::Stdp | PlasticityMode::RStdp => {
+                        modulators.learning_factor(params.modulation_group)
+                    }
                 };
                 reward_signals.insert(*key, r);
+                if reward_gated {
+                    reward_gated_mappings.insert(*key);
+                }
             }
             reward_signals
         };
@@ -6157,10 +6176,11 @@ impl<
                 continue;
             };
             let reward = *reward_signals.get(key).unwrap_or(&0.0);
-            // R-STDP requires a positive net reward to commit the initial LTP that creates
-            // an associative edge. Neutral activity records no connection; punishment cannot
+            // Reward-gated mappings (R-STDP, or any mode subscribed to `synaptic.reward`)
+            // require a positive net reward to commit the initial LTP that creates an
+            // associative edge. Neutral activity records no connection; punishment cannot
             // depress a synapse that does not yet exist.
-            if matches!(params.plasticity_mode, PlasticityMode::RStdp) && reward <= 0.0 {
+            if reward_gated_mappings.contains(key) && reward <= 0.0 {
                 continue;
             }
 

@@ -2322,7 +2322,11 @@ impl PlasticityService {
             .lock()
             .unwrap()
             .remove(&area_idx);
-        self.memory_area_names.lock().unwrap().remove(&area_idx);
+        // Lifecycle totals belong to the area instance. A later area with the same name
+        // (cortical IDs derive from names) must start its `created_total` at zero.
+        if let Some(area_name) = self.memory_area_names.lock().unwrap().remove(&area_idx) {
+            memory_stats_cache::remove_memory_area(&self.memory_stats_cache, &area_name);
+        }
         self.pattern_detector
             .detectors
             .lock()
@@ -2813,6 +2817,47 @@ mod tests {
             .unwrap()
             .is_empty());
         assert!(service.command_queue.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn recreated_memory_area_starts_lifecycle_totals_at_zero() {
+        let config = PlasticityConfig::default();
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-recreate-area-test-npu",
+        ));
+        let service = PlasticityService::new(config, cache.clone(), npu);
+        service.register_memory_area(
+            23,
+            "mem_balance".to_string(),
+            1,
+            vec![16],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
+        for _ in 0..5 {
+            memory_stats_cache::on_neuron_created(&cache, "mem_balance");
+        }
+        assert_eq!(cache.read().get("mem_balance").unwrap().created_total, 5);
+
+        service.unregister_memory_area(23);
+        assert!(
+            cache.read().get("mem_balance").is_none(),
+            "deleting the area must drop its lifecycle stats"
+        );
+
+        service.register_memory_area(
+            24,
+            "mem_balance".to_string(),
+            1,
+            vec![16],
+            None,
+            MemoryMpMode::PatternOnly,
+        );
+        let stats = cache.read().get("mem_balance").cloned().unwrap();
+        assert_eq!(stats.created_total, 0);
+        assert_eq!(stats.neuron_count, 0);
     }
 
     #[test]

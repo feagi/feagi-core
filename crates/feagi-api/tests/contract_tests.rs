@@ -1022,6 +1022,23 @@ async fn test_health_endpoint() {
 }
 
 #[tokio::test]
+async fn test_modulator_by_id_routes_resolve() {
+    // axum 0.7 path parameters are `:name`; a `{name}` segment is matched literally, so these
+    // routes used to 404 with an empty body for every real id.
+    for path in [
+        "/v1/modulator/modulator/no_such_modulator",
+        "/v1/modulator/usage/no_such_modulator",
+    ] {
+        let app = create_test_server().await;
+        let (status, body) = request_json(app, "GET", path, None).await;
+        assert!(
+            !body.is_null(),
+            "{path}: expected an API response body, got an empty router miss ({status})"
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_cortical_area_read_waits_for_genome_transition() {
     let state = build_test_state();
     let transition_lock = Arc::clone(&state.genome_transition_lock);

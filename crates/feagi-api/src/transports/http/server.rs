@@ -443,9 +443,9 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/device_registration_store",
             get(agent::get_device_registration_store),
         )
-        .route("/agent/info/{agent_id}", get(agent::get_agent_info))
+        .route("/agent/info/:agent_id", get(agent::get_agent_info))
         .route(
-            "/agent/properties/{agent_id}",
+            "/agent/properties/:agent_id",
             get(agent::get_agent_properties_path),
         )
         .route(
@@ -453,7 +453,7 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(agent::post_configure),
         )
         .route(
-            "/agent/{agent_id}/device_registrations",
+            "/agent/:agent_id/device_registrations",
             get(agent::export_device_registrations).post(agent::import_device_registrations),
         )
         // ===== SYSTEM MODULE (21 endpoints) =====
@@ -692,7 +692,7 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/modulator/types", get(modulator::get_modulator_types))
         .route("/modulator/modulators", get(modulator::get_modulators))
         .route(
-            "/modulator/modulator/{modulator_id}",
+            "/modulator/modulator/:modulator_id",
             get(modulator::get_modulator),
         )
         .route(
@@ -706,7 +706,7 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::put(modulator::put_rename_modulator),
         )
         .route(
-            "/modulator/usage/{modulator_id}",
+            "/modulator/usage/:modulator_id",
             get(modulator::get_modulator_usage),
         )
         // ===== MORPHOLOGY MODULE (14 endpoints) =====
