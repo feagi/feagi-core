@@ -3831,11 +3831,9 @@ impl GenomeServiceImpl {
                                 warn!(target: "feagi-services", "[GENOME-UPDATE] modulators must be an array of instance ids, got: {:?}", value);
                             }
                         }
-                        "spike_train" => {
-                            if value.is_boolean() {
-                                area.properties
-                                    .insert("spike_train".to_string(), value.clone());
-                            }
+                        "spike_train" if value.is_boolean() => {
+                            area.properties
+                                .insert("spike_train".to_string(), value.clone());
                         }
                         _ => {}
                     }
@@ -3975,11 +3973,9 @@ impl GenomeServiceImpl {
                             }
                         }
                     }
-                    "spike_train" => {
-                        if value.is_boolean() {
-                            area.properties
-                                .insert("spike_train".to_string(), value.clone());
-                        }
+                    "spike_train" if value.is_boolean() => {
+                        area.properties
+                            .insert("spike_train".to_string(), value.clone());
                     }
                     _ => {}
                 }

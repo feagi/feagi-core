@@ -3538,7 +3538,8 @@ fn validate_exported_long_term_memory(
     Ok(())
 }
 
-#[cfg(feature = "connectome-io")]
+// The production caller is plasticity-gated. The connectome-io test calls this directly.
+#[cfg(all(feature = "connectome-io", any(test, feature = "plasticity")))]
 fn attach_long_term_memory_replay_frames(
     connectome: &RwLock<ConnectomeManager>,
     snapshot: &mut feagi_npu_neural::types::connectome::ConnectomeSnapshot,

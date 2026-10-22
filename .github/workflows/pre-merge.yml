@@ -155,9 +155,36 @@ jobs:
         done
         echo "Crate metadata OK"
 
-    # --no-verify required: verify step would resolve deps from crates.io (0.0.1-beta.18 not published yet)
+    # --no-verify required: verify step would resolve deps from crates.io.
+    # Exact workspace versions are not on crates.io until publish, so package
+    # resolution uses a path patch. .cargo/config.toml is gitignored.
     - name: Dry run package verification
       run: |
+        set -euo pipefail
+        mkdir -p .cargo
+        {
+          echo "[patch.crates-io]"
+          echo "feagi-observability = { path = \"${GITHUB_WORKSPACE}/crates/feagi-observability\" }"
+          echo "feagi-structures = { path = \"${GITHUB_WORKSPACE}/crates/feagi-structures\" }"
+          echo "feagi-config = { path = \"${GITHUB_WORKSPACE}/crates/feagi-config\" }"
+          echo "feagi-npu-neural = { path = \"${GITHUB_WORKSPACE}/crates/feagi-npu/neural\" }"
+          echo "feagi-npu-runtime = { path = \"${GITHUB_WORKSPACE}/crates/feagi-npu/runtime\" }"
+          echo "feagi-serialization = { path = \"${GITHUB_WORKSPACE}/crates/feagi-serialization\" }"
+          echo "feagi-state-manager = { path = \"${GITHUB_WORKSPACE}/crates/feagi-state-manager\" }"
+          echo "feagi-npu-burst-engine = { path = \"${GITHUB_WORKSPACE}/crates/feagi-npu/burst-engine\" }"
+          echo "feagi-npu-plasticity = { path = \"${GITHUB_WORKSPACE}/crates/feagi-npu/plasticity\" }"
+          echo "feagi-dataset-contracts = { path = \"${GITHUB_WORKSPACE}/crates/feagi-dataset-contracts\" }"
+          echo "feagi-evolutionary = { path = \"${GITHUB_WORKSPACE}/crates/feagi-evolutionary\" }"
+          echo "feagi-brain-development = { path = \"${GITHUB_WORKSPACE}/crates/feagi-brain-development\" }"
+          echo "feagi-sensorimotor = { path = \"${GITHUB_WORKSPACE}/crates/feagi-sensorimotor\" }"
+          echo "feagi-services = { path = \"${GITHUB_WORKSPACE}/crates/feagi-services\" }"
+          echo "feagi-io = { path = \"${GITHUB_WORKSPACE}/crates/feagi-io\" }"
+          echo "feagi-agent = { path = \"${GITHUB_WORKSPACE}/crates/feagi-agent\" }"
+          echo "feagi-trainer = { path = \"${GITHUB_WORKSPACE}/crates/feagi-trainer\" }"
+          echo "feagi-api = { path = \"${GITHUB_WORKSPACE}/crates/feagi-api\" }"
+          echo "feagi-hal = { path = \"${GITHUB_WORKSPACE}/crates/feagi-hal\" }"
+          echo "feagi = { path = \"${GITHUB_WORKSPACE}\" }"
+        } > .cargo/config.toml
         for crate_dir in crates/*/ crates/feagi-npu/*/; do
           [ -f "$crate_dir/Cargo.toml" ] || continue
           crate_name=$(basename "$crate_dir")
