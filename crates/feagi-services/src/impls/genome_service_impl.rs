@@ -539,9 +539,22 @@ impl GenomeServiceImpl {
     }
 }
 
-#[async_trait]
-impl GenomeService for GenomeServiceImpl {
-    async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
+/// Record the outcome of a genome transition in the shared core state so every
+/// transport's `health_check` reports `genome_state` without each caller having
+/// to remember to do it.
+pub(crate) fn record_genome_transition_outcome<T>(result: &ServiceResult<T>) {
+    use feagi_state_manager::GenomeState;
+    let state = match result {
+        Ok(_) => GenomeState::Loaded,
+        Err(_) => GenomeState::Error,
+    };
+    feagi_state_manager::StateManager::instance()
+        .read()
+        .set_genome_state(state);
+}
+
+impl GenomeServiceImpl {
+    async fn load_genome_inner(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
         info!(target: "feagi-services", "Loading genome from JSON");
 
         // Parse genome using feagi-evo (this is CPU-bound, but relatively fast).
@@ -809,6 +822,15 @@ impl GenomeService for GenomeServiceImpl {
             genome_num: Some(genome_num), // Actual load counter
             genome_timestamp,             // Timestamp when genome was loaded
         })
+    }
+}
+
+#[async_trait]
+impl GenomeService for GenomeServiceImpl {
+    async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
+        let result = self.load_genome_inner(params).await;
+        record_genome_transition_outcome(&result);
+        result
     }
 
     async fn save_genome(&self, params: SaveGenomeParams) -> ServiceResult<String> {
@@ -5568,6 +5590,71 @@ mod tests {
     #[test]
     fn normalize_quantization_precision_marks_unknown_values() {
         assert_eq!(normalize_quantization_precision("weird"), "unknown");
+    }
+
+    /// `health_check` reads `genome_state` / `genome_validity` from the StateManager.
+    /// Only the HTTP upload wrapper used to write `genome_state`, so a genome that
+    /// reached the service by any other transport ran with `genome_state: "missing"`.
+    #[tokio::test]
+    async fn load_genome_marks_state_loaded_and_validity_known() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use crate::types::LoadGenomeParams;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_state_manager::{GenomeState, StateManager};
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        fn test_npu(name: &'static str) -> Arc<TracingMutex<DynamicNPU>> {
+            let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 100_000, 1_000_000, 10)
+                .expect("npu construct");
+            Arc::new(TracingMutex::new(DynamicNPU::F32(npu), name))
+        }
+
+        let _state_guard = crate::impls::GENOME_STATE_TEST_LOCK.lock();
+
+        // Neuroembryogenesis develops into the process-wide ConnectomeManager, which
+        // has no NPU in a unit test until one is attached.
+        {
+            let singleton = ConnectomeManager::instance();
+            let mut singleton = singleton.write();
+            if singleton.get_npu().is_none() {
+                singleton.set_npu(test_npu("genome-state-test-singleton-npu"));
+            }
+        }
+        let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            test_npu("genome-state-test-npu"),
+        )));
+        let service = GenomeServiceImpl::new(manager);
+
+        let genome = feagi_evolutionary::templates::create_genome_with_core_areas(
+            "genome-state-test".to_string(),
+            "genome-state-test".to_string(),
+        );
+        let json_str = feagi_evolutionary::save_genome_to_json(&genome).expect("genome json");
+
+        let info = service
+            .load_genome(LoadGenomeParams { json_str })
+            .await
+            .expect("load genome");
+        assert!(info.genome_num.is_some());
+
+        let state = StateManager::instance();
+        let state = state.read();
+        assert_eq!(state.get_genome_state(), GenomeState::Loaded);
+        assert_eq!(state.get_core_state().get_genome_validity(), Some(true));
+
+        // A load that fails leaves the error visible instead of a stale "loaded".
+        let err = service
+            .load_genome(LoadGenomeParams {
+                json_str: "{\"invalid\": \"payload\"}".to_string(),
+            })
+            .await;
+        assert!(err.is_err());
+        assert_eq!(state.get_genome_state(), GenomeState::Error);
     }
 
     #[test]

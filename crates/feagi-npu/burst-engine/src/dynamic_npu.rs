@@ -289,6 +289,11 @@ where
         dispatch!(self, get_synapse_count())
     }
 
+    /// `(incoming, outgoing)` valid synapse counts for one cortical area, read from storage.
+    pub fn get_cortical_area_synapse_counts(&self, cortical_idx: u32) -> (usize, usize) {
+        dispatch!(self, get_cortical_area_synapse_counts(cortical_idx))
+    }
+
     pub fn count_synapses_with_edge_flag_bits(&self, mask: u8) -> usize {
         dispatch!(self, count_synapses_with_edge_flag_bits(mask))
     }
