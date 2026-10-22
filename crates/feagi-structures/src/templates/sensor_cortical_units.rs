@@ -240,9 +240,10 @@ macro_rules! sensor_cortical_units {
                     },
                     cortical_area_properties: {
                         // Sub-area order is contractual: 0 = accelerometer, 1 = gyroscope, 2 = magnetometer.
-                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [70, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024]), // Accelerometer
-                        1 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [80, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024]), // Gyroscope
-                        2 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [90, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])  // Magnetometer
+                        // Width 6 per channel: the signed 3D encoder streams a plus and a minus column per axis.
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [70, 0, -10], channel_dimensions_default: [6, 1, 10], channel_dimensions_min: [6, 1, 1], channel_dimensions_max: [6, 1, 1024]), // Accelerometer
+                        1 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [80, 0, -10], channel_dimensions_default: [6, 1, 10], channel_dimensions_min: [6, 1, 1], channel_dimensions_max: [6, 1, 1024]), // Gyroscope
+                        2 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [90, 0, -10], channel_dimensions_default: [6, 1, 10], channel_dimensions_min: [6, 1, 1], channel_dimensions_max: [6, 1, 1024])  // Magnetometer
                     }
                 },
 
@@ -259,7 +260,8 @@ macro_rules! sensor_cortical_units {
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), relative_position: [100, 0, -10], channel_dimensions_default: [4, 1, 10], channel_dimensions_min: [4, 1, 1], channel_dimensions_max: [4, 1, 1024])
+                        // Width 8 per channel: the signed 4D encoder streams a plus and a minus column per quaternion component.
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), relative_position: [100, 0, -10], channel_dimensions_default: [8, 1, 10], channel_dimensions_min: [8, 1, 1], channel_dimensions_max: [8, 1, 1024])
                     }
                 },
 

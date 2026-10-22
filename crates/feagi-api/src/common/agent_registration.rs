@@ -763,6 +763,41 @@ fn extract_percentage_depth(encoder_properties: &Value) -> Option<usize> {
         .map(|depth| depth as usize)
 }
 
+/// Per-channel X width of a signed `JSONEncoderProperties::Percentage` encoder.
+///
+/// The tuple serializes as `[NeuronDepth, positioning, is_signed, dimensionality]`.
+/// `PercentageNeuronVoxelXYZPEncoder::channel_width` lays a signed value out as a
+/// plus column and a minus column per component, so a `SignedPercentage3D`
+/// gyroscope streams 6 columns and a `SignedPercentage4D` quaternion streams 8.
+/// The one exception is signed 1D Linear, which carries the sign along Z in a
+/// single column. Unsigned encoders return `None` so the template width applies
+/// (one column per component, which is what they stream).
+///
+/// Without this the RawIMU / SmartIMU areas were created at the template width
+/// (3 / 4) and FEAGI dropped every minus column: a negative pitch never reached
+/// the brain until someone widened the area by hand, and the next agent
+/// registration shrank it again.
+fn extract_signed_percentage_channel_width(encoder_properties: &Value) -> Option<usize> {
+    let payload = encoder_variant_payload(encoder_properties, "Percentage")?;
+    let items = payload.as_array()?;
+    let is_signed = items.get(2)?.as_bool()?;
+    if !is_signed {
+        return None;
+    }
+    let dimensions = match items.get(3)?.as_str()? {
+        "D1" => 1usize,
+        "D2" => 2,
+        "D3" => 3,
+        "D4" => 4,
+        _ => return None,
+    };
+    let positioning = items.get(1)?.as_str()?;
+    if dimensions == 1 && positioning == "Linear" {
+        return Some(1);
+    }
+    Some(dimensions * 2)
+}
+
 /// Scalar IPU width is one per-channel X column per registered device; Y/Z stay
 /// on the encoder result (Proximity/Servo depth, MiscData volume Z).
 fn apply_grouped_scalar_encoder_width(
@@ -790,8 +825,11 @@ fn resolve_sensory_dimensions_from_encoder_properties(
         .or_else(|| extract_audio_spectrum_dimensions(encoder_properties))
         .or_else(|| extract_misc_dimensions(encoder_properties))
         .or_else(|| {
-            extract_percentage_depth(encoder_properties)
-                .map(|depth| (fallback.0, fallback.1, depth))
+            extract_percentage_depth(encoder_properties).map(|depth| {
+                let width = extract_signed_percentage_channel_width(encoder_properties)
+                    .unwrap_or(fallback.0);
+                (width, fallback.1, depth)
+            })
         })
         .unwrap_or(fallback)
 }
@@ -1485,12 +1523,16 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     // encoders only pin Z depth, so a non-template depth (e.g. 50)
                     // must not skip the width expand or the IPU collapses to 1
                     // device (Servo). The same expand applies to Proximity and
-                    // MiscData so N-channel encoder IPUs match motor OPU width.
+                    // MiscData so N-channel encoder IPUs match motor OPU width,
+                    // and to RawIMU / SmartIMU, whose encoders write channel
+                    // `c` at `c * channel_width` (6 or 8 columns per site).
                     if matches!(
                         sensory_unit,
                         SensoryCorticalUnit::Servo
                             | SensoryCorticalUnit::Proximity
                             | SensoryCorticalUnit::MiscData
+                            | SensoryCorticalUnit::RawIMU
+                            | SensoryCorticalUnit::SmartIMU
                     ) {
                         let per_channel_x = if sensory_unit == SensoryCorticalUnit::Servo {
                             template_w
@@ -2364,6 +2406,74 @@ mod sensory_dimension_extraction_tests {
         let resolved =
             resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (3, 1, 10));
         assert_eq!(resolved, (3, 1, 100));
+    }
+
+    /// RawIMU sub-areas: the signed 3D encoder streams plus/minus per axis.
+    #[test]
+    fn raw_imu_signed_percentage3d_registers_six_columns() {
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Linear", true, "D3"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (3, 1, 10));
+        assert_eq!(resolved, (6, 1, 10));
+        // Two IMU sites on one unit: the encoder writes site `c` at `c * 6`.
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 2),
+            (12, 1, 10)
+        );
+    }
+
+    /// SmartIMU: the signed 4D quaternion encoder streams plus/minus per component.
+    #[test]
+    fn smart_imu_signed_percentage4d_registers_eight_columns() {
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Linear", true, "D4"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (4, 1, 10));
+        assert_eq!(resolved, (8, 1, 10));
+        assert_eq!(
+            apply_grouped_scalar_encoder_width(resolved, resolved.0, 1),
+            (8, 1, 10)
+        );
+    }
+
+    /// Fractional positioning uses the same plus/minus column layout.
+    #[test]
+    fn signed_percentage3d_fractional_registers_six_columns() {
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Fractional", true, "D3"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (3, 1, 10));
+        assert_eq!(resolved, (6, 1, 10));
+    }
+
+    /// Signed 1D Linear encodes the sign along Z in one column; width is untouched.
+    #[test]
+    fn signed_percentage1d_linear_keeps_single_column() {
+        let encoder = json!({
+            "Percentage": [{"value": 20}, "Linear", true, "D1"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (1, 1, 10));
+        assert_eq!(resolved, (1, 1, 20));
+    }
+
+    /// A malformed or short tuple falls back to the template width.
+    #[test]
+    fn signed_percentage_with_unknown_dimensionality_keeps_template_width() {
+        let encoder = json!({
+            "Percentage": [{"value": 10}, "Linear", true, "D9"]
+        });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&encoder), 0, (3, 1, 10));
+        assert_eq!(resolved, (3, 1, 10));
+        let short = json!({ "Percentage": [{"value": 10}] });
+        let resolved =
+            resolve_sensory_dimensions_from_encoder_properties(Some(&short), 0, (3, 1, 10));
+        assert_eq!(resolved, (3, 1, 10));
     }
 
     #[test]
