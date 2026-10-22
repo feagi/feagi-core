@@ -3289,6 +3289,11 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let (memory_ids, plastic, region_ids) =
                 crate::impls::genome_service_impl::architecture_indexes_from_genome(&genome);
             snapshot.set_architecture_indexes(memory_ids, plastic, region_ids);
+            if mode == feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite {
+                // Rebuilding the brain does not need the change log, and it can be far
+                // larger than the genome it describes.
+                genome.change_history.clear();
+            }
             match feagi_evolutionary::save_genome_to_json(&genome) {
                 Ok(json) => snapshot.genome_json = Some(json),
                 Err(e) => {
@@ -7056,7 +7061,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
-            change_history: Vec::new(),
+            change_history: vec![serde_json::json!({"change_id": "logged-edit", "after": {}})],
         };
 
         let source_npu = Arc::new(TracingMutex::new(
@@ -7257,6 +7262,14 @@ mod tests {
         assert!(
             exported.synapses.count == 0 && exported.lite_synapses.len() >= 2,
             "lite snapshot should omit raw-ID edges and retain semantic memory/plastic edges"
+        );
+        let embedded_genome: serde_json::Value = serde_json::from_str(
+            exported.genome_json.as_deref().expect("lite snapshot embeds the genome"),
+        )
+        .expect("genome json");
+        assert!(
+            embedded_genome.get("change_history").is_none(),
+            "lite snapshot should not embed the genome's change history"
         );
 
         let temp = NamedTempFile::new().expect("temp file");

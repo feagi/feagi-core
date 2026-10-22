@@ -38,6 +38,8 @@ changed it, and when. Changes can be replayed on another FEAGI instance.
 
 - `change_ledger_session_capacity`: entries held in memory for polling.
 - `change_history_max_entries`: entries persisted in the genome (oldest dropped first).
+- `change_history_max_bytes`: serialized size of the persisted history (oldest dropped
+  first; the newest entry is always kept).
 - `change_agent_id_max_length`: longest accepted agent id.
 
 ## Known limits
