@@ -283,7 +283,57 @@ macro_rules! define_sensory_cortical_units_enum {
 // Generate the SensoryCorticalUnit enum and all helper methods from the template
 sensor_cortical_units!(define_sensory_cortical_units_enum);
 
+/// Cortical area property key for the per-IPU sensor-cadence hold option.
+///
+/// When `true`, the burst engine re-injects the previous burst's frame for this input
+/// area on a burst where no new frame arrived (exactly one extra burst). Areas without
+/// the property use [`SensoryCorticalUnit::get_default_sensory_hold_last_frame`].
+pub const SENSORY_HOLD_LAST_FRAME_PROPERTY: &str = "sensory_hold_last_frame";
+
+/// Effective `sensory_hold_last_frame` for a cortical area: the explicit property when
+/// present and boolean, otherwise the template default of its sensory unit. Non-input
+/// areas and unknown input units resolve to `false`.
+pub fn resolve_sensory_hold_last_frame(
+    cortical_id: &CorticalID,
+    properties: &HashMap<String, Value>,
+) -> bool {
+    if let Some(value) = properties
+        .get(SENSORY_HOLD_LAST_FRAME_PROPERTY)
+        .and_then(Value::as_bool)
+    {
+        return value;
+    }
+    SensoryCorticalUnit::try_from_cortical_id(cortical_id)
+        .map(|unit| unit.get_default_sensory_hold_last_frame())
+        .unwrap_or(false)
+}
+
 impl SensoryCorticalUnit {
+    /// Template default for the `sensory_hold_last_frame` cortical area property:
+    /// `true` for scalar sensor units (IMU, encoder, proximity, battery, analog, ...),
+    /// `false` for frame-based (vision, audio), boolean/digital and opaque (`MiscData`) inputs.
+    /// Derived from the unit's accepted wrapped IO data type.
+    pub fn get_default_sensory_hold_last_frame(&self) -> bool {
+        matches!(
+            self.get_accepted_wrapped_io_data_type(),
+            "Percentage" | "Percentage_3D" | "SignedPercentage_4D" | "RawIMU"
+        )
+    }
+
+    /// Resolve the sensory unit of an input (`i...`) cortical ID from its 3-byte unit reference.
+    /// Returns `None` for non-input IDs and unknown unit references.
+    pub fn try_from_cortical_id(cortical_id: &CorticalID) -> Option<SensoryCorticalUnit> {
+        let bytes = cortical_id.as_bytes();
+        if bytes[0] != b'i' {
+            return None;
+        }
+        let unit_ref = [bytes[1], bytes[2], bytes[3]];
+        Self::list_all()
+            .iter()
+            .copied()
+            .find(|unit| unit.get_cortical_id_unit_reference() == unit_ref)
+    }
+
     /// Check if a legacy 3-char subtype matches a supported IPU type and return its default CorticalID.
     /// Used by genome migrator to avoid converting unsupported legacy IPU areas to MiscData.
     pub fn try_from_legacy_subtype(subtype: &str) -> Option<CorticalID> {
@@ -380,5 +430,62 @@ impl SensoryCorticalUnit {
                 Self::get_cortical_ids_array_for_audio_input_with_parameters(fh, group_index)[0]
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod sensory_hold_default_tests {
+    use super::*;
+
+    #[test]
+    fn scalar_units_hold_by_default_frame_units_do_not() {
+        for unit in [
+            SensoryCorticalUnit::RawIMU,
+            SensoryCorticalUnit::SmartIMU,
+            SensoryCorticalUnit::Servo,
+            SensoryCorticalUnit::Proximity,
+            SensoryCorticalUnit::Battery,
+            SensoryCorticalUnit::AnalogGPIO,
+            SensoryCorticalUnit::CartesianPosition,
+        ] {
+            assert!(unit.get_default_sensory_hold_last_frame(), "{unit:?}");
+        }
+        for unit in [
+            SensoryCorticalUnit::Vision,
+            SensoryCorticalUnit::SegmentedVision,
+            SensoryCorticalUnit::AudioInput,
+            SensoryCorticalUnit::DigitalGPIO,
+            SensoryCorticalUnit::MiscData,
+            SensoryCorticalUnit::DepthMap,
+        ] {
+            assert!(!unit.get_default_sensory_hold_last_frame(), "{unit:?}");
+        }
+    }
+
+    #[test]
+    fn resolve_uses_property_then_template_default() {
+        let imu = SensoryCorticalUnit::RawIMU
+            .get_default_cortical_id_for_group(CorticalUnitIndex::from(0u16));
+        let vision = SensoryCorticalUnit::Vision
+            .get_default_cortical_id_for_group(CorticalUnitIndex::from(0u16));
+        assert_eq!(
+            SensoryCorticalUnit::try_from_cortical_id(&imu),
+            Some(SensoryCorticalUnit::RawIMU)
+        );
+        let empty = HashMap::new();
+        assert!(resolve_sensory_hold_last_frame(&imu, &empty));
+        assert!(!resolve_sensory_hold_last_frame(&vision, &empty));
+        let off = HashMap::from([(
+            SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+            Value::Bool(false),
+        )]);
+        assert!(!resolve_sensory_hold_last_frame(&imu, &off));
+        let on = HashMap::from([(
+            SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+            Value::Bool(true),
+        )]);
+        assert!(resolve_sensory_hold_last_frame(&vision, &on));
+        let custom = CorticalID::try_from_bytes(b"cHOLD001").unwrap();
+        assert!(!resolve_sensory_hold_last_frame(&custom, &empty));
     }
 }

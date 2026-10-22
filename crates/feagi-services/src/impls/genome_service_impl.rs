@@ -28,7 +28,9 @@ use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
     IOCorticalAreaConfigurationFlag,
 };
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_structures::genomic::{
+    MotorCorticalUnit, SensoryCorticalUnit, SENSORY_HOLD_LAST_FRAME_PROPERTY,
+};
 use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -477,10 +479,12 @@ impl GenomeServiceImpl {
             let manager = self.connectome.read();
             let mappings = manager.get_all_cortical_idx_to_id_mappings();
             let chunk_sizes = manager.get_all_visualization_granularities();
+            let hold_areas = manager.get_sensory_hold_areas();
             let mapping_count = mappings.len();
             let burst_runner_write = burst_runner.write();
             burst_runner_write.refresh_cortical_id_mappings(mappings);
             burst_runner_write.refresh_visualization_granularities(chunk_sizes);
+            burst_runner_write.refresh_sensory_hold_areas(hold_areas);
             debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
@@ -3668,7 +3672,8 @@ impl GenomeServiceImpl {
         changes: HashMap<String, Value>,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}", cortical_id);
-        let needs_burst_cache_refresh = changes.contains_key("visualization_voxel_granularity");
+        let needs_burst_cache_refresh = changes.contains_key("visualization_voxel_granularity")
+            || changes.contains_key(SENSORY_HOLD_LAST_FRAME_PROPERTY);
         let mut properties_changed = false;
         let mut geometry_changed = false;
         for key in changes.keys() {
@@ -3835,6 +3840,17 @@ impl GenomeServiceImpl {
                             area.properties
                                 .insert("spike_train".to_string(), value.clone());
                         }
+                        SENSORY_HOLD_LAST_FRAME_PROPERTY => {
+                            let Some(enabled) = value.as_bool() else {
+                                return Err(ServiceError::InvalidInput(format!(
+                                    "{SENSORY_HOLD_LAST_FRAME_PROPERTY} must be a boolean, got {value}"
+                                )));
+                            };
+                            area.properties.insert(
+                                SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+                                serde_json::json!(enabled),
+                            );
+                        }
                         _ => {}
                     }
                 }
@@ -3976,6 +3992,17 @@ impl GenomeServiceImpl {
                     "spike_train" if value.is_boolean() => {
                         area.properties
                             .insert("spike_train".to_string(), value.clone());
+                    }
+                    SENSORY_HOLD_LAST_FRAME_PROPERTY => {
+                        let Some(enabled) = value.as_bool() else {
+                            return Err(ServiceError::InvalidInput(format!(
+                                "{SENSORY_HOLD_LAST_FRAME_PROPERTY} must be a boolean, got {value}"
+                            )));
+                        };
+                        area.properties.insert(
+                            SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+                            serde_json::json!(enabled),
+                        );
                     }
                     _ => {}
                 }
@@ -4822,8 +4849,11 @@ impl GenomeServiceImpl {
         if let Some(ref burst_runner) = burst_runner {
             let manager = connectome.read();
             let mappings = manager.get_all_cortical_idx_to_id_mappings();
+            let hold_areas = manager.get_sensory_hold_areas();
             let mapping_count = mappings.len();
-            burst_runner.write().refresh_cortical_id_mappings(mappings);
+            let burst_runner_write = burst_runner.write();
+            burst_runner_write.refresh_cortical_id_mappings(mappings);
+            burst_runner_write.refresh_sensory_hold_areas(hold_areas);
             debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
 
@@ -5011,6 +5041,10 @@ impl GenomeServiceImpl {
                             None
                         }
                     }),
+                sensory_hold_last_frame: crate::types::sensory_hold_last_frame_for_info(
+                    &area.cortical_id,
+                    &area.properties,
+                ),
                 visualization_voxel_granularity: area
                     .properties
                     .get("visualization_voxel_granularity")
@@ -5216,6 +5250,10 @@ impl GenomeServiceImpl {
                         None
                     }
                 }),
+            sensory_hold_last_frame: crate::types::sensory_hold_last_frame_for_info(
+                &area.cortical_id,
+                &area.properties,
+            ),
             visualization_voxel_granularity: area
                 .properties
                 .get("visualization_voxel_granularity")
@@ -5421,6 +5459,10 @@ impl GenomeServiceImpl {
                         None
                     }
                 }),
+            sensory_hold_last_frame: crate::types::sensory_hold_last_frame_for_info(
+                &area.cortical_id,
+                &area.properties,
+            ),
             visualization_voxel_granularity: area
                 .properties
                 .get("visualization_voxel_granularity")
@@ -5759,6 +5801,208 @@ mod tests {
             vec!["damp".to_string()],
             "area modulator subscription must be pushed to the burst engine"
         );
+    }
+
+    /// `sensory_hold_last_frame` is a metadata change: stored in genome + connectome
+    /// properties, visible through get, pushed to the burst runner cache, no rebuild.
+    #[tokio::test]
+    async fn update_cortical_area_sensory_hold_last_frame_is_metadata_and_round_trips() {
+        use super::GenomeServiceImpl;
+        use crate::genome::change_classifier::{ChangeType, CorticalChangeClassifier};
+        use crate::traits::{ConnectomeService, GenomeService};
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{
+            BurstLoopRunner, DynamicNPU, MotorPublisher, RawFireQueueSnapshot, RustNPU,
+            TracingMutex, VisualizationPublisher,
+        };
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use feagi_structures::genomic::{SensoryCorticalUnit, SENSORY_HOLD_LAST_FRAME_PROPERTY};
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        struct NoViz;
+        impl VisualizationPublisher for NoViz {
+            fn publish_raw_fire_queue_for_agent(
+                &self,
+                _agent_id: &str,
+                _fire_data: RawFireQueueSnapshot,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        struct NoMotor;
+        impl MotorPublisher for NoMotor {
+            fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        assert_eq!(
+            CorticalChangeClassifier::classify_changes(&HashMap::from([(
+                SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+                serde_json::json!(true)
+            )])),
+            ChangeType::Metadata,
+            "sensory_hold_last_frame must not trigger a structural rebuild"
+        );
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000, 1_000, 10).unwrap();
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "sensory-hold-npu"));
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+            dyn_npu.clone(),
+        )));
+        let runner = Arc::new(RwLock::new(BurstLoopRunner::new::<NoViz, NoMotor>(
+            dyn_npu, None, None, 10.0,
+        )));
+
+        let imu_id = SensoryCorticalUnit::RawIMU
+            .get_default_cortical_id_for_group(CorticalUnitIndex::from(0u16));
+        let imu = CorticalArea::new(
+            imu_id,
+            0,
+            "imu".to_string(),
+            CorticalAreaDimensions::new(1, 1, 4).unwrap(),
+            (0, 0, 0).into(),
+            imu_id.as_cortical_type().unwrap(),
+        )
+        .unwrap();
+        let custom_id = CorticalID::try_from_bytes(b"cHOLDTST").unwrap();
+        let custom = CorticalArea::new(
+            custom_id,
+            0,
+            "custom".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        connectome.write().add_cortical_area(imu.clone()).unwrap();
+        connectome
+            .write()
+            .add_cortical_area(custom.clone())
+            .unwrap();
+        let neurons_before = connectome.read().get_neuron_count();
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: String::new(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(imu_id, imu), (custom_id, custom)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let mut svc = GenomeServiceImpl::new(connectome.clone());
+        svc.set_burst_runner(runner.clone());
+        *svc.get_current_genome_arc().write() = Some(genome);
+        let reader = crate::impls::ConnectomeServiceImpl::new(
+            connectome.clone(),
+            svc.get_current_genome_arc(),
+        );
+
+        // Template default: scalar IMU holds, custom area has no hold flag.
+        let imu_info = reader
+            .get_cortical_area(&imu_id.as_base_64())
+            .await
+            .unwrap();
+        assert_eq!(imu_info.sensory_hold_last_frame, Some(true));
+        let custom_info = reader
+            .get_cortical_area(&custom_id.as_base_64())
+            .await
+            .unwrap();
+        assert_eq!(custom_info.sensory_hold_last_frame, None);
+
+        // Turn it off, then on again, checking storage, read-back and the runner cache.
+        let off = svc
+            .update_cortical_area(
+                &imu_id.as_base_64(),
+                HashMap::from([(
+                    SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+                    serde_json::json!(false),
+                )]),
+            )
+            .await
+            .expect("update sensory_hold_last_frame=false");
+        assert_eq!(off.sensory_hold_last_frame, Some(false));
+        assert_eq!(
+            reader
+                .get_cortical_area(&imu_id.as_base_64())
+                .await
+                .unwrap()
+                .sensory_hold_last_frame,
+            Some(false)
+        );
+        assert_eq!(
+            reader
+                .get_cortical_area_properties(&imu_id.as_base_64())
+                .await
+                .unwrap()
+                .get(SENSORY_HOLD_LAST_FRAME_PROPERTY),
+            Some(&serde_json::json!(false))
+        );
+        assert_eq!(
+            svc.get_current_genome_arc()
+                .read()
+                .as_ref()
+                .unwrap()
+                .cortical_areas[&imu_id]
+                .properties
+                .get(SENSORY_HOLD_LAST_FRAME_PROPERTY),
+            Some(&serde_json::json!(false)),
+            "stored in the genome so it survives save/load"
+        );
+        assert!(!runner.read().sensory_hold_areas().contains(&imu_id));
+
+        let on = svc
+            .update_cortical_area(
+                &imu_id.as_base_64(),
+                HashMap::from([(
+                    SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+                    serde_json::json!(true),
+                )]),
+            )
+            .await
+            .expect("update sensory_hold_last_frame=true");
+        assert_eq!(on.sensory_hold_last_frame, Some(true));
+        assert!(runner.read().sensory_hold_areas().contains(&imu_id));
+        assert!(!runner.read().sensory_hold_areas().contains(&custom_id));
+        assert_eq!(
+            connectome.read().get_neuron_count(),
+            neurons_before,
+            "metadata update must not rebuild neurons"
+        );
+
+        let bad = svc
+            .update_cortical_area(
+                &imu_id.as_base_64(),
+                HashMap::from([(
+                    SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+                    serde_json::json!("yes"),
+                )]),
+            )
+            .await;
+        assert!(bad.is_err(), "non-boolean value must be rejected");
     }
 
     #[tokio::test]

@@ -1515,6 +1515,23 @@ impl ConnectomeManager {
             .collect()
     }
 
+    /// Input areas whose effective `sensory_hold_last_frame` is on: the explicit property
+    /// when present, otherwise the sensory unit template default (scalar sensors hold,
+    /// vision/audio/boolean do not). Pushed to the burst runner alongside the
+    /// visualization granularity cache.
+    pub fn get_sensory_hold_areas(&self) -> ahash::AHashSet<CorticalID> {
+        self.cortical_areas
+            .iter()
+            .filter(|(cortical_id, area)| {
+                feagi_structures::genomic::resolve_sensory_hold_last_frame(
+                    cortical_id,
+                    &area.properties,
+                )
+            })
+            .map(|(cortical_id, _)| *cortical_id)
+            .collect()
+    }
+
     /// Get all cortical_idx -> visualization_voxel_granularity mappings
     ///
     /// Returns a map of cortical_idx to (granularity_x, granularity_y, granularity_z) for areas that have

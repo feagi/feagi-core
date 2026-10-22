@@ -692,10 +692,12 @@ impl ConnectomeServiceImpl {
             let manager = self.connectome.read();
             let mappings = manager.get_all_cortical_idx_to_id_mappings();
             let chunk_sizes = manager.get_all_visualization_granularities();
+            let hold_areas = manager.get_sensory_hold_areas();
             let mapping_count = mappings.len();
             let burst_runner_write = burst_runner.write();
             burst_runner_write.refresh_cortical_id_mappings(mappings);
             burst_runner_write.refresh_visualization_granularities(chunk_sizes);
+            burst_runner_write.refresh_sensory_hold_areas(hold_areas);
             debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
@@ -1674,6 +1676,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     from_properties
                 }
             },
+            sensory_hold_last_frame: crate::types::sensory_hold_last_frame_for_info(
+                &area.cortical_id,
+                &area.properties,
+            ),
             visualization_voxel_granularity: {
                 // Default is 1x1x1 if not in properties (user-driven, not stored)
                 // Handle both integer and float JSON values

@@ -21,3 +21,6 @@ pub use modulator::{
 pub use motor_cortical_unit::MotorCorticalUnit;
 pub use sensory_cortical_unit::SensoryCorticalUnit;
 pub use sensory_cortical_unit::UnitTopology;
+pub use sensory_cortical_unit::{
+    resolve_sensory_hold_last_frame, SENSORY_HOLD_LAST_FRAME_PROPERTY,
+};
