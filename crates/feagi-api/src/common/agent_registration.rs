@@ -1819,6 +1819,11 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             serde_json::json!(default_mp_charge_accumulation),
                         );
                     }
+                    // Sensor cadence hold: scalar sensors hold their last frame for one burst.
+                    properties.insert(
+                        feagi_structures::genomic::SENSORY_HOLD_LAST_FRAME_PROPERTY.to_string(),
+                        serde_json::json!(sensory_unit.get_default_sensory_hold_last_frame()),
+                    );
 
                     to_create.push(CreateCorticalAreaParams {
                         cortical_id: cortical_id_b64.clone(),

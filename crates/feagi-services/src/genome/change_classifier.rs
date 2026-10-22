@@ -100,6 +100,8 @@ impl CorticalChangeClassifier {
             // burst engine by `sync_modulators_from_genome`; no neuron or synapse rebuild.
             "modulators",
             "spike_train",
+            // Sensor cadence hold: read by the burst loop from a cache refreshed on update.
+            "sensory_hold_last_frame",
             // IO coding updates (cortical ID remap)
             "coding_signage",
             "coding_behavior",

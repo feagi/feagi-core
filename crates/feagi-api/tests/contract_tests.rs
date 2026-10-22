@@ -3767,3 +3767,100 @@ async fn test_saved_genome_carries_change_history() {
     assert_eq!(history[0]["operation"]["kind"], "create_cortical_areas");
     assert_eq!(history[0]["targets"][0]["id"], cortical_id.as_str());
 }
+
+/// `sensory_hold_last_frame` is readable through the cortical area property routes,
+/// writable through PUT as a metadata change, and persisted in the saved genome.
+#[tokio::test]
+async fn test_sensory_hold_last_frame_put_get_and_save() {
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+    use feagi_structures::genomic::SensoryCorticalUnit;
+
+    let state = build_test_state();
+    let imu_id = SensoryCorticalUnit::RawIMU
+        .get_default_cortical_id_for_group(CorticalUnitIndex::from(0u16))
+        .as_base_64();
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: imu_id.clone(),
+            name: "imu".to_string(),
+            dimensions: (1, 1, 4),
+            position: (0, 0, 0),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("create IMU area");
+
+    // Template default for a scalar IMU input: hold on, even with no stored property.
+    let (status, props) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_area/cortical_area_properties",
+        Some(json!({"cortical_id": imu_id})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(props["sensory_hold_last_frame"], json!(true));
+
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_area/cortical_area",
+        Some(json!({"cortical_id": imu_id, "sensory_hold_last_frame": false})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, props) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_area/cortical_area_properties",
+        Some(json!({"cortical_id": imu_id})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(props["sensory_hold_last_frame"], json!(false));
+
+    let (status, geometry) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/cortical_area/cortical_area/geometry",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(geometry[&imu_id]["sensory_hold_last_frame"], json!(false));
+
+    // Persisted in the flat genome (`snhold-b`) so it survives save/load.
+    let saved = state
+        .genome_service
+        .save_genome(feagi_services::types::SaveGenomeParams {
+            genome_id: None,
+            genome_title: None,
+        })
+        .await
+        .expect("save");
+    let saved: Value = serde_json::from_str(&saved).expect("saved JSON");
+    let blueprint = saved["blueprint"].as_object().expect("flat blueprint");
+    let hold_entry = blueprint
+        .iter()
+        .find(|(key, _)| key.ends_with("-snhold-b") && key.contains(&imu_id))
+        .map(|(_, value)| value.clone());
+    assert_eq!(hold_entry, Some(json!(false)));
+}
