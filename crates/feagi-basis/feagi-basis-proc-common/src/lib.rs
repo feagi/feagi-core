@@ -1,5 +1,8 @@
+use proc_macro::TokenStream;
+
 //region Independent Builders
 mod bit_struct_builder;
+mod typed_enum_builder;
 
 /// Builds a bit field struct around a uint with one named bit field per flag.
 ///
@@ -31,7 +34,11 @@ pub fn bit_struct_builder(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     bit_struct_builder::bit_struct_builder(input)
 }
 
-//endregion
+#[proc_macro]
+pub fn enum_leveled_builder(input: TokenStream) -> TokenStream {
+    typed_enum_builder::enum_leveled_builder(input)
+}
+
 
 //region Templates
 
