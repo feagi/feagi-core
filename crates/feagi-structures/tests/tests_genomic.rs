@@ -2159,7 +2159,8 @@ mod test_sensory_cortical_unit {
         /// height 1, default depth 10). The connector and BV both consume this
         /// shape; deviations break sensory ingestion silently.
         #[test]
-        fn test_raw_imu_subunit_dimensions_are_3x1x10() {
+        fn test_raw_imu_subunit_dimensions_are_6x1x10() {
+            // The signed 3D encoder streams plus/minus per axis: 6 columns per site.
             let topology = SensoryCorticalUnit::RawIMU.get_unit_default_topology();
             assert_eq!(topology.len(), 3);
             for sub_idx in 0..3u8 {
@@ -2168,12 +2169,12 @@ mod test_sensory_cortical_unit {
                     .unwrap_or_else(|| panic!("Missing topology for RawIMU sub-area {}", sub_idx));
                 assert_eq!(
                     unit.channel_dimensions_default,
-                    [3, 1, 10],
-                    "RawIMU sub-area {} must have default dims [3,1,10]",
+                    [6, 1, 10],
+                    "RawIMU sub-area {} must have default dims [6,1,10]",
                     sub_idx
                 );
-                assert_eq!(unit.channel_dimensions_min, [3, 1, 1]);
-                assert_eq!(unit.channel_dimensions_max, [3, 1, 1024]);
+                assert_eq!(unit.channel_dimensions_min, [6, 1, 1]);
+                assert_eq!(unit.channel_dimensions_max, [6, 1, 1024]);
             }
         }
 
@@ -2218,7 +2219,8 @@ mod test_sensory_cortical_unit {
             let unit = topology
                 .get(&0.into())
                 .expect("Missing SmartIMU sub-area topology");
-            assert_eq!(unit.channel_dimensions_default, [4, 1, 10]);
+            // The signed 4D encoder streams plus/minus per quaternion component.
+            assert_eq!(unit.channel_dimensions_default, [8, 1, 10]);
         }
 
         /// Snake-case names must be stable; SDK auto-generation and genome
