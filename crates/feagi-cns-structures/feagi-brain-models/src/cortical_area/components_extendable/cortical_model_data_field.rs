@@ -1,4 +1,4 @@
-use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
+use crate::cortical_area::components_extendable::cortical_area_quantization::CorticalAreaQuantization;
 
 /// Various fields of cortical models just need some form of model quantized data
 pub trait CorticalModelDataField<CAQ: CorticalAreaQuantization> {

@@ -1,9 +1,9 @@
 use feagi_basis::neurons::{CorticalAreaNeuronLocalIndex, CorticalAreaNeuronPotential};
 use feagi_basis::prelude::*;
-use crate::cortical_area::components::neuron_layout::NeuronLayout;
+use crate::cortical_area::components_rigid::neuron_layout::NeuronLayout;
 use crate::cortical_area::data_structs::{CorticalAreaModelConnectomeCorticalData, CorticalAreaModelNeuronData};
-use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
-use crate::cortical_area::extendable_components::cortical_model_data_field::CorticalModelDataField;
+use crate::cortical_area::components_extendable::cortical_area_quantization::CorticalAreaQuantization;
+use crate::cortical_area::components_extendable::cortical_model_data_field::CorticalModelDataField;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 type IsFiring = bool;
@@ -16,6 +16,12 @@ where
 {
     // NOTE: The data properties for the cortical and neurons are each in one uniform struct.
     // Beware overall byte alignment for them all!
+
+    /// Set to true to ensure the burst engine calls the `process_cortical_dynamics` function
+    const HAS_CORTICAL_DYNAMICS_PROCESSING: bool;
+
+    /// Set to true to ensure the burst engine calls the `process_neuron_dynamics` function
+    const HAS_NEURON_DYNAMICS_PROCESSING: bool;
 
     //region Cortical level Data
 
@@ -30,6 +36,10 @@ where
     /// The cortical level data that is used for runtime processing, is not exposed to
     /// genome developers nor is it saved (starts clean with every init)
     type CorticalDataScratch: CorticalModelDataField<CAQ>;
+
+    /// Not actual cortical data, but rather represents various "values" that are actually the result
+    /// of running functions on the neuron data
+    type CorticalFunctionContext: CorticalModelDataField<CAQ>;
     //endregion
 
     //region Per Neuron Data
@@ -42,15 +52,12 @@ where
 
     //endregion
 
-    /// Not actual cortical data, but rather represents various "values" that are actually the result
-    /// of running functions on the neuron data
-    type CorticalFunctionContext: CorticalModelDataField<CAQ>;
+    fn get_cortical_data_properties(&self) -> &Self::CorticalDataProperties;
 
-    /// Set to true to ensure the burst engine calls the `process_cortical_dynamics` function
-    const HAS_CORTICAL_DYNAMICS_PROCESSING: bool;
+    fn set_cortical_data_properties(&mut self, properties: &Self::CorticalDataProperties);
 
-    /// Set to true to ensure the burst engine calls the `process_neuron_dynamics` function
-    const HAS_NEURON_DYNAMICS_PROCESSING: bool;
+
+    //region Neuron Dynamics
 
     /// called per area. Called before neuron call
     fn process_model_cortical_dynamics(
@@ -130,4 +137,6 @@ where
         // This struct will apply any force fires / probe overrides and store firing state 
         _ = neuron_data.neuron_flags.process_neuron_firing(model_is_firing);
     }
+
+    //endregion
 }

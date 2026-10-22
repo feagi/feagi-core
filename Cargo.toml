@@ -120,6 +120,9 @@ members = [
     "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-basis",
     "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-rayon",
     "crates/feagi-cns-processing/feagi-brain-npu/feagi-npu-burst-engines/feagi-npu-burst-esp32",
+
+    "crates/feagi-migrator",
+    "crates/feagi-migrator/migrator-legacy-v5",
 ]
 
 

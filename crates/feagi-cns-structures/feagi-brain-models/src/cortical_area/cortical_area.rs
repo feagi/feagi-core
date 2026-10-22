@@ -1,6 +1,6 @@
-use crate::cortical_area::components::neuron_layout::NeuronLayout;
-use crate::cortical_area::extendable_components::cortical_area_dynamics::CorticalAreaDynamics;
-use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
+use crate::cortical_area::components_rigid::neuron_layout::NeuronLayout;
+use crate::cortical_area::components_extendable::cortical_area_dynamics::CorticalAreaDynamics;
+use crate::cortical_area::components_extendable::cortical_area_quantization::CorticalAreaQuantization;
 use crate::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Describes a cortical area model with all its dynamics
@@ -16,4 +16,11 @@ where
     type CorticalAreaDynamics: CorticalAreaDynamics<FIQ, Self::NeuronLayout, CAQ>;
 
     type CorticalAreaModelWriter; // TODO
+    
+    fn get_neuron_layout(&self) -> &Self::NeuronLayout;
+    
+    fn replace_neuron_layout(&mut self, new_neuron_layout: Self::NeuronLayout);
+    
+    
+    
 }

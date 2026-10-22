@@ -1,7 +1,7 @@
 use crate::cortical_area::data_structs::per_neuron_flags::PerNeuronFlags;
 use crate::cortical_area::data_structs::InverseOutgoingConnectionCount;
-use crate::cortical_area::extendable_components::cortical_area_quantization::CorticalAreaQuantization;
-use crate::cortical_area::extendable_components::cortical_model_data_field::CorticalModelDataField;
+use crate::cortical_area::components_extendable::cortical_area_quantization::CorticalAreaQuantization;
+use crate::cortical_area::components_extendable::cortical_model_data_field::CorticalModelDataField;
 
 pub struct CorticalAreaModelNeuronData<
     CAQ: CorticalAreaQuantization,
