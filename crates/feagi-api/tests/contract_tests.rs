@@ -362,6 +362,8 @@ fn build_test_state() -> ApiState {
 struct RuntimeTransitionTracker {
     motor_subscriptions: Mutex<HashSet<String>>,
     visualization_subscriptions: Mutex<HashSet<String>>,
+    /// Every `set_frequency` call, in order (registration must never add one).
+    frequency_calls: Mutex<Vec<f64>>,
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -395,17 +397,27 @@ impl feagi_services::RuntimeService for TrackingRuntimeService {
         Ok(())
     }
     async fn get_status(&self) -> feagi_services::ServiceResult<feagi_services::RuntimeStatus> {
+        // Last applied frequency, or the 40 Hz a user dialed in before registering.
+        let frequency_hz = self
+            .tracker
+            .frequency_calls
+            .lock()
+            .unwrap()
+            .last()
+            .copied()
+            .unwrap_or(40.0);
         Ok(feagi_services::RuntimeStatus {
             is_running: false,
             is_paused: false,
-            frequency_hz: 1000.0,
+            frequency_hz,
             burst_count: 0,
             current_rate_hz: 0.0,
             last_burst_neuron_count: 0,
             avg_burst_time_ms: 0.0,
         })
     }
-    async fn set_frequency(&self, _frequency: f64) -> feagi_services::ServiceResult<()> {
+    async fn set_frequency(&self, frequency: f64) -> feagi_services::ServiceResult<()> {
+        self.tracker.frequency_calls.lock().unwrap().push(frequency);
         Ok(())
     }
     async fn get_burst_count(&self) -> feagi_services::ServiceResult<u64> {
@@ -857,6 +869,104 @@ fn sample_motor_device_registrations_with_io_flags() -> Value {
         },
         "feedbacks": {}
     })
+}
+
+/// Grouped Servo encoder (3 joints) with the io flags a MuJoCo controller sends.
+#[cfg(feature = "feagi-agent")]
+fn sample_servo_sensory_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "Servo": [
+                [
+                    {
+                        "friendly_name": "arm_joints",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}],
+                        "io_configuration_flags": {
+                            "frame_change_handling": "Absolute",
+                            "percentage_neuron_positioning": "Linear"
+                        }
+                    },
+                    {}
+                ]
+            ]
+        },
+        "output_units_and_decoder_properties": {},
+        "feedbacks": {}
+    })
+}
+
+/// Pre-creates the Servo IPU twice as wide as its registration declares (a user
+/// widened it by hand) and returns `(cortical_id, declared_dimensions, widened_dimensions)`.
+#[cfg(feature = "feagi-agent")]
+async fn precreate_hand_widened_servo_area(
+    state: &ApiState,
+    registrations: &Value,
+) -> (String, (usize, usize, usize), (usize, usize, usize)) {
+    use feagi_api::common::agent_registration::diff_device_registrations;
+
+    let declared = diff_device_registrations(state, registrations).await;
+    assert_eq!(declared.len(), 1, "Servo registration resolves to one IPU");
+    let area = &declared[0];
+    assert!(
+        area.live_dimensions.is_none(),
+        "area must not exist before the test pre-creates it"
+    );
+    let [dx, dy, dz] = area.declared_dimensions;
+    let widened = (dx * 2, dy, dz);
+    let per_device = (widened.0 / area.declared_device_count, dy, dz);
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: area.cortical_id.clone(),
+            name: "hand_widened_servo".to_string(),
+            dimensions: widened,
+            position: (-50, 20, 0),
+            area_type: "sensory".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(HashMap::from([
+                ("dev_count".to_string(), json!(area.declared_device_count)),
+                (
+                    "cortical_dimensions_per_device".to_string(),
+                    json!([per_device.0, per_device.1, per_device.2]),
+                ),
+            ])),
+        }])
+        .await
+        .expect("failed pre-creating widened servo area");
+    (area.cortical_id.clone(), (dx, dy, dz), widened)
+}
+
+#[cfg(feature = "feagi-agent")]
+fn registration_request_with(agent_id: &AgentID, registrations: Value) -> AgentRegistrationRequest {
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert("device_registrations".to_string(), registrations);
+    AgentRegistrationRequest {
+        agent_type: "embodiment".to_string(),
+        agent_id: agent_id.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(AuthToken::new([1u8; 32]).to_base64()),
+        chosen_transport: None,
+    }
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -2395,6 +2505,174 @@ async fn test_auto_create_preserves_existing_motor_area_position_while_reconcili
             .and_then(|v| v.as_u64()),
         Some(2),
         "Expected motor dev_count to reconcile from registration while preserving position"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_reregistration_keeps_hand_widened_area_dimensions() {
+    use feagi_api::endpoints::agent::get_registration_diff;
+    use feagi_api::v1::RegistrationDiffQuery;
+
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_servo_sensory_device_registrations();
+    let (cortical_id, declared, widened) =
+        precreate_hand_widened_servo_area(&state, &registrations).await;
+    assert!(widened.0 > declared.0);
+
+    // Two registrations with fresh agent ids, like a controller restarting twice.
+    for seed in [11u8, 12u8] {
+        let agent_id = AgentID::new([seed; AgentID::NUMBER_BYTES]);
+        register_agent(
+            ApiStateExtract(state.clone()),
+            ApiJson(registration_request_with(&agent_id, registrations.clone())),
+        )
+        .await
+        .expect("registration should succeed");
+
+        let live = state
+            .connectome_service
+            .get_cortical_area(&cortical_id)
+            .await
+            .expect("widened servo area must still exist");
+        assert_eq!(
+            live.dimensions, widened,
+            "re-registration must not shrink a hand-widened area back to the declared {:?}",
+            declared
+        );
+        assert_eq!(live.dev_count, Some(3));
+    }
+
+    // Diff route: declared < live, matches=false, for the last registered agent.
+    let last_agent = AgentID::new([12u8; AgentID::NUMBER_BYTES]).to_base64();
+    let diff = get_registration_diff(
+        ApiStateExtract(state.clone()),
+        feagi_api::common::Query(RegistrationDiffQuery {
+            agent_id: Some(last_agent.clone()),
+        }),
+    )
+    .await
+    .expect("registration diff should succeed")
+    .0;
+    assert_eq!(diff.agents.len(), 1);
+    assert_eq!(diff.agents[0].agent_id, last_agent);
+    let area = diff.agents[0]
+        .areas
+        .iter()
+        .find(|a| a.cortical_id == cortical_id)
+        .expect("diff must list the servo IPU");
+    assert_eq!(area.direction, "ipu");
+    assert_eq!(
+        area.declared_dimensions,
+        [declared.0, declared.1, declared.2]
+    );
+    assert_eq!(area.declared_device_count, 3);
+    let live_dims = area.live_dimensions.expect("live area exists");
+    assert!(
+        live_dims[0] > area.declared_dimensions[0],
+        "live width {} must exceed declared {}",
+        live_dims[0],
+        area.declared_dimensions[0]
+    );
+    assert_eq!(area.live_device_count, Some(3));
+    assert!(!area.matches);
+
+    // Without agent_id every stored agent is listed.
+    let all = get_registration_diff(
+        ApiStateExtract(state.clone()),
+        feagi_api::common::Query(RegistrationDiffQuery { agent_id: None }),
+    )
+    .await
+    .expect("registration diff should succeed")
+    .0;
+    assert_eq!(all.agents.len(), 2);
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_registration_diff_reports_missing_area_as_no_live() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let diff = feagi_api::common::agent_registration::diff_device_registrations(
+        &state,
+        &sample_servo_sensory_device_registrations(),
+    )
+    .await;
+    assert_eq!(diff.len(), 1);
+    assert!(diff[0].live_dimensions.is_none());
+    assert!(diff[0].live_device_count.is_none());
+    assert!(!diff[0].matches);
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("list areas");
+    assert!(
+        !areas.iter().any(|a| a.cortical_id == diff[0].cortical_id),
+        "diff must not create areas"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_registration_against_existing_area_leaves_burst_frequency_unchanged() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let tracker = Arc::new(RuntimeTransitionTracker::default());
+    let mut state = build_test_state();
+    state.runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
+        as Arc<dyn RuntimeService + Send + Sync>;
+    let registrations = sample_servo_sensory_device_registrations();
+    let _ = precreate_hand_widened_servo_area(&state, &registrations).await;
+
+    let before = state
+        .runtime_service
+        .get_status()
+        .await
+        .expect("status")
+        .frequency_hz;
+    assert_eq!(before, 40.0);
+
+    let agent_id = AgentID::new([21u8; AgentID::NUMBER_BYTES]);
+    register_agent(
+        ApiStateExtract(state.clone()),
+        ApiJson(registration_request_with(&agent_id, registrations)),
+    )
+    .await
+    .expect("registration should succeed");
+
+    let after = state
+        .runtime_service
+        .get_status()
+        .await
+        .expect("status")
+        .frequency_hz;
+    assert_eq!(
+        after, before,
+        "agent registration must not touch the burst engine frequency"
+    );
+    assert!(
+        tracker.frequency_calls.lock().unwrap().is_empty(),
+        "registration must not call RuntimeService::set_frequency, got {:?}",
+        tracker.frequency_calls.lock().unwrap()
     );
 }
 

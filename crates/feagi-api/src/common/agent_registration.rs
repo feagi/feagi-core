@@ -4,8 +4,10 @@
 //! Shared registration helpers used across transports.
 
 use crate::common::ApiState;
+use crate::v1::RegistrationAreaDiff;
 use feagi_config::load_config;
 use feagi_services::types::CreateCorticalAreaParams;
+use feagi_services::ConnectomeService;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalSubUnitIndex, CorticalUnitIndex,
 };
@@ -839,12 +841,36 @@ fn resolve_sensory_dimensions_from_encoder_properties(
 /// IO area width is `per_device_x * dev_count`. Y and Z are not scaled by device
 /// count, so a Servo encoder registered as `(6, 1, 20)` with 6 joints is
 /// `[1, 1, 20]` per device.
+///
+/// Width is divided rounding up: the localized rebuild recomputes the total as
+/// `per_device_x * dev_count`, so a hand-widened live width that is not a multiple
+/// of the device count must never round down (that would shrink the area).
 fn registration_per_device_dimensions(
     expected_dimensions: (usize, usize, usize),
     device_count: usize,
 ) -> (usize, usize, usize) {
-    let per_x = expected_dimensions.0 / device_count.max(1);
+    let per_x = expected_dimensions.0.div_ceil(device_count.max(1));
     (per_x.max(1), expected_dimensions.1, expected_dimensions.2)
+}
+
+/// Geometry an existing area should have after a registration: the per-axis max of
+/// the live area and the declared total.
+///
+/// Re-registration (new agent id, same controller) must not shrink an area the user
+/// widened by hand (orientation IPU 8 -> 4 columns, gyro 6 -> 3 on every reconnect),
+/// while an area smaller than its registration still grows (xARM Servo encoder depth
+/// 10 -> 20). Returns the target and whether the live area exceeds the declared one
+/// on any axis, so the caller can log it.
+pub fn reconcile_registration_dimensions(
+    declared: (usize, usize, usize),
+    live: (usize, usize, usize),
+) -> ((usize, usize, usize), bool) {
+    let target = (
+        declared.0.max(live.0),
+        declared.1.max(live.1),
+        declared.2.max(live.2),
+    );
+    (target, target != declared)
 }
 
 /// Structural update payload so agent registration replaces leftover genome geometry.
@@ -877,23 +903,109 @@ fn registration_dimension_changes(
     changes
 }
 
+/// What a pass over device registrations does with each declared area.
+enum RegistrationPass<'a> {
+    /// Create missing areas and reconcile existing ones (agent registration).
+    Apply,
+    /// Only report declared vs live geometry; the connectome is not touched.
+    Collect(&'a mut Vec<RegistrationAreaDiff>),
+}
+
+/// Live area geometry next to what the registration declares (`GET /v1/agent/registration_diff`).
+async fn build_registration_area_diff(
+    connectome_service: &(dyn ConnectomeService + Send + Sync),
+    cortical_id_b64: &str,
+    declared_name: &str,
+    direction: &str,
+    declared_dimensions: (usize, usize, usize),
+    device_count: usize,
+    exists: bool,
+) -> RegistrationAreaDiff {
+    let declared_per_device = registration_per_device_dimensions(declared_dimensions, device_count);
+    let live = if exists {
+        connectome_service
+            .get_cortical_area(cortical_id_b64)
+            .await
+            .ok()
+    } else {
+        None
+    };
+    let live_dimensions = live.as_ref().map(|area| area.dimensions);
+    let live_per_device_dimensions = live
+        .as_ref()
+        .and_then(|area| area.cortical_dimensions_per_device);
+    let live_device_count = live.as_ref().and_then(|area| {
+        area.properties
+            .get("dev_count")
+            .and_then(|v| v.as_u64())
+            .map(|u| u as usize)
+            .or(area.dev_count)
+    });
+    let matches = live_dimensions == Some(declared_dimensions)
+        && live_per_device_dimensions == Some(declared_per_device)
+        && live_device_count == Some(device_count);
+    let triplet = |d: (usize, usize, usize)| [d.0, d.1, d.2];
+    RegistrationAreaDiff {
+        cortical_id: cortical_id_b64.to_string(),
+        name: live
+            .map(|area| area.name)
+            .unwrap_or_else(|| declared_name.to_string()),
+        direction: direction.to_string(),
+        declared_dimensions: triplet(declared_dimensions),
+        declared_per_device_dimensions: triplet(declared_per_device),
+        declared_device_count: device_count,
+        live_dimensions: live_dimensions.map(triplet),
+        live_per_device_dimensions: live_per_device_dimensions.map(triplet),
+        live_device_count,
+        matches,
+    }
+}
+
+/// Declared vs live geometry for every area a device registration resolves to.
+///
+/// Same derivation as [`auto_create_cortical_areas_from_device_registrations`]
+/// (positions, encoder widths, grouped scalar strips); nothing is created or updated.
+pub async fn diff_device_registrations(
+    state: &ApiState,
+    device_registrations: &serde_json::Value,
+) -> Vec<RegistrationAreaDiff> {
+    let mut areas = Vec::new();
+    reconcile_device_registrations(
+        state,
+        device_registrations,
+        RegistrationPass::Collect(&mut areas),
+    )
+    .await;
+    areas
+}
+
 pub async fn auto_create_cortical_areas_from_device_registrations(
     state: &ApiState,
     device_registrations: &serde_json::Value,
 ) {
-    let config = match load_config(None, None) {
-        Ok(config) => config,
-        Err(e) => {
-            warn!(
-                "⚠️ [API] Failed to load FEAGI configuration for auto-create: {}",
-                e
-            );
+    reconcile_device_registrations(state, device_registrations, RegistrationPass::Apply).await;
+}
+
+async fn reconcile_device_registrations(
+    state: &ApiState,
+    device_registrations: &serde_json::Value,
+    mut pass: RegistrationPass<'_>,
+) {
+    if matches!(pass, RegistrationPass::Apply) {
+        let config = match load_config(None, None) {
+            Ok(config) => config,
+            Err(e) => {
+                warn!(
+                    "⚠️ [API] Failed to load FEAGI configuration for auto-create: {}",
+                    e
+                );
+                return;
+            }
+        };
+
+        if !config.agent.auto_create_missing_cortical_areas {
             return;
         }
-    };
-
-    if !config.agent.auto_create_missing_cortical_areas {
-        return;
     }
 
     let connectome_service = state.connectome_service.as_ref();
@@ -1191,6 +1303,22 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         }
                     };
 
+                    if let RegistrationPass::Collect(out) = &mut pass {
+                        out.push(
+                            build_registration_area_diff(
+                                connectome_service,
+                                &cortical_id_b64,
+                                &resolved_name,
+                                "opu",
+                                expected_dimensions,
+                                device_count,
+                                exists,
+                            )
+                            .await,
+                        );
+                        continue;
+                    }
+
                     if exists {
                         // Area exists: reconcile structural properties from registrations.
                         // Preserve user-defined layout by not mutating existing position.
@@ -1214,16 +1342,27 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             .and_then(|v| v.as_u64())
                             .map(|u| u as usize)
                             .or(current.dev_count);
+                        let (target_dimensions, live_exceeds_declared) =
+                            reconcile_registration_dimensions(
+                                expected_dimensions,
+                                current.dimensions,
+                            );
+                        if live_exceeds_declared {
+                            warn!(
+                                "[API] Motor area '{}' ({}) is larger than its registration: keeping live {:?} over declared {:?}",
+                                current.name, cortical_id_b64, current.dimensions, expected_dimensions
+                            );
+                        }
                         let expected_per_device =
-                            registration_per_device_dimensions(expected_dimensions, device_count);
-                        let dimensions_mismatch = current.dimensions != expected_dimensions;
+                            registration_per_device_dimensions(target_dimensions, device_count);
+                        let dimensions_mismatch = current.dimensions != target_dimensions;
                         let dev_count_mismatch = current_dev_count != Some(device_count);
                         let per_device_mismatch =
                             current.cortical_dimensions_per_device != Some(expected_per_device);
 
                         if dimensions_mismatch || dev_count_mismatch || per_device_mismatch {
                             let changes =
-                                registration_dimension_changes(expected_dimensions, device_count);
+                                registration_dimension_changes(target_dimensions, device_count);
                             if let Err(e) = genome_service
                                 .update_cortical_area(&cortical_id_b64, changes)
                                 .await
@@ -1235,7 +1374,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             } else {
                                 info!(
                                     "[API] Updated cortical area '{}' to {} channels (dimensions {:?})",
-                                    cortical_id_b64, device_count, expected_dimensions
+                                    cortical_id_b64, device_count, target_dimensions
                                 );
                             }
                         }
@@ -1612,6 +1751,22 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         }
                     };
 
+                    if let RegistrationPass::Collect(out) = &mut pass {
+                        out.push(
+                            build_registration_area_diff(
+                                connectome_service,
+                                &cortical_id_b64,
+                                &resolved_name,
+                                "ipu",
+                                expected_dimensions,
+                                device_count,
+                                exists,
+                            )
+                            .await,
+                        );
+                        continue;
+                    }
+
                     if exists {
                         // Area exists: reconcile structural properties from registrations.
                         // Preserve user-defined layout by not mutating existing position.
@@ -1635,15 +1790,26 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             .and_then(|v| v.as_u64())
                             .map(|u| u as usize)
                             .or(current.dev_count);
+                        let (target_dimensions, live_exceeds_declared) =
+                            reconcile_registration_dimensions(
+                                expected_dimensions,
+                                current.dimensions,
+                            );
+                        if live_exceeds_declared {
+                            warn!(
+                                "[API] Sensory area '{}' ({}) is larger than its registration: keeping live {:?} over declared {:?}",
+                                current.name, cortical_id_b64, current.dimensions, expected_dimensions
+                            );
+                        }
                         let expected_per_device =
-                            registration_per_device_dimensions(expected_dimensions, device_count);
-                        let dimensions_mismatch = current.dimensions != expected_dimensions;
+                            registration_per_device_dimensions(target_dimensions, device_count);
+                        let dimensions_mismatch = current.dimensions != target_dimensions;
                         let dev_count_mismatch = current_dev_count != Some(device_count);
                         let per_device_mismatch =
                             current.cortical_dimensions_per_device != Some(expected_per_device);
                         if dimensions_mismatch || dev_count_mismatch || per_device_mismatch {
                             let changes =
-                                registration_dimension_changes(expected_dimensions, device_count);
+                                registration_dimension_changes(target_dimensions, device_count);
                             if let Err(e) = genome_service
                                 .update_cortical_area(&cortical_id_b64, changes)
                                 .await
@@ -1655,7 +1821,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             } else {
                                 info!(
                                     "[API] Updated sensory cortical area '{}' to registration dimensions {:?} (dev_count {})",
-                                    cortical_id_b64, expected_dimensions, device_count
+                                    cortical_id_b64, target_dimensions, device_count
                                 );
                             }
                         }
@@ -1682,6 +1848,19 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                         "firing_threshold".to_string(),
                                         serde_json::json!(default_firing_threshold),
                                     );
+                                    // A legacy-threshold depth map is the old binned encoding
+                                    // (one layer per depth bin), not a user-widened area: move it
+                                    // to the registration's single-layer geometry as well.
+                                    if current.dimensions != expected_dimensions {
+                                        info!(
+                                            "[API] Legacy depth map '{}' migrates from {:?} to registration dimensions {:?}",
+                                            cortical_id_b64, current.dimensions, expected_dimensions
+                                        );
+                                        changes.extend(registration_dimension_changes(
+                                            expected_dimensions,
+                                            device_count,
+                                        ));
+                                    }
                                 }
                             }
                             if let Some(default_firing_threshold_increment) =
@@ -1846,6 +2025,10 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                 }
             }
         }
+    }
+
+    if matches!(pass, RegistrationPass::Collect(_)) {
+        return;
     }
 
     if to_create.is_empty() {
@@ -2545,8 +2728,58 @@ mod sensory_dimension_extraction_tests {
 
 #[cfg(test)]
 mod registration_dimension_change_tests {
-    use super::{registration_dimension_changes, registration_per_device_dimensions};
+    use super::{
+        reconcile_registration_dimensions, registration_dimension_changes,
+        registration_per_device_dimensions,
+    };
     use serde_json::json;
+
+    #[test]
+    fn existing_area_keeps_hand_widened_width_on_reregistration() {
+        // Orientation IPU widened from 4 to 8 columns by hand; controller re-registers 4.
+        let (target, live_exceeds) = reconcile_registration_dimensions((4, 1, 10), (8, 1, 10));
+        assert_eq!(target, (8, 1, 10));
+        assert!(live_exceeds);
+        let changes = registration_dimension_changes(target, 1);
+        assert_eq!(changes.get("dimensions"), Some(&json!([8, 1, 10])));
+        assert_eq!(
+            changes.get("cortical_dimensions_per_device"),
+            Some(&json!([8, 1, 10]))
+        );
+        assert_eq!(changes.get("dev_count"), Some(&json!(1)));
+    }
+
+    #[test]
+    fn existing_area_still_grows_to_declared_dimensions() {
+        // xARM Servo encoder: genome depth 10, registration depth 20 (PR #262).
+        let (target, live_exceeds) = reconcile_registration_dimensions((6, 1, 20), (6, 1, 10));
+        assert_eq!(target, (6, 1, 20));
+        assert!(!live_exceeds);
+    }
+
+    #[test]
+    fn equal_dimensions_are_unchanged() {
+        let (target, live_exceeds) = reconcile_registration_dimensions((3, 1, 100), (3, 1, 100));
+        assert_eq!(target, (3, 1, 100));
+        assert!(!live_exceeds);
+    }
+
+    #[test]
+    fn mixed_axes_take_the_per_axis_max() {
+        let (target, live_exceeds) = reconcile_registration_dimensions((4, 1, 20), (8, 1, 10));
+        assert_eq!(target, (8, 1, 20));
+        assert!(live_exceeds);
+    }
+
+    #[test]
+    fn hand_widened_width_not_divisible_by_device_count_never_rounds_down() {
+        // Gyro IPU widened to 8 columns for 3 devices: rebuild recomputes
+        // total = per_device_x * dev_count, so per_device_x must round up.
+        assert_eq!(
+            registration_per_device_dimensions((8, 1, 10), 3),
+            (3, 1, 10)
+        );
+    }
 
     #[test]
     fn servo_encoder_registration_replaces_stale_per_device_depth() {

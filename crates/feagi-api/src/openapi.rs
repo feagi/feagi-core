@@ -95,6 +95,7 @@ use crate::{
         crate::endpoints::agent::get_capabilities,
         crate::endpoints::agent::get_all_agent_capabilities,
         crate::endpoints::agent::get_device_registration_store,
+        crate::endpoints::agent::get_registration_diff,
         crate::endpoints::agent::get_agent_info,
         crate::endpoints::agent::post_configure,
 
@@ -543,6 +544,10 @@ use crate::{
             crate::v1::DeviceRegistrationExportResponse,
             crate::v1::DeviceRegistrationImportRequest,
             crate::v1::DeviceRegistrationImportResponse,
+            crate::v1::RegistrationAreaDiff,
+            crate::v1::RegistrationDiffAgent,
+            crate::v1::RegistrationDiffResponse,
+            crate::v1::RegistrationDiffQuery,
 
             // System
             crate::endpoints::system::HealthCheckResponse,
