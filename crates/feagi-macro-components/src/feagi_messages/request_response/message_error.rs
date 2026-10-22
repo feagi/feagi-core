@@ -1,7 +1,7 @@
 use crate::common::{basis_path, serde_data_derive_attributes};
 use indexmap::IndexMap;
-use proc_macro2::Ident;
-use quote::quote;
+use proc_macro2::{Ident, Span};
+use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::token::Brace;
 use syn::{braced, LitStr, Token, Type};
@@ -69,7 +69,10 @@ impl MessageErrorTemplate {
 
             impl ::core::error::Error for #generated_name {}
 
-            impl #basis::feagi_message::request::feagi_request_response_payloads::FeagiMessageError for #generated_name {}
+
+            impl #basis::feagi_message::request::feagi_request_response_payloads::FeagiMessageError for #generated_name {
+                const NOT_IMPLEMENTED: Self = #generated_name::NotImplemented;
+            }
         }
     }
 }
@@ -99,6 +102,7 @@ impl Parse for MessageErrorTemplate {
         if variants.is_empty() {
             return Err(entries.error("error block must define at least one error. Leave `error` out to use the default error"));
         }
+        variants.insert(format_ident!("NotImplemented"), LitStr::new("This function is not implemented!", Span::call_site()));
         Ok(MessageErrorTemplate::Variants(variants))
     }
 }

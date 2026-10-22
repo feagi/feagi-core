@@ -14,6 +14,7 @@ use feagi_basis::feagi_message::request::feagi_request_response_payloads::{Feagi
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum CoffeeMachineError {
     OutOfBeans { beans_needed: u32 },
+    NotImplemented
 }
 
 impl core::fmt::Display for CoffeeMachineError {
@@ -24,7 +25,9 @@ impl core::fmt::Display for CoffeeMachineError {
 
 impl core::error::Error for CoffeeMachineError {}
 
-impl FeagiMessageError for CoffeeMachineError {}
+impl FeagiMessageError for CoffeeMachineError {
+    const NOT_IMPLEMENTED: Self = CoffeeMachineError::NotImplemented;
+}
 
 define_request_message_category! {
     category_name: "CoffeeShop",
