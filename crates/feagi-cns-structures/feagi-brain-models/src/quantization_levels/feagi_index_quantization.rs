@@ -1,6 +1,7 @@
 use core::hash::Hash;
 use feagi_basis::prelude::{QuantizedUnsignedIntegerTrait, QuantizedUnsignedIntegerUnwrappedTrait};
 use serde::{Deserialize, Serialize};
+use feagi_basis::feagi_basis_proc_common::enum_leveled_builder;
 
 /// The quantization level that is for structures that must be of the same quantization across
 /// all burst engines in the Neural Processing Unit
@@ -111,6 +112,17 @@ pub enum FeagiIndexQuantizationLevel {
 // TODO macro to generate all the below for a given trait with zero sized impls like this,
 // including generating the with_X macros and the macro for adding the family trait to the struct
 
+enum_leveled_builder!(
+     (Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize),
+    FeagiIndexQuantization, FIQ, {
+        (StandardQuantization, FeagiIndexQuantizationStandard)
+        (LowQuantization, FeagiIndexQuantizationLow)
+        (MiniQuantization, FeagiIndexQuantizationMini)
+    }
+);
+
+
+/*
 /// Maps a quantization level to a concrete type
 pub trait FeagiIndexQuantizationFamily {
     type Of<FIQ: FeagiIndexQuantization>;
@@ -127,6 +139,8 @@ pub enum FeagiIndexQuantizationLeveled<FIQF: FeagiIndexQuantizationFamily> {
 
 // TODO macro to add FeagiIndexQuantizationFamily to a struct
 
+
+ */
 
 
 //endregion
