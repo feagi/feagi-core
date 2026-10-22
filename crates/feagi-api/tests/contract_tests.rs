@@ -653,6 +653,58 @@ async fn create_test_server() -> axum::Router {
 #[cfg(feature = "feagi-agent")]
 static CONFIG_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+/// Serializes tests that load a genome (successfully or not): every load writes the
+/// process-wide `StateManager` genome state that `health_check` reports.
+static GENOME_STATE_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
+/// Attach an NPU to the process-wide ConnectomeManager, which `load_genome` develops
+/// into. Test states use isolated managers, so the singleton has none by default.
+fn ensure_singleton_connectome_has_npu() {
+    let singleton = ConnectomeManager::instance();
+    let mut singleton = singleton.write();
+    if singleton.get_npu().is_none() {
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000_000, 10_000_000, 10)
+            .expect("singleton npu");
+        singleton.set_npu(Arc::new(TracingMutex::new(
+            DynamicNPU::F32(npu),
+            "api-contract-test-singleton-npu",
+        )));
+    }
+}
+
+#[tokio::test]
+async fn test_health_check_reports_genome_loaded_after_service_load() {
+    let _genome_state = GENOME_STATE_LOCK.lock();
+    ensure_singleton_connectome_has_npu();
+    let state = build_test_state();
+
+    // Before any load in this test the state is whatever the process holds; load a
+    // genome through the service layer (no HTTP upload wrapper involved) and the
+    // health check must report it.
+    let genome = create_genome_with_core_areas(
+        "health-genome-state".to_string(),
+        "health-genome-state".to_string(),
+    );
+    let json_str = feagi_evolutionary::save_genome_to_json(&genome).expect("genome json");
+    state
+        .genome_service
+        .load_genome(feagi_services::LoadGenomeParams { json_str })
+        .await
+        .expect("load genome through service");
+
+    let (status, body) = request_json(
+        create_http_server(state),
+        "GET",
+        "/v1/system/health_check",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["genome_state"], "loaded", "{body}");
+    assert_eq!(body["genome_loading"], false, "{body}");
+    assert_eq!(body["genome_validity"], true, "{body}");
+}
+
 #[cfg(feature = "feagi-agent")]
 struct ConfigEnvGuard {
     previous: Option<String>,
@@ -2639,6 +2691,7 @@ async fn test_registration_against_existing_area_leaves_burst_frequency_unchange
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_until_reregister() {
+    let _genome_state = GENOME_STATE_LOCK.lock();
     let tracker = Arc::new(RuntimeTransitionTracker::default());
     let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
         as Arc<dyn RuntimeService + Send + Sync>;
@@ -2841,6 +2894,7 @@ fn test_device_registration_store_compare_flags_stale_segmented_vision() {
 #[tokio::test]
 #[ignore = "real transport path can hang in CI; run manually for websocket validation"]
 async fn test_genome_transition_realtime_transport_requires_reregistration() {
+    let _genome_state = GENOME_STATE_LOCK.lock();
     let tracker = Arc::new(RuntimeTransitionTracker::default());
     let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
         as Arc<dyn RuntimeService + Send + Sync>;
@@ -4477,4 +4531,99 @@ async fn test_sensory_hold_last_frame_put_get_and_save() {
         .find(|(key, _)| key.ends_with("-snhold-b") && key.contains(&imu_id))
         .map(|(_, value)| value.clone());
     assert_eq!(hold_entry, Some(json!(false)));
+}
+
+// ============================================================================
+// ROUTE PATH PARAMETER STYLE
+// ============================================================================
+
+/// Source of the HTTP router. The axum `Router` cannot be introspected, so the
+/// route table is read straight from the file that registers it.
+const HTTP_SERVER_SOURCE: &str = include_str!("../src/transports/http/server.rs");
+
+/// Every string literal passed as the first argument of a `.route(` call.
+fn registered_route_paths(source: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    let mut rest = source;
+    while let Some(pos) = rest.find(".route(") {
+        rest = &rest[pos + ".route(".len()..];
+        let after = rest.trim_start();
+        let Some(literal) = after.strip_prefix('"') else {
+            panic!(
+                "`.route(` argument is not a string literal near: {:?}",
+                &after[..after.len().min(60)]
+            );
+        };
+        let end = literal
+            .find('"')
+            .expect("unterminated route string literal");
+        paths.push(literal[..end].to_string());
+        rest = &literal[end..];
+    }
+    paths
+}
+
+/// axum 0.7 matches `{id}` literally, so such a route 404s for every real id;
+/// path parameters must be written `:name`.
+fn route_path_style_violations(paths: &[String]) -> Vec<String> {
+    let mut violations = Vec::new();
+    for path in paths {
+        if path.contains('{') || path.contains('}') {
+            violations.push(format!("{path}: brace-style parameter (use `:name`)"));
+            continue;
+        }
+        for segment in path.split('/') {
+            if let Some(name) = segment.strip_prefix(':') {
+                let valid =
+                    !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+                if !valid {
+                    violations.push(format!("{path}: malformed parameter segment `{segment}`"));
+                }
+            } else if segment.contains(':') {
+                violations.push(format!(
+                    "{path}: `:` must start a whole segment (`{segment}`)"
+                ));
+            }
+        }
+    }
+    violations
+}
+
+#[test]
+fn test_registered_routes_use_colon_path_parameters() {
+    let paths = registered_route_paths(HTTP_SERVER_SOURCE);
+    assert!(
+        paths.len() > 100,
+        "route parser found only {} routes; the parser or server.rs layout changed",
+        paths.len()
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("/:")),
+        "expected at least one `:name` route in server.rs"
+    );
+    let violations = route_path_style_violations(&paths);
+    assert!(
+        violations.is_empty(),
+        "axum 0.7 path parameters must be `:name`, not `{{name}}`:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn test_route_path_style_check_rejects_brace_parameters() {
+    let sample = r#"
+        Router::new()
+            .route("/v1/foo/:id", get(a))
+            .route(
+                "/v1/foo/{id}",
+                get(b),
+            )
+            .route("/v1/bar/x:id", get(c))
+    "#;
+    let paths = registered_route_paths(sample);
+    assert_eq!(paths, ["/v1/foo/:id", "/v1/foo/{id}", "/v1/bar/x:id"]);
+    let violations = route_path_style_violations(&paths);
+    assert_eq!(violations.len(), 2, "{violations:?}");
+    assert!(violations[0].starts_with("/v1/foo/{id}"));
+    assert!(violations[1].starts_with("/v1/bar/x:id"));
 }

@@ -26,3 +26,8 @@ pub use genome_service_impl::GenomeServiceImpl;
 pub use neuron_service_impl::NeuronServiceImpl;
 pub use runtime_service_impl::RuntimeServiceImpl;
 pub use system_service_impl::SystemServiceImpl;
+
+/// Serializes tests that assert on the process-wide `StateManager` genome state,
+/// which every genome/connectome load in this test binary writes to.
+#[cfg(test)]
+pub(crate) static GENOME_STATE_TEST_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());

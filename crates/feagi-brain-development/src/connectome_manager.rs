@@ -8384,17 +8384,43 @@ impl ConnectomeManager {
     ///
     /// Total number of incoming synapses targeting neurons in this area.
     pub fn get_incoming_synapse_count_in_area(&self, cortical_id: &CorticalID) -> usize {
-        if !self.cortical_id_to_idx.contains_key(cortical_id) {
-            return 0;
-        }
+        self.area_synapse_counts(cortical_id)
+            .map(|(incoming, _)| incoming)
+            .unwrap_or(0)
+    }
 
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            if let Some(stats) = state_manager.get_cortical_area_stats(&cortical_id.as_base_64()) {
-                return stats.incoming_synapse_count;
+    /// `(incoming, outgoing)` synapse counts for an area, counted from the NPU's synapse
+    /// storage so synapses that bypassed the stats counters (snapshot import,
+    /// synaptogenesis, plasticity) are included. The StateManager stats cache is refreshed
+    /// with the counted values; it is only used as a fallback when the NPU is unavailable.
+    fn area_synapse_counts(&self, cortical_id: &CorticalID) -> Option<(usize, usize)> {
+        let cortical_idx = *self.cortical_id_to_idx.get(cortical_id)?;
+        let cortical_id_b64 = cortical_id.as_base_64();
+
+        let counted = self.npu.as_ref().and_then(|npu| {
+            npu.lock()
+                .ok()
+                .map(|npu| npu.get_cortical_area_synapse_counts(cortical_idx))
+        });
+
+        // `read()` rather than `try_read()`: nothing in the runtime holds the StateManager
+        // write lock, and `try_read()` returns `None` whenever a writer is merely queued,
+        // which would silently skip the cache refresh.
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        match counted {
+            Some((incoming, outgoing)) => {
+                state_manager.set_cortical_area_synapse_counts(
+                    &cortical_id_b64,
+                    incoming,
+                    outgoing,
+                );
+                Some((incoming, outgoing))
             }
+            None => state_manager
+                .get_cortical_area_stats(&cortical_id_b64)
+                .map(|stats| (stats.incoming_synapse_count, stats.outgoing_synapse_count)),
         }
-
-        0
     }
 
     /// Get total outgoing synapse count for a specific cortical area.
@@ -8407,17 +8433,9 @@ impl ConnectomeManager {
     ///
     /// Total number of outgoing synapses originating from neurons in this area.
     pub fn get_outgoing_synapse_count_in_area(&self, cortical_id: &CorticalID) -> usize {
-        if !self.cortical_id_to_idx.contains_key(cortical_id) {
-            return 0;
-        }
-
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            if let Some(stats) = state_manager.get_cortical_area_stats(&cortical_id.as_base_64()) {
-                return stats.outgoing_synapse_count;
-            }
-        }
-
-        0
+        self.area_synapse_counts(cortical_id)
+            .map(|(_, outgoing)| outgoing)
+            .unwrap_or(0)
     }
 
     /// Check if two neurons are connected (source → target)

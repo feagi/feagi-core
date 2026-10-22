@@ -5462,6 +5462,37 @@ impl<
         n
     }
 
+    /// Count valid synapses entering and leaving one cortical area.
+    ///
+    /// Returns `(incoming, outgoing)`. This reads the synapse storage directly, so it
+    /// is correct for synapses created by any path (connectome snapshot import,
+    /// synaptogenesis, plasticity), unlike counters that only track explicit
+    /// create/remove calls. One pass over the synapse arrays, no per-neuron allocation;
+    /// a synapse internal to the area counts once in each total.
+    pub fn get_cortical_area_synapse_counts(&self, cortical_idx: u32) -> (usize, usize) {
+        let neurons = self.neuron_storage.read().unwrap();
+        let synapses = self.synapse_storage.read().unwrap();
+        let neuron_areas = neurons.cortical_areas();
+        let valid = synapses.valid_mask();
+        let sources = synapses.source_neurons();
+        let targets = synapses.target_neurons();
+        let in_area = |neuron: u32| neuron_areas.get(neuron as usize) == Some(&cortical_idx);
+        let mut incoming = 0usize;
+        let mut outgoing = 0usize;
+        for i in 0..synapses.count() {
+            if !valid[i] {
+                continue;
+            }
+            if in_area(targets[i]) {
+                incoming += 1;
+            }
+            if in_area(sources[i]) {
+                outgoing += 1;
+            }
+        }
+        (incoming, outgoing)
+    }
+
     /// Get all outgoing synapses from a source neuron
     /// Returns Vec of (target_neuron_id, weight, psp, synapse_type)
     pub fn get_outgoing_synapses(&self, source_neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
