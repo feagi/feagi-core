@@ -179,6 +179,26 @@ fn classifier_areas_allowed_in_region(
     accepted
 }
 
+fn copy_live_designated_io(
+    manager: &ConnectomeManager,
+    region: &mut feagi_structures::genomic::BrainRegion,
+    region_id: &str,
+) {
+    let Some(live) = manager.get_brain_region(region_id) else {
+        return;
+    };
+    for key in ["designated_inputs", "designated_outputs"] {
+        match live.properties.get(key) {
+            Some(value) => {
+                region.properties.insert(key.to_string(), value.clone());
+            }
+            None => {
+                region.properties.remove(key);
+            }
+        }
+    }
+}
+
 fn frame_handling_label(frame: FrameChangeHandling) -> &'static str {
     match frame {
         FrameChangeHandling::Absolute => "Absolute",
@@ -383,6 +403,17 @@ fn io_coding_options_for_unit(cortical_id: &CorticalID) -> Option<IOCodingOption
 /// - When `mapping_data` is empty: remove the destination entry, and if the
 ///   container becomes empty remove `cortical_mapping_dst` entirely.
 /// - When `mapping_data` is non-empty: insert/overwrite the destination entry.
+fn rule_modulator_ids(rule: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
+    rule.get("modulators")
+        .and_then(|value| value.as_array())
+        .map(|list| {
+            list.iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn update_cortical_mapping_dst_in_properties(
     properties: &mut HashMap<String, serde_json::Value>,
     dst_area_id: &str,
@@ -1045,21 +1076,27 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     continue;
                 }
                 let mut detached = classifier.clone();
-                if let Some(field_area_id) = detached.detach_twin(&deleted_id_base64) {
+                if let Some(class_area_id) = detached
+                    .binding_for_output(&deleted_id_base64)
+                    .map(|binding| binding.class_area_id.clone())
+                {
                     let _ = manager
-                        .remove_memory_twin_mapping(&detached.kernel_memory_id, &field_area_id);
-                    detached_scans.push((field_area_id, detached.kernel_memory_id.clone()));
+                        .remove_memory_twin_mapping(&detached.class_memory_id, &class_area_id);
+                    detached.detach_class(&class_area_id);
+                    detached_scans.push((class_area_id, detached.class_memory_id.clone()));
                     manager.upsert_classifier(detached);
                 }
             }
             let classifiers = manager.list_classifiers();
             for classifier in classifiers.values() {
-                if let Some(binding) = classifier.binding_for_field(&deleted_id_base64) {
+                if let Some(binding) = classifier.binding_for_class(&deleted_id_base64) {
                     let _ = manager.remove_memory_twin_mapping(
-                        &classifier.kernel_memory_id,
+                        &classifier.class_memory_id,
                         &deleted_id_base64,
                     );
-                    siblings.push(binding.scan_twin_id.clone());
+                    if !binding.class_output_area_id.is_empty() {
+                        siblings.push(binding.class_output_area_id.clone());
+                    }
                 }
             }
             manager.clear_classifier_inputs_for_area(&deleted_id_base64);
@@ -1151,63 +1188,21 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .cloned()
                 .collect();
 
-            // 1) Incoming side: src → deleted_id. For every other area mapping to the doomed area,
-            //    clear rules and prune the resulting orphan synapses out of the NPU.
-            for src_id in &cortical_ids {
-                if src_id == &cortical_id_typed {
-                    continue;
-                }
-                let has_mapping = manager
-                    .get_cortical_area(src_id)
-                    .and_then(|area| area.properties.get("cortical_mapping_dst"))
-                    .and_then(|value| value.as_object())
-                    .map(|mapping| mapping.contains_key(&deleted_id_base64))
-                    .unwrap_or(false);
-                if has_mapping {
-                    manager
-                        .update_cortical_mapping(src_id, &cortical_id_typed, Vec::new())
-                        .map_err(ServiceError::from)?;
-                    let pruned = manager
-                        .regenerate_synapses_for_mapping(src_id, &cortical_id_typed)
-                        .map_err(|e| {
-                            ServiceError::Backend(format!(
-                                "Failed to prune synapses for {} -> {}: {}",
-                                src_id, cortical_id_typed, e
-                            ))
-                        })?;
-                    pruned_incoming_synapses = pruned_incoming_synapses.saturating_add(pruned);
-                    removed_mapping_count += 1;
-                }
-            }
-
-            // 2) Outgoing side: deleted_id → dst. Same treatment so the doomed area leaves no
-            //    orphan synapses pointing into still-live targets.
-            let outgoing_targets: Vec<CorticalID> = manager
-                .get_cortical_area(&cortical_id_typed)
-                .and_then(|area| area.properties.get("cortical_mapping_dst"))
-                .and_then(|value| value.as_object())
-                .map(|mapping| {
-                    mapping
-                        .keys()
-                        .filter_map(|k| CorticalID::try_from_base_64(k).ok())
-                        .collect()
-                })
-                .unwrap_or_default();
-            for dst_id in outgoing_targets {
-                manager
-                    .update_cortical_mapping(&cortical_id_typed, &dst_id, Vec::new())
-                    .map_err(ServiceError::from)?;
-                let pruned = manager
-                    .regenerate_synapses_for_mapping(&cortical_id_typed, &dst_id)
-                    .map_err(|e| {
-                        ServiceError::Backend(format!(
-                            "Failed to prune synapses for {} -> {}: {}",
-                            cortical_id_typed, dst_id, e
-                        ))
-                    })?;
-                pruned_outgoing_synapses = pruned_outgoing_synapses.saturating_add(pruned);
-                removed_mapping_count += 1;
-            }
+            // 1) + 2) Clear every mapping into and out of the doomed area and prune their
+            //    synapses. The helper tolerates stale entries (a side with no cortical idx has
+            //    nothing to prune) and restores already-cleared rules if pruning fails, so a
+            //    failed delete leaves unrelated mappings as they were.
+            let (cleared, pruned_in, pruned_out) = manager
+                .detach_cortical_area_mappings(&cortical_id_typed)
+                .map_err(|e| {
+                    ServiceError::Backend(format!(
+                        "Failed to prune synapses for mappings of {}: {}",
+                        cortical_id_typed, e
+                    ))
+                })?;
+            removed_mapping_count += cleared;
+            pruned_incoming_synapses = pruned_incoming_synapses.saturating_add(pruned_in);
+            pruned_outgoing_synapses = pruned_outgoing_synapses.saturating_add(pruned_out);
 
             // 3) Upstream-cortical-areas property cleanup on every remaining area. Done while
             //    the deleted_idx is still valid (post-removal we'd have to scan numerically).
@@ -2737,6 +2732,51 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         }
                     }
                 }
+                // Runtime reward comes from `synaptic.reward` modulator instances listed in
+                // the rule's `modulators`. The pre-v4 `reward_source_area` /
+                // `punishment_source_area` fields are stored but never read by the burst
+                // engine, so accepting them would silently produce a mapping that never learns.
+                let legacy_reward_fields: Vec<&str> =
+                    ["reward_source_area", "punishment_source_area"]
+                        .into_iter()
+                        .filter(|key| normalized.get(*key).is_some_and(|v| !v.is_null()))
+                        .collect();
+                if !legacy_reward_fields.is_empty() {
+                    return Err(ServiceError::InvalidInput(format!(
+                        "{} on mapping {} -> {} is not applied at runtime (genome schema v4 \
+                         removed it). Create a `synaptic.reward` modulator whose driver area is \
+                         fed by that source and list its id in the rule's `modulators` array.",
+                        legacy_reward_fields.join(" / "),
+                        src_area_id,
+                        dst_area_id
+                    )));
+                }
+                let plasticity_mode = normalized
+                    .get("plasticity_mode")
+                    .and_then(|v| v.as_str())
+                    .map(|mode| mode.to_ascii_lowercase());
+                if matches!(plasticity_mode.as_deref(), Some("rstdp") | Some("r-stdp")) {
+                    let has_reward_modulator = {
+                        let genome = self.current_genome.read();
+                        let ids = rule_modulator_ids(&normalized);
+                        genome.as_ref().is_some_and(|genome| {
+                            ids.iter().any(|id| {
+                                genome.modulators.get(id).is_some_and(|instance| {
+                                    instance.kind
+                                        == feagi_structures::genomic::ModulatorKind::Reward
+                                })
+                            })
+                        })
+                    };
+                    if !has_reward_modulator {
+                        return Err(ServiceError::InvalidInput(format!(
+                            "plasticity_mode 'rstdp' on mapping {} -> {} needs at least one \
+                             `synaptic.reward` modulator id in the rule's `modulators` array; \
+                             without one R(t) is always 0 and no weight ever changes.",
+                            src_area_id, dst_area_id
+                        )));
+                    }
+                }
                 if plasticity_flag || is_associative {
                     let required = [
                         "plasticity_constant",
@@ -2828,15 +2868,23 @@ impl ConnectomeService for ConnectomeServiceImpl {
             manager
                 .update_cortical_mapping(&src_id, &dst_id, normalized_mapping_data.clone())
                 .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
+            let previous_morphology = existing_mapping
+                .as_ref()
+                .and_then(|rules| rules.first())
+                .and_then(|rule| rule.get("morphology_id"))
+                .and_then(|value| value.as_str())
+                .unwrap_or("")
+                .to_string();
             let mapping_morphology = normalized_mapping_data
                 .first()
                 .and_then(|rule| rule.get("morphology_id"))
                 .and_then(|value| value.as_str())
-                .unwrap_or("");
-            manager.apply_classifier_mapping_change(
+                .unwrap_or(previous_morphology.as_str())
+                .to_string();
+            let removed_class_outputs = manager.apply_classifier_mapping_change(
                 &src_id.as_base_64(),
                 &dst_id.as_base_64(),
-                mapping_morphology,
+                &mapping_morphology,
                 normalized_mapping_data.is_empty(),
             );
 
@@ -2858,7 +2906,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 synapse_count
             );
 
-            (synapse_count, region_io)
+            (synapse_count, region_io, removed_class_outputs)
         };
 
         // Refresh burst-runner caches so newly created twin areas are visualized immediately.
@@ -2868,6 +2916,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Persist updated region IO into RuntimeGenome so genome save/export stays consistent.
         if let Some(genome) = self.current_genome.write().as_mut() {
             genome.classifiers = self.connectome.read().list_classifiers();
+            for output_id in &region_io.2 {
+                if let Ok(cortical_id) = CorticalID::try_from_base_64(output_id) {
+                    genome.cortical_areas.remove(&cortical_id);
+                    for region in genome.brain_regions.values_mut() {
+                        region.remove_area(&cortical_id);
+                    }
+                }
+            }
             if let Some(twin_id) = removed_owned_twin_id {
                 genome.cortical_areas.remove(&twin_id);
                 for region in genome.brain_regions.values_mut() {
@@ -2914,6 +2970,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         "Region '{}' not found in RuntimeGenome while persisting IO registry",
                         region_id
                     );
+                }
+            }
+            {
+                let manager = self.connectome.read();
+                let region_ids: Vec<String> = genome.brain_regions.keys().cloned().collect();
+                for region_id in region_ids {
+                    if let Some(region) = genome.brain_regions.get_mut(&region_id) {
+                        copy_live_designated_io(&manager, region, &region_id);
+                    }
                 }
             }
 
@@ -3008,7 +3073,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
             }
             manager.upsert_classifier(classifier.clone());
-            manager.reconfigure_classifier_scan(&classifier.kernel_memory_id);
+            manager.reconfigure_classifier_scan(&classifier.sample_memory_id);
             let region_io = manager.recompute_brain_region_io_registry().map_err(|e| {
                 ServiceError::Backend(format!(
                     "Failed to recompute region IO after classifier upsert: {}",
@@ -3051,6 +3116,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         region
                             .properties
                             .insert("outputs".to_string(), serde_json::json!(outputs));
+                    }
+                }
+            }
+            {
+                let manager = self.connectome.read();
+                let region_ids: Vec<String> = genome.brain_regions.keys().cloned().collect();
+                for region_id in region_ids {
+                    if let Some(region) = genome.brain_regions.get_mut(&region_id) {
+                        copy_live_designated_io(&manager, region, &region_id);
                     }
                 }
             }
@@ -3140,8 +3214,20 @@ impl ConnectomeService for ConnectomeServiceImpl {
         if let Some(genome) = self.current_genome.write().as_mut() {
             genome.classifiers.remove(classifier_id);
         }
+        let circuit_region_id = classifier.parent_region_id.clone();
+        let delete_circuit = {
+            let manager = self.connectome.read();
+            manager
+                .get_brain_region(&circuit_region_id)
+                .and_then(|region| region.properties.get("classifier_circuit"))
+                .and_then(|value| value.as_bool())
+                == Some(true)
+        };
         for area_id in classifier.owned_area_ids() {
             self.delete_cortical_area(&area_id).await?;
+        }
+        if delete_circuit {
+            self.delete_brain_region(&circuit_region_id).await?;
         }
         Ok(())
     }
@@ -3217,6 +3303,11 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let (memory_ids, plastic, region_ids) =
                 crate::impls::genome_service_impl::architecture_indexes_from_genome(&genome);
             snapshot.set_architecture_indexes(memory_ids, plastic, region_ids);
+            if mode == feagi_npu_neural::types::connectome::ConnectomePersistMode::Lite {
+                // Rebuilding the brain does not need the change log, and it can be far
+                // larger than the genome it describes.
+                genome.change_history.clear();
+            }
             match feagi_evolutionary::save_genome_to_json(&genome) {
                 Ok(json) => snapshot.genome_json = Some(json),
                 Err(e) => {
@@ -4941,6 +5032,111 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn mapping_rejects_legacy_reward_fields_and_rstdp_without_reward_modulator(
+    ) -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
+        let mk = |bytes: &[u8; 8], name: &str| {
+            CorticalArea::new(
+                CorticalID::try_from_bytes(bytes).unwrap(),
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap()
+        };
+        let src = mk(b"crwdsrc1", "src");
+        let dst = mk(b"crwddst1", "dst");
+        let reward = mk(b"crwdrew1", "reward");
+        let src_id = src.cortical_id;
+        let dst_id = dst.cortical_id;
+        let reward_id = reward.cortical_id;
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(src.clone())?;
+            manager.add_cortical_area(dst.clone())?;
+            manager.add_cortical_area(reward.clone())?;
+        }
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: String::new(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(src_id, src), (dst_id, dst), (reward_id, reward)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let svc =
+            ConnectomeServiceImpl::new(connectome.clone(), Arc::new(RwLock::new(Some(genome))));
+
+        let base = serde_json::json!({
+            "morphology_id": "projector",
+            "morphology_scalar": [1, 1, 1],
+            "postSynapticCurrent_multiplier": 1.0,
+            "plasticity_flag": true,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1,
+            "plasticity_window": 10,
+            "plasticity_mode": "rstdp",
+            "eligibility_decay_bursts": 20
+        });
+
+        let mut legacy = base.clone();
+        legacy["reward_source_area"] = serde_json::json!(reward_id.as_base_64());
+        let err = svc
+            .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![legacy])
+            .await
+            .expect_err("reward_source_area must be rejected");
+        match err {
+            crate::types::ServiceError::InvalidInput(message) => {
+                assert!(message.contains("reward_source_area"), "{message}");
+                assert!(message.contains("synaptic.reward"), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+
+        let err = svc
+            .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![base])
+            .await
+            .expect_err("rstdp without a synaptic.reward modulator must be rejected");
+        match err {
+            crate::types::ServiceError::InvalidInput(message) => {
+                assert!(message.contains("synaptic.reward"), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn associative_memory_missing_window_is_filled_from_existing_mapping() -> ServiceResult<()>
     {
         use super::ConnectomeServiceImpl;
@@ -5149,30 +5345,35 @@ mod tests {
 
         let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
 
-        let areas_hash_before = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_cortical_areas_hash();
-        let geometry_hash_before = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_brain_geometry_hash();
+        // Hash the isolated manager directly. StateManager is a process-wide singleton, so
+        // parallel feagi-services tests overwrite published hashes and make before/after
+        // reads of get_brain_geometry_hash() race.
+        let (areas_hash_before, geometry_hash_before) = {
+            let mgr = connectome.read();
+            (
+                mgr.compute_cortical_areas_hash(),
+                mgr.compute_brain_geometry_hash(),
+            )
+        };
 
         // Act: delete by base64 string.
         let cortical_id_base64 = cortical_id.as_base_64();
         svc.delete_cortical_area(&cortical_id_base64).await?;
 
-        let areas_hash_after = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_cortical_areas_hash();
-        let geometry_hash_after = feagi_state_manager::StateManager::instance()
-            .read()
-            .get_brain_geometry_hash();
+        let (areas_hash_after, geometry_hash_after) = {
+            let mgr = connectome.read();
+            (
+                mgr.compute_cortical_areas_hash(),
+                mgr.compute_brain_geometry_hash(),
+            )
+        };
         assert_ne!(
             areas_hash_before, areas_hash_after,
-            "delete must republish cortical_areas_hash for Brain Visualizer"
+            "delete must change cortical_areas_hash for Brain Visualizer"
         );
         assert_ne!(
             geometry_hash_before, geometry_hash_after,
-            "delete must republish brain_geometry_hash for Brain Visualizer"
+            "delete must change brain_geometry_hash for Brain Visualizer"
         );
 
         // Assert: RuntimeGenome no longer contains the area nor region membership.
@@ -6063,7 +6264,7 @@ mod tests {
             SerializableSynapseArray,
         };
         use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
-        use feagi_structures::genomic::classifiers::{Classifier, ClassifierField};
+        use feagi_structures::genomic::classifiers::Classifier;
         use feagi_structures::genomic::cortical_area::{
             CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
             MemoryCorticalType,
@@ -6125,17 +6326,10 @@ mod tests {
             name: "Checker".to_string(),
             parent_region_id: region_key.clone(),
             coordinates_3d: [45, 15, 0],
-            training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
-            kernel_area_id: Some(kernel_id.as_base_64()),
-            class_area_id: Some(class_id.as_base_64()),
-            mask_area_id: None,
-            class_count: None,
-            kernel_size: None,
-            fields: vec![ClassifierField {
-                field_area_id: field_id.as_base_64(),
-                scan_twin_id: twin_id.as_base_64(),
-            }],
-            kernel_memory_id: kernel_mem_id.as_base_64(),
+            sample_area_ids: Vec::new(),
+            class_bindings: Vec::new(),
+            sample_memory_id: kernel_mem_id.as_base_64(),
+            error_area_id: "cerr0001".to_string(),
             class_memory_id: class_mem_id.as_base_64(),
             reward_training: false,
             answer_feedback_area_id: None,
@@ -6220,38 +6414,25 @@ mod tests {
                 .get_classifier("clf-import")
                 .expect("classifier registry restored");
             assert_eq!(restored.class_memory_id, class_mem_id.as_base_64());
-            assert_eq!(
-                restored.fields[0].scan_twin_id,
-                twin_id.as_base_64(),
-                "field scan twin must survive connectome import"
-            );
-            assert_eq!(
-                restored.training_mode,
-                feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
-                "a connectome saved before scanner mode reloads as kernel training"
-            );
-            assert!(restored.mask_area_id.is_none());
-            assert!(restored.kernel_size.is_none());
+            assert_eq!(restored.sample_memory_id, kernel_mem_id.as_base_64());
+            assert_eq!(restored.error_area_id, "cerr0001");
             let kernel_mem = manager
                 .get_cortical_area(&kernel_mem_id)
-                .expect("kernel memory area");
+                .expect("sample memory area");
             assert_eq!(
                 kernel_mem
                     .properties
                     .get("classifier_role")
                     .and_then(|value| value.as_str()),
-                Some("kernel_memory")
+                Some("sample_memory")
             );
-            let twins = kernel_mem
-                .properties
-                .get("memory_twin_areas")
-                .and_then(|value| value.as_object())
-                .expect("field scan twin projected onto kernel memory");
             assert_eq!(
-                twins
-                    .get(&field_id.as_base_64())
-                    .and_then(|value| value.as_str()),
-                Some(twin_id.as_base_64().as_str())
+                kernel_mem
+                    .properties
+                    .get("memory_twin_areas")
+                    .and_then(|value| value.as_object())
+                    .map(|twins| twins.len()),
+                Some(0)
             );
             let class_mem = manager
                 .get_cortical_area(&class_mem_id)
@@ -6999,7 +7180,7 @@ mod tests {
                 morphologies: None,
             },
             stats: feagi_evolutionary::GenomeStats::default(),
-            change_history: Vec::new(),
+            change_history: vec![serde_json::json!({"change_id": "logged-edit", "after": {}})],
         };
 
         let source_npu = Arc::new(TracingMutex::new(
@@ -7200,6 +7381,14 @@ mod tests {
         assert!(
             exported.synapses.count == 0 && exported.lite_synapses.len() >= 2,
             "lite snapshot should omit raw-ID edges and retain semantic memory/plastic edges"
+        );
+        let embedded_genome: serde_json::Value = serde_json::from_str(
+            exported.genome_json.as_deref().expect("lite snapshot embeds the genome"),
+        )
+        .expect("genome json");
+        assert!(
+            embedded_genome.get("change_history").is_none(),
+            "lite snapshot should not embed the genome's change history"
         );
 
         let temp = NamedTempFile::new().expect("temp file");

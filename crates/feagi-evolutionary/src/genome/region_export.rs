@@ -807,7 +807,7 @@ mod tests {
 
     #[test]
     fn subset_keeps_classifier_parented_in_the_exported_circuit() {
-        use feagi_structures::genomic::classifiers::{Classifier, ClassifierTrainingMode};
+        use feagi_structures::genomic::classifiers::Classifier;
         use feagi_structures::genomic::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, MemoryCorticalType,
         };
@@ -839,15 +839,11 @@ mod tests {
                 name: "Demo".to_string(),
                 parent_region_id: child_key.clone(),
                 coordinates_3d: [1, 2, 3],
-                training_mode: ClassifierTrainingMode::Kernel,
-                kernel_area_id: None,
-                class_area_id: None,
-                mask_area_id: None,
-                class_count: None,
-                kernel_size: None,
-                fields: Vec::new(),
-                kernel_memory_id: kernel_mem_id.as_base_64(),
+                sample_area_ids: Vec::new(),
+                class_bindings: Vec::new(),
+                sample_memory_id: kernel_mem_id.as_base_64(),
                 class_memory_id: kernel_mem_id.as_base_64(),
+                error_area_id: "cerr1".to_string(),
                 reward_training: false,
                 answer_feedback_area_id: None,
                 pain_area_id: None,
@@ -866,7 +862,7 @@ mod tests {
             .get("clf-1")
             .expect("classifier stays a classifier record");
         assert_eq!(classifier.parent_region_id, child_key);
-        assert_eq!(classifier.kernel_memory_id, kernel_mem_id.as_base_64());
+        assert_eq!(classifier.sample_memory_id, kernel_mem_id.as_base_64());
         assert!(exported.cortical_areas.contains_key(&kernel_mem_id));
         assert!(exported.brain_regions[&child_key]
             .cortical_areas
@@ -875,7 +871,7 @@ mod tests {
 
     #[test]
     fn subset_omits_classifier_outside_the_exported_circuit() {
-        use feagi_structures::genomic::classifiers::{Classifier, ClassifierTrainingMode};
+        use feagi_structures::genomic::classifiers::Classifier;
 
         let (mut genome, parent_key, child_key) = runtime_parent_and_child();
         genome.classifiers.insert(
@@ -885,15 +881,11 @@ mod tests {
                 name: "Parent only".to_string(),
                 parent_region_id: parent_key,
                 coordinates_3d: [0, 0, 0],
-                training_mode: ClassifierTrainingMode::Kernel,
-                kernel_area_id: None,
-                class_area_id: None,
-                mask_area_id: None,
-                class_count: None,
-                kernel_size: None,
-                fields: Vec::new(),
-                kernel_memory_id: "bW1pc3Npbmch".to_string(),
+                sample_area_ids: Vec::new(),
+                class_bindings: Vec::new(),
+                sample_memory_id: "bW1pc3Npbmch".to_string(),
                 class_memory_id: "bW1pc3Npbmch".to_string(),
+                error_area_id: "cerr1".to_string(),
                 reward_training: false,
                 answer_feedback_area_id: None,
                 pain_area_id: None,

@@ -23,8 +23,10 @@ use crate::genome::migration::MigrationError;
 use crate::genome::schema::GenomeSchemaVersion;
 
 pub mod v3;
+pub mod v6;
 
 pub use v3::V3Normalizer;
+pub use v6::V6Normalizer;
 
 /// Diagnostic record produced by a single normalizer pass.
 ///

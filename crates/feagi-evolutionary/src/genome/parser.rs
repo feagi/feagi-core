@@ -27,7 +27,7 @@ Parses FEAGI 2.1 genome JSON format into runtime data structures.
       "title": "...",
       "parent_region_id": null,
       "coordinate_3d": [x, y, z],
-      "areas": ["cortical_id1", ...],
+      "cortical_areas": ["cortical_id1", ...],
       "regions": ["child_region_id1", ...]
     }
   },
@@ -45,6 +45,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
 
+use crate::genome::migration::membership::fold_genome_region_membership;
 use crate::types::{EvoError, EvoResult};
 use feagi_structures::genomic::brain_regions::RegionID;
 use feagi_structures::genomic::classifiers::Classifier;
@@ -182,6 +183,9 @@ pub struct RawBrainRegion {
     pub parent_region_id: Option<String>,
     pub coordinate_2d: Option<Vec<i32>>,
     pub coordinate_3d: Option<Vec<i32>>,
+    /// Legacy wire key. Canonical saves use `cortical_areas`. Parse folds
+    /// `areas` into `cortical_areas` before this alias is applied, so a region
+    /// that still carries both names does not fail as a duplicate field.
     #[serde(alias = "cortical_areas")]
     pub areas: Option<Vec<String>>,
     pub regions: Option<Vec<String>>,
@@ -203,20 +207,13 @@ pub struct RawClassifier {
     pub parent_region_id: Option<String>,
     #[serde(alias = "coordinate_3d")]
     pub coordinates_3d: Option<Vec<i32>>,
-    pub kernel_area_id: Option<String>,
-    pub class_area_id: Option<String>,
     #[serde(default)]
-    pub training_mode: Option<feagi_structures::genomic::classifiers::ClassifierTrainingMode>,
-    pub mask_area_id: Option<String>,
-    pub kernel_size: Option<[u32; 3]>,
-    /// Scanner-mode class count. Required in scanner mode.
-    pub class_count: Option<u32>,
-    /// Current field bindings. Each entry is one Classifier mapping and its twin.
-    pub fields: Option<Vec<feagi_structures::genomic::classifiers::ClassifierField>>,
-    /// Previous singular field record. Loaded as one binding when `fields` is absent.
-    pub field_area_id: Option<String>,
-    pub kernel_memory_id: Option<String>,
+    pub sample_area_ids: Vec<String>,
+    #[serde(default)]
+    pub class_bindings: Vec<feagi_structures::genomic::classifiers::ClassifierClassBinding>,
+    pub sample_memory_id: Option<String>,
     pub class_memory_id: Option<String>,
+    pub error_area_id: Option<String>,
     #[serde(default)]
     pub reward_training: bool,
     #[serde(default)]
@@ -231,32 +228,7 @@ pub struct RawClassifier {
     pub learn_area_id: Option<String>,
     #[serde(default)]
     pub confidence_area_id: Option<String>,
-    /// Previous singular twin record. Paired with `field_area_id` on load.
-    pub scan_twin_id: Option<String>,
     pub properties: Option<HashMap<String, Value>>,
-}
-
-fn classifier_fields_from_raw(
-    raw: &RawClassifier,
-) -> Vec<feagi_structures::genomic::classifiers::ClassifierField> {
-    if let Some(fields) = &raw.fields {
-        return fields
-            .iter()
-            .filter(|field| !field.field_area_id.is_empty() && !field.scan_twin_id.is_empty())
-            .cloned()
-            .collect();
-    }
-    match (&raw.field_area_id, &raw.scan_twin_id) {
-        (Some(field_area_id), Some(scan_twin_id))
-            if !field_area_id.is_empty() && !scan_twin_id.is_empty() =>
-        {
-            vec![feagi_structures::genomic::classifiers::ClassifierField {
-                field_area_id: field_area_id.clone(),
-                scan_twin_id: scan_twin_id.clone(),
-            }]
-        }
-        _ => Vec::new(),
-    }
 }
 
 /// Convert cortical_mapping_dst keys from old format to base64
@@ -394,15 +366,6 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
 /// Genome parser
 pub struct GenomeParser;
 
-/// Kernel/class/mask area bindings, kernel size, and class count after training-mode normalization.
-type NormalizedClassifierTraining = (
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<[u32; 3]>,
-    Option<u32>,
-);
-
 impl GenomeParser {
     /// Normalize cortical ID list properties (inputs, outputs, designated_*) to base64 strings.
     fn normalize_brain_region_cortical_id_list_properties(region: &mut BrainRegion, keys: &[&str]) {
@@ -453,8 +416,15 @@ impl GenomeParser {
     /// - Data types are invalid
     ///
     pub fn parse(json_str: &str) -> EvoResult<ParsedGenome> {
-        // Deserialize raw genome
-        let raw: RawGenome = serde_json::from_str(json_str)
+        // Fold legacy `areas` into `cortical_areas` before struct decode.
+        // Serde treats the alias as the same field and rejects a region that
+        // still has both keys.
+        let mut genome_value: Value = serde_json::from_str(json_str)
+            .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
+        for note in fold_genome_region_membership(&mut genome_value).data_loss {
+            warn!(target: "feagi-evo", "[GENOME-PARSE] {}", note);
+        }
+        let raw: RawGenome = serde_json::from_value(genome_value)
             .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
 
         // Validate version - support 2.x and 3.x (3.0 is flat format with base64 IDs)
@@ -928,60 +898,6 @@ impl GenomeParser {
         Ok(regions)
     }
 
-    fn normalize_classifier_training(
-        classifier_id: &str,
-        training_mode: feagi_structures::genomic::classifiers::ClassifierTrainingMode,
-        kernel_area_id: Option<String>,
-        class_area_id: Option<String>,
-        mask_area_id: Option<String>,
-        kernel_size: Option<[u32; 3]>,
-        class_count: Option<u32>,
-    ) -> EvoResult<NormalizedClassifierTraining> {
-        use feagi_structures::genomic::classifiers::ClassifierTrainingMode;
-        match training_mode {
-            ClassifierTrainingMode::Kernel => {
-                if mask_area_id.is_some() || kernel_size.is_some() || class_count.is_some() {
-                    return Err(EvoError::InvalidArea(format!(
-                    "Classifier '{classifier_id}' is in kernel mode and cannot store a mask, kernel size, or class count"
-                )));
-                }
-                Ok((kernel_area_id, class_area_id, None, None, None))
-            }
-            ClassifierTrainingMode::Scanner => {
-                if kernel_area_id.is_some() || class_area_id.is_some() {
-                    return Err(EvoError::InvalidArea(format!(
-                    "Classifier '{classifier_id}' is in scanner mode and cannot store kernel or class areas"
-                )));
-                }
-                let mask = mask_area_id
-                    .filter(|id| !id.trim().is_empty())
-                    .ok_or_else(|| {
-                        EvoError::InvalidArea(format!(
-                    "Classifier '{classifier_id}' is in scanner mode and is missing mask_area_id"
-                ))
-                    })?;
-                let size = kernel_size.ok_or_else(|| {
-                    EvoError::InvalidArea(format!(
-                    "Classifier '{classifier_id}' is in scanner mode and is missing kernel_size"
-                ))
-                })?;
-                feagi_structures::genomic::classifiers::validate_kernel_size(size).map_err(
-                    |e| EvoError::InvalidArea(format!("Classifier '{classifier_id}' {e}")),
-                )?;
-                let count = class_count.ok_or_else(|| {
-                    EvoError::InvalidArea(format!(
-                    "Classifier '{classifier_id}' is in scanner mode and is missing class_count"
-                ))
-                })?;
-                feagi_structures::neuron_voxels::class_potential::validate_class_count(count)
-                    .map_err(|e| {
-                        EvoError::InvalidArea(format!("Classifier '{classifier_id}' {e}"))
-                    })?;
-                Ok((None, None, Some(mask), Some(size), Some(count)))
-            }
-        }
-    }
-
     fn parse_classifiers(
         raw_classifiers: &HashMap<String, RawClassifier>,
     ) -> EvoResult<Vec<Classifier>> {
@@ -1015,9 +931,9 @@ impl GenomeParser {
                 }
                 None => [0, 0, 0],
             };
-            let kernel_memory_id = raw.kernel_memory_id.clone().ok_or_else(|| {
+            let sample_memory_id = raw.sample_memory_id.clone().ok_or_else(|| {
                 EvoError::InvalidArea(format!(
-                    "Classifier '{}' is missing kernel_memory_id",
+                    "Classifier '{}' is missing sample_memory_id",
                     classifier_id
                 ))
             })?;
@@ -1027,32 +943,34 @@ impl GenomeParser {
                     classifier_id
                 ))
             })?;
-            let fields = classifier_fields_from_raw(raw);
-            let training_mode = raw.training_mode.unwrap_or_default();
-            let (kernel_area_id, class_area_id, mask_area_id, kernel_size, class_count) =
-                Self::normalize_classifier_training(
-                    classifier_id,
-                    training_mode,
-                    raw.kernel_area_id.clone(),
-                    raw.class_area_id.clone(),
-                    raw.mask_area_id.clone(),
-                    raw.kernel_size,
-                    raw.class_count,
-                )?;
+            let error_area_id = raw.error_area_id.clone().ok_or_else(|| {
+                EvoError::InvalidArea(format!(
+                    "Classifier '{}' is missing error_area_id",
+                    classifier_id
+                ))
+            })?;
+            let sample_area_ids = raw
+                .sample_area_ids
+                .iter()
+                .map(|id| id.trim().to_string())
+                .filter(|id| !id.is_empty())
+                .collect();
+            let class_bindings = raw
+                .class_bindings
+                .iter()
+                .filter(|binding| !binding.class_area_id.trim().is_empty())
+                .cloned()
+                .collect();
             classifiers.push(Classifier {
                 classifier_id: classifier_id.clone(),
                 name,
                 parent_region_id,
                 coordinates_3d,
-                training_mode,
-                kernel_area_id,
-                class_area_id,
-                mask_area_id,
-                class_count,
-                kernel_size,
-                fields,
-                kernel_memory_id,
+                sample_area_ids,
+                class_bindings,
+                sample_memory_id,
                 class_memory_id,
+                error_area_id,
                 reward_training: raw.reward_training,
                 answer_feedback_area_id: raw.answer_feedback_area_id.clone(),
                 pain_area_id: raw.pain_area_id.clone(),
@@ -1070,6 +988,88 @@ impl GenomeParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_folds_legacy_areas_into_cortical_areas() {
+        let json = r#"{
+            "version": "2.1",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Power",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                },
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "areas": ["_power"],
+                    "cortical_areas": ["_death"]
+                }
+            }
+        }"#;
+
+        let parsed = GenomeParser::parse(json).unwrap();
+        let (region, _) = &parsed.brain_regions[0];
+        let ids: Vec<String> = region
+            .get_all_areas()
+            .into_iter()
+            .map(|id| id.as_base_64())
+            .collect();
+        assert!(ids.contains(&string_to_cortical_id("_power").unwrap().as_base_64()));
+        assert!(ids.contains(&string_to_cortical_id("_death").unwrap().as_base_64()));
+    }
+
+    #[test]
+    fn parse_accepts_cortical_areas_only_and_a_non_array_legacy_key() {
+        let cortical_only = r#"{
+            "version": "2.1",
+            "blueprint": {
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": { "title": "Root", "cortical_areas": ["_death"] }
+            }
+        }"#;
+        let parsed = GenomeParser::parse(cortical_only).unwrap();
+        let (region, _) = &parsed.brain_regions[0];
+        assert!(region.contains_area(&string_to_cortical_id("_death").unwrap()));
+
+        let dropped_legacy = r#"{
+            "version": "2.1",
+            "blueprint": {
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "areas": "not-a-list",
+                    "cortical_areas": ["_death"]
+                }
+            }
+        }"#;
+        let parsed = GenomeParser::parse(dropped_legacy).unwrap();
+        let (region, _) = &parsed.brain_regions[0];
+        assert_eq!(region.area_count(), 1);
+        assert!(region.contains_area(&string_to_cortical_id("_death").unwrap()));
+    }
 
     #[test]
     fn test_parse_minimal_genome() {
@@ -1435,29 +1435,35 @@ mod tests {
         let json = r#"{
             "version": "3.0",
             "blueprint": {
-                "cfield": {
-                    "cortical_name": "Field",
+                "csample": {
+                    "cortical_name": "Sample",
                     "cortical_type": "CUSTOM",
                     "block_boundaries": [4, 4, 1],
                     "relative_coordinate": [0, 0, 0]
                 },
-                "mkmem1": {
-                    "cortical_name": "KernelMem",
+                "msmem1": {
+                    "cortical_name": "SampleMem",
                     "cortical_type": "MEMORY",
-                    "block_boundaries": [2, 2, 2],
+                    "block_boundaries": [1, 1, 1],
                     "relative_coordinate": [10, 0, 0]
                 },
                 "mcmem1": {
                     "cortical_name": "ClassMem",
                     "cortical_type": "MEMORY",
-                    "block_boundaries": [2, 2, 2],
+                    "block_boundaries": [1, 1, 1],
                     "relative_coordinate": [20, 0, 0]
                 },
-                "cscan1": {
-                    "cortical_name": "ScanTwin",
+                "cout1": {
+                    "cortical_name": "ClassOutput",
                     "cortical_type": "CUSTOM",
-                    "block_boundaries": [4, 4, 3],
+                    "block_boundaries": [1, 1, 4],
                     "relative_coordinate": [30, 0, 0]
+                },
+                "cerr1": {
+                    "cortical_name": "Error",
+                    "cortical_type": "CUSTOM",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [40, 0, 0]
                 }
             },
             "brain_regions": {
@@ -1466,7 +1472,7 @@ mod tests {
                     "parent_region_id": "",
                     "coordinate_2d": [0, 0],
                     "coordinate_3d": [0, 0, 0],
-                    "areas": ["cfield", "mkmem1", "mcmem1", "cscan1"],
+                    "areas": ["csample", "msmem1", "mcmem1", "cout1", "cerr1"],
                     "regions": [],
                     "inputs": [],
                     "outputs": []
@@ -1477,10 +1483,14 @@ mod tests {
                     "name": "object_class",
                     "parent_region_id": "root",
                     "coordinates_3d": [30, 0, 0],
-                    "field_area_id": "cfield",
-                    "kernel_memory_id": "mkmem1",
+                    "sample_area_ids": ["csample"],
+                    "class_bindings": [{
+                        "class_area_id": "cclass",
+                        "class_output_area_id": "cout1"
+                    }],
+                    "sample_memory_id": "msmem1",
                     "class_memory_id": "mcmem1",
-                    "scan_twin_id": "cscan1"
+                    "error_area_id": "cerr1"
                 }
             }
         }"#;
@@ -1490,72 +1500,32 @@ mod tests {
         let classifier = &parsed.classifiers[0];
         assert_eq!(classifier.classifier_id, "clf-1");
         assert_eq!(classifier.name, "object_class");
-        assert_eq!(classifier.parent_region_id, "root");
-        assert_eq!(classifier.fields.len(), 1);
-        assert_eq!(classifier.fields[0].field_area_id, "cfield");
-        assert_eq!(classifier.kernel_memory_id, "mkmem1");
+        assert_eq!(classifier.sample_memory_id, "msmem1");
         assert_eq!(classifier.class_memory_id, "mcmem1");
-        assert_eq!(classifier.fields[0].scan_twin_id, "cscan1");
-        assert_eq!(classifier.owned_area_ids().len(), 3);
-        assert_eq!(
-            classifier.training_mode,
-            feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel
-        );
-        assert!(classifier.mask_area_id.is_none());
-        assert!(classifier.kernel_size.is_none());
+        assert_eq!(classifier.error_area_id, "cerr1");
+        assert_eq!(classifier.sample_area_ids, vec!["csample".to_string()]);
+        assert_eq!(classifier.class_bindings.len(), 1);
+        assert_eq!(classifier.class_bindings[0].class_output_area_id, "cout1");
+        assert!(classifier.owned_area_ids().contains(&"cerr1".to_string()));
+        assert!(classifier.owned_area_ids().contains(&"cout1".to_string()));
     }
 
     #[test]
-    fn test_parse_scanner_classifier_round_trip_fields() {
+    fn test_parse_classifier_without_error_area_is_rejected() {
         let json = r#"{
             "version": "3.0",
             "blueprint": {},
             "brain_regions": {},
             "classifiers": {
-                "clf-scan": {
-                    "name": "scan",
+                "clf-1": {
+                    "name": "object_class",
                     "parent_region_id": "root",
-                    "coordinates_3d": [1, 2, 3],
-                    "training_mode": "scanner",
-                    "mask_area_id": "cmask",
-                    "kernel_size": [8, 8, 3],
-                    "class_count": 19,
-                    "kernel_memory_id": "mkmem1",
+                    "sample_memory_id": "msmem1",
                     "class_memory_id": "mcmem1"
                 }
             }
         }"#;
-        let parsed = GenomeParser::parse(json).expect("scanner classifier");
-        let classifier = &parsed.classifiers[0];
-        assert_eq!(
-            classifier.training_mode,
-            feagi_structures::genomic::classifiers::ClassifierTrainingMode::Scanner
-        );
-        assert_eq!(classifier.mask_area_id.as_deref(), Some("cmask"));
-        assert_eq!(classifier.kernel_size, Some([8, 8, 3]));
-        assert_eq!(classifier.class_count, Some(19));
-        assert!(classifier.kernel_area_id.is_none());
-    }
-
-    #[test]
-    fn test_parse_scanner_classifier_without_class_count_is_rejected() {
-        let json = r#"{
-            "version": "3.0",
-            "blueprint": {},
-            "brain_regions": {},
-            "classifiers": {
-                "clf-scan": {
-                    "name": "scan",
-                    "parent_region_id": "root",
-                    "training_mode": "scanner",
-                    "mask_area_id": "cmask",
-                    "kernel_size": [8, 8, 3],
-                    "kernel_memory_id": "mkmem1",
-                    "class_memory_id": "mcmem1"
-                }
-            }
-        }"#;
-        let error = GenomeParser::parse(json).expect_err("class_count is required");
-        assert!(error.to_string().contains("class_count"), "{error}");
+        let error = GenomeParser::parse(json).expect_err("error_area_id is required");
+        assert!(error.to_string().contains("error_area_id"), "{error}");
     }
 }

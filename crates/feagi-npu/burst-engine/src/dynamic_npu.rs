@@ -772,6 +772,10 @@ where
         dispatch!(self, set_spike_train_areas(areas))
     }
 
+    pub fn modulator_area_subscriptions(&self, cortical_idx: u32) -> Vec<String> {
+        dispatch!(self, modulator_area_subscriptions(cortical_idx))
+    }
+
     pub fn set_homeostatic_leak_areas(&self, areas: ahash::AHashSet<u32>) {
         dispatch!(self, set_homeostatic_leak_areas(areas))
     }
@@ -1252,6 +1256,14 @@ where
             DynamicNPUGeneric::INT8(npu) => {
                 npu.schedule_valued_force_fire(target_burst, area_idx, coords, potentials)
             }
+        }
+    }
+
+    /// Replace classifier error watches on the active NPU.
+    pub fn set_classifier_error_watches(&self, watches: Vec<crate::npu::ClassifierErrorWatch>) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.set_classifier_error_watches(watches),
+            DynamicNPUGeneric::INT8(npu) => npu.set_classifier_error_watches(watches),
         }
     }
 

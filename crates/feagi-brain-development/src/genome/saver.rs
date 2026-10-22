@@ -91,17 +91,21 @@ impl GenomeSaver {
                 }
             );
 
-            // Cortical areas in this region
+            // Membership is saved only as cortical_areas. Legacy `areas` is a read-time input.
             let areas: Vec<String> = region.cortical_areas.iter().cloned().collect();
-            region_data.insert("areas".to_string(), json!(areas));
 
             // Child regions (empty for now - can be computed from hierarchy)
             region_data.insert("regions".to_string(), json!(Vec::<String>::new()));
 
-            // Add all properties from the region's properties HashMap
+            // Skip membership keys so a stored legacy `areas` property cannot
+            // be written beside cortical_areas.
             for (key, value) in &region.properties {
+                if key == "areas" || key == "cortical_areas" {
+                    continue;
+                }
                 region_data.insert(key.clone(), value.clone());
             }
+            region_data.insert("cortical_areas".to_string(), json!(areas));
 
             regions_map.insert(region_id.clone(), Value::Object(region_data));
         }
@@ -175,6 +179,9 @@ mod tests {
         assert_eq!(parsed["version"], "2.1");
         assert!(parsed["blueprint"].is_object());
         assert!(parsed["brain_regions"].is_object());
+        let root = &parsed["brain_regions"]["root"];
+        assert!(root.get("areas").is_none());
+        assert!(root.get("cortical_areas").is_some());
     }
 
     #[test]

@@ -23,12 +23,17 @@ use crate::genome::schema::GenomeSchemaVersion;
 use crate::genome::validators::{ValidationReport, Validator};
 
 pub mod chain;
+pub mod membership;
 pub mod v2_to_v3;
 pub mod v3_to_v4;
+pub mod v4_to_v5;
+pub mod v5_to_v6;
 
 pub use chain::ChainRunner;
 pub use v2_to_v3::V2ToV3Migrator;
 pub use v3_to_v4::V3ToV4Migrator;
+pub use v4_to_v5::V4ToV5Migrator;
+pub use v5_to_v6::V5ToV6Migrator;
 
 /// Errors emitted by migrators and by the chain machinery itself.
 #[derive(Debug, Error)]

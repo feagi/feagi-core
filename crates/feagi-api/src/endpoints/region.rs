@@ -230,6 +230,11 @@ pub async fn get_regions_members(
                         "outputs": outputs,
                         "designated_inputs": designated_inputs,
                         "designated_outputs": designated_outputs,
+                        "classifier_circuit": region
+                            .properties
+                            .get("classifier_circuit")
+                            .and_then(|value| value.as_bool())
+                            .unwrap_or(false),
                     }),
                 );
             }

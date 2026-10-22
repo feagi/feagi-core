@@ -397,6 +397,23 @@ pub struct RustNPU<
     /// the gate cortical area index. Used to check the fire queue each burst and compute
     /// which gates are closed before propagation.
     gate_configs: std::sync::RwLock<AHashMap<CorticalMappingKey, u32>>,
+
+    /// Classifier class pairs checked against this burst's fire queue.
+    classifier_error_watches: std::sync::RwLock<Vec<ClassifierErrorWatch>>,
+}
+
+/// One class input and the class output created for it.
+#[derive(Debug, Clone)]
+pub struct ClassifierErrorPair {
+    pub input_area_idx: u32,
+    pub output_area_idx: u32,
+}
+
+/// Error area plus the class pairs that can raise it.
+#[derive(Debug, Clone)]
+pub struct ClassifierErrorWatch {
+    pub error_area_idx: u32,
+    pub pairs: Vec<ClassifierErrorPair>,
 }
 
 const POWER_NEURON_UNSET: u32 = u32::MAX;
@@ -581,6 +598,7 @@ impl<
             rate_modulated_leak: std::sync::Mutex::new(RateModulatedLeakRegistry::default()),
             modulator_engine: std::sync::Mutex::new(ModulatorEngine::default()),
             gate_configs: std::sync::RwLock::new(AHashMap::new()),
+            classifier_error_watches: std::sync::RwLock::new(Vec::new()),
         })
     }
 }
@@ -2215,6 +2233,67 @@ impl<
             .map(|target| (target.twin_area_idx, target.potential))
     }
 
+    /// Replace the classifier error watches checked after each burst.
+    pub fn set_classifier_error_watches(&self, watches: Vec<ClassifierErrorWatch>) {
+        *self.classifier_error_watches.write().unwrap() = watches;
+    }
+
+    /// Same-burst class mismatch or multi-neuron class output fires the error area next burst.
+    ///
+    /// `process_burst` already holds `fire_structures`. Queue the injection on that
+    /// guard. Locking the mutex again deadlocks the burst loop.
+    fn schedule_classifier_error_outputs(
+        &self,
+        fire_queue: &FireQueue,
+        burst_count: u64,
+        fire_structures: &mut FireStructures,
+    ) {
+        use feagi_structures::genomic::classifiers::{classifier_reports_error, ClassPairFiring};
+
+        let watches = self.classifier_error_watches.read().unwrap();
+        if watches.is_empty() {
+            return;
+        }
+        let coords_for = |area_idx: u32| -> Vec<(u32, u32, u32)> {
+            fire_queue
+                .neurons_by_area
+                .get(&area_idx)
+                .map(|neurons| {
+                    neurons
+                        .iter()
+                        .map(|neuron| (neuron.x, neuron.y, neuron.z))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let error_areas: Vec<u32> = watches
+            .iter()
+            .filter(|watch| {
+                let pairs: Vec<ClassPairFiring> = watch
+                    .pairs
+                    .iter()
+                    .map(|pair| ClassPairFiring {
+                        input_coords: coords_for(pair.input_area_idx),
+                        output_coords: coords_for(pair.output_area_idx),
+                    })
+                    .collect();
+                classifier_reports_error(&pairs)
+            })
+            .map(|watch| watch.error_area_idx)
+            .collect();
+        drop(watches);
+        for error_area_idx in error_areas {
+            fire_structures
+                .pending_replay_injections
+                .push(ReplayInjection {
+                    target_burst: burst_count.saturating_add(1),
+                    twin_area_idx: error_area_idx,
+                    coords: vec![(0, 0, 0)],
+                    potentials: ReplayPotentialMode::ForceFire,
+                });
+        }
+    }
+
     /// Register the twin cortical area for replay from a memory area and upstream area.
     pub fn register_memory_twin_mapping(
         &mut self,
@@ -2706,6 +2785,11 @@ impl<
             burst_count,
             &mut fire_structures,
             &propagation_engine,
+        );
+        self.schedule_classifier_error_outputs(
+            &dynamics_result.fire_queue,
+            burst_count,
+            &mut fire_structures,
         );
 
         // PSP from fires at `burst_count` arrives at `burst_count + delay_bursts` (see synaptic delay docs).
@@ -4388,6 +4472,14 @@ impl<
             .set_area_subscriptions(subscriptions);
     }
 
+    /// Modulator instance ids a cortical area subscribes to, as pushed into the engine.
+    pub fn modulator_area_subscriptions(&self, cortical_idx: u32) -> Vec<String> {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .area_subscriptions(cortical_idx)
+    }
+
     /// Cortical indices whose neurons run the spike-train state machine.
     pub fn set_spike_train_areas(&self, areas: AHashSet<u32>) {
         self.modulator_engine
@@ -5909,19 +6001,30 @@ impl<
             .modulator_engine
             .lock()
             .map_err(|_| FeagiError::RuntimeError("modulator engine lock poisoned".to_string()))?;
+        let mut reward_gated_mappings: AHashSet<CorticalMappingKey> = AHashSet::new();
         let reward_signals: AHashMap<CorticalMappingKey, f32> = {
             let mut reward_signals: AHashMap<CorticalMappingKey, f32> =
                 AHashMap::with_capacity(mappings.len());
             for (key, params) in &mappings {
+                // A mapping that subscribes to `synaptic.reward` is reward-gated in every
+                // plastic mode: plain Hebbian LTP must not run while the reward driver is
+                // silent, otherwise the subscription has no effect in `stdp` mode.
+                let reward_gated = matches!(params.plasticity_mode, PlasticityMode::RStdp)
+                    || modulators.group_has_reward(params.modulation_group);
                 let r = match params.plasticity_mode {
                     PlasticityMode::Off => continue,
-                    PlasticityMode::Stdp => modulators.learning_factor(params.modulation_group),
-                    PlasticityMode::RStdp => {
+                    PlasticityMode::Stdp | PlasticityMode::RStdp if reward_gated => {
                         modulators.reward_for_group(params.modulation_group)
                             * modulators.learning_factor(params.modulation_group)
                     }
+                    PlasticityMode::Stdp | PlasticityMode::RStdp => {
+                        modulators.learning_factor(params.modulation_group)
+                    }
                 };
                 reward_signals.insert(*key, r);
+                if reward_gated {
+                    reward_gated_mappings.insert(*key);
+                }
             }
             reward_signals
         };
@@ -6073,10 +6176,11 @@ impl<
                 continue;
             };
             let reward = *reward_signals.get(key).unwrap_or(&0.0);
-            // R-STDP requires a positive net reward to commit the initial LTP that creates
-            // an associative edge. Neutral activity records no connection; punishment cannot
+            // Reward-gated mappings (R-STDP, or any mode subscribed to `synaptic.reward`)
+            // require a positive net reward to commit the initial LTP that creates an
+            // associative edge. Neutral activity records no connection; punishment cannot
             // depress a synapse that does not yet exist.
-            if matches!(params.plasticity_mode, PlasticityMode::RStdp) && reward <= 0.0 {
+            if reward_gated_mappings.contains(key) && reward <= 0.0 {
                 continue;
             }
 
@@ -6850,6 +6954,38 @@ mod tests {
     // ═══════════════════════════════════════════════════════════
     // Core NPU Creation & Initialization
     // ═══════════════════════════════════════════════════════════
+
+    #[test]
+    fn classifier_error_schedules_without_relocking_fire_structures() {
+        let npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                64, 64, 4,
+            );
+        npu.set_classifier_error_watches(vec![ClassifierErrorWatch {
+            error_area_idx: 9,
+            pairs: vec![ClassifierErrorPair {
+                input_area_idx: 2,
+                output_area_idx: 3,
+            }],
+        }]);
+        let mut fire_queue = FireQueue::new();
+        fire_queue.add_neuron(FiringNeuron {
+            neuron_id: NeuronId(1),
+            membrane_potential: 1.0,
+            cortical_idx: 2,
+            x: 1,
+            y: 0,
+            z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+        });
+        let mut fire_structures = npu.fire_structures.lock().unwrap();
+        npu.schedule_classifier_error_outputs(&fire_queue, 10, &mut fire_structures);
+        assert_eq!(fire_structures.pending_replay_injections.len(), 1);
+        let injection = &fire_structures.pending_replay_injections[0];
+        assert_eq!(injection.target_burst, 11);
+        assert_eq!(injection.twin_area_idx, 9);
+        assert_eq!(injection.coords, vec![(0, 0, 0)]);
+    }
 
     #[test]
     fn test_npu_creation() {

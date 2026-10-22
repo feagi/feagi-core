@@ -282,6 +282,7 @@ fn is_flat_format(genome_value: &Value) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::genome::parser::string_to_cortical_id;
 
     #[test]
     fn test_load_minimal_genome() {
@@ -344,10 +345,131 @@ mod tests {
 
         let (_genome, report) = load_genome_with_report(json).unwrap();
         assert_eq!(report.from_version.as_u32(), 2);
-        assert_eq!(report.to_version.as_u32(), 4);
-        assert_eq!(report.migrators_applied, vec!["v2_to_v3", "v3_to_v4"]);
+        assert_eq!(report.to_version.as_u32(), 6);
+        assert_eq!(
+            report.migrators_applied,
+            vec!["v2_to_v3", "v3_to_v4", "v4_to_v5", "v5_to_v6"]
+        );
         // V4Validator is a placeholder today; clean report expected.
         assert!(report.is_blocking_clean());
+    }
+
+    #[test]
+    fn load_folds_duplicate_region_membership_keys() {
+        // Production connectome saves failed here: a region with both `areas`
+        // and `cortical_areas` made serde report duplicate field `areas`.
+        let json = r#"{
+            "genome_id": "t-both",
+            "genome_title": "t",
+            "genome_description": "t",
+            "version": "2.0",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Power",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                },
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "areas": ["_power"],
+                    "cortical_areas": ["_death"]
+                }
+            },
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "stats": { "innate_cortical_area_count": 2, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+            "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+            "timestamp": 0.0
+        }"#;
+
+        let (genome, report) = load_genome_with_report(json).unwrap();
+        assert!(report.is_blocking_clean());
+        assert_eq!(report.to_version.as_u32(), 6);
+        let (migrated, _) = migrate_genome_json_to_current(json).unwrap();
+        assert!(migrated["brain_regions"]["root"].get("areas").is_none());
+        let membership = migrated["brain_regions"]["root"]["cortical_areas"]
+            .as_array()
+            .unwrap();
+        let death_id = string_to_cortical_id("_death").unwrap();
+        let power_id = string_to_cortical_id("_power").unwrap();
+        let death_pos = membership_position(membership, "_death", &death_id);
+        let power_pos = membership_position(membership, "_power", &power_id);
+        assert!(death_pos < power_pos);
+        assert_eq!(genome.brain_regions.len(), 1);
+        let region = genome.brain_regions.values().next().unwrap();
+        assert!(region.contains_area(&death_id));
+        assert!(region.contains_area(&power_id));
+        assert_eq!(region.area_count(), 2);
+    }
+
+    fn membership_position(
+        membership: &[serde_json::Value],
+        raw_id: &str,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+    ) -> usize {
+        let encoded = cortical_id.as_base_64();
+        membership
+            .iter()
+            .position(|value| value.as_str() == Some(raw_id) || value.as_str() == Some(&encoded))
+            .expect("membership id")
+    }
+
+    #[test]
+    fn load_folds_areas_on_a_genome_already_stamped_current() {
+        let json = r#"{
+            "genome_schema_version": 6,
+            "genome_id": "t-current",
+            "genome_title": "t",
+            "genome_description": "t",
+            "version": "2.0",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Power",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                },
+                "_death": {
+                    "cortical_name": "Death",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root",
+                    "areas": ["_power"],
+                    "cortical_areas": ["_death"]
+                }
+            },
+            "neuron_morphologies": {},
+            "physiology": { "simulation_timestep": 0.025, "max_age": 1 },
+            "stats": { "innate_cortical_area_count": 2, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+            "signatures": { "genome": "0", "blueprint": "0", "physiology": "0" },
+            "timestamp": 0.0
+        }"#;
+
+        let (genome, report) = load_genome_with_report(json).unwrap();
+        assert!(report.is_blocking_clean());
+        assert_eq!(report.from_version.as_u32(), 6);
+        assert_eq!(report.to_version.as_u32(), 6);
+        assert!(report.migrators_applied.is_empty());
+        assert!(report.normalizers_applied.contains(&"v6_normalizer"));
+        let (migrated, _) = migrate_genome_json_to_current(json).unwrap();
+        assert!(migrated["brain_regions"]["root"].get("areas").is_none());
+        let region = genome.brain_regions.values().next().unwrap();
+        assert!(region.contains_area(&string_to_cortical_id("_death").unwrap()));
+        assert!(region.contains_area(&string_to_cortical_id("_power").unwrap()));
     }
 
     #[test]

@@ -102,6 +102,21 @@ positives are cheap; false negatives corrupt user data.
   one entry in `MigrationStepDiagnostics.transformations`. A migrator
   that runs and produces zero diagnostics is a bug.
 
+## Brain region membership
+
+Schema v6 stores the cortical ids that belong to a brain region only in
+`cortical_areas`. `areas` is the legacy name for that same list. The v5-to-v6
+migrator and the v6 normalizer fold `areas` into `cortical_areas` and drop
+`areas` before the v6 validator runs. When a region still has both keys,
+`cortical_areas` keeps its order and ids that appear only in `areas` are
+appended. New genome and connectome saves write `cortical_areas` only.
+
+The fold lives in `migration/membership.rs`. A non-array `areas` value is
+dropped, and a non-array `cortical_areas` value is replaced by the `areas`
+list. Both outcomes discard data, so the v5-to-v6 migrator and the v6
+normalizer record one diagnostic per affected region, and the other callers
+(parser, flat converter, v3-to-v4, v4-to-v5) log it at `warn`.
+
 ## Forward-only
 
 Down-migration is not supported and not planned. Cloud-stored genomes

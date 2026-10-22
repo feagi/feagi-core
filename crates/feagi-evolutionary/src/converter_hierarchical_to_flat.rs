@@ -180,6 +180,13 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
                 }
             }
 
+            let fold =
+                crate::genome::migration::membership::fold_region_membership_into_cortical_areas(
+                    &mut props,
+                );
+            if let Some(note) = fold.data_loss_note(region_id) {
+                tracing::warn!(target: "feagi-evo", "[GENOME-SAVE] {}", note);
+            }
             region_data = props;
         }
 
@@ -571,6 +578,56 @@ mod tests {
     }
 
     #[test]
+    fn convert_writes_region_membership_only_as_cortical_areas() {
+        use feagi_structures::genomic::brain_regions::RegionID;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::{BrainRegion, RegionType};
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "A test genome".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            modulators: crate::modulators::ModulatorRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let region_id = RegionID::new();
+        let power_id = CoreCorticalType::Power.to_cortical_id();
+        let mut region =
+            BrainRegion::new(region_id, "Root".to_string(), RegionType::Undefined).unwrap();
+        region.add_area(power_id);
+        region.add_property("areas".to_string(), json!(["should-stay-nested"]));
+        region.add_property("description".to_string(), json!("kept"));
+        genome.brain_regions.insert(region_id.to_string(), region);
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let saved = &flat["brain_regions"][region_id.to_string()];
+        assert!(saved.get("areas").is_none());
+        let membership = saved["cortical_areas"].as_array().unwrap();
+        assert!(membership
+            .iter()
+            .any(|value| value.as_str() == Some(power_id.as_base_64().as_str())));
+        assert_eq!(saved["properties"]["description"], "kept");
+        assert_eq!(saved["properties"]["areas"], json!(["should-stay-nested"]));
+    }
+
+    #[test]
     fn test_convert_preserves_classifiers() {
         let mut genome = RuntimeGenome {
             metadata: GenomeMetadata {
@@ -603,19 +660,16 @@ mod tests {
                 name: "object_class".to_string(),
                 parent_region_id: "root".to_string(),
                 coordinates_3d: [1, 2, 3],
-                training_mode:
-                    feagi_structures::genomic::classifiers::ClassifierTrainingMode::Kernel,
-                kernel_area_id: Some("ckern1".to_string()),
-                class_area_id: Some("ccls01".to_string()),
-                mask_area_id: None,
-                class_count: None,
-                kernel_size: None,
-                fields: vec![feagi_structures::genomic::classifiers::ClassifierField {
-                    field_area_id: "cfield".to_string(),
-                    scan_twin_id: "cscan1".to_string(),
-                }],
-                kernel_memory_id: "mkmem1".to_string(),
+                sample_area_ids: vec!["csample".to_string()],
+                class_bindings: vec![
+                    feagi_structures::genomic::classifiers::ClassifierClassBinding {
+                        class_area_id: "ccls01".to_string(),
+                        class_output_area_id: "cout1".to_string(),
+                    },
+                ],
+                sample_memory_id: "mkmem1".to_string(),
                 class_memory_id: "mcmem1".to_string(),
+                error_area_id: "cerr1".to_string(),
                 reward_training: false,
                 answer_feedback_area_id: None,
                 pain_area_id: None,
@@ -629,8 +683,8 @@ mod tests {
         let flat = convert_hierarchical_to_flat(&genome).unwrap();
         assert_eq!(flat["classifiers"]["clf-1"]["name"], "object_class");
         assert_eq!(
-            flat["classifiers"]["clf-1"]["fields"][0]["scan_twin_id"],
-            "cscan1"
+            flat["classifiers"]["clf-1"]["class_bindings"][0]["class_output_area_id"],
+            "cout1"
         );
         assert_eq!(flat["classifiers"]["clf-1"]["parent_region_id"], "root");
     }

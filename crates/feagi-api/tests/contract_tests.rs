@@ -140,6 +140,7 @@ fn build_test_state() -> ApiState {
             ChangeLedgerConfig {
                 session_capacity: genome_config.change_ledger_session_capacity,
                 max_persisted_entries: genome_config.change_history_max_entries,
+                max_persisted_bytes: genome_config.change_history_max_bytes,
                 agent_id_max_length: genome_config.change_agent_id_max_length,
             },
             current_genome.clone(),
@@ -1019,6 +1020,23 @@ async fn test_health_endpoint() {
 
     assert_eq!(status, StatusCode::OK);
     assert!(response["status"].is_string() || !response.is_null());
+}
+
+#[tokio::test]
+async fn test_modulator_by_id_routes_resolve() {
+    // axum 0.7 path parameters are `:name`; a `{name}` segment is matched literally, so these
+    // routes used to 404 with an empty body for every real id.
+    for path in [
+        "/v1/modulator/modulator/no_such_modulator",
+        "/v1/modulator/usage/no_such_modulator",
+    ] {
+        let app = create_test_server().await;
+        let (status, body) = request_json(app, "GET", path, None).await;
+        assert!(
+            !body.is_null(),
+            "{path}: expected an API response body, got an empty router miss ({status})"
+        );
+    }
 }
 
 #[tokio::test]

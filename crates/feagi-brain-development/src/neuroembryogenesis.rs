@@ -1452,11 +1452,11 @@ impl Neuroembryogenesis {
                 let Some(twin_area) = genome.cortical_areas.get(&dst_id) else {
                     continue;
                 };
-                let owned_by_this_memory = twin_area
-                    .properties
-                    .get("memory_twin_for")
-                    .and_then(|v| v.as_str())
-                    == Some(memory_id.as_base_64().as_str());
+                let owned_by_this_memory = ConnectomeManager::memory_owns_twin(
+                    memory_id,
+                    twin_area,
+                    &genome.cortical_areas,
+                );
                 let legacy_replay = rule_array.iter().any(|rule| {
                     rule.get("morphology_id").and_then(|v| v.as_str()) == Some("memory_replay")
                 });
@@ -1485,6 +1485,18 @@ impl Neuroembryogenesis {
 
                 let mut manager = self.connectome_manager.write();
                 if manager.auto_memory_twin_forbidden(memory_id, Some(&dst_id)) {
+                    continue;
+                }
+                // Index the saved twin first so ensure_memory_twin_area reuses it.
+                if let Err(e) = manager.restore_memory_twin_index(memory_id, &upstream_id, &dst_id)
+                {
+                    warn!(
+                        target: "feagi-bdu",
+                        "Failed to restore memory twin index for memory {} twin {}: {}",
+                        memory_id.as_base_64(),
+                        dst_id.as_base_64(),
+                        e
+                    );
                     continue;
                 }
                 if let Err(e) = manager.ensure_memory_twin_area(memory_id, &upstream_id) {

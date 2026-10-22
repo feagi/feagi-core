@@ -106,6 +106,14 @@ impl ModulatorEngine {
         self.area_subscriptions = subscriptions;
     }
 
+    /// Instance ids this cortical area subscribes to (neuromodulators).
+    pub fn area_subscriptions(&self, cortical_idx: u32) -> Vec<String> {
+        self.area_subscriptions
+            .get(&cortical_idx)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     pub fn set_spike_train_areas(&mut self, areas: AHashSet<u32>) {
         self.spike_train_areas = areas;
     }
@@ -149,6 +157,20 @@ impl ModulatorEngine {
             .get(&group)
             .copied()
             .unwrap_or(0.0)
+    }
+
+    /// Whether this synaptic group lists at least one `synaptic.reward` instance. A mapping
+    /// in such a group is reward-gated whatever its `plasticity_mode` says.
+    pub fn group_has_reward(&self, group: u16) -> bool {
+        if group == 0 {
+            return false;
+        }
+        self.groups.get(&group).is_some_and(|ids| {
+            ids.iter().any(|id| {
+                self.binding(id)
+                    .is_some_and(|binding| binding.kind == ModulatorKind::Reward)
+            })
+        })
     }
 
     pub fn learning_factor(&self, group: u16) -> f32 {

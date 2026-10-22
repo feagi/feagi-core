@@ -96,6 +96,10 @@ impl CorticalChangeClassifier {
             "visualization_voxel_granularity",
             // Field-to-twin index used by classifier episodic_scan injection.
             "memory_twin_areas",
+            // Modulator subscriptions and spike-train flag: plain properties pushed to the
+            // burst engine by `sync_modulators_from_genome`; no neuron or synapse rebuild.
+            "modulators",
+            "spike_train",
             // IO coding updates (cortical ID remap)
             "coding_signage",
             "coding_behavior",
