@@ -65,6 +65,7 @@ fn stdp_params(mode: PlasticityMode, group: u16) -> StdpMappingParams {
         plasticity_eta: 1.0,
         instance_reward: false,
         modulation_group: group,
+        frozen: false,
     }
 }
 
@@ -265,4 +266,91 @@ fn memory_to_custom_associative_stdp_with_episodic_fires_creates_synapses() {
         1,
         "episodic-kind memory fires must still drive associative synthesis"
     );
+}
+
+fn potentiating_pair() -> (RustNPU<StdRuntime, f32, CPUBackend>, NeuronId, NeuronId) {
+    let mut npu = npu_with_areas();
+    let src = add_lif(&mut npu, 10, 0);
+    let dst = add_lif(&mut npu, 11, 0);
+    npu.configure_fire_ledger_window(10, 1).unwrap();
+    npu.configure_fire_ledger_window(11, 1).unwrap();
+    npu.add_synapse(
+        src,
+        dst,
+        SynapticWeight(1.0),
+        SynapticPsp(0.0),
+        SynapseType::Excitatory,
+        0,
+        1,
+    )
+    .unwrap();
+    npu.rebuild_synapse_index();
+    npu.register_stdp_mapping(10, 11, stdp_params(PlasticityMode::Stdp, 0))
+        .unwrap();
+    (npu, src, dst)
+}
+
+fn cofire(npu: &mut RustNPU<StdRuntime, f32, CPUBackend>, src: NeuronId, dst: NeuronId, n: usize) {
+    for _ in 0..n {
+        npu.inject_sensory_with_potentials(&[(src, 128.0), (dst, 128.0)]);
+        npu.process_burst().unwrap();
+    }
+}
+
+/// A frozen mapping commits no weight change while co-firing; unfreezing resumes learning
+/// from where it stopped and the registration itself is untouched.
+#[test]
+fn frozen_stdp_mapping_commits_no_weight_change() {
+    let (mut npu, src, dst) = potentiating_pair();
+    // One burst only: `stdp_params` caps the weight at 3.0 and each co-fire adds 1.0.
+    cofire(&mut npu, src, dst, 1);
+    let learned = npu.get_outgoing_synapses(src.0)[0].1;
+    assert!(learned > 1.0, "unfrozen mapping must potentiate (got {learned})");
+
+    assert!(npu.set_stdp_mapping_frozen(10, 11, true));
+    assert_eq!(npu.is_stdp_mapping_frozen(10, 11), Some(true));
+    cofire(&mut npu, src, dst, 3);
+    assert_eq!(
+        npu.get_outgoing_synapses(src.0)[0].1,
+        learned,
+        "frozen mapping must not move its weight"
+    );
+
+    assert!(npu.set_stdp_mapping_frozen(10, 11, false));
+    cofire(&mut npu, src, dst, 1);
+    assert!(
+        npu.get_outgoing_synapses(src.0)[0].1 > learned,
+        "unfreezing must resume potentiation"
+    );
+    assert!(!npu.set_stdp_mapping_frozen(10, 12, true), "unregistered pair");
+    assert_eq!(npu.is_stdp_mapping_frozen(10, 12), None);
+}
+
+/// Resetting a mapping's weights puts every synapse of the pair back to the given weight
+/// and clears eligibility traces, without touching synapses of other pairs.
+#[test]
+fn reset_synapse_weights_between_areas_restores_initial_weight() {
+    let (mut npu, src, dst) = potentiating_pair();
+    let other = add_lif(&mut npu, 12, 0);
+    npu.add_synapse(
+        src,
+        other,
+        SynapticWeight(5.0),
+        SynapticPsp(0.0),
+        SynapseType::Excitatory,
+        0,
+        1,
+    )
+    .unwrap();
+    npu.rebuild_synapse_index();
+    cofire(&mut npu, src, dst, 2);
+    assert!(npu.get_outgoing_synapses(src.0)[0].1 > 1.0);
+
+    assert_eq!(npu.reset_synapse_weights_between_areas(10, 11, 1.0), 1);
+    let out = npu.get_outgoing_synapses(src.0);
+    let to_dst = out.iter().find(|s| s.0 == dst.0).unwrap();
+    let to_other = out.iter().find(|s| s.0 == other.0).unwrap();
+    assert_eq!(to_dst.1, 1.0, "pair weight reset to initial");
+    assert_eq!(to_other.1, 5.0, "other pair untouched");
+    assert_eq!(npu.reset_synapse_weights_between_areas(11, 10, 1.0), 0);
 }

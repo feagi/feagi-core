@@ -443,6 +443,10 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/device_registration_store",
             get(agent::get_device_registration_store),
         )
+        .route(
+            "/agent/registration_diff",
+            get(agent::get_registration_diff),
+        )
         .route("/agent/info/:agent_id", get(agent::get_agent_info))
         .route(
             "/agent/properties/:agent_id",
@@ -814,6 +818,15 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(cortical_mapping::post_batch_update),
         )
         .route(
+            "/cortical_mapping/reset_weights",
+            axum::routing::post(cortical_mapping::post_reset_weights),
+        )
+        .route(
+            "/cortical_mapping/plasticity_frozen",
+            get(cortical_mapping::get_plasticity_frozen)
+                .put(cortical_mapping::put_plasticity_frozen),
+        )
+        .route(
             "/cortical_mapping/mapping",
             axum::routing::post(cortical_mapping::post_mapping).put(cortical_mapping::put_mapping),
         )
@@ -1029,6 +1042,10 @@ fn create_v1_router() -> Router<ApiState> {
             "/burst_engine/fire_ledger/default_window_size",
             get(burst_engine::get_fire_ledger_default_window_size)
                 .put(burst_engine::put_fire_ledger_default_window_size),
+        )
+        .route(
+            "/burst_engine/fire_history",
+            get(burst_engine::get_fire_history).delete(burst_engine::delete_fire_history),
         )
         .route(
             "/burst_engine/fire_ledger/areas_window_config",

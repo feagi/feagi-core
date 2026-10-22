@@ -300,6 +300,19 @@ impl CorticalAreaStatsRegistry {
         }
     }
 
+    fn set_synapse_counts(&self, cortical_id: &str, incoming: usize, outgoing: usize) {
+        let mut stats = self.stats.write();
+        let entry = stats
+            .entry(cortical_id.to_string())
+            .or_insert_with(CorticalAreaStats::new);
+        entry
+            .incoming_synapse_count
+            .store(incoming, std::sync::atomic::Ordering::Release);
+        entry
+            .outgoing_synapse_count
+            .store(outgoing, std::sync::atomic::Ordering::Release);
+    }
+
     fn get_stats(&self, cortical_id: &str) -> Option<CorticalAreaStatsSnapshot> {
         let stats = self.stats.read();
         stats
@@ -570,6 +583,18 @@ impl StateManager {
     pub fn subtract_cortical_area_incoming_synapses(&self, cortical_id: &str, delta: usize) {
         self.cortical_area_stats
             .subtract_incoming_synapses(cortical_id, delta);
+    }
+
+    /// Overwrite both synapse counters for a cortical area with authoritative values
+    /// (e.g. counted from the connectome after a snapshot import).
+    pub fn set_cortical_area_synapse_counts(
+        &self,
+        cortical_id: &str,
+        incoming: usize,
+        outgoing: usize,
+    ) {
+        self.cortical_area_stats
+            .set_synapse_counts(cortical_id, incoming, outgoing);
     }
 
     /// Get cached cortical area stats, if present.

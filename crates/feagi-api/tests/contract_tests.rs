@@ -238,6 +238,48 @@ fn build_test_state() -> ApiState {
         > {
             Ok(std::collections::HashMap::new())
         }
+        async fn get_fire_history(
+            &self,
+            areas: &[u32],
+            bursts: usize,
+        ) -> feagi_services::ServiceResult<feagi_services::types::FireHistory> {
+            use feagi_services::types::{FireHistoryArea, FireHistoryFrame, FiredNeuron};
+            Ok(feagi_services::types::FireHistory {
+                current_burst: 42,
+                areas: areas
+                    .iter()
+                    .map(|idx| FireHistoryArea {
+                        cortical_idx: *idx,
+                        window: bursts,
+                        frames: vec![
+                            FireHistoryFrame {
+                                burst: 41,
+                                neurons: vec![],
+                            },
+                            FireHistoryFrame {
+                                burst: 42,
+                                neurons: vec![
+                                    FiredNeuron {
+                                        neuron_id: 7,
+                                        voxel: Some((1, 2, 3)),
+                                    },
+                                    FiredNeuron {
+                                        neuron_id: 50_000_001,
+                                        voxel: None,
+                                    },
+                                ],
+                            },
+                        ],
+                    })
+                    .collect(),
+            })
+        }
+        async fn unsubscribe_fire_history(
+            &self,
+            areas: &[u32],
+        ) -> feagi_services::ServiceResult<usize> {
+            Ok(areas.len())
+        }
         async fn get_fire_ledger_configs(
             &self,
         ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
@@ -358,6 +400,8 @@ fn build_test_state() -> ApiState {
 struct RuntimeTransitionTracker {
     motor_subscriptions: Mutex<HashSet<String>>,
     visualization_subscriptions: Mutex<HashSet<String>>,
+    /// Every `set_frequency` call, in order (registration must never add one).
+    frequency_calls: Mutex<Vec<f64>>,
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -391,17 +435,27 @@ impl feagi_services::RuntimeService for TrackingRuntimeService {
         Ok(())
     }
     async fn get_status(&self) -> feagi_services::ServiceResult<feagi_services::RuntimeStatus> {
+        // Last applied frequency, or the 40 Hz a user dialed in before registering.
+        let frequency_hz = self
+            .tracker
+            .frequency_calls
+            .lock()
+            .unwrap()
+            .last()
+            .copied()
+            .unwrap_or(40.0);
         Ok(feagi_services::RuntimeStatus {
             is_running: false,
             is_paused: false,
-            frequency_hz: 1000.0,
+            frequency_hz,
             burst_count: 0,
             current_rate_hz: 0.0,
             last_burst_neuron_count: 0,
             avg_burst_time_ms: 0.0,
         })
     }
-    async fn set_frequency(&self, _frequency: f64) -> feagi_services::ServiceResult<()> {
+    async fn set_frequency(&self, frequency: f64) -> feagi_services::ServiceResult<()> {
+        self.tracker.frequency_calls.lock().unwrap().push(frequency);
         Ok(())
     }
     async fn get_burst_count(&self) -> feagi_services::ServiceResult<u64> {
@@ -598,6 +652,58 @@ async fn create_test_server() -> axum::Router {
 
 #[cfg(feature = "feagi-agent")]
 static CONFIG_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Serializes tests that load a genome (successfully or not): every load writes the
+/// process-wide `StateManager` genome state that `health_check` reports.
+static GENOME_STATE_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
+/// Attach an NPU to the process-wide ConnectomeManager, which `load_genome` develops
+/// into. Test states use isolated managers, so the singleton has none by default.
+fn ensure_singleton_connectome_has_npu() {
+    let singleton = ConnectomeManager::instance();
+    let mut singleton = singleton.write();
+    if singleton.get_npu().is_none() {
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000_000, 10_000_000, 10)
+            .expect("singleton npu");
+        singleton.set_npu(Arc::new(TracingMutex::new(
+            DynamicNPU::F32(npu),
+            "api-contract-test-singleton-npu",
+        )));
+    }
+}
+
+#[tokio::test]
+async fn test_health_check_reports_genome_loaded_after_service_load() {
+    let _genome_state = GENOME_STATE_LOCK.lock();
+    ensure_singleton_connectome_has_npu();
+    let state = build_test_state();
+
+    // Before any load in this test the state is whatever the process holds; load a
+    // genome through the service layer (no HTTP upload wrapper involved) and the
+    // health check must report it.
+    let genome = create_genome_with_core_areas(
+        "health-genome-state".to_string(),
+        "health-genome-state".to_string(),
+    );
+    let json_str = feagi_evolutionary::save_genome_to_json(&genome).expect("genome json");
+    state
+        .genome_service
+        .load_genome(feagi_services::LoadGenomeParams { json_str })
+        .await
+        .expect("load genome through service");
+
+    let (status, body) = request_json(
+        create_http_server(state),
+        "GET",
+        "/v1/system/health_check",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["genome_state"], "loaded", "{body}");
+    assert_eq!(body["genome_loading"], false, "{body}");
+    assert_eq!(body["genome_validity"], true, "{body}");
+}
 
 #[cfg(feature = "feagi-agent")]
 struct ConfigEnvGuard {
@@ -801,6 +907,104 @@ fn sample_motor_device_registrations_with_io_flags() -> Value {
         },
         "feedbacks": {}
     })
+}
+
+/// Grouped Servo encoder (3 joints) with the io flags a MuJoCo controller sends.
+#[cfg(feature = "feagi-agent")]
+fn sample_servo_sensory_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "Servo": [
+                [
+                    {
+                        "friendly_name": "arm_joints",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}],
+                        "io_configuration_flags": {
+                            "frame_change_handling": "Absolute",
+                            "percentage_neuron_positioning": "Linear"
+                        }
+                    },
+                    {}
+                ]
+            ]
+        },
+        "output_units_and_decoder_properties": {},
+        "feedbacks": {}
+    })
+}
+
+/// Pre-creates the Servo IPU twice as wide as its registration declares (a user
+/// widened it by hand) and returns `(cortical_id, declared_dimensions, widened_dimensions)`.
+#[cfg(feature = "feagi-agent")]
+async fn precreate_hand_widened_servo_area(
+    state: &ApiState,
+    registrations: &Value,
+) -> (String, (usize, usize, usize), (usize, usize, usize)) {
+    use feagi_api::common::agent_registration::diff_device_registrations;
+
+    let declared = diff_device_registrations(state, registrations).await;
+    assert_eq!(declared.len(), 1, "Servo registration resolves to one IPU");
+    let area = &declared[0];
+    assert!(
+        area.live_dimensions.is_none(),
+        "area must not exist before the test pre-creates it"
+    );
+    let [dx, dy, dz] = area.declared_dimensions;
+    let widened = (dx * 2, dy, dz);
+    let per_device = (widened.0 / area.declared_device_count, dy, dz);
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: area.cortical_id.clone(),
+            name: "hand_widened_servo".to_string(),
+            dimensions: widened,
+            position: (-50, 20, 0),
+            area_type: "sensory".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: Some(HashMap::from([
+                ("dev_count".to_string(), json!(area.declared_device_count)),
+                (
+                    "cortical_dimensions_per_device".to_string(),
+                    json!([per_device.0, per_device.1, per_device.2]),
+                ),
+            ])),
+        }])
+        .await
+        .expect("failed pre-creating widened servo area");
+    (area.cortical_id.clone(), (dx, dy, dz), widened)
+}
+
+#[cfg(feature = "feagi-agent")]
+fn registration_request_with(agent_id: &AgentID, registrations: Value) -> AgentRegistrationRequest {
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert("device_registrations".to_string(), registrations);
+    AgentRegistrationRequest {
+        agent_type: "embodiment".to_string(),
+        agent_id: agent_id.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(AuthToken::new([1u8; 32]).to_base64()),
+        chosen_transport: None,
+    }
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -2318,7 +2522,176 @@ async fn test_auto_create_preserves_existing_motor_area_position_while_reconcili
 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
+async fn test_reregistration_keeps_hand_widened_area_dimensions() {
+    use feagi_api::endpoints::agent::get_registration_diff;
+    use feagi_api::v1::RegistrationDiffQuery;
+
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_servo_sensory_device_registrations();
+    let (cortical_id, declared, widened) =
+        precreate_hand_widened_servo_area(&state, &registrations).await;
+    assert!(widened.0 > declared.0);
+
+    // Two registrations with fresh agent ids, like a controller restarting twice.
+    for seed in [11u8, 12u8] {
+        let agent_id = AgentID::new([seed; AgentID::NUMBER_BYTES]);
+        register_agent(
+            ApiStateExtract(state.clone()),
+            ApiJson(registration_request_with(&agent_id, registrations.clone())),
+        )
+        .await
+        .expect("registration should succeed");
+
+        let live = state
+            .connectome_service
+            .get_cortical_area(&cortical_id)
+            .await
+            .expect("widened servo area must still exist");
+        assert_eq!(
+            live.dimensions, widened,
+            "re-registration must not shrink a hand-widened area back to the declared {:?}",
+            declared
+        );
+        assert_eq!(live.dev_count, Some(3));
+    }
+
+    // Diff route: declared < live, matches=false, for the last registered agent.
+    let last_agent = AgentID::new([12u8; AgentID::NUMBER_BYTES]).to_base64();
+    let diff = get_registration_diff(
+        ApiStateExtract(state.clone()),
+        feagi_api::common::Query(RegistrationDiffQuery {
+            agent_id: Some(last_agent.clone()),
+        }),
+    )
+    .await
+    .expect("registration diff should succeed")
+    .0;
+    assert_eq!(diff.agents.len(), 1);
+    assert_eq!(diff.agents[0].agent_id, last_agent);
+    let area = diff.agents[0]
+        .areas
+        .iter()
+        .find(|a| a.cortical_id == cortical_id)
+        .expect("diff must list the servo IPU");
+    assert_eq!(area.direction, "ipu");
+    assert_eq!(
+        area.declared_dimensions,
+        [declared.0, declared.1, declared.2]
+    );
+    assert_eq!(area.declared_device_count, 3);
+    let live_dims = area.live_dimensions.expect("live area exists");
+    assert!(
+        live_dims[0] > area.declared_dimensions[0],
+        "live width {} must exceed declared {}",
+        live_dims[0],
+        area.declared_dimensions[0]
+    );
+    assert_eq!(area.live_device_count, Some(3));
+    assert!(!area.matches);
+
+    // Without agent_id every stored agent is listed.
+    let all = get_registration_diff(
+        ApiStateExtract(state.clone()),
+        feagi_api::common::Query(RegistrationDiffQuery { agent_id: None }),
+    )
+    .await
+    .expect("registration diff should succeed")
+    .0;
+    assert_eq!(all.agents.len(), 2);
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_registration_diff_reports_missing_area_as_no_live() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let diff = feagi_api::common::agent_registration::diff_device_registrations(
+        &state,
+        &sample_servo_sensory_device_registrations(),
+    )
+    .await;
+    assert_eq!(diff.len(), 1);
+    assert!(diff[0].live_dimensions.is_none());
+    assert!(diff[0].live_device_count.is_none());
+    assert!(!diff[0].matches);
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("list areas");
+    assert!(
+        !areas.iter().any(|a| a.cortical_id == diff[0].cortical_id),
+        "diff must not create areas"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_registration_against_existing_area_leaves_burst_frequency_unchanged() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let tracker = Arc::new(RuntimeTransitionTracker::default());
+    let mut state = build_test_state();
+    state.runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
+        as Arc<dyn RuntimeService + Send + Sync>;
+    let registrations = sample_servo_sensory_device_registrations();
+    let _ = precreate_hand_widened_servo_area(&state, &registrations).await;
+
+    let before = state
+        .runtime_service
+        .get_status()
+        .await
+        .expect("status")
+        .frequency_hz;
+    assert_eq!(before, 40.0);
+
+    let agent_id = AgentID::new([21u8; AgentID::NUMBER_BYTES]);
+    register_agent(
+        ApiStateExtract(state.clone()),
+        ApiJson(registration_request_with(&agent_id, registrations)),
+    )
+    .await
+    .expect("registration should succeed");
+
+    let after = state
+        .runtime_service
+        .get_status()
+        .await
+        .expect("status")
+        .frequency_hz;
+    assert_eq!(
+        after, before,
+        "agent registration must not touch the burst engine frequency"
+    );
+    assert!(
+        tracker.frequency_calls.lock().unwrap().is_empty(),
+        "registration must not call RuntimeService::set_frequency, got {:?}",
+        tracker.frequency_calls.lock().unwrap()
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
 async fn test_genome_transition_clears_agents_subscriptions_and_blocks_sensory_until_reregister() {
+    let _genome_state = GENOME_STATE_LOCK.lock();
     let tracker = Arc::new(RuntimeTransitionTracker::default());
     let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
         as Arc<dyn RuntimeService + Send + Sync>;
@@ -2521,6 +2894,7 @@ fn test_device_registration_store_compare_flags_stale_segmented_vision() {
 #[tokio::test]
 #[ignore = "real transport path can hang in CI; run manually for websocket validation"]
 async fn test_genome_transition_realtime_transport_requires_reregistration() {
+    let _genome_state = GENOME_STATE_LOCK.lock();
     let tracker = Arc::new(RuntimeTransitionTracker::default());
     let runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
         as Arc<dyn RuntimeService + Send + Sync>;
@@ -3766,4 +4140,490 @@ async fn test_saved_genome_carries_change_history() {
     assert_eq!(history.len(), 1);
     assert_eq!(history[0]["operation"]["kind"], "create_cortical_areas");
     assert_eq!(history[0]["targets"][0]["id"], cortical_id.as_str());
+}
+
+// ============================================================================
+// CORTICAL MAPPING: WEIGHT RESET AND PLASTICITY FREEZE
+// ============================================================================
+
+async fn create_plain_custom_area(
+    state: &ApiState,
+    id_bytes: &[u8; 8],
+    name: &str,
+    position: (i32, i32, i32),
+) -> String {
+    let cortical_id = general_purpose::STANDARD.encode(id_bytes);
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: name.to_string(),
+            dimensions: (1, 1, 1),
+            position,
+            area_type: "Custom".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: Some(1.0),
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: Some(true),
+            properties: None,
+        }])
+        .await
+        .expect("create custom area");
+    cortical_id
+}
+
+fn plastic_projector_rule(weight: f64) -> Value {
+    json!({
+        "morphology_id": "projector",
+        "morphology_scalar": [1, 1, 1],
+        "postSynapticCurrent_multiplier": weight,
+        "plasticity_flag": true,
+        "plasticity_constant": 1,
+        "ltp_multiplier": 1,
+        "ltd_multiplier": 1,
+        "plasticity_window": 1
+    })
+}
+
+/// `POST /v1/cortical_mapping/reset_weights` and `GET|PUT /v1/cortical_mapping/plasticity_frozen`
+/// drive one plastic mapping end to end through the real connectome service and NPU.
+#[tokio::test]
+async fn test_cortical_mapping_reset_weights_and_plasticity_frozen_routes() {
+    let state = build_test_state();
+    state
+        .connectome_service
+        .create_morphology(
+            "projector".to_string(),
+            feagi_evolutionary::Morphology {
+                morphology_type: feagi_evolutionary::MorphologyType::Functions,
+                parameters: feagi_evolutionary::MorphologyParameters::Functions {},
+                class: "core".to_string(),
+            },
+        )
+        .await
+        .expect("register projector morphology");
+    let src = create_plain_custom_area(&state, b"cwrsrcA1", "weights-src", (0, 0, 0)).await;
+    let dst = create_plain_custom_area(&state, b"cwrdstA1", "weights-dst", (10, 0, 0)).await;
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_mapping/mapping_properties",
+        Some(json!({
+            "src_cortical_area": src,
+            "dst_cortical_area": dst,
+            "mapping_string": [plastic_projector_rule(2.0)]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "create mapping: {body}");
+    let created = body["synapse_count"].as_u64().expect("synapse_count");
+    assert!(created >= 1, "projector between 1x1x1 areas must create a synapse");
+
+    let frozen_query = format!(
+        "/v1/cortical_mapping/plasticity_frozen?src_cortical_area={src}&dst_cortical_area={dst}"
+    );
+    let (status, body) =
+        request_json(create_http_server(state.clone()), "GET", &frozen_query, None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["frozen"], json!(false));
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_mapping/plasticity_frozen",
+        Some(json!({"src_cortical_area": src, "dst_cortical_area": dst, "frozen": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["frozen"], json!(true));
+    assert_eq!(body["src_cortical_area"], json!(src));
+    assert_eq!(body["dst_cortical_area"], json!(dst));
+
+    let (status, body) =
+        request_json(create_http_server(state.clone()), "GET", &frozen_query, None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["frozen"], json!(true));
+
+    // The flag is visible on the rule itself through the mapping listing.
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/cortical_mapping/mapping?src_cortical_area={src}&dst_cortical_area={dst}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["connections"][0]["plasticity_frozen"], json!(true));
+    assert_eq!(body["connections"][0]["morphology_id"], json!("projector"));
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_mapping/reset_weights",
+        Some(json!({"src_cortical_area": src, "dst_cortical_area": dst})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["synapses_reset"].as_u64(), Some(created));
+    assert_eq!(body["weight"].as_f64(), Some(2.0));
+    assert_eq!(body["morphology_id"], json!(null));
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_mapping/reset_weights",
+        Some(json!({
+            "src_cortical_area": src,
+            "dst_cortical_area": dst,
+            "morphology_id": "projector"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["morphology_id"], json!("projector"));
+
+    // Validation: unknown morphology, missing field, unknown mapping.
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_mapping/reset_weights",
+        Some(json!({
+            "src_cortical_area": src,
+            "dst_cortical_area": dst,
+            "morphology_id": "no_such_morphology"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_mapping/reset_weights",
+        Some(json!({"src_cortical_area": src})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_mapping/plasticity_frozen",
+        Some(json!({"src_cortical_area": dst, "dst_cortical_area": src, "frozen": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "no mapping dst -> src");
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/cortical_mapping/plasticity_frozen?src_cortical_area={dst}&dst_cortical_area={src}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["frozen"], json!(null));
+
+    // Deleting the mapping drops its synapses; a recreate starts from the rule weight.
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "DELETE",
+        &format!("/v1/cortical_mapping/mapping?src_cortical_area={src}&dst_cortical_area={dst}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["synapse_count"].as_u64(), Some(0));
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_mapping/reset_weights",
+        Some(json!({"src_cortical_area": src, "dst_cortical_area": dst})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "mapping is gone: {body}");
+}
+
+// ============================================================================
+// BURST-ALIGNED FIRE HISTORY
+// ============================================================================
+
+/// `GET|DELETE /v1/burst_engine/fire_history` resolve cortical ids, enforce the area and
+/// burst caps, and shape the service's frames into aligned voxel lists.
+#[tokio::test]
+async fn test_burst_engine_fire_history_route_shape_and_limits() {
+    let state = build_test_state();
+    let area_id = create_plain_custom_area(&state, b"cfirehA1", "fire-history", (0, 0, 0)).await;
+    let cortical_idx = state
+        .connectome_service
+        .get_cortical_area(&area_id)
+        .await
+        .expect("area")
+        .cortical_idx;
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=5"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["current_burst"], json!(42));
+    assert_eq!(body["bursts"], json!(5));
+    assert_eq!(body["max_bursts"], json!(2000));
+    assert_eq!(body["max_areas"], json!(16));
+    assert_eq!(body["subscription_ttl_s"], json!(300));
+    let area = &body["areas"][&area_id];
+    assert_eq!(area["cortical_idx"], json!(cortical_idx));
+    assert_eq!(area["name"], json!("fire-history"));
+    assert_eq!(area["window"], json!(5));
+    assert_eq!(area["frames"][0]["burst"], json!(41));
+    assert_eq!(area["frames"][0]["voxels"], json!([]));
+    assert_eq!(area["frames"][1]["burst"], json!(42));
+    assert_eq!(area["frames"][1]["voxels"], json!([[1, 2, 3]]));
+    assert_eq!(area["frames"][1]["memory_neuron_ids"], json!([50000001]));
+
+    // Default bursts, duplicate ids collapse to one area.
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        &format!("/v1/burst_engine/fire_history?areas={area_id},{area_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["bursts"], json!(100));
+    assert_eq!(body["areas"].as_object().map(|m| m.len()), Some(1));
+
+    for (path, expected) in [
+        ("/v1/burst_engine/fire_history".to_string(), StatusCode::BAD_REQUEST),
+        ("/v1/burst_engine/fire_history?areas=".to_string(), StatusCode::BAD_REQUEST),
+        (format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=0"), StatusCode::BAD_REQUEST),
+        (format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=2001"), StatusCode::BAD_REQUEST),
+        (format!("/v1/burst_engine/fire_history?areas={area_id}&bursts=ten"), StatusCode::BAD_REQUEST),
+        (
+            format!(
+                "/v1/burst_engine/fire_history?areas={}",
+                (0..17).map(|i| format!("Y2ZpcmVoQ{i:02}")).collect::<Vec<_>>().join(",")
+            ),
+            StatusCode::BAD_REQUEST,
+        ),
+        ("/v1/burst_engine/fire_history?areas=Y25vc3VjaDE=".to_string(), StatusCode::NOT_FOUND),
+    ] {
+        let (status, body) = request_json(create_http_server(state.clone()), "GET", &path, None).await;
+        assert_eq!(status, expected, "{path}: {body}");
+    }
+
+    let (status, body) = request_json(
+        create_http_server(state.clone()),
+        "DELETE",
+        &format!("/v1/burst_engine/fire_history?areas={area_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["unsubscribed"], json!(1));
+    assert_eq!(body["areas"], json!([area_id]));
+}
+
+/// `sensory_hold_last_frame` is readable through the cortical area property routes,
+/// writable through PUT as a metadata change, and persisted in the saved genome.
+#[tokio::test]
+async fn test_sensory_hold_last_frame_put_get_and_save() {
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+    use feagi_structures::genomic::SensoryCorticalUnit;
+
+    let state = build_test_state();
+    let imu_id = SensoryCorticalUnit::RawIMU
+        .get_default_cortical_id_for_group(CorticalUnitIndex::from(0u16))
+        .as_base_64();
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: imu_id.clone(),
+            name: "imu".to_string(),
+            dimensions: (1, 1, 4),
+            position: (0, 0, 0),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("create IMU area");
+
+    // Template default for a scalar IMU input: hold on, even with no stored property.
+    let (status, props) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_area/cortical_area_properties",
+        Some(json!({"cortical_id": imu_id})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(props["sensory_hold_last_frame"], json!(true));
+
+    let (status, _) = request_json(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/cortical_area/cortical_area",
+        Some(json!({"cortical_id": imu_id, "sensory_hold_last_frame": false})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, props) = request_json(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/cortical_area/cortical_area_properties",
+        Some(json!({"cortical_id": imu_id})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(props["sensory_hold_last_frame"], json!(false));
+
+    let (status, geometry) = request_json(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/cortical_area/cortical_area/geometry",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(geometry[&imu_id]["sensory_hold_last_frame"], json!(false));
+
+    // Persisted in the flat genome (`snhold-b`) so it survives save/load.
+    let saved = state
+        .genome_service
+        .save_genome(feagi_services::types::SaveGenomeParams {
+            genome_id: None,
+            genome_title: None,
+        })
+        .await
+        .expect("save");
+    let saved: Value = serde_json::from_str(&saved).expect("saved JSON");
+    let blueprint = saved["blueprint"].as_object().expect("flat blueprint");
+    let hold_entry = blueprint
+        .iter()
+        .find(|(key, _)| key.ends_with("-snhold-b") && key.contains(&imu_id))
+        .map(|(_, value)| value.clone());
+    assert_eq!(hold_entry, Some(json!(false)));
+}
+
+// ============================================================================
+// ROUTE PATH PARAMETER STYLE
+// ============================================================================
+
+/// Source of the HTTP router. The axum `Router` cannot be introspected, so the
+/// route table is read straight from the file that registers it.
+const HTTP_SERVER_SOURCE: &str = include_str!("../src/transports/http/server.rs");
+
+/// Every string literal passed as the first argument of a `.route(` call.
+fn registered_route_paths(source: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    let mut rest = source;
+    while let Some(pos) = rest.find(".route(") {
+        rest = &rest[pos + ".route(".len()..];
+        let after = rest.trim_start();
+        let Some(literal) = after.strip_prefix('"') else {
+            panic!(
+                "`.route(` argument is not a string literal near: {:?}",
+                &after[..after.len().min(60)]
+            );
+        };
+        let end = literal
+            .find('"')
+            .expect("unterminated route string literal");
+        paths.push(literal[..end].to_string());
+        rest = &literal[end..];
+    }
+    paths
+}
+
+/// axum 0.7 matches `{id}` literally, so such a route 404s for every real id;
+/// path parameters must be written `:name`.
+fn route_path_style_violations(paths: &[String]) -> Vec<String> {
+    let mut violations = Vec::new();
+    for path in paths {
+        if path.contains('{') || path.contains('}') {
+            violations.push(format!("{path}: brace-style parameter (use `:name`)"));
+            continue;
+        }
+        for segment in path.split('/') {
+            if let Some(name) = segment.strip_prefix(':') {
+                let valid =
+                    !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+                if !valid {
+                    violations.push(format!("{path}: malformed parameter segment `{segment}`"));
+                }
+            } else if segment.contains(':') {
+                violations.push(format!(
+                    "{path}: `:` must start a whole segment (`{segment}`)"
+                ));
+            }
+        }
+    }
+    violations
+}
+
+#[test]
+fn test_registered_routes_use_colon_path_parameters() {
+    let paths = registered_route_paths(HTTP_SERVER_SOURCE);
+    assert!(
+        paths.len() > 100,
+        "route parser found only {} routes; the parser or server.rs layout changed",
+        paths.len()
+    );
+    assert!(
+        paths.iter().any(|p| p.contains("/:")),
+        "expected at least one `:name` route in server.rs"
+    );
+    let violations = route_path_style_violations(&paths);
+    assert!(
+        violations.is_empty(),
+        "axum 0.7 path parameters must be `:name`, not `{{name}}`:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn test_route_path_style_check_rejects_brace_parameters() {
+    let sample = r#"
+        Router::new()
+            .route("/v1/foo/:id", get(a))
+            .route(
+                "/v1/foo/{id}",
+                get(b),
+            )
+            .route("/v1/bar/x:id", get(c))
+    "#;
+    let paths = registered_route_paths(sample);
+    assert_eq!(paths, ["/v1/foo/:id", "/v1/foo/{id}", "/v1/bar/x:id"]);
+    let violations = route_path_style_violations(&paths);
+    assert_eq!(violations.len(), 2, "{violations:?}");
+    assert!(violations[0].starts_with("/v1/foo/{id}"));
+    assert!(violations[1].starts_with("/v1/bar/x:id"));
 }

@@ -1187,6 +1187,198 @@ pub async fn get_fire_ledger_history(
 }
 
 // ============================================================================
+// BURST-ALIGNED FIRE HISTORY
+// ============================================================================
+
+/// Most areas one fire-history request may cover.
+pub const FIRE_HISTORY_MAX_AREAS: usize = 16;
+/// Most bursts one fire-history request may cover.
+pub const FIRE_HISTORY_MAX_BURSTS: usize = 2000;
+/// Bursts returned when the query omits `bursts`.
+pub const FIRE_HISTORY_DEFAULT_BURSTS: usize = 100;
+
+fn parse_fire_history_areas(params: &HashMap<String, String>) -> ApiResult<Vec<String>> {
+    let raw = params
+        .get("areas")
+        .ok_or_else(|| ApiError::invalid_input("areas query parameter required (comma-separated cortical ids)"))?;
+    let mut areas: Vec<String> = Vec::new();
+    for id in raw.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        if !areas.iter().any(|existing| existing == id) {
+            areas.push(id.to_string());
+        }
+    }
+    if areas.is_empty() {
+        return Err(ApiError::invalid_input("areas must list at least one cortical id"));
+    }
+    if areas.len() > FIRE_HISTORY_MAX_AREAS {
+        return Err(ApiError::invalid_input(format!(
+            "areas lists {} cortical ids; at most {} per request",
+            areas.len(),
+            FIRE_HISTORY_MAX_AREAS
+        )));
+    }
+    Ok(areas)
+}
+
+fn parse_fire_history_bursts(params: &HashMap<String, String>) -> ApiResult<usize> {
+    let bursts = match params.get("bursts") {
+        None => FIRE_HISTORY_DEFAULT_BURSTS,
+        Some(raw) => raw
+            .parse::<usize>()
+            .map_err(|_| ApiError::invalid_input(format!("bursts must be a positive integer, got '{raw}'")))?,
+    };
+    if bursts == 0 || bursts > FIRE_HISTORY_MAX_BURSTS {
+        return Err(ApiError::invalid_input(format!(
+            "bursts must be between 1 and {}, got {}",
+            FIRE_HISTORY_MAX_BURSTS, bursts
+        )));
+    }
+    Ok(bursts)
+}
+
+/// Resolve cortical ids to `(cortical_idx, cortical_id, name)`; unknown ids are 404s.
+async fn resolve_fire_history_areas(
+    state: &ApiState,
+    ids: &[String],
+) -> ApiResult<Vec<(u32, String, String)>> {
+    let mut resolved = Vec::with_capacity(ids.len());
+    for id in ids {
+        let area = state
+            .connectome_service
+            .get_cortical_area(id)
+            .await
+            .map_err(|_| ApiError::not_found("Cortical area", id))?;
+        resolved.push((area.cortical_idx, id.clone(), area.name));
+    }
+    Ok(resolved)
+}
+
+/// GET /v1/burst_engine/fire_history?areas=<id,id,...>&bursts=<n>
+///
+/// Burst-aligned firing history for up to 16 cortical areas over the last `bursts`
+/// bursts (1..=2000, default 100). Each area gets one frame per burst, oldest first,
+/// with an explicit empty frame for a silent burst, so frames of different areas line up
+/// by their `burst` number.
+///
+/// Reading subscribes the areas to the Fire Ledger ring buffer (never shrinking a window
+/// that plasticity or memory already keeps), so the first read after a subscription
+/// returns only bursts recorded since; poll again after `bursts` bursts for a full window.
+/// A subscription idles out after `subscription_ttl_s` without a read, or is dropped by
+/// `DELETE /v1/burst_engine/fire_history?areas=...`.
+///
+/// Response:
+/// ```json
+/// {"current_burst": 1234, "bursts": 100, "subscription_ttl_s": 300,
+///  "areas": {"<cortical_id>": {"cortical_idx": 7, "name": "...", "window": 100,
+///     "frames": [{"burst": 1135, "voxels": [[x,y,z], ...], "memory_neuron_ids": [..]}, ...]}}}
+/// ```
+/// `voxels` are the fired dense neurons' coordinates; dynamic memory neurons have no voxel
+/// and are listed by id in `memory_neuron_ids`.
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fire_history",
+    tag = "burst_engine",
+    params(
+        ("areas" = String, Query, description = "Comma-separated cortical ids (base64), at most 16"),
+        ("bursts" = Option<usize>, Query, description = "Bursts to return, 1..=2000 (default 100)")
+    ),
+    responses(
+        (status = 200, description = "Burst-aligned fire history", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Bad areas or bursts"),
+        (status = 404, description = "Unknown cortical id")
+    )
+)]
+pub async fn get_fire_history(
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let ids = parse_fire_history_areas(&params)?;
+    let bursts = parse_fire_history_bursts(&params)?;
+    let resolved = resolve_fire_history_areas(&state, &ids).await?;
+    let idxs: Vec<u32> = resolved.iter().map(|(idx, _, _)| *idx).collect();
+
+    let history = state.runtime_service.get_fire_history(&idxs, bursts).await?;
+
+    let mut areas: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+    for (idx, id, name) in &resolved {
+        let Some(area) = history.areas.iter().find(|a| a.cortical_idx == *idx) else {
+            continue;
+        };
+        let frames: Vec<serde_json::Value> = area
+            .frames
+            .iter()
+            .map(|frame| {
+                let mut voxels: Vec<[u32; 3]> = Vec::new();
+                let mut memory_neuron_ids: Vec<u32> = Vec::new();
+                for neuron in &frame.neurons {
+                    match neuron.voxel {
+                        Some((x, y, z)) => voxels.push([x, y, z]),
+                        None => memory_neuron_ids.push(neuron.neuron_id),
+                    }
+                }
+                serde_json::json!({
+                    "burst": frame.burst,
+                    "voxels": voxels,
+                    "memory_neuron_ids": memory_neuron_ids,
+                })
+            })
+            .collect();
+        areas.insert(
+            id.clone(),
+            serde_json::json!({
+                "cortical_idx": idx,
+                "name": name,
+                "window": area.window,
+                "frames": frames,
+            }),
+        );
+    }
+
+    let mut response = HashMap::new();
+    response.insert("current_burst".to_string(), serde_json::json!(history.current_burst));
+    response.insert("bursts".to_string(), serde_json::json!(bursts));
+    response.insert("max_bursts".to_string(), serde_json::json!(FIRE_HISTORY_MAX_BURSTS));
+    response.insert("max_areas".to_string(), serde_json::json!(FIRE_HISTORY_MAX_AREAS));
+    response.insert(
+        "subscription_ttl_s".to_string(),
+        serde_json::json!(feagi_services::traits::runtime_service::FIRE_HISTORY_SUBSCRIPTION_TTL.as_secs()),
+    );
+    response.insert("areas".to_string(), serde_json::Value::Object(areas));
+    Ok(Json(response))
+}
+
+/// DELETE /v1/burst_engine/fire_history?areas=<id,id,...>
+///
+/// Drop the fire-history subscriptions of the listed areas, restoring the Fire Ledger
+/// window each had before (untracking areas nothing else tracks).
+/// Response: `{"unsubscribed": <n>, "areas": [<cortical_id>, ...]}`.
+#[utoipa::path(
+    delete,
+    path = "/v1/burst_engine/fire_history",
+    tag = "burst_engine",
+    params(
+        ("areas" = String, Query, description = "Comma-separated cortical ids (base64), at most 16")
+    ),
+    responses(
+        (status = 200, description = "Subscriptions dropped", body = HashMap<String, serde_json::Value>),
+        (status = 404, description = "Unknown cortical id")
+    )
+)]
+pub async fn delete_fire_history(
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let ids = parse_fire_history_areas(&params)?;
+    let resolved = resolve_fire_history_areas(&state, &ids).await?;
+    let idxs: Vec<u32> = resolved.iter().map(|(idx, _, _)| *idx).collect();
+    let dropped = state.runtime_service.unsubscribe_fire_history(&idxs).await?;
+    let mut response = HashMap::new();
+    response.insert("unsubscribed".to_string(), serde_json::json!(dropped));
+    response.insert("areas".to_string(), serde_json::json!(ids));
+    Ok(Json(response))
+}
+
+// ============================================================================
 // MEMBRANE POTENTIALS ENDPOINTS
 // ============================================================================
 

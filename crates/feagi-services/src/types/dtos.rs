@@ -222,6 +222,34 @@ pub struct CorticalAreaInfo {
     /// Example: For 512×512×22 area, granularity might be (16, 16, 16) → 32×32×2 = 2,048 chunks
     /// Default is (1, 1, 1) - always serialized so BV knows the value
     pub visualization_voxel_granularity: Option<(u32, u32, u32)>,
+
+    /// Sensor cadence hold (input areas only). When `true`, the burst engine re-injects
+    /// this area's previous frame for exactly one burst when no new frame arrived; a
+    /// longer gap goes silent on the burst after. Without the hold an IPU that gets no
+    /// payload in a burst has no fire candidates that burst (sensory injection is
+    /// per-burst; membrane potential does not carry over for the gap). The value here is
+    /// the effective one: the stored `sensory_hold_last_frame` property, or the sensory
+    /// unit template default (true for scalar sensors such as IMU, encoder, proximity,
+    /// battery, analog; false for vision, audio, boolean/digital inputs). `None` for
+    /// non-input areas. Writable through `PUT /v1/cortical_area/cortical_area` as a
+    /// metadata change (no structural rebuild).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sensory_hold_last_frame: Option<bool>,
+}
+
+/// Effective `sensory_hold_last_frame` for a [`CorticalAreaInfo`]: `Some` for input areas
+/// (explicit property or sensory unit template default), `None` otherwise.
+pub fn sensory_hold_last_frame_for_info(
+    cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+    properties: &HashMap<String, serde_json::Value>,
+) -> Option<bool> {
+    if cortical_id.as_bytes()[0] != b'i' {
+        return None;
+    }
+    Some(feagi_structures::genomic::resolve_sensory_hold_last_frame(
+        cortical_id,
+        properties,
+    ))
 }
 
 /// Parameters for creating a cortical area
@@ -465,6 +493,39 @@ pub struct SystemHealth {
 // ============================================================================
 // RUNTIME DTOs
 // ============================================================================
+
+/// One neuron that fired in a burst, with its voxel when it is a dense (storage) neuron.
+/// Dynamic memory neurons have no voxel and report `None`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FiredNeuron {
+    pub neuron_id: u32,
+    pub voxel: Option<(u32, u32, u32)>,
+}
+
+/// Every neuron of one area that fired in one burst (empty when the area was silent).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FireHistoryFrame {
+    pub burst: u64,
+    pub neurons: Vec<FiredNeuron>,
+}
+
+/// Burst-aligned firing history of one cortical area, oldest frame first.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FireHistoryArea {
+    pub cortical_idx: u32,
+    /// Ledger window currently kept for the area (may exceed the requested depth when
+    /// plasticity or memory needs more, or be less when the subscription could not grow it).
+    pub window: usize,
+    pub frames: Vec<FireHistoryFrame>,
+}
+
+/// Result of a fire-history read across several areas.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FireHistory {
+    /// Burst counter at the time of the read; the newest frame is at most this burst.
+    pub current_burst: u64,
+    pub areas: Vec<FireHistoryArea>,
+}
 
 /// Runtime status information
 #[derive(Debug, Clone, Serialize, Deserialize)]

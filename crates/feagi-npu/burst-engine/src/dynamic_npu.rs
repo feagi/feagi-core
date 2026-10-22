@@ -289,6 +289,11 @@ where
         dispatch!(self, get_synapse_count())
     }
 
+    /// `(incoming, outgoing)` valid synapse counts for one cortical area, read from storage.
+    pub fn get_cortical_area_synapse_counts(&self, cortical_idx: u32) -> (usize, usize) {
+        dispatch!(self, get_cortical_area_synapse_counts(cortical_idx))
+    }
+
     pub fn count_synapses_with_edge_flag_bits(&self, mask: u8) -> usize {
         dispatch!(self, count_synapses_with_edge_flag_bits(mask))
     }
@@ -821,6 +826,41 @@ where
         dispatch_mut!(
             self,
             unregister_stdp_mapping(src_cortical_idx, dst_cortical_idx)
+        )
+    }
+
+    pub fn set_stdp_mapping_frozen(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        frozen: bool,
+    ) -> bool {
+        dispatch_mut!(
+            self,
+            set_stdp_mapping_frozen(src_cortical_idx, dst_cortical_idx, frozen)
+        )
+    }
+
+    pub fn is_stdp_mapping_frozen(
+        &self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> Option<bool> {
+        dispatch!(
+            self,
+            is_stdp_mapping_frozen(src_cortical_idx, dst_cortical_idx)
+        )
+    }
+
+    pub fn reset_synapse_weights_between_areas(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        weight: f32,
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            reset_synapse_weights_between_areas(src_cortical_idx, dst_cortical_idx, weight)
         )
     }
 
@@ -1410,6 +1450,25 @@ where
                 npu.fired_neuron_ids_if_queue_timestep(cortical_idx, timestep)
             }
         }
+    }
+
+    /// Most recent FireLedger frames of a tracked area (oldest first, at most `max_depth`).
+    pub fn get_fire_ledger_recent_frames(
+        &self,
+        cortical_idx: u32,
+        max_depth: usize,
+    ) -> Result<Vec<(u64, roaring::RoaringBitmap)>> {
+        dispatch!(self, get_fire_ledger_recent_frames(cortical_idx, max_depth))
+    }
+
+    /// Stop tracking a cortical area in the FireLedger. Returns whether it was tracked.
+    pub fn untrack_fire_ledger_area(&mut self, cortical_idx: u32) -> bool {
+        dispatch_mut!(self, untrack_fire_ledger_area(cortical_idx))
+    }
+
+    /// Tracked FireLedger window of one area; error when untracked.
+    pub fn get_fire_ledger_window_size(&self, cortical_idx: u32) -> Result<usize> {
+        dispatch!(self, get_fire_ledger_window_size(cortical_idx))
     }
 
     /// Get a dense, burst-aligned window of firing history as RoaringBitmaps.

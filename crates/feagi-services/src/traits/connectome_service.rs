@@ -354,6 +354,36 @@ pub trait ConnectomeService: Send + Sync {
         mapping_data: Vec<serde_json::Value>,
     ) -> ServiceResult<usize>;
 
+    /// Put every synapse of `src -> dst` back to its rule's initial weight
+    /// (`postSynapticCurrent_multiplier`) and clear eligibility traces. The rule is untouched.
+    ///
+    /// `morphology_id` picks the rule that supplies the weight when the mapping has several.
+    /// Returns `(synapses_reset, weight)`.
+    async fn reset_mapping_weights(
+        &self,
+        _src_area_id: &str,
+        _dst_area_id: &str,
+        _morphology_id: Option<&str>,
+    ) -> ServiceResult<(usize, f32)> {
+        Err(ServiceError::NotImplemented(
+            "reset_mapping_weights is not available on this transport".to_string(),
+        ))
+    }
+
+    /// Freeze (`true`) or resume (`false`) weight commits and associative synapse
+    /// synthesis on `src -> dst`, keeping the rule and learned weights in place.
+    /// Stored as `plasticity_frozen` on the mapping's plastic rules.
+    async fn set_mapping_plasticity_frozen(
+        &self,
+        _src_area_id: &str,
+        _dst_area_id: &str,
+        _frozen: bool,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "set_mapping_plasticity_frozen is not available on this transport".to_string(),
+        ))
+    }
+
     // ========================================================================
     // CONNECTOME I/O OPERATIONS
     // ========================================================================

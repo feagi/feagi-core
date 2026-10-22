@@ -21,10 +21,12 @@
 
 use crate::parameter_update_queue::{increment_from_parameter_update, ParameterUpdateQueue};
 use crate::sensory::AgentManager;
+use crate::sensory_hold::SensoryHold;
 use crate::update_sim_timestep_from_hz;
 #[cfg(feature = "std")]
 use crate::{tracing_mutex::TracingMutex, DynamicNPU};
 use feagi_npu_neural::types::NeuronId;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -187,6 +189,9 @@ pub struct BurstLoopRunner {
     /// Cached cortical_idx -> visualization_voxel_granularity mappings (from ConnectomeManager)
     /// Used to determine when to apply aggregated rendering for large areas
     cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>,
+    /// Input areas with `sensory_hold_last_frame` on (from ConnectomeManager). The loop
+    /// re-injects their previous frame for one burst when no new frame arrived.
+    cached_sensory_hold_areas: Arc<Mutex<ahash::AHashSet<CorticalID>>>,
 }
 
 type VisualizationGranularity = (u32, u32, u32);
@@ -384,6 +389,7 @@ impl BurstLoopRunner {
             cached_cortical_id_mappings: Arc::new(Mutex::new(ahash::AHashMap::new())),
             last_cortical_id_refresh: Arc::new(Mutex::new(0)),
             cached_visualization_granularities: Arc::new(Mutex::new(ahash::AHashMap::new())),
+            cached_sensory_hold_areas: Arc::new(Mutex::new(ahash::AHashSet::new())),
             viz_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_viz_shm_writer
             motor_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_motor_shm_writer
             viz_publisher: viz_publisher_trait, // Trait object for visualization (NO PYTHON CALLBACKS!)
@@ -681,6 +687,7 @@ impl BurstLoopRunner {
         let cached_cortical_id_mappings = self.cached_cortical_id_mappings.clone();
         let last_cortical_id_refresh = self.last_cortical_id_refresh.clone();
         let cached_visualization_granularities = self.cached_visualization_granularities.clone();
+        let cached_sensory_hold_areas = self.cached_sensory_hold_areas.clone();
         let sensory_intake = self.sensory_intake.clone();
         let sequential_ingest = self
             .sequential_ingest_max_frames
@@ -713,6 +720,7 @@ impl BurstLoopRunner {
                         cached_cortical_id_mappings,
                         last_cortical_id_refresh,
                         cached_visualization_granularities,
+                        cached_sensory_hold_areas,
                         sensory_intake,
                         sequential_ingest,
                     );
@@ -967,6 +975,20 @@ impl BurstLoopRunner {
                 .unwrap()
                 .len()
         );
+    }
+
+    /// Refresh the set of input areas with `sensory_hold_last_frame` on (from ConnectomeManager).
+    /// Called from the same places as `refresh_visualization_granularities`
+    /// (genome load, cortical area create/update/delete).
+    pub fn refresh_sensory_hold_areas(&self, areas: ahash::AHashSet<CorticalID>) {
+        let count = areas.len();
+        *self.cached_sensory_hold_areas.lock().unwrap() = areas;
+        debug!("[BURST-LOOP] Refreshed sensory hold areas: {} areas", count);
+    }
+
+    /// Input areas currently configured to hold their last frame for one burst.
+    pub fn sensory_hold_areas(&self) -> ahash::AHashSet<CorticalID> {
+        self.cached_sensory_hold_areas.lock().unwrap().clone()
     }
 }
 
@@ -1492,9 +1514,11 @@ fn burst_loop(
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
     cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>, // Cached cortical_idx -> visualization_granularity
+    cached_sensory_hold_areas: Arc<Mutex<ahash::AHashSet<CorticalID>>>, // Input areas with sensory_hold_last_frame on
     sensory_intake: Option<Arc<Mutex<dyn SensoryIntake>>>, // Transport-agnostic (feagi-io)
     mut sequential_ingest: Option<crate::sequential_ingest::SequentialIngest>,
 ) {
+    let mut sensory_hold = SensoryHold::new();
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
     update_sim_timestep_from_hz(initial_freq);
@@ -1663,6 +1687,19 @@ fn burst_loop(
             if !ordered_frames.is_empty() {
                 sensory_xyzp_batches.push(ordered_frames);
             }
+        }
+        // Sensor cadence hold: for input areas with `sensory_hold_last_frame` on, re-inject
+        // the previous burst's frame when no new frame arrived this burst (one burst only).
+        // The enabled set is refreshed from the services layer; swap it in when it changed.
+        {
+            if let Ok(enabled) = cached_sensory_hold_areas.try_lock() {
+                let differs = enabled.len() != sensory_hold.enabled_len()
+                    || enabled.iter().any(|id| !sensory_hold.is_enabled(id));
+                if differs {
+                    sensory_hold.set_enabled(enabled.clone());
+                }
+            }
+            sensory_hold.apply(burst_num, &mut sensory_xyzp_batches);
         }
         if sequential_queue_dropped > 0 && burst_num % 120 == 0 {
             warn!(
