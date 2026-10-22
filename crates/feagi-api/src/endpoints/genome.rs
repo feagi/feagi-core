@@ -169,6 +169,20 @@ impl Drop for GenomeTransitionStateLifecycle {
     }
 }
 
+/// Runs a brain transition that is not a genome upload (a connectome import) under the
+/// same health_check genome_state lifecycle, so a brain restored from a connectome reports
+/// `loaded` like one loaded from a genome. Clients gate autosave on that state.
+pub(crate) async fn with_genome_state_lifecycle<T, E>(
+    transition: impl std::future::Future<Output = Result<T, E>>,
+) -> Result<T, E> {
+    let lifecycle = GenomeTransitionStateLifecycle::enter();
+    let result = transition.await;
+    if result.is_ok() {
+        lifecycle.succeed();
+    }
+    result
+}
+
 /// Execute a genome load with strict priority over concurrent operations.
 ///
 /// Guarantees:
@@ -1501,6 +1515,37 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<(HeaderMap
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(feature = "http")]
+    #[tokio::test]
+    async fn connectome_transition_reports_loaded_then_error_on_failure() {
+        use feagi_state_manager::{GenomeState, StateManager};
+        let state = || StateManager::instance().read().get_genome_state();
+
+        StateManager::instance()
+            .read()
+            .set_genome_state(GenomeState::Missing);
+        let loaded: Result<(), ()> = with_genome_state_lifecycle(async {
+            assert_eq!(
+                state(),
+                GenomeState::Loading,
+                "loading while the import runs"
+            );
+            Ok(())
+        })
+        .await;
+        assert!(loaded.is_ok());
+        assert_eq!(
+            state(),
+            GenomeState::Loaded,
+            "a restored connectome is a loaded genome"
+        );
+
+        let failed: Result<(), &str> =
+            with_genome_state_lifecycle(async { Err("bad artifact") }).await;
+        assert!(failed.is_err());
+        assert_eq!(state(), GenomeState::Error);
+    }
 
     #[test]
     fn genome_artifact_file_name_requires_genome_extension() {
