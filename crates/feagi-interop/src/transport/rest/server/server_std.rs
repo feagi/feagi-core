@@ -101,6 +101,10 @@ where
                 #[cfg(feature = "open_api_endpoint")]
                 open_api_json,
             );
+
+            // TODO delete me
+            let router = route_brain_visualizer_startup(router);
+
             run_rest_server(listener, requests, accept_poll_interval, router)
         })?;
         Ok((FeagiWorker::new(requester, handle), ()))
