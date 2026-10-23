@@ -105,6 +105,7 @@ macro_rules! impl_byte_array_id {
         }
 
         paste::paste! {
+            #[allow(clippy::manual_div_ceil)]
             pub type [<Base64Encoded $id_name>] = $crate::identifiers::byte_id::Base64EncodedByteID<
                 $id_name,
                 $number_of_bytes,
