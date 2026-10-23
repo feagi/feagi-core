@@ -45,6 +45,11 @@ pub trait FeagiRequestCategory: Sized {
 
     /// Whether `response` is the error of a message, rather than its response payload
     fn response_is_error(response: &Self::ResponseEnum) -> bool;
+
+    /// The response to `request` with its message's `FeagiMessageError::NOT_IMPLEMENTED` error.
+    /// For responders that don't handle (some of) the category's messages yet, so those
+    /// requests are still answered rather than left waiting
+    fn not_implemented_response(request: &Self::RequestEnum) -> Self::ResponseEnum;
     /// The runtime set path segments shared by all messages of this category
     type Configurables: FeagiMessagePathConfigurables + 'static;
     /// `Some` for categories that declare no configurables, so their (empty) configurables

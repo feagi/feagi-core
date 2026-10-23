@@ -215,6 +215,7 @@ impl FeagiRequestMessageCategory {
         let mut response_variants = proc_macro2::TokenStream::new();
         let mut response_serialize_arms = proc_macro2::TokenStream::new();
         let mut response_error_arms = proc_macro2::TokenStream::new();
+        let mut not_implemented_arms = proc_macro2::TokenStream::new();
         let mut froms = proc_macro2::TokenStream::new();
         let mut descriptors = Vec::new();
         let mut matcher_messages = Vec::new();
@@ -238,6 +239,11 @@ impl FeagiRequestMessageCategory {
             });
             response_error_arms.extend(quote! {
                 #response_enum::#variant(::core::result::Result::Err(_)) => true,
+            });
+            not_implemented_arms.extend(quote! {
+                #request_enum::#variant(_) => #response_enum::#variant(::core::result::Result::Err(
+                    <#response_error as #basis::feagi_message::request::feagi_request_response_payloads::FeagiMessageError>::NOT_IMPLEMENTED,
+                )),
             });
             descriptors.push(entry.names.feagi_message_descriptor_struct_name());
             matcher_messages.push(MatcherMessage {
@@ -342,6 +348,13 @@ impl FeagiRequestMessageCategory {
                     match response {
                         #response_error_arms
                         _ => false,
+                    }
+                }
+
+                fn not_implemented_response(request: &#request_enum) -> #response_enum {
+                    match request {
+                        #request_enum::Nothing => #response_enum::Nothing,
+                        #not_implemented_arms
                     }
                 }
 
