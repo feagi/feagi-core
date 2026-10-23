@@ -12,15 +12,17 @@ use crate::transport::zenoh::zenoh_configuration::ZenohConfiguration;
 
 pub struct ZenohWorkerBuilder {
     feagi_node_id: FeagiNodeID,
-    zenoh_config: ZenohConfiguration
+    zenoh_config: ZenohConfiguration,
+    flags: FeagiNodeFlags,
 }
 
 impl ZenohWorkerBuilder {
 
-    pub fn new(zenoh_config: ZenohConfiguration) -> Self {
+    pub fn new(zenoh_config: ZenohConfiguration, flags: FeagiNodeFlags) -> Self {
         Self {
             feagi_node_id: FeagiNodeID::new_random(),
-            zenoh_config
+            zenoh_config,
+            flags
         }
     }
 
@@ -31,7 +33,7 @@ impl ZenohWorkerBuilder {
 
 impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for ZenohWorkerBuilder {
     type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
-    type BuildInputs = FeagiNodeFlags;
+    type BuildInputs = ();
     type BuildOutputs = ();
     type RequiredChannelPairs = ();
     type CustomRequest = ();

@@ -46,6 +46,28 @@ pub trait FeagiMessagePath: 'static {
     fn parse_message_path<'a, I: Iterator<Item = &'a str>>(configurables: &Self::Configurables, segments: I) -> Option<Self::Parameters>;
 }
 
+/// Writes the path of `Path` with every parameter replaced by `*`, segments separated by `/`.
+/// Static and configurable segments are written as they are. Used to match every concrete path
+/// of `Path` at once (zenoh key expressions)
+///
+/// Errors if `configurables` has no value for a configurable of the path
+pub fn write_wildcard_message_path<Path: FeagiMessagePath, W: core::fmt::Write>(configurables: &Path::Configurables, out: &mut W) -> core::fmt::Result {
+    use crate::feagi_message::feagi_message_description::FeagiMessagePathElementDescription;
+    use configurables::FeagiMessagePathConfigurables;
+
+    for (index, element) in Path::PATH_ELEMENTS.iter().enumerate() {
+        if index != 0 {
+            out.write_str("/")?;
+        }
+        match element {
+            FeagiMessagePathElementDescription::Static(text) => out.write_str(text)?,
+            FeagiMessagePathElementDescription::Configurable { name } => out.write_str(configurables.configurable_str(name).ok_or(core::fmt::Error)?)?,
+            FeagiMessagePathElementDescription::Parameter { .. } => out.write_str("*")?,
+        }
+    }
+    Ok(())
+}
+
 
 /// Defines something that can be serialized to become part of the message path statically.
 /// Think reading server name from a config file

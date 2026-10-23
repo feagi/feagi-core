@@ -9,6 +9,7 @@ use crate::parallelism::feagi_channel::channel_error::{FeagiChannelReceiveError,
 use crate::parallelism::feagi_channel::recycling::Recyclable;
 use crate::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
 use crate::parallelism::feagi_channel::request_response_channel::{FeagiRequester, FeagiResponder};
+#[cfg(feature = "alloc")]
 use crate::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
 
 /// A zero sized struct that contains static information about a category of request messages
