@@ -579,3 +579,19 @@ pub struct CapacityInfo {
     pub current_cortical_areas: usize,
     pub max_cortical_areas: usize,
 }
+
+/// Outcome of resetting one cortical mapping's learned synapse weights.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MappingWeightsResetInfo {
+    /// Number of synapses written back to the initial weight.
+    pub synapses_reset: usize,
+    /// Initial weight synaptogenesis assigns for the mapping (rule `postSynapticCurrent_multiplier`).
+    pub weight: f32,
+}
+
+/// Outcome of resetting every incoming mapping of one cortical area.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AreaIncomingWeightsResetInfo {
+    pub mappings_reset: usize,
+    pub synapses_reset: usize,
+}

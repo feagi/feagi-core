@@ -11,7 +11,7 @@ use ahash::{AHashMap, AHashSet};
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_runtime::NeuronStorage;
 use feagi_structures::genomic::{
-    modulator_signal, multiplicative_factor, scale_baseline, summed_reward, ModulatorKind,
+    gate_factor, modulator_signal, multiplicative_factor, scale_baseline, summed_reward, ModulatorKind,
 };
 
 use crate::fire_structures::FireQueue;
@@ -100,6 +100,55 @@ impl ModulatorEngine {
     /// Replace instance bindings. Existing group ids stay valid.
     pub fn set_bindings(&mut self, bindings: Vec<ModulatorBinding>) {
         self.bindings = bindings;
+        self.close_unsettled_gates();
+    }
+
+    /// A gated group starts closed: until a burst commits a driver signal there is no
+    /// factor for it, and a missing factor would read as open.
+    fn close_unsettled_gates(&mut self) {
+        let gated: Vec<u16> = self
+            .groups
+            .iter()
+            .filter(|(_, ids)| {
+                ids.iter().any(|id| {
+                    self.binding(id)
+                        .is_some_and(|binding| binding.kind == ModulatorKind::Gate)
+                })
+            })
+            .map(|(group, _)| *group)
+            .collect();
+        for group in gated {
+            self.active.transmission_by_group.entry(group).or_insert(0.0);
+        }
+    }
+
+    /// Rewrite an instance id in the group table and area subscriptions after a genome rename,
+    /// so already-registered mappings keep their modulation. Bindings are replaced separately.
+    pub fn rename_instance(&mut self, old_id: &str, new_id: &str) {
+        let rewrite = |ids: &mut Vec<String>| {
+            for id in ids.iter_mut().filter(|id| id.as_str() == old_id) {
+                *id = new_id.to_string();
+            }
+        };
+        self.groups.values_mut().for_each(rewrite);
+        self.area_subscriptions.values_mut().for_each(rewrite);
+    }
+
+    /// Drop an instance id from the group table and area subscriptions after a genome delete.
+    /// A group left empty stays allocated and yields reward 0.
+    pub fn remove_instance(&mut self, id: &str) {
+        for ids in self.groups.values_mut() {
+            ids.retain(|entry| entry != id);
+        }
+        for ids in self.area_subscriptions.values_mut() {
+            ids.retain(|entry| entry != id);
+        }
+        self.area_subscriptions.retain(|_, ids| !ids.is_empty());
+    }
+
+    /// Instance ids a modulation group currently resolves to.
+    pub fn group_instance_ids(&self, group: u16) -> Vec<String> {
+        self.groups.get(&group).cloned().unwrap_or_default()
     }
 
     pub fn set_area_subscriptions(&mut self, subscriptions: AHashMap<u32, Vec<String>>) {
@@ -145,6 +194,7 @@ impl ModulatorEngine {
         self.next_group = self.next_group.saturating_add(1).max(1);
         let id = self.next_group;
         self.groups.insert(id, synaptic);
+        self.close_unsettled_gates();
         id
     }
 
@@ -170,6 +220,15 @@ impl ModulatorEngine {
                 self.binding(id)
                     .is_some_and(|binding| binding.kind == ModulatorKind::Reward)
             })
+        })
+    }
+
+    /// Whether any of these instance ids is bound to a `synaptic.reward` modulator. Read-only:
+    /// unlike `allocate_group` it never creates a group.
+    pub fn ids_include_reward(&self, ids: &[String]) -> bool {
+        ids.iter().any(|id| {
+            self.binding(id)
+                .is_some_and(|binding| binding.kind == ModulatorKind::Reward)
         })
     }
 
@@ -377,6 +436,7 @@ impl ModulatorEngine {
             let mut reward = Vec::new();
             let mut learning = Vec::new();
             let mut transmission = Vec::new();
+            let mut gate = Vec::new();
             for id in ids {
                 let Some(binding) = self.binding(id) else {
                     continue;
@@ -389,6 +449,7 @@ impl ModulatorEngine {
                     ModulatorKind::Reward => reward.push(signal),
                     ModulatorKind::LearningRate => learning.push(signal),
                     ModulatorKind::TransmissionGain => transmission.push(signal),
+                    ModulatorKind::Gate => gate.push(signal),
                     _ => {}
                 }
             }
@@ -402,10 +463,13 @@ impl ModulatorEngine {
                     .learning_by_group
                     .insert(*group, multiplicative_factor(&learning));
             }
-            if !transmission.is_empty() {
-                active
-                    .transmission_by_group
-                    .insert(*group, multiplicative_factor(&transmission));
+            if !transmission.is_empty() || !gate.is_empty() {
+                // Gain and gate multiply: a closed gate zeroes the whole group.
+                let mut factor = multiplicative_factor(&transmission);
+                if !gate.is_empty() {
+                    factor *= gate_factor(&gate);
+                }
+                active.transmission_by_group.insert(*group, factor);
             }
         }
         let needed = self.needed_params();
@@ -750,5 +814,157 @@ mod tests {
         let factors = engine.factors_from(&signals);
         assert!((factors.reward_by_group[&group]).abs() < 1e-6);
         assert!((factors.learning_by_group[&group] - 1.5).abs() < 1e-6);
+    }
+
+    fn gate_binding(id: &str, idx: u32, graded: bool) -> ModulatorBinding {
+        ModulatorBinding {
+            instance_id: id.into(),
+            kind: ModulatorKind::Gate,
+            magnitude_percent: 100.0,
+            graded,
+            full_scale_potential: 10.0,
+            driver_cortical_idx: idx,
+        }
+    }
+
+    fn gate_signals(engine: &ModulatorEngine, group: u16, drivers: &[(u32, f32)]) -> f32 {
+        let signals: AHashMap<u32, f32> = drivers.iter().copied().collect();
+        engine.factors_from(&signals).transmission_by_group[&group]
+    }
+
+    #[test]
+    fn gate_is_closed_with_silent_driver_and_open_when_driver_fires() {
+        let mut engine = ModulatorEngine::default();
+        engine.set_bindings(vec![gate_binding("g", 1, false)]);
+        let group = engine.allocate_group(&["g".into()]);
+        assert_eq!(gate_signals(&engine, group, &[(1, 0.0)]), 0.0);
+        assert!((gate_signals(&engine, group, &[(1, 1.0)]) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn graded_gate_scales_with_membrane_potential() {
+        let mut engine = ModulatorEngine::default();
+        engine.set_bindings(vec![gate_binding("g", 1, true)]);
+        let group = engine.allocate_group(&["g".into()]);
+        let signal = modulator_signal(100.0, true, true, 5.0, 10.0);
+        assert!((gate_signals(&engine, group, &[(1, signal)]) - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn multiple_gates_open_if_any_is_open() {
+        let mut engine = ModulatorEngine::default();
+        engine.set_bindings(vec![gate_binding("a", 1, false), gate_binding("b", 2, false)]);
+        let group = engine.allocate_group(&["a".into(), "b".into()]);
+        assert_eq!(gate_signals(&engine, group, &[(1, 0.0), (2, 0.0)]), 0.0);
+        assert!((gate_signals(&engine, group, &[(1, 0.0), (2, 1.0)]) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn gate_multiplies_with_transmission_gain() {
+        let mut engine = ModulatorEngine::default();
+        engine.set_bindings(vec![
+            gate_binding("g", 1, false),
+            ModulatorBinding {
+                instance_id: "gain".into(),
+                kind: ModulatorKind::TransmissionGain,
+                magnitude_percent: 50.0,
+                graded: false,
+                full_scale_potential: 1.0,
+                driver_cortical_idx: 2,
+            },
+        ]);
+        let group = engine.allocate_group(&["g".into(), "gain".into()]);
+        assert!((gate_signals(&engine, group, &[(1, 1.0), (2, 0.5)]) - 1.5).abs() < 1e-6);
+        assert_eq!(gate_signals(&engine, group, &[(1, 0.0), (2, 0.5)]), 0.0);
+    }
+
+    #[test]
+    fn group_without_gate_is_unaffected() {
+        let mut engine = ModulatorEngine::default();
+        engine.set_bindings(vec![reward_binding("r", 1)]);
+        let group = engine.allocate_group(&["r".into()]);
+        let signals: AHashMap<u32, f32> = [(1, 1.0)].into_iter().collect();
+        assert!(!engine
+            .factors_from(&signals)
+            .transmission_by_group
+            .contains_key(&group));
+    }
+
+    #[test]
+    fn ids_include_reward_is_read_only_and_reward_specific() {
+        let mut engine = ModulatorEngine::default();
+        engine.set_bindings(vec![
+            reward_binding("pleasure", 1),
+            ModulatorBinding {
+                instance_id: "eta".into(),
+                kind: ModulatorKind::LearningRate,
+                magnitude_percent: 50.0,
+                graded: false,
+                full_scale_potential: 1.0,
+                driver_cortical_idx: 3,
+            },
+        ]);
+        assert!(engine.ids_include_reward(&["pleasure".into()]));
+        assert!(engine.ids_include_reward(&["eta".into(), "pleasure".into()]));
+        assert!(!engine.ids_include_reward(&["eta".into()]));
+        assert!(!engine.ids_include_reward(&["unknown".into()]));
+        assert!(!engine.ids_include_reward(&[]));
+        assert!(engine.group_instance_ids(1).is_empty(), "no group allocated");
+    }
+
+    fn reward_binding(id: &str, idx: u32) -> ModulatorBinding {
+        ModulatorBinding {
+            instance_id: id.into(),
+            kind: ModulatorKind::Reward,
+            magnitude_percent: 100.0,
+            graded: false,
+            full_scale_potential: 1.0,
+            driver_cortical_idx: idx,
+        }
+    }
+
+    #[test]
+    fn rename_instance_keeps_group_and_area_subscriptions_modulated() {
+        let mut engine = ModulatorEngine::default();
+        engine.set_bindings(vec![reward_binding("pleasure", 1)]);
+        let group = engine.allocate_group(&["pleasure".into()]);
+        engine.set_area_subscriptions(AHashMap::from([(7, vec!["pleasure".to_string()])]));
+        let mut signals = AHashMap::new();
+        signals.insert(1, 1.0);
+
+        // Pushing renamed bindings alone leaves the group on the old id: reward drops to 0.
+        engine.set_bindings(vec![reward_binding("joy", 1)]);
+        let stale = engine.factors_from(&signals);
+        assert!(
+            stale
+                .reward_by_group
+                .get(&group)
+                .copied()
+                .unwrap_or(0.0)
+                .abs()
+                < 1e-6
+        );
+
+        engine.rename_instance("pleasure", "joy");
+        assert_eq!(engine.group_instance_ids(group), vec!["joy".to_string()]);
+        assert_eq!(engine.area_subscriptions(7), vec!["joy".to_string()]);
+        assert!((engine.factors_from(&signals).reward_by_group[&group] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn remove_instance_drops_id_from_groups_and_area_subscriptions() {
+        let mut engine = ModulatorEngine::default();
+        engine.set_bindings(vec![
+            reward_binding("pleasure", 1),
+            reward_binding("pain", 2),
+        ]);
+        let group = engine.allocate_group(&["pleasure".into(), "pain".into()]);
+        engine.set_area_subscriptions(AHashMap::from([(7, vec!["pain".to_string()])]));
+        engine.remove_instance("pain");
+        assert_eq!(
+            engine.group_instance_ids(group),
+            vec!["pleasure".to_string()]
+        );
+        assert!(engine.area_subscriptions(7).is_empty());
     }
 }

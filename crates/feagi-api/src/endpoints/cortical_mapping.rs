@@ -6,6 +6,7 @@
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// LTP/LTD multipliers are stored in the NPU as `i8` (aligns with effective range after
@@ -102,6 +103,97 @@ pub async fn post_efferents(
     Json(_req): Json<HashMap<String, String>>,
 ) -> ApiResult<Json<Vec<String>>> {
     Err(ApiError::internal("Not yet implemented"))
+}
+
+/// Shape one dict-format dstmap rule for `post_mapping_properties`. Strict schema, no implicit defaults.
+///
+/// Echoes every key the write path accepts, so a client that reads a rule and writes it back loses
+/// nothing. The pre-v4 `reward_source_area` / `punishment_source_area` are not echoed: the write
+/// path rejects them.
+fn format_dict_mapping_rule(
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> ApiResult<serde_json::Value> {
+    // Dict format - strict schema (no implicit defaults)
+    let morphology_id = obj
+        .get("morphology_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("morphology_id must be a string"))?;
+    let morphology_scalar = obj
+        .get("morphology_scalar")
+        .cloned()
+        .ok_or_else(|| ApiError::invalid_input("morphology_scalar missing"))?;
+    let psc_multiplier = f64_from_json_value(
+        obj.get("postSynapticCurrent_multiplier")
+            .ok_or_else(|| ApiError::invalid_input("postSynapticCurrent_multiplier missing"))?,
+        "postSynapticCurrent_multiplier",
+    )?;
+    let plasticity_flag = obj
+        .get("plasticity_flag")
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
+    let plasticity_constant = optional_i64_field(obj, "plasticity_constant")?;
+    let ltp_multiplier = optional_i8_field(obj, "ltp_multiplier")?;
+    let ltd_multiplier = optional_i8_field(obj, "ltd_multiplier")?;
+    let plasticity_window = optional_i64_field(obj, "plasticity_window")?;
+
+    let synaptic_delay_bursts: u64 = obj
+        .get("synaptic_delay_bursts")
+        .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
+        .unwrap_or(1)
+        .max(1);
+
+    // R-STDP optional fields. plasticity_mode is the canonical successor of
+    // plasticity_flag; when absent, downstream defaults to Stdp / Off based on the flag.
+    // The other three fields are only meaningful when plasticity_mode == "rstdp" and are
+    // validated downstream by the BDU.
+    let plasticity_mode = obj
+        .get("plasticity_mode")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let eligibility_decay_bursts = obj.get("eligibility_decay_bursts").and_then(|v| v.as_u64());
+    // Optional R-STDP / STDP weight ceiling. Validated downstream by the BDU; we only
+    // shape it here so the rule round-trips cleanly through GET.
+    let max_weight = obj
+        .get("max_weight")
+        .and_then(|v| if v.is_null() { None } else { v.as_f64() });
+    let plasticity_eta =
+        obj.get("plasticity_eta")
+            .and_then(|v| if v.is_null() { None } else { v.as_f64() });
+
+    let mut rule = serde_json::json!({
+        "morphology_id": morphology_id,
+        "morphology_scalar": morphology_scalar,
+        "postSynapticCurrent_multiplier": psc_multiplier,
+        "plasticity_flag": plasticity_flag,
+        "plasticity_constant": plasticity_constant,
+        "ltp_multiplier": ltp_multiplier,
+        "ltd_multiplier": ltd_multiplier,
+        "plasticity_window": plasticity_window,
+        "synaptic_delay_bursts": synaptic_delay_bursts,
+    });
+    let rule_obj = rule.as_object_mut().unwrap();
+    if let Some(mode) = plasticity_mode {
+        rule_obj.insert("plasticity_mode".to_string(), serde_json::json!(mode));
+    }
+    if let Some(decay) = eligibility_decay_bursts {
+        rule_obj.insert(
+            "eligibility_decay_bursts".to_string(),
+            serde_json::json!(decay),
+        );
+    }
+    // Subscriptions and per-instance reward fields: pass through when present.
+    for key in ["modulators", "classifier_instance_reward"] {
+        if let Some(value) = obj.get(key).filter(|v| !v.is_null()) {
+            rule_obj.insert(key.to_string(), value.clone());
+        }
+    }
+    if let Some(mw) = max_weight {
+        rule_obj.insert("max_weight".to_string(), serde_json::json!(mw));
+    }
+    if let Some(eta) = plasticity_eta {
+        rule_obj.insert("plasticity_eta".to_string(), serde_json::json!(eta));
+    }
+    Ok(rule)
 }
 
 /// POST /v1/cortical_mapping/mapping_properties
@@ -220,100 +312,7 @@ pub async fn post_mapping_properties(
                 "synaptic_delay_bursts": synaptic_delay_bursts,
             }));
         } else if let Some(obj) = conn.as_object() {
-            // Dict format - strict schema (no implicit defaults)
-            let morphology_id = obj
-                .get("morphology_id")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| ApiError::invalid_input("morphology_id must be a string"))?;
-            let morphology_scalar = obj
-                .get("morphology_scalar")
-                .cloned()
-                .ok_or_else(|| ApiError::invalid_input("morphology_scalar missing"))?;
-            let psc_multiplier = f64_from_json_value(
-                obj.get("postSynapticCurrent_multiplier").ok_or_else(|| {
-                    ApiError::invalid_input("postSynapticCurrent_multiplier missing")
-                })?,
-                "postSynapticCurrent_multiplier",
-            )?;
-            let plasticity_flag = obj
-                .get("plasticity_flag")
-                .and_then(|v| v.as_bool())
-                .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
-            let plasticity_constant = optional_i64_field(obj, "plasticity_constant")?;
-            let ltp_multiplier = optional_i8_field(obj, "ltp_multiplier")?;
-            let ltd_multiplier = optional_i8_field(obj, "ltd_multiplier")?;
-            let plasticity_window = optional_i64_field(obj, "plasticity_window")?;
-
-            let synaptic_delay_bursts: u64 = obj
-                .get("synaptic_delay_bursts")
-                .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
-                .unwrap_or(1)
-                .max(1);
-
-            // R-STDP optional fields. plasticity_mode is the canonical successor of
-            // plasticity_flag; when absent, downstream defaults to Stdp / Off based on the flag.
-            // The other three fields are only meaningful when plasticity_mode == "rstdp" and are
-            // validated downstream by the BDU.
-            let plasticity_mode = obj
-                .get("plasticity_mode")
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-            let eligibility_decay_bursts =
-                obj.get("eligibility_decay_bursts").and_then(|v| v.as_u64());
-            let reward_source_area = obj
-                .get("reward_source_area")
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-            let punishment_source_area = obj
-                .get("punishment_source_area")
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
-            // Optional R-STDP / STDP weight ceiling. Validated downstream by the BDU; we only
-            // shape it here so the rule round-trips cleanly through GET.
-            let max_weight =
-                obj.get("max_weight")
-                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
-            let plasticity_eta =
-                obj.get("plasticity_eta")
-                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
-
-            let mut rule = serde_json::json!({
-                "morphology_id": morphology_id,
-                "morphology_scalar": morphology_scalar,
-                "postSynapticCurrent_multiplier": psc_multiplier,
-                "plasticity_flag": plasticity_flag,
-                "plasticity_constant": plasticity_constant,
-                "ltp_multiplier": ltp_multiplier,
-                "ltd_multiplier": ltd_multiplier,
-                "plasticity_window": plasticity_window,
-                "synaptic_delay_bursts": synaptic_delay_bursts,
-            });
-            let rule_obj = rule.as_object_mut().unwrap();
-            if let Some(mode) = plasticity_mode {
-                rule_obj.insert("plasticity_mode".to_string(), serde_json::json!(mode));
-            }
-            if let Some(decay) = eligibility_decay_bursts {
-                rule_obj.insert(
-                    "eligibility_decay_bursts".to_string(),
-                    serde_json::json!(decay),
-                );
-            }
-            if let Some(area) = reward_source_area {
-                rule_obj.insert("reward_source_area".to_string(), serde_json::json!(area));
-            }
-            if let Some(area) = punishment_source_area {
-                rule_obj.insert(
-                    "punishment_source_area".to_string(),
-                    serde_json::json!(area),
-                );
-            }
-            if let Some(mw) = max_weight {
-                rule_obj.insert("max_weight".to_string(), serde_json::json!(mw));
-            }
-            if let Some(eta) = plasticity_eta {
-                rule_obj.insert("plasticity_eta".to_string(), serde_json::json!(eta));
-            }
-            formatted.push(rule);
+            formatted.push(format_dict_mapping_rule(obj)?);
         }
     }
 
@@ -638,8 +637,8 @@ pub async fn delete_mapping(
 #[cfg(test)]
 mod tests {
     use super::{
-        f64_from_json_value, i64_from_integer_like_json_value, optional_i64_field,
-        optional_i8_field,
+        f64_from_json_value, format_dict_mapping_rule, i64_from_integer_like_json_value,
+        optional_i64_field, optional_i8_field,
     };
 
     #[test]
@@ -726,6 +725,49 @@ mod tests {
             Some(1)
         );
     }
+
+    #[test]
+    fn dict_rule_echoes_subscriptions_and_drops_legacy_reward_fields() {
+        let stored = serde_json::json!({
+            "morphology_id": "associative_memory",
+            "morphology_scalar": 1,
+            "postSynapticCurrent_multiplier": 1.0,
+            "plasticity_flag": true,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1,
+            "plasticity_window": 5,
+            "plasticity_mode": "rstdp",
+            "modulators": ["pleasure", "pain"],
+            "gate_source_area": "gateAA=",
+            "classifier_instance_reward": true,
+            "reward_source_area": "legacy1",
+            "punishment_source_area": "legacy2",
+        });
+        let out = format_dict_mapping_rule(stored.as_object().unwrap()).unwrap();
+        assert_eq!(out["modulators"], serde_json::json!(["pleasure", "pain"]));
+        assert!(out.get("gate_source_area").is_none());
+        assert_eq!(out["classifier_instance_reward"], true);
+        assert!(out.get("reward_source_area").is_none());
+        assert!(out.get("punishment_source_area").is_none());
+        // Re-formatting the output is stable, so read -> write -> read loses nothing.
+        let again = format_dict_mapping_rule(out.as_object().unwrap()).unwrap();
+        assert_eq!(out, again);
+    }
+
+    #[test]
+    fn dict_rule_omits_absent_subscription_keys() {
+        let stored = serde_json::json!({
+            "morphology_id": "block_to_block",
+            "morphology_scalar": 1,
+            "postSynapticCurrent_multiplier": 1.0,
+            "plasticity_flag": false,
+        });
+        let out = format_dict_mapping_rule(stored.as_object().unwrap()).unwrap();
+        for key in ["modulators", "classifier_instance_reward"] {
+            assert!(out.get(key).is_none(), "{key}");
+        }
+    }
 }
 
 /// POST /v1/cortical_mapping/batch_update
@@ -776,4 +818,52 @@ pub async fn put_mapping(
         "message".to_string(),
         "Not yet implemented".to_string(),
     )])))
+}
+
+/// Body for `PUT /v1/cortical_mapping/reset_weights`.
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct MappingResetWeightsRequest {
+    pub src_cortical_area: String,
+    pub dst_cortical_area: String,
+}
+
+/// Result of resetting one mapping's learned weights.
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct MappingResetWeightsResponse {
+    pub src_cortical_area: String,
+    pub dst_cortical_area: String,
+    /// Synapses written back to the initial weight.
+    pub synapses_reset: usize,
+    /// Initial weight synaptogenesis assigns for the mapping.
+    pub weight: f32,
+}
+
+/// Reset learned synapse weights of one cortical mapping to the weight synaptogenesis assigns
+/// for it (the mapping rule's initial weight) and clear per-synapse plasticity state
+/// (eligibility traces). Genome and neuron membrane state are unchanged.
+#[utoipa::path(
+    put,
+    path = "/v1/cortical_mapping/reset_weights",
+    tag = "cortical_mapping",
+    request_body = MappingResetWeightsRequest,
+    responses(
+        (status = 200, description = "Weights reset", body = MappingResetWeightsResponse),
+        (status = 404, description = "Area or mapping not found"),
+    )
+)]
+pub async fn put_reset_weights(
+    State(state): State<ApiState>,
+    Json(request): Json<MappingResetWeightsRequest>,
+) -> ApiResult<Json<MappingResetWeightsResponse>> {
+    let info = state
+        .connectome_service
+        .reset_mapping_weights(&request.src_cortical_area, &request.dst_cortical_area)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(MappingResetWeightsResponse {
+        src_cortical_area: request.src_cortical_area,
+        dst_cortical_area: request.dst_cortical_area,
+        synapses_reset: info.synapses_reset,
+        weight: info.weight,
+    }))
 }

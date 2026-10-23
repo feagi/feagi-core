@@ -784,6 +784,22 @@ where
         dispatch!(self, allocate_modulation_group(instance_ids))
     }
 
+    pub fn rename_modulator_instance(&self, old_id: &str, new_id: &str) {
+        dispatch!(self, rename_modulator_instance(old_id, new_id))
+    }
+
+    pub fn remove_modulator_instance(&self, id: &str) {
+        dispatch!(self, remove_modulator_instance(id))
+    }
+
+    pub fn modulation_group_instance_ids(&self, group: u16) -> Vec<String> {
+        dispatch!(self, modulation_group_instance_ids(group))
+    }
+
+    pub fn modulator_ids_include_reward(&self, instance_ids: &[String]) -> bool {
+        dispatch!(self, modulator_ids_include_reward(instance_ids))
+    }
+
     pub fn authored_reward_signal(&self, driver_cortical_idx: u32) -> Option<f32> {
         dispatch!(self, authored_reward_signal(driver_cortical_idx))
     }
@@ -821,29 +837,6 @@ where
         dispatch_mut!(
             self,
             unregister_stdp_mapping(src_cortical_idx, dst_cortical_idx)
-        )
-    }
-
-    pub fn register_gate_mapping(
-        &mut self,
-        src_cortical_idx: u32,
-        dst_cortical_idx: u32,
-        gate_cortical_idx: u32,
-    ) -> Result<()> {
-        dispatch_mut!(
-            self,
-            register_gate_mapping(src_cortical_idx, dst_cortical_idx, gate_cortical_idx)
-        )
-    }
-
-    pub fn unregister_gate_mapping(
-        &mut self,
-        src_cortical_idx: u32,
-        dst_cortical_idx: u32,
-    ) -> bool {
-        dispatch_mut!(
-            self,
-            unregister_gate_mapping(src_cortical_idx, dst_cortical_idx)
         )
     }
 
@@ -1009,6 +1002,20 @@ where
     /// Clear FCL entries and reset membrane / refractory / consecutive-fire state for one cortical area.
     pub fn reset_cortical_area_runtime_state(&mut self, cortical_area: u32) -> usize {
         dispatch_mut!(self, reset_cortical_area_runtime_state(cortical_area))
+    }
+
+    /// Reset learned synapse weights of mapping `src -> dst` to `weight` and clear eligibility traces.
+    /// Returns the number of synapses reset.
+    pub fn reset_mapping_synapse_weights(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        weight: f32,
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            reset_mapping_synapse_weights(src_cortical_idx, dst_cortical_idx, weight)
+        )
     }
 
     /// Remove pending delayed synaptic PSP and associative-memory schedule entries for these targets.

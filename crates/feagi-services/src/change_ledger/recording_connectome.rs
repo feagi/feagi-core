@@ -338,6 +338,22 @@ impl ConnectomeService for RecordingConnectomeService {
         Ok(())
     }
 
+    // Weight reset changes runtime synapse state only, never the genome: no ledger entry.
+    async fn reset_mapping_weights(
+        &self,
+        src_area_id: &str,
+        dst_area_id: &str,
+    ) -> ServiceResult<MappingWeightsResetInfo> {
+        self.inner.reset_mapping_weights(src_area_id, dst_area_id).await
+    }
+
+    async fn reset_area_incoming_weights(
+        &self,
+        dst_area_id: &str,
+    ) -> ServiceResult<AreaIncomingWeightsResetInfo> {
+        self.inner.reset_area_incoming_weights(dst_area_id).await
+    }
+
     async fn delete_classifier(&self, classifier_id: &str) -> ServiceResult<()> {
         let before = classifier_snapshot(self.inner.as_ref(), classifier_id).await;
         self.inner.delete_classifier(classifier_id).await?;

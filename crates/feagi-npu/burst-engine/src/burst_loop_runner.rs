@@ -862,6 +862,20 @@ impl BurstLoopRunner {
         cached.map(|arc| (*arc).clone())
     }
 
+    /// Fired-neuron count per cortical area in the last cached burst.
+    /// Reads lengths from the shared sample; no neuron data is copied.
+    pub fn get_fire_queue_counts(&self) -> Option<Vec<(u32, u32)>> {
+        let cached = self.cached_fire_queue.lock().unwrap().clone();
+        cached.map(|sample| {
+            sample
+                .iter()
+                .map(|(cortical_idx, (neuron_ids, _, _, _, _))| {
+                    (*cortical_idx, neuron_ids.len() as u32)
+                })
+                .collect()
+        })
+    }
+
     /// Get Fire Ledger window configurations for all cortical areas
     pub fn get_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
         let lock_start = std::time::Instant::now();

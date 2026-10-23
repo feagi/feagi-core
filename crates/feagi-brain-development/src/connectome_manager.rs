@@ -4489,6 +4489,32 @@ impl ConnectomeManager {
             .or_else(|| v.as_f64().map(|f| f as usize))
     }
 
+    /// Follow a genome modulator rename in the burst engine's modulation groups and area
+    /// subscriptions. Call before `sync_modulators_from_genome` pushes the renamed bindings.
+    pub fn rename_modulator_in_runtime(&self, old_id: &str, new_id: &str) -> BduResult<()> {
+        let npu = self
+            .npu
+            .as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        npu.lock()
+            .map_err(|err| BduError::Internal(format!("Failed to lock NPU for modulators: {err}")))?
+            .rename_modulator_instance(old_id, new_id);
+        Ok(())
+    }
+
+    /// Drop a deleted genome modulator from the burst engine's modulation groups and area
+    /// subscriptions. Call before `sync_modulators_from_genome` pushes the remaining bindings.
+    pub fn remove_modulator_from_runtime(&self, id: &str) -> BduResult<()> {
+        let npu = self
+            .npu
+            .as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        npu.lock()
+            .map_err(|err| BduError::Internal(format!("Failed to lock NPU for modulators: {err}")))?
+            .remove_modulator_instance(id);
+        Ok(())
+    }
+
     /// Register STDP mapping parameters for a plastic rule
     #[allow(clippy::too_many_arguments)]
     /// Push genome modulator instances, area subscriptions, and spike-train areas into the NPU.
@@ -4744,15 +4770,13 @@ impl ConnectomeManager {
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
         if instance_reward
-            && (!matches!(
+            && !matches!(
                 plasticity_mode,
                 feagi_npu_burst_engine::npu::PlasticityMode::RStdp
-            ) || reward_source_area_id.is_none()
-                || punishment_source_area_id.is_none())
+            )
         {
             return Err(BduError::Internal(format!(
-                "classifier_instance_reward requires plasticity_mode='rstdp' plus \
-                 reward_source_area and punishment_source_area on mapping {} -> {}",
+                "classifier_instance_reward requires plasticity_mode='rstdp' on mapping {} -> {}",
                 src_area_id, dst_area_id
             )));
         }
@@ -4802,6 +4826,19 @@ impl ConnectomeManager {
             .lock()
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
         trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: acquired NPU lock");
+
+        // Schema v4: reward comes from `synaptic.reward` modulators listed in the rule's
+        // `modulators`, not from reward_source_area / punishment_source_area.
+        if instance_reward {
+            // Read-only check: a rejected rule must not leave an orphan group behind.
+            if !npu_lock.modulator_ids_include_reward(&rule_modulator_ids(rule_obj)) {
+                return Err(BduError::Internal(format!(
+                    "classifier_instance_reward requires at least one synaptic.reward modulator \
+                     in `modulators` on mapping {} -> {}",
+                    src_area_id, dst_area_id
+                )));
+            }
+        }
 
         // Resolve reward/punishment area names to cortical_idx (R-STDP only). The detector
         // areas must already be registered with the NPU before this mapping is parsed; the
@@ -4995,6 +5032,90 @@ impl ConnectomeManager {
         Ok((weight, psp_f32, synapse_type, delay_bursts))
     }
 
+    /// Initial synapse weight synaptogenesis assigns for the stored mapping `src -> dst`.
+    ///
+    /// The weight is `abs(postSynapticCurrent_multiplier)` of the mapping rule (see
+    /// `resolve_synapse_params_for_rule`). Plastic rules (`plasticity_flag`, or the
+    /// `associative_memory` morphology) are the ones whose weights can drift, so they are
+    /// used when present; otherwise every rule is considered.
+    ///
+    /// Returns `Ok(None)` when the source area has no rules for that destination. Errors with
+    /// `InvalidMorphology` when the considered rules disagree on the initial weight (the
+    /// synapses of the mapping cannot be told apart per rule).
+    pub fn mapping_initial_weight(
+        &self,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+    ) -> BduResult<Option<f32>> {
+        let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+            crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+        })?;
+        let Some(mapping_dst) = src_area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+        else {
+            return Ok(None);
+        };
+        let Some(rules) = Self::get_mapping_rules_for_destination(mapping_dst, dst_area_id) else {
+            return Ok(None);
+        };
+        if rules.is_empty() {
+            return Ok(None);
+        }
+        let is_plastic = |rule: &serde_json::Value| -> bool {
+            rule.as_object().is_some_and(|obj| {
+                obj.get("plasticity_flag")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                    || obj.get("morphology_id").and_then(|v| v.as_str())
+                        == Some("associative_memory")
+            })
+        };
+        let plastic: Vec<&serde_json::Value> = rules.iter().filter(|r| is_plastic(r)).collect();
+        let considered: Vec<&serde_json::Value> = if plastic.is_empty() {
+            rules.iter().collect()
+        } else {
+            plastic
+        };
+        let mut weight: Option<f32> = None;
+        for rule in considered {
+            let (w, _psp, _ty, _delay) = self.resolve_synapse_params_for_rule(src_area_id, rule)?;
+            match weight {
+                None => weight = Some(w),
+                Some(prev) if (prev - w).abs() > f32::EPSILON => {
+                    return Err(crate::types::BduError::InvalidMorphology(format!(
+                        "Mapping {} -> {} has rules with different initial weights ({} vs {}); \
+                         weight reset is ambiguous",
+                        src_area_id, dst_area_id, prev, w
+                    )));
+                }
+                Some(_) => {}
+            }
+        }
+        Ok(weight)
+    }
+
+    /// Cortical areas that have a stored, non-empty mapping into `dst_area_id`.
+    pub fn incoming_mapping_sources(&self, dst_area_id: &CorticalID) -> Vec<CorticalID> {
+        let mut out: Vec<CorticalID> = Vec::new();
+        for (src_id, area) in &self.cortical_areas {
+            let Some(mapping_dst) = area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            else {
+                continue;
+            };
+            if Self::get_mapping_rules_for_destination(mapping_dst, dst_area_id)
+                .is_some_and(|rules| !rules.is_empty())
+            {
+                out.push(*src_id);
+            }
+        }
+        out
+    }
+
     /// Apply cortical mapping for a specific area pair
     fn apply_cortical_mapping_for_pair(
         &mut self,
@@ -5121,53 +5242,6 @@ impl ConnectomeManager {
                         e
                     );
                     return Err(e);
-                }
-            }
-
-            // Handle conditional gate (transistor synapse) configuration if present.
-            // The gate_source_area field specifies a cortical area whose firing activity
-            // gates propagation through all synapses created by this mapping rule.
-            if let Some(gate_area_str) = rule
-                .as_object()
-                .and_then(|obj| obj.get("gate_source_area"))
-                .and_then(|v| v.as_str())
-            {
-                let gate_area_id = CorticalID::try_from_base_64(gate_area_str).map_err(|_| {
-                    crate::types::BduError::Internal(format!(
-                        "Invalid gate_source_area '{}' on mapping {} -> {}",
-                        gate_area_str, src_area_id, dst_area_id
-                    ))
-                })?;
-                let gate_cortical_idx =
-                    self.cortical_id_to_idx.get(&gate_area_id).ok_or_else(|| {
-                        crate::types::BduError::Internal(format!(
-                            "Unknown gate_source_area '{}' on mapping {} -> {}",
-                            gate_area_str, src_area_id, dst_area_id
-                        ))
-                    })?;
-
-                let mut npu_lock = npu_arc.lock().map_err(|_| {
-                    crate::types::BduError::Internal(
-                        "Failed to acquire NPU lock for gate registration".to_string(),
-                    )
-                })?;
-                if let Err(e) = npu_lock.register_gate_mapping(
-                    src_cortical_idx,
-                    dst_cortical_idx,
-                    *gate_cortical_idx,
-                ) {
-                    tracing::error!(
-                        target: "feagi-bdu",
-                        "Gate mapping registration failed for {} -> {} (gate={}): {}",
-                        src_area_id,
-                        dst_area_id,
-                        gate_area_str,
-                        e
-                    );
-                    return Err(crate::types::BduError::Internal(format!(
-                        "Gate registration failed: {}",
-                        e
-                    )));
                 }
             }
 
@@ -14033,5 +14107,98 @@ mod tests {
             Some("sample_memory")
         );
         assert!(manager.build_memory_scan_config(&mem_id).is_none());
+    }
+
+    fn classifier_reward_test_npu() -> Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>
+    {
+        use feagi_npu_burst_engine::modulator_engine::ModulatorBinding;
+        use feagi_structures::genomic::ModulatorKind;
+        let npu = Arc::new(feagi_npu_burst_engine::TracingMutex::new(
+            feagi_npu_burst_engine::DynamicNPU::new_f32(
+                feagi_npu_runtime::StdRuntime::new(),
+                feagi_npu_burst_engine::backend::CPUBackend::new(),
+                16,
+                16,
+                8,
+            )
+            .unwrap(),
+            "classifier-reward-test-npu",
+        ));
+        let binding = |id: &str, kind: ModulatorKind, idx: u32| ModulatorBinding {
+            instance_id: id.to_string(),
+            kind,
+            magnitude_percent: 100.0,
+            graded: false,
+            full_scale_potential: 1.0,
+            driver_cortical_idx: idx,
+        };
+        npu.lock().unwrap().set_modulator_bindings(vec![
+            binding("pleasure", ModulatorKind::Reward, 20),
+            binding("pain", ModulatorKind::Reward, 21),
+            binding("eta", ModulatorKind::LearningRate, 22),
+        ]);
+        npu
+    }
+
+    fn register_classifier_reward_rule(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        modulators: serde_json::Value,
+    ) -> BduResult<()> {
+        let src = CorticalID::try_from_bytes(b"mcsrc001").unwrap();
+        let dst = CorticalID::try_from_bytes(b"mcdst001").unwrap();
+        // Rule shape produced by feagi-api `classifier_reward_mapping_rule` under schema v4:
+        // no reward_source_area / punishment_source_area, reward instances in `modulators`.
+        let rule = serde_json::json!({
+            "morphology_id": "associative_memory",
+            "plasticity_flag": true,
+            "plasticity_mode": "rstdp",
+            "modulators": modulators,
+            "classifier_instance_reward": true,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1,
+            "plasticity_window": 4
+        });
+        ConnectomeManager::register_stdp_mapping_for_rule(
+            npu,
+            &src,
+            &dst,
+            1,
+            2,
+            rule.as_object().unwrap(),
+            false,
+            1.0,
+            feagi_npu_neural::SynapseType::Excitatory,
+        )
+    }
+
+    #[test]
+    fn classifier_instance_reward_accepts_reward_modulators_without_legacy_fields() {
+        let npu = classifier_reward_test_npu();
+        let result = register_classifier_reward_rule(&npu, serde_json::json!(["pleasure", "pain"]));
+        assert!(result.is_ok(), "reward mapping rejected: {:?}", result);
+    }
+
+    #[test]
+    fn classifier_instance_reward_without_reward_modulator_is_rejected() {
+        let npu = classifier_reward_test_npu();
+        let baseline = npu
+            .lock()
+            .unwrap()
+            .allocate_modulation_group(&["pleasure".to_string()]);
+        for modulators in [serde_json::json!([]), serde_json::json!(["eta"])] {
+            let err = register_classifier_reward_rule(&npu, modulators.clone())
+                .expect_err("classifier_instance_reward needs a synaptic.reward modulator");
+            assert!(
+                err.to_string().contains("synaptic.reward"),
+                "unexpected error for {modulators}: {err}"
+            );
+        }
+        // Rejections allocated nothing: the next new group id follows the baseline directly.
+        let next = npu
+            .lock()
+            .unwrap()
+            .allocate_modulation_group(&["pain".to_string()]);
+        assert_eq!(next, baseline + 1, "rejected rule leaked a modulation group");
     }
 }

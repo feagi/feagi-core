@@ -626,6 +626,10 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route("/cortical_area/reset", put(cortical_area::put_reset))
         .route(
+            "/cortical_area/reset_weights",
+            put(cortical_area::put_reset_weights),
+        )
+        .route(
             "/cortical_area/visualization",
             get(cortical_area::get_visualization),
         )
@@ -817,6 +821,10 @@ fn create_v1_router() -> Router<ApiState> {
             "/cortical_mapping/mapping",
             axum::routing::post(cortical_mapping::post_mapping).put(cortical_mapping::put_mapping),
         )
+        .route(
+            "/cortical_mapping/reset_weights",
+            put(cortical_mapping::put_reset_weights),
+        )
         // ===== CONNECTOME MODULE (21 endpoints) =====
         .route(
             "/connectome/cortical_areas/list/detailed",
@@ -1003,6 +1011,10 @@ fn create_v1_router() -> Router<ApiState> {
         .route(
             "/burst_engine/fire_queue/detailed",
             get(burst_engine::get_fire_queue_detailed),
+        )
+        .route(
+            "/burst_engine/fire_queue/counts",
+            get(burst_engine::get_fire_queue_counts),
         )
         .route(
             "/burst_engine/fire_queue/neuron",

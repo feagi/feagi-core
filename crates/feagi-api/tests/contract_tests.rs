@@ -1040,6 +1040,32 @@ async fn test_modulator_by_id_routes_resolve() {
 }
 
 #[tokio::test]
+async fn test_reset_weights_routes_return_404_for_unknown_areas() {
+    let app = create_test_server().await;
+    let (status, body) = request_json(
+        app,
+        "PUT",
+        "/v1/cortical_mapping/reset_weights",
+        Some(serde_json::json!({
+            "src_cortical_area": "no_such_src",
+            "dst_cortical_area": "no_such_dst"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+
+    let app = create_test_server().await;
+    let (status, body) = request_json(
+        app,
+        "PUT",
+        "/v1/cortical_area/reset_weights",
+        Some(serde_json::json!({ "area_list": ["no_such_area"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+}
+
+#[tokio::test]
 async fn test_cortical_area_read_waits_for_genome_transition() {
     let state = build_test_state();
     let transition_lock = Arc::clone(&state.genome_transition_lock);

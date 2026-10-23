@@ -676,3 +676,50 @@ fn test_rstdp_max_weight_does_not_block_punishment_to_zero() {
         w_final
     );
 }
+
+/// Punishment against a negative (LTD) trace must never potentiate. One-sided firing (src
+/// only) builds `e < 0`; with `R < 0` the raw product `eta * R * e` is positive, which the
+/// commit guard must discard. Regression for punishment-only mappings saturating at
+/// `max_weight`.
+#[test]
+fn test_rstdp_punishment_against_ltd_trace_never_potentiates() {
+    let (mut npu, src, dst, _reward, pain) = create_rstdp_network();
+    wire_test_synapse(&mut npu, src[0], dst[0], 20.0);
+
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    params.max_weight = 1000.0;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    let _ = dst;
+
+    // Source fires alone, every burst, while pain is active: trace goes negative (LTD).
+    for _ in 0..50 {
+        npu.inject_sensory_with_potentials(&[(src[0], 128.0), (pain, 128.0)]);
+        npu.process_burst().unwrap();
+        let w = synapse_weight(&npu, src[0]);
+        assert!(w <= 20.0, "punishment must never raise a weight, got {}", w);
+    }
+}
+
+/// `ltp_multiplier = 0` disables potentiation: with positive reward, co-firing builds no
+/// positive trace and one-sided firing may only depress, never raise, the weight.
+#[test]
+fn test_rstdp_zero_ltp_multiplier_never_increases_weight() {
+    let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
+    wire_test_synapse(&mut npu, src[0], dst[0], 20.0);
+
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    params.ltp_multiplier = 0;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    for i in 0..30 {
+        // Alternate co-firing and one-sided firing, always with reward present.
+        let mut inputs = vec![(src[0], 128.0), (reward, 128.0)];
+        if i % 2 == 0 {
+            inputs.push((dst[0], 128.0));
+        }
+        npu.inject_sensory_with_potentials(&inputs);
+        npu.process_burst().unwrap();
+        let w = synapse_weight(&npu, src[0]);
+        assert!(w <= 20.0, "ltp_multiplier=0 must not potentiate, got {}", w);
+    }
+}

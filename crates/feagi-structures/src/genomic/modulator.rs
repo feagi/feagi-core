@@ -25,6 +25,9 @@ pub enum ModulatorKind {
     Reward,
     /// STDP / R-STDP eta of the mapping. `eta * (1 + signal)`.
     LearningRate,
+    /// Open/closed switch on the subscribed mapping. Transmission is 0 unless a
+    /// gate instance in the group has an active driver; then the factor is the signal.
+    Gate,
 }
 
 impl ModulatorKind {
@@ -37,6 +40,7 @@ impl ModulatorKind {
             Self::TransmissionGain => "synaptic.transmission_gain",
             Self::Reward => "synaptic.reward",
             Self::LearningRate => "synaptic.learning_rate",
+            Self::Gate => "synaptic.gate",
         }
     }
 
@@ -49,6 +53,7 @@ impl ModulatorKind {
             "synaptic.transmission_gain" => Ok(Self::TransmissionGain),
             "synaptic.reward" => Ok(Self::Reward),
             "synaptic.learning_rate" => Ok(Self::LearningRate),
+            "synaptic.gate" => Ok(Self::Gate),
             other => Err(format!("unknown modulator type '{other}'")),
         }
     }
@@ -62,6 +67,7 @@ impl ModulatorKind {
             Self::TransmissionGain,
             Self::Reward,
             Self::LearningRate,
+            Self::Gate,
         ]
     }
 
@@ -177,6 +183,12 @@ pub fn multiplicative_factor(signals: &[f32]) -> f32 {
         .fold(1.0_f32, |acc, signal| acc * (1.0 + signal))
 }
 
+/// Transmission factor of a group's gate instances: the largest signal (open if
+/// any gate is open), never below 0. A silent driver has signal 0, so the gate is closed.
+pub fn gate_factor(signals: &[f32]) -> f32 {
+    signals.iter().copied().fold(0.0_f32, f32::max)
+}
+
 /// Sum of reward signals. Reward does not use the multiplicative factor.
 pub fn summed_reward(signals: &[f32]) -> f32 {
     signals.iter().sum()
@@ -192,7 +204,8 @@ pub fn scale_baseline(kind: ModulatorKind, baseline: f32, factor: f32) -> f32 {
         ModulatorKind::Leak | ModulatorKind::FiringProbability => value.clamp(0.0, 1.0),
         ModulatorKind::FiringThreshold
         | ModulatorKind::TransmissionGain
-        | ModulatorKind::LearningRate => value.max(0.0),
+        | ModulatorKind::LearningRate
+        | ModulatorKind::Gate => value.max(0.0),
         ModulatorKind::Reward => value,
     }
 }
@@ -259,5 +272,23 @@ mod tests {
         for kind in ModulatorKind::all() {
             assert_eq!(ModulatorKind::parse(kind.as_str()).unwrap(), *kind);
         }
+    }
+
+    #[test]
+    fn gate_kind_is_synaptic_and_parses() {
+        assert_eq!(
+            ModulatorKind::parse("synaptic.gate").unwrap(),
+            ModulatorKind::Gate
+        );
+        assert_eq!(ModulatorKind::Gate.as_str(), "synaptic.gate");
+        assert!(ModulatorKind::Gate.is_synaptic());
+        assert!(!ModulatorKind::Gate.combines_by_addition());
+    }
+
+    #[test]
+    fn gate_factor_is_closed_when_silent_and_open_if_any_open() {
+        assert_eq!(gate_factor(&[0.0]), 0.0);
+        assert_eq!(gate_factor(&[0.0, 1.0]), 1.0);
+        assert!((gate_factor(&[0.5, 0.25]) - 0.5).abs() < 1e-6);
     }
 }

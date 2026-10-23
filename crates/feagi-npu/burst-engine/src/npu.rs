@@ -393,10 +393,6 @@ pub struct RustNPU<
     /// @cursor:critical-path — idle when no modulator bindings and no spike trains are registered.
     modulator_engine: std::sync::Mutex<ModulatorEngine>,
 
-    /// Conditional gate configurations: maps (src_cortical_idx, dst_cortical_idx) to
-    /// the gate cortical area index. Used to check the fire queue each burst and compute
-    /// which gates are closed before propagation.
-    gate_configs: std::sync::RwLock<AHashMap<CorticalMappingKey, u32>>,
 
     /// Classifier class pairs checked against this burst's fire queue.
     classifier_error_watches: std::sync::RwLock<Vec<ClassifierErrorWatch>>,
@@ -597,7 +593,6 @@ impl<
             memory_neuron_longterm_predicate: std::sync::RwLock::new(None),
             rate_modulated_leak: std::sync::Mutex::new(RateModulatedLeakRegistry::default()),
             modulator_engine: std::sync::Mutex::new(ModulatorEngine::default()),
-            gate_configs: std::sync::RwLock::new(AHashMap::new()),
             classifier_error_watches: std::sync::RwLock::new(Vec::new()),
         })
     }
@@ -2809,36 +2804,6 @@ impl<
                 }
             }
 
-            // Compute conditional gate states before propagation. For each gated mapping,
-            // check if the gate area has any firing neurons in the current burst's fire queue.
-            // If not, mark the mapping as closed so propagation skips those synapses.
-            if propagation_engine.has_gate_mappings() {
-                let gate_configs = self.gate_configs.read().unwrap();
-                let mut closed = ahash::AHashSet::new();
-                for (&(src_idx, dst_idx), &gate_idx) in gate_configs.iter() {
-                    let gate_active = dynamics_result
-                        .fire_queue
-                        .neurons_by_area
-                        .get(&gate_idx)
-                        .map(|neurons| !neurons.is_empty())
-                        .unwrap_or(false);
-                    if !gate_active {
-                        if let (Some(src_name), Some(dst_name)) = (
-                            self.get_cortical_area_name(src_idx),
-                            self.get_cortical_area_name(dst_idx),
-                        ) {
-                            if let (Ok(src_id), Ok(dst_id)) = (
-                                CorticalID::try_from_base_64(&src_name),
-                                CorticalID::try_from_base_64(&dst_name),
-                            ) {
-                                closed.insert((src_id, dst_id));
-                            }
-                        }
-                    }
-                }
-                propagation_engine.set_closed_gates(closed);
-            }
-
             let delayed =
                 propagation_engine.propagate_delayed(&fired_ids, &*synapse_storage, &neuron_mps)?;
             fire_structures
@@ -4462,6 +4427,26 @@ impl<
             .lock()
             .expect("modulator engine lock")
             .set_bindings(bindings);
+        self.refresh_transmission_factors();
+    }
+
+    /// Push the engine's current transmission factors into propagation, so a newly
+    /// bound or allocated gate group is closed before the first burst commits a signal.
+    fn refresh_transmission_factors(&self) {
+        let (factors, active) = {
+            let modulators = self.modulator_engine.lock().expect("modulator engine lock");
+            (
+                modulators.transmission_factors(),
+                modulators.transmission_active(),
+            )
+        };
+        if let Ok(mut propagation) = self.propagation_engine.write() {
+            if active {
+                propagation.set_transmission_factors(factors);
+            } else {
+                propagation.clear_transmission_factors();
+            }
+        }
     }
 
     /// Area cortical index to neuromodulator instance ids.
@@ -4498,10 +4483,45 @@ impl<
 
     /// Allocate or reuse a synaptic modulation group for these instance ids.
     pub fn allocate_modulation_group(&self, instance_ids: &[String]) -> u16 {
+        let group = self
+            .modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .allocate_group(instance_ids);
+        self.refresh_transmission_factors();
+        group
+    }
+
+    /// Follow a genome modulator rename in the modulation group table and area subscriptions.
+    pub fn rename_modulator_instance(&self, old_id: &str, new_id: &str) {
         self.modulator_engine
             .lock()
             .expect("modulator engine lock")
-            .allocate_group(instance_ids)
+            .rename_instance(old_id, new_id);
+    }
+
+    /// Follow a genome modulator delete in the modulation group table and area subscriptions.
+    pub fn remove_modulator_instance(&self, id: &str) {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .remove_instance(id);
+    }
+
+    /// Instance ids a modulation group currently resolves to.
+    pub fn modulation_group_instance_ids(&self, group: u16) -> Vec<String> {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .group_instance_ids(group)
+    }
+
+    /// Whether any of these instance ids is a `synaptic.reward` modulator (allocates nothing).
+    pub fn modulator_ids_include_reward(&self, instance_ids: &[String]) -> bool {
+        self.modulator_engine
+            .lock()
+            .expect("modulator engine lock")
+            .ids_include_reward(instance_ids)
     }
 
     /// Authored full-strength reward of a driver area, if that driver is a Reward instance.
@@ -4896,6 +4916,50 @@ impl<
             }
         }
         reset_count
+    }
+
+    /// Reset learned synapse weights for one cortical mapping `src -> dst`.
+    ///
+    /// Every valid synapse whose source neuron belongs to `src_cortical_idx` and whose target
+    /// neuron belongs to `dst_cortical_idx` gets `weight` written back and its R-STDP
+    /// eligibility trace cleared. Membrane state, genome and synapse topology are untouched
+    /// (no synapse is added or removed, so the synapse index stays valid).
+    ///
+    /// Locking: takes the neuron storage read lock, then the synapse storage write lock, so it
+    /// is safe to call while the burst thread is between bursts (the caller holds the NPU mutex).
+    ///
+    /// Returns the number of synapses reset.
+    pub fn reset_mapping_synapse_weights(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        weight: f32,
+    ) -> usize {
+        let ns = self.neuron_storage.read().unwrap();
+        let mut ss = self.synapse_storage.write().unwrap();
+        let neuron_count = ns.count();
+        let mut reset = 0usize;
+        for i in 0..ss.count() {
+            if !ss.valid_mask()[i] {
+                continue;
+            }
+            let s = ss.source_neurons()[i] as usize;
+            let t = ss.target_neurons()[i] as usize;
+            if s >= neuron_count || t >= neuron_count {
+                continue;
+            }
+            if !ns.valid_mask()[s] || !ns.valid_mask()[t] {
+                continue;
+            }
+            if ns.cortical_areas()[s] == src_cortical_idx
+                && ns.cortical_areas()[t] == dst_cortical_idx
+            {
+                ss.weights_mut()[i] = weight;
+                ss.eligibility_traces_mut()[i] = 0.0;
+                reset += 1;
+            }
+        }
+        reset
     }
 
     /// Clear live neural state for one cortical area: strip FCL candidates, zero membrane
@@ -5642,111 +5706,6 @@ impl<
         self.stdp_mappings.write().unwrap().remove(&key).is_some()
     }
 
-    /// Register a conditional gate on a cortical mapping A→B.
-    ///
-    /// When registered, all synapses from `src_cortical_idx` to `dst_cortical_idx` will
-    /// produce zero contribution during propagation if `gate_cortical_idx` has no neuron
-    /// firing in the same burst (transistor-OFF semantics). When the gate area fires,
-    /// propagation proceeds normally (transistor-ON).
-    ///
-    /// The gate area's CorticalID is resolved from its index and stored on the
-    /// propagation engine for use during the parallel propagation pass.
-    pub fn register_gate_mapping(
-        &mut self,
-        src_cortical_idx: u32,
-        dst_cortical_idx: u32,
-        gate_cortical_idx: u32,
-    ) -> Result<()> {
-        let src_name = self
-            .get_cortical_area_name(src_cortical_idx)
-            .ok_or_else(|| {
-                FeagiError::RuntimeError(format!(
-                    "Gate registration: unknown source cortical area idx {}",
-                    src_cortical_idx
-                ))
-            })?;
-        let dst_name = self
-            .get_cortical_area_name(dst_cortical_idx)
-            .ok_or_else(|| {
-                FeagiError::RuntimeError(format!(
-                    "Gate registration: unknown destination cortical area idx {}",
-                    dst_cortical_idx
-                ))
-            })?;
-        let gate_name = self
-            .get_cortical_area_name(gate_cortical_idx)
-            .ok_or_else(|| {
-                FeagiError::RuntimeError(format!(
-                    "Gate registration: unknown gate cortical area idx {}",
-                    gate_cortical_idx
-                ))
-            })?;
-
-        let src_id = CorticalID::try_from_base_64(&src_name).map_err(|e| {
-            FeagiError::RuntimeError(format!("Gate registration: invalid src CorticalID: {}", e))
-        })?;
-        let dst_id = CorticalID::try_from_base_64(&dst_name).map_err(|e| {
-            FeagiError::RuntimeError(format!("Gate registration: invalid dst CorticalID: {}", e))
-        })?;
-        let gate_id = CorticalID::try_from_base_64(&gate_name).map_err(|e| {
-            FeagiError::RuntimeError(format!("Gate registration: invalid gate CorticalID: {}", e))
-        })?;
-
-        self.gate_configs
-            .write()
-            .unwrap()
-            .insert((src_cortical_idx, dst_cortical_idx), gate_cortical_idx);
-
-        self.propagation_engine
-            .write()
-            .unwrap()
-            .register_gate_mapping(src_id, dst_id, gate_id);
-
-        tracing::debug!(
-            target: "feagi-npu",
-            "Registered conditional gate: mapping {} -> {} gated by area {} (idx={})",
-            src_name,
-            dst_name,
-            gate_name,
-            gate_cortical_idx
-        );
-
-        Ok(())
-    }
-
-    /// Remove the conditional gate from a cortical mapping A→B.
-    pub fn unregister_gate_mapping(
-        &mut self,
-        src_cortical_idx: u32,
-        dst_cortical_idx: u32,
-    ) -> bool {
-        let removed = self
-            .gate_configs
-            .write()
-            .unwrap()
-            .remove(&(src_cortical_idx, dst_cortical_idx))
-            .is_some();
-
-        if removed {
-            if let (Some(src_name), Some(dst_name)) = (
-                self.get_cortical_area_name(src_cortical_idx),
-                self.get_cortical_area_name(dst_cortical_idx),
-            ) {
-                if let (Ok(src_id), Ok(dst_id)) = (
-                    CorticalID::try_from_base_64(&src_name),
-                    CorticalID::try_from_base_64(&dst_name),
-                ) {
-                    self.propagation_engine
-                        .write()
-                        .unwrap()
-                        .unregister_gate_mapping(src_id, dst_id);
-                }
-            }
-        }
-
-        removed
-    }
-
     fn rebuild_stdp_mapping_index(&self) {
         let mappings = self.stdp_mappings.read().unwrap().clone();
         if mappings.is_empty() {
@@ -5996,7 +5955,8 @@ impl<
         //   1. e_ij <- e_ij * decay
         //   2. if co-fire across the plasticity window:                e_ij += delta_plus
         //      else if uncorrelated firing across the window:          e_ij -= delta_minus
-        //   3. w_ij += R(t) * e_ij        (clamp at 0 on negative deltas)
+        //   3. w_ij += R(t) * e_ij        (clamp at 0 on negative deltas; positive deltas
+        //                                  only when R > 0, e_ij > 0 and delta_plus > 0)
         let modulators = self
             .modulator_engine
             .lock()
@@ -6130,6 +6090,12 @@ impl<
 
                     // Step 3: R(t)-modulated weight commit.
                     //
+                    // Weight can only rise when R > 0, e_ij > 0 and delta_plus > 0.
+                    // Depression is unchanged: R > 0 with e_ij < 0 (one-sided firing) and
+                    // R < 0 with e_ij > 0 (punished co-firing) both lower the weight.
+                    // R < 0 with e_ij < 0 (punishment on a one-sided-firing trace) is a
+                    // no-op: punishment must never potentiate.
+                    //
                     // Positive deltas are clamped to `params.max_weight` (default
                     // `f32::INFINITY`) to prevent runaway potentiation when the integer-valued
                     // `delta_plus` and persistent eligibility traces would otherwise compound
@@ -6140,7 +6106,14 @@ impl<
                         && e_ij != 0.0
                         && (!params.associative_memory_mapping || co_fired_within_window)
                     {
-                        let delta_w = params.plasticity_eta * reward * e_ij;
+                        let mut delta_w = params.plasticity_eta * reward * e_ij;
+                        // Sign guard: potentiation requires reward > 0, a positive trace
+                        // and LTP enabled (`delta_plus > 0`). Without it, punishment
+                        // (R < 0) times an LTD trace (e < 0) would raise the weight, and
+                        // `ltp_multiplier = 0` could not disable potentiation.
+                        if delta_w > 0.0 && !(reward > 0.0 && e_ij > 0.0 && delta_plus > 0.0) {
+                            delta_w = 0.0;
+                        }
                         let old = synapse_storage.weights()[syn_idx];
                         let new_w = if delta_w >= 0.0 {
                             (old + delta_w).min(params.max_weight)
@@ -8080,6 +8053,75 @@ mod tests {
             assert_eq!(ns.membrane_potentials()[n_area5.0 as usize].to_f32(), 0.0);
             assert!(!ns.mp_charge_accumulation()[n_area5.0 as usize]);
         }
+    }
+
+    #[test]
+    fn test_reset_mapping_synapse_weights_only_touches_named_mapping() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(5, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(6, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(7, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        let mk = |npu: &mut RustNPU<_, f32, _>, area: u32| {
+            npu.add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, area, 0, 0, 0)
+                .unwrap()
+        };
+        let srcs = [mk(&mut npu, 5), mk(&mut npu, 5)];
+        let others = [mk(&mut npu, 7), mk(&mut npu, 7)];
+        let dsts = [mk(&mut npu, 6), mk(&mut npu, 6)];
+        let initial = 25.0f32;
+        // Mapping 5 -> 6: 4 synapses; mapping 7 -> 6: 4 synapses (same dst area).
+        for s in srcs.iter().chain(others.iter()) {
+            for d in dsts.iter() {
+                npu.add_synapse(
+                    *s,
+                    *d,
+                    SynapticWeight(initial),
+                    SynapticPsp(1.0),
+                    SynapseType::Excitatory,
+                    0,
+                    1,
+                )
+                .unwrap();
+            }
+        }
+        let n = npu.synapse_count();
+        assert_eq!(n, 8);
+        // Learn: change every weight and leave eligibility traces behind.
+        for i in 0..n {
+            npu.synapse_storage.write().unwrap().weights_mut()[i] = 3.0 + i as f32;
+            assert!(npu.set_synapse_eligibility_trace(i, 0.75));
+        }
+
+        // (1) Reset 5 -> 6 only.
+        let reset = npu.reset_mapping_synapse_weights(5, 6, initial);
+        assert_eq!(reset, 4);
+        {
+            let ss = npu.synapse_storage.read().unwrap();
+            for i in 0..n {
+                let from_src = srcs.iter().any(|s| s.0 == ss.source_neurons()[i]);
+                if from_src {
+                    assert_eq!(ss.weights()[i], initial);
+                    assert_eq!(ss.eligibility_traces()[i], 0.0);
+                } else {
+                    assert_eq!(ss.weights()[i], 3.0 + i as f32, "other mapping untouched");
+                    assert_eq!(ss.eligibility_traces()[i], 0.75);
+                }
+            }
+        }
+        // (2) The second mapping into the same destination is reset by its own call.
+        assert_eq!(npu.reset_mapping_synapse_weights(7, 6, initial), 4);
+        {
+            let ss = npu.synapse_storage.read().unwrap();
+            for i in 0..n {
+                assert_eq!(ss.weights()[i], initial);
+                assert_eq!(ss.eligibility_traces()[i], 0.0);
+            }
+        }
+        // Unrelated pair resets nothing.
+        assert_eq!(npu.reset_mapping_synapse_weights(6, 5, initial), 0);
     }
 
     #[test]

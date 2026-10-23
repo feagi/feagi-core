@@ -416,4 +416,27 @@ pub trait ConnectomeService: Send + Sync {
 
     /// Remove the classifier record and delete its owned internals.
     async fn delete_classifier(&self, classifier_id: &str) -> ServiceResult<()>;
+
+    /// Reset learned synapse weights of the mapping `src -> dst` to the weight synaptogenesis
+    /// assigns for it (the rule's `postSynapticCurrent_multiplier`) and clear per-synapse
+    /// plasticity state (eligibility traces). Genome and neuron membrane state are untouched.
+    ///
+    /// # Errors
+    /// * `ServiceError::NotFound` - source/destination area or the mapping does not exist
+    /// * `ServiceError::InvalidInput` - rules of the mapping disagree on the initial weight
+    async fn reset_mapping_weights(
+        &self,
+        src_area_id: &str,
+        dst_area_id: &str,
+    ) -> ServiceResult<MappingWeightsResetInfo>;
+
+    /// Reset learned weights of every mapping whose destination is `dst_area_id`.
+    ///
+    /// # Errors
+    /// * `ServiceError::NotFound` - the area does not exist
+    async fn reset_area_incoming_weights(
+        &self,
+        dst_area_id: &str,
+    ) -> ServiceResult<AreaIncomingWeightsResetInfo>;
 }
+

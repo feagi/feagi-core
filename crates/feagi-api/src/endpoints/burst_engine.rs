@@ -261,6 +261,47 @@ pub async fn get_fire_queue(
     Ok(Json(response))
 }
 
+/// Fired-neuron count per cortical area in the latest sampled burst.
+///
+/// Lightweight variant of `/v1/burst_engine/fire_queue` for live monitors: no neuron
+/// data is copied or serialized and no cortical id lookup is done. Areas are keyed by
+/// `cortical_idx` and sorted by it.
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fire_queue/counts",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Per-area fired counts", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_fire_queue_counts(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    let mut counts = runtime_service
+        .get_fire_queue_counts()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get fire queue counts: {}", e)))?;
+    let timestep = runtime_service
+        .get_burst_count()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
+
+    counts.sort_unstable_by_key(|(cortical_idx, _)| *cortical_idx);
+    let total_fired: u64 = counts.iter().map(|(_, fired)| u64::from(*fired)).sum();
+    let areas: Vec<serde_json::Value> = counts
+        .into_iter()
+        .map(|(idx, fired)| serde_json::json!({ "idx": idx, "fired": fired }))
+        .collect();
+
+    let mut response = HashMap::new();
+    response.insert("timestep".to_string(), serde_json::json!(timestep));
+    response.insert("total_fired".to_string(), serde_json::json!(total_fired));
+    response.insert("areas".to_string(), serde_json::json!(areas));
+    Ok(Json(response))
+}
+
 /// Get the detailed Fire Queue (FQ) from the latest sampled burst.
 ///
 /// Unlike `/v1/burst_engine/fire_queue`, this endpoint includes per-area neuron IDs,

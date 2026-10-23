@@ -841,6 +841,61 @@ impl ConnectomeServiceImpl {
 
         Ok(())
     }
+
+    /// Reset learned weights of mapping `src -> dst` (areas already known to exist).
+    ///
+    /// The rule/index lookup happens under the connectome read lock, which is released before
+    /// the NPU mutex is taken (same discipline as `reset_cortical_area_states`).
+    fn reset_mapping_weights_resolved(
+        &self,
+        src_id: &CorticalID,
+        dst_id: &CorticalID,
+    ) -> ServiceResult<MappingWeightsResetInfo> {
+        let (weight, src_idx, dst_idx, npu_arc) = {
+            let manager = self.connectome.read();
+            let weight = manager
+                .mapping_initial_weight(src_id, dst_id)
+                .map_err(ServiceError::from)?
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "CorticalMapping".to_string(),
+                    id: format!("{} -> {}", src_id.as_base_64(), dst_id.as_base_64()),
+                })?;
+            let src_idx = manager.get_cortical_idx(src_id).ok_or_else(|| {
+                ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: src_id.as_base_64(),
+                }
+            })?;
+            let dst_idx = manager.get_cortical_idx(dst_id).ok_or_else(|| {
+                ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: dst_id.as_base_64(),
+                }
+            })?;
+            let npu_arc = manager.get_npu().cloned().ok_or_else(|| {
+                ServiceError::Backend("NPU not connected to ConnectomeManager".to_string())
+            })?;
+            (weight, src_idx, dst_idx, npu_arc)
+        };
+        let synapses_reset = {
+            let mut npu = npu_arc
+                .lock()
+                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {e}")))?;
+            npu.reset_mapping_synapse_weights(src_idx, dst_idx, weight)
+        };
+        info!(
+            target: "feagi-services",
+            "Reset weights {} -> {}: {} synapses set to {}",
+            src_id.as_base_64(),
+            dst_id.as_base_64(),
+            synapses_reset,
+            weight
+        );
+        Ok(MappingWeightsResetInfo {
+            synapses_reset,
+            weight,
+        })
+    }
 }
 
 #[async_trait]
@@ -2751,6 +2806,52 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         dst_area_id
                     )));
                 }
+                // Gating comes from `synaptic.gate` modulator instances. The pre-v7
+                // `gate_source_area` field is not read by the burst engine any more.
+                if normalized
+                    .get("gate_source_area")
+                    .is_some_and(|v| !v.is_null())
+                {
+                    return Err(ServiceError::InvalidInput(format!(
+                        "gate_source_area on mapping {} -> {} is not applied at runtime (genome \
+                         schema v7 removed it). Create a `synaptic.gate` modulator whose driver \
+                         area is fed by that source and list its id in the rule's `modulators` \
+                         array.",
+                        src_area_id, dst_area_id
+                    )));
+                }
+                {
+                    // Every listed id must be a defined synaptic.* modulator; unknown ids and
+                    // neuro.* ids would otherwise be dropped silently when groups are built.
+                    let genome = self.current_genome.read();
+                    for id in rule_modulator_ids(&normalized) {
+                        let kind = genome
+                            .as_ref()
+                            .and_then(|genome| genome.modulators.get(&id))
+                            .map(|instance| instance.kind);
+                        match kind {
+                            None => {
+                                return Err(ServiceError::InvalidInput(format!(
+                                    "modulator '{}' on mapping {} -> {} is not defined in \
+                                     genome.modulators.",
+                                    id, src_area_id, dst_area_id
+                                )));
+                            }
+                            Some(kind) if !kind.is_synaptic() => {
+                                return Err(ServiceError::InvalidInput(format!(
+                                    "modulator '{}' ({}) on mapping {} -> {} is a neuromodulator; \
+                                     mapping rules take `synaptic.*` modulators only. Subscribe \
+                                     the area to it instead.",
+                                    id,
+                                    kind.as_str(),
+                                    src_area_id,
+                                    dst_area_id
+                                )));
+                            }
+                            Some(_) => {}
+                        }
+                    }
+                }
                 let plasticity_mode = normalized
                     .get("plasticity_mode")
                     .and_then(|v| v.as_str())
@@ -3143,6 +3244,64 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .into_values()
             .map(ClassifierInfo::from)
             .collect())
+    }
+
+    async fn reset_mapping_weights(
+        &self,
+        src_area_id: &str,
+        dst_area_id: &str,
+    ) -> ServiceResult<MappingWeightsResetInfo> {
+        let (src_id, dst_id) = {
+            let not_found = |id: &str| ServiceError::NotFound {
+                resource: "CorticalArea".to_string(),
+                id: id.to_string(),
+            };
+            let src_id = CorticalID::try_from_base_64(src_area_id)
+                .map_err(|_| not_found(src_area_id))?;
+            let dst_id = CorticalID::try_from_base_64(dst_area_id)
+                .map_err(|_| not_found(dst_area_id))?;
+            let manager = self.connectome.read();
+            if manager.get_cortical_area(&src_id).is_none() {
+                return Err(not_found(src_area_id));
+            }
+            if manager.get_cortical_area(&dst_id).is_none() {
+                return Err(not_found(dst_area_id));
+            }
+            (src_id, dst_id)
+        };
+        self.reset_mapping_weights_resolved(&src_id, &dst_id)
+    }
+
+    async fn reset_area_incoming_weights(
+        &self,
+        dst_area_id: &str,
+    ) -> ServiceResult<AreaIncomingWeightsResetInfo> {
+        let dst_id = CorticalID::try_from_base_64(dst_area_id).map_err(|_| {
+            ServiceError::NotFound {
+                resource: "CorticalArea".to_string(),
+                id: dst_area_id.to_string(),
+            }
+        })?;
+        let sources = {
+            let manager = self.connectome.read();
+            if manager.get_cortical_area(&dst_id).is_none() {
+                return Err(ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: dst_area_id.to_string(),
+                });
+            }
+            manager.incoming_mapping_sources(&dst_id)
+        };
+        let mut out = AreaIncomingWeightsResetInfo {
+            mappings_reset: 0,
+            synapses_reset: 0,
+        };
+        for src_id in sources {
+            let info = self.reset_mapping_weights_resolved(&src_id, &dst_id)?;
+            out.mappings_reset += 1;
+            out.synapses_reset += info.synapses_reset;
+        }
+        Ok(out)
     }
 
     async fn rekey_memory_twin_source(
@@ -5124,6 +5283,20 @@ mod tests {
             other => panic!("expected InvalidInput, got {other:?}"),
         }
 
+        let mut gated = base.clone();
+        gated["gate_source_area"] = serde_json::json!(reward_id.as_base_64());
+        let err = svc
+            .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![gated])
+            .await
+            .expect_err("gate_source_area must be rejected");
+        match err {
+            crate::types::ServiceError::InvalidInput(message) => {
+                assert!(message.contains("gate_source_area"), "{message}");
+                assert!(message.contains("synaptic.gate"), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+
         let err = svc
             .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![base])
             .await
@@ -5133,6 +5306,109 @@ mod tests {
                 assert!(message.contains("synaptic.reward"), "{message}");
             }
             other => panic!("expected InvalidInput, got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn mapping_rejects_unknown_and_neuro_modulator_ids() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use feagi_structures::genomic::ModulatorKind;
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
+        let mk = |bytes: &[u8; 8], name: &str| {
+            CorticalArea::new(
+                CorticalID::try_from_bytes(bytes).unwrap(),
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap()
+        };
+        let src = mk(b"cmmdsrc1", "src");
+        let dst = mk(b"cmmddst1", "dst");
+        let (src_id, dst_id) = (src.cortical_id, dst.cortical_id);
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(src.clone())?;
+            manager.add_cortical_area(dst.clone())?;
+        }
+        let instance = |kind, serial| feagi_evolutionary::ModulatorInstance {
+            kind,
+            magnitude_percent: 100.0,
+            effect_duration_bursts: 1,
+            rest_bursts: 0,
+            graded: false,
+            full_scale_potential: None,
+            driver_cortical_id: CorticalID::modulator_driver(serial),
+        };
+        let mut modulators = feagi_evolutionary::ModulatorRegistry::new();
+        modulators.insert("joy".to_string(), instance(ModulatorKind::Reward, 0));
+        modulators.insert(
+            "damp".to_string(),
+            instance(ModulatorKind::FiringProbability, 1),
+        );
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: String::new(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(src_id, src), (dst_id, dst)]),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators,
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        };
+        let svc = ConnectomeServiceImpl::new(connectome, Arc::new(RwLock::new(Some(genome))));
+
+        for (ids, needle) in [
+            (serde_json::json!(["ghost"]), "ghost"),
+            (serde_json::json!(["joy", "ghost"]), "ghost"),
+            (serde_json::json!(["damp"]), "damp"),
+            (serde_json::json!(["joy", "damp"]), "damp"),
+        ] {
+            let rule = serde_json::json!({
+                "morphology_id": "projector",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1.0,
+                "plasticity_flag": false,
+                "modulators": ids.clone(),
+            });
+            let err = svc
+                .update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![rule])
+                .await
+                .expect_err("invalid mapping modulator list must be rejected");
+            match err {
+                crate::types::ServiceError::InvalidInput(message) => {
+                    assert!(message.contains(needle), "{ids}: {message}");
+                    assert!(message.contains("mapping"), "{ids}: {message}");
+                }
+                other => panic!("expected InvalidInput for {ids}, got {other:?}"),
+            }
         }
         Ok(())
     }

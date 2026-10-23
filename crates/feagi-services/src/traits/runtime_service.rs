@@ -144,6 +144,19 @@ pub trait RuntimeService: Send + Sync {
         std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
     >;
 
+    /// Fired-neuron count per cortical area in the last burst, as
+    /// `(cortical_idx, fired_count)` pairs. For monitors that need counts only.
+    /// The default derives them from `get_fire_queue_sample`; implementations
+    /// should override it to avoid copying neuron data.
+    async fn get_fire_queue_counts(&self) -> ServiceResult<Vec<(u32, u32)>> {
+        Ok(self
+            .get_fire_queue_sample()
+            .await?
+            .into_iter()
+            .map(|(cortical_idx, (neuron_ids, _, _, _, _))| (cortical_idx, neuron_ids.len() as u32))
+            .collect())
+    }
+
     /// Get Fire Ledger window configurations for all cortical areas
     ///
     /// # Returns

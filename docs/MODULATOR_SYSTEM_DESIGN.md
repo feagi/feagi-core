@@ -85,6 +85,7 @@ effect of a magnitude is unambiguous.
 | Synaptic | Transmission gain | PSP of the mapping's synapses | psp x (1 + m) |
 | Synaptic | Reward | R-STDP reward signal of the mapping | contributes `m x strength` to R(t) |
 | Synaptic | Learning rate | STDP / R-STDP eta of the mapping | eta x (1 + m) |
+| Synaptic | Gate | Transmission of the mapping's synapses | 0 unless the driver signal is active, then the factor is the signal `m x strength` |
 
 The "Reward" type replaces `reward_source_area` and `punishment_source_area`:
 pleasure is a Reward instance with positive magnitude, pain one with negative
@@ -241,6 +242,28 @@ leak modulator scales the baseline.
   synapses (including the embedded `SynapseArray<N>`).
 - Per burst, a small table maps group ID to the combined factor or reward signal.
 
+### Gate (`synaptic.gate`)
+
+A mapping rule whose `modulators` list a gate instance passes nothing until that
+instance's driver area fires. Per modulation group the engine computes
+`gate = max(signal_k)` over the group's gate instances (open if any is open, never
+below 0) and multiplies it with the transmission-gain factor. A group without a gate
+instance is unaffected. A gated group starts closed, before any signal exists.
+
+Timing is the same as every other synaptic modulator: the driver signal is committed
+at the end of burst t and applies from burst t+1. There is no same-burst path, so a
+gate driven by the source area opens one burst after the source fires. With
+`magnitude_percent` 100 and `graded` false the factor is 1.0 when open. A graded gate
+scales by `membrane_potential / full_scale_potential` (capped at 1).
+
+`gate_source_area` (a per-mapping field open when any neuron of the named area fired in
+the same burst) is removed in schema v7. The v6 to v7 migrator creates one gate
+instance `gate_<source name>` per distinct source (magnitude 100, duration 1, rest 0,
+not graded) with a 1x1x1 driver wired from the source by a projector, as v3 to v4 does
+for reward. It lists the instance on every rule of each (source, destination) pair that
+had the field, since the old gate was per pair, and deletes `gate_source_area`. The v7
+validator and the mapping write path reject `gate_source_area`.
+
 ### R-STDP migration
 
 Today: `R(t) = density(reward_source_area) - density(punishment_source_area)`.
@@ -250,6 +273,11 @@ Pleasure and pain become Reward instances with positive and negative magnitude.
 Graded reward is preserved through `graded = true`. Learning behavior will differ
 from today's density-based reward and must be re-baselined in
 `test_rstdp_plasticity.rs`.
+
+Weight commit sign rule: `w += eta * R * e` can raise a weight only when `R > 0`,
+`e > 0` and `ltp_multiplier * plasticity_constant > 0`. Punishment (`R < 0`) never
+potentiates, even against a negative (one-sided firing) trace, and `ltp_multiplier: 0`
+disables potentiation. Depression is unchanged.
 
 `reward_source_area` and `punishment_source_area` are replaced by subscriptions.
 A genome schema migrator converts existing genomes: each referenced reward or
@@ -299,7 +327,8 @@ Follows the morphology model:
 - New area properties: `modulators` (subscription list) and `spike_train`.
 - New field in mapping rule objects: `modulators`.
 - `CURRENT_SCHEMA_VERSION` bump with a `vN -> vN+1` migrator that converts R-STDP
-  reward and punishment areas, per `GENOME_SCHEMA_VERSIONING.md`.
+  reward and punishment areas, per `GENOME_SCHEMA_VERSIONING.md`. v7 does the same for
+  `gate_source_area` (see Gate).
 
 ## API and tooling
 

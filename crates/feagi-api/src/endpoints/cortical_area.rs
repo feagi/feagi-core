@@ -54,6 +54,20 @@ pub struct CorticalAreaResetResponse {
     pub results: Vec<CorticalAreaResetItem>,
 }
 
+/// Per-area outcome for incoming-weight reset.
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CorticalAreaResetWeightsItem {
+    pub cortical_id: String,
+    pub mappings_reset: usize,
+    pub synapses_reset: usize,
+}
+
+/// Response for `PUT /v1/cortical_area/reset_weights`.
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CorticalAreaResetWeightsResponse {
+    pub results: Vec<CorticalAreaResetWeightsItem>,
+}
+
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct UnitTopologyData {
     pub relative_position: [i32; 3],
@@ -3427,6 +3441,42 @@ pub async fn put_reset(
         message: "ok".to_string(),
         results,
     }))
+}
+
+/// Reset learned synapse weights of every incoming mapping of the listed cortical areas to
+/// each mapping's initial weight, clearing eligibility traces. Genome and neuron state are
+/// unchanged (see `PUT /v1/cortical_area/reset` for membrane state).
+#[utoipa::path(
+    put,
+    path = "/v1/cortical_area/reset_weights",
+    tag = "cortical_area",
+    request_body = CorticalAreaResetRequest,
+    responses(
+        (status = 200, description = "Weights reset", body = CorticalAreaResetWeightsResponse),
+        (status = 404, description = "Cortical area not found"),
+    )
+)]
+pub async fn put_reset_weights(
+    State(state): State<ApiState>,
+    Json(request): Json<CorticalAreaResetRequest>,
+) -> ApiResult<Json<CorticalAreaResetWeightsResponse>> {
+    if request.area_list.is_empty() {
+        return Err(ApiError::invalid_input("area_list cannot be empty"));
+    }
+    let mut results = Vec::with_capacity(request.area_list.len());
+    for id in &request.area_list {
+        let info = state
+            .connectome_service
+            .reset_area_incoming_weights(id)
+            .await
+            .map_err(ApiError::from)?;
+        results.push(CorticalAreaResetWeightsItem {
+            cortical_id: id.clone(),
+            mappings_reset: info.mappings_reset,
+            synapses_reset: info.synapses_reset,
+        });
+    }
+    Ok(Json(CorticalAreaResetWeightsResponse { results }))
 }
 
 /// Check if visualization is enabled for the system.
