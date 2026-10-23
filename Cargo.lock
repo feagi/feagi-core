@@ -775,6 +775,7 @@ dependencies = [
  "heapless 0.9.3",
  "paste",
  "picoserve",
+ "rand 0.10.3",
  "serde",
  "serde-json-core",
  "serde_json",
