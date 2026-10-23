@@ -1,6 +1,3 @@
-use feagi_basis::impl_byte_array_id;
-
-//region Feagi Roles
 
 /// A single role a node can fulfill. The discriminant of each variant is the bit index it
 /// occupies within [FeagiRoles]. Roles are split into 4 groups of 4 bits, where any bit in a
@@ -128,78 +125,5 @@ impl From<u16> for FeagiRoles {
 impl From<FeagiRoles> for u16 {
     fn from(roles: FeagiRoles) -> Self {
         roles.as_u16()
-    }
-}
-
-//endregion
-
-
-
-//endregion
-
-
-pub const NUMBER_OF_BYTES_NODE_ID: usize = 8;
-
-impl_byte_array_id!(
-    /// Unique session tracker of a node tracked by FEAGI (generally for Zenoh)
-    pub FeagiNodeID,
-    NUMBER_OF_BYTES_NODE_ID
-);
-
-
-
-/// The version of a given node
-pub type FeagiNodeVersion = u16;
-pub const NUMBER_OF_BYTES_NODE_FLAGS: usize = 6;
-
-/// What node version the node with this code compiled will report itself as
-pub const CURRENT_FEAGI_NODE_VERSION: FeagiNodeVersion = 0;
-
-/// If nodes below (exclusive) this version are detected in the network, this node will refuse to start
-pub const MINIMUM_SUPPORTED_INTERFACE_VERSION: FeagiNodeVersion = 0;
-
-/// Denotes the version, state, and roles this given node supports
-pub struct FeagiNodeFlags([u8; NUMBER_OF_BYTES_NODE_FLAGS]);
-
-impl FeagiNodeFlags {
-
-    // Bytes 0, 1 specify version
-    // Bytes 2, 3 specify roles
-    // Bytes 4 specify general device state
-    // Byte 5 Reserved
-
-    /// Creates a new struct with the current version
-    pub fn new() -> Self {
-        let mut out = [0u8; 6];
-        let bytes: [u8; 2] = CURRENT_FEAGI_NODE_VERSION.to_be_bytes();
-        out[0] = bytes[0];
-        out[1] = bytes[1];
-        Self(out)
-    }
-
-    pub fn get_version(&self) -> FeagiNodeVersion {
-        let slice = [self.0[0], self.0[1]];
-        u16::from_be_bytes(slice)
-    }
-
-    // cannot "set" version, thats defined at compile time
-
-    pub fn get_roles(&self) -> FeagiRoles {
-        FeagiRoles::from_be_bytes([self.0[2], self.0[3]])
-    }
-
-    pub fn set_roles(&mut self, roles: FeagiRoles) {
-        let bytes: [u8; 2] = roles.to_be_bytes();
-        self.0[2] = bytes[0];
-        self.0[3] = bytes[1];
-    }
-
-
-
-}
-
-impl Default for FeagiNodeFlags {
-    fn default() -> Self {
-        Self::new()
     }
 }

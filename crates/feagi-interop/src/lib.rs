@@ -11,4 +11,4 @@ pub mod interop_request_requester;
 pub mod interop_request_responder;
 pub mod transport;
 pub mod reference_endpoints;
-pub mod feagi_node;
+pub mod node;
