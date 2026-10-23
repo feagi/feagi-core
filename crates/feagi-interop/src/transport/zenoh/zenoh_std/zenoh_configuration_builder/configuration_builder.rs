@@ -13,14 +13,14 @@ use super::transport::{
 /// Call `into_client' (or `into_peer` / `into_router` on `std`) to pick the mode
 /// and continue with connect and listen settings.
 #[derive(Clone, Debug, Default)]
-pub struct ZenohConfigurationBuilder {
+pub struct ZenohSTDConfigurationBuilder {
     id_mode: ZenohIDGenerationMode,
     namespace: Option<ZenohNamespace>,
     queries_default_timeout: ZenohQueriesDefaultTimeout,
     transport: ZenohTransportConfig,
 }
 
-impl ZenohConfigurationBuilder {
+impl ZenohSTDConfigurationBuilder {
     /// How the Zenoh ID is chosen.
     pub fn id_mode(&self) -> ZenohIDGenerationMode {
         self.id_mode

@@ -2,15 +2,15 @@
 
 #![cfg(feature = "serde_json")]
 
-use feagi_interop::transport::zenoh::zenoh_configuration_builder::configuration_builder::ZenohConfigurationBuilder;
-use feagi_interop::transport::zenoh::zenoh_configuration_builder::connect::ZenohTimeoutMs;
-use feagi_interop::transport::zenoh::zenoh_configuration_builder::error::ZenohConfigBuildError;
-use feagi_interop::transport::zenoh::zenoh_configuration_builder::id_generation_mode::ZenohIDGenerationMode;
-use feagi_interop::transport::zenoh::zenoh_configuration_builder::namespace::ZenohNamespace;
+use feagi_interop::transport::zenoh::zenoh_std::zenoh_configuration_builder::configuration_builder::ZenohSTDConfigurationBuilder;
+use feagi_interop::transport::zenoh::zenoh_std::zenoh_configuration_builder::connect::ZenohTimeoutMs;
+use feagi_interop::transport::zenoh::zenoh_std::zenoh_configuration_builder::error::ZenohConfigBuildError;
+use feagi_interop::transport::zenoh::zenoh_std::zenoh_configuration_builder::id_generation_mode::ZenohIDGenerationMode;
+use feagi_interop::transport::zenoh::zenoh_std::zenoh_configuration_builder::namespace::ZenohNamespace;
 
 #[test]
 fn connect_timeout_rejection_keeps_the_previous_value() {
-    let mut node = ZenohConfigurationBuilder::default().into_client();
+    let mut node = ZenohSTDConfigurationBuilder::default().into_client();
     let error = node.set_connect_timeout(ZenohTimeoutMs::Millis(0)).expect_err("zero milliseconds");
     assert_eq!(error, ZenohConfigBuildError::ZeroMillisecondTimeout);
     assert_eq!(node.connect().timeout_ms, ZenohTimeoutMs::NoRetry);
@@ -18,7 +18,7 @@ fn connect_timeout_rejection_keeps_the_previous_value() {
 
 #[test]
 fn client_json5_encodes_the_chosen_id_namespace_and_client_connect() {
-    let mut builder = ZenohConfigurationBuilder::default();
+    let mut builder = ZenohSTDConfigurationBuilder::default();
     builder
         .set_id_mode(ZenohIDGenerationMode::Specific(0x10ab))
         .set_namespace(ZenohNamespace::new("brain/1").expect("namespace"))
@@ -40,7 +40,7 @@ fn client_json5_encodes_the_chosen_id_namespace_and_client_connect() {
 #[cfg(feature = "std")]
 #[test]
 fn peer_json5_waits_forever_and_listens_on_an_ephemeral_port() {
-    let json = ZenohConfigurationBuilder::default().into_peer().build_json5().expect("json5");
+    let json = ZenohSTDConfigurationBuilder::default().into_peer().build_json5().expect("json5");
     let value: serde_json::Value = serde_json::from_str(&json).expect("parse");
     assert!(value.get("id").is_none());
     assert_eq!(value["mode"], "peer");

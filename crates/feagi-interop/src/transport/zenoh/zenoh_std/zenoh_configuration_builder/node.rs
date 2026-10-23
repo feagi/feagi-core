@@ -1,4 +1,4 @@
-use super::configuration_builder::ZenohConfigurationBuilder;
+use super::configuration_builder::ZenohSTDConfigurationBuilder;
 use super::connect::{ZenohConnectConfig, ZenohEndpointEntry, ZenohEndpointRetry, ZenohListenConfig, ZenohTimeoutMs};
 use super::error::ZenohConfigBuildError;
 use super::node_mode::ZenohNodeMode;
@@ -6,18 +6,18 @@ use super::transport::ZenohTransportConfig;
 
 /// Connect and listen settings for one already chosen node mode.
 ///
-/// Produced by [`super::configuration_builder::ZenohConfigurationBuilder::into_client`], and on `std` by
+/// Produced by [`super::configuration_builder::ZenohSTDConfigurationBuilder::into_client`], and on `std` by
 /// `into_peer` and `into_router`. [`Self::build_json5`] writes the Zenoh JSON5 document.
 #[derive(Clone, Debug)]
 pub struct ZenohNodeBuilder {
-    configuration: ZenohConfigurationBuilder,
+    configuration: ZenohSTDConfigurationBuilder,
     mode: ZenohNodeMode,
     connect: ZenohConnectConfig,
     listen: ZenohListenConfig,
 }
 
 impl ZenohNodeBuilder {
-    pub(super) fn new(mode: ZenohNodeMode, configuration: ZenohConfigurationBuilder) -> Self {
+    pub(in crate::transport::zenoh) fn new(mode: ZenohNodeMode, configuration: ZenohSTDConfigurationBuilder) -> Self {
         Self {
             configuration,
             connect: ZenohConnectConfig::for_mode(mode),
@@ -27,7 +27,7 @@ impl ZenohNodeBuilder {
     }
 
     /// Settings chosen before the node mode.
-    pub fn configuration(&self) -> &ZenohConfigurationBuilder {
+    pub fn configuration(&self) -> &ZenohSTDConfigurationBuilder {
         &self.configuration
     }
 

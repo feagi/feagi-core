@@ -1,6 +1,6 @@
 //! Two-stage Zenoh session configuration.
 //!
-//! [`configuration_builder::ZenohConfigurationBuilder`] holds settings that do not depend on node mode.
+//! [`configuration_builder::ZenohSTDConfigurationBuilder`] holds settings that do not depend on node mode.
 //! Choosing client, peer, or router produces a [`node::ZenohNodeBuilder`] whose connect and
 //! listen values are for that one mode. [`node::ZenohNodeBuilder::build_json5`] writes the document.
 
