@@ -30,7 +30,9 @@ transport_rest = [
     "picoserve", "serde-json-core"
 ]
 
-transport_ws = []
+transport_ws = [
+    "zenoh?/transport_ws"
+]
 
 transport_quic = []
 

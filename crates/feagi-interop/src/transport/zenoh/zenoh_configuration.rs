@@ -23,8 +23,12 @@ impl ZenohConfigurationBuilder {
         self.building_config.ws_client_target = Some(socket)
     }
 
+    /// Errors with `NothingEnabled` if no way of connecting to other nodes was enabled
     pub fn build(self) -> Result<ZenohConfiguration, ZenohConfigurationError> {
-        // TODO proper error checking
+        let config = &self.building_config;
+        if config.ws_server_bind.is_none() && config.ws_client_target.is_none() {
+            return Err(ZenohConfigurationError::NothingEnabled);
+        }
         Ok(self.building_config)
     }
 }
@@ -49,6 +53,18 @@ pub struct ZenohConfiguration {
 
 }
 
+impl ZenohConfiguration {
+    /// The socket a websocket server listens on, if enabled
+    pub fn ws_server_bind(&self) -> Option<SocketAddr> {
+        self.ws_server_bind
+    }
+
+    /// The socket of the websocket server to connect to, if enabled
+    pub fn ws_client_target(&self) -> Option<SocketAddr> {
+        self.ws_client_target
+    }
+}
+
 
 
 
@@ -58,14 +74,18 @@ pub struct ZenohConfiguration {
 pub(crate) trait ZenohConfigurationBackend {
     /// The type of config /  struct the version of the zenoh crate enabled expects
     type BackendType;
+    /// Why the backend could not express the configuration
+    type BackendError: core::error::Error;
 
-    fn build_zenoh_config(config: ZenohConfiguration) -> Result<Self::BackendType, ZenohConfigurationError>;
+    fn build_zenoh_config(config: ZenohConfiguration) -> Result<Self::BackendType, Self::BackendError>;
 }
 
 
 #[derive(Debug, thiserror::Error)]
 pub enum ZenohConfigurationError {
     #[error("Failed To Build Configuration!")]
-    FailedToBuildConfiguration
+    FailedToBuildConfiguration,
+    #[error("No way of connecting to other nodes was enabled!")]
+    NothingEnabled,
     // TODO flesh this out
 }

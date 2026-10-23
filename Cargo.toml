@@ -48,7 +48,7 @@ alloc = [
 ### Runtimes are default implementations ###
 
 runtime_feagi_design_server = [
-    "rest_swagger_ui"
+    "rest_swagger_ui", "zenoh_ws"
 ]
 
 ### Extensions of functionality ###
@@ -65,6 +65,10 @@ rest_open_api = [
 rest_swagger_ui = [
     "rest_open_api",
     "feagi-interop/swagger_web_ui"
+]
+
+zenoh_ws = [
+    "feagi-interop/transport_ws"
 ]
 
 # TODO
