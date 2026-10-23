@@ -45,6 +45,10 @@ pub struct StdRestServerBuilder<Group> {
     /// how late a new connection is accepted and how long a `stop` waits while no connection is
     /// open. Shorter intervals wake the thread more often while idle
     pub accept_poll_interval: core::time::Duration,
+    /// The OpenAPI document served at `OPEN_API_JSON_PATH`, built at compile time with
+    /// `feagi_open_api_json!` for the same group. Without one, that path is answered with 404
+    #[cfg(feature = "open_api_endpoint")]
+    pub open_api_json: Option<&'static str>,
     _group: PhantomData<fn() -> Group>,
 }
 
@@ -53,6 +57,8 @@ impl<Group> RestServerWorkerBuilder<FeagiRequestResponseChannelsAllocBackend> fo
         StdRestServerBuilder {
             socket_address,
             accept_poll_interval: DEFAULT_ACCEPT_POLL_INTERVAL,
+            #[cfg(feature = "open_api_endpoint")]
+            open_api_json: None,
             _group: PhantomData,
         }
     }
@@ -87,7 +93,16 @@ where
         let routes = group.into_nested_categories(configurables);
         let (requester, requests) = FeagiRequestResponseChannelsAllocBackend::create_channels(REQUEST_QUEUE_CAPACITY);
         let accept_poll_interval = self.accept_poll_interval;
-        let handle = spawner.spawn_worker(move || run_rest_server(listener, requests, accept_poll_interval, routes))?;
+        #[cfg(feature = "open_api_endpoint")]
+        let open_api_json = self.open_api_json;
+        let handle = spawner.spawn_worker(move || {
+            let router = build_router_with_routes(
+                routes,
+                #[cfg(feature = "open_api_endpoint")]
+                open_api_json,
+            );
+            run_rest_server(listener, requests, accept_poll_interval, router)
+        })?;
         Ok((FeagiWorker::new(requester, handle), ()))
     }
 
@@ -116,13 +131,12 @@ impl FeagiWorkerCommandHandler for RestServerCommandHandler {
 /// Accepts one connection at a time and serves it to completion. Checks for requests before
 /// each accept attempt, sleeping `accept_poll_interval` when no connection is waiting. Exits
 /// after acknowledging `Stop` or once the worker handle is dropped.
-async fn run_rest_server<Routes: RestCategoryRoutes>(
+async fn run_rest_server<Router: picoserve::routing::PathRouter>(
     listener: std::net::TcpListener,
     requests: FeagiResponderAlloc<FeagiWorkerRequest<()>, FeagiWorkerResponse<()>>,
     accept_poll_interval: core::time::Duration,
-    routes: Routes,
+    router: picoserve::Router<Router>,
 ) {
-    let router = build_router_with_routes(routes);
     //let router = route_brain_visualizer_startup(router);
     let commands = FeagiWorkerCommands::new(requests);
     let mut command_handler = RestServerCommandHandler;

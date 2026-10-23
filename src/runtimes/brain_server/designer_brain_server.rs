@@ -16,6 +16,13 @@ use feagi_interop::transport::zenoh::zenoh_worker_builder::{FeagiBuildZenohWorke
 
 type ChannelBackend = FeagiRequestResponseChannelsAllocBackend;
 
+/// The group of request categories the REST server serves
+type RestGroup = GenomeManagerRequesters<ChannelBackend>;
+
+/// OpenAPI document of `RestGroup`, written at compile time
+#[cfg(feature = "rest_open_api")]
+const OPEN_API_JSON: &str = feagi_interop::feagi_open_api_json!(RestGroup, ChannelBackend);
+
 /// How many commands can be queued on the brain server worker at once. Only `Stop` is sent
 const COMMAND_QUEUE_LENGTH: usize = 1;
 
@@ -52,8 +59,13 @@ impl FeagiWorkerBuilder<FeagiStdThreadSpawner> for DesignerBrainServerWorkerBuil
         // categories have configurables yet. If it fails to start, the genome manager is dropped
         // here, which disconnects it so it exits on its own
         let configurables = GenomeManagerConfigurables::without_configurables();
-        let (rest_server, ()) = StdRestServerBuilder::<GenomeManagerRequesters<ChannelBackend>>::new(self.rest_server_socket)
-            .build_worker(spawner, (genome_manager_requesters, configurables))?;
+        #[allow(unused_mut)]
+        let mut rest_server_builder = StdRestServerBuilder::<RestGroup>::new(self.rest_server_socket);
+        #[cfg(feature = "rest_open_api")]
+        {
+            rest_server_builder.open_api_json = Some(OPEN_API_JSON);
+        }
+        let (rest_server, ()) = rest_server_builder.build_worker(spawner, (genome_manager_requesters, configurables))?;
 
         // Not connected to the other workers yet, it only announces the brain server. If it fails
         // to start, the workers above are dropped the same way

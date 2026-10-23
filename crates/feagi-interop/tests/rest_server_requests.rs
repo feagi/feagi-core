@@ -39,7 +39,7 @@ fn http(method: &str, path: &str, body: Option<&str>) -> (u16, String) {
     (status, body)
 }
 
-/// The served OpenAPI document lists every message, with configurables filled in
+/// The served OpenAPI document lists every message, with configurables as path parameters
 #[cfg(feature = "open_api_endpoint")]
 fn check_open_api_document() {
     let (status, body) = http("GET", "/api-docs/openapi.json", None);
@@ -50,23 +50,27 @@ fn check_open_api_document() {
     let paths = document["paths"].as_object().unwrap();
     let mut path_keys: Vec<&str> = paths.keys().map(String::as_str).collect();
     path_keys.sort();
-    assert_eq!(path_keys, ["/shops/downtown/orders", "/shops/downtown/orders/{order_id}", "/shops/downtown/status"]);
+    assert_eq!(path_keys, ["/shops/{shop_name}/orders", "/shops/{shop_name}/orders/{order_id}", "/shops/{shop_name}/status"]);
 
     // Read and Delete share the order's path
-    let order = &paths["/shops/downtown/orders/{order_id}"];
+    let order = &paths["/shops/{shop_name}/orders/{order_id}"];
     assert_eq!(order["delete"]["description"], "Cancel an order");
     let read_parameters = order["get"]["parameters"].as_array().unwrap();
-    assert_eq!(read_parameters[0]["name"], "order_id");
+    // A configurable is a string path parameter
+    assert_eq!(read_parameters[0]["name"], "shop_name");
     assert_eq!(read_parameters[0]["in"], "path");
-    assert_eq!(read_parameters[0]["schema"]["type"], "integer");
+    assert_eq!(read_parameters[0]["schema"]["type"], "string");
+    assert_eq!(read_parameters[1]["name"], "order_id");
+    assert_eq!(read_parameters[1]["in"], "path");
+    assert_eq!(read_parameters[1]["schema"]["type"], "integer");
     // A Read payload is the URL query
-    assert_eq!(read_parameters[1]["name"], "include_price");
-    assert_eq!(read_parameters[1]["in"], "query");
-    assert_eq!(read_parameters[1]["required"], false);
+    assert_eq!(read_parameters[2]["name"], "include_price");
+    assert_eq!(read_parameters[2]["in"], "query");
+    assert_eq!(read_parameters[2]["required"], false);
     assert_eq!(order["get"]["responses"]["200"]["content"]["application/json"]["schema"]["properties"]["price"]["type"], "integer");
 
     // Other payloads are the json body
-    let create_body = &paths["/shops/downtown/orders"]["post"]["requestBody"]["content"]["application/json"]["schema"];
+    let create_body = &paths["/shops/{shop_name}/orders"]["post"]["requestBody"]["content"]["application/json"]["schema"];
     assert_eq!(create_body["required"], serde_json::json!(["drink", "size"]));
 }
 
@@ -74,7 +78,13 @@ fn check_open_api_document() {
 fn rest_server_sends_requests_through_category_channels() {
     let (group, configurables, responder_thread) = start_coffee_shop("downtown");
     let address: SocketAddr = LISTEN_ADDRESS.parse().unwrap();
-    let (mut server, ()) = StdRestServerBuilder::<ShopGroup>::new(address)
+    #[allow(unused_mut)]
+    let mut builder = StdRestServerBuilder::<ShopGroup>::new(address);
+    #[cfg(feature = "open_api_endpoint")]
+    {
+        builder.open_api_json = Some(feagi_interop::feagi_open_api_json!(ShopGroup, common::Channels));
+    }
+    let (mut server, ()) = builder
         .build_worker(&FeagiStdThreadSpawner, (group, configurables))
         .expect("REST server starts");
 

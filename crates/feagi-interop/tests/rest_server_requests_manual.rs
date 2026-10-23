@@ -10,7 +10,7 @@ mod common;
 
 use std::net::SocketAddr;
 
-use common::{start_coffee_shop, ShopGroup};
+use common::{start_coffee_shop, Channels, ShopGroup};
 use feagi_basis::parallelism::feagi_worker::feagi_worker_builder::FeagiWorkerBuilder;
 use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread::FeagiStdThreadSpawner;
 use feagi_interop::transport::rest::server::server_basis::RestServerWorkerBuilder;
@@ -24,7 +24,9 @@ fn rest_server_serves_coffee_shop_until_ended() {
     let (group, configurables, _responder_thread) = start_coffee_shop("downtown");
     let address: SocketAddr = LISTEN_ADDRESS.parse().expect("listen address is a socket address");
     // Kept so the server keeps running, it is never stopped
-    let (_server, ()) = StdRestServerBuilder::<ShopGroup>::new(address)
+    let mut builder = StdRestServerBuilder::<ShopGroup>::new(address);
+    builder.open_api_json = Some(feagi_interop::feagi_open_api_json!(ShopGroup, Channels));
+    let (_server, ()) = builder
         .build_worker(&FeagiStdThreadSpawner, (group, configurables))
         .expect("REST server failed to start");
 

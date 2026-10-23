@@ -20,29 +20,24 @@ pub trait RestServerWorkerBuilder<Channels: FeagiRequestResponseChannelBackend>:
 }
 
 /// Builds the router of the server: an endpoint for every message of every category in
-/// `routes`, plus the predefined routes enabled by crate features
-pub(crate) fn build_router_with_routes<Routes: RestCategoryRoutes>(routes: Routes) -> picoserve::Router<impl picoserve::routing::PathRouter> {
-    use picoserve::routing::PathRouter;
-
+/// `routes`, plus the predefined routes enabled by crate features. `open_api_json` is the
+/// document served at `OPEN_API_JSON_PATH`, built with `feagi_open_api_json!`. Without one, that
+/// path is answered with 404
+pub(crate) fn build_router_with_routes<Routes: RestCategoryRoutes>(
+    routes: Routes,
+    #[cfg(feature = "open_api_endpoint")] open_api_json: Option<&'static str>,
+) -> picoserve::Router<impl picoserve::routing::PathRouter> {
     let router = picoserve::Router::from_service(FeagiRestGroupRouter::new(routes));
 
-    /* // TODO make openapi doc generation compile time again, but for now skip
-    /// OpenAPI / Swagger
+    // OpenAPI / Swagger
     #[cfg(feature = "open_api_endpoint")]
     let router = {
         use super::open_api_builder::OPEN_API_JSON_PATH;
         use picoserve::routing::get_service;
 
-        let open_api_json = {
-            let mut open_api_json = alloc::string::String::new();
-            super::open_api_builder::write_open_api_json(&routes, &mut open_api_json).expect("writing to a String does not fail");
-            open_api_json
-        };
-
         let router = router.route(OPEN_API_JSON_PATH, get_service(OpenApiDocumentService { open_api_json }));
 
-
-        /// Serves the Swagger UI page and the CSS and JS files it loads beside that page.
+        // Serves the Swagger UI page and the CSS and JS files it loads beside that page.
         #[cfg(feature = "swagger_web_ui")]
         let router = {
             use picoserve::response::File;
@@ -63,22 +58,19 @@ pub(crate) fn build_router_with_routes<Routes: RestCategoryRoutes>(routes: Route
                 .route(SWAGGER_JS_PATH, get_service(File::with_content_type(File::MIME_JS, JS)))
         };
 
-
         router
     };
-
-     */
 
     router
 }
 
-/// Answers with the OpenAPI document it holds
-#[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
+/// Answers with the OpenAPI document it holds, or 404 if it holds none
+#[cfg(feature = "open_api_endpoint")]
 struct OpenApiDocumentService {
-    open_api_json: alloc::string::String,
+    open_api_json: Option<&'static str>,
 }
 
-#[cfg(all(feature = "open_api_endpoint", feature = "alloc"))]
+#[cfg(feature = "open_api_endpoint")]
 impl<State, PathParameters> picoserve::routing::RequestHandlerService<State, PathParameters> for OpenApiDocumentService {
     async fn call_request_handler_service<R: picoserve::io::Read, W: picoserve::response::ResponseWriter<Error = R::Error>>(
         &self,
@@ -87,12 +79,13 @@ impl<State, PathParameters> picoserve::routing::RequestHandlerService<State, Pat
         request: picoserve::request::Request<'_, R>,
         response_writer: W,
     ) -> Result<picoserve::ResponseSent, W::Error> {
-        use picoserve::response::IntoResponse;
+        use picoserve::response::{IntoResponse, Response, StatusCode};
 
-        picoserve::response::Response::ok(self.open_api_json.as_str())
-            .with_content_type("application/json")
-            .write_to(request.body_connection.finalize().await?, response_writer)
-            .await
+        let connection = request.body_connection.finalize().await?;
+        match self.open_api_json {
+            Some(open_api_json) => Response::ok(open_api_json).with_content_type("application/json").write_to(connection, response_writer).await,
+            None => (StatusCode::NOT_FOUND, "No OpenAPI document was given to this server\r\n").write_to(connection, response_writer).await,
+        }
     }
 }
 
@@ -103,12 +96,9 @@ impl<State, PathParameters> picoserve::routing::RequestHandlerService<State, Pat
 /// methods may share a path. Read messages take their payload from the URL query, all others
 /// from a json body. Responses are json: the response payload on success, or the message's error
 pub mod routing {
-    use feagi_basis::feagi_message::feagi_message_description::{FeagiFieldDescription, FeagiMessagePathElementDescription};
-    use feagi_basis::feagi_message::feagi_message_path::configurables::FeagiMessagePathConfigurables;
-    use feagi_basis::feagi_message::feagi_message_path::FeagiMessagePath;
-    use feagi_basis::feagi_message::request::feagi_request_descriptor::{FeagiMessageEnum, FeagiRequestMessageDescriptor};
+    use feagi_basis::feagi_message::request::feagi_request_descriptor::FeagiMessageEnum;
     use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryRequester, FeagiRequestCategory, FeagiRequestPayloadDecoder};
-    use feagi_basis::feagi_message::request::feagi_request_message_grouping::{FeagiConfiguredCategoryRequester, NCat, NMDes, NNull};
+    use feagi_basis::feagi_message::request::feagi_request_message_grouping::{FeagiConfiguredCategoryRequester, NCat, NNull};
     use feagi_basis::parallelism::feagi_channel::request_response_channel::channel_backend::FeagiRequestResponseChannelBackend;
     use picoserve::io::Read;
     use picoserve::request::{Path, Request};
@@ -203,21 +193,6 @@ pub mod routing {
 
     //region Category
 
-    /// One route of the server, described for documentation (such as OpenAPI)
-    #[derive(Clone, Copy)]
-    pub struct RouteDescription<'a> {
-        pub category_name: &'static str,
-        pub category_description: &'static str,
-        pub method: FeagiMessageEnum,
-        pub description: &'static str,
-        pub path_elements: &'static [FeagiMessagePathElementDescription],
-        /// Values of the configurable path elements
-        pub configurables: &'a dyn FeagiMessagePathConfigurables,
-        /// From the URL query for Read messages, otherwise from the json body
-        pub request_payload_fields: &'static [FeagiFieldDescription],
-        pub response_payload_fields: &'static [FeagiFieldDescription],
-    }
-
     /// Tries the categories in turn. Implemented for the `NCat` chain of a group's
     /// `FeagiConfiguredCategoryRequester`s
     pub trait RestCategoryRoutes {
@@ -235,10 +210,6 @@ pub mod routing {
 
         /// Whether any message, of any method, is at `segments`
         fn any_path_matches(&self, segments: &[&str]) -> bool;
-
-        /// Describes route `index`, counting across all categories in order, or `None` past
-        /// the last route
-        fn route_description(&self, index: usize) -> Option<RouteDescription<'_>>;
     }
 
     impl RestCategoryRoutes for NNull {
@@ -255,16 +226,11 @@ pub mod routing {
         fn any_path_matches(&self, _segments: &[&str]) -> bool {
             false
         }
-
-        fn route_description(&self, _index: usize) -> Option<RouteDescription<'_>> {
-            None
-        }
     }
 
     impl<Category, Channels, Tail> RestCategoryRoutes for NCat<FeagiConfiguredCategoryRequester<Category, Channels>, Tail>
     where
         Category: FeagiRequestCategory,
-        Category::NestedMessageDescriptors: RestMessageDescriptions<Category>,
         Channels: FeagiRequestResponseChannelBackend,
         FeagiCategoryRequester<Category, Channels>: Clone,
         Tail: RestCategoryRoutes,
@@ -289,62 +255,11 @@ pub mod routing {
         fn any_path_matches(&self, segments: &[&str]) -> bool {
             Category::message_path_exists(self.head.configurables, segments) || self.tail.any_path_matches(segments)
         }
-
-        fn route_description(&self, index: usize) -> Option<RouteDescription<'_>> {
-            let route_count = <Category::NestedMessageDescriptors as RestMessageDescriptions<Category>>::ROUTE_COUNT;
-            if index < route_count {
-                return <Category::NestedMessageDescriptors as RestMessageDescriptions<Category>>::route_description(self.head.configurables, index);
-            }
-            self.tail.route_description(index - route_count)
-        }
     }
 
     //endregion
 
     //region Message
-
-    /// Describes the routes of a category's messages, for documentation. Implemented for the
-    /// `NMDes` chain of the category
-    pub trait RestMessageDescriptions<Category: FeagiRequestCategory> {
-        /// How many messages, and so routes, the chain has
-        const ROUTE_COUNT: usize;
-
-        /// Describes the route of message `index` of the chain, or `None` past the last one
-        fn route_description(configurables: &Category::Configurables, index: usize) -> Option<RouteDescription<'_>>;
-    }
-
-    impl<Category: FeagiRequestCategory> RestMessageDescriptions<Category> for NNull {
-        const ROUTE_COUNT: usize = 0;
-
-        fn route_description(_configurables: &Category::Configurables, _index: usize) -> Option<RouteDescription<'_>> {
-            None
-        }
-    }
-
-    impl<Descriptor, Tail, Category> RestMessageDescriptions<Category> for NMDes<Descriptor, Tail>
-    where
-        Descriptor: FeagiRequestMessageDescriptor<Category = Category>,
-        Tail: RestMessageDescriptions<Category>,
-        Category: FeagiRequestCategory,
-    {
-        const ROUTE_COUNT: usize = 1 + Tail::ROUTE_COUNT;
-
-        fn route_description(configurables: &Category::Configurables, index: usize) -> Option<RouteDescription<'_>> {
-            if index != 0 {
-                return Tail::route_description(configurables, index - 1);
-            }
-            Some(RouteDescription {
-                category_name: Category::CATEGORY_NAME,
-                category_description: Category::CATEGORY_DESCRIPTION,
-                method: Descriptor::METHOD,
-                description: Descriptor::MESSAGE_DESCRIPTION,
-                path_elements: <Descriptor::MessagePath as FeagiMessagePath>::PATH_ELEMENTS,
-                configurables,
-                request_payload_fields: Descriptor::REQUEST_PAYLOAD_FIELDS,
-                response_payload_fields: Descriptor::RESPONSE_PAYLOAD_FIELDS,
-            })
-        }
-    }
 
     /// Decodes the matched message's payload from the request, sends the request through the
     /// category channel, and writes back the response
