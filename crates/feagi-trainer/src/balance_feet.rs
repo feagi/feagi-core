@@ -53,7 +53,7 @@ fn default_graduate_success_rate() -> f64 {
     0.66
 }
 fn default_support_max_stiffness() -> f64 {
-    2.0
+    20.0
 }
 fn default_support_max_damping() -> f64 {
     0.2
@@ -101,7 +101,7 @@ pub struct BalanceFeetCriterion {
     /// Block success rate needed to lower support. Default 0.66.
     #[serde(default = "default_graduate_success_rate")]
     pub graduate_success_rate: f64,
-    /// Torso restoring stiffness at support 1.0, N*m/rad. Default 2.0.
+    /// Torso restoring stiffness at support 1.0, N*m/rad. Default 20.0.
     #[serde(default = "default_support_max_stiffness")]
     pub support_max_stiffness_nm_per_rad: f64,
     /// Torso restoring damping at support 1.0, N*m*s/rad. Default 0.2.
@@ -128,6 +128,26 @@ pub struct BalanceFeetCriterion {
     /// Perturbation pulse length in bursts. Default 2.
     #[serde(default = "default_perturb_duration_bursts")]
     pub perturb_duration_bursts: u32,
+    /// Graduation by time balanced: when `Some`, a support level passes when the MEDIAN
+    /// `balanced_s` over that level's attempts is >= this value (seconds), instead of the
+    /// success rate. `None` keeps the `graduate_success_rate` rule.
+    #[serde(default)]
+    pub graduate_balanced_s: Option<f64>,
+    /// Harness vertical (height) stiffness, N/m. Sent in `begin_balance_attempt` only when set.
+    #[serde(default)]
+    pub support_height_stiffness_n_per_m: Option<f64>,
+    /// Harness vertical (height) damping, N*s/m. Sent only when set.
+    #[serde(default)]
+    pub support_height_damping_n_s_per_m: Option<f64>,
+    /// Harness gravity compensation fraction. Sent only when set.
+    #[serde(default)]
+    pub support_gravity_comp: Option<f64>,
+    /// Harness horizontal (xy) stiffness, N/m. Sent only when set.
+    #[serde(default)]
+    pub support_xy_stiffness_n_per_m: Option<f64>,
+    /// Harness horizontal (xy) damping, N*s/m. Sent only when set.
+    #[serde(default)]
+    pub support_xy_damping_n_s_per_m: Option<f64>,
 }
 
 /// Fading-support schedule parameters.
@@ -143,6 +163,8 @@ pub struct SupportConfig {
     pub attempts_per_level: u32,
     /// Block success rate that lowers the level.
     pub graduate_success_rate: f64,
+    /// When `Some`, the block's median `balanced_s` >= this lowers the level instead.
+    pub graduate_balanced_s: Option<f64>,
 }
 
 impl Default for SupportConfig {
@@ -153,6 +175,7 @@ impl Default for SupportConfig {
             min: 0.0,
             attempts_per_level: 3,
             graduate_success_rate: 0.66,
+            graduate_balanced_s: None,
         }
     }
 }
@@ -188,6 +211,12 @@ impl BalanceFeetCriterion {
             perturb_interval_bursts: 0,
             perturb_torque_nm: default_perturb_torque_nm(),
             perturb_duration_bursts: default_perturb_duration_bursts(),
+            graduate_balanced_s: None,
+            support_height_stiffness_n_per_m: None,
+            support_height_damping_n_s_per_m: None,
+            support_gravity_comp: None,
+            support_xy_stiffness_n_per_m: None,
+            support_xy_damping_n_s_per_m: None,
         }
     }
 
@@ -199,6 +228,7 @@ impl BalanceFeetCriterion {
             min: self.support_min,
             attempts_per_level: self.attempts_per_level,
             graduate_success_rate: self.graduate_success_rate,
+            graduate_balanced_s: self.graduate_balanced_s,
         }
     }
 
@@ -307,7 +337,29 @@ impl SupportConfig {
                 "attempts_per_level must be > 0".to_string(),
             ));
         }
+        if self
+            .graduate_balanced_s
+            .is_some_and(|s| !s.is_finite() || s <= 0.0)
+        {
+            return Err(TrainerError::Config(
+                "graduate_balanced_s must be finite and > 0".to_string(),
+            ));
+        }
         Ok(())
+    }
+}
+
+fn median_f64(values: &[f64]) -> f64 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    let mid = sorted.len() / 2;
+    if sorted.len() % 2 == 1 {
+        sorted[mid]
+    } else {
+        (sorted[mid - 1] + sorted[mid]) / 2.0
     }
 }
 
@@ -323,6 +375,7 @@ pub struct SupportSchedule {
     level: f64,
     block_attempts: u32,
     block_successes: u32,
+    block_balanced_s: Vec<f64>,
     failed_blocks_in_a_row: u32,
 }
 
@@ -334,6 +387,7 @@ impl SupportSchedule {
             config,
             block_attempts: 0,
             block_successes: 0,
+            block_balanced_s: Vec::new(),
             failed_blocks_in_a_row: 0,
         }
     }
@@ -348,9 +402,18 @@ impl SupportSchedule {
         config.min
     }
 
-    /// Fold one finished attempt into the current block.
+    /// Fold one finished attempt into the current block with `balanced_s` of 0. Use
+    /// [`SupportSchedule::record_attempt`] when graduating on time balanced.
     pub fn record(&mut self, outcome: BalanceAttemptOutcome) {
+        self.record_attempt(outcome, 0.0);
+    }
+
+    /// Fold one finished attempt (outcome and its `balanced_s`) into the current block. With
+    /// `graduate_balanced_s` set, the block passes on its median `balanced_s`; otherwise on
+    /// its success rate.
+    pub fn record_attempt(&mut self, outcome: BalanceAttemptOutcome, balanced_s: f64) {
         self.block_attempts += 1;
+        self.block_balanced_s.push(balanced_s);
         if outcome == BalanceAttemptOutcome::Success {
             self.block_successes += 1;
         }
@@ -358,9 +421,14 @@ impl SupportSchedule {
             return;
         }
         let rate = f64::from(self.block_successes) / f64::from(self.block_attempts);
+        let passed = match self.config.graduate_balanced_s {
+            Some(threshold) => median_f64(&self.block_balanced_s) >= threshold,
+            None => rate >= self.config.graduate_success_rate,
+        };
         self.block_attempts = 0;
         self.block_successes = 0;
-        if rate >= self.config.graduate_success_rate {
+        self.block_balanced_s.clear();
+        if passed {
             self.failed_blocks_in_a_row = 0;
             self.level = round_level((self.level - self.config.step).max(self.config.min));
         } else {
@@ -416,6 +484,20 @@ pub struct BalanceAttemptRecord {
     /// Distinct perturbation pulses seen (rising edges of `perturbing`).
     #[serde(default)]
     pub perturbations: u32,
+    /// Balance metric: the longest continuous run of upright bursts (tilt inside the limit and
+    /// both feet down), counted in elapsed bursts, not samples. A `Death` burst never counts.
+    #[serde(default)]
+    pub balanced_bursts: u32,
+    /// `balanced_bursts` times the criterion's `burst_period_s`.
+    #[serde(default)]
+    pub balanced_s: f64,
+    /// Non-settling bursts elapsed before the first non-upright burst, measured from the end of
+    /// settling. Absent when the attempt never left the upright band.
+    #[serde(default)]
+    pub time_to_first_violation_bursts: Option<u32>,
+    /// `time_to_first_violation_bursts` times `burst_period_s`.
+    #[serde(default)]
+    pub time_to_first_violation_s: Option<f64>,
 }
 
 /// Parameters sent to the controller with `begin_balance_attempt`.
@@ -439,6 +521,16 @@ pub struct BalanceAttemptParams {
     pub perturb_torque_nm: f64,
     /// Perturbation pulse length in bursts.
     pub perturb_duration_bursts: u32,
+    /// Harness height stiffness, N/m; sent only when set.
+    pub height_stiffness_n_per_m: Option<f64>,
+    /// Harness height damping, N*s/m; sent only when set.
+    pub height_damping_n_s_per_m: Option<f64>,
+    /// Harness gravity compensation; sent only when set.
+    pub gravity_comp: Option<f64>,
+    /// Harness xy stiffness, N/m; sent only when set.
+    pub xy_stiffness_n_per_m: Option<f64>,
+    /// Harness xy damping, N*s/m; sent only when set.
+    pub xy_damping_n_s_per_m: Option<f64>,
 }
 
 impl BalanceAttemptParams {
@@ -454,6 +546,11 @@ impl BalanceAttemptParams {
             perturb_interval_bursts: criterion.perturb_interval_bursts,
             perturb_torque_nm: criterion.perturb_torque_nm,
             perturb_duration_bursts: criterion.perturb_duration_bursts,
+            height_stiffness_n_per_m: criterion.support_height_stiffness_n_per_m,
+            height_damping_n_s_per_m: criterion.support_height_damping_n_s_per_m,
+            gravity_comp: criterion.support_gravity_comp,
+            xy_stiffness_n_per_m: criterion.support_xy_stiffness_n_per_m,
+            xy_damping_n_s_per_m: criterion.support_xy_damping_n_s_per_m,
         }
     }
 }
@@ -501,6 +598,18 @@ pub struct BalanceSample {
     /// A perturbation pulse is being applied at this step. Absent on old controllers.
     #[serde(default)]
     pub perturbing: bool,
+    /// Predicted tilt fraction 0..1 at this step. Absent on old controllers.
+    #[serde(default)]
+    pub support_need: Option<f64>,
+    /// Harness effort 0..1 at this step. Absent on old controllers.
+    #[serde(default)]
+    pub support_effort: Option<f64>,
+    /// Harness torque, N*m. Absent on old controllers.
+    #[serde(default)]
+    pub support_torque_nm: Option<f64>,
+    /// Harness force, N. Absent on old controllers.
+    #[serde(default)]
+    pub support_force_n: Option<f64>,
 }
 
 /// Controller-latched end cause. Hold success is decided here, not by the controller.
@@ -540,6 +649,10 @@ pub struct OpenBalanceAttempt {
     pub perturbations: u32,
     /// The latest sample (counted or not) had `perturbing` set.
     pub last_perturbing: bool,
+    /// Longest continuous run of upright bursts so far (elapsed bursts).
+    pub longest_balanced_bursts: u32,
+    /// Non-settling bursts elapsed before the first non-upright burst, if one happened.
+    pub first_violation_burst: Option<u32>,
 }
 
 impl OpenBalanceAttempt {
@@ -567,6 +680,8 @@ impl OpenBalanceAttempt {
             params_support_level: 0.0,
             perturbations: 0,
             last_perturbing: false,
+            longest_balanced_bursts: 0,
+            first_violation_burst: None,
         }
     }
 }
@@ -634,6 +749,19 @@ pub fn observe_balance_sample(
             open.bursts.saturating_add(1)
         };
         let upright_bursts = open.upright_bursts + u32::from(!sample.settling && upright);
+        // A Death burst is a balance failure even if the last tilt reading was inside the limit.
+        let balanced = upright && terminal != BalanceTerminal::Death;
+        let (run, first_violation) = if sample.settling {
+            (open.holding_bursts, open.first_violation_burst)
+        } else if balanced {
+            (
+                open.holding_bursts.saturating_add(1),
+                open.first_violation_burst,
+            )
+        } else {
+            (0, open.first_violation_burst.or(Some(open.bursts)))
+        };
+        let longest = open.longest_balanced_bursts.max(run);
         return Ok(BalanceAttemptStep::Finished(BalanceAttemptRecord {
             seed,
             outcome,
@@ -642,6 +770,7 @@ pub fn observe_balance_sample(
             support_level: sample.support_level.unwrap_or(open.params_support_level),
             upright_fraction: upright_fraction(upright_bursts, bursts),
             perturbations,
+            ..balance_time_fields(longest, first_violation, criterion.burst_period_s)
         }));
     }
     let steps = u64::from(
@@ -682,11 +811,17 @@ pub fn observe_balance_sample(
     let upright_bursts = open
         .upright_bursts
         .saturating_add(if upright { new_bursts } else { 0 });
+    // Same unit as `bursts` and `upright_bursts`: elapsed bursts, so slow polls do not
+    // stretch the hold.
     let holding_bursts = if upright {
-        open.holding_bursts.saturating_add(1)
+        open.holding_bursts.saturating_add(new_bursts)
     } else {
         0
     };
+    let longest_balanced_bursts = open.longest_balanced_bursts.max(holding_bursts);
+    let first_violation_burst =
+        open.first_violation_burst
+            .or(if upright { None } else { Some(open.bursts) });
     let finish = |outcome| {
         BalanceAttemptStep::Finished(BalanceAttemptRecord {
             seed,
@@ -696,6 +831,11 @@ pub fn observe_balance_sample(
             support_level: sample.support_level.unwrap_or(open.params_support_level),
             upright_fraction: upright_fraction(upright_bursts, bursts),
             perturbations,
+            ..balance_time_fields(
+                longest_balanced_bursts,
+                first_violation_burst,
+                criterion.burst_period_s,
+            )
         })
     };
     if holding_bursts >= criterion.hold_bursts {
@@ -717,7 +857,30 @@ pub fn observe_balance_sample(
         params_support_level: open.params_support_level,
         perturbations,
         last_perturbing,
+        longest_balanced_bursts,
+        first_violation_burst,
     }))
+}
+
+/// Record carrying only the balance-time fields; callers fill the rest with struct update.
+fn balance_time_fields(
+    longest: u32,
+    first_violation: Option<u32>,
+    burst_period_s: f64,
+) -> BalanceAttemptRecord {
+    BalanceAttemptRecord {
+        seed: 0,
+        outcome: BalanceAttemptOutcome::Truncated,
+        bursts: 0,
+        final_tilt_deg: 0.0,
+        support_level: 0.0,
+        upright_fraction: 0.0,
+        perturbations: 0,
+        balanced_bursts: longest,
+        balanced_s: f64::from(longest) * burst_period_s,
+        time_to_first_violation_bursts: first_violation,
+        time_to_first_violation_s: first_violation.map(|b| f64::from(b) * burst_period_s),
+    }
 }
 
 fn upright_fraction(upright_bursts: u32, bursts: u32) -> f64 {
@@ -814,13 +977,157 @@ impl BalanceAffectReward {
             signals.push(pleasure(1.0));
         } else if !death
             && outcome.is_none()
-            && burst_sample.support_level.is_some_and(|level| level <= 1.0e-9)
+            && burst_sample
+                .support_level
+                .is_some_and(|level| level <= 1.0e-9)
             && sample_is_upright(burst_sample, criterion)
         {
             signals.push(pleasure(0.1));
         }
         signals.retain(|s| s.channel != AffectChannel::Pleasure || s.magnitude >= 0.05);
         signals
+    }
+}
+
+/// Need at or below this fraction counts as balanced (no Pain, holding Pleasure applies).
+pub const ASSIST_NEED_DEADBAND: f64 = 0.1;
+/// Pleasure per unit of need reduction between consecutive bursts: `min(1, GAIN * drop)`.
+pub const ASSIST_FALL_GAIN: f64 = 4.0;
+/// Pleasure each burst that need is inside the deadband with both feet down.
+pub const ASSIST_HOLD_PLEASURE: f64 = 0.2;
+/// Pleasure below this magnitude is dropped.
+pub const ASSIST_MIN_PLEASURE: f64 = 0.05;
+
+/// Which affect policy scores a balance attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BalanceRewardPolicy {
+    /// [`BalanceAffectReward`] (mode name `affect`).
+    #[default]
+    Affect,
+    /// [`BalanceAssistReward`] (mode name `assist`).
+    Assist,
+}
+
+impl BalanceRewardPolicy {
+    /// Parse a reward mode name; `none` has no policy and returns `None`.
+    pub fn from_mode(mode: &str) -> Option<Self> {
+        match mode {
+            "affect" => Some(Self::Affect),
+            "assist" => Some(Self::Assist),
+            _ => None,
+        }
+    }
+
+    /// Policy identity recorded with the run.
+    pub fn policy_id(self) -> &'static str {
+        match self {
+            Self::Affect => BalanceAffectReward::policy_id(),
+            Self::Assist => BalanceAssistReward::policy_id(),
+        }
+    }
+}
+
+/// Assist-as-needed affect for one balance attempt, driven by the harness `support_need`
+/// (falls back to `min(1, tilt / max_tilt)` when absent). Per counted, non-settling burst with
+/// need `n_t` and previous need `n_{t-1}`: Death -> Pain 1.0; `n_t > ASSIST_NEED_DEADBAND` and
+/// rising -> Pain `min(1, n_t)`; falling -> Pleasure `min(1, ASSIST_FALL_GAIN * drop)`;
+/// `n_t <= deadband` with both feet down -> Pleasure `ASSIST_HOLD_PLEASURE`; Success ->
+/// Pleasure 1.0. When several Pleasures apply in one burst the largest is emitted. Never scaled
+/// by support level. Pleasure below `ASSIST_MIN_PLEASURE` is dropped. Settling bursts emit
+/// nothing except a Death terminal (their need still seeds `n_{t-1}`).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BalanceAssistReward {
+    previous_need: Option<f64>,
+}
+
+impl BalanceAssistReward {
+    /// Policy at the start of an attempt.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Stable identity recorded with the run.
+    pub fn policy_id() -> &'static str {
+        "reward.balance-assist.v1"
+    }
+
+    /// Signals for one burst. `outcome` is the attempt outcome when this burst ended it.
+    pub fn on_sample(
+        &mut self,
+        burst_sample: &BalanceSample,
+        outcome: Option<&BalanceAttemptOutcome>,
+        criterion: &BalanceFeetCriterion,
+    ) -> Vec<RewardSignal> {
+        let need = burst_sample
+            .support_need
+            .unwrap_or_else(|| burst_sample.tilt_deg / criterion.max_tilt_deg)
+            .clamp(0.0, 1.0);
+        let previous = self.previous_need.unwrap_or(need);
+        self.previous_need = Some(need);
+        let death = outcome == Some(&BalanceAttemptOutcome::Death);
+        let pain = |magnitude| RewardSignal {
+            channel: AffectChannel::Pain,
+            magnitude,
+        };
+        if death {
+            return vec![pain(1.0)];
+        }
+        if burst_sample.settling {
+            return Vec::new();
+        }
+        let mut signals = Vec::new();
+        if need > ASSIST_NEED_DEADBAND && need > previous {
+            signals.push(pain(need.min(1.0)));
+        }
+        let mut pleasure = 0.0_f64;
+        if need < previous {
+            pleasure = pleasure.max((ASSIST_FALL_GAIN * (previous - need)).min(1.0));
+        }
+        if need <= ASSIST_NEED_DEADBAND
+            && burst_sample.left_foot_contact
+            && burst_sample.right_foot_contact
+        {
+            pleasure = pleasure.max(ASSIST_HOLD_PLEASURE);
+        }
+        if outcome == Some(&BalanceAttemptOutcome::Success) {
+            pleasure = 1.0;
+        }
+        if pleasure >= ASSIST_MIN_PLEASURE {
+            signals.push(RewardSignal {
+                channel: AffectChannel::Pleasure,
+                magnitude: pleasure,
+            });
+        }
+        signals
+    }
+}
+
+/// The reward policy instance of one attempt.
+enum AttemptReward {
+    Affect(BalanceAffectReward),
+    Assist(BalanceAssistReward),
+}
+
+impl AttemptReward {
+    fn new(policy: BalanceRewardPolicy, support_level: f64) -> Self {
+        match policy {
+            BalanceRewardPolicy::Affect => {
+                Self::Affect(BalanceAffectReward::for_attempt(support_level))
+            }
+            BalanceRewardPolicy::Assist => Self::Assist(BalanceAssistReward::new()),
+        }
+    }
+
+    fn on_sample(
+        &mut self,
+        sample: &BalanceSample,
+        outcome: Option<&BalanceAttemptOutcome>,
+        criterion: &BalanceFeetCriterion,
+    ) -> Vec<RewardSignal> {
+        match self {
+            Self::Affect(r) => r.on_sample(sample, outcome, criterion),
+            Self::Assist(r) => r.on_sample(sample, outcome, criterion),
+        }
     }
 }
 
@@ -850,6 +1157,63 @@ pub struct BalancePhaseReport {
     /// Success rate at `support_min` >= `graduate_success_rate`; false with no attempt there.
     #[serde(default)]
     pub graduated: bool,
+    /// Time balanced (longest upright run per attempt) over every attempt.
+    #[serde(default)]
+    pub balanced: BalancedTimeStats,
+    /// Time balanced per support level, keyed by the level formatted `{:.2}`.
+    #[serde(default)]
+    pub balanced_by_support: BTreeMap<String, BalancedTimeStats>,
+}
+
+/// Mean, median and max of the per-attempt balanced time, in bursts and seconds.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BalancedTimeStats {
+    /// Attempts summarized.
+    pub attempts: u32,
+    /// Mean `balanced_bursts`.
+    pub mean_bursts: f64,
+    /// Median `balanced_bursts`.
+    pub median_bursts: f64,
+    /// Max `balanced_bursts`.
+    pub max_bursts: u32,
+    /// Mean `balanced_s`.
+    pub mean_s: f64,
+    /// Median `balanced_s`.
+    pub median_s: f64,
+    /// Max `balanced_s`.
+    pub max_s: f64,
+}
+
+impl BalancedTimeStats {
+    /// Summarize attempts; an empty slice gives all zeros.
+    pub fn from_attempts<'a>(attempts: impl IntoIterator<Item = &'a BalanceAttemptRecord>) -> Self {
+        let mut bursts: Vec<u32> = Vec::new();
+        let mut seconds: Vec<f64> = Vec::new();
+        for attempt in attempts {
+            bursts.push(attempt.balanced_bursts);
+            seconds.push(attempt.balanced_s);
+        }
+        if bursts.is_empty() {
+            return Self::default();
+        }
+        let n = bursts.len() as f64;
+        seconds.sort_by(|a, b| a.total_cmp(b));
+        let mid = seconds.len() / 2;
+        let median_s = if seconds.len() % 2 == 1 {
+            seconds[mid]
+        } else {
+            (seconds[mid - 1] + seconds[mid]) / 2.0
+        };
+        Self {
+            attempts: bursts.len() as u32,
+            mean_bursts: bursts.iter().map(|b| f64::from(*b)).sum::<f64>() / n,
+            median_bursts: median_u32(&bursts),
+            max_bursts: bursts.iter().copied().max().unwrap_or(0),
+            mean_s: seconds.iter().sum::<f64>() / n,
+            median_s,
+            max_s: seconds.last().copied().unwrap_or(0.0),
+        }
+    }
 }
 
 fn support_key(level: f64) -> String {
@@ -920,6 +1284,18 @@ impl BalancePhaseReport {
             .collect();
         let graduated =
             success_rate_at_min_support.is_some_and(|rate| rate >= support.graduate_success_rate);
+        let balanced = BalancedTimeStats::from_attempts(&attempts);
+        let mut by_level: BTreeMap<String, Vec<&BalanceAttemptRecord>> = BTreeMap::new();
+        for attempt in &attempts {
+            by_level
+                .entry(support_key(attempt.support_level))
+                .or_default()
+                .push(attempt);
+        }
+        let balanced_by_support = by_level
+            .into_iter()
+            .map(|(key, group)| (key, BalancedTimeStats::from_attempts(group)))
+            .collect();
         Ok(Self {
             attempts,
             success_rate,
@@ -930,6 +1306,8 @@ impl BalancePhaseReport {
             mean_upright_fraction,
             success_rate_by_support,
             graduated,
+            balanced,
+            balanced_by_support,
         })
     }
 }
@@ -947,7 +1325,9 @@ fn median_u32(values: &[u32]) -> f64 {
 
 /// Named metrics for one finished phase. Optional values are omitted when undefined.
 /// Per-level rates are `success_rate_at_support_<level>` with the level as `{:.2}`;
-/// `graduated` is 1.0 or 0.0.
+/// `graduated` is 1.0 or 0.0. Time balanced (longest upright run per attempt) is reported as
+/// `balanced_bursts_{mean,median,max}` and `balanced_s_{mean,median,max}`, overall and per
+/// level with the suffix `_at_support_<level>`.
 pub fn balance_phase_metrics(phase: &BalancePhaseReport) -> BTreeMap<String, f64> {
     let mut metrics = BTreeMap::new();
     metrics.insert("success_rate".to_string(), phase.success_rate);
@@ -972,7 +1352,29 @@ pub fn balance_phase_metrics(phase: &BalancePhaseReport) -> BTreeMap<String, f64
     for (level, rate) in &phase.success_rate_by_support {
         metrics.insert(format!("success_rate_at_support_{level}"), *rate);
     }
+    insert_balanced_metrics(&mut metrics, "", &phase.balanced);
+    for (level, stats) in &phase.balanced_by_support {
+        insert_balanced_metrics(&mut metrics, &format!("_at_support_{level}"), stats);
+    }
     metrics
+}
+
+fn insert_balanced_metrics(
+    metrics: &mut BTreeMap<String, f64>,
+    suffix: &str,
+    stats: &BalancedTimeStats,
+) {
+    let rows = [
+        ("balanced_bursts_mean", stats.mean_bursts),
+        ("balanced_bursts_median", stats.median_bursts),
+        ("balanced_bursts_max", f64::from(stats.max_bursts)),
+        ("balanced_s_mean", stats.mean_s),
+        ("balanced_s_median", stats.median_s),
+        ("balanced_s_max", stats.max_s),
+    ];
+    for (name, value) in rows {
+        metrics.insert(format!("{name}{suffix}"), value);
+    }
 }
 
 /// Scorecard for one balance phase (protocol `balance-feet-v2`).
@@ -1052,6 +1454,8 @@ pub struct BalancePhaseRun<'a> {
     pub support_mode: Option<SupportMode>,
     /// Affect delivery. `None` keeps the no-affect behavior.
     pub deliver_reward: Option<DeliverReward<'a>>,
+    /// Which policy builds the affect signals when `deliver_reward` is set.
+    pub reward_policy: BalanceRewardPolicy,
 }
 
 /// Run one phase (`train` or `test`) and emit its progress.
@@ -1110,10 +1514,11 @@ pub fn run_balance_phase(
             probe,
             present_goal,
             &mut run.deliver_reward,
+            run.reward_policy,
             run.poll_timeout,
             cancel,
         )?;
-        schedule.record(record.outcome);
+        schedule.record_attempt(record.outcome, record.balanced_s);
         attempts.push(record);
         events.emit(RunEvent::new(
             run.run_id.clone(),
@@ -1153,6 +1558,7 @@ fn run_balance_attempt(
     probe: &mut dyn BalanceProbe,
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
     deliver_reward: &mut Option<DeliverReward<'_>>,
+    reward_policy: BalanceRewardPolicy,
     poll_timeout: Duration,
     cancel: &CancelToken,
 ) -> Result<BalanceAttemptRecord, TrainerError> {
@@ -1166,7 +1572,7 @@ fn run_balance_attempt(
     }
     let features = upright_goal_features();
     let mut open = OpenBalanceAttempt::for_attempt(begun.physics_steps_per_burst, support_level);
-    let mut affect = BalanceAffectReward::for_attempt(support_level);
+    let mut affect = AttemptReward::new(reward_policy, support_level);
     loop {
         if cancel.is_cancelled() {
             return Err(TrainerError::Cancelled(
@@ -1208,7 +1614,7 @@ pub fn begin_attempt_request(
     criterion: &BalanceFeetCriterion,
     params: &BalanceAttemptParams,
 ) -> serde_json::Value {
-    serde_json::json!({
+    let mut body = serde_json::json!({
         "action": "begin_balance_attempt",
         "seed": seed,
         "torso_body": criterion.torso_body,
@@ -1224,7 +1630,26 @@ pub fn begin_attempt_request(
         "perturb_interval_bursts": params.perturb_interval_bursts,
         "perturb_torque_nm": params.perturb_torque_nm,
         "perturb_duration_bursts": params.perturb_duration_bursts,
-    })
+    });
+    let optional = [
+        (
+            "support_height_stiffness_n_per_m",
+            params.height_stiffness_n_per_m,
+        ),
+        (
+            "support_height_damping_n_s_per_m",
+            params.height_damping_n_s_per_m,
+        ),
+        ("support_gravity_comp", params.gravity_comp),
+        ("support_xy_stiffness_n_per_m", params.xy_stiffness_n_per_m),
+        ("support_xy_damping_n_s_per_m", params.xy_damping_n_s_per_m),
+    ];
+    for (key, value) in optional {
+        if let Some(value) = value {
+            body[key] = serde_json::json!(value);
+        }
+    }
+    body
 }
 
 impl HttpBalanceProbe {
@@ -1446,6 +1871,10 @@ mod tests {
             support_level: Some(0.0),
             settling: false,
             perturbing: false,
+            support_need: None,
+            support_effort: None,
+            support_torque_nm: None,
+            support_force_n: None,
         }
     }
 
@@ -1462,6 +1891,10 @@ mod tests {
             support_level: level,
             upright_fraction: upright,
             perturbations: 0,
+            balanced_bursts: 0,
+            balanced_s: 0.0,
+            time_to_first_violation_bursts: None,
+            time_to_first_violation_s: None,
         }
     }
 
@@ -1526,6 +1959,7 @@ mod tests {
             run_id: &run_id,
             support_mode: None,
             deliver_reward: None,
+            reward_policy: BalanceRewardPolicy::Affect,
         };
         let report = run_balance_phase(
             &mut run,
@@ -1566,6 +2000,7 @@ mod tests {
             run_id: &run_id,
             support_mode: None,
             deliver_reward: Some(&mut sink),
+            reward_policy: BalanceRewardPolicy::Affect,
         };
         run_balance_phase(
             &mut run,
@@ -1590,6 +2025,7 @@ mod tests {
             min: 0.0,
             attempts_per_level: 3,
             graduate_success_rate: 0.66,
+            graduate_balanced_s: None,
         }
     }
 
@@ -1696,7 +2132,10 @@ mod tests {
         open = fed(&open, &balanced(60, 5), &c);
         assert_eq!(open.bursts, 3, "1 first burst + 2 elapsed (59 / 25)");
         assert_eq!(open.last_burst_seq, Some(51));
-        assert_eq!(open.holding_bursts, 2, "one observation holds once");
+        assert_eq!(
+            open.holding_bursts, 3,
+            "hold advances by elapsed upright bursts"
+        );
         assert!(open.counted_burst);
     }
 
@@ -1873,7 +2312,13 @@ mod tests {
     fn success_pleasure_scales_with_support() {
         for (level, expected) in [(1.0, None), (0.5, Some(0.5)), (0.0, Some(1.0))] {
             let mut r = BalanceAffectReward::new();
-            let out = reward_for(&mut r, 2.0, level, false, Some(BalanceAttemptOutcome::Success));
+            let out = reward_for(
+                &mut r,
+                2.0,
+                level,
+                false,
+                Some(BalanceAttemptOutcome::Success),
+            );
             let pleasure: Vec<f64> = out
                 .iter()
                 .filter(|(c, _)| *c == AffectChannel::Pleasure)
@@ -1883,7 +2328,10 @@ mod tests {
                 None => assert!(pleasure.is_empty(), "level {level}: {pleasure:?}"),
                 Some(e) => {
                     assert_eq!(pleasure.len(), 1);
-                    assert!((pleasure[0] - e).abs() < 1e-9, "level {level}: {pleasure:?}");
+                    assert!(
+                        (pleasure[0] - e).abs() < 1e-9,
+                        "level {level}: {pleasure:?}"
+                    );
                 }
             }
         }
@@ -1926,7 +2374,7 @@ mod tests {
         assert_eq!(body["action"], "begin_balance_attempt");
         assert_eq!(body["seed"], 9);
         assert_eq!(body["support_level"], 0.3);
-        assert_eq!(body["support_max_stiffness_nm_per_rad"], 2.0);
+        assert_eq!(body["support_max_stiffness_nm_per_rad"], 20.0);
         assert_eq!(body["support_max_damping_nm_s_per_rad"], 0.2);
         assert_eq!(body["settle_bursts"], 10);
         assert_eq!(body["burst_period_s"], 0.04);
@@ -1971,5 +2419,270 @@ mod tests {
         assert_eq!(c.support_deadband_deg, 6.0);
         assert_eq!(c.perturb_interval_bursts, 0);
         assert_eq!(c.perturb_duration_bursts, 2);
+    }
+
+    #[test]
+    fn slow_polls_reach_success_at_hold_bursts_elapsed() {
+        // Polls every 2 bursts (steps_per_burst 1, seq advancing by 2). The first sample counts
+        // as one burst, so holds after each poll are 1, 3, 5: success exactly at 5 bursts, not
+        // after 5 samples.
+        let mut c = criterion();
+        c.hold_bursts = 5;
+        c.attempt_burst_cap = 50;
+        let mut open = OpenBalanceAttempt::fresh();
+        open = fed(&open, &balanced(1, 3), &c);
+        open = fed(&open, &balanced(3, 3), &c);
+        assert_eq!(open.holding_bursts, 3);
+        assert_eq!(open.bursts, 3);
+        match observe_balance_sample(&open, &balanced(5, 3), &c, 3).expect("obs") {
+            BalanceAttemptStep::Finished(r) => {
+                assert_eq!(r.outcome, BalanceAttemptOutcome::Success);
+                assert_eq!(r.bursts, 5);
+                assert_eq!(r.balanced_bursts, 5);
+                assert!((r.balanced_s - 0.25).abs() < 1e-9);
+                assert_eq!(r.time_to_first_violation_bursts, None);
+            }
+            BalanceAttemptStep::Continue(_) => panic!("5 elapsed upright bursts must succeed"),
+        }
+    }
+
+    #[test]
+    fn balanced_bursts_is_the_longest_upright_streak() {
+        // up x3, tilt, up x5 (last one with a lifted foot is NOT in it), foot lift, up x2.
+        // Streaks: 3, 5, 2. Cap 12 truncates at the 12th burst.
+        let mut c = criterion();
+        c.hold_bursts = 100;
+        c.attempt_burst_cap = 12;
+        let mut open = OpenBalanceAttempt::fresh();
+        for seq in 1..=3 {
+            open = fed(&open, &balanced(seq, 1), &c);
+        }
+        open = fed(&open, &sample(4, 1, 30.0), &c);
+        for seq in 5..=9 {
+            open = fed(&open, &balanced(seq, 1), &c);
+        }
+        let mut lifted = balanced(10, 1);
+        lifted.left_foot_contact = false;
+        open = fed(&open, &lifted, &c);
+        assert_eq!(open.longest_balanced_bursts, 5);
+        assert_eq!(open.first_violation_burst, Some(3));
+        open = fed(&open, &balanced(11, 1), &c);
+        match observe_balance_sample(&open, &balanced(12, 1), &c, 1).expect("obs") {
+            BalanceAttemptStep::Finished(r) => {
+                assert_eq!(r.outcome, BalanceAttemptOutcome::Truncated);
+                assert_eq!(r.bursts, 12);
+                assert_eq!(r.balanced_bursts, 5);
+                assert!((r.balanced_s - 0.25).abs() < 1e-9);
+                assert_eq!(r.time_to_first_violation_bursts, Some(3));
+                assert!((r.time_to_first_violation_s.unwrap() - 0.15).abs() < 1e-9);
+            }
+            BalanceAttemptStep::Continue(_) => panic!("cap is 12"),
+        }
+    }
+
+    #[test]
+    fn death_burst_does_not_extend_the_balanced_run() {
+        let c = criterion();
+        let mut open = OpenBalanceAttempt::fresh();
+        open = fed(&open, &balanced(1, 1), &c);
+        let mut dead = balanced(2, 1);
+        dead.terminal = Some(BalanceTerminal::Death);
+        match observe_balance_sample(&open, &dead, &c, 1).expect("obs") {
+            BalanceAttemptStep::Finished(r) => {
+                assert_eq!(r.outcome, BalanceAttemptOutcome::Death);
+                assert_eq!(r.balanced_bursts, 1);
+                assert_eq!(r.time_to_first_violation_bursts, Some(1));
+            }
+            BalanceAttemptStep::Continue(_) => panic!("death ends the attempt"),
+        }
+    }
+
+    #[test]
+    fn phase_aggregates_balanced_time_overall_and_by_support() {
+        let mk = |level: f64, bursts: u32| {
+            let mut r = record(BalanceAttemptOutcome::Truncated, level, 0.5);
+            r.balanced_bursts = bursts;
+            r.balanced_s = f64::from(bursts) * 0.05;
+            r
+        };
+        let report = BalancePhaseReport::from_attempts(vec![mk(0.5, 4), mk(0.5, 10), mk(0.0, 6)])
+            .expect("report");
+        assert_eq!(report.balanced.attempts, 3);
+        assert!((report.balanced.mean_bursts - 20.0 / 3.0).abs() < 1e-9);
+        assert_eq!(report.balanced.median_bursts, 6.0);
+        assert_eq!(report.balanced.max_bursts, 10);
+        assert!((report.balanced.mean_s - (20.0 / 3.0) * 0.05).abs() < 1e-9);
+        assert!((report.balanced.median_s - 0.3).abs() < 1e-9);
+        assert!((report.balanced.max_s - 0.5).abs() < 1e-9);
+        let half = &report.balanced_by_support["0.50"];
+        assert_eq!(half.attempts, 2);
+        assert_eq!(half.mean_bursts, 7.0);
+        assert_eq!(half.median_bursts, 7.0);
+        assert_eq!(half.max_bursts, 10);
+        assert!((half.mean_s - 0.35).abs() < 1e-9);
+        let zero = &report.balanced_by_support["0.00"];
+        assert_eq!((zero.mean_bursts, zero.max_bursts), (6.0, 6));
+        let metrics = balance_phase_metrics(&report);
+        assert_eq!(metrics["balanced_bursts_max"], 10.0);
+        assert_eq!(metrics["balanced_bursts_median"], 6.0);
+        assert!((metrics["balanced_s_mean_at_support_0.50"] - 0.35).abs() < 1e-9);
+        assert_eq!(metrics["balanced_bursts_max_at_support_0.00"], 6.0);
+    }
+
+    fn need_sample(need: Option<f64>, tilt: f64, settling: bool) -> BalanceSample {
+        BalanceSample {
+            support_need: need,
+            settling,
+            ..sample(1, 1, tilt)
+        }
+    }
+
+    fn assist_step(
+        r: &mut BalanceAssistReward,
+        need: f64,
+        outcome: Option<BalanceAttemptOutcome>,
+    ) -> Vec<(AffectChannel, f64)> {
+        r.on_sample(
+            &need_sample(Some(need), 0.0, false),
+            outcome.as_ref(),
+            &criterion(),
+        )
+        .into_iter()
+        .map(|s| (s.channel, s.magnitude))
+        .collect()
+    }
+
+    #[test]
+    fn assist_reward_follows_need_sequence() {
+        let p = AffectChannel::Pain;
+        let g = AffectChannel::Pleasure;
+        let mut r = BalanceAssistReward::new();
+        assert_eq!(assist_step(&mut r, 0.05, None), vec![(g, 0.2)]);
+        assert_eq!(assist_step(&mut r, 0.3, None), vec![(p, 0.3)]);
+        assert_eq!(assist_step(&mut r, 0.6, None), vec![(p, 0.6)]);
+        let falling = assist_step(&mut r, 0.5, None);
+        assert_eq!(falling.len(), 1);
+        assert_eq!(falling[0].0, g);
+        assert!((falling[0].1 - 0.4).abs() < 1e-9);
+        // Tiny drop is below the Pleasure floor: silent.
+        assert!(assist_step(&mut r, 0.499, None).is_empty());
+        // Steady above the deadband: nothing.
+        assert!(assist_step(&mut r, 0.499, None).is_empty());
+        // Falling into the deadband: largest Pleasure (fall 1.0 capped).
+        assert_eq!(assist_step(&mut r, 0.05, None), vec![(g, 1.0)]);
+        assert_eq!(assist_step(&mut r, 0.05, None), vec![(g, 0.2)]);
+        assert_eq!(
+            assist_step(&mut r, 0.05, Some(BalanceAttemptOutcome::Success)),
+            vec![(g, 1.0)]
+        );
+        assert_eq!(
+            assist_step(&mut r, 0.05, Some(BalanceAttemptOutcome::Death)),
+            vec![(p, 1.0)]
+        );
+    }
+
+    #[test]
+    fn assist_reward_edge_cases() {
+        let c = criterion();
+        let mut r = BalanceAssistReward::new();
+        // Settling is silent; death while settling is Pain 1.
+        assert!(r
+            .on_sample(&need_sample(Some(0.9), 0.0, true), None, &c)
+            .is_empty());
+        let d = r.on_sample(
+            &need_sample(Some(0.9), 0.0, true),
+            Some(&BalanceAttemptOutcome::Death),
+            &c,
+        );
+        assert_eq!((d[0].channel, d[0].magnitude), (AffectChannel::Pain, 1.0));
+        // No support_need: falls back to tilt / max_tilt (max_tilt 15 deg): 12 deg -> 0.8.
+        let mut r = BalanceAssistReward::new();
+        let _ = r.on_sample(&need_sample(None, 2.0, false), None, &c);
+        let s = r.on_sample(&need_sample(None, 12.0, false), None, &c);
+        assert_eq!(s.len(), 1);
+        assert_eq!(s[0].channel, AffectChannel::Pain);
+        assert!((s[0].magnitude - 0.8).abs() < 1e-9);
+        // Feet up inside the deadband: no holding Pleasure.
+        let mut r = BalanceAssistReward::new();
+        let mut up = need_sample(Some(0.0), 0.0, false);
+        up.left_foot_contact = false;
+        assert!(r.on_sample(&up, None, &c).is_empty());
+        assert_eq!(BalanceAssistReward::policy_id(), "reward.balance-assist.v1");
+        assert_eq!(
+            BalanceRewardPolicy::from_mode("assist"),
+            Some(BalanceRewardPolicy::Assist)
+        );
+        assert_eq!(BalanceRewardPolicy::from_mode("none"), None);
+    }
+
+    #[test]
+    fn graduation_uses_median_balanced_s_when_set() {
+        let mut config = cfg();
+        config.graduate_balanced_s = Some(1.0);
+        // Median of [0.2, 1.5, 2.0] = 1.5 >= 1.0 passes though only 0 successes: lowers.
+        let mut s = SupportSchedule::new(config);
+        for t in [0.2, 1.5, 2.0] {
+            s.record_attempt(BalanceAttemptOutcome::Truncated, t);
+        }
+        assert!((s.current_level() - 0.9).abs() < 1e-9);
+        // Median of [0.2, 0.3, 5.0] = 0.3 < 1.0 fails even with 2 successes: holds.
+        let mut s = SupportSchedule::new(config);
+        s.record_attempt(BalanceAttemptOutcome::Success, 5.0);
+        s.record_attempt(BalanceAttemptOutcome::Success, 0.3);
+        s.record_attempt(BalanceAttemptOutcome::Death, 0.2);
+        assert!((s.current_level() - 1.0).abs() < 1e-9);
+        // None keeps the success-rate rule: 2 of 3 successes lowers.
+        let mut s = SupportSchedule::new(cfg());
+        s.record_attempt(BalanceAttemptOutcome::Success, 0.0);
+        s.record_attempt(BalanceAttemptOutcome::Success, 0.0);
+        s.record_attempt(BalanceAttemptOutcome::Death, 0.0);
+        assert!((s.current_level() - 0.9).abs() < 1e-9);
+        let mut bad = criterion();
+        bad.graduate_balanced_s = Some(0.0);
+        assert!(bad.validate().is_err());
+    }
+
+    #[test]
+    fn new_sample_fields_parse_and_harness_fields_are_sent_only_when_set() {
+        let old = serde_json::json!({
+            "seq": 1, "seed": 1, "tilt_deg": 1.0,
+            "left_foot_contact": true, "right_foot_contact": true, "terminal": null
+        });
+        let parsed: BalanceSample = serde_json::from_value(old).expect("old sample");
+        assert_eq!(parsed.support_need, None);
+        assert_eq!(parsed.support_force_n, None);
+        let new = serde_json::json!({
+            "seq": 1, "seed": 1, "tilt_deg": 1.0, "left_foot_contact": true,
+            "right_foot_contact": true, "terminal": null, "support_need": 0.0,
+            "support_effort": 0.5, "support_torque_nm": 1.5, "support_force_n": 2.5
+        });
+        let parsed: BalanceSample = serde_json::from_value(new).expect("new sample");
+        assert_eq!(parsed.support_need, Some(0.0));
+        assert_eq!(parsed.support_effort, Some(0.5));
+        assert_eq!(parsed.support_torque_nm, Some(1.5));
+        assert_eq!(parsed.support_force_n, Some(2.5));
+        let keys = [
+            "support_height_stiffness_n_per_m",
+            "support_height_damping_n_s_per_m",
+            "support_gravity_comp",
+            "support_xy_stiffness_n_per_m",
+            "support_xy_damping_n_s_per_m",
+        ];
+        let mut c = criterion();
+        let body = begin_attempt_request(1, &c, &BalanceAttemptParams::from_criterion(&c, 0.5));
+        for k in keys {
+            assert!(body.get(k).is_none(), "{k} must be absent when unset");
+        }
+        c.support_height_stiffness_n_per_m = Some(100.0);
+        c.support_height_damping_n_s_per_m = Some(10.0);
+        c.support_gravity_comp = Some(0.8);
+        c.support_xy_stiffness_n_per_m = Some(50.0);
+        c.support_xy_damping_n_s_per_m = Some(5.0);
+        let body = begin_attempt_request(1, &c, &BalanceAttemptParams::from_criterion(&c, 0.5));
+        assert_eq!(body["support_height_stiffness_n_per_m"], 100.0);
+        assert_eq!(body["support_height_damping_n_s_per_m"], 10.0);
+        assert_eq!(body["support_gravity_comp"], 0.8);
+        assert_eq!(body["support_xy_stiffness_n_per_m"], 50.0);
+        assert_eq!(body["support_xy_damping_n_s_per_m"], 5.0);
     }
 }
