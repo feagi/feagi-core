@@ -439,4 +439,3 @@ pub trait ConnectomeService: Send + Sync {
         dst_area_id: &str,
     ) -> ServiceResult<AreaIncomingWeightsResetInfo>;
 }
-

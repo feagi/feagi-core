@@ -344,7 +344,9 @@ impl ConnectomeService for RecordingConnectomeService {
         src_area_id: &str,
         dst_area_id: &str,
     ) -> ServiceResult<MappingWeightsResetInfo> {
-        self.inner.reset_mapping_weights(src_area_id, dst_area_id).await
+        self.inner
+            .reset_mapping_weights(src_area_id, dst_area_id)
+            .await
     }
 
     async fn reset_area_incoming_weights(

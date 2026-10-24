@@ -846,7 +846,15 @@ impl PlasticityService {
                             membrane_potential: 0.0,
                         });
 
-                        if final_replay_frames.is_empty() && change_encoding.is_none() {
+                        if Self::empty_replay_is_fault(
+                            final_replay_frames.is_empty(),
+                            change_encoding.is_some(),
+                            Self::memory_area_has_replay_twin(
+                                npu,
+                                *memory_area_idx,
+                                &area_config.upstream_areas,
+                            ),
+                        ) {
                             tracing::warn!(
                                 target: "plasticity",
                                 "[PLASTICITY] Burst {} reactivation area={} neuron_id={} has empty replay frames",
@@ -932,7 +940,15 @@ impl PlasticityService {
                             membrane_potential: 0.0,
                         });
 
-                        if replay_frames.is_empty() && change_encoding.is_none() {
+                        if Self::empty_replay_is_fault(
+                            replay_frames.is_empty(),
+                            change_encoding.is_some(),
+                            Self::memory_area_has_replay_twin(
+                                npu,
+                                *memory_area_idx,
+                                &area_config.upstream_areas,
+                            ),
+                        ) {
                             tracing::warn!(
                                 target: "plasticity",
                                 "[PLASTICITY] Burst {} new memory neuron area={} neuron_id={} has empty replay frames",
@@ -1110,6 +1126,29 @@ impl PlasticityService {
             }
         }
         Some(steps)
+    }
+
+    /// Empty replay frames are a fault only when this memory area has a twin to drive.
+    /// A memory area fed by another memory area does not form a twin, so an empty list is expected.
+    fn empty_replay_is_fault(
+        frames_empty: bool,
+        change_encoded: bool,
+        has_replay_twin: bool,
+    ) -> bool {
+        frames_empty && !change_encoded && has_replay_twin
+    }
+
+    fn memory_area_has_replay_twin(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        memory_area_idx: u32,
+        upstream_areas: &[u32],
+    ) -> bool {
+        let npu_lock = npu.lock().unwrap();
+        upstream_areas.iter().any(|upstream| {
+            npu_lock
+                .get_memory_twin_mapping(memory_area_idx, *upstream)
+                .is_some()
+        })
     }
 
     /// Build replay frames from dense upstream windows for pattern reconstruction.
@@ -2449,14 +2488,6 @@ impl PlasticityService {
                             is_reactivation,
                             replay_frames.len()
                         );
-                        if replay_frames.is_empty() {
-                            tracing::warn!(
-                                target: "plasticity",
-                                "[PLASTICITY-SVC] InjectMemoryNeuronToFCL area={} neuron_id={} has empty replay frames",
-                                area_idx,
-                                neuron_id
-                            );
-                        }
                     }
                     PlasticityCommand::UpdateWeightsDelta { .. } => {}
                     PlasticityCommand::UpdateStateCounters { .. } => {}
@@ -4112,5 +4143,17 @@ mod tests {
         assert_eq!(array.get_class_channels(neuron_idx), vec![2]);
         assert_eq!(array.class_channel_weight(neuron_idx, 2), Some(1.0));
         assert_eq!(array.class_channel_weight(neuron_idx, 1), None);
+    }
+
+    #[test]
+    fn empty_replay_frames_are_a_fault_only_when_a_twin_exists() {
+        assert!(!PlasticityService::empty_replay_is_fault(
+            true, false, false
+        ));
+        assert!(!PlasticityService::empty_replay_is_fault(true, true, true));
+        assert!(!PlasticityService::empty_replay_is_fault(
+            false, false, true
+        ));
+        assert!(PlasticityService::empty_replay_is_fault(true, false, true));
     }
 }

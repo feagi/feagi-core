@@ -1105,6 +1105,14 @@ impl ConnectomeManager {
         self.cortical_id_to_idx.remove(cortical_id);
         self.cortical_idx_to_id.remove(&area.cortical_idx);
 
+        // Drop the area from the homeostat registry and the modulator engine's homeostatic set,
+        // so stale neuron indices cannot later point at another area's neurons.
+        if let Some(npu) = &self.npu {
+            if let Ok(mut npu_lock) = npu.lock() {
+                npu_lock.remove_rate_modulated_leak(area.cortical_idx);
+            }
+        }
+
         self.refresh_cortical_area_hashes(true, true);
         Ok(())
     }
@@ -6277,6 +6285,46 @@ impl ConnectomeManager {
         self.npu.as_ref()
     }
 
+    /// Rebuild the rate-modulated leak homeostat from the live cortical areas.
+    ///
+    /// Clears the NPU registry, then registers every area whose properties carry an enabled
+    /// `rate_modulated_leak` (neuron indices from the NPU, base leak from the area). Used after a
+    /// full connectome snapshot apply, which replaces neuron storage and so invalidates the
+    /// registry's neuron indices. Returns the number of areas registered.
+    pub fn reregister_rate_modulated_leak_for_all_areas(&self) -> usize {
+        use crate::models::CorticalAreaExt;
+        let Some(npu) = &self.npu else {
+            return 0;
+        };
+        let Ok(mut npu_lock) = npu.lock() else {
+            return 0;
+        };
+        npu_lock.clear_rate_modulated_leak();
+        let mut homeostatic_areas = ahash::AHashSet::new();
+        for area in self.cortical_areas.values() {
+            let Some(value) = area.properties.get("rate_modulated_leak") else {
+                continue;
+            };
+            let idxs: Vec<usize> = npu_lock
+                .get_neurons_in_cortical_area(area.cortical_idx)
+                .into_iter()
+                .map(|id| id as usize)
+                .collect();
+            npu_lock.sync_rate_modulated_leak_from_cortical_property(
+                area.cortical_idx,
+                value,
+                area.leak_coefficient(),
+                idxs,
+            );
+            if npu_lock.has_rate_modulated_leak(area.cortical_idx) {
+                homeostatic_areas.insert(area.cortical_idx);
+            }
+        }
+        let count = homeostatic_areas.len();
+        npu_lock.set_homeostatic_leak_areas(homeostatic_areas);
+        count
+    }
+
     /// Re-register NPU runtime that `apply_connectome_snapshot` clears.
     ///
     /// Neurons, synapses, and LTM rows are restored from the snapshot. Twin routes,
@@ -10431,6 +10479,76 @@ mod tests {
         );
     }
 
+    fn homeostat_test_manager() -> (
+        ConnectomeManager,
+        Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        CorticalID,
+        u32,
+    ) {
+        use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CustomCorticalType,
+        };
+
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(
+                StdRuntime::new(),
+                feagi_npu_burst_engine::backend::CPUBackend::new(),
+                64,
+                64,
+                8,
+            )
+            .unwrap(),
+            "homeostat-test-npu",
+        ));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(npu.clone());
+        let area_id = CorticalID::try_from_bytes(b"chomeo01").unwrap();
+        let mut area = CorticalArea::new(
+            area_id,
+            0,
+            "homeostat".to_string(),
+            CorticalAreaDimensions::new(2, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        area.properties.insert(
+            "rate_modulated_leak".to_string(),
+            serde_json::json!({ "enabled": true }),
+        );
+        let idx = manager.add_cortical_area(area).unwrap();
+        manager.create_neurons_for_area(&area_id).unwrap();
+        (manager, npu, area_id, idx)
+    }
+
+    #[test]
+    fn remove_cortical_area_clears_homeostat_registration() {
+        let (mut manager, npu, area_id, idx) = homeostat_test_manager();
+        npu.lock()
+            .unwrap()
+            .set_homeostatic_leak_areas([idx].into_iter().collect());
+        assert!(npu.lock().unwrap().has_rate_modulated_leak(idx));
+        assert!(npu.lock().unwrap().is_homeostatic_leak_area(idx));
+
+        manager.remove_cortical_area(&area_id).unwrap();
+
+        assert!(!npu.lock().unwrap().has_rate_modulated_leak(idx));
+        assert!(!npu.lock().unwrap().is_homeostatic_leak_area(idx));
+    }
+
+    #[test]
+    fn reregister_rate_modulated_leak_rebuilds_registry_from_areas() {
+        let (manager, npu, _area_id, idx) = homeostat_test_manager();
+        npu.lock().unwrap().clear_rate_modulated_leak();
+        assert!(!npu.lock().unwrap().has_rate_modulated_leak(idx));
+
+        assert_eq!(manager.reregister_rate_modulated_leak_for_all_areas(), 1);
+
+        assert!(npu.lock().unwrap().has_rate_modulated_leak(idx));
+        assert!(npu.lock().unwrap().is_homeostatic_leak_area(idx));
+    }
+
     #[test]
     fn test_singleton_instance() {
         let instance1 = ConnectomeManager::instance();
@@ -14109,8 +14227,8 @@ mod tests {
         assert!(manager.build_memory_scan_config(&mem_id).is_none());
     }
 
-    fn classifier_reward_test_npu() -> Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>
-    {
+    fn classifier_reward_test_npu(
+    ) -> Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>> {
         use feagi_npu_burst_engine::modulator_engine::ModulatorBinding;
         use feagi_structures::genomic::ModulatorKind;
         let npu = Arc::new(feagi_npu_burst_engine::TracingMutex::new(
@@ -14199,6 +14317,10 @@ mod tests {
             .lock()
             .unwrap()
             .allocate_modulation_group(&["pain".to_string()]);
-        assert_eq!(next, baseline + 1, "rejected rule leaked a modulation group");
+        assert_eq!(
+            next,
+            baseline + 1,
+            "rejected rule leaked a modulation group"
+        );
     }
 }

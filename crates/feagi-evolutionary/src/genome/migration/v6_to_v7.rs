@@ -169,9 +169,7 @@ fn migrate_gate_sources(genome: &mut Value) -> Result<usize, String> {
             .ok_or_else(|| "blueprint must be an object".to_string())?;
         let mut y = 2 * blueprint
             .keys()
-            .filter(|k| {
-                CorticalID::try_from_base_64(k).is_ok_and(|id| id.is_modulator_driver())
-            })
+            .filter(|k| CorticalID::try_from_base_64(k).is_ok_and(|id| id.is_modulator_driver()))
             .count() as i32;
         for (source_id, (instance_id, driver_id)) in &source_to_instance {
             blueprint.insert(driver_id.clone(), driver_area(instance_id, y));
@@ -293,7 +291,10 @@ mod tests {
             src["Y2RzdDAwMDE="][1]["modulators"],
             json!(["eta", "gate_open_door"])
         );
-        assert_eq!(src["Y2RzdDAwMDI="][0]["modulators"], json!(["gate_open_door"]));
+        assert_eq!(
+            src["Y2RzdDAwMDI="][0]["modulators"],
+            json!(["gate_open_door"])
+        );
 
         let modulators = genome["modulators"].as_object().unwrap();
         assert_eq!(modulators.len(), 1);

@@ -393,7 +393,6 @@ pub struct RustNPU<
     /// @cursor:critical-path — idle when no modulator bindings and no spike trains are registered.
     modulator_engine: std::sync::Mutex<ModulatorEngine>,
 
-
     /// Classifier class pairs checked against this burst's fire queue.
     classifier_error_watches: std::sync::RwLock<Vec<ClassifierErrorWatch>>,
 }
@@ -805,6 +804,8 @@ impl<
             .store(POWER_NEURON_UNSET, std::sync::atomic::Ordering::SeqCst);
         *self.memory_neuron_assoc_predicate.write().unwrap() = None;
         *self.memory_neuron_longterm_predicate.write().unwrap() = None;
+        // Registry holds neuron storage indices, which this reset invalidates.
+        self.rate_modulated_leak.lock().unwrap().clear();
 
         Ok(())
     }
@@ -4417,6 +4418,15 @@ impl<
                 updated_count += 1;
             }
         }
+        // Burst path locks the registry before storage: release storage first.
+        drop(neuron_storage_write);
+
+        // An explicit leak edit is the homeostat's new starting point, not something to overwrite.
+        if updated_count > 0 {
+            if let Ok(mut g) = self.rate_modulated_leak.lock() {
+                g.reseed_leak(cortical_area, leak);
+            }
+        }
 
         updated_count
     }
@@ -4562,8 +4572,51 @@ impl<
         base_leak: f32,
         neuron_global_indices: Vec<usize>,
     ) {
+        let registered = match self.rate_modulated_leak.lock() {
+            Ok(mut g) => {
+                g.sync_cortical(cortical_idx, value, base_leak, neuron_global_indices);
+                g.contains(cortical_idx)
+            }
+            Err(_) => false,
+        };
+        // The homeostat reads firing from the main fire ledger, so the area must be tracked.
+        // Registry lock is released first: the burst path locks fire_structures, then the registry.
+        if registered {
+            if let Ok(mut fs) = self.fire_structures.lock() {
+                // Never shrink an existing window; only track when absent.
+                if fs.fire_ledger.get_tracked_window(cortical_idx).is_err() {
+                    if let Err(e) = fs.fire_ledger.track_area(cortical_idx, 1) {
+                        tracing::warn!(
+                            "rate_modulated_leak: failed to track cortical_idx {} in fire ledger: {}",
+                            cortical_idx,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Whether a cortical area is registered with the rate-modulated leak homeostat.
+    pub fn has_rate_modulated_leak(&self, cortical_idx: u32) -> bool {
+        self.rate_modulated_leak
+            .lock()
+            .map(|g| g.contains(cortical_idx))
+            .unwrap_or(false)
+    }
+
+    /// Whether the modulator engine treats a cortical area as a homeostatic leak area.
+    pub fn is_homeostatic_leak_area(&self, cortical_idx: u32) -> bool {
+        self.modulator_engine
+            .lock()
+            .map(|m| m.is_homeostatic_leak_area(cortical_idx))
+            .unwrap_or(false)
+    }
+
+    /// Clear the whole rate-modulated leak registry (e.g. before re-registering after an import).
+    pub fn clear_rate_modulated_leak(&mut self) {
         if let Ok(mut g) = self.rate_modulated_leak.lock() {
-            g.sync_cortical(cortical_idx, value, base_leak, neuron_global_indices);
+            g.clear();
         }
     }
 
@@ -4571,6 +4624,9 @@ impl<
     pub fn remove_rate_modulated_leak(&mut self, cortical_idx: u32) {
         if let Ok(mut g) = self.rate_modulated_leak.lock() {
             g.remove(cortical_idx);
+        }
+        if let Ok(mut m) = self.modulator_engine.lock() {
+            m.remove_homeostatic_leak_area(cortical_idx);
         }
     }
 
@@ -6135,7 +6191,8 @@ impl<
         // forward synapse synthesis between concrete memory neuron ids; only the reverse
         // direction should require an explicit reverse mapping.
         let mut created_synapses = false;
-        for (key @ (_src_area, dst_area), params) in &mappings {
+        let mut created_by_mapping: Vec<(u32, u32, usize)> = Vec::new();
+        for (key @ (src_area, dst_area), params) in &mappings {
             if params.instance_reward {
                 continue;
             }
@@ -6275,6 +6332,7 @@ impl<
                     })?;
                 created_synapses = true;
                 synaptic_plasticity_committed = true;
+                created_by_mapping.push((*src_area, *dst_area, n_new));
             }
         }
 
@@ -6291,6 +6349,21 @@ impl<
             let state = feagi_state_manager::StateManager::instance();
             if let Some(manager) = state.try_read() {
                 manager.note_synaptic_plasticity_change();
+                // Area property counts only move when morphology builds synapses.
+                // Learned associative edges are created here, so the same counters
+                // have to move or a memory area keeps reporting 0.
+                for (src_idx, dst_idx, count) in created_by_mapping {
+                    let created_u32 = u32::try_from(count).map_err(|_| {
+                        FeagiError::RuntimeError(format!("created synapse count overflow: {count}"))
+                    })?;
+                    if let Some(src_id) = self.cortical_id_for_index(src_idx) {
+                        manager.add_cortical_area_outgoing_synapses(&src_id.as_base_64(), count);
+                    }
+                    if let Some(dst_id) = self.cortical_id_for_index(dst_idx) {
+                        manager.add_cortical_area_incoming_synapses(&dst_id.as_base_64(), count);
+                    }
+                    manager.get_core_state().add_synapse_count(created_u32);
+                }
             };
         }
 
@@ -8065,8 +8138,23 @@ mod tests {
         npu.register_cortical_area(6, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(7, CoreCorticalType::Power.to_cortical_id().as_base_64());
         let mk = |npu: &mut RustNPU<_, f32, _>, area: u32| {
-            npu.add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, area, 0, 0, 0)
-                .unwrap()
+            npu.add_neuron(
+                10.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                0,
+                1.0,
+                0,
+                0,
+                true,
+                area,
+                0,
+                0,
+                0,
+            )
+            .unwrap()
         };
         let srcs = [mk(&mut npu, 5), mk(&mut npu, 5)];
         let others = [mk(&mut npu, 7), mk(&mut npu, 7)];

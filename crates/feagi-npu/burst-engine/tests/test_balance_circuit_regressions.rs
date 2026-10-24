@@ -95,6 +95,18 @@ fn memory_to_custom_associative_stdp_creates_synapses() {
         "memory -> custom associative mapping must create one synapse"
     );
     assert_eq!(out[0].0, dst.0);
+
+    let area_id = CorticalID::try_from_bytes(b"mmem0001")
+        .unwrap()
+        .as_base_64();
+    let stats = feagi_state_manager::StateManager::instance()
+        .read()
+        .get_cortical_area_stats(&area_id)
+        .expect("source area synapse stats");
+    assert!(
+        stats.outgoing_synapse_count >= 1,
+        "learned associative synapses must count on the memory source area"
+    );
 }
 
 /// Item 3: a plastic mapping that subscribes to `synaptic.reward` must not potentiate

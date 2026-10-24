@@ -11,7 +11,8 @@ use ahash::{AHashMap, AHashSet};
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_runtime::NeuronStorage;
 use feagi_structures::genomic::{
-    gate_factor, modulator_signal, multiplicative_factor, scale_baseline, summed_reward, ModulatorKind,
+    gate_factor, modulator_signal, multiplicative_factor, scale_baseline, summed_reward,
+    ModulatorKind,
 };
 
 use crate::fire_structures::FireQueue;
@@ -118,7 +119,10 @@ impl ModulatorEngine {
             .map(|(group, _)| *group)
             .collect();
         for group in gated {
-            self.active.transmission_by_group.entry(group).or_insert(0.0);
+            self.active
+                .transmission_by_group
+                .entry(group)
+                .or_insert(0.0);
         }
     }
 
@@ -169,6 +173,16 @@ impl ModulatorEngine {
 
     pub fn set_homeostatic_leak_areas(&mut self, areas: AHashSet<u32>) {
         self.homeostatic_leak_areas = areas;
+    }
+
+    /// Whether `cortical_idx` is currently a homeostatic leak area.
+    pub fn is_homeostatic_leak_area(&self, cortical_idx: u32) -> bool {
+        self.homeostatic_leak_areas.contains(&cortical_idx)
+    }
+
+    /// Drop one area from the homeostatic leak set.
+    pub fn remove_homeostatic_leak_area(&mut self, cortical_idx: u32) {
+        self.homeostatic_leak_areas.remove(&cortical_idx);
     }
 
     /// Assign a modulation group for a mapping rule. Returns 0 when the rule
@@ -853,7 +867,10 @@ mod tests {
     #[test]
     fn multiple_gates_open_if_any_is_open() {
         let mut engine = ModulatorEngine::default();
-        engine.set_bindings(vec![gate_binding("a", 1, false), gate_binding("b", 2, false)]);
+        engine.set_bindings(vec![
+            gate_binding("a", 1, false),
+            gate_binding("b", 2, false),
+        ]);
         let group = engine.allocate_group(&["a".into(), "b".into()]);
         assert_eq!(gate_signals(&engine, group, &[(1, 0.0), (2, 0.0)]), 0.0);
         assert!((gate_signals(&engine, group, &[(1, 0.0), (2, 1.0)]) - 1.0).abs() < 1e-6);
@@ -909,7 +926,10 @@ mod tests {
         assert!(!engine.ids_include_reward(&["eta".into()]));
         assert!(!engine.ids_include_reward(&["unknown".into()]));
         assert!(!engine.ids_include_reward(&[]));
-        assert!(engine.group_instance_ids(1).is_empty(), "no group allocated");
+        assert!(
+            engine.group_instance_ids(1).is_empty(),
+            "no group allocated"
+        );
     }
 
     fn reward_binding(id: &str, idx: u32) -> ModulatorBinding {

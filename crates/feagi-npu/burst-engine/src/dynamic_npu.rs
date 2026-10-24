@@ -650,6 +650,21 @@ where
         dispatch_mut!(self, remove_rate_modulated_leak(cortical_idx));
     }
 
+    /// Whether a cortical area is registered with the homeostat.
+    pub fn has_rate_modulated_leak(&self, cortical_idx: u32) -> bool {
+        dispatch!(self, has_rate_modulated_leak(cortical_idx))
+    }
+
+    /// Whether the modulator engine treats a cortical area as a homeostatic leak area.
+    pub fn is_homeostatic_leak_area(&self, cortical_idx: u32) -> bool {
+        dispatch!(self, is_homeostatic_leak_area(cortical_idx))
+    }
+
+    /// Clear the whole homeostat registry.
+    pub fn clear_rate_modulated_leak(&mut self) {
+        dispatch_mut!(self, clear_rate_modulated_leak());
+    }
+
     pub fn update_cortical_area_excitability(
         &mut self,
         cortical_area: u32,

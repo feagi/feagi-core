@@ -1328,6 +1328,16 @@ impl GenomeService for GenomeServiceImpl {
                 }
             }
         }
+
+        // Reject a malformed homeostat config before anything is applied; null clears it.
+        if let Some(value) = changes.get("rate_modulated_leak") {
+            if !value.is_null() {
+                feagi_npu_burst_engine::rate_modulated_leak::RateModulatedLeakConfig::validate(
+                    value,
+                )
+                .map_err(ServiceError::InvalidInput)?;
+            }
+        }
         let needs_modulator_sync = changes.contains_key("modulators")
             || changes.contains_key("spike_train")
             || changes.contains_key("rate_modulated_leak");
@@ -5691,6 +5701,78 @@ mod tests {
             .drain_all()
             .iter()
             .any(|u| u.parameter_name == "neuron_excitability"));
+    }
+
+    #[tokio::test]
+    async fn update_cortical_area_rejects_invalid_rate_modulated_leak() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::ParameterUpdateQueue;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let area_id = CorticalID::try_from_bytes(b"crmlval1").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            10,
+            "rml-validation-test".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        connectome.write().add_cortical_area(area).unwrap();
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(connectome.clone(), queue.clone());
+
+        let bad_configs = [
+            serde_json::json!({ "enabled": true, "rate_ema_tau_bursts": 0.0 }),
+            serde_json::json!({ "enabled": true, "gain": -1.0 }),
+            serde_json::json!({ "enabled": true, "leak_min": 0.9, "leak_max": 0.1 }),
+            serde_json::json!("on"),
+        ];
+        for bad in bad_configs {
+            let err = svc
+                .update_cortical_area(
+                    &area_id.as_base_64(),
+                    HashMap::from([("rate_modulated_leak".to_string(), bad.clone())]),
+                )
+                .await
+                .expect_err("invalid rate_modulated_leak must be rejected");
+            assert!(
+                matches!(err, super::ServiceError::InvalidInput(_)),
+                "{bad}: got {err:?}"
+            );
+        }
+        assert!(
+            queue.drain_all().is_empty(),
+            "rejected update must queue nothing"
+        );
+        assert!(
+            !connectome
+                .read()
+                .get_cortical_area(&area_id)
+                .expect("area")
+                .properties
+                .contains_key("rate_modulated_leak"),
+            "rejected update must not touch the area"
+        );
+
+        svc.update_cortical_area(
+            &area_id.as_base_64(),
+            HashMap::from([(
+                "rate_modulated_leak".to_string(),
+                serde_json::json!({ "enabled": true, "gain": 0.1 }),
+            )]),
+        )
+        .await
+        .expect("valid rate_modulated_leak is accepted");
     }
 
     #[tokio::test]

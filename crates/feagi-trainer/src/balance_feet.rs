@@ -1,13 +1,14 @@
 //! Balance-on-feet co-agent loop.
 //!
-//! The embodiment controller owns the biped. This module homes nothing itself:
-//! it asks the controller to begin an attempt, writes the upright goal into the
-//! goal area through the caller, and scores torso tilt plus both feet on the
-//! floor. Death and a misc reset end the attempt. The session continues until
-//! the phase seeds are done.
+//! The embodiment controller knows no robot and no task: it offers generic physics
+//! primitives (`get_model_info`, `reset_episode`, body springs, body pulses, `measure`).
+//! This module owns every balance decision: spring gain sizing, the support level
+//! schedule, settling, perturbation pulses, support need and effort, and scoring of torso
+//! tilt plus all contact bodies on the floor. Death and a misc reset end the attempt. The
+//! session continues until the phase seeds are done.
 
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
@@ -30,10 +31,9 @@ fn default_support_deadband_deg() -> f64 {
 fn default_perturb_torque_nm() -> f64 {
     0.3
 }
-fn default_perturb_duration_bursts() -> u32 {
-    2
+fn default_perturb_duration_s() -> f64 {
+    0.1
 }
-
 fn default_support_start() -> f64 {
     1.0
 }
@@ -43,8 +43,8 @@ fn default_support_step() -> f64 {
 fn default_support_min() -> f64 {
     0.0
 }
-fn default_settle_bursts() -> u32 {
-    10
+fn default_settle_s() -> f64 {
+    0.5
 }
 fn default_attempts_per_level() -> u32 {
     3
@@ -52,37 +52,52 @@ fn default_attempts_per_level() -> u32 {
 fn default_graduate_success_rate() -> f64 {
     0.66
 }
-fn default_support_max_stiffness() -> f64 {
-    20.0
-}
-fn default_support_max_damping() -> f64 {
-    0.2
-}
 fn default_burst_period_s() -> f64 {
     0.05
 }
-fn default_physics_steps_per_burst() -> u32 {
-    25
+fn default_lookahead_s() -> f64 {
+    0.1
+}
+
+/// Whole bursts that cover `seconds` at `burst_period_s` (at least 1). This is the one place
+/// seconds become bursts, so a duration keeps its meaning when the burst rate changes.
+pub fn bursts_for_seconds(seconds: f64, burst_period_s: f64) -> u32 {
+    if !(seconds.is_finite() && burst_period_s.is_finite()) || burst_period_s <= 0.0 {
+        return 1;
+    }
+    let bursts = (seconds / burst_period_s - 1.0e-9).ceil().max(1.0);
+    if bursts >= f64::from(u32::MAX) {
+        u32::MAX
+    } else {
+        bursts as u32
+    }
 }
 
 /// Operator criterion for one balance-on-feet session.
 ///
-/// Every field after `attempt_burst_cap` is optional on the wire and has a default, but Rust
+/// The controller knows no robot and no task: this struct owns every decision. All durations
+/// are in seconds of simulated time and are converted to bursts with the live burst period
+/// (`burst_period_s`, set by the caller from the running FEAGI burst rate). Spring gains are
+/// sized by the Trainer from the model (see [`size_spring_gains`]); each `support_*` gain
+/// override that is `Some` wins over the sized value.
+///
+/// Every field after `attempt_cap_s` is optional on the wire and has a default, but Rust
 /// struct literals must name them all: use [`BalanceFeetCriterion::new`] and override fields.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BalanceFeetCriterion {
-    /// Body whose +Z axis is compared with world up.
+    /// Body whose +Z axis is compared with world up and which carries the support spring.
     pub torso_body: String,
-    /// Body that owns the left foot collision geoms.
-    pub left_foot_body: String,
-    /// Body that owns the right foot collision geoms.
-    pub right_foot_body: String,
+    /// Bodies that must touch the world (any count). Upright needs every one down.
+    pub contact_bodies: Vec<String>,
+    /// Keyframe the controller resets to at the start of each attempt; empty = model default.
+    #[serde(default)]
+    pub reset_keyframe: String,
     /// Maximum lean from upright, in degrees, that still counts as balanced.
     pub max_tilt_deg: f64,
-    /// Consecutive balanced bursts required to accept the attempt.
-    pub hold_bursts: u32,
-    /// Bursts after which an attempt that has not succeeded is truncated.
-    pub attempt_burst_cap: u32,
+    /// Seconds of continuous balance that accept the attempt.
+    pub hold_s: f64,
+    /// Seconds after which an attempt that has not succeeded is truncated.
+    pub attempt_cap_s: f64,
     /// Support level of the first train block (0..1). Default 1.0.
     #[serde(default = "default_support_start")]
     pub support_start: f64,
@@ -92,60 +107,60 @@ pub struct BalanceFeetCriterion {
     /// Lowest support level. The test phase runs at this level. Default 0.0.
     #[serde(default = "default_support_min")]
     pub support_min: f64,
-    /// Bursts the controller holds full support after a reset (samples flagged settling).
-    #[serde(default = "default_settle_bursts")]
-    pub settle_bursts: u32,
+    /// Seconds the spring holds full support after a reset (samples flagged settling).
+    #[serde(default = "default_settle_s")]
+    pub settle_s: f64,
     /// Attempts per support block. Default 3.
     #[serde(default = "default_attempts_per_level")]
     pub attempts_per_level: u32,
     /// Block success rate needed to lower support. Default 0.66.
     #[serde(default = "default_graduate_success_rate")]
     pub graduate_success_rate: f64,
-    /// Torso restoring stiffness at support 1.0, N*m/rad. Default 20.0.
-    #[serde(default = "default_support_max_stiffness")]
-    pub support_max_stiffness_nm_per_rad: f64,
-    /// Torso restoring damping at support 1.0, N*m*s/rad. Default 0.2.
-    #[serde(default = "default_support_max_damping")]
-    pub support_max_damping_nm_s_per_rad: f64,
-    /// FEAGI burst period in seconds; the caller must set it to the real burst period.
+    /// Live FEAGI burst period in seconds; the caller sets it from the running burst rate.
     #[serde(default = "default_burst_period_s")]
     pub burst_period_s: f64,
-    /// Physics steps per burst. The controller publishes one sample per physics step and does
-    /// not report its timestep, so bursts are decimated by `seq`: a sample is a new burst only
-    /// when `seq` advanced by at least this many steps since the last counted burst.
-    /// Default 25 = 0.05 s burst / 0.002 s physics step.
-    #[serde(default = "default_physics_steps_per_burst")]
-    pub physics_steps_per_burst: u32,
-    /// Tilt deadband in degrees inside which the support torque is zero. Default 6.0.
+    /// Tilt deadband in degrees inside which the spring torque is zero. Default 6.0.
     #[serde(default = "default_support_deadband_deg")]
     pub support_deadband_deg: f64,
-    /// Bursts between perturbation pulses; 0 turns perturbation off. Default 0.
+    /// Lookahead in seconds of the support-need prediction (tilt + omega * lookahead). Default 0.1.
+    #[serde(default = "default_lookahead_s")]
+    pub need_lookahead_s: f64,
+    /// Seconds between perturbation pulses (jittered +-50%); 0 turns perturbation off.
     #[serde(default)]
-    pub perturb_interval_bursts: u32,
+    pub perturb_interval_s: f64,
     /// Perturbation pulse torque, N*m. Default 0.3.
     #[serde(default = "default_perturb_torque_nm")]
     pub perturb_torque_nm: f64,
-    /// Perturbation pulse length in bursts. Default 2.
-    #[serde(default = "default_perturb_duration_bursts")]
-    pub perturb_duration_bursts: u32,
+    /// Perturbation pulse length in seconds. Default 0.1.
+    #[serde(default = "default_perturb_duration_s")]
+    pub perturb_duration_s: f64,
     /// Graduation by time balanced: when `Some`, a support level passes when the MEDIAN
     /// `balanced_s` over that level's attempts is >= this value (seconds), instead of the
     /// success rate. `None` keeps the `graduate_success_rate` rule.
     #[serde(default)]
     pub graduate_balanced_s: Option<f64>,
-    /// Harness vertical (height) stiffness, N/m. Sent in `begin_balance_attempt` only when set.
+    /// Override: torso CoM height above the mean contact point used for sizing, m.
+    #[serde(default)]
+    pub support_com_height_m: Option<f64>,
+    /// Override: rotational stiffness k_rot, N*m/rad.
+    #[serde(default)]
+    pub support_rot_stiffness_nm_per_rad: Option<f64>,
+    /// Override: rotational damping d_rot, N*m*s/rad.
+    #[serde(default)]
+    pub support_rot_damping_nm_s_per_rad: Option<f64>,
+    /// Override: vertical stiffness k_lin_z, N/m.
     #[serde(default)]
     pub support_height_stiffness_n_per_m: Option<f64>,
-    /// Harness vertical (height) damping, N*s/m. Sent only when set.
+    /// Override: vertical damping d_lin_z, N*s/m.
     #[serde(default)]
     pub support_height_damping_n_s_per_m: Option<f64>,
-    /// Harness gravity compensation fraction. Sent only when set.
+    /// Override: gravity compensation fraction (0..1). Default 1.0.
     #[serde(default)]
     pub support_gravity_comp: Option<f64>,
-    /// Harness horizontal (xy) stiffness, N/m. Sent only when set.
+    /// Override: horizontal stiffness k_lin_xy, N/m.
     #[serde(default)]
     pub support_xy_stiffness_n_per_m: Option<f64>,
-    /// Harness horizontal (xy) damping, N*s/m. Sent only when set.
+    /// Override: horizontal damping d_lin_xy, N*s/m.
     #[serde(default)]
     pub support_xy_damping_n_s_per_m: Option<f64>,
 }
@@ -181,43 +196,53 @@ impl Default for SupportConfig {
 }
 
 impl BalanceFeetCriterion {
-    /// Criterion with the support, settle and decimation fields at their defaults.
+    /// Criterion with the support, settle and perturbation fields at their defaults.
     pub fn new(
         torso_body: impl Into<String>,
-        left_foot_body: impl Into<String>,
-        right_foot_body: impl Into<String>,
+        contact_bodies: Vec<String>,
         max_tilt_deg: f64,
-        hold_bursts: u32,
-        attempt_burst_cap: u32,
+        hold_s: f64,
+        attempt_cap_s: f64,
     ) -> Self {
         Self {
             torso_body: torso_body.into(),
-            left_foot_body: left_foot_body.into(),
-            right_foot_body: right_foot_body.into(),
+            contact_bodies,
+            reset_keyframe: String::new(),
             max_tilt_deg,
-            hold_bursts,
-            attempt_burst_cap,
+            hold_s,
+            attempt_cap_s,
             support_start: default_support_start(),
             support_step: default_support_step(),
             support_min: default_support_min(),
-            settle_bursts: default_settle_bursts(),
+            settle_s: default_settle_s(),
             attempts_per_level: default_attempts_per_level(),
             graduate_success_rate: default_graduate_success_rate(),
-            support_max_stiffness_nm_per_rad: default_support_max_stiffness(),
-            support_max_damping_nm_s_per_rad: default_support_max_damping(),
             burst_period_s: default_burst_period_s(),
-            physics_steps_per_burst: default_physics_steps_per_burst(),
             support_deadband_deg: default_support_deadband_deg(),
-            perturb_interval_bursts: 0,
+            need_lookahead_s: default_lookahead_s(),
+            perturb_interval_s: 0.0,
             perturb_torque_nm: default_perturb_torque_nm(),
-            perturb_duration_bursts: default_perturb_duration_bursts(),
+            perturb_duration_s: default_perturb_duration_s(),
             graduate_balanced_s: None,
+            support_com_height_m: None,
+            support_rot_stiffness_nm_per_rad: None,
+            support_rot_damping_nm_s_per_rad: None,
             support_height_stiffness_n_per_m: None,
             support_height_damping_n_s_per_m: None,
             support_gravity_comp: None,
             support_xy_stiffness_n_per_m: None,
             support_xy_damping_n_s_per_m: None,
         }
+    }
+
+    /// Bursts of continuous balance that accept an attempt, at the live burst period.
+    pub fn hold_bursts(&self) -> u32 {
+        bursts_for_seconds(self.hold_s, self.burst_period_s)
+    }
+
+    /// Bursts after which an unfinished attempt is truncated, at the live burst period.
+    pub fn attempt_burst_cap(&self) -> u32 {
+        bursts_for_seconds(self.attempt_cap_s, self.burst_period_s)
     }
 
     /// The schedule parameters of this criterion.
@@ -234,77 +259,139 @@ impl BalanceFeetCriterion {
 
     /// Rejects a criterion that cannot produce a success.
     pub fn validate(&self) -> Result<(), TrainerError> {
-        let names = [
-            self.torso_body.trim(),
-            self.left_foot_body.trim(),
-            self.right_foot_body.trim(),
-        ];
-        if names.iter().any(|name| name.is_empty()) {
+        let torso = self.torso_body.trim();
+        if torso.is_empty() {
             return Err(TrainerError::Config(
-                "torso and both feet must be non-empty".to_string(),
+                "torso body must be non-empty".to_string(),
             ));
         }
-        if names[0] == names[1] || names[0] == names[2] || names[1] == names[2] {
+        if self.contact_bodies.is_empty() {
             return Err(TrainerError::Config(
-                "torso, left foot, and right foot must be different bodies".to_string(),
+                "contact_bodies must name at least one body".to_string(),
             ));
+        }
+        let mut seen: Vec<&str> = Vec::new();
+        for name in &self.contact_bodies {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(TrainerError::Config(
+                    "contact_bodies must not contain an empty name".to_string(),
+                ));
+            }
+            if seen.contains(&name) {
+                return Err(TrainerError::Config(format!(
+                    "contact body {name} is listed twice"
+                )));
+            }
+            seen.push(name);
         }
         if !self.max_tilt_deg.is_finite() || self.max_tilt_deg <= 0.0 || self.max_tilt_deg > 90.0 {
             return Err(TrainerError::Config(
                 "max_tilt_deg must be a finite value in (0, 90]".to_string(),
             ));
         }
-        if self.hold_bursts == 0 {
-            return Err(TrainerError::Config("hold_bursts must be > 0".to_string()));
-        }
-        if self.attempt_burst_cap == 0 {
+        let positive = |value: f64| value.is_finite() && value > 0.0;
+        let non_negative = |value: f64| value.is_finite() && value >= 0.0;
+        if !positive(self.hold_s) {
             return Err(TrainerError::Config(
-                "attempt_burst_cap must be > 0".to_string(),
+                "hold_s must be finite and > 0".to_string(),
             ));
         }
-        if self.hold_bursts > self.attempt_burst_cap {
+        if !positive(self.attempt_cap_s) {
             return Err(TrainerError::Config(
-                "hold_bursts must be <= attempt_burst_cap".to_string(),
+                "attempt_cap_s must be finite and > 0".to_string(),
+            ));
+        }
+        if self.hold_s > self.attempt_cap_s {
+            return Err(TrainerError::Config(
+                "hold_s must be <= attempt_cap_s".to_string(),
             ));
         }
         self.support_config().validate()?;
-        if !self.support_max_stiffness_nm_per_rad.is_finite()
-            || self.support_max_stiffness_nm_per_rad <= 0.0
-        {
+        if !non_negative(self.settle_s) {
             return Err(TrainerError::Config(
-                "support_max_stiffness_nm_per_rad must be finite and > 0".to_string(),
+                "settle_s must be finite and >= 0".to_string(),
             ));
         }
-        if !self.support_max_damping_nm_s_per_rad.is_finite()
-            || self.support_max_damping_nm_s_per_rad < 0.0
-        {
-            return Err(TrainerError::Config(
-                "support_max_damping_nm_s_per_rad must be finite and >= 0".to_string(),
-            ));
-        }
-        if !self.burst_period_s.is_finite() || self.burst_period_s <= 0.0 {
+        if !positive(self.burst_period_s) {
             return Err(TrainerError::Config(
                 "burst_period_s must be finite and > 0".to_string(),
             ));
         }
-        if self.physics_steps_per_burst == 0 {
-            return Err(TrainerError::Config(
-                "physics_steps_per_burst must be > 0".to_string(),
-            ));
-        }
-        if !self.support_deadband_deg.is_finite() || self.support_deadband_deg < 0.0 {
+        if !non_negative(self.support_deadband_deg) {
             return Err(TrainerError::Config(
                 "support_deadband_deg must be finite and >= 0".to_string(),
             ));
         }
-        if !self.perturb_torque_nm.is_finite() || self.perturb_torque_nm < 0.0 {
+        if !non_negative(self.need_lookahead_s) {
+            return Err(TrainerError::Config(
+                "need_lookahead_s must be finite and >= 0".to_string(),
+            ));
+        }
+        if !non_negative(self.perturb_interval_s) {
+            return Err(TrainerError::Config(
+                "perturb_interval_s must be finite and >= 0".to_string(),
+            ));
+        }
+        if !non_negative(self.perturb_torque_nm) {
             return Err(TrainerError::Config(
                 "perturb_torque_nm must be finite and >= 0".to_string(),
             ));
         }
-        if self.perturb_duration_bursts == 0 {
+        if !positive(self.perturb_duration_s) {
             return Err(TrainerError::Config(
-                "perturb_duration_bursts must be >= 1".to_string(),
+                "perturb_duration_s must be finite and > 0".to_string(),
+            ));
+        }
+        let strictly_positive = [
+            ("support_com_height_m", self.support_com_height_m),
+            (
+                "support_rot_stiffness_nm_per_rad",
+                self.support_rot_stiffness_nm_per_rad,
+            ),
+            (
+                "support_height_stiffness_n_per_m",
+                self.support_height_stiffness_n_per_m,
+            ),
+            (
+                "support_xy_stiffness_n_per_m",
+                self.support_xy_stiffness_n_per_m,
+            ),
+        ];
+        for (name, value) in strictly_positive {
+            if value.is_some_and(|v| !positive(v)) {
+                return Err(TrainerError::Config(format!(
+                    "{name} must be finite and > 0"
+                )));
+            }
+        }
+        let damping = [
+            (
+                "support_rot_damping_nm_s_per_rad",
+                self.support_rot_damping_nm_s_per_rad,
+            ),
+            (
+                "support_height_damping_n_s_per_m",
+                self.support_height_damping_n_s_per_m,
+            ),
+            (
+                "support_xy_damping_n_s_per_m",
+                self.support_xy_damping_n_s_per_m,
+            ),
+        ];
+        for (name, value) in damping {
+            if value.is_some_and(|v| !non_negative(v)) {
+                return Err(TrainerError::Config(format!(
+                    "{name} must be finite and >= 0"
+                )));
+            }
+        }
+        if self
+            .support_gravity_comp
+            .is_some_and(|v| !v.is_finite() || !(0.0..=1.0).contains(&v))
+        {
+            return Err(TrainerError::Config(
+                "support_gravity_comp must be in [0, 1]".to_string(),
             ));
         }
         Ok(())
@@ -454,7 +541,7 @@ pub enum SupportMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BalanceAttemptOutcome {
-    /// Tilt stayed inside the limit and both feet stayed down for the required bursts.
+    /// Tilt stayed inside the limit and every contact body stayed down for the required bursts.
     Success,
     /// `_death` fired. The controller homes the body and the session continues.
     Death,
@@ -478,14 +565,14 @@ pub struct BalanceAttemptRecord {
     /// Support level of the attempt.
     #[serde(default)]
     pub support_level: f64,
-    /// Fraction of non-settling bursts with tilt inside the limit and both feet down.
+    /// Fraction of non-settling bursts with tilt inside the limit and every contact body down.
     #[serde(default)]
     pub upright_fraction: f64,
     /// Distinct perturbation pulses seen (rising edges of `perturbing`).
     #[serde(default)]
     pub perturbations: u32,
     /// Balance metric: the longest continuous run of upright bursts (tilt inside the limit and
-    /// both feet down), counted in elapsed bursts, not samples. A `Death` burst never counts.
+    /// every contact body down), counted in elapsed bursts, not samples. A `Death` burst never counts.
     #[serde(default)]
     pub balanced_bursts: u32,
     /// `balanced_bursts` times the criterion's `burst_period_s`.
@@ -500,116 +587,405 @@ pub struct BalanceAttemptRecord {
     pub time_to_first_violation_s: Option<f64>,
 }
 
-/// Parameters sent to the controller with `begin_balance_attempt`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct BalanceAttemptParams {
-    /// Support level for this attempt, 0..1.
-    pub support_level: f64,
-    /// Stiffness at support 1.0, N*m/rad.
-    pub max_stiffness: f64,
-    /// Damping at support 1.0, N*m*s/rad.
-    pub max_damping: f64,
-    /// Settling bursts at full support before the attempt.
-    pub settle_bursts: u32,
-    /// Burst period in seconds.
-    pub burst_period_s: f64,
-    /// Tilt deadband of the support torque, degrees.
-    pub support_deadband_deg: f64,
-    /// Bursts between perturbation pulses; 0 = off.
-    pub perturb_interval_bursts: u32,
-    /// Perturbation pulse torque, N*m.
-    pub perturb_torque_nm: f64,
-    /// Perturbation pulse length in bursts.
-    pub perturb_duration_bursts: u32,
-    /// Harness height stiffness, N/m; sent only when set.
-    pub height_stiffness_n_per_m: Option<f64>,
-    /// Harness height damping, N*s/m; sent only when set.
-    pub height_damping_n_s_per_m: Option<f64>,
-    /// Harness gravity compensation; sent only when set.
-    pub gravity_comp: Option<f64>,
-    /// Harness xy stiffness, N/m; sent only when set.
-    pub xy_stiffness_n_per_m: Option<f64>,
-    /// Harness xy damping, N*s/m; sent only when set.
-    pub xy_damping_n_s_per_m: Option<f64>,
+/// Model facts the Trainer needs, from the controller's `get_model_info`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ModelInfo {
+    /// Physics timestep, seconds.
+    pub timestep_s: f64,
+    /// World gravity vector, m/s^2.
+    pub gravity: [f64; 3],
+    /// Every body of the loaded model.
+    #[serde(default)]
+    pub bodies: Vec<ModelBody>,
+    /// Names of bodies that own a free joint.
+    #[serde(default)]
+    pub free_roots: Vec<String>,
+    /// Keyframe names (a bare entry is an unnamed keyframe).
+    #[serde(default)]
+    pub keyframes: Vec<serde_json::Value>,
 }
 
-impl BalanceAttemptParams {
-    /// Parameters for an attempt at `support_level` using the criterion's limits.
-    pub fn from_criterion(criterion: &BalanceFeetCriterion, support_level: f64) -> Self {
-        Self {
-            support_level,
-            max_stiffness: criterion.support_max_stiffness_nm_per_rad,
-            max_damping: criterion.support_max_damping_nm_s_per_rad,
-            settle_bursts: criterion.settle_bursts,
-            burst_period_s: criterion.burst_period_s,
-            support_deadband_deg: criterion.support_deadband_deg,
-            perturb_interval_bursts: criterion.perturb_interval_bursts,
-            perturb_torque_nm: criterion.perturb_torque_nm,
-            perturb_duration_bursts: criterion.perturb_duration_bursts,
-            height_stiffness_n_per_m: criterion.support_height_stiffness_n_per_m,
-            height_damping_n_s_per_m: criterion.support_height_damping_n_s_per_m,
-            gravity_comp: criterion.support_gravity_comp,
-            xy_stiffness_n_per_m: criterion.support_xy_stiffness_n_per_m,
-            xy_damping_n_s_per_m: criterion.support_xy_damping_n_s_per_m,
+/// One body of [`ModelInfo`].
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ModelBody {
+    /// Body name.
+    pub name: String,
+    /// Name of the free-joint root this body belongs to.
+    #[serde(default)]
+    pub root_name: String,
+    /// Mass of the body alone, kg.
+    #[serde(default)]
+    pub mass: f64,
+    /// Mass of the body and everything below it, kg.
+    #[serde(default)]
+    pub subtree_mass: f64,
+    /// Principal inertia of the body alone, kg*m^2.
+    #[serde(default)]
+    pub inertia: [f64; 3],
+    /// Inertia of the subtree about its own CoM, diagonal in the body frame, kg*m^2.
+    #[serde(default)]
+    pub subtree_inertia: [f64; 3],
+}
+
+impl ModelInfo {
+    /// Body by name.
+    pub fn body(&self, name: &str) -> Option<&ModelBody> {
+        self.bodies.iter().find(|body| body.name == name)
+    }
+
+    /// Names of the named keyframes.
+    pub fn keyframe_names(&self) -> Vec<String> {
+        self.keyframes
+            .iter()
+            .filter_map(|entry| match entry {
+                serde_json::Value::String(name) => Some(name.clone()),
+                serde_json::Value::Object(map) => map
+                    .get("name")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string),
+                _ => None,
+            })
+            .filter(|name| !name.is_empty())
+            .collect()
+    }
+}
+
+/// Inputs of the documented gain-sizing formulas.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SizingInputs {
+    /// Robot mass m: subtree mass of the torso's free root, kg.
+    pub mass_kg: f64,
+    /// Gravity magnitude g, m/s^2.
+    pub gravity: f64,
+    /// Torso subtree CoM height above the mean contact point h0, m.
+    pub h0_m: f64,
+    /// Tilt inertia: max(x, y) of the torso root's subtree inertia, kg*m^2.
+    pub i_tilt: f64,
+    /// Smallest principal inertia of the torso root's subtree, kg*m^2.
+    pub i_min: f64,
+    /// Smallest principal inertia of the torso body alone (limp-limb stability limit), kg*m^2.
+    pub i_own_min: f64,
+    /// Physics timestep dt, s.
+    pub dt_s: f64,
+}
+
+/// Spring parameters sent to the controller (all lengths m, angles rad).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SpringGains {
+    /// Rotational stiffness, N*m/rad.
+    pub k_rot: f64,
+    /// Rotational damping, N*m*s/rad.
+    pub d_rot: f64,
+    /// Linear stiffness (x, y, z), N/m.
+    pub k_lin: [f64; 3],
+    /// Linear damping (x, y, z), N*s/m.
+    pub d_lin: [f64; 3],
+    /// Fraction of the body's root weight the spring carries.
+    pub gravity_comp: f64,
+}
+
+/// Size the support spring (documented formulas; `gravity_comp` is 1.0 here):
+///
+/// `k_rot = 3 m g h0 / 0.087` (a 5 degree tilt costs about a third of the weight torque),
+/// `d_rot = min(0.4 * 2 sqrt(k_rot I_tilt), 0.9 * 2 I_min / dt)` (the second term keeps the
+/// explicit-force integration stable), `k_z = 8 m g / 0.005`, `d_z = 0.33 m / dt`,
+/// `k_xy = 2.8 m g / 0.005`, `d_xy = 0.22 m / dt`. `I_tilt` and `I_min` come from the torso
+/// root's subtree inertia. Finally k_rot and d_rot are capped by the torso body's own
+/// inertia (`d dt / I_own < 2` with 10% margin, `k dt^2 / I_own <= 0.25`) so limp-limb
+/// models do not diverge.
+pub fn size_spring_gains(inputs: &SizingInputs) -> SpringGains {
+    let weight = inputs.mass_kg * inputs.gravity;
+    let k_rot = cap_k_rot(3.0 * weight * inputs.h0_m / 0.087, inputs);
+    let d_rot = sized_d_rot(k_rot, inputs);
+    let k_z = 8.0 * weight / 0.005;
+    let d_z = 0.33 * inputs.mass_kg / inputs.dt_s;
+    let k_xy = 2.8 * weight / 0.005;
+    let d_xy = 0.22 * inputs.mass_kg / inputs.dt_s;
+    SpringGains {
+        k_rot,
+        d_rot,
+        k_lin: [k_xy, k_xy, k_z],
+        d_lin: [d_xy, d_xy, d_z],
+        gravity_comp: 1.0,
+    }
+}
+
+fn cap_k_rot(k_rot: f64, inputs: &SizingInputs) -> f64 {
+    k_rot.min(0.25 * inputs.i_own_min / (inputs.dt_s * inputs.dt_s))
+}
+
+fn sized_d_rot(k_rot: f64, inputs: &SizingInputs) -> f64 {
+    (0.4 * 2.0 * (k_rot * inputs.i_tilt).sqrt())
+        .min(0.9 * 2.0 * inputs.i_min / inputs.dt_s)
+        .min(0.9 * 2.0 * inputs.i_own_min / inputs.dt_s)
+}
+
+/// Sized gains with the criterion's explicit overrides applied. An overridden `k_rot` feeds the
+/// `d_rot` formula; an overridden `d_rot` replaces it.
+pub fn gains_for(inputs: &SizingInputs, criterion: &BalanceFeetCriterion) -> SpringGains {
+    let mut gains = size_spring_gains(inputs);
+    if let Some(k_rot) = criterion.support_rot_stiffness_nm_per_rad {
+        gains.k_rot = k_rot;
+        gains.d_rot = sized_d_rot(k_rot, inputs);
+    }
+    if let Some(d_rot) = criterion.support_rot_damping_nm_s_per_rad {
+        gains.d_rot = d_rot;
+    }
+    if let Some(k_z) = criterion.support_height_stiffness_n_per_m {
+        gains.k_lin[2] = k_z;
+    }
+    if let Some(d_z) = criterion.support_height_damping_n_s_per_m {
+        gains.d_lin[2] = d_z;
+    }
+    if let Some(k_xy) = criterion.support_xy_stiffness_n_per_m {
+        gains.k_lin[0] = k_xy;
+        gains.k_lin[1] = k_xy;
+    }
+    if let Some(d_xy) = criterion.support_xy_damping_n_s_per_m {
+        gains.d_lin[0] = d_xy;
+        gains.d_lin[1] = d_xy;
+    }
+    if let Some(gc) = criterion.support_gravity_comp {
+        gains.gravity_comp = gc;
+    }
+    gains
+}
+
+/// Sizing inputs from the model and the measured CoM height `h0_m`. Every quantity must be
+/// positive; the error names the one that is not.
+pub fn sizing_inputs(
+    info: &ModelInfo,
+    torso_body: &str,
+    h0_m: f64,
+) -> Result<SizingInputs, TrainerError> {
+    let torso = info.body(torso_body).ok_or_else(|| {
+        TrainerError::Config(format!(
+            "torso body {torso_body} is not in the loaded model"
+        ))
+    })?;
+    let root = if torso.root_name.is_empty() {
+        torso
+    } else {
+        info.body(&torso.root_name).ok_or_else(|| {
+            TrainerError::Runtime(format!(
+                "root body {} of {torso_body} is missing from get_model_info",
+                torso.root_name
+            ))
+        })?
+    };
+    let gravity = info.gravity.iter().map(|g| g * g).sum::<f64>().sqrt();
+    let min3 = |v: [f64; 3]| v.iter().copied().fold(f64::INFINITY, f64::min);
+    let inputs = SizingInputs {
+        mass_kg: root.subtree_mass,
+        gravity,
+        h0_m,
+        i_tilt: root.subtree_inertia[0].max(root.subtree_inertia[1]),
+        i_min: min3(root.subtree_inertia),
+        i_own_min: min3(torso.inertia),
+        dt_s: info.timestep_s,
+    };
+    for (name, value) in [
+        ("root subtree mass", inputs.mass_kg),
+        ("gravity", inputs.gravity),
+        ("CoM height above the contacts", inputs.h0_m),
+        ("torso root subtree tilt inertia", inputs.i_tilt),
+        ("torso root subtree minimum inertia", inputs.i_min),
+        ("torso own minimum inertia", inputs.i_own_min),
+        ("physics timestep", inputs.dt_s),
+    ] {
+        if !value.is_finite() || value <= 0.0 {
+            return Err(TrainerError::Runtime(format!(
+                "cannot size the support spring: {name} is {value}"
+            )));
+        }
+    }
+    Ok(inputs)
+}
+
+/// What to read in one `measure` call.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MeasureRequest {
+    /// Bodies to report.
+    pub bodies: Vec<String>,
+    /// One contact set per entry: touching between these bodies and the world.
+    pub contacts: Vec<Vec<String>>,
+}
+
+/// One body in a `measure` reply.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct BodyMeasure {
+    /// Angle between the body-local up axis and -gravity, rad.
+    pub tilt_rad: f64,
+    /// Tilt vector, rad.
+    #[serde(default)]
+    pub tilt_vec: [f64; 2],
+    /// Angular velocity, rad/s.
+    #[serde(default)]
+    pub ang_vel: [f64; 3],
+    /// Body CoM, m.
+    #[serde(default)]
+    pub com: [f64; 3],
+    /// Subtree CoM, m.
+    #[serde(default)]
+    pub subtree_com: [f64; 3],
+}
+
+/// One contact set in a `measure` reply.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct ContactMeasure {
+    /// The set touches the world.
+    pub touching: bool,
+    /// Contact points, m.
+    #[serde(default)]
+    pub points: Vec<[f64; 3]>,
+}
+
+/// Norms of the wrench one spring applies right now.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
+pub struct SpringMeasure {
+    /// Torque norm, N*m.
+    pub wrench_norm_torque: f64,
+    /// Restoring force norm, N (gravity compensation excluded).
+    pub wrench_norm_force: f64,
+    /// Gravity-compensation force, N (reported separately).
+    #[serde(default)]
+    pub gravity_comp_force_n: f64,
+}
+
+/// A `measure` reply.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Measurement {
+    /// Simulated time, seconds.
+    pub sim_time_s: f64,
+    /// Physics steps since the model was loaded.
+    pub physics_steps: u64,
+    /// Episode the reading belongs to.
+    #[serde(default)]
+    pub episode_id: u64,
+    /// Latched end cause of the episode, if one happened.
+    #[serde(default)]
+    pub terminal: Option<BalanceTerminal>,
+    /// Reported bodies by name (an object, or an array of objects carrying `name`).
+    #[serde(default, deserialize_with = "named_map")]
+    pub bodies: BTreeMap<String, BodyMeasure>,
+    /// One entry per requested contact set, in request order.
+    #[serde(default)]
+    pub contacts: Vec<ContactMeasure>,
+    /// Active springs by body name.
+    #[serde(default, deserialize_with = "named_map")]
+    pub springs: BTreeMap<String, SpringMeasure>,
+}
+
+fn named_map<'de, D, T>(deserializer: D) -> Result<BTreeMap<String, T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    use serde::de::Error;
+    let value = serde_json::Value::deserialize(deserializer)?;
+    let mut out = BTreeMap::new();
+    match value {
+        serde_json::Value::Null => {}
+        serde_json::Value::Object(map) => {
+            for (name, entry) in map {
+                out.insert(
+                    name,
+                    serde_json::from_value(entry).map_err(D::Error::custom)?,
+                );
+            }
+        }
+        serde_json::Value::Array(entries) => {
+            for entry in entries {
+                let name = entry
+                    .get("name")
+                    .or_else(|| entry.get("body"))
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| D::Error::custom("entry has no name"))?
+                    .to_string();
+                out.insert(
+                    name,
+                    serde_json::from_value(entry).map_err(D::Error::custom)?,
+                );
+            }
+        }
+        _ => return Err(D::Error::custom("expected an object or an array")),
+    }
+    Ok(out)
+}
+
+impl Measurement {
+    /// Mean height of every contact point of every set, if any point exists.
+    pub fn mean_contact_height(&self) -> Option<f64> {
+        let heights: Vec<f64> = self
+            .contacts
+            .iter()
+            .flat_map(|set| set.points.iter().map(|point| point[2]))
+            .collect();
+        if heights.is_empty() {
+            None
+        } else {
+            Some(heights.iter().sum::<f64>() / heights.len() as f64)
         }
     }
 }
 
-/// Home acknowledgement returned by the controller.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BalanceBegin {
-    /// Seed that was homed.
-    pub seed: u64,
-    /// Torso body measured for tilt.
-    pub torso_body: String,
-    /// Left foot body.
-    pub left_foot_body: String,
-    /// Right foot body.
-    pub right_foot_body: String,
-    /// Tilt limit echoed by the controller, degrees.
-    pub max_tilt_deg: f64,
-    /// Physics steps per burst as computed by the controller from its model timestep and the
-    /// requested `burst_period_s`. Absent on old controllers; the criterion value is used then.
-    #[serde(default)]
-    pub physics_steps_per_burst: Option<u32>,
-}
-
-/// One stance measurement from the controller (one per physics step).
+/// One stance measurement, derived by the Trainer from a [`Measurement`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BalanceSample {
-    /// Monotonic sample counter for this attempt; advances once per physics step.
+    /// Monotonic physics-step counter of the controller.
     pub seq: u64,
     /// Attempt seed.
     pub seed: u64,
     /// Torso tilt from world up, degrees.
     pub tilt_deg: f64,
-    /// Left foot geom is touching a world geom.
-    pub left_foot_contact: bool,
-    /// Right foot geom is touching a world geom.
-    pub right_foot_contact: bool,
+    /// Per contact body, in `contact_bodies` order: touching the world.
+    pub contacts: Vec<bool>,
     /// Latched end cause. Absent while the attempt is still open.
     pub terminal: Option<BalanceTerminal>,
-    /// Effective support level at this step. Absent on old controllers.
+    /// Effective support level at this step.
     #[serde(default)]
     pub support_level: Option<f64>,
-    /// The controller is still holding the settle period. Absent on old controllers.
+    /// The settle period is still running.
     #[serde(default)]
     pub settling: bool,
-    /// A perturbation pulse is being applied at this step. Absent on old controllers.
+    /// A perturbation pulse is being applied at this step.
     #[serde(default)]
     pub perturbing: bool,
-    /// Predicted tilt fraction 0..1 at this step. Absent on old controllers.
+    /// Predicted tilt fraction 0..1 (tilt + omega * lookahead vs the tilt limit).
     #[serde(default)]
     pub support_need: Option<f64>,
-    /// Harness effort 0..1 at this step. Absent on old controllers.
+    /// Spring effort 0..1 from the wrench norms.
     #[serde(default)]
     pub support_effort: Option<f64>,
-    /// Harness torque, N*m. Absent on old controllers.
+    /// Spring torque norm, N*m.
     #[serde(default)]
     pub support_torque_nm: Option<f64>,
-    /// Harness force, N. Absent on old controllers.
+    /// Spring force norm, N.
     #[serde(default)]
     pub support_force_n: Option<f64>,
+}
+
+impl BalanceSample {
+    /// Every contact body touches the world.
+    pub fn all_contacts_down(&self) -> bool {
+        self.contacts.iter().all(|down| *down)
+    }
+}
+
+/// Predicted tilt fraction `min(1, (tilt + lookahead * |omega_xy|) / max_tilt)`.
+pub fn support_need(tilt_rad: f64, ang_vel: [f64; 3], max_tilt_deg: f64, lookahead_s: f64) -> f64 {
+    let ahead = tilt_rad + lookahead_s * ang_vel[0].hypot(ang_vel[1]);
+    (ahead / max_tilt_deg.to_radians()).clamp(0.0, 1.0)
+}
+
+/// Mean of the clipped torque and force shares of the weight-tipping budget:
+/// `(min(1, |tau| / (m g h0)) + min(1, |F_restoring| / (m g))) / 2`. The controller reports
+/// the restoring force without the gravity-compensation share.
+pub fn support_effort(wrench: SpringMeasure, sizing: &SizingInputs) -> f64 {
+    let weight = (sizing.mass_kg * sizing.gravity).max(1.0e-9);
+    let torque_share = (wrench.wrench_norm_torque / (weight * sizing.h0_m.max(1.0e-9))).min(1.0);
+    let force_share = (wrench.wrench_norm_force / weight).min(1.0);
+    (torque_share + force_share) / 2.0
 }
 
 /// Controller-latched end cause. Hold success is decided here, not by the controller.
@@ -618,7 +994,7 @@ pub struct BalanceSample {
 pub enum BalanceTerminal {
     /// `_death` fired.
     Death,
-    /// Misc reset fired while the attempt was active.
+    /// A misc reset fired while the episode was active.
     Interrupted,
 }
 
@@ -631,19 +1007,19 @@ pub struct OpenBalanceAttempt {
     pub holding_bursts: u32,
     /// Latest torso tilt, degrees.
     pub last_tilt_deg: f64,
-    /// Latest controller sample sequence seen (counted or not); pass it to `poll`.
+    /// Latest controller step counter seen (counted or not).
     pub last_seq: u64,
-    /// Sequence of the last sample that was counted as a burst, if any.
-    pub last_burst_seq: Option<u64>,
+    /// Step counter of the last sample that was counted as a burst, if any.
+    pub last_burst_seq: Option<f64>,
     /// Settling bursts observed (logged, never scored).
     pub settling_bursts: u32,
-    /// Non-settling bursts that were upright (tilt inside the limit, both feet down).
+    /// Non-settling bursts that were upright (tilt inside the limit, all contacts down).
     pub upright_bursts: u32,
     /// The latest sample was counted as a new burst (false when decimated away).
     pub counted_burst: bool,
-    /// Physics steps per burst reported by the controller; overrides the criterion when set.
-    pub steps_per_burst: Option<u32>,
-    /// Support level of the attempt's params, used when a sample carries none.
+    /// Physics steps per burst: `burst_period_s / timestep_s` (not necessarily whole).
+    pub steps_per_burst: f64,
+    /// Support level of the attempt, used when a sample carries none.
     pub params_support_level: f64,
     /// Distinct perturbation pulses seen so far.
     pub perturbations: u32,
@@ -656,16 +1032,20 @@ pub struct OpenBalanceAttempt {
 }
 
 impl OpenBalanceAttempt {
-    /// An attempt for `support_level` using the controller's steps-per-burst when it reported one.
-    pub fn for_attempt(steps_per_burst: Option<u32>, support_level: f64) -> Self {
+    /// An attempt for `support_level` with `steps_per_burst` physics steps per burst.
+    pub fn for_attempt(steps_per_burst: f64, support_level: f64) -> Self {
         Self {
-            steps_per_burst: steps_per_burst.filter(|n| *n > 0),
+            steps_per_burst: if steps_per_burst.is_finite() && steps_per_burst > 0.0 {
+                steps_per_burst
+            } else {
+                1.0
+            },
             params_support_level: support_level,
             ..Self::fresh()
         }
     }
 
-    /// An attempt that has not observed a sample yet.
+    /// An attempt that has not observed a sample yet (one physics step per burst).
     pub fn fresh() -> Self {
         Self {
             bursts: 0,
@@ -676,7 +1056,7 @@ impl OpenBalanceAttempt {
             settling_bursts: 0,
             upright_bursts: 0,
             counted_burst: false,
-            steps_per_burst: None,
+            steps_per_burst: 1.0,
             params_support_level: 0.0,
             perturbations: 0,
             last_perturbing: false,
@@ -700,19 +1080,17 @@ pub fn upright_goal_features() -> [f64; 3] {
     [0.5, 0.5, 1.0]
 }
 
-/// Tilt inside the limit with both feet down.
+/// Tilt inside the limit with every contact body down.
 pub fn sample_is_upright(sample: &BalanceSample, criterion: &BalanceFeetCriterion) -> bool {
-    sample.tilt_deg <= criterion.max_tilt_deg
-        && sample.left_foot_contact
-        && sample.right_foot_contact
+    sample.tilt_deg <= criterion.max_tilt_deg && sample.all_contacts_down()
 }
 
 /// Fold one controller sample into the attempt.
 ///
-/// Samples arrive once per physics step. With N steps per burst (the controller's value when it
-/// reported one, else `criterion.physics_steps_per_burst`), `k = (seq - last_burst_seq) / N` new
-/// bursts have elapsed since the last counted burst; `last_burst_seq` advances by `k * N` and
-/// `bursts` by `k`, so a late poll does not undercount. A sample with `k >= 1` is one counted
+/// `seq` is the controller's physics-step counter. With N steps per burst
+/// (`burst_period_s / timestep_s`, not necessarily whole), `k = floor((seq - last_burst_seq) / N)`
+/// new bursts have elapsed since the last counted burst; `last_burst_seq` advances by `k * N` and
+/// `bursts` by `k`, so a late reading does not undercount. A sample with `k >= 1` is one counted
 /// observation for hold and reward purposes (the first sample always counts as one burst). Terminal samples are always processed. Samples with `settling == true`
 /// never advance the hold counter and never count toward `attempt_burst_cap`.
 pub fn observe_balance_sample(
@@ -773,18 +1151,19 @@ pub fn observe_balance_sample(
             ..balance_time_fields(longest, first_violation, criterion.burst_period_s)
         }));
     }
-    let steps = u64::from(
-        open.steps_per_burst
-            .unwrap_or(criterion.physics_steps_per_burst)
-            .max(1),
-    );
-    let (new_bursts, anchor): (u32, u64) = match open.last_burst_seq {
-        None => (1, sample.seq),
+    let steps = open.steps_per_burst.max(1.0e-9);
+    let seq_now = sample.seq as f64;
+    let (new_bursts, anchor): (u32, f64) = match open.last_burst_seq {
+        None => (1, seq_now),
         Some(last) => {
-            let k = sample.seq.saturating_sub(last) / steps;
+            let k = ((seq_now - last) / steps + 1.0e-9).floor().max(0.0);
             (
-                u32::try_from(k).unwrap_or(u32::MAX),
-                last.saturating_add(k.saturating_mul(steps)),
+                if k >= f64::from(u32::MAX) {
+                    u32::MAX
+                } else {
+                    k as u32
+                },
+                last + k * steps,
             )
         }
     };
@@ -838,10 +1217,10 @@ pub fn observe_balance_sample(
             )
         })
     };
-    if holding_bursts >= criterion.hold_bursts {
+    if holding_bursts >= criterion.hold_bursts() {
         return Ok(finish(BalanceAttemptOutcome::Success));
     }
-    if bursts >= criterion.attempt_burst_cap {
+    if bursts >= criterion.attempt_burst_cap() {
         return Ok(finish(BalanceAttemptOutcome::Truncated));
     }
     Ok(BalanceAttemptStep::Continue(OpenBalanceAttempt {
@@ -993,7 +1372,7 @@ impl BalanceAffectReward {
 pub const ASSIST_NEED_DEADBAND: f64 = 0.1;
 /// Pleasure per unit of need reduction between consecutive bursts: `min(1, GAIN * drop)`.
 pub const ASSIST_FALL_GAIN: f64 = 4.0;
-/// Pleasure each burst that need is inside the deadband with both feet down.
+/// Pleasure each burst that need is inside the deadband with every contact body down.
 pub const ASSIST_HOLD_PLEASURE: f64 = 0.2;
 /// Pleasure below this magnitude is dropped.
 pub const ASSIST_MIN_PLEASURE: f64 = 0.05;
@@ -1031,7 +1410,7 @@ impl BalanceRewardPolicy {
 /// (falls back to `min(1, tilt / max_tilt)` when absent). Per counted, non-settling burst with
 /// need `n_t` and previous need `n_{t-1}`: Death -> Pain 1.0; `n_t > ASSIST_NEED_DEADBAND` and
 /// rising -> Pain `min(1, n_t)`; falling -> Pleasure `min(1, ASSIST_FALL_GAIN * drop)`;
-/// `n_t <= deadband` with both feet down -> Pleasure `ASSIST_HOLD_PLEASURE`; Success ->
+/// `n_t <= deadband` with every contact body down -> Pleasure `ASSIST_HOLD_PLEASURE`; Success ->
 /// Pleasure 1.0. When several Pleasures apply in one burst the largest is emitted. Never scaled
 /// by support level. Pleasure below `ASSIST_MIN_PLEASURE` is dropped. Settling bursts emit
 /// nothing except a Death terminal (their need still seeds `n_{t-1}`).
@@ -1083,10 +1462,7 @@ impl BalanceAssistReward {
         if need < previous {
             pleasure = pleasure.max((ASSIST_FALL_GAIN * (previous - need)).min(1.0));
         }
-        if need <= ASSIST_NEED_DEADBAND
-            && burst_sample.left_foot_contact
-            && burst_sample.right_foot_contact
-        {
+        if need <= ASSIST_NEED_DEADBAND && burst_sample.all_contacts_down() {
             pleasure = pleasure.max(ASSIST_HOLD_PLEASURE);
         }
         if outcome == Some(&BalanceAttemptOutcome::Success) {
@@ -1154,6 +1530,9 @@ pub struct BalancePhaseReport {
     /// Success rate per support level, keyed by the level formatted `{:.2}`.
     #[serde(default)]
     pub success_rate_by_support: BTreeMap<String, f64>,
+    /// Spring gains the Trainer sized for this phase (absent when no attempt ran).
+    #[serde(default)]
+    pub spring_gains: Option<SpringGains>,
     /// Success rate at `support_min` >= `graduate_success_rate`; false with no attempt there.
     #[serde(default)]
     pub graduated: bool,
@@ -1305,6 +1684,7 @@ impl BalancePhaseReport {
             success_rate_at_min_support,
             mean_upright_fraction,
             success_rate_by_support,
+            spring_gains: None,
             graduated,
             balanced,
             balanced_by_support,
@@ -1421,18 +1801,43 @@ pub fn balance_phase_scorecard(
     }
 }
 
-/// Controller side of one balance session.
-pub trait BalanceProbe {
-    /// Home the biped for `seed` and start the attempt with the given support parameters.
-    fn begin_attempt(
-        &mut self,
-        seed: u64,
-        criterion: &BalanceFeetCriterion,
-        params: &BalanceAttemptParams,
-    ) -> Result<BalanceBegin, TrainerError>;
+/// Controller side of one balance session: the generic physics primitives of the controller
+/// contract. The controller knows no robot and no task; every balance decision is made by the
+/// Trainer from these calls.
+pub trait BalanceController {
+    /// `get_model_info`: timestep, gravity, bodies, keyframes.
+    fn model_info(&mut self) -> Result<ModelInfo, TrainerError>;
 
-    /// Wait for a sample newer than `after_seq`.
-    fn poll(&mut self, after_seq: u64, timeout: Duration) -> Result<BalanceSample, TrainerError>;
+    /// `reset_episode`: reset to `keyframe` (or the model default), clear springs and pulses,
+    /// start a new episode. Returns the episode id.
+    fn reset_episode(&mut self, keyframe: Option<&str>) -> Result<u64, TrainerError>;
+
+    /// `set_body_spring`: capture the body's current pose as the reference and apply the spring.
+    fn set_body_spring(
+        &mut self,
+        body: &str,
+        gains: &SpringGains,
+        level: f64,
+        deadband_rad: f64,
+    ) -> Result<(), TrainerError>;
+
+    /// `update_body_spring`: change the level of a running spring.
+    fn update_body_spring(&mut self, body: &str, level: f64) -> Result<(), TrainerError>;
+
+    /// `clear_body_spring`.
+    fn clear_body_spring(&mut self, body: &str) -> Result<(), TrainerError>;
+
+    /// `apply_body_pulse`: a timed external wrench on `body`.
+    fn apply_body_pulse(
+        &mut self,
+        body: &str,
+        torque: [f64; 3],
+        force: [f64; 3],
+        duration_s: f64,
+    ) -> Result<(), TrainerError>;
+
+    /// `measure`: one reading of bodies, contact sets and springs.
+    fn measure(&mut self, request: &MeasureRequest) -> Result<Measurement, TrainerError>;
 }
 
 /// Callback that delivers affect signals into the brain (e.g. `runtime.submit_reward`).
@@ -1446,8 +1851,6 @@ pub struct BalancePhaseRun<'a> {
     pub seeds: &'a [u64],
     /// Acceptance rule.
     pub criterion: &'a BalanceFeetCriterion,
-    /// How long one poll may wait.
-    pub poll_timeout: Duration,
     /// Run the progress events are stamped with.
     pub run_id: &'a RunId,
     /// Support policy. `None`: `train` follows the schedule, `test` runs at `support_min`.
@@ -1458,10 +1861,16 @@ pub struct BalancePhaseRun<'a> {
     pub reward_policy: BalanceRewardPolicy,
 }
 
+/// Per-phase state: model facts and the gains sized once from the first reset.
+struct BalanceSession {
+    info: ModelInfo,
+    sizing: Option<(SizingInputs, SpringGains)>,
+}
+
 /// Run one phase (`train` or `test`) and emit its progress.
 pub fn run_balance_phase(
     run: &mut BalancePhaseRun<'_>,
-    probe: &mut dyn BalanceProbe,
+    controller: &mut dyn BalanceController,
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
     events: &mut dyn RunEventSink,
     cancel: &CancelToken,
@@ -1478,9 +1887,6 @@ pub fn run_balance_phase(
             run.phase
         )));
     }
-    if run.poll_timeout.is_zero() {
-        return Err(TrainerError::Config("poll_timeout must be > 0".to_string()));
-    }
     let support = run.criterion.support_config();
     let mode = run.support_mode.unwrap_or(if run.phase == "train" {
         SupportMode::Schedule
@@ -1494,6 +1900,9 @@ pub fn run_balance_phase(
             ));
         }
     }
+    let info = controller.model_info()?;
+    check_model(&info, run.criterion)?;
+    let mut session = BalanceSession { info, sizing: None };
     let mut schedule = SupportSchedule::new(support);
     let samples_total = run.seeds.len() as u64;
     let mut attempts = Vec::with_capacity(run.seeds.len());
@@ -1511,11 +1920,11 @@ pub fn run_balance_phase(
             *seed,
             run.criterion,
             level,
-            probe,
+            controller,
+            &mut session,
             present_goal,
             &mut run.deliver_reward,
             run.reward_policy,
-            run.poll_timeout,
             cancel,
         )?;
         schedule.record_attempt(record.outcome, record.balanced_s);
@@ -1538,7 +1947,8 @@ pub fn run_balance_phase(
             },
         ));
     }
-    let report = BalancePhaseReport::from_attempts_with(attempts, &support)?;
+    let mut report = BalancePhaseReport::from_attempts_with(attempts, &support)?;
+    report.spring_gains = session.sizing.map(|(_, gains)| gains);
     events.emit(RunEvent::new(
         run.run_id.clone(),
         RunEventKind::MetricUpdate {
@@ -1550,37 +1960,250 @@ pub fn run_balance_phase(
     Ok(report)
 }
 
+/// The named bodies and keyframe must exist in the loaded model.
+fn check_model(info: &ModelInfo, criterion: &BalanceFeetCriterion) -> Result<(), TrainerError> {
+    let names = std::iter::once(&criterion.torso_body).chain(criterion.contact_bodies.iter());
+    for name in names {
+        if info.body(name.trim()).is_none() {
+            return Err(TrainerError::Config(format!(
+                "body {name} is not in the loaded model"
+            )));
+        }
+    }
+    let keyframe = criterion.reset_keyframe.trim();
+    if !keyframe.is_empty() && !info.keyframe_names().iter().any(|name| name == keyframe) {
+        return Err(TrainerError::Config(format!(
+            "reset keyframe {keyframe} is not in the loaded model (keyframes: {})",
+            info.keyframe_names().join(", ")
+        )));
+    }
+    if !(info.timestep_s.is_finite() && info.timestep_s > 0.0) {
+        return Err(TrainerError::Runtime(
+            "get_model_info reported no physics timestep".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn measure_request(criterion: &BalanceFeetCriterion) -> MeasureRequest {
+    MeasureRequest {
+        bodies: vec![criterion.torso_body.trim().to_string()],
+        contacts: criterion
+            .contact_bodies
+            .iter()
+            .map(|name| vec![name.trim().to_string()])
+            .collect(),
+    }
+}
+
+/// Small deterministic generator (splitmix64) so perturbation schedules repeat per seed.
+#[derive(Debug, Clone)]
+struct SplitMix(u64);
+
+impl SplitMix {
+    fn next_u64(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn unit(&mut self) -> f64 {
+        (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
+    }
+}
+
+/// Repeatable random torque pulses, indexed by seconds after settling. The first pulse starts
+/// after `interval_s` jittered by +-50%; each later pulse starts a jittered interval after the
+/// previous start (never before the previous pulse ends). Each pulse lasts `duration_s` about
+/// world X or Y with a random sign.
+#[derive(Debug, Clone)]
+pub struct PerturbPlan {
+    rng: SplitMix,
+    interval_s: f64,
+    duration_s: f64,
+    torque_nm: f64,
+    next_start_s: f64,
+    pulse_end_s: f64,
+}
+
+impl PerturbPlan {
+    /// Plan for one attempt; `interval_s == 0` never pulses.
+    pub fn new(seed: u64, interval_s: f64, duration_s: f64, torque_nm: f64) -> Self {
+        let mut plan = Self {
+            rng: SplitMix(seed ^ 0xA5A5_5A5A_1234_5678),
+            interval_s,
+            duration_s,
+            torque_nm,
+            next_start_s: f64::INFINITY,
+            pulse_end_s: f64::NEG_INFINITY,
+        };
+        if interval_s > 0.0 {
+            plan.next_start_s = plan.jittered(0.0);
+        }
+        plan
+    }
+
+    fn jittered(&mut self, base: f64) -> f64 {
+        base + self.interval_s * (0.5 + self.rng.unit())
+    }
+
+    /// Pulse to start at `post_settle_s` (non-decreasing calls), or `None`.
+    pub fn pulse_at(&mut self, post_settle_s: f64) -> Option<[f64; 3]> {
+        if self.interval_s <= 0.0
+            || post_settle_s < self.next_start_s
+            || post_settle_s < self.pulse_end_s
+        {
+            return None;
+        }
+        let axis = (self.rng.next_u64() & 1) as usize;
+        let sign = if self.rng.next_u64() & 1 == 0 {
+            -1.0
+        } else {
+            1.0
+        };
+        let mut torque = [0.0; 3];
+        torque[axis] = sign * self.torque_nm;
+        self.pulse_end_s = post_settle_s + self.duration_s;
+        self.next_start_s = self.jittered(post_settle_s).max(self.pulse_end_s);
+        Some(torque)
+    }
+
+    /// A pulse is running at `post_settle_s`.
+    pub fn active_at(&self, post_settle_s: f64) -> bool {
+        post_settle_s < self.pulse_end_s
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_balance_attempt(
     seed: u64,
     criterion: &BalanceFeetCriterion,
     support_level: f64,
-    probe: &mut dyn BalanceProbe,
+    controller: &mut dyn BalanceController,
+    session: &mut BalanceSession,
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
     deliver_reward: &mut Option<DeliverReward<'_>>,
     reward_policy: BalanceRewardPolicy,
-    poll_timeout: Duration,
     cancel: &CancelToken,
 ) -> Result<BalanceAttemptRecord, TrainerError> {
-    let params = BalanceAttemptParams::from_criterion(criterion, support_level);
-    let begun = probe.begin_attempt(seed, criterion, &params)?;
-    if begun.seed != seed {
-        return Err(TrainerError::Runtime(format!(
-            "controller homed seed {} for requested seed {seed}",
-            begun.seed
-        )));
-    }
+    let torso = criterion.torso_body.trim().to_string();
+    let keyframe = Some(criterion.reset_keyframe.trim()).filter(|name| !name.is_empty());
+    controller.reset_episode(keyframe)?;
+    let request = measure_request(criterion);
+    let first = controller.measure(&request)?;
+    let (sizing, gains) = match session.sizing {
+        Some(sized) => sized,
+        None => {
+            let torso_now = first.bodies.get(&torso).ok_or_else(|| {
+                TrainerError::Runtime(format!("measure reply has no body {torso}"))
+            })?;
+            let h0 = match criterion.support_com_height_m {
+                Some(h0) => h0,
+                None => {
+                    let floor = first.mean_contact_height().ok_or_else(|| {
+                        TrainerError::Runtime(
+                            "cannot size the support spring: no contact points after the reset; \
+                             the contact bodies must touch the floor in the reset pose, or set \
+                             support_com_height_m"
+                                .to_string(),
+                        )
+                    })?;
+                    torso_now.subtree_com[2] - floor
+                }
+            };
+            let sizing = sizing_inputs(&session.info, &torso, h0)?;
+            let sized = (sizing, gains_for(&sizing, criterion));
+            session.sizing = Some(sized);
+            sized
+        }
+    };
+    let settle_level = if criterion.settle_s > 0.0 {
+        1.0
+    } else {
+        support_level
+    };
+    controller.set_body_spring(
+        &torso,
+        &gains,
+        settle_level,
+        criterion.support_deadband_deg.to_radians(),
+    )?;
+    let t0 = first.sim_time_s;
+    let steps_per_burst = criterion.burst_period_s / session.info.timestep_s;
     let features = upright_goal_features();
-    let mut open = OpenBalanceAttempt::for_attempt(begun.physics_steps_per_burst, support_level);
+    let mut open = OpenBalanceAttempt::for_attempt(steps_per_burst, support_level);
     let mut affect = AttemptReward::new(reward_policy, support_level);
-    loop {
+    let mut perturb = PerturbPlan::new(
+        seed,
+        criterion.perturb_interval_s,
+        criterion.perturb_duration_s,
+        criterion.perturb_torque_nm,
+    );
+    let mut spring_level = settle_level;
+    let result = loop {
         if cancel.is_cancelled() {
+            let _ = controller.clear_body_spring(&torso);
             return Err(TrainerError::Cancelled(
                 "balance-on-feet run cancelled".to_string(),
             ));
         }
         present_goal(features)?;
-        let sample = probe.poll(open.last_seq, poll_timeout)?;
+        let reading = controller.measure(&request)?;
+        let elapsed_s = reading.sim_time_s - t0;
+        let settling = elapsed_s + 1.0e-9 < criterion.settle_s;
+        let level_now = if settling { 1.0 } else { support_level };
+        let body = reading
+            .bodies
+            .get(&torso)
+            .ok_or_else(|| TrainerError::Runtime(format!("measure reply has no body {torso}")))?;
+        if reading.contacts.len() != criterion.contact_bodies.len() {
+            return Err(TrainerError::Runtime(format!(
+                "measure returned {} contact sets for {} contact bodies",
+                reading.contacts.len(),
+                criterion.contact_bodies.len()
+            )));
+        }
+        let mut perturbing = false;
+        if reading.terminal.is_none() {
+            if (spring_level - level_now).abs() > 1.0e-12 {
+                controller.update_body_spring(&torso, level_now)?;
+                spring_level = level_now;
+            }
+            if !settling {
+                let post_settle_s = elapsed_s - criterion.settle_s;
+                if let Some(torque) = perturb.pulse_at(post_settle_s) {
+                    controller.apply_body_pulse(
+                        &torso,
+                        torque,
+                        [0.0; 3],
+                        criterion.perturb_duration_s,
+                    )?;
+                }
+                perturbing = perturb.active_at(post_settle_s);
+            }
+        }
+        let wrench = reading.springs.get(&torso).copied();
+        let sample = BalanceSample {
+            seq: reading.physics_steps,
+            seed,
+            tilt_deg: body.tilt_rad.to_degrees(),
+            contacts: reading.contacts.iter().map(|set| set.touching).collect(),
+            terminal: reading.terminal,
+            support_level: Some(level_now),
+            settling,
+            perturbing,
+            support_need: Some(support_need(
+                body.tilt_rad,
+                body.ang_vel,
+                criterion.max_tilt_deg,
+                criterion.need_lookahead_s,
+            )),
+            support_effort: wrench.map(|w| support_effort(w, &sizing)),
+            support_torque_nm: wrench.map(|w| w.wrench_norm_torque),
+            support_force_n: wrench.map(|w| w.wrench_norm_force),
+        };
         let step = observe_balance_sample(&open, &sample, criterion, seed)?;
         let (counted, outcome) = match &step {
             BalanceAttemptStep::Continue(next) => (next.counted_burst, None),
@@ -1596,63 +2219,107 @@ fn run_balance_attempt(
         }
         match step {
             BalanceAttemptStep::Continue(next) => open = next,
-            BalanceAttemptStep::Finished(record) => return Ok(record),
+            BalanceAttemptStep::Finished(record) => break record,
         }
-    }
+    };
+    // The next reset clears it anyway; a death may already have cleared it.
+    let _ = controller.clear_body_spring(&torso);
+    Ok(result)
 }
 
-/// HTTP client for the neutral balance actions on a controller control server.
-pub struct HttpBalanceProbe {
+/// HTTP client for the generic physics actions of a controller control server. One keep-alive
+/// connection is reused for every call (reopened transparently when the server closes it).
+pub struct HttpBalanceController {
     host: String,
     port: u16,
     timeout: Duration,
+    connection: Option<BufReader<TcpStream>>,
+    connections_opened: u32,
 }
 
-/// JSON body of `begin_balance_attempt`.
-pub fn begin_attempt_request(
-    seed: u64,
-    criterion: &BalanceFeetCriterion,
-    params: &BalanceAttemptParams,
-) -> serde_json::Value {
-    let mut body = serde_json::json!({
-        "action": "begin_balance_attempt",
-        "seed": seed,
-        "torso_body": criterion.torso_body,
-        "left_foot_body": criterion.left_foot_body,
-        "right_foot_body": criterion.right_foot_body,
-        "max_tilt_deg": criterion.max_tilt_deg,
-        "support_level": params.support_level,
-        "support_max_stiffness_nm_per_rad": params.max_stiffness,
-        "support_max_damping_nm_s_per_rad": params.max_damping,
-        "settle_bursts": params.settle_bursts,
-        "burst_period_s": params.burst_period_s,
-        "support_deadband_deg": params.support_deadband_deg,
-        "perturb_interval_bursts": params.perturb_interval_bursts,
-        "perturb_torque_nm": params.perturb_torque_nm,
-        "perturb_duration_bursts": params.perturb_duration_bursts,
-    });
-    let optional = [
-        (
-            "support_height_stiffness_n_per_m",
-            params.height_stiffness_n_per_m,
-        ),
-        (
-            "support_height_damping_n_s_per_m",
-            params.height_damping_n_s_per_m,
-        ),
-        ("support_gravity_comp", params.gravity_comp),
-        ("support_xy_stiffness_n_per_m", params.xy_stiffness_n_per_m),
-        ("support_xy_damping_n_s_per_m", params.xy_damping_n_s_per_m),
-    ];
-    for (key, value) in optional {
-        if let Some(value) = value {
-            body[key] = serde_json::json!(value);
-        }
+/// JSON body of `get_model_info`.
+pub fn model_info_request() -> serde_json::Value {
+    serde_json::json!({"action": "get_model_info"})
+}
+
+/// JSON body of `reset_episode`.
+pub fn reset_episode_request(keyframe: Option<&str>) -> serde_json::Value {
+    let mut body = serde_json::json!({"action": "reset_episode"});
+    if let Some(name) = keyframe {
+        body["keyframe"] = serde_json::json!(name);
     }
     body
 }
 
-impl HttpBalanceProbe {
+/// JSON body of `set_body_spring`.
+pub fn set_body_spring_request(
+    body: &str,
+    gains: &SpringGains,
+    level: f64,
+    deadband_rad: f64,
+) -> serde_json::Value {
+    serde_json::json!({
+        "action": "set_body_spring",
+        "body": body,
+        "k_rot": gains.k_rot,
+        "d_rot": gains.d_rot,
+        "k_lin": gains.k_lin,
+        "d_lin": gains.d_lin,
+        "gravity_comp": gains.gravity_comp,
+        "level": level,
+        "deadband_rad": deadband_rad,
+        "ref": "current",
+    })
+}
+
+/// JSON body of `update_body_spring`.
+pub fn update_body_spring_request(body: &str, level: f64) -> serde_json::Value {
+    serde_json::json!({"action": "update_body_spring", "body": body, "level": level})
+}
+
+/// JSON body of `clear_body_spring`.
+pub fn clear_body_spring_request(body: &str) -> serde_json::Value {
+    serde_json::json!({"action": "clear_body_spring", "body": body})
+}
+
+/// JSON body of `apply_body_pulse`.
+pub fn apply_body_pulse_request(
+    body: &str,
+    torque: [f64; 3],
+    force: [f64; 3],
+    duration_s: f64,
+) -> serde_json::Value {
+    serde_json::json!({
+        "action": "apply_body_pulse",
+        "body": body,
+        "torque": torque,
+        "force": force,
+        "duration_s": duration_s,
+    })
+}
+
+/// JSON body of `measure`.
+pub fn measure_request_body(request: &MeasureRequest) -> serde_json::Value {
+    let contacts: Vec<serde_json::Value> = request
+        .contacts
+        .iter()
+        .map(|set| serde_json::json!({"a": set, "b": "world"}))
+        .collect();
+    serde_json::json!({
+        "action": "measure",
+        "bodies": request.bodies,
+        "contacts": contacts,
+    })
+}
+
+/// One HTTP exchange: status code, whether the server keeps the connection, and the body.
+struct HttpReply {
+    status: u16,
+    keep_alive: bool,
+    body: String,
+}
+
+impl HttpBalanceController {
     /// `base_url` is `http://host:port` with no path.
     pub fn new(base_url: &str, timeout: Duration) -> Result<Self, TrainerError> {
         if timeout.is_zero() {
@@ -1665,19 +2332,17 @@ impl HttpBalanceProbe {
             host,
             port,
             timeout,
+            connection: None,
+            connections_opened: 0,
         })
     }
 
-    fn command(&self, body: &serde_json::Value) -> Result<serde_json::Value, TrainerError> {
-        let payload = serde_json::to_vec(body).map_err(|error| {
-            TrainerError::Runtime(format!("balance command encode failed: {error}"))
-        })?;
-        let request = format!(
-            "POST /command HTTP/1.1\r\nHost: {}:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-            self.host,
-            self.port,
-            payload.len()
-        );
+    /// TCP connections opened so far (1 while keep-alive holds).
+    pub fn connections_opened(&self) -> u32 {
+        self.connections_opened
+    }
+
+    fn connect(&mut self) -> Result<BufReader<TcpStream>, TrainerError> {
         let address = format!("{}:{}", self.host, self.port);
         let socket = address
             .to_socket_addrs()
@@ -1686,55 +2351,197 @@ impl HttpBalanceProbe {
             .ok_or_else(|| {
                 TrainerError::Runtime(format!("balance control address {address} did not resolve"))
             })?;
-        let mut stream = TcpStream::connect_timeout(&socket, self.timeout).map_err(|error| {
+        let stream = TcpStream::connect_timeout(&socket, self.timeout).map_err(|error| {
             TrainerError::Runtime(format!("balance control connect failed: {error}"))
         })?;
         stream
             .set_read_timeout(Some(self.timeout))
-            .map_err(|error| TrainerError::Runtime(format!("balance control timeout: {error}")))?;
-        stream
-            .set_write_timeout(Some(self.timeout))
-            .map_err(|error| TrainerError::Runtime(format!("balance control timeout: {error}")))?;
-        stream.write_all(request.as_bytes()).map_err(|error| {
-            TrainerError::Runtime(format!("balance control write failed: {error}"))
-        })?;
-        stream.write_all(&payload).map_err(|error| {
-            TrainerError::Runtime(format!("balance control write failed: {error}"))
-        })?;
+            .and_then(|()| stream.set_write_timeout(Some(self.timeout)))
+            .and_then(|()| stream.set_nodelay(true))
+            .map_err(|error| TrainerError::Runtime(format!("balance control socket: {error}")))?;
+        self.connections_opened += 1;
+        Ok(BufReader::new(stream))
+    }
+
+    /// One request/response on `reader`. The flag is true when the failure happened before any
+    /// response byte arrived (a stale kept-alive connection), so the call may be retried.
+    fn exchange(
+        reader: &mut BufReader<TcpStream>,
+        request: &[u8],
+    ) -> Result<HttpReply, (TrainerError, bool)> {
+        let early = |error: std::io::Error, what: &str| {
+            (
+                TrainerError::Runtime(format!("balance control {what} failed: {error}")),
+                true,
+            )
+        };
+        reader
+            .get_mut()
+            .write_all(request)
+            .map_err(|error| early(error, "write"))?;
+        let mut status_line = String::new();
+        let read = reader
+            .read_line(&mut status_line)
+            .map_err(|error| early(error, "read"))?;
+        if read == 0 {
+            return Err((
+                TrainerError::Runtime("balance control closed the connection".to_string()),
+                true,
+            ));
+        }
+        let late = |error: std::io::Error| {
+            (
+                TrainerError::Runtime(format!("balance control read failed: {error}")),
+                false,
+            )
+        };
+        let status: u16 = status_line
+            .split_whitespace()
+            .nth(1)
+            .and_then(|code| code.parse().ok())
+            .ok_or_else(|| {
+                (
+                    TrainerError::Runtime(format!(
+                        "balance control HTTP failed: {}",
+                        status_line.trim()
+                    )),
+                    false,
+                )
+            })?;
+        let http_10 = status_line.starts_with("HTTP/1.0");
+        let mut content_length: Option<usize> = None;
+        let mut keep_alive = !http_10;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).map_err(late)?;
+            let line = line.trim_end();
+            if line.is_empty() {
+                break;
+            }
+            if let Some((name, value)) = line.split_once(':') {
+                let value = value.trim();
+                match name.trim().to_ascii_lowercase().as_str() {
+                    "content-length" => content_length = value.parse().ok(),
+                    "connection" => {
+                        let lower = value.to_ascii_lowercase();
+                        if lower.contains("close") {
+                            keep_alive = false;
+                        } else if lower.contains("keep-alive") {
+                            keep_alive = true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
         let mut raw = Vec::new();
-        stream.read_to_end(&mut raw).map_err(|error| {
-            TrainerError::Runtime(format!("balance control read failed: {error}"))
+        match content_length {
+            Some(length) => {
+                raw.resize(length, 0);
+                reader.read_exact(&mut raw).map_err(late)?;
+            }
+            None => {
+                reader.read_to_end(&mut raw).map_err(late)?;
+                keep_alive = false;
+            }
+        }
+        Ok(HttpReply {
+            status,
+            keep_alive,
+            body: String::from_utf8_lossy(&raw).into_owned(),
+        })
+    }
+
+    fn command(&mut self, body: &serde_json::Value) -> Result<serde_json::Value, TrainerError> {
+        let payload = serde_json::to_vec(body).map_err(|error| {
+            TrainerError::Runtime(format!("balance command encode failed: {error}"))
         })?;
-        parse_http_json(&raw)
+        let mut request = format!(
+            "POST /command HTTP/1.1\r\nHost: {}:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: keep-alive\r\n\r\n",
+            self.host,
+            self.port,
+            payload.len()
+        )
+        .into_bytes();
+        request.extend_from_slice(&payload);
+        let (mut reader, reused) = match self.connection.take() {
+            Some(reader) => (reader, true),
+            None => (self.connect()?, false),
+        };
+        let reply = match Self::exchange(&mut reader, &request) {
+            Ok(reply) => reply,
+            Err((_, true)) if reused => {
+                reader = self.connect()?;
+                Self::exchange(&mut reader, &request).map_err(|(error, _)| error)?
+            }
+            Err((error, _)) => return Err(error),
+        };
+        if reply.keep_alive {
+            self.connection = Some(reader);
+        }
+        decode_envelope(reply.status, &reply.body)
+    }
+
+    fn command_as<T: serde::de::DeserializeOwned>(
+        &mut self,
+        body: &serde_json::Value,
+        what: &str,
+    ) -> Result<T, TrainerError> {
+        let result = self.command(body)?;
+        serde_json::from_value(result).map_err(|error| {
+            TrainerError::Runtime(format!("balance {what} decode failed: {error}"))
+        })
     }
 }
 
-impl BalanceProbe for HttpBalanceProbe {
-    fn begin_attempt(
-        &mut self,
-        seed: u64,
-        criterion: &BalanceFeetCriterion,
-        params: &BalanceAttemptParams,
-    ) -> Result<BalanceBegin, TrainerError> {
-        let result = self.command(&begin_attempt_request(seed, criterion, params))?;
-        serde_json::from_value(result)
-            .map_err(|error| TrainerError::Runtime(format!("balance begin decode failed: {error}")))
+impl BalanceController for HttpBalanceController {
+    fn model_info(&mut self) -> Result<ModelInfo, TrainerError> {
+        self.command_as(&model_info_request(), "model info")
     }
 
-    fn poll(&mut self, after_seq: u64, timeout: Duration) -> Result<BalanceSample, TrainerError> {
-        let timeout_s = timeout.as_secs_f64();
-        if timeout_s <= 0.0 {
-            return Err(TrainerError::Config(
-                "balance poll timeout must be > 0".to_string(),
-            ));
-        }
-        let result = self.command(&serde_json::json!({
-            "action": "poll_balance_outcome",
-            "after_seq": after_seq,
-            "timeout_s": timeout_s,
-        }))?;
-        serde_json::from_value(result)
-            .map_err(|error| TrainerError::Runtime(format!("balance poll decode failed: {error}")))
+    fn reset_episode(&mut self, keyframe: Option<&str>) -> Result<u64, TrainerError> {
+        let result = self.command(&reset_episode_request(keyframe))?;
+        result
+            .get("episode_id")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| {
+                TrainerError::Runtime("reset_episode reply has no episode_id".to_string())
+            })
+    }
+
+    fn set_body_spring(
+        &mut self,
+        body: &str,
+        gains: &SpringGains,
+        level: f64,
+        deadband_rad: f64,
+    ) -> Result<(), TrainerError> {
+        self.command(&set_body_spring_request(body, gains, level, deadband_rad))
+            .map(|_| ())
+    }
+
+    fn update_body_spring(&mut self, body: &str, level: f64) -> Result<(), TrainerError> {
+        self.command(&update_body_spring_request(body, level))
+            .map(|_| ())
+    }
+
+    fn clear_body_spring(&mut self, body: &str) -> Result<(), TrainerError> {
+        self.command(&clear_body_spring_request(body)).map(|_| ())
+    }
+
+    fn apply_body_pulse(
+        &mut self,
+        body: &str,
+        torque: [f64; 3],
+        force: [f64; 3],
+        duration_s: f64,
+    ) -> Result<(), TrainerError> {
+        self.command(&apply_body_pulse_request(body, torque, force, duration_s))
+            .map(|_| ())
+    }
+
+    fn measure(&mut self, request: &MeasureRequest) -> Result<Measurement, TrainerError> {
+        self.command_as(&measure_request_body(request), "measure")
     }
 }
 
@@ -1761,19 +2568,20 @@ fn split_http_base(base_url: &str) -> Result<(String, u16), TrainerError> {
     Ok((host.to_string(), port))
 }
 
-fn parse_http_json(raw: &[u8]) -> Result<serde_json::Value, TrainerError> {
-    let text = String::from_utf8_lossy(raw);
-    let (head, body) = text.split_once("\r\n\r\n").ok_or_else(|| {
-        TrainerError::Runtime("balance control response has no HTTP body".to_string())
-    })?;
-    let status_line = head.lines().next().unwrap_or("");
-    if !status_line.contains(" 200 ") {
+fn decode_envelope(status: u16, body: &str) -> Result<serde_json::Value, TrainerError> {
+    let envelope: Option<serde_json::Value> = serde_json::from_str(body.trim()).ok();
+    if status != 200 {
+        let detail = envelope
+            .as_ref()
+            .and_then(|value| value.get("error"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
         return Err(TrainerError::Runtime(format!(
-            "balance control HTTP failed: {status_line}"
+            "balance control HTTP failed: status {status} {detail}"
         )));
     }
-    let envelope: serde_json::Value = serde_json::from_str(body.trim())
-        .map_err(|error| TrainerError::Runtime(format!("balance control JSON failed: {error}")))?;
+    let envelope = envelope
+        .ok_or_else(|| TrainerError::Runtime("balance control response is not JSON".to_string()))?;
     let ok = envelope
         .get("ok")
         .and_then(|value| value.as_bool())
@@ -1797,67 +2605,19 @@ fn parse_http_json(raw: &[u8]) -> Result<serde_json::Value, TrainerError> {
 mod tests {
     use super::*;
     use crate::control::CollectingEventSink;
-    use std::collections::VecDeque;
 
-    struct ScriptedProbe {
-        begins: VecDeque<BalanceBegin>,
-        samples: VecDeque<BalanceSample>,
-        seen_params: Vec<BalanceAttemptParams>,
-    }
-
-    impl ScriptedProbe {
-        fn new(begins: Vec<BalanceBegin>, samples: Vec<BalanceSample>) -> Self {
-            Self {
-                begins: begins.into(),
-                samples: samples.into(),
-                seen_params: Vec::new(),
-            }
-        }
-    }
-
-    impl BalanceProbe for ScriptedProbe {
-        fn begin_attempt(
-            &mut self,
-            seed: u64,
-            _criterion: &BalanceFeetCriterion,
-            params: &BalanceAttemptParams,
-        ) -> Result<BalanceBegin, TrainerError> {
-            self.seen_params.push(*params);
-            let mut begun = self
-                .begins
-                .pop_front()
-                .ok_or_else(|| TrainerError::Runtime("no scripted begin".to_string()))?;
-            begun.seed = seed;
-            Ok(begun)
-        }
-
-        fn poll(
-            &mut self,
-            _after_seq: u64,
-            _timeout: Duration,
-        ) -> Result<BalanceSample, TrainerError> {
-            self.samples
-                .pop_front()
-                .ok_or_else(|| TrainerError::Runtime("no scripted sample".to_string()))
-        }
-    }
-
-    /// One physics step per burst so legacy tests stay readable.
+    /// One burst is 0.05 s; hold 0.1 s = 2 bursts, cap 0.2 s = 4 bursts. One physics step per
+    /// burst so legacy tests stay readable.
     fn criterion() -> BalanceFeetCriterion {
-        let mut c = BalanceFeetCriterion::new("torso", "left_foot", "right_foot", 15.0, 2, 4);
-        c.physics_steps_per_burst = 1;
+        let mut c = BalanceFeetCriterion::new(
+            "torso",
+            vec!["left_foot".to_string(), "right_foot".to_string()],
+            15.0,
+            0.1,
+            0.2,
+        );
+        c.burst_period_s = 0.05;
         c
-    }
-
-    fn begin() -> BalanceBegin {
-        BalanceBegin {
-            seed: 0,
-            torso_body: "torso".to_string(),
-            left_foot_body: "left_foot".to_string(),
-            right_foot_body: "right_foot".to_string(),
-            max_tilt_deg: 15.0,
-            physics_steps_per_burst: None,
-        }
     }
 
     fn sample(seq: u64, seed: u64, tilt: f64) -> BalanceSample {
@@ -1865,8 +2625,7 @@ mod tests {
             seq,
             seed,
             tilt_deg: tilt,
-            left_foot_contact: true,
-            right_foot_contact: true,
+            contacts: vec![true, true],
             terminal: None,
             support_level: Some(0.0),
             settling: false,
@@ -1935,87 +2694,13 @@ mod tests {
         open.bursts = 1;
         open.holding_bursts = 1;
         open.last_seq = 1;
-        open.last_burst_seq = Some(1);
+        open.last_burst_seq = Some(1.0);
         let mut s = balanced(2, 3);
-        s.right_foot_contact = false;
+        s.contacts[1] = false;
         match observe_balance_sample(&open, &s, &criterion(), 3).expect("step") {
             BalanceAttemptStep::Continue(next) => assert_eq!(next.holding_bursts, 0),
             BalanceAttemptStep::Finished(_) => panic!("one missed foot is not the cap"),
         }
-    }
-
-    #[test]
-    fn phase_emits_progress_and_success_rate() {
-        let mut probe = ScriptedProbe::new(vec![begin()], vec![balanced(1, 1), balanced(2, 1)]);
-        let mut events = CollectingEventSink::default();
-        let run_id = RunId("balance-test".to_string());
-        let mut presented = 0;
-        let rule = criterion();
-        let mut run = BalancePhaseRun {
-            phase: "train",
-            seeds: &[1],
-            criterion: &rule,
-            poll_timeout: Duration::from_millis(1),
-            run_id: &run_id,
-            support_mode: None,
-            deliver_reward: None,
-            reward_policy: BalanceRewardPolicy::Affect,
-        };
-        let report = run_balance_phase(
-            &mut run,
-            &mut probe,
-            &mut |_| {
-                presented += 1;
-                Ok(())
-            },
-            &mut events,
-            &CancelToken::new(),
-        )
-        .expect("phase");
-        assert_eq!(report.success_rate, 1.0);
-        assert_eq!(presented, 2);
-        assert!(report.median_bursts_to_success.is_some());
-        assert_eq!(probe.seen_params[0].support_level, 1.0);
-        let card = balance_phase_scorecard("sc-1", "sha256:abc", 1, "train", "b", "hash", &report);
-        assert_eq!(card.metrics.get("success_rate"), Some(&1.0));
-        assert_eq!(card.evaluation_protocol_version.0, "balance-feet-v2");
-    }
-
-    #[test]
-    fn test_phase_runs_at_support_min_and_delivers_reward() {
-        let mut probe = ScriptedProbe::new(vec![begin()], vec![balanced(1, 1), balanced(2, 1)]);
-        let mut events = CollectingEventSink::default();
-        let run_id = RunId("balance-test".to_string());
-        let rule = criterion();
-        let mut delivered: Vec<RewardSignal> = Vec::new();
-        let mut sink = |signals: &[RewardSignal]| -> Result<(), TrainerError> {
-            delivered.extend_from_slice(signals);
-            Ok(())
-        };
-        let mut run = BalancePhaseRun {
-            phase: "test",
-            seeds: &[1],
-            criterion: &rule,
-            poll_timeout: Duration::from_millis(1),
-            run_id: &run_id,
-            support_mode: None,
-            deliver_reward: Some(&mut sink),
-            reward_policy: BalanceRewardPolicy::Affect,
-        };
-        run_balance_phase(
-            &mut run,
-            &mut probe,
-            &mut |_| Ok(()),
-            &mut events,
-            &CancelToken::new(),
-        )
-        .expect("phase");
-        assert_eq!(probe.seen_params[0].support_level, 0.0);
-        // burst 1: support 0 and upright -> 0.1; burst 2: success -> 1.0
-        assert_eq!(delivered.len(), 2);
-        assert_eq!(delivered[0].magnitude, 0.1);
-        assert_eq!(delivered[1].channel, AffectChannel::Pleasure);
-        assert_eq!(delivered[1].magnitude, 1.0);
     }
 
     fn cfg() -> SupportConfig {
@@ -2080,33 +2765,11 @@ mod tests {
     }
 
     #[test]
-    fn criterion_validation_covers_support_fields() {
-        let mut c = criterion();
-        assert!(c.validate().is_ok());
-        c.support_min = 0.5;
-        c.support_start = 0.4;
-        assert!(c.validate().is_err());
-        let mut c = criterion();
-        c.support_step = 0.0;
-        assert!(c.validate().is_err());
-        let mut c = criterion();
-        c.graduate_success_rate = 0.0;
-        assert!(c.validate().is_err());
-        let mut c = criterion();
-        c.attempts_per_level = 0;
-        assert!(c.validate().is_err());
-        let mut c = criterion();
-        c.burst_period_s = 0.0;
-        assert!(c.validate().is_err());
-    }
-
-    #[test]
     fn twenty_five_steps_are_one_burst() {
         let mut c = criterion();
-        c.physics_steps_per_burst = 25;
-        c.hold_bursts = 10;
-        c.attempt_burst_cap = 20;
-        let mut open = OpenBalanceAttempt::fresh();
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 1.0;
+        let mut open = OpenBalanceAttempt::for_attempt(25.0, 0.0);
         open = fed(&open, &balanced(1, 5), &c);
         assert_eq!((open.bursts, open.counted_burst), (1, true));
         for seq in 2..26 {
@@ -2124,14 +2787,13 @@ mod tests {
     #[test]
     fn late_poll_counts_every_elapsed_burst() {
         let mut c = criterion();
-        c.physics_steps_per_burst = 25;
-        c.hold_bursts = 10;
-        c.attempt_burst_cap = 20;
-        let mut open = OpenBalanceAttempt::fresh();
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 1.0;
+        let mut open = OpenBalanceAttempt::for_attempt(25.0, 0.0);
         open = fed(&open, &balanced(1, 5), &c);
         open = fed(&open, &balanced(60, 5), &c);
         assert_eq!(open.bursts, 3, "1 first burst + 2 elapsed (59 / 25)");
-        assert_eq!(open.last_burst_seq, Some(51));
+        assert_eq!(open.last_burst_seq, Some(51.0));
         assert_eq!(
             open.holding_bursts, 3,
             "hold advances by elapsed upright bursts"
@@ -2142,10 +2804,9 @@ mod tests {
     #[test]
     fn controller_steps_per_burst_overrides_criterion() {
         let mut c = criterion();
-        c.physics_steps_per_burst = 25;
-        c.hold_bursts = 10;
-        c.attempt_burst_cap = 20;
-        let mut open = OpenBalanceAttempt::for_attempt(Some(10), 0.0);
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 1.0;
+        let mut open = OpenBalanceAttempt::for_attempt(10.0, 0.0);
         open = fed(&open, &balanced(1, 5), &c);
         open = fed(&open, &balanced(11, 5), &c);
         assert_eq!(open.bursts, 2);
@@ -2254,7 +2915,7 @@ mod tests {
         );
         let mut r = BalanceAffectReward::new();
         let mut s = sample(1, 1, 3.0);
-        s.right_foot_contact = false;
+        s.contacts[1] = false;
         assert!(
             r.on_sample(&s, None, &criterion()).is_empty(),
             "foot up: not upright"
@@ -2346,9 +3007,8 @@ mod tests {
     #[test]
     fn perturbations_count_rising_edges() {
         let mut c = criterion();
-        c.hold_bursts = 50;
-        c.attempt_burst_cap = 100;
-        c.physics_steps_per_burst = 1;
+        c.hold_s = 2.5;
+        c.attempt_cap_s = 5.0;
         let pattern = [false, true, true, false, false, true, false, true, true];
         let mut open = OpenBalanceAttempt::fresh();
         for (i, p) in pattern.iter().enumerate() {
@@ -2366,69 +3026,13 @@ mod tests {
     }
 
     #[test]
-    fn begin_request_includes_support_fields() {
-        let c = criterion();
-        let mut params = BalanceAttemptParams::from_criterion(&c, 0.3);
-        params.burst_period_s = 0.04;
-        let body = begin_attempt_request(9, &c, &params);
-        assert_eq!(body["action"], "begin_balance_attempt");
-        assert_eq!(body["seed"], 9);
-        assert_eq!(body["support_level"], 0.3);
-        assert_eq!(body["support_max_stiffness_nm_per_rad"], 20.0);
-        assert_eq!(body["support_max_damping_nm_s_per_rad"], 0.2);
-        assert_eq!(body["settle_bursts"], 10);
-        assert_eq!(body["burst_period_s"], 0.04);
-        assert_eq!(body["support_deadband_deg"], 6.0);
-        assert_eq!(body["perturb_interval_bursts"], 0);
-        assert_eq!(body["perturb_torque_nm"], 0.3);
-        assert_eq!(body["perturb_duration_bursts"], 2);
-    }
-
-    #[test]
-    fn old_format_samples_still_parse() {
-        let old = serde_json::json!({
-            "seq": 3, "seed": 1, "tilt_deg": 4.5,
-            "left_foot_contact": true, "right_foot_contact": false, "terminal": null
-        });
-        let parsed: BalanceSample = serde_json::from_value(old).expect("old sample");
-        assert!(!parsed.settling);
-        assert!(!parsed.perturbing);
-        assert_eq!(parsed.support_level, None);
-        let c = criterion();
-        let mut reward = BalanceAffectReward::new();
-        let signals = reward.on_sample(&parsed, None, &c);
-        assert!(
-            signals.iter().all(|x| x.magnitude != 0.1),
-            "no Pleasure 0.1 without a reported support level"
-        );
-        let new = serde_json::json!({
-            "seq": 3, "seed": 1, "tilt_deg": 4.5, "left_foot_contact": true,
-            "right_foot_contact": true, "terminal": "death",
-            "support_level": 0.7, "settling": true
-        });
-        let parsed: BalanceSample = serde_json::from_value(new).expect("new sample");
-        assert!(parsed.settling);
-        assert_eq!(parsed.terminal, Some(BalanceTerminal::Death));
-        let c: BalanceFeetCriterion = serde_json::from_value(serde_json::json!({
-            "torso_body": "t", "left_foot_body": "l", "right_foot_body": "r",
-            "max_tilt_deg": 10.0, "hold_bursts": 1, "attempt_burst_cap": 2
-        }))
-        .expect("old criterion");
-        assert_eq!(c.attempts_per_level, 3);
-        assert_eq!(c.physics_steps_per_burst, 25);
-        assert_eq!(c.support_deadband_deg, 6.0);
-        assert_eq!(c.perturb_interval_bursts, 0);
-        assert_eq!(c.perturb_duration_bursts, 2);
-    }
-
-    #[test]
     fn slow_polls_reach_success_at_hold_bursts_elapsed() {
         // Polls every 2 bursts (steps_per_burst 1, seq advancing by 2). The first sample counts
         // as one burst, so holds after each poll are 1, 3, 5: success exactly at 5 bursts, not
         // after 5 samples.
         let mut c = criterion();
-        c.hold_bursts = 5;
-        c.attempt_burst_cap = 50;
+        c.hold_s = 0.25;
+        c.attempt_cap_s = 2.5;
         let mut open = OpenBalanceAttempt::fresh();
         open = fed(&open, &balanced(1, 3), &c);
         open = fed(&open, &balanced(3, 3), &c);
@@ -2451,8 +3055,8 @@ mod tests {
         // up x3, tilt, up x5 (last one with a lifted foot is NOT in it), foot lift, up x2.
         // Streaks: 3, 5, 2. Cap 12 truncates at the 12th burst.
         let mut c = criterion();
-        c.hold_bursts = 100;
-        c.attempt_burst_cap = 12;
+        c.hold_s = 5.0;
+        c.attempt_cap_s = 0.6;
         let mut open = OpenBalanceAttempt::fresh();
         for seq in 1..=3 {
             open = fed(&open, &balanced(seq, 1), &c);
@@ -2462,7 +3066,7 @@ mod tests {
             open = fed(&open, &balanced(seq, 1), &c);
         }
         let mut lifted = balanced(10, 1);
-        lifted.left_foot_contact = false;
+        lifted.contacts[0] = false;
         open = fed(&open, &lifted, &c);
         assert_eq!(open.longest_balanced_bursts, 5);
         assert_eq!(open.first_violation_burst, Some(3));
@@ -2605,7 +3209,7 @@ mod tests {
         // Feet up inside the deadband: no holding Pleasure.
         let mut r = BalanceAssistReward::new();
         let mut up = need_sample(Some(0.0), 0.0, false);
-        up.left_foot_contact = false;
+        up.contacts[0] = false;
         assert!(r.on_sample(&up, None, &c).is_empty());
         assert_eq!(BalanceAssistReward::policy_id(), "reward.balance-assist.v1");
         assert_eq!(
@@ -2642,47 +3246,880 @@ mod tests {
         assert!(bad.validate().is_err());
     }
 
-    #[test]
-    fn new_sample_fields_parse_and_harness_fields_are_sent_only_when_set() {
-        let old = serde_json::json!({
-            "seq": 1, "seed": 1, "tilt_deg": 1.0,
-            "left_foot_contact": true, "right_foot_contact": true, "terminal": null
-        });
-        let parsed: BalanceSample = serde_json::from_value(old).expect("old sample");
-        assert_eq!(parsed.support_need, None);
-        assert_eq!(parsed.support_force_n, None);
-        let new = serde_json::json!({
-            "seq": 1, "seed": 1, "tilt_deg": 1.0, "left_foot_contact": true,
-            "right_foot_contact": true, "terminal": null, "support_need": 0.0,
-            "support_effort": 0.5, "support_torque_nm": 1.5, "support_force_n": 2.5
-        });
-        let parsed: BalanceSample = serde_json::from_value(new).expect("new sample");
-        assert_eq!(parsed.support_need, Some(0.0));
-        assert_eq!(parsed.support_effort, Some(0.5));
-        assert_eq!(parsed.support_torque_nm, Some(1.5));
-        assert_eq!(parsed.support_force_n, Some(2.5));
-        let keys = [
-            "support_height_stiffness_n_per_m",
-            "support_height_damping_n_s_per_m",
-            "support_gravity_comp",
-            "support_xy_stiffness_n_per_m",
-            "support_xy_damping_n_s_per_m",
-        ];
-        let mut c = criterion();
-        let body = begin_attempt_request(1, &c, &BalanceAttemptParams::from_criterion(&c, 0.5));
-        for k in keys {
-            assert!(body.get(k).is_none(), "{k} must be absent when unset");
+    // ---- mock controller: the generic physics primitives of the contract ----
+
+    #[derive(Debug, Clone, Copy)]
+    struct Scripted {
+        tilt_deg: f64,
+        down: bool,
+        terminal: Option<BalanceTerminal>,
+    }
+
+    fn upright_step() -> Scripted {
+        Scripted {
+            tilt_deg: 2.0,
+            down: true,
+            terminal: None,
         }
-        c.support_height_stiffness_n_per_m = Some(100.0);
-        c.support_height_damping_n_s_per_m = Some(10.0);
-        c.support_gravity_comp = Some(0.8);
-        c.support_xy_stiffness_n_per_m = Some(50.0);
-        c.support_xy_damping_n_s_per_m = Some(5.0);
-        let body = begin_attempt_request(1, &c, &BalanceAttemptParams::from_criterion(&c, 0.5));
-        assert_eq!(body["support_height_stiffness_n_per_m"], 100.0);
-        assert_eq!(body["support_height_damping_n_s_per_m"], 10.0);
-        assert_eq!(body["support_gravity_comp"], 0.8);
-        assert_eq!(body["support_xy_stiffness_n_per_m"], 50.0);
-        assert_eq!(body["support_xy_damping_n_s_per_m"], 5.0);
+    }
+
+    /// `script(measure_index_since_reset, seconds_since_reset)`.
+    type Script = Box<dyn FnMut(u32, f64) -> Scripted>;
+
+    struct MockController {
+        info: ModelInfo,
+        advance_s: f64,
+        script: Script,
+        contact_count: usize,
+        floor_z: Option<f64>,
+        calls: Vec<String>,
+        resets: Vec<Option<String>>,
+        spring_sets: Vec<(SpringGains, f64, f64)>,
+        /// (level, seconds since reset when it was sent)
+        level_updates: Vec<(f64, f64)>,
+        /// (torque, force, duration_s, seconds since reset)
+        pulses: Vec<([f64; 3], [f64; 3], f64, f64)>,
+        measure_requests: Vec<MeasureRequest>,
+        spring_level: Option<f64>,
+        k: u32,
+        fresh: bool,
+        steps: u64,
+    }
+
+    /// Howard-like model: base is the free root (0.737 kg), torso a child body.
+    fn howard_info() -> ModelInfo {
+        let body = |name: &str, root: &str, subtree: f64, inertia: [f64; 3]| ModelBody {
+            name: name.to_string(),
+            root_name: root.to_string(),
+            mass: subtree,
+            subtree_mass: subtree,
+            inertia,
+            subtree_inertia: [5e-3, 4e-3, 1.3e-3],
+        };
+        ModelInfo {
+            timestep_s: 0.002,
+            gravity: [0.0, 0.0, -9.81],
+            bodies: vec![
+                body("base", "base", 0.737, [2e-3, 2e-3, 1e-3]),
+                body("torso", "base", 0.6, [2e-3, 2e-3, 1e-3]),
+                body("left_foot", "base", 0.05, [1e-5; 3]),
+                body("right_foot", "base", 0.05, [1e-5; 3]),
+                body("tail_foot", "base", 0.05, [1e-5; 3]),
+            ],
+            free_roots: vec!["base".to_string()],
+            keyframes: vec![serde_json::json!("home"), serde_json::json!("stand")],
+        }
+    }
+
+    impl MockController {
+        fn new(advance_s: f64, contact_count: usize, script: Script) -> Self {
+            Self {
+                info: howard_info(),
+                advance_s,
+                script,
+                contact_count,
+                floor_z: Some(0.01),
+                calls: Vec::new(),
+                resets: Vec::new(),
+                spring_sets: Vec::new(),
+                level_updates: Vec::new(),
+                pulses: Vec::new(),
+                measure_requests: Vec::new(),
+                spring_level: None,
+                k: 0,
+                fresh: false,
+                steps: 0,
+            }
+        }
+
+        fn seconds(&self) -> f64 {
+            f64::from(self.k) * self.advance_s
+        }
+
+        fn count(&self, action: &str) -> usize {
+            self.calls.iter().filter(|call| *call == action).count()
+        }
+    }
+
+    impl BalanceController for MockController {
+        fn model_info(&mut self) -> Result<ModelInfo, TrainerError> {
+            self.calls.push("get_model_info".to_string());
+            Ok(self.info.clone())
+        }
+
+        fn reset_episode(&mut self, keyframe: Option<&str>) -> Result<u64, TrainerError> {
+            self.calls.push("reset_episode".to_string());
+            self.resets.push(keyframe.map(str::to_string));
+            self.k = 0;
+            self.fresh = true;
+            self.spring_level = None;
+            Ok(self.resets.len() as u64)
+        }
+
+        fn set_body_spring(
+            &mut self,
+            _body: &str,
+            gains: &SpringGains,
+            level: f64,
+            deadband_rad: f64,
+        ) -> Result<(), TrainerError> {
+            self.calls.push("set_body_spring".to_string());
+            self.spring_sets.push((*gains, level, deadband_rad));
+            self.spring_level = Some(level);
+            Ok(())
+        }
+
+        fn update_body_spring(&mut self, _body: &str, level: f64) -> Result<(), TrainerError> {
+            self.calls.push("update_body_spring".to_string());
+            self.level_updates.push((level, self.seconds()));
+            self.spring_level = Some(level);
+            Ok(())
+        }
+
+        fn clear_body_spring(&mut self, _body: &str) -> Result<(), TrainerError> {
+            self.calls.push("clear_body_spring".to_string());
+            self.spring_level = None;
+            Ok(())
+        }
+
+        fn apply_body_pulse(
+            &mut self,
+            _body: &str,
+            torque: [f64; 3],
+            force: [f64; 3],
+            duration_s: f64,
+        ) -> Result<(), TrainerError> {
+            self.calls.push("apply_body_pulse".to_string());
+            self.pulses
+                .push((torque, force, duration_s, self.seconds()));
+            Ok(())
+        }
+
+        fn measure(&mut self, request: &MeasureRequest) -> Result<Measurement, TrainerError> {
+            self.calls.push("measure".to_string());
+            self.measure_requests.push(request.clone());
+            if self.fresh {
+                self.fresh = false;
+            } else {
+                self.k += 1;
+                self.steps = (self.seconds() / self.info.timestep_s).round() as u64;
+            }
+            let (k, seconds) = (self.k, self.seconds());
+            let scripted = (self.script)(k, seconds);
+            let touching_z = self.floor_z.filter(|_| scripted.down);
+            let contacts = (0..self.contact_count)
+                .map(|_| ContactMeasure {
+                    touching: scripted.down,
+                    points: touching_z.map(|z| vec![[0.0, 0.0, z]]).unwrap_or_default(),
+                })
+                .collect();
+            let mut bodies = BTreeMap::new();
+            bodies.insert(
+                request.bodies[0].clone(),
+                BodyMeasure {
+                    tilt_rad: scripted.tilt_deg.to_radians(),
+                    tilt_vec: [0.0, 0.0],
+                    ang_vel: [0.0; 3],
+                    com: [0.0, 0.0, 0.1],
+                    subtree_com: [0.0, 0.0, 0.150],
+                },
+            );
+            let mut springs = BTreeMap::new();
+            if let Some(level) = self.spring_level {
+                springs.insert(
+                    request.bodies[0].clone(),
+                    SpringMeasure {
+                        wrench_norm_torque: level * 0.5,
+                        wrench_norm_force: level * 0.5,
+                        gravity_comp_force_n: level * 0.737 * 9.81,
+                    },
+                );
+            }
+            Ok(Measurement {
+                sim_time_s: self.seconds(),
+                physics_steps: self.steps,
+                episode_id: self.resets.len() as u64,
+                terminal: scripted.terminal,
+                bodies,
+                contacts,
+                springs,
+            })
+        }
+    }
+
+    fn contact_names(count: usize) -> Vec<String> {
+        ["left_foot", "right_foot", "tail_foot"][..count]
+            .iter()
+            .map(|name| name.to_string())
+            .collect()
+    }
+
+    fn criterion_for(contacts: usize, period_s: f64) -> BalanceFeetCriterion {
+        let mut c = BalanceFeetCriterion::new("torso", contact_names(contacts), 15.0, 1.0, 3.0);
+        c.burst_period_s = period_s;
+        c
+    }
+
+    fn run_phase(
+        c: &BalanceFeetCriterion,
+        controller: &mut MockController,
+        phase: &str,
+        seeds: &[u64],
+    ) -> Result<BalancePhaseReport, TrainerError> {
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-test".to_string());
+        let mut run = BalancePhaseRun {
+            phase,
+            seeds,
+            criterion: c,
+            run_id: &run_id,
+            support_mode: None,
+            deliver_reward: None,
+            reward_policy: BalanceRewardPolicy::Affect,
+        };
+        run_balance_phase(
+            &mut run,
+            controller,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+    }
+
+    // ---- gain sizing ----
+
+    #[test]
+    fn gain_sizing_reproduces_howards_previous_values() {
+        let info = howard_info();
+        let inputs = sizing_inputs(&info, "torso", 0.140).expect("inputs");
+        assert!((inputs.mass_kg - 0.737).abs() < 1e-12);
+        assert!((inputs.i_tilt - 5e-3).abs() < 1e-12);
+        assert!((inputs.i_min - 1.3e-3).abs() < 1e-12);
+        let g = size_spring_gains(&inputs);
+        println!(
+            "sized: k_rot {:.2} d_rot {:.3} k_z {:.0} d_z {:.1} k_xy {:.0} d_xy {:.1}",
+            g.k_rot, g.d_rot, g.k_lin[2], g.d_lin[2], g.k_lin[0], g.d_lin[0]
+        );
+        assert!((34.0..=36.0).contains(&g.k_rot), "k_rot {}", g.k_rot);
+        assert!((g.d_rot - 0.333).abs() < 0.02, "d_rot {}", g.d_rot);
+        assert!(
+            (11_000.0..=12_000.0).contains(&g.k_lin[2]),
+            "k_z {}",
+            g.k_lin[2]
+        );
+        assert!((g.d_lin[2] - 120.0).abs() < 3.0, "d_z {}", g.d_lin[2]);
+        assert!(
+            (3_900.0..=4_100.0).contains(&g.k_lin[0]),
+            "k_xy {}",
+            g.k_lin[0]
+        );
+        assert!((g.d_lin[0] - 80.0).abs() < 2.0, "d_xy {}", g.d_lin[0]);
+        assert_eq!(g.k_lin[0], g.k_lin[1]);
+        assert_eq!(g.gravity_comp, 1.0);
+    }
+
+    #[test]
+    fn d_rot_is_capped_for_explicit_force_stability() {
+        let mut info = howard_info();
+        info.bodies[0].subtree_inertia = [5e-3, 4e-3, 1.0e-5];
+        let inputs = sizing_inputs(&info, "torso", 0.140).expect("inputs");
+        let g = size_spring_gains(&inputs);
+        assert!(
+            (g.d_rot - 0.9 * 2.0 * 1.0e-5 / 0.002).abs() < 1e-12,
+            "{}",
+            g.d_rot
+        );
+    }
+
+    #[test]
+    fn limp_torso_inertia_caps_k_rot_and_d_rot() {
+        let mut info = howard_info();
+        info.bodies[1].inertia = [1e-5, 1e-5, 1e-5];
+        let inputs = sizing_inputs(&info, "torso", 0.140).expect("inputs");
+        let g = size_spring_gains(&inputs);
+        assert!(
+            (g.k_rot - 0.25 * 1e-5 / (0.002 * 0.002)).abs() < 1e-9,
+            "{}",
+            g.k_rot
+        );
+        assert!(g.d_rot * 0.002 / 1e-5 < 2.0, "d dt / I < 2: {}", g.d_rot);
+    }
+
+    #[test]
+    fn explicit_overrides_win_over_sizing() {
+        let inputs = sizing_inputs(&howard_info(), "torso", 0.140).expect("inputs");
+        let mut c = criterion_for(2, 0.05);
+        let sized = gains_for(&inputs, &c);
+        assert_eq!(sized, size_spring_gains(&inputs));
+        c.support_rot_stiffness_nm_per_rad = Some(50.0);
+        c.support_height_stiffness_n_per_m = Some(7.0);
+        c.support_height_damping_n_s_per_m = Some(8.0);
+        c.support_xy_stiffness_n_per_m = Some(9.0);
+        c.support_xy_damping_n_s_per_m = Some(10.0);
+        c.support_gravity_comp = Some(0.5);
+        let g = gains_for(&inputs, &c);
+        assert_eq!(g.k_rot, 50.0);
+        assert!(
+            (g.d_rot - 0.8 * (50.0_f64 * 5e-3).sqrt()).abs() < 1e-9,
+            "k feeds d"
+        );
+        assert_eq!(g.k_lin, [9.0, 9.0, 7.0]);
+        assert_eq!(g.d_lin, [10.0, 10.0, 8.0]);
+        assert_eq!(g.gravity_comp, 0.5);
+        c.support_rot_damping_nm_s_per_rad = Some(0.11);
+        assert_eq!(gains_for(&inputs, &c).d_rot, 0.11);
+    }
+
+    #[test]
+    fn sizing_names_what_is_missing() {
+        let mut info = howard_info();
+        info.bodies[0].subtree_mass = 0.0;
+        let error = sizing_inputs(&info, "torso", 0.140)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("root subtree mass"), "{error}");
+        let error = sizing_inputs(&howard_info(), "nope", 0.140)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("nope"), "{error}");
+    }
+
+    // ---- a full attempt against the mock ----
+
+    #[test]
+    fn attempt_runs_reset_spring_measure_loop_to_success() {
+        let mut c = criterion_for(2, 0.05);
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 2.0;
+        c.reset_keyframe = "stand".to_string();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = run_phase(&c, &mut mock, "test", &[7]).expect("phase");
+        let attempt = &report.attempts[0];
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::Success);
+        assert_eq!(
+            attempt.bursts, 10,
+            "0.5 s hold at 20 Hz, settle not counted"
+        );
+        assert!((attempt.balanced_s - 0.5).abs() < 1e-9);
+        assert_eq!(mock.resets, vec![Some("stand".to_string())]);
+        assert_eq!(
+            &mock.calls[..4],
+            [
+                "get_model_info",
+                "reset_episode",
+                "measure",
+                "set_body_spring"
+            ]
+        );
+        assert_eq!(
+            mock.calls.last().map(String::as_str),
+            Some("clear_body_spring")
+        );
+        // settle (0.5 s) at level 1, then level 0 (test phase = support_min)
+        assert_eq!(mock.spring_sets[0].1, 1.0);
+        assert_eq!(mock.level_updates.len(), 1);
+        assert_eq!(mock.level_updates[0].0, 0.0);
+        assert!(
+            (mock.level_updates[0].1 - 0.5).abs() < 0.051,
+            "{:?}",
+            mock.level_updates
+        );
+        assert!((mock.spring_sets[0].2 - 6.0_f64.to_radians()).abs() < 1e-12);
+        assert_eq!(
+            mock.count("measure"),
+            1 + 9 + 10,
+            "sizing read + 9 settle + 10 hold"
+        );
+        assert!(report.spring_gains.is_some());
+    }
+
+    #[test]
+    fn three_contact_bodies_are_measured_and_all_must_be_down() {
+        let c = criterion_for(3, 0.05);
+        let mut mock = MockController::new(0.05, 3, Box::new(|_, _| upright_step()));
+        let report = run_phase(&c, &mut mock, "train", &[1]).expect("phase");
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Success);
+        let request = &mock.measure_requests[0];
+        assert_eq!(request.bodies, vec!["torso".to_string()]);
+        assert_eq!(
+            request.contacts,
+            vec![
+                vec!["left_foot".to_string()],
+                vec!["right_foot".to_string()],
+                vec!["tail_foot".to_string()]
+            ]
+        );
+        // a lifted foot is not upright: nothing balances, so the cap truncates
+        let mut c2 = criterion_for(3, 0.05);
+        c2.attempt_cap_s = 1.5;
+        let mut lifted = MockController::new(
+            0.05,
+            3,
+            Box::new(|_, _| Scripted {
+                down: false,
+                ..upright_step()
+            }),
+        );
+        lifted.floor_z = Some(0.01);
+        // sizing needs contact points at the reset, so give it an explicit height
+        c2.support_com_height_m = Some(0.140);
+        let report = run_phase(&c2, &mut lifted, "train", &[1]).expect("phase");
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Truncated);
+        assert_eq!(report.attempts[0].balanced_bursts, 0);
+    }
+
+    #[test]
+    fn death_interrupt_and_truncation_end_the_attempt() {
+        let c = criterion_for(2, 0.05);
+        // death at 1.0 s
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|k, _| {
+                if k >= 20 {
+                    Scripted {
+                        terminal: Some(BalanceTerminal::Death),
+                        tilt_deg: 40.0,
+                        ..upright_step()
+                    }
+                } else {
+                    Scripted {
+                        tilt_deg: if k > 12 { 30.0 } else { 2.0 },
+                        ..upright_step()
+                    }
+                }
+            }),
+        );
+        let report = run_phase(&c, &mut mock, "train", &[1]).expect("phase");
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Death);
+        // interrupted
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|k, _| {
+                if k >= 15 {
+                    Scripted {
+                        terminal: Some(BalanceTerminal::Interrupted),
+                        ..upright_step()
+                    }
+                } else {
+                    Scripted {
+                        tilt_deg: 30.0,
+                        ..upright_step()
+                    }
+                }
+            }),
+        );
+        let report = run_phase(&c, &mut mock, "train", &[1]).expect("phase");
+        assert_eq!(
+            report.attempts[0].outcome,
+            BalanceAttemptOutcome::Interrupted
+        );
+        // truncated: leaning past the limit for the whole cap (3.0 s = 60 bursts)
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|_, _| Scripted {
+                tilt_deg: 30.0,
+                ..upright_step()
+            }),
+        );
+        let report = run_phase(&c, &mut mock, "train", &[1]).expect("phase");
+        assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Truncated);
+        assert_eq!(report.attempts[0].bursts, 60);
+    }
+
+    #[test]
+    fn gains_are_sized_once_and_reused_every_attempt() {
+        let c = criterion_for(2, 0.05);
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = run_phase(&c, &mut mock, "train", &[1, 2, 3]).expect("phase");
+        assert_eq!(report.attempts.len(), 3);
+        assert_eq!(mock.count("get_model_info"), 1);
+        assert_eq!(mock.count("reset_episode"), 3);
+        assert_eq!(mock.spring_sets.len(), 3);
+        assert!(mock
+            .spring_sets
+            .iter()
+            .all(|set| set.0 == mock.spring_sets[0].0));
+        assert_eq!(report.spring_gains, Some(mock.spring_sets[0].0));
+        // h0 = subtree com z 0.150 - contact z 0.01 = 0.140: Howard's k_rot
+        assert!((34.0..=36.0).contains(&mock.spring_sets[0].0.k_rot));
+    }
+
+    #[test]
+    fn explicit_gain_overrides_reach_the_controller() {
+        let mut c = criterion_for(2, 0.05);
+        c.support_rot_stiffness_nm_per_rad = Some(33.0);
+        c.support_rot_damping_nm_s_per_rad = Some(0.25);
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        run_phase(&c, &mut mock, "train", &[1]).expect("phase");
+        assert_eq!(mock.spring_sets[0].0.k_rot, 33.0);
+        assert_eq!(mock.spring_sets[0].0.d_rot, 0.25);
+    }
+
+    #[test]
+    fn missing_contact_points_or_keyframe_stop_with_a_named_error() {
+        let c = criterion_for(2, 0.05);
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        mock.floor_z = None;
+        let error = run_phase(&c, &mut mock, "train", &[1])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("no contact points"), "{error}");
+        let mut c = criterion_for(2, 0.05);
+        c.reset_keyframe = "crouch".to_string();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let error = run_phase(&c, &mut mock, "train", &[1])
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("crouch") && error.contains("home"),
+            "{error}"
+        );
+        assert_eq!(mock.count("reset_episode"), 0, "checked before any reset");
+        let mut c = criterion_for(2, 0.05);
+        c.contact_bodies[1] = "ghost".to_string();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let error = run_phase(&c, &mut mock, "train", &[1])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("ghost"), "{error}");
+    }
+
+    #[test]
+    fn perturbation_pulses_are_scheduled_by_the_trainer_after_settling() {
+        let mut c = criterion_for(2, 0.05);
+        c.perturb_interval_s = 0.5;
+        c.perturb_duration_s = 0.1;
+        c.perturb_torque_nm = 0.3;
+        c.hold_s = 5.0;
+        c.attempt_cap_s = 5.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let report = run_phase(&c, &mut mock, "train", &[4]).expect("phase");
+        assert!(mock.pulses.len() >= 5, "{} pulses", mock.pulses.len());
+        for (torque, force, duration, at_s) in &mock.pulses {
+            assert_eq!(*duration, 0.1);
+            assert_eq!(*force, [0.0; 3]);
+            assert_eq!(torque[2], 0.0);
+            assert!((torque[0].abs() + torque[1].abs() - 0.3).abs() < 1e-12);
+            assert!(*at_s >= c.settle_s, "no pulse during settle: {at_s}");
+        }
+        assert_eq!(report.attempts[0].perturbations as usize, mock.pulses.len());
+        // same seed, same schedule
+        let mut again = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        run_phase(&c, &mut again, "train", &[4]).expect("phase");
+        assert_eq!(mock.pulses, again.pulses);
+    }
+
+    #[test]
+    fn durations_stay_equal_in_seconds_at_10_hz_and_200_hz() {
+        assert_eq!(bursts_for_seconds(1.0, 0.1), 10);
+        assert_eq!(bursts_for_seconds(1.0, 0.005), 200);
+        let mut seen = Vec::new();
+        for hz in [10.0_f64, 200.0] {
+            let period = 1.0 / hz;
+            let mut c = criterion_for(2, period);
+            c.settle_s = 0.5;
+            c.hold_s = 1.0;
+            c.attempt_cap_s = 4.0;
+            c.perturb_interval_s = 0.4;
+            c.perturb_duration_s = 0.1;
+            let mut mock = MockController::new(period, 2, Box::new(|_, _| upright_step()));
+            let report = run_phase(&c, &mut mock, "test", &[3]).expect("phase");
+            let attempt = &report.attempts[0];
+            assert_eq!(attempt.outcome, BalanceAttemptOutcome::Success);
+            let end_s = mock.seconds();
+            let settle_end_s = mock.level_updates[0].1;
+            println!(
+                "{hz} Hz: bursts {} balanced_s {} settle_end {settle_end_s} success_at {end_s} pulses {}",
+                attempt.bursts, attempt.balanced_s, mock.pulses.len()
+            );
+            assert!(
+                (attempt.balanced_s - 1.0).abs() <= period + 1e-9,
+                "{}",
+                attempt.balanced_s
+            );
+            assert!(
+                (settle_end_s - 0.5).abs() <= period + 1e-9,
+                "{settle_end_s}"
+            );
+            assert!((end_s - 1.5).abs() <= 2.0 * period + 1e-9, "{end_s}");
+            assert!(
+                mock.pulses.iter().all(|p| p.2 == 0.1),
+                "pulse length is seconds"
+            );
+            seen.push((attempt.balanced_s, settle_end_s, end_s, mock.pulses.len()));
+        }
+        assert!((seen[0].0 - seen[1].0).abs() <= 0.1 + 1e-9);
+        assert!((seen[0].2 - seen[1].2).abs() <= 0.2 + 1e-9);
+    }
+
+    #[test]
+    fn test_phase_delivers_reward_from_trainer_samples() {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.0;
+        c.hold_s = 0.1;
+        c.attempt_cap_s = 1.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut delivered: Vec<RewardSignal> = Vec::new();
+        let mut sink = |signals: &[RewardSignal]| -> Result<(), TrainerError> {
+            delivered.extend_from_slice(signals);
+            Ok(())
+        };
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-test".to_string());
+        let mut run = BalancePhaseRun {
+            phase: "test",
+            seeds: &[1],
+            criterion: &c,
+            run_id: &run_id,
+            support_mode: None,
+            deliver_reward: Some(&mut sink),
+            reward_policy: BalanceRewardPolicy::Affect,
+        };
+        run_balance_phase(
+            &mut run,
+            &mut mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+        .expect("phase");
+        // burst 1: support 0 and upright -> 0.1; burst 2: success -> 1.0
+        assert_eq!(delivered.len(), 2);
+        assert_eq!(delivered[0].magnitude, 0.1);
+        assert_eq!(delivered[1].channel, AffectChannel::Pleasure);
+        assert_eq!(delivered[1].magnitude, 1.0);
+    }
+
+    #[test]
+    fn support_need_and_effort_follow_the_documented_formulas() {
+        // (tilt + 0.1 s * |omega_xy|) / max_tilt, clamped
+        let need = support_need(5.0_f64.to_radians(), [0.1, 0.0, 9.0], 15.0, 0.1);
+        let expected = (5.0_f64.to_radians() + 0.01) / 15.0_f64.to_radians();
+        assert!((need - expected).abs() < 1e-12);
+        assert_eq!(support_need(1.0, [0.0; 3], 15.0, 0.1), 1.0);
+        let sizing = sizing_inputs(&howard_info(), "torso", 0.140).unwrap();
+        let weight = 0.737 * 9.81;
+        let wrench = SpringMeasure {
+            wrench_norm_torque: weight * 0.140 / 2.0,
+            wrench_norm_force: weight / 4.0,
+            gravity_comp_force_n: weight,
+        };
+        // torque share 0.5; restoring force weight/4 -> 0.25
+        let effort = support_effort(wrench, &sizing);
+        assert!((effort - 0.375).abs() < 1e-9, "{effort}");
+    }
+
+    #[test]
+    fn criterion_validation_covers_the_new_fields() {
+        let mut c = criterion_for(2, 0.05);
+        assert!(c.validate().is_ok());
+        c.contact_bodies.clear();
+        assert!(c.validate().is_err());
+        let mut c = criterion_for(2, 0.05);
+        c.contact_bodies[1] = "left_foot".to_string();
+        assert!(c.validate().is_err(), "duplicate contact body");
+        let mut c = criterion_for(2, 0.05);
+        c.hold_s = 5.0;
+        assert!(c.validate().is_err(), "hold above cap");
+        let mut c = criterion_for(2, 0.05);
+        c.support_min = 0.5;
+        c.support_start = 0.4;
+        assert!(c.validate().is_err());
+        let mut c = criterion_for(2, 0.05);
+        c.burst_period_s = 0.0;
+        assert!(c.validate().is_err());
+        let mut c = criterion_for(2, 0.05);
+        c.perturb_duration_s = 0.0;
+        assert!(c.validate().is_err());
+        let mut c = criterion_for(2, 0.05);
+        c.support_gravity_comp = Some(1.5);
+        assert!(c.validate().is_err());
+        let c: BalanceFeetCriterion = serde_json::from_value(serde_json::json!({
+            "torso_body": "t", "contact_bodies": ["a", "b", "c"],
+            "max_tilt_deg": 10.0, "hold_s": 1.0, "attempt_cap_s": 2.0
+        }))
+        .expect("minimal criterion");
+        assert_eq!(c.contact_bodies.len(), 3);
+        assert_eq!(c.reset_keyframe, "");
+        assert_eq!(c.settle_s, 0.5);
+        assert_eq!(c.attempts_per_level, 3);
+        assert_eq!(c.support_deadband_deg, 6.0);
+        assert_eq!(c.perturb_interval_s, 0.0);
+        assert_eq!(
+            c.support_rot_stiffness_nm_per_rad, None,
+            "no fixed stiffness default"
+        );
+    }
+
+    // ---- wire format and keep-alive ----
+
+    #[test]
+    fn request_bodies_follow_the_controller_contract() {
+        let gains = SpringGains {
+            k_rot: 28.0,
+            d_rot: 0.3,
+            k_lin: [4000.0, 4000.0, 11600.0],
+            d_lin: [80.0, 80.0, 120.0],
+            gravity_comp: 1.0,
+        };
+        let body = set_body_spring_request("torso", &gains, 1.0, 0.1);
+        assert_eq!(body["action"], "set_body_spring");
+        assert_eq!(body["body"], "torso");
+        assert_eq!(body["k_lin"], serde_json::json!([4000.0, 4000.0, 11600.0]));
+        assert_eq!(body["ref"], "current");
+        assert_eq!(body["deadband_rad"], 0.1);
+        assert_eq!(update_body_spring_request("torso", 0.4)["level"], 0.4);
+        assert_eq!(
+            clear_body_spring_request("torso")["action"],
+            "clear_body_spring"
+        );
+        let pulse = apply_body_pulse_request("torso", [0.3, 0.0, 0.0], [0.0; 3], 0.1);
+        assert_eq!(pulse["duration_s"], 0.1);
+        assert_eq!(pulse["torque"], serde_json::json!([0.3, 0.0, 0.0]));
+        assert!(reset_episode_request(None).get("keyframe").is_none());
+        assert_eq!(reset_episode_request(Some("stand"))["keyframe"], "stand");
+        let m = measure_request_body(&MeasureRequest {
+            bodies: vec!["torso".to_string()],
+            contacts: vec![vec!["a".to_string()], vec!["b".to_string()]],
+        });
+        assert_eq!(m["bodies"], serde_json::json!(["torso"]));
+        assert_eq!(
+            m["contacts"][1],
+            serde_json::json!({"a": ["b"], "b": "world"})
+        );
+    }
+
+    #[test]
+    fn measurement_parses_object_and_array_forms() {
+        let object = serde_json::json!({
+            "sim_time_s": 1.5, "physics_steps": 750, "episode_id": 2, "terminal": "death",
+            "bodies": {"torso": {"tilt_rad": 0.1, "ang_vel": [0.0, 0.2, 0.0],
+                                 "subtree_com": [0.0, 0.0, 0.124]}},
+            "contacts": [{"touching": true, "points": [[0.0, 0.0, 0.01]]}, {"touching": false}],
+            "springs": {"torso": {"wrench_norm_torque": 0.4, "wrench_norm_force": 7.0}}
+        });
+        let m: Measurement = serde_json::from_value(object).expect("object form");
+        assert_eq!(m.terminal, Some(BalanceTerminal::Death));
+        assert_eq!(m.bodies["torso"].tilt_rad, 0.1);
+        assert_eq!(m.mean_contact_height(), Some(0.01));
+        assert_eq!(m.springs["torso"].wrench_norm_force, 7.0);
+        let array = serde_json::json!({
+            "sim_time_s": 0.0, "physics_steps": 0,
+            "bodies": [{"name": "torso", "tilt_rad": 0.0}],
+            "contacts": [], "springs": [{"body": "torso", "wrench_norm_torque": 0.0, "wrench_norm_force": 0.0}]
+        });
+        let m: Measurement = serde_json::from_value(array).expect("array form");
+        assert!(m.bodies.contains_key("torso") && m.springs.contains_key("torso"));
+        assert_eq!(m.terminal, None);
+        let info: ModelInfo = serde_json::from_value(serde_json::json!({
+            "timestep_s": 0.002, "gravity": [0.0, 0.0, -9.81],
+            "bodies": [{"name": "b", "id": 1, "parent": "world", "root_name": "b", "mass": 1.0,
+                        "subtree_mass": 1.0, "subtree_com": [0.0, 0.0, 0.0],
+                        "inertia": [1.0, 1.0, 1.0]}],
+            "free_roots": ["b"], "keyframes": ["home", ""], "actuators": [], "joints": []
+        }))
+        .expect("model info");
+        assert_eq!(info.keyframe_names(), vec!["home".to_string()]);
+    }
+
+    /// Tiny HTTP server: answers every request on one accepted connection until it closes.
+    fn serve(close_each: bool) -> (u16, std::sync::Arc<std::sync::atomic::AtomicU32>) {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().unwrap().port();
+        let accepted = Arc::new(AtomicU32::new(0));
+        let counter = accepted.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(stream) = stream else { return };
+                counter.fetch_add(1, Ordering::SeqCst);
+                std::thread::spawn(move || {
+                    let mut reader = BufReader::new(stream);
+                    loop {
+                        let mut length = 0usize;
+                        let mut first = true;
+                        loop {
+                            let mut line = String::new();
+                            match reader.read_line(&mut line) {
+                                Ok(0) | Err(_) => return,
+                                Ok(_) => {}
+                            }
+                            if first {
+                                first = false;
+                            }
+                            let trimmed = line.trim_end().to_ascii_lowercase();
+                            if let Some(v) = trimmed.strip_prefix("content-length:") {
+                                length = v.trim().parse().unwrap_or(0);
+                            }
+                            if trimmed.is_empty() {
+                                break;
+                            }
+                        }
+                        let mut body = vec![0u8; length];
+                        if reader.read_exact(&mut body).is_err() {
+                            return;
+                        }
+                        let payload = br#"{"ok":true,"result":{"episode_id":5}}"#;
+                        let connection = if close_each { "close" } else { "keep-alive" };
+                        let head = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: {connection}\r\n\r\n",
+                            payload.len()
+                        );
+                        let socket = reader.get_mut();
+                        if socket.write_all(head.as_bytes()).is_err()
+                            || socket.write_all(payload).is_err()
+                        {
+                            return;
+                        }
+                        if close_each {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+        (port, accepted)
+    }
+
+    #[test]
+    fn one_keep_alive_connection_serves_every_call() {
+        let (port, accepted) = serve(false);
+        let mut http =
+            HttpBalanceController::new(&format!("http://127.0.0.1:{port}"), Duration::from_secs(5))
+                .expect("client");
+        for _ in 0..25 {
+            assert_eq!(http.reset_episode(None).expect("reset"), 5);
+        }
+        assert_eq!(http.connections_opened(), 1);
+        assert_eq!(accepted.load(std::sync::atomic::Ordering::SeqCst), 1);
+        // a server that closes after each reply still works: the client reconnects
+        let (port, accepted) = serve(true);
+        let mut http =
+            HttpBalanceController::new(&format!("http://127.0.0.1:{port}"), Duration::from_secs(5))
+                .expect("client");
+        for _ in 0..3 {
+            assert_eq!(http.reset_episode(Some("stand")).expect("reset"), 5);
+        }
+        assert_eq!(http.connections_opened(), 3);
+        assert_eq!(accepted.load(std::sync::atomic::Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn error_envelope_and_http_status_surface() {
+        assert!(
+            decode_envelope(200, r#"{"ok":false,"error":"keyframe x missing"}"#)
+                .unwrap_err()
+                .to_string()
+                .contains("keyframe x missing")
+        );
+        let error = decode_envelope(500, r#"{"error":"boom"}"#)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("500") && error.contains("boom"), "{error}");
+        assert!(decode_envelope(200, r#"{"ok":true,"result":{"a":1}}"#).is_ok());
     }
 }

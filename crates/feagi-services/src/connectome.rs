@@ -639,8 +639,8 @@ mod tests {
         synapses.weights = weights.to_vec();
         snapshot.synapses = synapses;
 
-        let loaded = load_connectome_from_bytes(&save_connectome_to_bytes(&snapshot).unwrap())
-            .unwrap();
+        let loaded =
+            load_connectome_from_bytes(&save_connectome_to_bytes(&snapshot).unwrap()).unwrap();
         assert_eq!(&loaded.synapses.weights[..3], &weights);
         let lite: Vec<f32> = loaded.lite_synapses.iter().map(|s| s.weight).collect();
         assert_eq!(lite, weights.to_vec());
