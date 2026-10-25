@@ -703,6 +703,36 @@ impl ConnectomeServiceImpl {
         feagi_npu_burst_engine::BurstTaps::instance().clear();
     }
 
+    /// Set the burst engine to the simulation timestep stored in a restored genome.
+    ///
+    /// Genome upload already does this. Connectome restore is the path a running
+    /// experiment uses, and the engine otherwise stays on the process configuration
+    /// timestep. A service with no burst runner has no engine to update.
+    fn apply_restored_genome_burst_frequency(
+        &self,
+        simulation_timestep_s: f64,
+    ) -> ServiceResult<()> {
+        if !simulation_timestep_s.is_finite() || simulation_timestep_s <= 0.0 {
+            return Err(ServiceError::InvalidInput(format!(
+                "Restored genome simulation_timestep must be finite and > 0, got {simulation_timestep_s}"
+            )));
+        }
+        let Some(ref burst_runner) = self.burst_runner else {
+            warn!(
+                target: "feagi-services",
+                "Connectome import restored simulation_timestep {simulation_timestep_s} s but no burst runner is connected, so the burst frequency was not updated"
+            );
+            return Ok(());
+        };
+        let frequency_hz = 1.0 / simulation_timestep_s;
+        info!(
+            target: "feagi-services",
+            "Applying restored genome burst frequency: {frequency_hz} Hz ({simulation_timestep_s} s timestep)"
+        );
+        burst_runner.write().set_frequency(frequency_hz);
+        Ok(())
+    }
+
     /// Refresh cortical_id cache in burst runner
     fn refresh_burst_runner_cache(&self) {
         if let Some(ref burst_runner) = self.burst_runner {
@@ -3532,6 +3562,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         let mut snapshot = snapshot;
         let mut lite_overlay_needed = false;
+        let mut restored_simulation_timestep_s: Option<f64> = None;
         if snapshot.is_lite_mode() {
             let genome_json = snapshot.genome_json.clone().ok_or_else(|| {
                 ServiceError::InvalidInput(
@@ -3544,6 +3575,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     e
                 ))
             })?;
+            restored_simulation_timestep_s = Some(genome.physiology.simulation_timestep);
             rebuild_connectome_from_genome(&self.connectome, &genome)?;
             *self.current_genome.write() = Some(genome);
             {
@@ -3562,6 +3594,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                             e
                         ))
                     })?;
+                restored_simulation_timestep_s = Some(genome.physiology.simulation_timestep);
                 self.apply_runtime_genome_to_connectome(&genome)?;
                 *self.current_genome.write() = Some(genome);
             }
@@ -3609,6 +3642,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
             manager.refresh_all_connectome_hashes();
         }
         self.record_connectome_as_genome_load();
+        if let Some(timestep_s) = restored_simulation_timestep_s {
+            self.apply_restored_genome_burst_frequency(timestep_s)?;
+        }
         self.refresh_burst_runner_cache();
         self.clear_published_activity();
 
@@ -6431,6 +6467,59 @@ mod tests {
         Ok(())
     }
 
+    fn burst_runner_at_hz(
+        frequency_hz: f64,
+    ) -> Arc<RwLock<feagi_npu_burst_engine::BurstLoopRunner>> {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{BurstLoopRunner, DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+
+        struct NoViz;
+        impl feagi_npu_burst_engine::VisualizationPublisher for NoViz {
+            fn publish_raw_fire_queue_for_agent(
+                &self,
+                _agent_id: &str,
+                _fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        struct NoMotor;
+        impl feagi_npu_burst_engine::MotorPublisher for NoMotor {
+            fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        let npu = RustNPU::new(StdRuntime, CPUBackend::new(), 1_000, 10_000, 10)
+            .expect("burst frequency test NPU");
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(npu),
+            "genome-timestep-test",
+        ));
+        Arc::new(RwLock::new(BurstLoopRunner::new::<NoViz, NoMotor>(
+            npu,
+            None,
+            None,
+            frequency_hz,
+        )))
+    }
+
+    #[test]
+    fn restored_genome_rejects_non_positive_timestep() {
+        let svc = ConnectomeServiceImpl::new(
+            Arc::new(RwLock::new(
+                feagi_brain_development::ConnectomeManager::new_for_testing(),
+            )),
+            Arc::new(RwLock::new(None)),
+        );
+        let err = svc
+            .apply_restored_genome_burst_frequency(0.0)
+            .expect_err("timestep must be positive");
+        assert!(matches!(err, crate::types::ServiceError::InvalidInput(_)));
+    }
+
     #[tokio::test]
     async fn import_connectome_restores_memory_plastic_and_regions_from_genome_json(
     ) -> ServiceResult<()> {
@@ -6509,7 +6598,10 @@ mod tests {
             classifiers: HashMap::new(),
             morphologies: feagi_evolutionary::MorphologyRegistry::new(),
             modulators: feagi_evolutionary::ModulatorRegistry::new(),
-            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            physiology: feagi_evolutionary::PhysiologyConfig {
+                simulation_timestep: 0.02,
+                ..feagi_evolutionary::PhysiologyConfig::default()
+            },
             signatures: feagi_evolutionary::GenomeSignatures {
                 genome: "0".to_string(),
                 blueprint: "0".to_string(),
@@ -6529,6 +6621,8 @@ mod tests {
         let genome_load_timestamp = Arc::new(RwLock::new(None));
         let mut svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
         svc.set_genome_load_signals(genome_load_counter.clone(), genome_load_timestamp.clone());
+        let burst_runner = burst_runner_at_hz(10.0);
+        svc.set_burst_runner(Arc::clone(&burst_runner));
 
         let snapshot = ConnectomeSnapshot {
             version: 1,
@@ -6560,7 +6654,9 @@ mod tests {
             let stored = genome_guard.as_ref().expect("genome restored");
             assert!(stored.cortical_areas.contains_key(&mem_id));
             assert!(stored.brain_regions.contains_key(&region_key));
+            assert!((stored.physiology.simulation_timestep - 0.02).abs() < 1e-12);
         }
+        assert!((burst_runner.read().get_frequency() - 50.0).abs() < 1e-6);
         assert_eq!(*genome_load_counter.read(), 1);
         assert!(genome_load_timestamp.read().is_some());
         {

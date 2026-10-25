@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::binding::reward::{AffectChannel, RewardSignal};
 use crate::contracts::{
-    BackendFingerprint, BackendKind, ConnectomeHash, ContentHash, DatasetAssetId,
+    AttemptStand, BackendFingerprint, BackendKind, ConnectomeHash, ContentHash, DatasetAssetId,
     EvaluationProtocolVersion, MetricScope, PluginId, PluginRef, RunEvent, RunEventKind, RunId,
     Scorecard, ScorecardId, ScorecardStatus, ScorecardVisibility, SplitId,
 };
@@ -26,7 +26,7 @@ use crate::metrics::episodic_control::EpisodicControlMetricPack;
 use crate::reach_hold::trainer_package_version;
 
 fn default_support_deadband_deg() -> f64 {
-    6.0
+    0.0
 }
 fn default_perturb_torque_nm() -> f64 {
     0.3
@@ -119,7 +119,7 @@ pub struct BalanceFeetCriterion {
     /// Live FEAGI burst period in seconds; the caller sets it from the running burst rate.
     #[serde(default = "default_burst_period_s")]
     pub burst_period_s: f64,
-    /// Tilt deadband in degrees inside which the spring torque is zero. Default 6.0.
+    /// Tilt deadband in degrees inside which the spring torque is zero. Default 0.0.
     #[serde(default = "default_support_deadband_deg")]
     pub support_deadband_deg: f64,
     /// Lookahead in seconds of the support-need prediction (tilt + omega * lookahead). Default 0.1.
@@ -479,12 +479,36 @@ impl SupportSchedule {
         }
     }
 
+    /// Continue at `level`, clamped to `[config.min, config.start]`.
+    ///
+    /// `config.start` stays the ceiling, so later failed blocks can still
+    /// raise the grip back toward a full hold. Block counters start empty.
+    pub fn resume(config: SupportConfig, level: f64) -> Self {
+        let mut schedule = Self::new(config);
+        if level.is_finite() {
+            schedule.level = level.clamp(schedule.config.min, schedule.config.start);
+        }
+        schedule
+    }
+
+    /// Level the next attempt would use after folding `attempts` in order.
+    pub fn level_after_attempts(config: SupportConfig, attempts: &[BalanceAttemptRecord]) -> f64 {
+        let mut schedule = Self::new(config);
+        for attempt in attempts {
+            schedule.record_attempt(attempt.outcome, attempt.balanced_s);
+        }
+        schedule.current_level()
+    }
+
     /// Level to send with the next attempt.
     pub fn current_level(&self) -> f64 {
         self.level
     }
 
-    /// Fixed level of a test phase: `support_min`.
+    /// Goal level of a test phase: `support_min`.
+    ///
+    /// A test that follows a train phase uses [`test_support_level`] instead, so an
+    /// ungraduated curriculum is scored at the level training left, not at this floor.
     pub fn for_test_phase(config: &SupportConfig) -> f64 {
         config.min
     }
@@ -528,6 +552,32 @@ impl SupportSchedule {
     }
 }
 
+/// Support level a test phase should score.
+///
+/// `support_min` when `train` is absent or that phase graduated. Otherwise the level the
+/// train schedule left for its next attempt, clamped to `[config.min, config.start]`.
+pub fn test_support_level(
+    config: &SupportConfig,
+    train: Option<&BalancePhaseReport>,
+) -> Result<f64, TrainerError> {
+    let Some(report) = train else {
+        return Ok(config.min);
+    };
+    if report.graduated {
+        return Ok(config.min);
+    }
+    let level = match report.support_level_next {
+        Some(level) => level,
+        None => SupportSchedule::level_after_attempts(*config, &report.attempts),
+    };
+    if !level.is_finite() {
+        return Err(TrainerError::Config(
+            "train report support level is not finite".to_string(),
+        ));
+    }
+    Ok(SupportSchedule::resume(*config, level).current_level())
+}
+
 /// How a phase picks the support level of each attempt.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SupportMode {
@@ -535,6 +585,8 @@ pub enum SupportMode {
     Schedule,
     /// Every attempt at this level.
     Fixed(f64),
+    /// Train schedule whose first attempt is at this level. `config.start` stays the ceiling.
+    Resume(f64),
 }
 
 /// Why one attempt ended.
@@ -562,7 +614,7 @@ pub struct BalanceAttemptRecord {
     pub bursts: u32,
     /// Torso tilt at the terminal burst, in degrees.
     pub final_tilt_deg: f64,
-    /// Support level of the attempt.
+    /// Scheduled support level of the attempt. The opening settle spring is not recorded here.
     #[serde(default)]
     pub support_level: f64,
     /// Fraction of non-settling bursts with tilt inside the limit and every contact body down.
@@ -1145,7 +1197,7 @@ pub fn observe_balance_sample(
             outcome,
             bursts,
             final_tilt_deg: sample.tilt_deg,
-            support_level: sample.support_level.unwrap_or(open.params_support_level),
+            support_level: open.params_support_level,
             upright_fraction: upright_fraction(upright_bursts, bursts),
             perturbations,
             ..balance_time_fields(longest, first_violation, criterion.burst_period_s)
@@ -1207,7 +1259,7 @@ pub fn observe_balance_sample(
             outcome,
             bursts,
             final_tilt_deg: sample.tilt_deg,
-            support_level: sample.support_level.unwrap_or(open.params_support_level),
+            support_level: open.params_support_level,
             upright_fraction: upright_fraction(upright_bursts, bursts),
             perturbations,
             ..balance_time_fields(
@@ -1368,8 +1420,6 @@ impl BalanceAffectReward {
     }
 }
 
-/// Need at or below this fraction counts as balanced (no Pain, holding Pleasure applies).
-pub const ASSIST_NEED_DEADBAND: f64 = 0.1;
 /// Pleasure per unit of need reduction between consecutive bursts: `min(1, GAIN * drop)`.
 pub const ASSIST_FALL_GAIN: f64 = 4.0;
 /// Pleasure each burst that need is inside the deadband with every contact body down.
@@ -1407,16 +1457,19 @@ impl BalanceRewardPolicy {
 }
 
 /// Assist-as-needed affect for one balance attempt, driven by the harness `support_need`
-/// (falls back to `min(1, tilt / max_tilt)` when absent). Per counted, non-settling burst with
-/// need `n_t` and previous need `n_{t-1}`: Death -> Pain 1.0; `n_t > ASSIST_NEED_DEADBAND` and
-/// rising -> Pain `min(1, n_t)`; falling -> Pleasure `min(1, ASSIST_FALL_GAIN * drop)`;
-/// `n_t <= deadband` with every contact body down -> Pleasure `ASSIST_HOLD_PLEASURE`; Success ->
-/// Pleasure 1.0. When several Pleasures apply in one burst the largest is emitted. Never scaled
-/// by support level. Pleasure below `ASSIST_MIN_PLEASURE` is dropped. Settling bursts emit
-/// nothing except a Death terminal (their need still seeds `n_{t-1}`).
+/// (falls back to `min(1, tilt / max_tilt)` when absent). Per counted, non-settling burst:
+/// Death -> Pain 1.0; tilt rising through `max_tilt` -> Pain `min(1, tilt / max_tilt)`;
+/// falling need -> Pleasure `min(1, ASSIST_FALL_GAIN * drop)`; a burst that meets the success
+/// rule (tilt at or under `max_tilt` and every contact body down) -> Pleasure
+/// `ASSIST_HOLD_PLEASURE`; Success -> Pleasure 1.0. Holding pleasure uses that success rule,
+/// so a stance inside the limit is reinforced and a wobble that stays inside it is not Pain.
+/// When several Pleasures apply in one burst the largest is emitted. Never scaled by support
+/// level. Pleasure below `ASSIST_MIN_PLEASURE` is dropped. Settling bursts emit nothing,
+/// including a Death; their need and tilt still seed the next burst.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct BalanceAssistReward {
     previous_need: Option<f64>,
+    previous_tilt_deg: Option<f64>,
 }
 
 impl BalanceAssistReward {
@@ -1427,7 +1480,7 @@ impl BalanceAssistReward {
 
     /// Stable identity recorded with the run.
     pub fn policy_id() -> &'static str {
-        "reward.balance-assist.v1"
+        "reward.balance-assist.v2"
     }
 
     /// Signals for one burst. `outcome` is the attempt outcome when this burst ended it.
@@ -1443,26 +1496,32 @@ impl BalanceAssistReward {
             .clamp(0.0, 1.0);
         let previous = self.previous_need.unwrap_or(need);
         self.previous_need = Some(need);
+        let previous_tilt = self.previous_tilt_deg.unwrap_or(burst_sample.tilt_deg);
+        self.previous_tilt_deg = Some(burst_sample.tilt_deg);
         let death = outcome == Some(&BalanceAttemptOutcome::Death);
         let pain = |magnitude| RewardSignal {
             channel: AffectChannel::Pain,
             magnitude,
         };
-        if death {
-            return vec![pain(1.0)];
-        }
+        // A death during settle is the fall detector firing before the attempt starts.
+        // Punishing it drives balance_punish on every reset.
         if burst_sample.settling {
             return Vec::new();
         }
+        if death {
+            return vec![pain(1.0)];
+        }
         let mut signals = Vec::new();
-        if need > ASSIST_NEED_DEADBAND && need > previous {
-            signals.push(pain(need.min(1.0)));
+        let upright = sample_is_upright(burst_sample, criterion);
+        if !upright && burst_sample.tilt_deg > previous_tilt {
+            let past = (burst_sample.tilt_deg / criterion.max_tilt_deg).clamp(0.0, 1.0);
+            signals.push(pain(past));
         }
         let mut pleasure = 0.0_f64;
         if need < previous {
             pleasure = pleasure.max((ASSIST_FALL_GAIN * (previous - need)).min(1.0));
         }
-        if need <= ASSIST_NEED_DEADBAND && burst_sample.all_contacts_down() {
+        if upright {
             pleasure = pleasure.max(ASSIST_HOLD_PLEASURE);
         }
         if outcome == Some(&BalanceAttemptOutcome::Success) {
@@ -1542,6 +1601,9 @@ pub struct BalancePhaseReport {
     /// Time balanced per support level, keyed by the level formatted `{:.2}`.
     #[serde(default)]
     pub balanced_by_support: BTreeMap<String, BalancedTimeStats>,
+    /// Grip level the next training attempt should use. Absent for a fixed test phase.
+    #[serde(default)]
+    pub support_level_next: Option<f64>,
 }
 
 /// Mean, median and max of the per-attempt balanced time, in bursts and seconds.
@@ -1688,6 +1750,7 @@ impl BalancePhaseReport {
             graduated,
             balanced,
             balanced_by_support,
+            support_level_next: None,
         })
     }
 }
@@ -1854,6 +1917,7 @@ pub struct BalancePhaseRun<'a> {
     /// Run the progress events are stamped with.
     pub run_id: &'a RunId,
     /// Support policy. `None`: `train` follows the schedule, `test` runs at `support_min`.
+    /// The desktop test phase passes [`SupportMode::Fixed`] from [`test_support_level`].
     pub support_mode: Option<SupportMode>,
     /// Affect delivery. `None` keeps the no-affect behavior.
     pub deliver_reward: Option<DeliverReward<'a>>,
@@ -1903,7 +1967,10 @@ pub fn run_balance_phase(
     let info = controller.model_info()?;
     check_model(&info, run.criterion)?;
     let mut session = BalanceSession { info, sizing: None };
-    let mut schedule = SupportSchedule::new(support);
+    let mut schedule = match mode {
+        SupportMode::Resume(level) => SupportSchedule::resume(support, level),
+        _ => SupportSchedule::new(support),
+    };
     let samples_total = run.seeds.len() as u64;
     let mut attempts = Vec::with_capacity(run.seeds.len());
     for seed in run.seeds {
@@ -1913,8 +1980,8 @@ pub fn run_balance_phase(
             ));
         }
         let level = match mode {
-            SupportMode::Schedule => schedule.current_level(),
             SupportMode::Fixed(level) => level,
+            SupportMode::Schedule | SupportMode::Resume(_) => schedule.current_level(),
         };
         let record = run_balance_attempt(
             *seed,
@@ -1927,6 +1994,12 @@ pub fn run_balance_phase(
             run.reward_policy,
             cancel,
         )?;
+        let stand = AttemptStand {
+            balanced_s: record.balanced_s,
+            support_level: record.support_level,
+            outcome: outcome_name(record.outcome).to_string(),
+            seed: record.seed,
+        };
         schedule.record_attempt(record.outcome, record.balanced_s);
         attempts.push(record);
         events.emit(RunEvent::new(
@@ -1944,11 +2017,15 @@ pub fn run_balance_phase(
                 preview_name: Some(format!("{} seed {seed} support {level:.2}", run.phase)),
                 predicted_class: None,
                 class_scores: Vec::new(),
+                stand: Some(stand),
             },
         ));
     }
     let mut report = BalancePhaseReport::from_attempts_with(attempts, &support)?;
     report.spring_gains = session.sizing.map(|(_, gains)| gains);
+    if !matches!(mode, SupportMode::Fixed(_)) {
+        report.support_level_next = Some(schedule.current_level());
+    }
     events.emit(RunEvent::new(
         run.run_id.clone(),
         RunEventKind::MetricUpdate {
@@ -1958,6 +2035,16 @@ pub fn run_balance_phase(
         },
     ));
     Ok(report)
+}
+
+/// Wire name for an attempt outcome. Matches the serde name on [`BalanceAttemptOutcome`].
+fn outcome_name(outcome: BalanceAttemptOutcome) -> &'static str {
+    match outcome {
+        BalanceAttemptOutcome::Success => "success",
+        BalanceAttemptOutcome::Death => "death",
+        BalanceAttemptOutcome::Interrupted => "interrupted",
+        BalanceAttemptOutcome::Truncated => "truncated",
+    }
 }
 
 /// The named bodies and keyframe must exist in the loaded model.
@@ -2142,6 +2229,9 @@ fn run_balance_attempt(
         criterion.perturb_torque_nm,
     );
     let mut spring_level = settle_level;
+    // Settle is only the opening window. A death homes the body and rewinds sim
+    // time to the keyframe, so a later reading must not be labeled as settle.
+    let mut past_settle = criterion.settle_s <= 0.0;
     let result = loop {
         if cancel.is_cancelled() {
             let _ = controller.clear_body_spring(&torso);
@@ -2152,7 +2242,10 @@ fn run_balance_attempt(
         present_goal(features)?;
         let reading = controller.measure(&request)?;
         let elapsed_s = reading.sim_time_s - t0;
-        let settling = elapsed_s + 1.0e-9 < criterion.settle_s;
+        let settling = !past_settle && elapsed_s + 1.0e-9 < criterion.settle_s;
+        if !settling {
+            past_settle = true;
+        }
         let level_now = if settling { 1.0 } else { support_level };
         let body = reading
             .bodies
@@ -2765,6 +2858,54 @@ mod tests {
     }
 
     #[test]
+    fn test_phase_stays_at_the_train_level_until_graduation() {
+        let config = cfg();
+        assert_eq!(test_support_level(&config, None).expect("level"), 0.0);
+        let mut report = BalancePhaseReport::from_attempts(vec![record(
+            BalanceAttemptOutcome::Truncated,
+            0.6,
+            0.7,
+        )])
+        .expect("report");
+        report.graduated = false;
+        report.support_level_next = Some(0.7);
+        assert_eq!(
+            test_support_level(&config, Some(&report)).expect("level"),
+            0.7
+        );
+        report.graduated = true;
+        assert_eq!(
+            test_support_level(&config, Some(&report)).expect("level"),
+            0.0
+        );
+        report.graduated = false;
+        report.support_level_next = Some(f64::NAN);
+        assert!(test_support_level(&config, Some(&report)).is_err());
+    }
+
+    #[test]
+    fn resume_keeps_the_ceiling_and_starts_at_the_saved_level() {
+        let resumed = SupportSchedule::resume(cfg(), 0.2);
+        assert!((resumed.current_level() - 0.2).abs() < 1e-9);
+        let mut raised = resumed;
+        feed(&mut raised, &[Death; 3]);
+        feed(&mut raised, &[Death; 3]);
+        assert!(
+            (raised.current_level() - 0.3).abs() < 1e-9,
+            "two failed blocks raise one step"
+        );
+        for _ in 0..20 {
+            feed(&mut raised, &[Death; 3]);
+        }
+        assert!(
+            (raised.current_level() - 1.0).abs() < 1e-9,
+            "the original start stays the ceiling"
+        );
+        assert!((SupportSchedule::resume(cfg(), 5.0).current_level() - 1.0).abs() < 1e-9);
+        assert_eq!(SupportSchedule::resume(cfg(), -1.0).current_level(), 0.0);
+    }
+
+    #[test]
     fn twenty_five_steps_are_one_burst() {
         let mut c = criterion();
         c.hold_s = 0.5;
@@ -3141,13 +3282,13 @@ mod tests {
         }
     }
 
-    fn assist_step(
+    fn assist_tilt(
         r: &mut BalanceAssistReward,
-        need: f64,
+        tilt: f64,
         outcome: Option<BalanceAttemptOutcome>,
     ) -> Vec<(AffectChannel, f64)> {
         r.on_sample(
-            &need_sample(Some(need), 0.0, false),
+            &need_sample(None, tilt, false),
             outcome.as_ref(),
             &criterion(),
         )
@@ -3157,30 +3298,30 @@ mod tests {
     }
 
     #[test]
-    fn assist_reward_follows_need_sequence() {
+    fn assist_reward_holds_inside_the_success_limit_and_pains_past_it() {
         let p = AffectChannel::Pain;
         let g = AffectChannel::Pleasure;
         let mut r = BalanceAssistReward::new();
-        assert_eq!(assist_step(&mut r, 0.05, None), vec![(g, 0.2)]);
-        assert_eq!(assist_step(&mut r, 0.3, None), vec![(p, 0.3)]);
-        assert_eq!(assist_step(&mut r, 0.6, None), vec![(p, 0.6)]);
-        let falling = assist_step(&mut r, 0.5, None);
-        assert_eq!(falling.len(), 1);
-        assert_eq!(falling[0].0, g);
-        assert!((falling[0].1 - 0.4).abs() < 1e-9);
-        // Tiny drop is below the Pleasure floor: silent.
-        assert!(assist_step(&mut r, 0.499, None).is_empty());
-        // Steady above the deadband: nothing.
-        assert!(assist_step(&mut r, 0.499, None).is_empty());
-        // Falling into the deadband: largest Pleasure (fall 1.0 capped).
-        assert_eq!(assist_step(&mut r, 0.05, None), vec![(g, 1.0)]);
-        assert_eq!(assist_step(&mut r, 0.05, None), vec![(g, 0.2)]);
+        // 3 deg is inside the 15 deg success limit: holding Pleasure, not Pain.
+        assert_eq!(assist_tilt(&mut r, 3.0, None), vec![(g, 0.2)]);
+        // A wobble that stays inside the limit is still a hold.
+        assert_eq!(assist_tilt(&mut r, 8.0, None), vec![(g, 0.2)]);
+        // Crossing the limit is Pain. 18/15 clamps to 1.
+        assert_eq!(assist_tilt(&mut r, 18.0, None), vec![(p, 1.0)]);
+        // Steady past the limit: nothing.
+        assert!(assist_tilt(&mut r, 18.0, None).is_empty());
+        // Back inside: fall Pleasure (need 1 -> 0.8, gain 4) wins over the hold.
+        let recovered = assist_tilt(&mut r, 12.0, None);
+        assert_eq!(recovered.len(), 1);
+        assert_eq!(recovered[0].0, g);
+        assert!((recovered[0].1 - 0.8).abs() < 1e-9);
+        assert_eq!(assist_tilt(&mut r, 12.0, None), vec![(g, 0.2)]);
         assert_eq!(
-            assist_step(&mut r, 0.05, Some(BalanceAttemptOutcome::Success)),
+            assist_tilt(&mut r, 3.0, Some(BalanceAttemptOutcome::Success)),
             vec![(g, 1.0)]
         );
         assert_eq!(
-            assist_step(&mut r, 0.05, Some(BalanceAttemptOutcome::Death)),
+            assist_tilt(&mut r, 3.0, Some(BalanceAttemptOutcome::Death)),
             vec![(p, 1.0)]
         );
     }
@@ -3189,29 +3330,33 @@ mod tests {
     fn assist_reward_edge_cases() {
         let c = criterion();
         let mut r = BalanceAssistReward::new();
-        // Settling is silent; death while settling is Pain 1.
+        // Settling is silent, including a death. The need still seeds the next burst.
         assert!(r
             .on_sample(&need_sample(Some(0.9), 0.0, true), None, &c)
             .is_empty());
-        let d = r.on_sample(
-            &need_sample(Some(0.9), 0.0, true),
-            Some(&BalanceAttemptOutcome::Death),
-            &c,
-        );
-        assert_eq!((d[0].channel, d[0].magnitude), (AffectChannel::Pain, 1.0));
-        // No support_need: falls back to tilt / max_tilt (max_tilt 15 deg): 12 deg -> 0.8.
+        assert!(r
+            .on_sample(
+                &need_sample(Some(0.9), 0.0, true),
+                Some(&BalanceAttemptOutcome::Death),
+                &c,
+            )
+            .is_empty());
+        // Settle seeds need 0.9. The next burst stays at that need and inside the limit.
+        let next = r.on_sample(&need_sample(Some(0.9), 3.0, false), None, &c);
+        assert_eq!(next.len(), 1);
+        assert_eq!(next[0].channel, AffectChannel::Pleasure);
+        assert!((next[0].magnitude - ASSIST_HOLD_PLEASURE).abs() < 1e-9);
+        // Past the limit after that seed: Pain.
+        let past = r.on_sample(&need_sample(None, 18.0, false), None, &c);
+        assert_eq!(past.len(), 1);
+        assert_eq!(past[0].channel, AffectChannel::Pain);
+        assert!((past[0].magnitude - 1.0).abs() < 1e-9);
+        // Feet up inside the limit: no holding Pleasure.
         let mut r = BalanceAssistReward::new();
-        let _ = r.on_sample(&need_sample(None, 2.0, false), None, &c);
-        let s = r.on_sample(&need_sample(None, 12.0, false), None, &c);
-        assert_eq!(s.len(), 1);
-        assert_eq!(s[0].channel, AffectChannel::Pain);
-        assert!((s[0].magnitude - 0.8).abs() < 1e-9);
-        // Feet up inside the deadband: no holding Pleasure.
-        let mut r = BalanceAssistReward::new();
-        let mut up = need_sample(Some(0.0), 0.0, false);
+        let mut up = need_sample(Some(0.0), 3.0, false);
         up.contacts[0] = false;
         assert!(r.on_sample(&up, None, &c).is_empty());
-        assert_eq!(BalanceAssistReward::policy_id(), "reward.balance-assist.v1");
+        assert_eq!(BalanceAssistReward::policy_id(), "reward.balance-assist.v2");
         assert_eq!(
             BalanceRewardPolicy::from_mode("assist"),
             Some(BalanceRewardPolicy::Assist)
@@ -3253,6 +3398,8 @@ mod tests {
         tilt_deg: f64,
         down: bool,
         terminal: Option<BalanceTerminal>,
+        /// Replaces the mock clock. A death reset reports the keyframe time.
+        sim_time_s: Option<f64>,
     }
 
     fn upright_step() -> Scripted {
@@ -3260,6 +3407,7 @@ mod tests {
             tilt_deg: 2.0,
             down: true,
             terminal: None,
+            sim_time_s: None,
         }
     }
 
@@ -3436,7 +3584,7 @@ mod tests {
                 );
             }
             Ok(Measurement {
-                sim_time_s: self.seconds(),
+                sim_time_s: scripted.sim_time_s.unwrap_or_else(|| self.seconds()),
                 physics_steps: self.steps,
                 episode_id: self.resets.len() as u64,
                 terminal: scripted.terminal,
@@ -3624,13 +3772,61 @@ mod tests {
             "{:?}",
             mock.level_updates
         );
-        assert!((mock.spring_sets[0].2 - 6.0_f64.to_radians()).abs() < 1e-12);
+        assert!(mock.spring_sets[0].2 == 0.0);
         assert_eq!(
             mock.count("measure"),
             1 + 9 + 10,
             "sizing read + 9 settle + 10 hold"
         );
         assert!(report.spring_gains.is_some());
+    }
+
+    #[test]
+    fn progress_event_carries_the_attempt_stand_duration() {
+        let mut c = criterion_for(2, 0.05);
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 2.0;
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-stand".to_string());
+        let seeds = [7u64];
+        let mut run = BalancePhaseRun {
+            phase: "test",
+            seeds: &seeds,
+            criterion: &c,
+            run_id: &run_id,
+            support_mode: None,
+            deliver_reward: None,
+            reward_policy: BalanceRewardPolicy::Affect,
+        };
+        let report = run_balance_phase(
+            &mut run,
+            &mut mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+        .expect("phase");
+        let stand = events
+            .events
+            .iter()
+            .find_map(|event| match &event.kind {
+                RunEventKind::Progress {
+                    stand: Some(stand),
+                    samples_done,
+                    ..
+                } => {
+                    assert_eq!(*samples_done, 1);
+                    Some(stand)
+                }
+                _ => None,
+            })
+            .expect("progress stand");
+        let attempt = &report.attempts[0];
+        assert_eq!(stand.seed, 7);
+        assert_eq!(stand.outcome, "success");
+        assert!((stand.balanced_s - attempt.balanced_s).abs() < 1e-9);
+        assert!((stand.support_level - attempt.support_level).abs() < 1e-9);
     }
 
     #[test]
@@ -3727,6 +3923,74 @@ mod tests {
         let report = run_phase(&c, &mut mock, "train", &[1]).expect("phase");
         assert_eq!(report.attempts[0].outcome, BalanceAttemptOutcome::Truncated);
         assert_eq!(report.attempts[0].bursts, 60);
+    }
+
+    #[test]
+    fn death_after_settle_keeps_the_attempt_grip_when_sim_time_rewinds() {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.5;
+        c.hold_s = 10.0;
+        c.attempt_cap_s = 20.0;
+        c.support_min = 0.0;
+        let mut mock = MockController::new(
+            0.05,
+            2,
+            Box::new(|k, _| {
+                if k >= 40 {
+                    Scripted {
+                        terminal: Some(BalanceTerminal::Death),
+                        sim_time_s: Some(0.0),
+                        tilt_deg: 40.0,
+                        ..upright_step()
+                    }
+                } else {
+                    upright_step()
+                }
+            }),
+        );
+        let report = run_phase(&c, &mut mock, "test", &[1]).expect("phase");
+        let attempt = &report.attempts[0];
+        assert_eq!(attempt.outcome, BalanceAttemptOutcome::Death);
+        assert!(
+            attempt.balanced_s > 0.5,
+            "the stand was scored after settle, got {}",
+            attempt.balanced_s
+        );
+        assert!(
+            attempt.support_level.abs() < 1.0e-9,
+            "rewound death clock must not relabel the grip as the settle, got {}",
+            attempt.support_level
+        );
+
+        let mut early = MockController::new(
+            0.05,
+            2,
+            Box::new(|k, _| {
+                if k >= 2 {
+                    Scripted {
+                        terminal: Some(BalanceTerminal::Death),
+                        sim_time_s: Some(0.0),
+                        ..upright_step()
+                    }
+                } else {
+                    upright_step()
+                }
+            }),
+        );
+        let mut during_c = c.clone();
+        during_c.support_min = 0.3;
+        let during = run_phase(&during_c, &mut early, "test", &[1]).expect("phase");
+        assert_eq!(during.attempts[0].outcome, BalanceAttemptOutcome::Death);
+        assert_eq!(during.attempts[0].balanced_s, 0.0);
+        assert!(
+            (during.attempts[0].support_level - 0.3).abs() < 1.0e-9,
+            "a death inside the settle records the attempt grip, not the settle spring, got {}",
+            during.attempts[0].support_level
+        );
+        assert_eq!(
+            early.spring_sets[0].1, 1.0,
+            "the settle spring stays at a full grip"
+        );
     }
 
     #[test]
@@ -3946,7 +4210,7 @@ mod tests {
         assert_eq!(c.reset_keyframe, "");
         assert_eq!(c.settle_s, 0.5);
         assert_eq!(c.attempts_per_level, 3);
-        assert_eq!(c.support_deadband_deg, 6.0);
+        assert_eq!(c.support_deadband_deg, 0.0);
         assert_eq!(c.perturb_interval_s, 0.0);
         assert_eq!(
             c.support_rot_stiffness_nm_per_rad, None,

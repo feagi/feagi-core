@@ -33,6 +33,19 @@ pub struct ClassBreakdown {
     pub total: u64,
 }
 
+/// Stand time of one finished balance attempt, attached to a progress event.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AttemptStand {
+    /// Longest continuous upright run, in seconds.
+    pub balanced_s: f64,
+    /// Support level of the attempt, from 0 to 1.
+    pub support_level: f64,
+    /// `success`, `death`, `interrupted`, or `truncated`.
+    pub outcome: String,
+    /// Seed the controller used to home the attempt.
+    pub seed: u64,
+}
+
 /// Whether a [`RunEventKind::MetricUpdate`] reports interim or final metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -89,6 +102,9 @@ pub enum RunEventKind {
         /// Per-class confidence read from that OPU. Empty when the sample was not scored.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         class_scores: Vec<f64>,
+        /// Stand time of the attempt that just finished. Absent for sample-wise runs.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stand: Option<AttemptStand>,
     },
     /// A metric snapshot — interim ([`MetricScope::Partial`]) or final
     /// ([`MetricScope::Aggregate`]). Values are deterministically ordered.
@@ -185,6 +201,7 @@ mod tests {
                 preview_name: None,
                 predicted_class: Some(1),
                 class_scores: vec![0.2, 0.8],
+                stand: None,
             },
         );
         let json = serde_json::to_string(&event).expect("serialize");
@@ -207,6 +224,7 @@ mod tests {
                 image_png_base64,
                 mask_png_base64,
                 preview_name,
+                stand,
                 ..
             } => {
                 assert_eq!(tick_index, None);
@@ -215,6 +233,7 @@ mod tests {
                 assert_eq!(image_png_base64, None);
                 assert_eq!(mask_png_base64, None);
                 assert_eq!(preview_name, None);
+                assert_eq!(stand, None);
             }
             other => panic!("expected progress, got {other:?}"),
         }
