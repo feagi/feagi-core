@@ -166,6 +166,8 @@ pub struct RawCorticalArea {
     pub mp_ratio_quantization: Option<f32>,
     pub min_window_activity: Option<u32>,
     pub scan_skip_density: Option<f32>,
+    pub memory_neuron_cap: Option<u32>,
+    pub ltm_eviction: Option<String>,
     pub consecutive_fire_cnt_max: Option<u32>,
     pub snooze_length: Option<u32>,
 
@@ -685,6 +687,14 @@ impl GenomeParser {
             if let Some(v) = raw_area.scan_skip_density {
                 area.properties
                     .insert("scan_skip_density".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.memory_neuron_cap {
+                area.properties
+                    .insert("memory_neuron_cap".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = &raw_area.ltm_eviction {
+                area.properties
+                    .insert("ltm_eviction".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.consecutive_fire_cnt_max {
                 area.properties

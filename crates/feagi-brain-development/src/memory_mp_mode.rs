@@ -8,8 +8,12 @@
 
 use std::collections::HashMap;
 
-use feagi_evolutionary::{validate_memory_mp_properties, MemoryAreaProperties, MpChangeMode};
-use feagi_npu_plasticity::{MemoryMpMode, MpChangeEncoding};
+use feagi_evolutionary::{
+    validate_memory_mp_properties, LtmEvictionMode, MemoryAreaProperties, MpChangeMode,
+};
+use feagi_npu_plasticity::{
+    LtmEviction, MemoryMpMode, MemoryNeuronLifecycleConfig, MpChangeEncoding,
+};
 use serde_json::Value;
 
 /// Resolve the runtime MP mode for a memory area.
@@ -34,6 +38,24 @@ pub fn memory_mp_mode(
     })
 }
 
+/// Plasticity-runtime lifecycle settings for a memory area, from its genome properties.
+///
+/// Carries the per-area `memory_neuron_cap` and `ltm_eviction` along with the lifespan
+/// settings, so every registration path (genome load, area update, rebind) applies them.
+pub fn memory_lifecycle_config(mem_props: &MemoryAreaProperties) -> MemoryNeuronLifecycleConfig {
+    MemoryNeuronLifecycleConfig {
+        initial_lifespan: mem_props.init_lifespan,
+        lifespan_growth_rate: mem_props.lifespan_growth_rate,
+        longterm_threshold: mem_props.longterm_threshold,
+        max_reactivations: 1000,
+        memory_neuron_cap: mem_props.memory_neuron_cap,
+        ltm_eviction: match mem_props.ltm_eviction {
+            LtmEvictionMode::Lru => LtmEviction::Lru,
+            LtmEvictionMode::None => LtmEviction::None,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -48,6 +70,21 @@ mod tests {
         }
         let mem_props = extract_memory_properties(&properties).unwrap();
         memory_mp_mode(&properties, &mem_props)
+    }
+
+    #[test]
+    fn lifecycle_config_carries_cap_and_eviction() {
+        let mut properties = HashMap::new();
+        properties.insert("is_mem_type".to_string(), json!(true));
+        let defaults = memory_lifecycle_config(&extract_memory_properties(&properties).unwrap());
+        assert_eq!(defaults.memory_neuron_cap, 0);
+        assert_eq!(defaults.ltm_eviction, LtmEviction::Lru);
+
+        properties.insert("memory_neuron_cap".to_string(), json!(250));
+        properties.insert("ltm_eviction".to_string(), json!("none"));
+        let set = memory_lifecycle_config(&extract_memory_properties(&properties).unwrap());
+        assert_eq!(set.memory_neuron_cap, 250);
+        assert_eq!(set.ltm_eviction, LtmEviction::None);
     }
 
     #[test]

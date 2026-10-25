@@ -154,6 +154,23 @@ impl AsyncPlasticityExecutor {
             .and_then(|s| s.memory_neuron_detail(neuron_id))
     }
 
+    /// Occupancy of the shared memory-neuron pool as of the last burst (lock-free read).
+    pub fn memory_pool_snapshot(&self) -> Option<crate::memory_stats_cache::MemoryPoolSnapshot> {
+        self.service
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|s| s.memory_pool_snapshot()))
+    }
+
+    /// True when the global id is an active memory neuron (no allocation).
+    pub fn is_active_memory_neuron(&self, neuron_id: u32) -> bool {
+        self.service
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|s| s.is_active_memory_neuron(neuron_id)))
+            .unwrap_or(false)
+    }
+
     /// Active long-term memory neurons only (STM is excluded).
     pub fn export_long_term_memory_neurons(&self) -> Result<Vec<MemoryNeuronDetail>, String> {
         let guard = self
@@ -305,6 +322,19 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
                                 target: "plasticity",
                                 "[PLASTICITY-EXEC] ResetMemoryNeuronsInArea cortical_idx={}",
                                 cortical_idx
+                            );
+                        }
+                        PlasticityCommand::MemoryNeuronRemoved {
+                            neuron_id,
+                            area_idx,
+                            reason,
+                        } => {
+                            debug!(
+                                target: "plasticity",
+                                "[PLASTICITY-EXEC] MemoryNeuronRemoved area={} neuron_id={} reason={:?}",
+                                area_idx,
+                                neuron_id,
+                                reason
                             );
                         }
                     }

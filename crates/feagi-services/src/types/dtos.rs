@@ -152,6 +152,14 @@ pub struct CorticalAreaInfo {
         skip_serializing_if = "Option::is_none"
     )]
     pub mp_ratio_quantization: Option<f32>,
+    /// Most memory neurons (short-term plus long-term) this memory area may hold; `0` means
+    /// no per-area cap. Omitted for non-memory areas.
+    #[serde(rename = "memory_neuron_cap", skip_serializing_if = "Option::is_none")]
+    pub memory_neuron_cap: Option<u32>,
+    /// What the area does when its cap or the shared pool is full: "lru" or "none".
+    /// Omitted for non-memory areas.
+    #[serde(rename = "ltm_eviction", skip_serializing_if = "Option::is_none")]
+    pub ltm_eviction: Option<String>,
     pub properties: HashMap<String, serde_json::Value>,
 
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)

@@ -178,6 +178,13 @@ fn memory_parameters_from_reported_area(
             .unwrap_or(extracted.mp_ratio_quantization),
         min_window_activity: extracted.min_window_activity,
         scan_skip_density: extracted.scan_skip_density,
+        memory_neuron_cap: area
+            .memory_neuron_cap
+            .unwrap_or(extracted.memory_neuron_cap),
+        ltm_eviction: area
+            .ltm_eviction
+            .clone()
+            .unwrap_or_else(|| extracted.ltm_eviction.as_str().to_string()),
     }
 }
 
@@ -197,6 +204,23 @@ pub struct MemoryCorticalAreaParamsResponse {
     pub mp_ratio_quantization: f32,
     pub min_window_activity: u32,
     pub scan_skip_density: f32,
+    /// Most memory neurons (short-term plus long-term) this area may hold. `0` means no
+    /// per-area cap; only the shared pool limits the area.
+    pub memory_neuron_cap: u32,
+    /// What the area does when its cap or the shared pool is full: "lru" evicts one of its
+    /// neurons to make room, "none" lets the creation fail.
+    pub ltm_eviction: String,
+}
+
+/// Occupancy of the pool shared by all memory areas.
+#[derive(Debug, Clone, Copy, Serialize, serde::Deserialize, ToSchema)]
+pub struct MemoryPoolResponse {
+    /// Slots in the pool.
+    pub pool_capacity: usize,
+    /// Active memory neurons across all areas.
+    pub pool_in_use: usize,
+    /// Active long-term memory neurons across all areas.
+    pub pool_ltm: usize,
 }
 
 /// Response for [`get_memory_cortical_area`].
@@ -208,6 +232,12 @@ pub struct MemoryCorticalAreaResponse {
     pub short_term_neuron_count: usize,
     pub long_term_neuron_count: usize,
     pub memory_parameters: MemoryCorticalAreaParamsResponse,
+    /// Neurons evicted from this area to make room for new ones since the area was created.
+    pub evicted_total: usize,
+    /// New-pattern creations in this area that failed because no slot could be freed.
+    pub creation_failed_total: usize,
+    /// Occupancy of the pool shared by all memory areas.
+    pub memory_pool: MemoryPoolResponse,
     /// Mode the plasticity layer actually runs: "pattern_only", "mp_learning",
     /// "mp_differential", or "mp_ratio". Differs from `memory_parameters` when a change
     /// mode was auto-disabled (temporal_depth < 2). `None` if the area is not registered.
@@ -3698,6 +3728,13 @@ pub async fn get_memory_cortical_area(
         // again from that bag substitutes MemoryAreaProperties defaults (9, 1, 100)
         // and hides the values that were written to the genome.
         memory_parameters: memory_parameters_from_reported_area(&area, &mem_props),
+        evicted_total: runtime.evicted_total,
+        creation_failed_total: runtime.creation_failed_total,
+        memory_pool: MemoryPoolResponse {
+            pool_capacity: runtime.memory_pool.pool_capacity,
+            pool_in_use: runtime.memory_pool.pool_in_use,
+            pool_ltm: runtime.memory_pool.pool_ltm,
+        },
         effective_mp_mode: runtime.effective_mp_mode,
         upstream_cortical_area_indices,
         upstream_cortical_area_count,

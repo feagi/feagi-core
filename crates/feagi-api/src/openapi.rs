@@ -567,6 +567,7 @@ use crate::{
             crate::endpoints::cortical_area::VoxelNeuronsResponse,
             crate::endpoints::cortical_area::MemoryCorticalAreaQuery,
             crate::endpoints::cortical_area::MemoryCorticalAreaParamsResponse,
+            crate::endpoints::cortical_area::MemoryPoolResponse,
             crate::endpoints::cortical_area::MemoryCorticalAreaResponse,
             crate::endpoints::cortical_area::UpdateClassifierRequest,
             crate::endpoints::connectome::MemoryNeuronQuery,

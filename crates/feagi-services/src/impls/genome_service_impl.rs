@@ -110,6 +110,12 @@ fn merge_memory_area_properties(
         .entry(feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY.to_string())
         .or_insert(Value::from(memory_defaults.mp_ratio_quantization));
     defaults
+        .entry(feagi_evolutionary::MEMORY_NEURON_CAP_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.memory_neuron_cap));
+    defaults
+        .entry(feagi_evolutionary::LTM_EVICTION_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.ltm_eviction.as_str()));
+    defaults
         .entry("psp_uniform_distribution".to_string())
         .or_insert(Value::from(true));
 
@@ -129,11 +135,13 @@ fn validate_mp_encoding_update(
     current: &HashMap<String, Value>,
     changes: &HashMap<String, Value>,
 ) -> ServiceResult<()> {
-    const MP_KEYS: [&str; 4] = [
+    const MP_KEYS: [&str; 6] = [
         feagi_evolutionary::MP_LEARNING_ENABLED_KEY,
         feagi_evolutionary::MP_CHANGE_MODE_KEY,
         feagi_evolutionary::MP_DELTA_QUANTIZATION_KEY,
         feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY,
+        feagi_evolutionary::MEMORY_NEURON_CAP_KEY,
+        feagi_evolutionary::LTM_EVICTION_KEY,
     ];
     if !changes.keys().any(|k| MP_KEYS.contains(&k.as_str())) {
         return Ok(());
@@ -2338,7 +2346,11 @@ impl GenomeServiceImpl {
                             }
                         }
                         // Validated up front by validate_mp_encoding_update.
-                        "mp_change_mode" | "mp_delta_quantization" | "mp_ratio_quantization" => {
+                        "mp_change_mode"
+                        | "mp_delta_quantization"
+                        | "mp_ratio_quantization"
+                        | "memory_neuron_cap"
+                        | "ltm_eviction" => {
                             area.properties.insert(key.clone(), value.clone());
                         }
 
@@ -2662,7 +2674,11 @@ impl GenomeServiceImpl {
                             }
                         }
                         // Validated up front by validate_mp_encoding_update.
-                        "mp_change_mode" | "mp_delta_quantization" | "mp_ratio_quantization" => {
+                        "mp_change_mode"
+                        | "mp_delta_quantization"
+                        | "mp_ratio_quantization"
+                        | "memory_neuron_cap"
+                        | "ltm_eviction" => {
                             area.properties.insert(key.clone(), value.clone());
                         }
                         "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
@@ -3047,12 +3063,14 @@ impl GenomeServiceImpl {
                         | "mp_change_mode"
                         | "mp_delta_quantization"
                         | "mp_ratio_quantization"
+                        | "memory_neuron_cap"
+                        | "ltm_eviction"
                 )
             });
 
             if memory_param_changed {
                 use feagi_evolutionary::extract_memory_properties;
-                use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
+                use feagi_npu_plasticity::PlasticityExecutor;
 
                 let mut manager = self.connectome.write();
                 if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
@@ -3108,12 +3126,10 @@ impl GenomeServiceImpl {
                                     .get_episodic_memory_upstream_cortical_areas(
                                         &cortical_id_typed,
                                     );
-                                let lifecycle_config = MemoryNeuronLifecycleConfig {
-                                    initial_lifespan: mem_props.init_lifespan,
-                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
-                                    longterm_threshold: mem_props.longterm_threshold,
-                                    max_reactivations: 1000,
-                                };
+                                // Re-registering replaces the area's settings only; the
+                                // plasticity service keeps the area's existing neurons.
+                                let lifecycle_config =
+                                    feagi_brain_development::memory_lifecycle_config(&mem_props);
 
                                 match mp_mode {
                                     Ok(mp_mode) => exec.register_memory_area(
@@ -5027,6 +5043,10 @@ impl GenomeServiceImpl {
                     &area.properties,
                 )
                 .map(|p| p.mp_ratio_quantization),
+                memory_neuron_cap: feagi_evolutionary::extract_memory_properties(&area.properties)
+                    .map(|p| p.memory_neuron_cap),
+                ltm_eviction: feagi_evolutionary::extract_memory_properties(&area.properties)
+                    .map(|p| p.ltm_eviction.as_str().to_string()),
                 properties: HashMap::new(),
                 cortical_subtype,
                 encoding_type,
@@ -5231,6 +5251,10 @@ impl GenomeServiceImpl {
                 .map(|p| p.mp_delta_quantization),
             mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
                 .map(|p| p.mp_ratio_quantization),
+            memory_neuron_cap: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.memory_neuron_cap),
+            ltm_eviction: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.ltm_eviction.as_str().to_string()),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
@@ -5436,6 +5460,10 @@ impl GenomeServiceImpl {
                 .map(|p| p.mp_delta_quantization),
             mp_ratio_quantization: feagi_evolutionary::extract_memory_properties(&area.properties)
                 .map(|p| p.mp_ratio_quantization),
+            memory_neuron_cap: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.memory_neuron_cap),
+            ltm_eviction: feagi_evolutionary::extract_memory_properties(&area.properties)
+                .map(|p| p.ltm_eviction.as_str().to_string()),
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
@@ -5645,6 +5673,136 @@ mod tests {
             loaded.cortical_areas[&mem_id].properties["memory_twin_of"],
             serde_json::json!(src_id.as_base_64())
         );
+    }
+
+    #[tokio::test]
+    async fn memory_cap_and_eviction_survive_update_and_genome_save() {
+        use super::GenomeServiceImpl;
+        use crate::traits::GenomeService;
+        use crate::types::SaveGenomeParams;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::ParameterUpdateQueue;
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, MemoryCorticalType,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let mem_id = CorticalID::try_from_bytes(b"mmemev01").unwrap();
+        let mut mem = CorticalArea::new(
+            mem_id,
+            10,
+            "evict-test".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Memory(MemoryCorticalType::Memory),
+        )
+        .unwrap();
+        mem.properties
+            .insert("is_mem_type".to_string(), serde_json::json!(true));
+        let region = BrainRegion::new(
+            RegionID::new(),
+            "evict-region".to_string(),
+            RegionType::Undefined,
+        )
+        .unwrap()
+        .with_areas([mem_id]);
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+        {
+            let mut manager = connectome.write();
+            manager.add_brain_region(region, None).unwrap();
+            manager.add_cortical_area(mem).unwrap();
+        }
+        let queue = ParameterUpdateQueue::new();
+        let svc = GenomeServiceImpl::new_with_parameter_queue(Arc::clone(&connectome), queue);
+
+        // Defaults before any update.
+        let before = connectome
+            .read()
+            .get_cortical_area(&mem_id)
+            .and_then(|a| feagi_evolutionary::extract_memory_properties(&a.properties))
+            .unwrap();
+        assert_eq!(before.memory_neuron_cap, 0);
+        assert_eq!(before.ltm_eviction.as_str(), "lru");
+
+        // A bad value is rejected and changes nothing.
+        let bad = svc
+            .update_cortical_area(
+                &mem_id.as_base_64(),
+                HashMap::from([("ltm_eviction".to_string(), serde_json::json!("oldest"))]),
+            )
+            .await
+            .expect_err("unknown eviction mode must be rejected");
+        assert!(
+            matches!(bad, super::ServiceError::InvalidInput(_)),
+            "{bad:?}"
+        );
+
+        let info = svc
+            .update_cortical_area(
+                &mem_id.as_base_64(),
+                HashMap::from([
+                    ("memory_neuron_cap".to_string(), serde_json::json!(120)),
+                    ("ltm_eviction".to_string(), serde_json::json!("none")),
+                ]),
+            )
+            .await
+            .expect("update memory cap and eviction");
+        assert_eq!(info.memory_neuron_cap, Some(120));
+        assert_eq!(info.ltm_eviction.as_deref(), Some("none"));
+        let wire = serde_json::to_value(&info).unwrap();
+        assert_eq!(wire["memory_neuron_cap"], serde_json::json!(120));
+        assert_eq!(wire["ltm_eviction"], serde_json::json!("none"));
+
+        let after = connectome
+            .read()
+            .get_cortical_area(&mem_id)
+            .and_then(|a| feagi_evolutionary::extract_memory_properties(&a.properties))
+            .unwrap();
+        assert_eq!(after.memory_neuron_cap, 120);
+        assert_eq!(after.ltm_eviction.as_str(), "none");
+
+        // Serialized back out through the genome save (it rebuilds from the live areas).
+        *svc.get_current_genome_arc().write() = Some(feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "stale".to_string(),
+                genome_title: "stale".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            classifiers: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            modulators: feagi_evolutionary::ModulatorRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+            change_history: Vec::new(),
+        });
+        let json = svc
+            .save_genome(SaveGenomeParams {
+                genome_id: Some("evict".to_string()),
+                genome_title: Some("Evict".to_string()),
+            })
+            .await
+            .expect("save_genome");
+        let loaded = feagi_evolutionary::load_genome_from_json(&json).expect("reload genome");
+        let reloaded = feagi_evolutionary::extract_memory_properties(
+            &loaded.cortical_areas[&mem_id].properties,
+        )
+        .unwrap();
+        assert_eq!(reloaded.memory_neuron_cap, 120);
+        assert_eq!(reloaded.ltm_eviction.as_str(), "none");
     }
 
     #[tokio::test]

@@ -59,7 +59,13 @@ pub struct SynapseArray {
 
     /// Source index for fast lookup
     pub source_index: AHashMap<u32, Vec<usize>>,
+
+    /// Synapse indices by target, kept only for memory-neuron ids (>= `MEMORY_NEURON_ID_START`).
+    /// Lets one memory neuron's incoming synapses be removed without scanning every synapse.
+    pub memory_target_index: AHashMap<u32, Vec<usize>>,
 }
+
+use feagi_npu_neural::types::connectome::MEMORY_NEURON_ID_START;
 
 impl SynapseArray {
     /// Create a new synapse array with initial capacity
@@ -78,6 +84,41 @@ impl SynapseArray {
             modulation_groups: Vec::new(),
             modulation_groups_allocated: false,
             source_index: AHashMap::new(),
+            memory_target_index: AHashMap::new(),
+        }
+    }
+
+    /// Drop invalidated synapse indices from the source and memory-target index lists they
+    /// sit in, so the indexes do not keep entries for removed synapses.
+    fn prune_indexes(&mut self, removed: &[usize]) {
+        if removed.is_empty() {
+            return;
+        }
+        let mut sources = std::collections::HashSet::new();
+        let mut targets = std::collections::HashSet::new();
+        for &idx in removed {
+            sources.insert(self.source_neurons[idx]);
+            let target = self.target_neurons[idx];
+            if target >= MEMORY_NEURON_ID_START {
+                targets.insert(target);
+            }
+        }
+        let valid = &self.valid_mask;
+        for source in sources {
+            if let Some(list) = self.source_index.get_mut(&source) {
+                list.retain(|&i| valid[i]);
+                if list.is_empty() {
+                    self.source_index.remove(&source);
+                }
+            }
+        }
+        for target in targets {
+            if let Some(list) = self.memory_target_index.get_mut(&target) {
+                list.retain(|&i| valid[i]);
+                if list.is_empty() {
+                    self.memory_target_index.remove(&target);
+                }
+            }
         }
     }
 
@@ -259,6 +300,12 @@ impl SynapseStorage for SynapseArray {
 
         // Update index
         self.source_index.entry(source).or_default().push(idx);
+        if target >= MEMORY_NEURON_ID_START {
+            self.memory_target_index
+                .entry(target)
+                .or_default()
+                .push(idx);
+        }
 
         self.count += 1;
         Ok(idx)
@@ -307,7 +354,11 @@ impl SynapseStorage for SynapseArray {
                 idx, self.count
             )));
         }
+        let was_valid = self.valid_mask[idx];
         self.valid_mask[idx] = false;
+        if was_valid {
+            self.prune_indexes(&[idx]);
+        }
         Ok(())
     }
 
@@ -315,34 +366,61 @@ impl SynapseStorage for SynapseArray {
         &mut self,
         source_neurons: &[u32],
     ) -> crate::traits::Result<usize> {
-        let mut removed = 0;
+        let mut removed = Vec::new();
         for idx in 0..self.count {
             if self.valid_mask[idx] && source_neurons.contains(&self.source_neurons[idx]) {
                 self.valid_mask[idx] = false;
-                removed += 1;
+                removed.push(idx);
             }
         }
-        Ok(removed)
+        self.prune_indexes(&removed);
+        Ok(removed.len())
     }
 
     fn remove_synapses_touching_neuron(&mut self, neuron_id: u32) -> crate::traits::Result<usize> {
-        let mut removed = 0;
+        let mut removed = Vec::new();
         for idx in 0..self.count {
             if self.valid_mask[idx]
                 && (self.source_neurons[idx] == neuron_id || self.target_neurons[idx] == neuron_id)
             {
                 self.valid_mask[idx] = false;
-                removed += 1;
+                removed.push(idx);
             }
         }
-        Ok(removed)
+        self.prune_indexes(&removed);
+        Ok(removed.len())
+    }
+
+    fn remove_synapses_touching_memory_neurons(
+        &mut self,
+        neuron_ids: &[u32],
+    ) -> crate::traits::Result<usize> {
+        let mut removed = Vec::new();
+        for &neuron_id in neuron_ids {
+            // Outgoing edges: the source index covers every source id.
+            let outgoing = self.source_index.remove(&neuron_id).unwrap_or_default();
+            // Incoming edges: indexed for memory-range targets only.
+            let incoming = self
+                .memory_target_index
+                .remove(&neuron_id)
+                .unwrap_or_default();
+            for idx in outgoing.into_iter().chain(incoming) {
+                if idx < self.count && self.valid_mask[idx] {
+                    self.valid_mask[idx] = false;
+                    removed.push(idx);
+                }
+            }
+        }
+        // The removed ids' own lists are gone; drop the entries the other ends still hold.
+        self.prune_indexes(&removed);
+        Ok(removed.len())
     }
 
     fn remove_synapses_touching_marked_neurons(
         &mut self,
         neuron_marked: &[bool],
     ) -> crate::traits::Result<usize> {
-        let mut removed = 0;
+        let mut removed = Vec::new();
         for idx in 0..self.count {
             if !self.valid_mask[idx] {
                 continue;
@@ -353,10 +431,11 @@ impl SynapseStorage for SynapseArray {
             let target_marked = neuron_marked.get(target).copied().unwrap_or(false);
             if source_marked || target_marked {
                 self.valid_mask[idx] = false;
-                removed += 1;
+                removed.push(idx);
             }
         }
-        Ok(removed)
+        self.prune_indexes(&removed);
+        Ok(removed.len())
     }
 
     fn remove_synapses_between(
@@ -364,17 +443,18 @@ impl SynapseStorage for SynapseArray {
         source: u32,
         target: u32,
     ) -> crate::traits::Result<usize> {
-        let mut removed = 0;
+        let mut removed = Vec::new();
         for idx in 0..self.count {
             if self.valid_mask[idx]
                 && self.source_neurons[idx] == source
                 && self.target_neurons[idx] == target
             {
                 self.valid_mask[idx] = false;
-                removed += 1;
+                removed.push(idx);
             }
         }
-        Ok(removed)
+        self.prune_indexes(&removed);
+        Ok(removed.len())
     }
 
     fn update_weight(&mut self, idx: usize, new_weight: f32) -> crate::traits::Result<()> {
@@ -408,6 +488,44 @@ mod tests {
         let mut array = SynapseArray::new(10);
         array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory);
         assert_eq!(array.count, 1);
+    }
+
+    #[test]
+    fn memory_neuron_removal_drops_incoming_and_outgoing_edges_only() {
+        let mem_a = MEMORY_NEURON_ID_START + 1;
+        let mem_b = MEMORY_NEURON_ID_START + 2;
+        let mut array = SynapseArray::new(16);
+        array.add_synapse_simple(0, mem_a, 1.0, 1.0, SynapseType::Excitatory);
+        array.add_synapse_simple(mem_a, 1, 1.0, 1.0, SynapseType::Excitatory);
+        array.add_synapse_simple(mem_a, mem_b, 1.0, 1.0, SynapseType::Excitatory);
+        array.add_synapse_simple(2, mem_b, 1.0, 1.0, SynapseType::Excitatory);
+        array.add_synapse_simple(2, 3, 1.0, 1.0, SynapseType::Excitatory);
+        assert_eq!(array.valid_count(), 5);
+
+        let removed = array
+            .remove_synapses_touching_memory_neurons(&[mem_a])
+            .unwrap();
+        assert_eq!(removed, 3);
+        assert_eq!(array.valid_count(), 2);
+        // Removing again finds nothing; the unrelated memory neuron keeps its edge.
+        assert_eq!(
+            array
+                .remove_synapses_touching_memory_neurons(&[mem_a])
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            array
+                .remove_synapses_touching_memory_neurons(&[mem_b])
+                .unwrap(),
+            1
+        );
+        assert_eq!(array.valid_count(), 1);
+        // Index entries for removed synapses are gone, not just masked.
+        assert!(!array.memory_target_index.contains_key(&mem_a));
+        assert!(!array.memory_target_index.contains_key(&mem_b));
+        assert!(!array.source_index.contains_key(&mem_a));
+        assert_eq!(array.source_index.get(&2).map(|l| l.len()), Some(1));
     }
 
     #[test]

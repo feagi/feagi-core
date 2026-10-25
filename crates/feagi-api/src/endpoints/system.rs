@@ -59,6 +59,10 @@ pub struct HealthCheckResponse {
     pub genome_timestamp: Option<i64>,
     pub simulation_timestep: Option<f64>,
     pub memory_area_stats: Option<HashMap<String, HashMap<String, serde_json::Value>>>,
+    /// Occupancy of the pool shared by all memory areas (`pool_capacity`, `pool_in_use`,
+    /// `pool_ltm`). Omitted when the plasticity service is not running.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_pool: Option<crate::endpoints::cortical_area::MemoryPoolResponse>,
     pub amalgamation_pending: Option<HashMap<String, serde_json::Value>>,
     /// Hash of brain regions (hierarchy, membership, and properties)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -239,6 +243,14 @@ pub async fn get_health_check(
                         serde_json::json!(stats.deleted_total),
                     );
                     inner_map.insert(
+                        "evicted_total".to_string(),
+                        serde_json::json!(stats.evicted_total),
+                    );
+                    inner_map.insert(
+                        "creation_failed_total".to_string(),
+                        serde_json::json!(stats.creation_failed_total),
+                    );
+                    inner_map.insert(
                         "last_updated".to_string(),
                         serde_json::json!(stats.last_updated),
                     );
@@ -248,6 +260,21 @@ pub async fn get_health_check(
             (Some(per_area), Some(total))
         })
         .unwrap_or((None, None));
+
+    // Pool occupancy comes from counters the plasticity service publishes every burst, so
+    // this read never waits on the memory array.
+    #[cfg(feature = "services")]
+    let memory_pool = feagi_brain_development::ConnectomeManager::instance()
+        .read()
+        .get_plasticity_executor()
+        .and_then(|executor| executor.lock().ok()?.memory_pool_snapshot())
+        .map(|pool| crate::endpoints::cortical_area::MemoryPoolResponse {
+            pool_capacity: pool.pool_capacity,
+            pool_in_use: pool.pool_in_use,
+            pool_ltm: pool.pool_ltm,
+        });
+    #[cfg(not(feature = "services"))]
+    let memory_pool = None;
 
     // Prefer the plasticity cache-derived total to avoid discrepancies.
     let memory_neuron_count = memory_neuron_count_from_cache.or(memory_neuron_count);
@@ -374,6 +401,7 @@ pub async fn get_health_check(
         genome_timestamp,
         simulation_timestep,
         memory_area_stats,
+        memory_pool,
         amalgamation_pending,
         brain_regions_hash,
         cortical_areas_hash,

@@ -25,8 +25,16 @@ pub struct MemoryAreaStats {
     /// Total neurons created since area was initialized
     pub created_total: usize,
 
-    /// Total neurons deleted/expired since area was initialized
+    /// Total neurons deleted/expired/evicted since area was initialized
     pub deleted_total: usize,
+
+    /// Neurons evicted to make room for a new one (also counted in `deleted_total`)
+    #[serde(default)]
+    pub evicted_total: usize,
+
+    /// New-pattern creations that failed (area cap or pool full with no eviction possible)
+    #[serde(default)]
+    pub creation_failed_total: usize,
 
     /// Last update timestamp (milliseconds since epoch)
     pub last_updated: u64,
@@ -38,6 +46,8 @@ impl Default for MemoryAreaStats {
             neuron_count: 0,
             created_total: 0,
             deleted_total: 0,
+            evicted_total: 0,
+            creation_failed_total: 0,
             last_updated: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -96,6 +106,64 @@ pub fn on_neuron_deleted(cache: &MemoryStatsCache, area_name: &str) {
         state_manager
             .get_core_state()
             .subtract_memory_neuron_count(1);
+    }
+}
+
+/// Update stats when a neuron is evicted to make room for a new one.
+///
+/// Counts as a deletion too (`deleted_total`, `neuron_count`), plus `evicted_total`.
+pub fn on_neuron_evicted(cache: &MemoryStatsCache, area_name: &str) {
+    if let Some(area_stats) = cache.write().get_mut(area_name) {
+        area_stats.evicted_total += 1;
+    }
+    on_neuron_deleted(cache, area_name);
+}
+
+/// Update stats when creating a neuron failed for a new pattern.
+pub fn on_creation_failed(cache: &MemoryStatsCache, area_name: &str) {
+    let mut stats = cache.write();
+    let area_stats = stats.entry(area_name.to_string()).or_default();
+    area_stats.creation_failed_total += 1;
+    area_stats.last_updated = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+}
+
+/// Occupancy of the shared memory-neuron pool.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryPoolSnapshot {
+    /// Slots in the pool (`[plasticity.memory] array_capacity`).
+    pub pool_capacity: usize,
+    /// Active memory neurons across all areas.
+    pub pool_in_use: usize,
+    /// Active long-term memory neurons across all areas.
+    pub pool_ltm: usize,
+}
+
+/// Shared, lock-free pool occupancy published by the plasticity service.
+#[derive(Debug, Default)]
+pub struct MemoryPoolCounters {
+    capacity: std::sync::atomic::AtomicUsize,
+    in_use: std::sync::atomic::AtomicUsize,
+    ltm: std::sync::atomic::AtomicUsize,
+}
+
+impl MemoryPoolCounters {
+    pub fn publish(&self, snapshot: MemoryPoolSnapshot) {
+        use std::sync::atomic::Ordering::Relaxed;
+        self.capacity.store(snapshot.pool_capacity, Relaxed);
+        self.in_use.store(snapshot.pool_in_use, Relaxed);
+        self.ltm.store(snapshot.pool_ltm, Relaxed);
+    }
+
+    pub fn snapshot(&self) -> MemoryPoolSnapshot {
+        use std::sync::atomic::Ordering::Relaxed;
+        MemoryPoolSnapshot {
+            pool_capacity: self.capacity.load(Relaxed),
+            pool_in_use: self.in_use.load(Relaxed),
+            pool_ltm: self.ltm.load(Relaxed),
+        }
     }
 }
 
@@ -193,5 +261,22 @@ mod tests {
         on_neuron_deleted(&cache, "mem_00");
         assert_eq!(core_state.get_neuron_count(), start_total);
         assert_eq!(core_state.get_memory_neuron_count(), start_memory);
+    }
+
+    #[test]
+    fn eviction_and_failure_counters() {
+        let _lock = CORE_STATE_LOCK.lock().unwrap();
+        let cache = create_memory_stats_cache();
+        on_neuron_created(&cache, "mem_ev");
+        on_neuron_created(&cache, "mem_ev");
+        on_neuron_evicted(&cache, "mem_ev");
+        on_creation_failed(&cache, "mem_ev");
+        on_creation_failed(&cache, "mem_ev");
+        let stats = get_area_stats(&cache, "mem_ev").unwrap();
+        assert_eq!(stats.neuron_count, 1);
+        assert_eq!(stats.created_total, 2);
+        assert_eq!(stats.deleted_total, 1);
+        assert_eq!(stats.evicted_total, 1);
+        assert_eq!(stats.creation_failed_total, 2);
     }
 }

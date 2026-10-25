@@ -437,6 +437,20 @@ pub trait SynapseStorage: Send + Sync {
     /// Remove every incoming and outgoing synapse touching one neuron.
     fn remove_synapses_touching_neuron(&mut self, neuron_id: u32) -> Result<usize>;
 
+    /// Remove every incoming and outgoing synapse of memory-neuron ids.
+    ///
+    /// Memory-neuron ids sit in a reserved range outside the dense neuron array.
+    /// Implementations that keep a per-endpoint index can answer in time
+    /// proportional to the removed synapses; the default scans once per id.
+    /// Returns how many synapses were invalidated.
+    fn remove_synapses_touching_memory_neurons(&mut self, neuron_ids: &[u32]) -> Result<usize> {
+        let mut removed = 0;
+        for &neuron_id in neuron_ids {
+            removed += self.remove_synapses_touching_neuron(neuron_id)?;
+        }
+        Ok(removed)
+    }
+
     /// Remove every synapse whose source or target is marked.
     ///
     /// `neuron_marked[neuron_id]` is true for a neuron being deleted. One pass

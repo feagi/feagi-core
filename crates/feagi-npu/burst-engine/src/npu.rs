@@ -1611,6 +1611,79 @@ impl<
             .remove_pending_for_neuron_targets(&ids);
     }
 
+    /// Remove the runtime footprint of individual memory neurons that were deleted or evicted.
+    ///
+    /// Per-neuron counterpart of the area-wide reset: synapses into and out of each id, its
+    /// propagation mapping, replay frames, pending arrivals, staged injections and fire
+    /// history. `removals` holds `(cortical_idx, memory_neuron_id)`. Cost is proportional to
+    /// the removed neurons' own synapses; no pass over all synapses and no index rebuild
+    /// (stale index entries are skipped through the synapse valid mask).
+    ///
+    /// Returns the number of synapses invalidated.
+    pub fn remove_memory_neuron_runtime_state(&mut self, removals: &[(u32, u32)]) -> usize {
+        if removals.is_empty() {
+            return 0;
+        }
+        let ids: Vec<u32> = removals.iter().map(|&(_, id)| id).collect();
+        let id_set: AHashSet<u32> = ids.iter().copied().collect();
+        let mut by_area: AHashMap<u32, Vec<u32>> = AHashMap::new();
+        for &(cortical_idx, neuron_id) in removals {
+            by_area.entry(cortical_idx).or_default().push(neuron_id);
+        }
+
+        let removed = {
+            let mut synapse_storage = self.synapse_storage.write().unwrap();
+            synapse_storage
+                .remove_synapses_touching_memory_neurons(&ids)
+                .unwrap_or(0)
+        };
+        {
+            let mut engine = self.propagation_engine.write().unwrap();
+            for &neuron_id in &ids {
+                engine.synapse_index.remove(&NeuronId(neuron_id));
+                engine.neuron_to_area.remove(&NeuronId(neuron_id));
+            }
+        }
+        self.clear_memory_replay_frames(&ids);
+
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures
+            .synaptic_arrival_schedule
+            .remove_pending_for_neuron_targets(&id_set);
+        for (cortical_idx, area_ids) in &by_area {
+            fire_structures
+                .fire_ledger
+                .forget_neuron_ids(*cortical_idx, area_ids);
+            fire_structures
+                .episodic_memory_fire_ledger
+                .forget_neuron_ids(*cortical_idx, area_ids);
+        }
+        fire_structures
+            .pending_memory_injections
+            .retain(|(neuron_id, _, _, _)| !id_set.contains(&neuron_id.0));
+        fire_structures
+            .last_fcl_snapshot
+            .retain(|(neuron_id, _)| !id_set.contains(&neuron_id.0));
+        for &neuron_id in &ids {
+            fire_structures
+                .fire_candidate_list
+                .remove_candidate(NeuronId(neuron_id));
+            fire_structures
+                .sparse_memory_associative_lif
+                .remove(&neuron_id);
+            fire_structures
+                .memory_associative_fcl_input
+                .remove(&neuron_id);
+            fire_structures
+                .memory_candidate_cortical_idx
+                .remove(&neuron_id);
+            fire_structures
+                .memory_candidate_fire_kind
+                .remove(&neuron_id);
+        }
+        removed
+    }
+
     fn cortical_id_for_index(&self, cortical_idx: u32) -> Option<CorticalID> {
         let area_name = self.get_cortical_area_name(cortical_idx)?;
         CorticalID::try_from_base_64(&area_name).ok()
@@ -8334,6 +8407,52 @@ mod tests {
         let fs = npu.fire_structures.lock().unwrap();
         assert!(fs.pending_memory_injections.is_empty());
         assert!(fs.current_fire_queue.get_area_neurons(20).is_none());
+    }
+
+    #[test]
+    fn remove_memory_neuron_runtime_state_is_per_neuron() {
+        use feagi_npu_neural::types::NeuronId;
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
+        use feagi_structures::genomic::cortical_area::CorticalID;
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 8,
+            );
+        let area = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+        npu.register_cortical_area(20, area.as_base_64());
+        let evicted = 50_000_000u32;
+        let kept = 50_000_001u32;
+        npu.register_dynamic_neuron_mapping(evicted, area);
+        npu.register_dynamic_neuron_mapping(kept, area);
+        for (src, dst) in [(1u32, evicted), (evicted, 2), (1, kept), (kept, 2)] {
+            npu.add_synapse(
+                NeuronId(src),
+                NeuronId(dst),
+                SynapticWeight(1.0),
+                SynapticPsp(1.0),
+                SynapseType::Excitatory,
+                SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+                1,
+            )
+            .unwrap();
+        }
+        npu.register_memory_replay_frames(evicted, Vec::new());
+        npu.register_memory_replay_frames(kept, Vec::new());
+
+        let removed = npu.remove_memory_neuron_runtime_state(&[(20, evicted)]);
+        assert_eq!(
+            removed, 2,
+            "incoming and outgoing synapses of the evicted id"
+        );
+        assert_eq!(npu.dynamic_memory_neuron_ids_in_area(20), vec![kept]);
+        assert!(npu.get_memory_replay_frames(evicted).is_none());
+        assert!(npu.get_memory_replay_frames(kept).is_some());
+        let synapses = npu.synapse_storage.read().unwrap();
+        let valid = (0..synapses.count())
+            .filter(|&i| synapses.valid_mask()[i])
+            .count();
+        assert_eq!(valid, 2, "the other memory neuron's synapses survive");
     }
 
     #[test]

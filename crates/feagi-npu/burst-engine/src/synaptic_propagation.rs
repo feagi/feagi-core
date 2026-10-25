@@ -930,6 +930,7 @@ mod tests {
             modulation_groups: Vec::new(),
             modulation_groups_allocated: false,
             source_index: ahash::AHashMap::new(),
+            memory_target_index: ahash::AHashMap::new(),
         };
 
         // Build source index

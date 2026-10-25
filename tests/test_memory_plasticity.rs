@@ -586,6 +586,7 @@ fn apply_plasticity_commands(npu: &Arc<TracingMutex<DynamicNPU>>, commands: &[Pl
             PlasticityCommand::UpdateWeightsDelta { .. } => {}
             PlasticityCommand::UpdateStateCounters { .. } => {}
             PlasticityCommand::ResetMemoryNeuronsInArea { .. } => {}
+            PlasticityCommand::MemoryNeuronRemoved { .. } => {}
         }
     }
 }
@@ -640,6 +641,7 @@ fn apply_plasticity_commands_with_manager(
             PlasticityCommand::UpdateWeightsDelta { .. } => {}
             PlasticityCommand::UpdateStateCounters { .. } => {}
             PlasticityCommand::ResetMemoryNeuronsInArea { .. } => {}
+            PlasticityCommand::MemoryNeuronRemoved { .. } => {}
         }
     }
 }
@@ -1080,6 +1082,7 @@ fn test_longterm_memory_converts_and_never_dies() {
         longterm_threshold: 5,
         lifespan_growth_rate: 1.0,
         max_reactivations: 1000,
+        ..MemoryNeuronLifecycleConfig::default()
     };
     service.register_memory_area(
         100,
@@ -1154,6 +1157,7 @@ fn test_memory_neuron_count_stalls_with_limited_unique_patterns() {
         lifespan_growth_rate: 9.0,
         longterm_threshold: 9,
         max_reactivations: 1000,
+        ..MemoryNeuronLifecycleConfig::default()
     };
     service.register_memory_area(
         100,

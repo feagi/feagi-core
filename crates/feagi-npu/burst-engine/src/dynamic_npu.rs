@@ -725,6 +725,10 @@ where
         dispatch_mut!(self, forget_dynamic_memory_neuron_mappings(cortical_idx))
     }
 
+    pub fn remove_memory_neuron_runtime_state(&mut self, removals: &[(u32, u32)]) -> usize {
+        dispatch_mut!(self, remove_memory_neuron_runtime_state(removals))
+    }
+
     pub fn clear_memory_area_activation_records(&mut self, cortical_idx: u32, neuron_ids: &[u32]) {
         dispatch_mut!(
             self,

@@ -26,11 +26,12 @@ use crate::episodic_scan::{
     class_channel_index, collect_active_scan_windows, mask_channels_in_window, should_skip_scan,
     spatial_signature_hash, ScanKernel,
 };
-use crate::log_rate_limiter::BurstLogRateLimiter;
+use crate::log_rate_limiter::{BurstLogRateLimiter, TimeLogRateLimiter};
 use crate::memory_neuron_array::{
-    MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig,
+    MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig, MemoryNeuronRemovalReason,
+    RemovedMemoryNeuron,
 };
-use crate::memory_stats_cache::{self, MemoryStatsCache};
+use crate::memory_stats_cache::{self, MemoryPoolCounters, MemoryPoolSnapshot, MemoryStatsCache};
 use crate::mp_change_encoder::{ChangeStep, MemoryMpMode, MpChangeEncoding};
 use crate::pattern_detector::{BatchPatternDetector, PatternConfig};
 use crate::stdp::STDPConfig;
@@ -42,6 +43,9 @@ use serde::{Deserialize, Serialize};
 
 /// Default burst gap between repeated MP-unavailable warnings.
 pub const DEFAULT_MP_UNAVAILABLE_WARN_PERIOD_BURSTS: u64 = 100;
+
+/// Longest interval at which one memory area logs a creation-failure WARN.
+pub const CREATION_FAILURE_WARN_PERIOD: std::time::Duration = std::time::Duration::from_secs(10);
 
 type MpWindowFrame = (u64, ahash::AHashMap<u32, f32>);
 type PerAreaMpWindow = (u32, Vec<MpWindowFrame>);
@@ -139,6 +143,17 @@ pub enum PlasticityCommand {
 
     /// Reset (delete) all memory neurons and their synapses in a cortical area
     ResetMemoryNeuronsInArea { cortical_idx: u32 },
+
+    /// A single memory neuron left the array (short-term expiry or eviction).
+    ///
+    /// The service has already removed its NPU synapses, dynamic mapping, replay frames and
+    /// activation records. Consumers drop anything they keep for the id, such as the
+    /// storage-side twin created when the neuron converted to long-term memory.
+    MemoryNeuronRemoved {
+        neuron_id: u32,
+        area_idx: u32,
+        reason: MemoryNeuronRemovalReason,
+    },
 }
 
 fn command_targets_area(command: &PlasticityCommand, area_idx: u32) -> bool {
@@ -160,8 +175,29 @@ fn command_targets_area(command: &PlasticityCommand, area_idx: u32) -> bool {
             ..
         } => *command_area == area_idx,
         PlasticityCommand::ResetMemoryNeuronsInArea { cortical_idx } => *cortical_idx == area_idx,
+        PlasticityCommand::MemoryNeuronRemoved {
+            area_idx: command_area,
+            ..
+        } => *command_area == area_idx,
         PlasticityCommand::UpdateWeightsDelta { .. } => false,
     }
+}
+
+/// Memory neuron id a queued command would register or re-inject, if it names one.
+fn command_neuron_id(command: &PlasticityCommand) -> Option<u32> {
+    match command {
+        PlasticityCommand::RegisterMemoryNeuron { neuron_id, .. }
+        | PlasticityCommand::MemoryNeuronConvertedToLtm { neuron_id, .. }
+        | PlasticityCommand::InjectMemoryNeuronToFCL { neuron_id, .. }
+        | PlasticityCommand::UpdateStateCounters { neuron_id, .. } => Some(*neuron_id),
+        _ => None,
+    }
+}
+
+/// True for queued commands that would re-register or re-inject this memory neuron id.
+#[cfg(test)]
+fn command_targets_neuron(command: &PlasticityCommand, id: u32) -> bool {
+    command_neuron_id(command) == Some(id)
 }
 
 /// Replay frame describing a single temporal slice for an upstream area.
@@ -277,6 +313,15 @@ pub struct MemoryCorticalAreaRuntimeInfo {
     /// Mode the plasticity layer actually runs (after depth < 2 auto-disable);
     /// `None` when the area is not registered.
     pub effective_mp_mode: Option<String>,
+    /// Neurons evicted from this area to make room for new ones.
+    #[serde(default)]
+    pub evicted_total: usize,
+    /// New-pattern creations in this area that failed.
+    #[serde(default)]
+    pub creation_failed_total: usize,
+    /// Occupancy of the pool shared by all memory areas.
+    #[serde(default)]
+    pub memory_pool: MemoryPoolSnapshot,
 }
 
 impl MemoryCorticalAreaRuntimeInfo {
@@ -331,6 +376,13 @@ pub struct PlasticityService {
 
     /// Rate-limits repeating MP-unavailable warnings (keyed by upstream area idx).
     mp_window_warn_limiter: Arc<Mutex<BurstLogRateLimiter>>,
+
+    /// Rate-limits creation-failure warnings: one line per area per
+    /// [`CREATION_FAILURE_WARN_PERIOD`].
+    creation_failure_warn_limiter: Arc<Mutex<TimeLogRateLimiter>>,
+
+    /// Pool occupancy published after every burst for lock-free readers (health check).
+    pool_counters: Arc<MemoryPoolCounters>,
 }
 
 impl PlasticityService {
@@ -382,7 +434,24 @@ impl PlasticityService {
             stats: Arc::new(Mutex::new(PlasticityStats::default())),
             memory_stats_cache,
             mp_window_warn_limiter: Arc::new(Mutex::new(BurstLogRateLimiter::new(mp_warn_period))),
+            creation_failure_warn_limiter: Arc::new(Mutex::new(TimeLogRateLimiter::new(
+                CREATION_FAILURE_WARN_PERIOD,
+            ))),
+            pool_counters: Arc::new(MemoryPoolCounters::default()),
         }
+    }
+
+    /// Occupancy of the shared memory-neuron pool as of the last burst. Lock-free.
+    pub fn memory_pool_snapshot(&self) -> MemoryPoolSnapshot {
+        self.pool_counters.snapshot()
+    }
+
+    fn publish_pool_counters(array: &MemoryNeuronArray, counters: &MemoryPoolCounters) {
+        counters.publish(MemoryPoolSnapshot {
+            pool_capacity: array.pool_capacity(),
+            pool_in_use: array.pool_in_use(),
+            pool_ltm: array.pool_ltm(),
+        });
     }
 
     /// Get the memory stats cache (for wiring to health check)
@@ -414,6 +483,8 @@ impl PlasticityService {
         let memory_stats_cache = self.memory_stats_cache.clone();
         let npu = Arc::clone(&self.npu); // Clone NPU reference for thread
         let mp_window_warn_limiter = Arc::clone(&self.mp_window_warn_limiter);
+        let creation_failure_warn_limiter = Arc::clone(&self.creation_failure_warn_limiter);
+        let pool_counters = Arc::clone(&self.pool_counters);
 
         tracing::info!(target: "plasticity", "🧠 Starting PlasticityService background thread...");
 
@@ -448,6 +519,8 @@ impl PlasticityService {
                     &config,
                     &memory_stats_cache,
                     &mp_window_warn_limiter,
+                    &creation_failure_warn_limiter,
+                    &pool_counters,
                 );
             }
         })
@@ -476,6 +549,8 @@ impl PlasticityService {
         config: &PlasticityConfig,
         memory_stats_cache: &MemoryStatsCache,
         mp_window_warn_limiter: &Arc<Mutex<BurstLogRateLimiter>>,
+        creation_failure_warn_limiter: &Arc<Mutex<TimeLogRateLimiter>>,
+        pool_counters: &Arc<MemoryPoolCounters>,
     ) {
         let memory_areas_snapshot = memory_areas.lock().unwrap().clone();
 
@@ -881,7 +956,7 @@ impl PlasticityService {
                             replay_frames: final_replay_frames,
                         });
 
-                        let total_memory = array.get_stats().active_neurons;
+                        let total_memory = array.pool_in_use();
                         commands.push(PlasticityCommand::UpdateStateCounters {
                             memory_neurons_created: 0,
                             current_memory_neuron_count: total_memory,
@@ -977,7 +1052,7 @@ impl PlasticityService {
 
                         commands.push(PlasticityCommand::UpdateStateCounters {
                             memory_neurons_created: 1,
-                            current_memory_neuron_count: array.get_stats().active_neurons,
+                            current_memory_neuron_count: array.pool_in_use(),
                             area_idx: *memory_area_idx,
                             neuron_id,
                         });
@@ -985,19 +1060,14 @@ impl PlasticityService {
                         // Update memory utilization in state manager after creation
                         Self::update_memory_utilization_in_state_manager(&array, config);
                     } else {
-                        // Get diagnostic information to understand failure cause
-                        let array_stats = array.get_stats();
-                        let id_stats = array.get_id_allocation_stats();
-                        tracing::warn!(target: "plasticity",
-                            "[PLASTICITY] ⚠️  Failed to create memory neuron for pattern {} in area {} - Array: {}/{} active ({} LTM, {} reusable), ID: {}/{} allocated",
+                        Self::note_creation_failure(
+                            &array,
+                            *memory_area_idx,
                             pattern.pattern_hash,
-                            memory_area_idx,
-                            array_stats.active_neurons,
-                            array_stats.total_capacity,
-                            array_stats.longterm_neurons,
-                            array_stats.reusable_indices,
-                            id_stats.memory_allocated,
-                            id_stats.memory_capacity
+                            &lifecycle_config,
+                            memory_area_names,
+                            memory_stats_cache,
+                            creation_failure_warn_limiter,
                         );
                     }
                 }
@@ -1026,6 +1096,7 @@ impl PlasticityService {
             current_timestep,
             &mut commands,
             stats,
+            creation_failure_warn_limiter,
         );
         Self::run_episodic_scan(npu, &mut array, &memory_areas_snapshot, current_timestep);
 
@@ -1036,28 +1107,22 @@ impl PlasticityService {
             let mut s = stats.lock().unwrap();
             s.memory_neurons_aged += died_neurons.len();
             drop(s);
+        }
 
-            // Update memory stats cache for deleted neurons (group by area)
-            let area_names_map = memory_area_names.lock().unwrap();
-            let mut area_death_counts: HashMap<u32, usize> = HashMap::new();
-
-            for died_idx in died_neurons {
-                if let Some(area_idx) = array.get_cortical_area_id(died_idx) {
-                    *area_death_counts.entry(area_idx).or_insert(0) += 1;
-                }
-            }
-
-            for (area_idx, count) in area_death_counts {
-                if let Some(area_name) = area_names_map.get(&area_idx) {
-                    for _ in 0..count {
-                        memory_stats_cache::on_neuron_deleted(memory_stats_cache, area_name);
-                    }
-                }
-            }
-
+        // Every neuron removed this burst (expired above, evicted during creation) leaves
+        // the stats cache, then its NPU footprint, then downstream consumers.
+        let removed = array.drain_removed_neurons();
+        if !removed.is_empty() {
+            Self::count_removed_in_stats_cache(&removed, memory_area_names, memory_stats_cache);
             // Update memory utilization in state manager after deletions
             Self::update_memory_utilization_in_state_manager(&array, config);
         }
+        Self::publish_pool_counters(&array, pool_counters);
+
+        // The NPU is locked only after the array is released: the burst loop holds the NPU
+        // and then reads the array, so holding both in the other order can deadlock.
+        drop(array);
+        let removal_commands = Self::remove_from_npu(npu, command_queue, &removed);
 
         // Enqueue commands
         if !commands.is_empty() {
@@ -1072,6 +1137,113 @@ impl PlasticityService {
                 s.plasticity_commands_dropped += cmd_count;
             }
         }
+
+        // Removal notices are never dropped for a full queue: a dropped notice would leave
+        // a storage-side twin behind for an id that no longer exists.
+        if !removal_commands.is_empty() {
+            command_queue.lock().unwrap().extend(removal_commands);
+        }
+    }
+
+    /// Count removed neurons against their area's cached stats.
+    fn count_removed_in_stats_cache(
+        removed: &[RemovedMemoryNeuron],
+        memory_area_names: &Arc<Mutex<HashMap<u32, String>>>,
+        memory_stats_cache: &MemoryStatsCache,
+    ) {
+        let names = memory_area_names.lock().unwrap();
+        for record in removed.iter().filter(|record| record.counted_in_stats) {
+            let Some(area_name) = names.get(&record.area_idx) else {
+                continue;
+            };
+            match record.reason {
+                MemoryNeuronRemovalReason::Expired => {
+                    memory_stats_cache::on_neuron_deleted(memory_stats_cache, area_name)
+                }
+                MemoryNeuronRemovalReason::Evicted => {
+                    memory_stats_cache::on_neuron_evicted(memory_stats_cache, area_name)
+                }
+            }
+        }
+    }
+
+    /// Remove the NPU-side footprint of removed neurons and return their notices.
+    ///
+    /// One NPU lock per call covers the whole batch. Each neuron costs time proportional to
+    /// its own synapses. Queued commands that would re-register a removed id are dropped.
+    fn remove_from_npu(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        command_queue: &Arc<Mutex<Vec<PlasticityCommand>>>,
+        removed: &[RemovedMemoryNeuron],
+    ) -> Vec<PlasticityCommand> {
+        if removed.is_empty() {
+            return Vec::new();
+        }
+        let removals: Vec<(u32, u32)> = removed
+            .iter()
+            .map(|record| (record.area_idx, record.neuron_id))
+            .collect();
+        {
+            let mut npu_lock = npu.lock().unwrap();
+            npu_lock.remove_memory_neuron_runtime_state(&removals);
+        }
+        {
+            let ids: AHashSet<u32> = removed.iter().map(|record| record.neuron_id).collect();
+            command_queue
+                .lock()
+                .unwrap()
+                .retain(|command| !command_neuron_id(command).is_some_and(|id| ids.contains(&id)));
+        }
+        removed
+            .iter()
+            .map(|record| PlasticityCommand::MemoryNeuronRemoved {
+                neuron_id: record.neuron_id,
+                area_idx: record.area_idx,
+                reason: record.reason,
+            })
+            .collect()
+    }
+
+    /// Count a failed creation and log it at most once per area per
+    /// [`CREATION_FAILURE_WARN_PERIOD`], with the number of lines suppressed since the last.
+    fn note_creation_failure(
+        array: &MemoryNeuronArray,
+        area_idx: u32,
+        pattern_hash: u64,
+        lifecycle_config: &MemoryNeuronLifecycleConfig,
+        memory_area_names: &Arc<Mutex<HashMap<u32, String>>>,
+        memory_stats_cache: &MemoryStatsCache,
+        limiter: &Arc<Mutex<TimeLogRateLimiter>>,
+    ) {
+        if let Some(area_name) = memory_area_names.lock().unwrap().get(&area_idx) {
+            memory_stats_cache::on_creation_failed(memory_stats_cache, area_name);
+        }
+        let Some(suppressed) = limiter
+            .lock()
+            .unwrap()
+            .should_emit(area_idx, std::time::Instant::now())
+        else {
+            return;
+        };
+        let id_stats = array.get_id_allocation_stats();
+        tracing::warn!(target: "plasticity",
+            "[PLASTICITY] Failed to create memory neuron in area {} (pattern {}): area {} of cap {} (0 = none), eviction={}, pool {}/{} in use ({} LTM), ids {}/{} allocated{}",
+            area_idx,
+            pattern_hash,
+            array.area_neuron_count(area_idx),
+            lifecycle_config.memory_neuron_cap,
+            lifecycle_config.ltm_eviction.as_str(),
+            array.pool_in_use(),
+            array.pool_capacity(),
+            array.pool_ltm(),
+            id_stats.memory_allocated,
+            id_stats.memory_capacity,
+            if suppressed > 0 {
+                format!(" ({} similar failures suppressed since the last line)", suppressed)
+            } else {
+                String::new()
+            }
+        );
     }
 
     /// Neuron set hashed for one upstream frame.
@@ -1356,6 +1528,7 @@ impl PlasticityService {
         current_timestep: u64,
         commands: &mut Vec<PlasticityCommand>,
         stats: &Arc<Mutex<PlasticityStats>>,
+        creation_failure_warn_limiter: &Arc<Mutex<TimeLogRateLimiter>>,
     ) {
         let lifecycle_configs = memory_lifecycle_configs.lock().unwrap();
         for (kernel_area_idx, kernel_cfg) in memory_areas {
@@ -1436,6 +1609,15 @@ impl PlasticityService {
                         current_timestep,
                         &lifecycle_config,
                     ) else {
+                        Self::note_creation_failure(
+                            array,
+                            *kernel_area_idx,
+                            window.spatial_hash,
+                            &lifecycle_config,
+                            memory_area_names,
+                            memory_stats_cache,
+                            creation_failure_warn_limiter,
+                        );
                         continue;
                     };
                     let created = array
@@ -2036,12 +2218,24 @@ impl PlasticityService {
             },
         );
 
-        let mut names = self.memory_area_names.lock().unwrap();
-        names.insert(area_idx, area_name.clone());
+        {
+            // Released before the array lock: the burst thread locks the array first and
+            // the names and configs second.
+            let mut names = self.memory_area_names.lock().unwrap();
+            names.insert(area_idx, area_name.clone());
+        }
 
         if let Some(config) = lifecycle_config {
-            let mut configs = self.memory_lifecycle_configs.lock().unwrap();
-            configs.insert(area_idx, self.sanitize_lifecycle_config(config));
+            let sanitized = self.sanitize_lifecycle_config(config);
+            self.memory_lifecycle_configs
+                .lock()
+                .unwrap()
+                .insert(area_idx, sanitized);
+            // Re-registering an existing area (a cap or eviction update) only replaces its
+            // settings. Its neurons stay.
+            let mut array = self.memory_neuron_array.lock().unwrap();
+            array.set_area_eviction(area_idx, sanitized.ltm_eviction);
+            array.set_area_cap(area_idx, sanitized.memory_neuron_cap);
         }
 
         // Ensure FireLedger tracks upstream areas for the requested temporal depth (STDP ledger).
@@ -2293,6 +2487,10 @@ impl PlasticityService {
         self.memory_areas.lock().unwrap().clear();
         self.memory_lifecycle_configs.lock().unwrap().clear();
         self.memory_area_names.lock().unwrap().clear();
+        self.memory_neuron_array
+            .lock()
+            .unwrap()
+            .clear_all_area_policies();
         self.pattern_detector.detectors.lock().unwrap().clear();
         self.command_queue.lock().unwrap().clear();
     }
@@ -2318,6 +2516,7 @@ impl PlasticityService {
             }
             let discarded = array.get_stats().active_neurons;
             array.reset();
+            Self::publish_pool_counters(&array, &self.pool_counters);
             discarded
         };
 
@@ -2361,6 +2560,10 @@ impl PlasticityService {
             .lock()
             .unwrap()
             .remove(&area_idx);
+        self.memory_neuron_array
+            .lock()
+            .unwrap()
+            .clear_area_eviction(area_idx);
         // Lifecycle totals belong to the area instance. A later area with the same name
         // (cortical IDs derive from names) must start its `created_total` at zero.
         if let Some(area_name) = self.memory_area_names.lock().unwrap().remove(&area_idx) {
@@ -2498,6 +2701,19 @@ impl PlasticityService {
                             cortical_idx
                         );
                     }
+                    PlasticityCommand::MemoryNeuronRemoved {
+                        neuron_id,
+                        area_idx,
+                        reason,
+                    } => {
+                        tracing::debug!(
+                            target: "plasticity",
+                            "[PLASTICITY-SVC] MemoryNeuronRemoved area={} neuron_id={} reason={:?}",
+                            area_idx,
+                            neuron_id,
+                            reason
+                        );
+                    }
                 }
             }
         }
@@ -2527,10 +2743,10 @@ impl PlasticityService {
         &self,
         neurons: &[MemoryNeuronDetail],
     ) -> Result<usize, String> {
-        self.memory_neuron_array
-            .lock()
-            .unwrap()
-            .restore_long_term_memory_neurons(neurons)
+        let mut array = self.memory_neuron_array.lock().unwrap();
+        let restored = array.restore_long_term_memory_neurons(neurons);
+        Self::publish_pool_counters(&array, &self.pool_counters);
+        restored
     }
 
     /// Reset (delete) all memory neurons and their synapses in a cortical area.
@@ -2631,6 +2847,7 @@ impl PlasticityService {
             }
             let array = self.memory_neuron_array.lock().unwrap();
             Self::update_memory_utilization_in_state_manager(&array, &self.config);
+            Self::publish_pool_counters(&array, &self.pool_counters);
         }
 
         tracing::info!(
@@ -2651,6 +2868,14 @@ impl PlasticityService {
         let effective_mp_mode = self
             .memory_area_mp_mode(cortical_idx)
             .map(|mode| mode.as_str().to_string());
+        let (evicted_total, creation_failed_total) = self
+            .memory_area_names
+            .lock()
+            .unwrap()
+            .get(&cortical_idx)
+            .and_then(|name| memory_stats_cache::get_area_stats(&self.memory_stats_cache, name))
+            .map(|stats| (stats.evicted_total, stats.creation_failed_total))
+            .unwrap_or((0, 0));
         let array = self.memory_neuron_array.lock().unwrap();
         let upstream_pattern_cache_size = self
             .pattern_detector
@@ -2660,6 +2885,13 @@ impl PlasticityService {
             long_term_neuron_count: array.count_long_term_in_area(cortical_idx),
             upstream_pattern_cache_size,
             effective_mp_mode,
+            evicted_total,
+            creation_failed_total,
+            memory_pool: MemoryPoolSnapshot {
+                pool_capacity: array.pool_capacity(),
+                pool_in_use: array.pool_in_use(),
+                pool_ltm: array.pool_ltm(),
+            },
         }
     }
 
@@ -2667,6 +2899,12 @@ impl PlasticityService {
     pub fn memory_neuron_detail(&self, neuron_id: u32) -> Option<MemoryNeuronDetail> {
         let array = self.memory_neuron_array.lock().unwrap();
         array.get_memory_neuron_detail(neuron_id)
+    }
+
+    /// True when the id is an active memory neuron (no allocation).
+    pub fn is_active_memory_neuron(&self, neuron_id: u32) -> bool {
+        let array = self.memory_neuron_array.lock().unwrap();
+        array.is_active_memory_neuron(neuron_id)
     }
 
     /// Update memory neuron utilization in state manager
@@ -2719,6 +2957,7 @@ impl PlasticityService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory_neuron_array::LtmEviction;
     use crate::memory_stats_cache::create_memory_stats_cache;
     use feagi_npu_burst_engine::backend::CPUBackend;
     use feagi_npu_burst_engine::DynamicNPU;
@@ -3344,6 +3583,7 @@ mod tests {
             lifespan_growth_rate: 0.0,
             longterm_threshold: 0,
             max_reactivations: 0,
+            ..MemoryNeuronLifecycleConfig::default()
         };
         assert!(service.register_memory_area(
             100,
@@ -3761,6 +4001,7 @@ mod tests {
             timestep,
             &mut commands,
             &service.stats,
+            &service.creation_failure_warn_limiter,
         );
 
         let expected_hash = super::spatial_signature_hash(&[vec![(0, 0, 0)]]);
@@ -4155,5 +4396,345 @@ mod tests {
             false, false, true
         ));
         assert!(PlasticityService::empty_replay_is_fault(true, false, true));
+    }
+
+    // ---- Eviction and removal path, driven through compute_plasticity ----
+
+    const UPSTREAM_IDX: u32 = 7;
+    const MEM_IDX: u32 = 100;
+    const DOWNSTREAM_IDX: u32 = 8;
+
+    struct EvictionRig {
+        npu: Arc<TracingMutex<DynamicNPU>>,
+        service: PlasticityService,
+        memory_cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        upstream: Vec<u32>,
+        downstream_neuron: u32,
+    }
+
+    fn eviction_rig(lifecycle: MemoryNeuronLifecycleConfig) -> EvictionRig {
+        use feagi_structures::genomic::cortical_area::CorticalID;
+        let npu = Arc::new(TracingMutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 64, 256, 8).unwrap(),
+            "plasticity-eviction-test-npu",
+        ));
+        let service = PlasticityService::new(
+            PlasticityConfig::default(),
+            create_memory_stats_cache(),
+            Arc::clone(&npu),
+        );
+        let upstream_id = CorticalID::try_from_bytes(b"csrc0001").unwrap();
+        let downstream_id = CorticalID::try_from_bytes(b"csrc0002").unwrap();
+        let memory_cortical_id = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+        let (upstream, downstream_neuron) = {
+            let mut guard = npu.lock().unwrap();
+            guard.register_cortical_area(UPSTREAM_IDX, upstream_id.as_base_64());
+            guard.register_cortical_area(DOWNSTREAM_IDX, downstream_id.as_base_64());
+            guard.register_cortical_area(MEM_IDX, memory_cortical_id.as_base_64());
+            guard
+                .create_cortical_area_neurons(
+                    UPSTREAM_IDX,
+                    4,
+                    1,
+                    1,
+                    1,
+                    0.1,
+                    0.0,
+                    0.0,
+                    0.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    0,
+                    0,
+                    false,
+                )
+                .unwrap();
+            let downstream = guard
+                .add_neuron(
+                    1.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    0,
+                    0,
+                    false,
+                    DOWNSTREAM_IDX,
+                    0,
+                    0,
+                    0,
+                )
+                .unwrap();
+            (
+                guard.get_neurons_in_cortical_area(UPSTREAM_IDX),
+                downstream.0,
+            )
+        };
+        assert!(service.register_memory_area(
+            MEM_IDX,
+            memory_cortical_id.as_base_64(),
+            1,
+            vec![UPSTREAM_IDX],
+            Some(lifecycle),
+            MemoryMpMode::PatternOnly,
+        ));
+        EvictionRig {
+            npu,
+            service,
+            memory_cortical_id,
+            upstream,
+            downstream_neuron,
+        }
+    }
+
+    impl EvictionRig {
+        /// Fire one upstream neuron (a distinct pattern per neuron) and run one plasticity pass.
+        fn burst(&self, firing: Option<usize>) -> u64 {
+            let burst = {
+                let mut guard = self.npu.lock().unwrap();
+                if let Some(which) = firing {
+                    guard.inject_sensory_with_potentials(&[(
+                        feagi_npu_neural::types::NeuronId(self.upstream[which]),
+                        10.0,
+                    )]);
+                }
+                guard.process_burst().unwrap().burst
+            };
+            let limiter = Arc::clone(&self.service.creation_failure_warn_limiter);
+            let pool = Arc::clone(&self.service.pool_counters);
+            PlasticityService::compute_plasticity(
+                burst,
+                &self.service.npu,
+                &self.service.memory_neuron_array,
+                &self.service.memory_areas,
+                &self.service.memory_lifecycle_configs,
+                &self.service.memory_area_names,
+                &self.service.pattern_detector,
+                &self.service.command_queue,
+                &self.service.stats,
+                &self.service.config,
+                &self.service.memory_stats_cache,
+                &self.service.mp_window_warn_limiter,
+                &limiter,
+                &pool,
+            );
+            burst
+        }
+
+        fn active_ids(&self) -> Vec<u32> {
+            let mut ids = self
+                .service
+                .memory_neuron_array
+                .lock()
+                .unwrap()
+                .get_active_neurons_by_area(MEM_IDX);
+            ids.sort_unstable();
+            ids
+        }
+
+        /// Give a memory neuron the NPU footprint a consumer builds: mapping and synapses.
+        fn attach_footprint(&self, memory_neuron: u32) {
+            use feagi_npu_neural::types::{NeuronId, SynapseType, SynapticPsp, SynapticWeight};
+            let mut guard = self.npu.lock().unwrap();
+            guard.register_dynamic_neuron_mapping(memory_neuron, self.memory_cortical_id);
+            guard.register_memory_replay_frames(memory_neuron, Vec::new());
+            let associative = feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
+            guard
+                .add_synapse(
+                    NeuronId(self.upstream[3]),
+                    NeuronId(memory_neuron),
+                    SynapticWeight(9.0),
+                    SynapticPsp(5.0),
+                    SynapseType::Excitatory,
+                    associative,
+                    1,
+                )
+                .unwrap();
+            guard
+                .add_synapse(
+                    NeuronId(memory_neuron),
+                    NeuronId(self.downstream_neuron),
+                    SynapticWeight(9.0),
+                    SynapticPsp(5.0),
+                    SynapseType::Excitatory,
+                    associative,
+                    1,
+                )
+                .unwrap();
+            guard.rebuild_synapse_index();
+        }
+    }
+
+    fn cfg(cap: u32, eviction: LtmEviction, lifespan: u32) -> MemoryNeuronLifecycleConfig {
+        MemoryNeuronLifecycleConfig {
+            initial_lifespan: lifespan,
+            lifespan_growth_rate: 1.0,
+            longterm_threshold: 1000,
+            max_reactivations: 1000,
+            memory_neuron_cap: cap,
+            ltm_eviction: eviction,
+        }
+    }
+
+    #[test]
+    fn cap_eviction_runs_the_full_removal_path() {
+        let rig = eviction_rig(cfg(1, LtmEviction::Lru, 50));
+        rig.burst(Some(0));
+        let first = rig.active_ids();
+        assert_eq!(first.len(), 1);
+        rig.attach_footprint(first[0]);
+
+        // A distinct pattern at the cap evicts the first neuron and takes its place.
+        rig.burst(Some(1));
+        let second = rig.active_ids();
+        assert_eq!(second.len(), 1);
+        assert_ne!(second[0], first[0]);
+        assert!(!rig.service.is_active_memory_neuron(first[0]));
+
+        // NPU side: synapses, dynamic mapping and replay frames of the evicted id are gone.
+        {
+            let guard = rig.npu.lock().unwrap();
+            assert!(guard.get_incoming_synapses(first[0]).is_empty());
+            assert!(guard.get_outgoing_synapses(first[0]).is_empty());
+            assert!(!guard
+                .dynamic_memory_neuron_ids_in_area(MEM_IDX)
+                .contains(&first[0]));
+            assert!(guard.get_memory_replay_frames(first[0]).is_none());
+        }
+
+        // Downstream notice, and no stale registration for the evicted id left in the queue.
+        let commands = rig.service.drain_commands();
+        assert!(commands.iter().any(|c| matches!(
+            c,
+            PlasticityCommand::MemoryNeuronRemoved {
+                neuron_id,
+                area_idx: MEM_IDX,
+                reason: MemoryNeuronRemovalReason::Evicted,
+            } if *neuron_id == first[0]
+        )));
+        assert!(!commands.iter().any(|c| command_targets_neuron(c, first[0])));
+        assert!(commands.iter().any(|c| matches!(
+            c,
+            PlasticityCommand::InjectMemoryNeuronToFCL { neuron_id, .. } if *neuron_id == second[0]
+        )));
+
+        // Counters and pool.
+        let stats = memory_stats_cache::get_area_stats(
+            &rig.service.memory_stats_cache,
+            &rig.memory_cortical_id.as_base_64(),
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                stats.created_total,
+                stats.evicted_total,
+                stats.deleted_total,
+                stats.neuron_count,
+                stats.creation_failed_total
+            ),
+            (2, 1, 1, 1, 0)
+        );
+        let info = rig.service.memory_cortical_area_runtime_info(MEM_IDX);
+        assert_eq!((info.evicted_total, info.creation_failed_total), (1, 0));
+        assert_eq!(rig.service.memory_pool_snapshot().pool_in_use, 1);
+        assert_eq!(
+            rig.service.memory_pool_snapshot().pool_capacity,
+            PlasticityConfig::default().memory_array_capacity
+        );
+    }
+
+    #[test]
+    fn none_eviction_counts_the_failed_creation() {
+        let rig = eviction_rig(cfg(1, LtmEviction::None, 50));
+        rig.burst(Some(0));
+        let first = rig.active_ids();
+        rig.burst(Some(1));
+        rig.burst(Some(2));
+        assert_eq!(rig.active_ids(), first, "nothing was evicted");
+        let stats = memory_stats_cache::get_area_stats(
+            &rig.service.memory_stats_cache,
+            &rig.memory_cortical_id.as_base_64(),
+        )
+        .unwrap();
+        assert_eq!(stats.creation_failed_total, 2);
+        assert_eq!((stats.created_total, stats.evicted_total), (1, 0));
+        assert!(!rig
+            .service
+            .drain_commands()
+            .iter()
+            .any(|c| matches!(c, PlasticityCommand::MemoryNeuronRemoved { .. })));
+    }
+
+    #[test]
+    fn short_term_expiry_removes_the_footprint_and_emits_removed() {
+        let rig = eviction_rig(cfg(0, LtmEviction::Lru, 1));
+        rig.burst(Some(0));
+        let ids = rig.active_ids();
+        assert_eq!(ids.len(), 1);
+        rig.attach_footprint(ids[0]);
+        rig.service.drain_commands();
+
+        rig.burst(None); // unseen for one burst: lifespan 1 runs out
+        assert!(rig.active_ids().is_empty());
+        {
+            let guard = rig.npu.lock().unwrap();
+            assert!(guard.get_incoming_synapses(ids[0]).is_empty());
+            assert!(guard.get_outgoing_synapses(ids[0]).is_empty());
+            assert!(guard.dynamic_memory_neuron_ids_in_area(MEM_IDX).is_empty());
+        }
+        let commands = rig.service.drain_commands();
+        assert!(commands.iter().any(|c| matches!(
+            c,
+            PlasticityCommand::MemoryNeuronRemoved {
+                neuron_id,
+                reason: MemoryNeuronRemovalReason::Expired,
+                ..
+            } if *neuron_id == ids[0]
+        )));
+        let stats = memory_stats_cache::get_area_stats(
+            &rig.service.memory_stats_cache,
+            &rig.memory_cortical_id.as_base_64(),
+        )
+        .unwrap();
+        assert_eq!((stats.deleted_total, stats.evicted_total), (1, 0));
+    }
+
+    #[test]
+    fn updating_cap_and_eviction_keeps_existing_neurons() {
+        let rig = eviction_rig(cfg(0, LtmEviction::Lru, 50));
+        rig.burst(Some(0));
+        rig.burst(Some(1));
+        let before = rig.active_ids();
+        assert_eq!(before.len(), 2);
+
+        // Same registration call the genome service uses for a settings update.
+        assert!(rig.service.register_memory_area(
+            MEM_IDX,
+            rig.memory_cortical_id.as_base_64(),
+            1,
+            vec![UPSTREAM_IDX],
+            Some(cfg(1, LtmEviction::None, 50)),
+            MemoryMpMode::PatternOnly,
+        ));
+        assert_eq!(rig.active_ids(), before, "neurons survive the re-register");
+        let applied = *rig
+            .service
+            .memory_lifecycle_configs
+            .lock()
+            .unwrap()
+            .get(&MEM_IDX)
+            .unwrap();
+        assert_eq!(applied.memory_neuron_cap, 1);
+        assert_eq!(applied.ltm_eviction, LtmEviction::None);
+
+        // Over the new cap with eviction none: a new pattern fails, nothing is evicted.
+        rig.burst(Some(2));
+        assert_eq!(rig.active_ids(), before);
     }
 }

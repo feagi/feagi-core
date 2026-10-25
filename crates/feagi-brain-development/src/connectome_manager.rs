@@ -4372,16 +4372,9 @@ impl ConnectomeManager {
                         }
 
                         if let Ok(exec) = executor.lock() {
-                            use feagi_npu_plasticity::{
-                                MemoryNeuronLifecycleConfig, PlasticityExecutor,
-                            };
+                            use feagi_npu_plasticity::PlasticityExecutor;
 
-                            let lifecycle_config = MemoryNeuronLifecycleConfig {
-                                initial_lifespan: mem_props.init_lifespan,
-                                lifespan_growth_rate: mem_props.lifespan_growth_rate,
-                                longterm_threshold: mem_props.longterm_threshold,
-                                max_reactivations: 1000,
-                            };
+                            let lifecycle_config = crate::memory_lifecycle_config(&mem_props);
 
                             match crate::memory_mp_mode(&dst_area.properties, &mem_props) {
                                 Ok(mp_mode) => {
@@ -6844,7 +6837,7 @@ impl ConnectomeManager {
     #[cfg(feature = "plasticity")]
     fn reregister_memory_areas_with_plasticity(&mut self) -> BduResult<()> {
         use feagi_evolutionary::extract_memory_properties;
-        use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
+        use feagi_npu_plasticity::PlasticityExecutor;
 
         let Some(executor) = self.plasticity_executor.clone() else {
             return Ok(());
@@ -6868,12 +6861,7 @@ impl ConnectomeManager {
             };
             let area_name = memory_id.as_base_64();
             let upstream_areas = self.get_episodic_memory_upstream_cortical_areas(&memory_id);
-            let lifecycle_config = MemoryNeuronLifecycleConfig {
-                initial_lifespan: mem_props.init_lifespan,
-                lifespan_growth_rate: mem_props.lifespan_growth_rate,
-                longterm_threshold: mem_props.longterm_threshold,
-                max_reactivations: 1000,
-            };
+            let lifecycle_config = crate::memory_lifecycle_config(&mem_props);
             let mp_mode = match crate::memory_mp_mode(&area.properties, &mem_props) {
                 Ok(mode) => mode,
                 Err(e) => {
@@ -9324,6 +9312,20 @@ impl ConnectomeManager {
     /// Number of neurons actually deleted
     ///
     pub fn delete_neurons_batch(&self, neuron_ids: Vec<u64>) -> BduResult<usize> {
+        self.delete_neurons_batch_logged(neuron_ids, true)
+    }
+
+    /// Same as [`Self::delete_neurons_batch`] but logs the result at debug level. For callers
+    /// that delete a few neurons on many bursts, such as LTM twin cleanup after eviction.
+    pub fn delete_neurons_batch_quiet(&self, neuron_ids: Vec<u64>) -> BduResult<usize> {
+        self.delete_neurons_batch_logged(neuron_ids, false)
+    }
+
+    fn delete_neurons_batch_logged(
+        &self,
+        neuron_ids: Vec<u64>,
+        log_at_info: bool,
+    ) -> BduResult<usize> {
         // Get NPU
         let npu = self
             .npu
@@ -9350,7 +9352,11 @@ impl ConnectomeManager {
             }
         }
 
-        info!(target: "feagi-bdu","Batch deleted {} neurons", deleted_count);
+        if log_at_info {
+            info!(target: "feagi-bdu","Batch deleted {} neurons", deleted_count);
+        } else {
+            debug!(target: "feagi-bdu","Batch deleted {} neurons", deleted_count);
+        }
 
         // CRITICAL: Update StateManager neuron count (for health_check endpoint)
         if deleted_count > 0 {

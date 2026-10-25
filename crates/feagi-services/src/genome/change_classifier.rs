@@ -168,6 +168,9 @@ impl CorticalChangeClassifier {
             "mp_change_mode",
             "mp_delta_quantization",
             "mp_ratio_quantization",
+            // Memory neuron cap and eviction policy (applied live, neurons are kept)
+            "memory_neuron_cap",
+            "ltm_eviction",
             // Membrane potential
             "mp_charge_accumulation",
             "neuron_mp_charge_accumulation",

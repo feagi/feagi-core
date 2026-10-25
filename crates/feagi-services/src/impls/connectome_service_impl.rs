@@ -145,6 +145,12 @@ fn merge_memory_area_properties(
         .entry(feagi_evolutionary::MP_RATIO_QUANTIZATION_KEY.to_string())
         .or_insert(Value::from(memory_defaults.mp_ratio_quantization));
     defaults
+        .entry(feagi_evolutionary::MEMORY_NEURON_CAP_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.memory_neuron_cap));
+    defaults
+        .entry(feagi_evolutionary::LTM_EVICTION_KEY.to_string())
+        .or_insert(Value::from(memory_defaults.ltm_eviction.as_str()));
+    defaults
         .entry("psp_uniform_distribution".to_string())
         .or_insert(Value::from(true));
 
@@ -1719,6 +1725,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .map(|p| p.mp_change_mode.as_str().to_string()),
             mp_delta_quantization: memory_props.as_ref().map(|p| p.mp_delta_quantization),
             mp_ratio_quantization: memory_props.as_ref().map(|p| p.mp_ratio_quantization),
+            memory_neuron_cap: memory_props.as_ref().map(|p| p.memory_neuron_cap),
+            ltm_eviction: memory_props
+                .as_ref()
+                .map(|p| p.ltm_eviction.as_str().to_string()),
             properties: filtered_properties,
             // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
             cortical_subtype,

@@ -69,6 +69,8 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("mprtq-f", "mp_ratio_quantization"),
     ("mnwin-i", "min_window_activity"),
     ("scnsk-f", "scan_skip_density"),
+    ("memcap-i", "memory_neuron_cap"),
+    ("ltmevc-t", "ltm_eviction"),
     ("excite-f", "neuron_excitability"),
     ("devcnt-i", "dev_count"),
     ("twinrf-t", "memory_twin_of"),

@@ -164,6 +164,31 @@ impl FireLedger {
         true
     }
 
+    /// Drop specific neuron ids from one area's recorded activity.
+    ///
+    /// Per-neuron counterpart of [`Self::clear_recorded_activity`]: a plasticity window
+    /// must not see a removed memory neuron as recently co-active and rebuild its synapses.
+    /// The ledger frames and tracked windows stay in place.
+    pub fn forget_neuron_ids(&mut self, cortical_idx: u32, neuron_ids: &[u32]) {
+        if neuron_ids.is_empty() {
+            return;
+        }
+        if let Some(hist) = self.tracked.get_mut(&cortical_idx) {
+            for (_, bitmap) in hist.frames.iter_mut() {
+                for &neuron_id in neuron_ids {
+                    bitmap.remove(neuron_id);
+                }
+            }
+        }
+        if let Some(mp_ring) = self.mp_history.get_mut(&cortical_idx) {
+            for (_, potentials) in mp_ring.iter_mut() {
+                for neuron_id in neuron_ids {
+                    potentials.remove(neuron_id);
+                }
+            }
+        }
+    }
+
     /// Get the tracked window size for a cortical area.
     pub fn get_tracked_window(&self, cortical_idx: u32) -> Result<usize, FireLedgerError> {
         self.tracked
