@@ -1,6 +1,6 @@
-//! Launches the designer brain server (the genome manager, a REST server serving its request
-//! categories, and a zenoh websocket server announcing it) and keeps it running until the process
-//! is ended with Ctrl+C.
+//! Launches the designer brain server (the genome manager, a REST server serving its and the
+//! system request categories, and a zenoh websocket server announcing it) and keeps it running
+//! until the process is ended with Ctrl+C.
 //!
 //! Run with:
 //! `cargo run --example designer_brain_server`

@@ -2,7 +2,8 @@ use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiC
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
 use feagi_cns_structures::feagi_brain_models::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
 use feagi_cns_structures::graphs::implementations::designer_graph::DesignerGraph;
-use crate::genome_manager::requests::categories::cortical_area::{CorticalAreaRequestCategory, CorticalAreaRequests, CorticalAreaResponses};
+use std::collections::HashMap;
+use crate::genome_manager::requests::categories::cortical_area::{CorticalAreaRequestCategory, CorticalAreaRequests, CorticalAreaResponses, ReadCorticalAreaGeometryFeagiRequestMessageResponse, ReadCorticalMapDetailedFeagiRequestMessageResponse, ReadIpuTypesFeagiRequestMessageResponse, ReadOpuTypesFeagiRequestMessageResponse};
 
 pub(crate) async fn cortical_area_response(
     responder: &FeagiCategoryResponder<CorticalAreaRequestCategory, FeagiRequestResponseChannelsAllocBackend>,
@@ -21,10 +22,14 @@ pub(crate) async fn cortical_area_response(
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
                 CorticalAreaRequests::ReadIpuTypes(r) => {
-                    CorticalAreaRequestCategory::not_implemented_response(&request)
+                    CorticalAreaResponses::ReadIpuTypes(Ok(ReadIpuTypesFeagiRequestMessageResponse {
+                        types: HashMap::new(),
+                    }))
                 }
                 CorticalAreaRequests::ReadOpuTypes(r) => {
-                    CorticalAreaRequestCategory::not_implemented_response(&request)
+                    CorticalAreaResponses::ReadOpuTypes(Ok(ReadOpuTypesFeagiRequestMessageResponse {
+                        types: HashMap::new(),
+                    }))
                 }
                 CorticalAreaRequests::ReadCorticalAreaIdList(r) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
@@ -39,13 +44,17 @@ pub(crate) async fn cortical_area_response(
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
                 CorticalAreaRequests::ReadCorticalMapDetailed(r) => {
-                    CorticalAreaRequestCategory::not_implemented_response(&request)
+                    CorticalAreaResponses::ReadCorticalMapDetailed(Ok(ReadCorticalMapDetailedFeagiRequestMessageResponse {
+                        mappings: HashMap::new(),
+                    }))
                 }
                 CorticalAreaRequests::ReadCorticalLocations2d(r) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
                 }
                 CorticalAreaRequests::ReadCorticalAreaGeometry(r) => {
-                    CorticalAreaRequestCategory::not_implemented_response(&request)
+                    CorticalAreaResponses::ReadCorticalAreaGeometry(Ok(ReadCorticalAreaGeometryFeagiRequestMessageResponse {
+                        areas: HashMap::new(),
+                    }))
                 }
                 CorticalAreaRequests::ReadCorticalVisibility(r) => {
                     CorticalAreaRequestCategory::not_implemented_response(&request)
@@ -109,8 +118,7 @@ pub(crate) async fn cortical_area_response(
                 }
             }
         }
-    );
-    true
+    ).await.is_ok()
 }
 
 

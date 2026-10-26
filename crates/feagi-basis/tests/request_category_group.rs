@@ -117,6 +117,44 @@ fn group_nests_each_requester_with_its_configurables() {
     assert!(core::ptr::eq(nested.tail.head.configurables, &SHELF));
 }
 
+#[test]
+fn joined_groups_nest_as_one_flat_chain() {
+    use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend as Channels;
+
+    // A generated group joined with a lone category, as categories served by different workers are
+    type Joined = (TeaOnlyRequesters<Channels>, FeagiCategoryRequester<ShelfRequestCategory, Channels>);
+    assert_same_type::<
+        <Joined as FeagiRequestCategoryGroup<Channels>>::NestedCategories,
+        <PantryRequesters<Channels> as FeagiRequestCategoryGroup<Channels>>::NestedCategories,
+    >();
+    assert_same_type::<<Joined as FeagiRequestCategoryGroup<Channels>>::Configurables, (TeaOnlyConfigurables, &'static ShelfConfigurables)>();
+
+    static SHELF: ShelfConfigurables = ShelfConfigurables { shelf_name: heapless::String::new() };
+    let (tea, _tea_responders) = TeaOnlyRequesters::create_alloc_channel_pairs(2);
+    let (shelf, _shelf_responder) = ShelfRequestCategory::spawn_alloc_requester_responser_pair(2);
+    let nested = (tea, shelf).into_nested_categories((TEA_ONLY_CONFIGURABLES, &SHELF));
+    assert!(core::ptr::eq(nested.tail.head.configurables, &SHELF));
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn unhandled_categories_are_answered_as_not_implemented() {
+    use feagi_basis::parallelism::block_on_thread;
+
+    let (mut requester, responder) = TeaRequestCategory::spawn_alloc_requester_responser_pair(2);
+    let worker = std::thread::spawn(move || {
+        block_on_thread(async move {
+            while responder.try_answer_not_implemented().await.is_err() {
+                std::thread::yield_now();
+            }
+        })
+    });
+
+    let kettle = block_on_thread(requester.request(ReadKettleFeagiRequestMessage::new())).unwrap();
+    assert!(kettle.is_err());
+    worker.join().unwrap();
+}
+
 #[cfg(feature = "std")]
 #[test]
 fn group_requesters_reach_their_responders() {

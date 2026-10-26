@@ -4,7 +4,10 @@ use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommand
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_cns_structures::feagi_brain_models::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use feagi_cns_structures::graphs::implementations::designer_graph::DesignerGraph;
+use crate::genome_manager::response_processing::burst_engine::burst_engine_response;
 use crate::genome_manager::response_processing::cortical_area::cortical_area_response;
+use crate::genome_manager::response_processing::morphology::morphology_response;
+use crate::genome_manager::response_processing::region::region_response;
 use crate::genome_manager::worker_builder::GenomeManagerResponders;
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
@@ -43,15 +46,15 @@ pub(crate) async fn run_genome_manager(
             FeagiWorkerStep::Stopped | FeagiWorkerStep::Disconnected => break,
         };
 
-        // TODO actually handle requests. Until then every request is answered as not
+        // TODO actually handle requests. Until then the unhandled ones are answered as not
         // implemented, so requesters don't wait forever
-        busy |= answer_not_implemented(&burst_engine).await;
+        busy |= burst_engine_response(&burst_engine).await;
         busy |= answer_not_implemented(&connectome).await;
         busy |= cortical_area_response(&cortical_area, &mut graph).await;
         busy |= answer_not_implemented(&cortical_mapping).await;
         busy |= answer_not_implemented(&genome).await;
-        busy |= answer_not_implemented(&morphology).await;
-        busy |= answer_not_implemented(&region).await;
+        busy |= morphology_response(&morphology).await;
+        busy |= region_response(&region).await;
 
         if !busy {
             std::thread::sleep(IDLE_POLL_INTERVAL);
@@ -64,10 +67,7 @@ pub(crate) async fn run_genome_manager(
 /// implemented error. Returns whether a request was answered
 async fn answer_not_implemented<Category: FeagiRequestCategory>(responder: &FeagiCategoryResponder<Category, FeagiRequestResponseChannelsAllocBackend>) -> bool {
     // An empty or closed channel just has nothing to answer
-    responder
-        .try_process_next(async |request| Category::not_implemented_response(&request))
-        .await
-        .is_ok()
+    responder.try_answer_not_implemented().await.is_ok()
 }
 
 

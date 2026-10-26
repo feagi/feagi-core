@@ -177,16 +177,16 @@ async fn run_rest_server<Router: picoserve::routing::PathRouter>(
 
 const JSON_CONTENT_TYPE: &str = "application/json";
 
-const HEALTH_CHECK_JSON: &str = r#"{"genome_availability":true,"brain_readiness":true,"genome_validity":true,"genome_loading":false,"feagi_session":1,"genome_num":1,"burst_engine":true,"simulation_timestep":0.05,"influxdb_availability":false,"neuron_count_max":0,"synapse_count_max":0,"neuron_count":0,"synapse_count":0}"#;
+// const HEALTH_CHECK_JSON: &str = r#"{"genome_availability":true,"brain_readiness":true,"genome_validity":true,"genome_loading":false,"feagi_session":1,"genome_num":1,"burst_engine":true,"simulation_timestep":0.05,"influxdb_availability":false,"neuron_count_max":0,"synapse_count_max":0,"neuron_count":0,"synapse_count":0}"#;
 
-/// Brain Visualizer reads this body with `String.to_float()`, so the body is a JSON number.
-const SIMULATION_TIMESTEP_JSON: &str = "0.05";
+// /// Brain Visualizer reads this body with `String.to_float()`, so the body is a JSON number.
+// const SIMULATION_TIMESTEP_JSON: &str = "0.05";
 
-/// Brain Visualizer reads this body with `String.to_int()`, so the body is a JSON number.
-const VISUALIZATION_SKIP_RATE_JSON: &str = "1";
+// /// Brain Visualizer reads this body with `String.to_int()`, so the body is a JSON number.
+// const VISUALIZATION_SKIP_RATE_JSON: &str = "1";
 
-/// Brain Visualizer reads this body with `String.to_int()`, so the body is a JSON number.
-const VISUALIZATION_SUPPRESSION_THRESHOLD_JSON: &str = "1";
+// /// Brain Visualizer reads this body with `String.to_int()`, so the body is a JSON number.
+// const VISUALIZATION_SUPPRESSION_THRESHOLD_JSON: &str = "1";
 
 /// Brain Visualizer reads this body with `String.to_int()`, so the body is a JSON number.
 const PLASTICITY_QUEUE_DEPTH_JSON: &str = "1";
@@ -194,19 +194,19 @@ const PLASTICITY_QUEUE_DEPTH_JSON: &str = "1";
 const CONNECTION_INFO_JSON: &str =
     r#"{"websocket":{"enabled":true,"host":"127.0.0.1","endpoints":{"registration":"ws://127.0.0.1:9050","visualization":"ws://127.0.0.1:9050"}}}"#;
 
-const CORTICAL_AREA_GEOMETRY_JSON: &str = "{}";
+// const CORTICAL_AREA_GEOMETRY_JSON: &str = "{}";
 
-const MORPHOLOGIES_JSON: &str = "{}";
+// const MORPHOLOGIES_JSON: &str = "{}";
 
-const CORTICAL_MAP_DETAILED_JSON: &str = "{}";
+// const CORTICAL_MAP_DETAILED_JSON: &str = "{}";
 
-/// One root region and no cortical areas. `parent_region_id` null marks the root.
-const REGIONS_MEMBERS_JSON: &str =
-    r#"{"root":{"title":"root","coordinate_2d":[0,0],"coordinate_3d":[0,0,0],"regions":[],"areas":[],"parent_region_id":null}}"#;
+// /// One root region and no cortical areas. `parent_region_id` null marks the root.
+// const REGIONS_MEMBERS_JSON: &str =
+    // r#"{"root":{"title":"root","coordinate_2d":[0,0],"coordinate_3d":[0,0,0],"regions":[],"areas":[],"parent_region_id":null}}"#;
 
-const IPU_TYPES_JSON: &str = "{}";
+// const IPU_TYPES_JSON: &str = "{}";
 
-const OPU_TYPES_JSON: &str = "{}";
+// const OPU_TYPES_JSON: &str = "{}";
 
 const AGENT_CAPABILITIES_JSON: &str = "{}";
 
@@ -223,30 +223,31 @@ fn route_brain_visualizer_startup<R: picoserve::routing::PathRouter>(
         File::with_content_type(JSON_CONTENT_TYPE, body.as_bytes())
     }
 
+    // Commented out routes are now answered by the system and genome manager responders
     router
-        .route("/v1/system/health_check", get_service(json_file(HEALTH_CHECK_JSON)))
-        .route("/v1/burst_engine/simulation_timestep", get_service(json_file(SIMULATION_TIMESTEP_JSON)))
+        // .route("/v1/system/health_check", get_service(json_file(HEALTH_CHECK_JSON)))
+        // .route("/v1/burst_engine/simulation_timestep", get_service(json_file(SIMULATION_TIMESTEP_JSON)))
         .route("/v1/network/connection_info", get_service(json_file(CONNECTION_INFO_JSON)))
-        .route(
-            "/v1/cortical_area/cortical_area/geometry",
-            get_service(json_file(CORTICAL_AREA_GEOMETRY_JSON)),
-        )
-        .route("/v1/morphology/morphologies", get_service(json_file(MORPHOLOGIES_JSON)))
-        .route(
-            "/v1/cortical_area/cortical_map_detailed",
-            get_service(json_file(CORTICAL_MAP_DETAILED_JSON)),
-        )
-        .route("/v1/region/regions_members", get_service(json_file(REGIONS_MEMBERS_JSON)))
-        .route("/v1/cortical_area/ipu/types", get_service(json_file(IPU_TYPES_JSON)))
-        .route("/v1/cortical_area/opu/types", get_service(json_file(OPU_TYPES_JSON)))
-        .route(
-            "/v1/system/cortical_area_visualization_skip_rate",
-            get_service(json_file(VISUALIZATION_SKIP_RATE_JSON)),
-        )
-        .route(
-            "/v1/system/cortical_area_visualization_suppression_threshold",
-            get_service(json_file(VISUALIZATION_SUPPRESSION_THRESHOLD_JSON)),
-        )
+        // .route(
+            // "/v1/cortical_area/cortical_area/geometry",
+            // get_service(json_file(CORTICAL_AREA_GEOMETRY_JSON)),
+        // )
+        // .route("/v1/morphology/morphologies", get_service(json_file(MORPHOLOGIES_JSON)))
+        // .route(
+            // "/v1/cortical_area/cortical_map_detailed",
+            // get_service(json_file(CORTICAL_MAP_DETAILED_JSON)),
+        // )
+        // .route("/v1/region/regions_members", get_service(json_file(REGIONS_MEMBERS_JSON)))
+        // .route("/v1/cortical_area/ipu/types", get_service(json_file(IPU_TYPES_JSON)))
+        // .route("/v1/cortical_area/opu/types", get_service(json_file(OPU_TYPES_JSON)))
+        // .route(
+            // "/v1/system/cortical_area_visualization_skip_rate",
+            // get_service(json_file(VISUALIZATION_SKIP_RATE_JSON)),
+        // )
+        // .route(
+            // "/v1/system/cortical_area_visualization_suppression_threshold",
+            // get_service(json_file(VISUALIZATION_SUPPRESSION_THRESHOLD_JSON)),
+        // )
         .route(
             "/v1/neuroplasticity/plasticity_queue_depth",
             get_service(json_file(PLASTICITY_QUEUE_DEPTH_JSON)),

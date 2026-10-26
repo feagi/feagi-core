@@ -193,6 +193,13 @@ where
     {
         self.responder.try_process_next(processor).await
     }
+
+    /// Answers the next request with its message's not implemented error if one is queued,
+    /// otherwise returns `ChannelEmpty` immediately. For workers that don't handle the
+    /// category yet, so its requests are answered rather than left waiting
+    pub async fn try_answer_not_implemented(&self) -> Result<(), FeagiChannelReceiveError> {
+        self.try_process_next(async |request| Category::not_implemented_response(&request)).await
+    }
 }
 
 //endregion
