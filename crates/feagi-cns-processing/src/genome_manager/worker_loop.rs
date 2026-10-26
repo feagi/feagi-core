@@ -4,6 +4,7 @@ use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommand
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_cns_structures::feagi_brain_models::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
 use feagi_cns_structures::graphs::implementations::designer_graph::DesignerGraph;
+use crate::genome_manager::response_processing::cortical_area::cortical_area_response;
 use crate::genome_manager::worker_builder::GenomeManagerResponders;
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
@@ -29,7 +30,7 @@ pub(crate) async fn run_genome_manager(
 )
 {
 
-    let mut genome = DesignerGraph::<FeagiIndexQuantizationStandard>::new("Blank Genome".to_string());
+    let mut graph = DesignerGraph::<FeagiIndexQuantizationStandard>::new("Blank Genome".to_string());
 
     let commands = FeagiWorkerCommands::new(responder);
     let mut command_handler = GenomeManagerCommandHandler;
@@ -46,7 +47,7 @@ pub(crate) async fn run_genome_manager(
         // implemented, so requesters don't wait forever
         busy |= answer_not_implemented(&burst_engine).await;
         busy |= answer_not_implemented(&connectome).await;
-        busy |= answer_not_implemented(&cortical_area).await;
+        busy |= cortical_area_response(&cortical_area, &mut graph).await;
         busy |= answer_not_implemented(&cortical_mapping).await;
         busy |= answer_not_implemented(&genome).await;
         busy |= answer_not_implemented(&morphology).await;
