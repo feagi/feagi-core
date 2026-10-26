@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use feagi_brain_models::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_area_container::{CorticalAreaContainer, CorticalAreaRuntimeCache};
 use crate::graphs::feagi_graph::FeagiGraph;
 use crate::identifiers::brain_regions::BrainRegionID;

@@ -2,9 +2,8 @@
 //! areas of the running brain. Converted from the old `connectome` endpoints, for reference only
 
 use std::collections::HashMap;
-
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
-use feagi_cns_structures::basis::cortical_area::cortical_id::Base64EncodedCorticalID;
+use crate::basis::cortical_area::cortical_id::Base64EncodedCorticalID;
 
 /// All cortical areas of one cortical subtype
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

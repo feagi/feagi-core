@@ -9,7 +9,20 @@ repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 
+[features]
+
+std = [
+    "alloc",
+    "migrator-legacy-v5/std"
+]
+
+alloc = [
+    "migrator-legacy-v5/alloc"
+]
+
 [dependencies]
+# Sub Crates
+migrator-legacy-v5 = {path = "migrator-legacy-v5"}
 
 [lints]
 workspace = true

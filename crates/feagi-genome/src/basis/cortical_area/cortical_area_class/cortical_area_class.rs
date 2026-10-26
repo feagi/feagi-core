@@ -1,7 +1,7 @@
-use feagi_brain_models::cortical_dynamics::model::components::neuron_layout::NeuronLayout;
-use feagi_brain_models::cortical_dynamics::model::cortical_dynamics_model::CorticalDynamicsModel;
-use feagi_brain_models::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
-use feagi_brain_models::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_brain_basis::cortical_dynamics::model::components::neuron_layout::NeuronLayout;
+use feagi_brain_basis::cortical_dynamics::model::cortical_dynamics_model::CorticalDynamicsModel;
+use feagi_brain_basis::cortical_dynamics::model::cortical_dynamics_quantization::CorticalDynamicsQuantization;
+use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::basis::cortical_area::cortical_area_class::cortical_area_class_enum::CorticalAreaClassEnum;
 
 /// Describes a specific cortical area class

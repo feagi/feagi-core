@@ -3,7 +3,7 @@
 
 use feagi_basis::feagi_basis_proc_common::define_request_message_category;
 use std::collections::HashMap;
-use feagi_cns_structures::basis::cortical_area::cortical_id::Base64EncodedCorticalID;
+use crate::basis::cortical_area::cortical_id::Base64EncodedCorticalID;
 
 /// A morphology definition, as listed by `Morphologies`
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

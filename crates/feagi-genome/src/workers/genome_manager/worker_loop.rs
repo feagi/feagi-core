@@ -2,13 +2,13 @@ use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiC
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::{FeagiRequestResponseChannelsAllocBackend, FeagiResponderAlloc};
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
-use feagi_cns_structures::feagi_brain_models::quantization_levels::feagi_index_quantization::{FeagiIndexQuantization, FeagiIndexQuantizationStandard};
-use feagi_cns_structures::graphs::implementations::designer_graph::DesignerGraph;
-use crate::genome_manager::response_processing::burst_engine::burst_engine_response;
-use crate::genome_manager::response_processing::cortical_area::cortical_area_response;
-use crate::genome_manager::response_processing::morphology::morphology_response;
-use crate::genome_manager::response_processing::region::region_response;
-use crate::genome_manager::worker_builder::GenomeManagerResponders;
+use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantizationStandard;
+use crate::graphs::implementations::designer_graph::DesignerGraph;
+use crate::workers::genome_manager::response_processing::burst_engine::burst_engine_response;
+use crate::workers::genome_manager::response_processing::cortical_area::cortical_area_response;
+use crate::workers::genome_manager::response_processing::morphology::morphology_response;
+use crate::workers::genome_manager::response_processing::region::region_response;
+use crate::workers::genome_manager::worker_builder::GenomeManagerResponders;
 
 /// How long the genome manager sleeps when no command or request is waiting. Bounds how late a
 /// request is answered while idle

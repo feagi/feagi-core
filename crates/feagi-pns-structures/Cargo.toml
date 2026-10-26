@@ -9,6 +9,15 @@ repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 
+[features]
+
+std = [
+    "alloc",
+]
+
+alloc = [
+]
+
 [dependencies]
 
 [lints]

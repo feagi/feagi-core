@@ -715,59 +715,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-brain-models"
+name = "feagi-brain-processing"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
- "half",
- "paste",
- "serde",
-]
-
-[[package]]
-name = "feagi-brain-npu"
-version = "0.1.1"
-dependencies = [
- "ahash",
- "feagi-basis",
- "feagi-brain-models",
- "feagi-npu-burst-engines",
- "futures",
- "paste",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "feagi-cns-processing"
-version = "0.1.1"
-dependencies = [
- "base64 0.23.1",
- "feagi-basis",
- "feagi-cns-structures",
- "half",
- "heapless 0.9.3",
- "paste",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "uuid",
-]
-
-[[package]]
-name = "feagi-cns-structures"
-version = "0.1.1"
-dependencies = [
- "base64 0.23.1",
- "feagi-basis",
- "feagi-brain-models",
- "half",
- "heapless 0.9.3",
- "paste",
- "rand 0.10.3",
- "serde",
- "thiserror 2.0.21",
- "uuid",
+ "feagi-brain-basis",
+ "feagi-npu-burst-basis",
+ "feagi-npu-burst-esp32",
+ "feagi-npu-burst-rayon",
 ]
 
 [[package]]
@@ -775,11 +730,33 @@ name = "feagi-core"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
- "feagi-cns-processing",
+ "feagi-brain-basis",
+ "feagi-brain-processing",
+ "feagi-genome",
  "feagi-interop",
+ "feagi-migrator",
+ "feagi-pns-processing",
+ "feagi-pns-structures",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "feagi-genome"
+version = "0.1.1"
+dependencies = [
+ "base64 0.23.1",
+ "feagi-basis",
+ "feagi-brain-basis",
+ "half",
+ "heapless 0.9.3",
+ "paste",
+ "rand 0.10.3",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "uuid",
 ]
 
 [[package]]
@@ -814,29 +791,19 @@ dependencies = [
 [[package]]
 name = "feagi-migrator"
 version = "0.1.1"
+dependencies = [
+ "migrator-legacy-v5",
+]
 
 [[package]]
 name = "feagi-npu-burst-basis"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
- "feagi-brain-models",
+ "feagi-brain-basis",
  "heapless 0.9.3",
  "paste",
  "serde",
-]
-
-[[package]]
-name = "feagi-npu-burst-engines"
-version = "0.1.1"
-dependencies = [
- "feagi-basis",
- "feagi-brain-models",
- "feagi-npu-burst-basis",
- "feagi-npu-burst-esp32",
- "feagi-npu-burst-rayon",
- "heapless 0.9.3",
- "paste",
 ]
 
 [[package]]
@@ -844,7 +811,7 @@ name = "feagi-npu-burst-esp32"
 version = "0.1.1"
 dependencies = [
  "feagi-basis",
- "feagi-brain-models",
+ "feagi-brain-basis",
  "feagi-npu-burst-basis",
  "heapless 0.9.3",
  "paste",
@@ -857,7 +824,7 @@ version = "0.1.1"
 dependencies = [
  "ahash",
  "feagi-basis",
- "feagi-brain-models",
+ "feagi-brain-basis",
  "feagi-npu-burst-basis",
  "half",
  "heapless 0.9.3",

@@ -18,11 +18,13 @@ description = "Shared logic / traits for burst engines"
 
 std = [
     "alloc",
+    "feagi-basis/std", "feagi-brain-basis/std"
 ]
 
 alloc = [
     "serde/alloc",
-    "heapless/alloc"
+    "heapless/alloc",
+    "feagi-basis/alloc", "feagi-brain-basis/alloc"
 ]
 
 [dependencies]
@@ -32,7 +34,8 @@ alloc = [
 
 
 # Root Crates
-feagi-basis = {path = "../../../feagi-basis" }
+feagi-basis = {path = "../../../feagi-basis", default-features = false }
+feagi-brain-basis = {path = "../../../feagi-brain-basis" }
 
 # External Crates
 paste = { workspace = true}

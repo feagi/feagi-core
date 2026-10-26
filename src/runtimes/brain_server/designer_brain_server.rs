@@ -6,7 +6,7 @@ use feagi_basis::parallelism::feagi_worker::spawner_implementations::std_thread:
 use feagi_basis::parallelism::feagi_worker::worker_commands::{FeagiWorkerCommandHandler, FeagiWorkerCommands, FeagiWorkerStep};
 use feagi_basis::parallelism::feagi_worker::worker_request_response::{FeagiWorkerRequest, FeagiWorkerResponse};
 use feagi_basis::parallelism::feagi_worker::worker_spawner_implementation::FeagiWorkerSpawnError;
-use feagi_cns_processing::genome_manager::worker_builder::{GenomeManagerConfigurables, GenomeManagerRequesters, GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
+use feagi_genome::workers::genome_manager::worker_builder::{GenomeManagerConfigurables, GenomeManagerRequesters, GenomeManagerWorkerBuilder, GenomeManagerWorkerBuilderError};
 use feagi_interop::transport::rest::server::error::FeagiRestServerError;
 use feagi_interop::transport::rest::server::server_basis::RestServerWorkerBuilder;
 use feagi_interop::transport::rest::server::server_std::{StdRestServerBuilder, StdRestServerWorker};

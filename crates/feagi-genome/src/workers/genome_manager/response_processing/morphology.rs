@@ -1,7 +1,7 @@
+use std::collections::HashMap;
 use feagi_basis::feagi_message::request::feagi_request_message_category::{FeagiCategoryResponder, FeagiRequestCategory};
 use feagi_basis::parallelism::feagi_channel::request_response_channel::implementations::dynamic::FeagiRequestResponseChannelsAllocBackend;
-use std::collections::HashMap;
-use crate::genome_manager::requests::categories::morphology::{MorphologyRequestCategory, MorphologyRequests, MorphologyResponses, ReadMorphologiesFeagiRequestMessageResponse};
+use crate::workers::genome_manager::requests::categories::morphology::{MorphologyRequestCategory, MorphologyRequests, MorphologyResponses, ReadMorphologiesFeagiRequestMessageResponse};
 
 pub(crate) async fn morphology_response(
     responder: &FeagiCategoryResponder<MorphologyRequestCategory, FeagiRequestResponseChannelsAllocBackend>) -> bool {

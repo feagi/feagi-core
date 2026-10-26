@@ -18,12 +18,14 @@ std = [
     "alloc",
     "zenoh",
     "thiserror/std", "thingbuf/std", "base64/std", "serde/std",
-    "serde_json/std", "picoserve/std"
+    "serde_json/std", "picoserve/std",
+    "feagi-basis/std"
 ]
 
 alloc = [
     "thingbuf/alloc", "base64/alloc", "serde/alloc",
-    "serde_json/alloc", "picoserve/alloc"
+    "serde_json/alloc", "picoserve/alloc",
+    "feagi-basis/alloc"
 ]
 
 transport_rest = [
@@ -48,7 +50,7 @@ swagger_web_ui = [
 
 [dependencies]
 # Root Crates
-feagi-basis = { path = "../feagi-basis" }
+feagi-basis = { path = "../feagi-basis", default-features = false }
 
 # External Crates
 # Always used

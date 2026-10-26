@@ -14,18 +14,20 @@ description = "Base structs and traits to describe neural processing"
 
 std = [
     "alloc",
-    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std"
+    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std",
+    "feagi-basis/std"
 ]
 
 alloc = [
-    "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc"
+    "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc",
+    "feagi-basis/alloc"
 ]
 
 
 
 [dependencies]
 # Workspace Crates
-feagi-basis = { path = "../feagi-basis" }
+feagi-basis = { path = "../feagi-basis", default-features = false }
 
 # External Crates
 paste = { workspace = true }

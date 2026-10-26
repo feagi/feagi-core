@@ -20,10 +20,11 @@ description = "A burst engine for running on the ESP32 family of SOCs"
 
 std = [
     "alloc",
+    "feagi-npu-burst-basis/std", "feagi-basis/std", "feagi-brain-basis/std"
 ]
 
 alloc = [
-
+    "feagi-npu-burst-basis/alloc", "feagi-basis/alloc", "feagi-brain-basis/alloc"
 ]
 
 # ========================= Platform ========================= #
@@ -38,7 +39,8 @@ alloc = [
 feagi-npu-burst-basis = {path = "../feagi-npu-burst-basis" }
 
 # Root Crates
-feagi-basis = {path = "../../../feagi-basis" }
+feagi-basis = {path = "../../../feagi-basis", default-features = false }
+feagi-brain-basis = {path = "../../../feagi-brain-basis" }
 
 # External Crates
 paste = { workspace = true}

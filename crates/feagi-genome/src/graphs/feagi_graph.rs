@@ -1,4 +1,4 @@
-use feagi_brain_models::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_brain_basis::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::graphs::components::element_identifiers::GraphElementIdentifiers;
 use crate::graphs::components::npu_context::GraphNPUContext;
 

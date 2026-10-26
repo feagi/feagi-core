@@ -18,10 +18,11 @@ description = "Rayon burst engine logic for multithread / core CPU neuron proces
 
 std = [
     "alloc",
+    "feagi-npu-burst-basis/std", "feagi-basis/std", "feagi-brain-basis/std"
 ]
 
 alloc = [
-
+    "feagi-npu-burst-basis/alloc", "feagi-basis/alloc", "feagi-brain-basis/alloc"
 ]
 
 [dependencies]
@@ -31,7 +32,8 @@ alloc = [
 feagi-npu-burst-basis = {path = "../feagi-npu-burst-basis" }
 
 # Root Crates
-feagi-basis = {path = "../../../feagi-basis" }
+feagi-basis = {path = "../../../feagi-basis", default-features = false }
+feagi-brain-basis = {path = "../../../feagi-brain-basis" }
 
 # External Crates
 paste = { workspace = true}

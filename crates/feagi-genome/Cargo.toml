@@ -14,25 +14,28 @@ description = "Various structures used to describe the structure and state of th
 
 std = [
     "alloc",
-    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std"
+    "serde/std", "base64/std", "thiserror/std", "half/std", "uuid/std",
+    "feagi-basis/std", "feagi-brain-basis/std"
 ]
 
 alloc = [
-    "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc"
+    "serde/alloc", "base64/alloc", "heapless/alloc", "half/alloc",
+    "feagi-basis/alloc", "feagi-brain-basis/alloc"
 ]
 
 
 
 [dependencies]
 # Workspace Crates
-feagi-brain-models = {path = "feagi-brain-models"}
-feagi-basis = { path = "../feagi-basis" }
+feagi-brain-basis = { path = "../feagi-brain-basis" }
+feagi-basis = { path = "../feagi-basis", default-features = false }
 
 # External Crates
 paste = { workspace = true }
 thiserror = { workspace = true, default-features = false }
 half = { workspace = true, features = ["serde"] }
 serde = { workspace = true, default-features = false, features = ["derive"] }
+serde_json = {workspace = true} # TODO this may nto be optional?
 base64 = { workspace = true, default-features = false }
 heapless = { workspace = true, default-features = false, features = ["serde"] }
 uuid = { workspace = true, features = ["serde"] }
