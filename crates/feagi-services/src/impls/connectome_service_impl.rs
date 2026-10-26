@@ -6029,6 +6029,7 @@ mod tests {
     ///   2) deleted_area -> downstream synapses must also be pruned (full cascade hygiene).
     #[tokio::test]
     async fn delete_cortical_area_cascade_prunes_orphan_synapses() -> ServiceResult<()> {
+        let _state_guard = crate::impls::GENOME_STATE_TEST_LOCK.lock().await;
         use super::ConnectomeServiceImpl;
         use crate::traits::ConnectomeService;
         use feagi_brain_development::ConnectomeManager;
@@ -6289,6 +6290,7 @@ mod tests {
     /// plasticity) reported 0. The counts must come from the connectome itself.
     #[test]
     fn area_synapse_counts_reflect_synapses_added_directly_in_npu() {
+        let _state_guard = crate::impls::GENOME_STATE_TEST_LOCK.blocking_lock();
         use feagi_brain_development::ConnectomeManager;
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
@@ -6902,6 +6904,7 @@ mod tests {
     #[tokio::test]
     async fn import_connectome_restores_memory_plastic_and_regions_from_genome_json(
     ) -> ServiceResult<()> {
+        let _state_guard = crate::impls::GENOME_STATE_TEST_LOCK.lock().await;
         use crate::traits::ConnectomeService;
         use feagi_npu_neural::types::connectome::{
             ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,

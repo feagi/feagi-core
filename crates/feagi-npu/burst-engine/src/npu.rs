@@ -5679,14 +5679,26 @@ impl<
     /// synaptogenesis, plasticity), unlike counters that only track explicit
     /// create/remove calls. One pass over the synapse arrays, no per-neuron allocation;
     /// a synapse internal to the area counts once in each total.
+    ///
+    /// Dynamic memory neurons (ids at or above `MEMORY_NEURON_ID_START`) live outside
+    /// dense neuron storage, so their area is resolved through the propagation engine's
+    /// `neuron_to_area` map. Without this, the per-area sums fall short of the global
+    /// synapse count whenever a memory area has learned synapses.
     pub fn get_cortical_area_synapse_counts(&self, cortical_idx: u32) -> (usize, usize) {
+        let memory_ids: ahash::AHashSet<u32> = self
+            .dynamic_memory_neuron_ids_in_area(cortical_idx)
+            .into_iter()
+            .collect();
         let neurons = self.neuron_storage.read().unwrap();
         let synapses = self.synapse_storage.read().unwrap();
         let neuron_areas = neurons.cortical_areas();
         let valid = synapses.valid_mask();
         let sources = synapses.source_neurons();
         let targets = synapses.target_neurons();
-        let in_area = |neuron: u32| neuron_areas.get(neuron as usize) == Some(&cortical_idx);
+        let in_area = |neuron: u32| {
+            neuron_areas.get(neuron as usize) == Some(&cortical_idx)
+                || (neuron >= MEMORY_NEURON_ID_START && memory_ids.contains(&neuron))
+        };
         let mut incoming = 0usize;
         let mut outgoing = 0usize;
         for i in 0..synapses.count() {
@@ -8529,6 +8541,64 @@ mod tests {
         let fs = npu.fire_structures.lock().unwrap();
         assert!(fs.pending_memory_injections.is_empty());
         assert!(fs.current_fire_queue.get_area_neurons(20).is_none());
+    }
+
+    #[test]
+    fn per_area_synapse_counts_include_memory_neuron_synapses() {
+        use feagi_npu_neural::types::NeuronId;
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
+        use feagi_structures::genomic::cortical_area::CorticalID;
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 8,
+            );
+        let dense_area = CorticalID::try_from_bytes(b"mdns0001").unwrap();
+        let memory_area = CorticalID::try_from_bytes(b"mmem0001").unwrap();
+        npu.register_cortical_area(10, dense_area.as_base_64());
+        npu.register_cortical_area(20, memory_area.as_base_64());
+        let dense_a = npu
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 10, 0, 0, 0)
+            .unwrap();
+        let dense_b = npu
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 10, 1, 0, 0)
+            .unwrap();
+        let mem_a = 50_000_000u32;
+        let mem_b = 50_000_001u32;
+        npu.register_dynamic_neuron_mapping(mem_a, memory_area);
+        npu.register_dynamic_neuron_mapping(mem_b, memory_area);
+
+        // dense->dense, dense->memory, memory->dense, memory->memory
+        for (src, dst) in [
+            (dense_a.0, dense_b.0),
+            (dense_a.0, mem_a),
+            (mem_a, dense_b.0),
+            (mem_a, mem_b),
+        ] {
+            npu.add_synapse(
+                NeuronId(src),
+                NeuronId(dst),
+                SynapticWeight(1.0),
+                SynapticPsp(1.0),
+                SynapseType::Excitatory,
+                SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+                1,
+            )
+            .unwrap();
+        }
+
+        let total = npu.get_synapse_count();
+        assert_eq!(total, 4);
+        assert_eq!(npu.get_cortical_area_synapse_counts(10), (2, 2));
+        assert_eq!(npu.get_cortical_area_synapse_counts(20), (2, 2));
+        // Every synapse has exactly one source area and one target area, so the per-area
+        // sums must equal the global count.
+        let (inc, out): (usize, usize) = [10u32, 20]
+            .iter()
+            .map(|&idx| npu.get_cortical_area_synapse_counts(idx))
+            .fold((0, 0), |a, c| (a.0 + c.0, a.1 + c.1));
+        assert_eq!(inc, total);
+        assert_eq!(out, total);
     }
 
     #[test]

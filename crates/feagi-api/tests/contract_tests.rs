@@ -99,13 +99,25 @@ static MOCK_RUNTIME_FREQUENCY_BITS: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 use std::sync::atomic::Ordering;
 
+/// Workspace-level `feagi_configuration.toml` checked into this repository.
+fn repo_config_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../feagi_configuration.toml")
+}
+
+/// Point `FEAGI_CONFIG_PATH` at the repo config exactly once per process (library code
+/// resolves configuration through this variable). Tests that need a different config
+/// go through [`set_temp_config`], which serializes on `CONFIG_ENV_LOCK`.
+fn ensure_base_config_env() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        if std::env::var_os("FEAGI_CONFIG_PATH").is_none() {
+            std::env::set_var("FEAGI_CONFIG_PATH", repo_config_path());
+        }
+    });
+}
+
 fn build_test_state() -> ApiState {
-    if std::env::var("FEAGI_CONFIG_PATH").is_err() {
-        std::env::set_var(
-            "FEAGI_CONFIG_PATH",
-            "/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml",
-        );
-    }
+    ensure_base_config_env();
 
     // Initialize NPU (fire_ledger_window=10)
     let runtime = StdRuntime;
@@ -655,7 +667,7 @@ async fn create_test_server() -> axum::Router {
 }
 
 #[cfg(feature = "feagi-agent")]
-static CONFIG_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static CONFIG_ENV_LOCK: Mutex<()> = Mutex::new(());
 
 /// Serializes tests that load a genome (successfully or not): every load writes the
 /// process-wide `StateManager` genome state that `health_check` reports.
@@ -711,8 +723,10 @@ async fn test_health_check_reports_genome_loaded_after_service_load() {
 
 #[cfg(feature = "feagi-agent")]
 struct ConfigEnvGuard {
-    previous: Option<String>,
+    previous: Option<std::ffi::OsString>,
     path: std::path::PathBuf,
+    /// Held for the whole test so no other config-mutating test overlaps.
+    _lock: std::sync::MutexGuard<'static, ()>,
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -729,13 +743,16 @@ impl Drop for ConfigEnvGuard {
 
 #[cfg(feature = "feagi-agent")]
 fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
+    ensure_base_config_env();
+    let lock = CONFIG_ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("Time went backwards")
         .as_nanos();
-    let path = std::path::PathBuf::from(format!("/tmp/feagi-config-{nanos}--temp.toml"));
-    let base_path =
-        std::path::PathBuf::from("/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml");
+    let path = std::env::temp_dir().join(format!("feagi-config-{nanos}--temp.toml"));
+    let base_path = repo_config_path();
     let base_contents =
         std::fs::read_to_string(&base_path).expect("Failed to read base FEAGI config");
     let mut contents = String::new();
@@ -781,10 +798,14 @@ fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
 
     std::fs::write(&path, contents).expect("Failed to write temp config");
 
-    let previous = std::env::var("FEAGI_CONFIG_PATH").ok();
+    let previous = std::env::var_os("FEAGI_CONFIG_PATH");
     std::env::set_var("FEAGI_CONFIG_PATH", &path);
 
-    ConfigEnvGuard { previous, path }
+    ConfigEnvGuard {
+        previous,
+        path,
+        _lock: lock,
+    }
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -795,6 +816,7 @@ fn sample_device_registrations() -> Value {
                 [
                     {
                         "cortical_unit_index": 0,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}]
                     },
                     {}
@@ -806,6 +828,7 @@ fn sample_device_registrations() -> Value {
                 [
                     {
                         "cortical_unit_index": 0,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}]
                     },
                     {}
@@ -825,6 +848,7 @@ fn sample_multi_limb_device_registrations() -> Value {
                 [
                     {
                         "cortical_unit_index": 0,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
                     },
                     {}
@@ -832,6 +856,7 @@ fn sample_multi_limb_device_registrations() -> Value {
                 [
                     {
                         "cortical_unit_index": 1,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
                     },
                     {}
@@ -839,6 +864,7 @@ fn sample_multi_limb_device_registrations() -> Value {
                 [
                     {
                         "cortical_unit_index": 2,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
                     },
                     {}
@@ -846,6 +872,7 @@ fn sample_multi_limb_device_registrations() -> Value {
                 [
                     {
                         "cortical_unit_index": 3,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
                     },
                     {}
@@ -865,6 +892,7 @@ fn sample_named_motor_device_registrations() -> Value {
                     {
                         "friendly_name": "front_left_leg",
                         "cortical_unit_index": 0,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [
                             {
                                 "friendly_name": "front_left_hip",
@@ -1020,6 +1048,7 @@ fn sample_multi_segmented_vision_device_registrations() -> Value {
                     {
                         "friendly_name": "front_camera_segmented",
                         "cortical_unit_index": 0,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}]
                     },
                     {
@@ -1042,6 +1071,7 @@ fn sample_multi_segmented_vision_device_registrations() -> Value {
                     {
                         "friendly_name": "rear_camera_segmented",
                         "cortical_unit_index": 1,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}]
                     },
                     {
@@ -1101,6 +1131,7 @@ fn sample_segmented_vision_group1_only_device_registrations() -> Value {
                     {
                         "friendly_name": "rear_camera_segmented",
                         "cortical_unit_index": 1,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}]
                     },
                     {
@@ -1134,6 +1165,7 @@ fn sample_named_sensory_only_device_registrations() -> Value {
                     {
                         "friendly_name": "head_camera",
                         "cortical_unit_index": 0,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [
                             {
                                 "friendly_name": "rgb_camera",
@@ -1161,6 +1193,7 @@ fn sample_sensory_device_registrations_with_large_vision_encoder() -> Value {
                     {
                         "friendly_name": "head_camera",
                         "cortical_unit_index": 0,
+                        "frame_change_handling": "Absolute",
                         "device_grouping": [{"id": 0}]
                     },
                     {
@@ -1351,13 +1384,13 @@ async fn test_register_agent_returns_session_and_endpoints() {
     let body = response.0;
 
     assert!(body.success);
-    let transport = body.transport.expect("Expected transport payload");
-    assert!(transport.contains_key("session_id"));
-    let endpoints = transport
-        .get("endpoints")
-        .and_then(|value| value.as_object())
-        .expect("Expected endpoints in transport payload");
-    assert!(endpoints.contains_key("send_sensor_data"));
+    // The legacy `transport` field is deprecated; transport details are reported via
+    // `transports` (see endpoints/agent.rs.disabled, commit 1ed916ca).
+    assert!(
+        body.transport.is_none(),
+        "Legacy transport field must stay unset"
+    );
+    assert!(body.transports.is_some(), "Expected transports array");
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -1392,13 +1425,13 @@ async fn test_register_visualization_only_agent_returns_session_and_endpoints() 
     let body = response.0;
 
     assert!(body.success);
-    let transport = body.transport.expect("Expected transport payload");
-    assert!(transport.contains_key("session_id"));
-    let endpoints = transport
-        .get("endpoints")
-        .and_then(|value| value.as_object())
-        .expect("Expected endpoints in transport payload");
-    assert!(endpoints.contains_key("receive_neuron_visualizations"));
+    // The legacy `transport` field is deprecated; transport details are reported via
+    // `transports` (see endpoints/agent.rs.disabled, commit 1ed916ca).
+    assert!(
+        body.transport.is_none(),
+        "Legacy transport field must stay unset"
+    );
+    assert!(body.transports.is_some(), "Expected transports array");
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -1466,13 +1499,7 @@ async fn test_register_agent_rejects_visualization_rate_above_burst_frequency() 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_disabled_skips_creation() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(false)
-    };
+    let _guard = set_temp_config(false);
     let state = build_test_state();
 
     auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
@@ -1489,13 +1516,7 @@ async fn test_auto_create_disabled_skips_creation() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_enabled_creates_areas() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
 
     auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
@@ -1512,13 +1533,7 @@ async fn test_auto_create_enabled_creates_areas() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_creates_all_limb_cortical_areas() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
 
     auto_create_cortical_areas_from_device_registrations(
@@ -1552,7 +1567,7 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
                 "Incremental subunit width should be 6"
             );
             inc_width_count += 1;
-        } else if area.name.ends_with("-2") {
+        } else if area.name.ends_with(" Speed") {
             assert_eq!(area.dimensions.0, 3, "Speed subunit width should be 3");
             speed_width_count += 1;
         } else if area.name.ends_with("-0") {
@@ -1573,13 +1588,7 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_index() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
     let registrations = sample_multi_segmented_vision_device_registrations();
 
@@ -1668,13 +1677,7 @@ async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_in
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
 
     // Seed the scene with an existing segmented-vision group (group 0) at custom Y/Z positions.
@@ -1806,13 +1809,7 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
 #[tokio::test]
 async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existing_anchor_incomplete(
 ) {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
 
     // Seed an INCOMPLETE existing segmented-vision group (group 0): only one subunit.
@@ -1911,13 +1908,7 @@ async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existi
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
 
     auto_create_cortical_areas_from_device_registrations(
@@ -1942,13 +1933,7 @@ async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_sets_firing_threshold_for_simple_vision() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
 
     auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
@@ -1982,13 +1967,7 @@ async fn test_auto_create_sets_firing_threshold_for_simple_vision() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_sets_firing_threshold_for_segmented_vision() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
 
     auto_create_cortical_areas_from_device_registrations(
@@ -2034,13 +2013,7 @@ async fn test_auto_create_sets_firing_threshold_for_segmented_vision() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_sets_depth_map_threshold_defaults() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
 
     let registrations = sample_depth_map_device_registrations();
@@ -2079,13 +2052,7 @@ async fn test_auto_create_sets_depth_map_threshold_defaults() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_migrates_existing_depth_map_legacy_thresholds() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
     let registrations = sample_depth_map_device_registrations();
     let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
@@ -2165,13 +2132,7 @@ async fn test_auto_create_migrates_existing_depth_map_legacy_thresholds() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_migrates_depth_map_threshold_from_legacy_35() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
     let registrations = sample_depth_map_device_registrations();
     let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
@@ -2247,13 +2208,7 @@ async fn test_auto_create_migrates_depth_map_threshold_from_legacy_35() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_supports_sensory_only_registrations() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
 
     auto_create_cortical_areas_from_device_registrations(
@@ -2276,13 +2231,7 @@ async fn test_auto_create_supports_sensory_only_registrations() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_properties() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
     let registrations = sample_sensory_device_registrations_with_large_vision_encoder();
     let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
@@ -2348,13 +2297,7 @@ async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_post_cortical_area_resizes_existing_segmented_tile_for_the_same_group() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
     let ids = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
         FrameChangeHandling::Absolute,
@@ -2474,13 +2417,7 @@ async fn test_post_cortical_area_resizes_existing_segmented_tile_for_the_same_gr
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_preserves_existing_motor_area_position_while_reconciling_structure() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
     let registrations = sample_motor_device_registrations_with_io_flags();
     let motor_ids = derive_motor_cortical_ids_from_device_registrations(&registrations)
@@ -2556,13 +2493,7 @@ async fn test_reregistration_keeps_hand_widened_area_dimensions() {
     use feagi_api::endpoints::agent::get_registration_diff;
     use feagi_api::v1::RegistrationDiffQuery;
 
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
     let registrations = sample_servo_sensory_device_registrations();
     let (cortical_id, declared, widened) =
@@ -2640,13 +2571,7 @@ async fn test_reregistration_keeps_hand_widened_area_dimensions() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_registration_diff_reports_missing_area_as_no_live() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let state = build_test_state();
     let diff = feagi_api::common::agent_registration::diff_device_registrations(
         &state,
@@ -2671,13 +2596,7 @@ async fn test_registration_diff_reports_missing_area_as_no_live() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_registration_against_existing_area_leaves_burst_frequency_unchanged() {
-    let _guard = {
-        let _lock = CONFIG_ENV_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("Failed to lock config env");
-        set_temp_config(true)
-    };
+    let _guard = set_temp_config(true);
     let tracker = Arc::new(RuntimeTransitionTracker::default());
     let mut state = build_test_state();
     state.runtime_service = Arc::new(TrackingRuntimeService::new(Arc::clone(&tracker)))
