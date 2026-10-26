@@ -30,6 +30,11 @@ on:
         description: 'Seconds between crates.io verification polls'
         required: false
         default: '15'
+      resume:
+        description: 'Resume a partly published release: skip crates already on crates.io at this exact version'
+        type: boolean
+        required: false
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -249,12 +254,15 @@ jobs:
           path: ${{ steps.manifest.outputs.manifest_path }}
 
       - name: Guard - workspace version must be newer than crates.io (developer must bump before run)
+        env:
+          RESUME_RELEASE: ${{ inputs.resume == true && 'true' || 'false' }}
         run: |
           set -euo pipefail
           echo "Verifying workspace version is greater than crates.io for changed crates..."
           LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
           python3 - <<'PY'
           import json
+          import os
           import re
           import subprocess
           import sys
@@ -354,6 +362,17 @@ jobs:
                   return False
               return _semver_gt(a, b)
 
+          resume = os.environ.get("RESUME_RELEASE") == "true"
+
+          def check_bump(name: str, version: str, published: str):
+              if not published:
+                  return
+              if resume and version == published:
+                  print(f"resume: {name} {version} already published")
+                  return
+              if not version_gt(version, published):
+                  violations.append(f"{name} local {version} not > crates.io {published}")
+
           violations = []
           workspace_version = read_workspace_version(root)
 
@@ -364,16 +383,12 @@ jobs:
               name, version = crate_name_and_version(manifest, workspace_version)
               if not name or not version:
                   continue
-              published = latest_on_crates_io(name)
-              if published and not version_gt(version, published):
-                  violations.append(f"{name} local {version} not > crates.io {published}")
+              check_bump(name, version, latest_on_crates_io(name))
 
           if root_changed:
               name, version = crate_name_and_version(root / "Cargo.toml", workspace_version)
               if name and version:
-                  published = latest_on_crates_io(name)
-                  if published and not version_gt(version, published):
-                      violations.append(f"{name} local {version} not > crates.io {published}")
+                  check_bump(name, version, latest_on_crates_io(name))
 
           if violations:
               print("Version bump enforcement failed:")
@@ -467,6 +482,7 @@ jobs:
       RELEASE_SHA: ${{ needs.prep.outputs.release_sha }}
       VERIFY_TIMEOUT_SECONDS: ${{ github.event.inputs.verify_timeout_seconds }}
       VERIFY_POLL_SECONDS: ${{ github.event.inputs.verify_poll_seconds }}
+      RESUME_RELEASE: ${{ github.event.inputs.resume == 'true' && 'true' || 'false' }}
     steps:
       - name: Guard - require release SHA
         run: |

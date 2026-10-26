@@ -172,6 +172,12 @@ should_publish_crate() {
     # downstream crates that resolve dependencies from crates.io during packaging.
     if [ "$(is_already_published "$crate_name" "$crate_path")" = "true" ]; then
         if [ -n "$CHANGED_CRATES_LIST" ] && [[ " ${CHANGED_CRATES_LIST} " == *" ${crate_name} "* ]]; then
+            if [ "${RESUME_RELEASE:-false}" = "true" ]; then
+                # stderr: stdout of this function is captured as the decision
+                echo "resume: $crate_name v$(get_crate_version "$crate_path") already on crates.io, skipping" >&2
+                echo "skip_published"
+                return
+            fi
             echo "fail_already_published"
             return
         fi
@@ -327,8 +333,28 @@ publish_crate() {
         echo "   🚀 Publishing to crates.io..."
         # With set -e, we must temporarily disable exit-on-error to capture output.
         set +e
-        publish_output="$(cargo publish --allow-dirty --token "$CARGO_TOKEN" 2>&1)"
-        publish_status=$?
+        local attempt=1 max_attempts=3 backoff
+        while :; do
+            publish_output="$(cargo publish --allow-dirty --token "$CARGO_TOKEN" 2>&1)"
+            publish_status=$?
+            [ "$publish_status" -eq 0 ] && break
+            # Retry only transient registry/network errors
+            if [ "$attempt" -ge "$max_attempts" ] || \
+               ! echo "$publish_output" | grep -qiE "got 408|got 429|got 5|timed out|connection"; then
+                break
+            fi
+            backoff=$((attempt * 30))
+            echo "$publish_output"
+            echo -e "   ${YELLOW}Transient publish error (attempt $attempt/$max_attempts); retrying in ${backoff}s${NC}"
+            sleep "$backoff"
+            # The upload may have succeeded despite the error
+            if [ "$(is_already_published "$crate_name" "$crate_path")" = "true" ]; then
+                echo -e "   ${YELLOW}$crate_name v$version is on crates.io despite the error; treating as success${NC}"
+                publish_status=0
+                break
+            fi
+            attempt=$((attempt + 1))
+        done
         set -e
 
         if [ "$publish_status" -eq 0 ]; then
