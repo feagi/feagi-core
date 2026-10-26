@@ -65,13 +65,46 @@ pub async fn get_physiology(
     Ok(Json(response))
 }
 
+/// Store a new simulation timestep (seconds) in the loaded genome's physiology and apply the
+/// matching burst rate (1 / timestep Hz) to the running engine. Returns the stored value.
+///
+/// Rejects values that are not finite or not greater than 0 with `invalid_input`. The genome is
+/// written first, so a rejected value changes neither the genome nor the running rate.
+pub(crate) async fn apply_simulation_timestep(state: &ApiState, timestep_s: f64) -> ApiResult<f64> {
+    let stored = state
+        .genome_service
+        .set_simulation_timestep(timestep_s)
+        .await
+        .map_err(|e| match e {
+            feagi_services::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
+            other => ApiError::internal(format!("Failed to store simulation_timestep: {}", other)),
+        })?;
+    let frequency = 1.0 / stored;
+    state
+        .runtime_service
+        .set_frequency(frequency)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to set timestep: {}", e)))?;
+    tracing::info!(target: "feagi-api", "Stored simulation timestep {:.6}s and applied {:.2} Hz",
+        stored, frequency);
+    Ok(stored)
+}
+
 /// Update physiology parameters in the active genome including timestep and aging settings.
+///
+/// `simulation_timestep` (seconds, finite and > 0) is stored in the in-memory genome
+/// (`physiology.simulation_timestep`) AND applied live as burst rate 1/timestep Hz, so a later
+/// genome save, download or connectome export carries it and the next load restores it.
+/// Contrast `PUT /v1/burst_engine/config`, which changes the running engine only and leaves the
+/// stored genome unchanged. Body: `{"physiology": {"simulation_timestep": 0.025}}`; the response
+/// `updated.simulation_timestep` is the stored value. Other keys are accepted but not yet stored.
 #[utoipa::path(
     put,
     path = "/v1/physiology/",
     tag = "physiology",
     responses(
         (status = 200, description = "Physiology updated", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Invalid simulation_timestep (not a finite number > 0)"),
         (status = 500, description = "Internal server error")
     )
 )]
@@ -114,18 +147,14 @@ pub async fn put_physiology(
         ])));
     }
 
-    // Apply simulation_timestep if provided
-    if let Some(timestep) = updates.get("simulation_timestep").and_then(|v| v.as_f64()) {
-        let runtime_service = state.runtime_service.as_ref();
-        if timestep > 0.0 {
-            let frequency = 1.0 / timestep;
-            runtime_service
-                .set_frequency(frequency)
-                .await
-                .map_err(|e| ApiError::internal(format!("Failed to set timestep: {}", e)))?;
-            tracing::info!(target: "feagi-api", "Updated simulation timestep to {:.6}s ({:.2} Hz)",
-                timestep, frequency);
-        }
+    // Store simulation_timestep in the genome and apply it live. A non-numeric value is invalid.
+    let mut updates = updates;
+    if let Some(raw) = updates.get("simulation_timestep") {
+        let timestep = raw
+            .as_f64()
+            .ok_or_else(|| ApiError::invalid_input("simulation_timestep must be a number"))?;
+        let stored = apply_simulation_timestep(&state, timestep).await?;
+        updates.insert("simulation_timestep".to_string(), json!(stored));
     }
 
     // TODO: Apply other physiology parameters to genome

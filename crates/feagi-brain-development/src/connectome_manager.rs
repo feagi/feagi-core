@@ -3883,6 +3883,113 @@ impl ConnectomeManager {
         Ok(())
     }
 
+    /// Rule keys that only configure plasticity. Changing them never changes which synapses
+    /// exist or their stored weights (the initial weight comes from
+    /// `postSynapticCurrent_multiplier`, which is structural and not listed here).
+    const PLASTICITY_ONLY_RULE_KEYS: [&'static str; 13] = [
+        "plasticity_flag",
+        "plasticity_mode",
+        "plasticity_window",
+        "plasticity_constant",
+        "ltp_multiplier",
+        "ltd_multiplier",
+        "eligibility_decay_bursts",
+        "plasticity_eta",
+        "max_weight",
+        "modulators",
+        "classifier_instance_reward",
+        "reward_source_area",
+        "punishment_source_area",
+    ];
+
+    /// True when `new_rules` equals `old_rules` rule-for-rule (same count and order) except for
+    /// plasticity-only keys, so the update can be applied with
+    /// [`Self::apply_mapping_plasticity_in_place`] instead of rebuilding synapses.
+    /// Non-object (array-format) rules are never treated as plasticity-only.
+    pub fn mapping_rules_differ_only_in_plasticity(
+        old_rules: &[serde_json::Value],
+        new_rules: &[serde_json::Value],
+    ) -> bool {
+        if old_rules.is_empty() || old_rules.len() != new_rules.len() {
+            return false;
+        }
+        old_rules.iter().zip(new_rules).all(|(old, new)| {
+            let (Some(old), Some(new)) = (old.as_object(), new.as_object()) else {
+                return false;
+            };
+            let structural = |obj: &serde_json::Map<String, serde_json::Value>| {
+                obj.iter()
+                    .filter(|(k, _)| !Self::PLASTICITY_ONLY_RULE_KEYS.contains(&k.as_str()))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect::<serde_json::Map<String, serde_json::Value>>()
+            };
+            structural(old) == structural(new)
+        })
+    }
+
+    /// Refresh the plasticity registration of mapping `src -> dst` from its stored rules without
+    /// touching synapses or their weights. The registration is dropped first, then re-created for
+    /// plastic rules, so turning plasticity off stops learning and turning it on resumes from the
+    /// current weights.
+    pub fn apply_mapping_plasticity_in_place(
+        &mut self,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+    ) -> BduResult<()> {
+        let Some(npu_arc) = self.npu.clone() else {
+            return Ok(());
+        };
+        let rules: Vec<serde_json::Value> = self
+            .cortical_areas
+            .get(src_area_id)
+            .and_then(|area| area.properties.get("cortical_mapping_dst"))
+            .and_then(|v| v.as_object())
+            .and_then(|map| Self::get_mapping_rules_for_destination(map, dst_area_id))
+            .cloned()
+            .unwrap_or_default();
+        let src_idx = *self.cortical_id_to_idx.get(src_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!("No cortical idx for source area {}", src_area_id))
+        })?;
+        let dst_idx = *self.cortical_id_to_idx.get(dst_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!(
+                "No cortical idx for destination area {}",
+                dst_area_id
+            ))
+        })?;
+        npu_arc
+            .lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?
+            .unregister_stdp_mapping(src_idx, dst_idx);
+        for rule in &rules {
+            let Some(rule_obj) = rule.as_object() else {
+                continue;
+            };
+            let plastic = rule_obj
+                .get("plasticity_flag")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+                || rule_obj.get("morphology_id").and_then(|v| v.as_str())
+                    == Some("associative_memory");
+            if !plastic {
+                continue;
+            }
+            let (_weight, psp, synapse_type, _delay) =
+                self.resolve_synapse_params_for_rule(src_area_id, rule)?;
+            Self::register_stdp_mapping_for_rule(
+                &npu_arc,
+                src_area_id,
+                dst_area_id,
+                src_idx,
+                dst_idx,
+                rule_obj,
+                false,
+                psp,
+                synapse_type,
+            )?;
+        }
+        Ok(())
+    }
+
     /// Clear every mapping rule into and out of `area_id` and prune the synapses they created.
     ///
     /// Used before an area is removed. A side that has no cortical idx (an area that was

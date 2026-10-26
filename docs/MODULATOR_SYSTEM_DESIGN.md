@@ -86,6 +86,20 @@ effect of a magnitude is unambiguous.
 | Synaptic | Reward | R-STDP reward signal of the mapping | contributes `m x strength` to R(t) |
 | Synaptic | Learning rate | STDP / R-STDP eta of the mapping | eta x (1 + m) |
 | Synaptic | Gate | Transmission of the mapping's synapses | 0 unless the driver signal is active, then the factor is the signal `m x strength` |
+| Memory | Memory formation (`memory.formation`) | New-memory-neuron creation in a subscribed memory area | factor `clamp(1 + m x strength, 0, 1)`; at 0 the area forms no new memory neurons |
+
+### Memory formation (`memory.formation`)
+
+Subscribes on a memory cortical area, like the `neuro.*` kinds (combined by multiplication
+across instances). The engine commits one factor per subscribed area at the end of each
+burst. When it is 0 (a driver at -100% active), plasticity skips creating new memory
+neurons for that area. Pattern detection still runs, so known patterns still reactivate;
+firing of existing memory neurons, STM aging, LTM conversion and eviction are unchanged.
+A skipped creation is not a failure: it is counted in the per-area
+`formation_suppressed_total` (next to `created_total`), not in `creation_failed_total`,
+and logs no capacity warning. No subscription means no effect. Subscribing a non-memory
+area is rejected by the area update. The plasticity service reads the suppressed set once
+per burst under a single NPU lock.
 
 The "Reward" type replaces `reward_source_area` and `punishment_source_area`:
 pleasure is a Reward instance with positive magnitude, pain one with negative

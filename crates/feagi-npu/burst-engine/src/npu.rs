@@ -4548,6 +4548,15 @@ impl<
             .area_subscriptions(cortical_idx)
     }
 
+    /// Whether a subscribed `memory.formation` modulator blocks new memory neurons in this
+    /// area right now. Read once per area per burst by the plasticity service.
+    pub fn memory_formation_suppressed(&self, cortical_idx: u32) -> bool {
+        self.modulator_engine
+            .lock()
+            .map(|m| m.memory_formation_suppressed(cortical_idx))
+            .unwrap_or(false)
+    }
+
     /// Cortical indices whose neurons run the spike-train state machine.
     pub fn set_spike_train_areas(&self, areas: AHashSet<u32>) {
         self.modulator_engine
@@ -5832,7 +5841,11 @@ impl<
         dst_cortical_idx: u32,
     ) -> bool {
         let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
-        self.stdp_mappings.write().unwrap().remove(&key).is_some()
+        let removed = self.stdp_mappings.write().unwrap().remove(&key).is_some();
+        if removed {
+            self.rebuild_stdp_mapping_index();
+        }
+        removed
     }
 
     fn rebuild_stdp_mapping_index(&self) {

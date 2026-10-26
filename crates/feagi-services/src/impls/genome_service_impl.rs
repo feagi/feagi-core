@@ -384,6 +384,19 @@ pub fn sync_runtime_genome_from_connectome(
     }
 }
 
+/// Whether the area is a memory area in this genome.
+fn area_is_memory(
+    genome: Option<&feagi_evolutionary::RuntimeGenome>,
+    cortical_id: &CorticalID,
+) -> bool {
+    genome
+        .and_then(|genome| genome.cortical_areas.get(cortical_id))
+        .is_some_and(|area| {
+            matches!(area.cortical_type, CorticalAreaType::Memory(_))
+                || area.properties.get("is_mem_type").and_then(|v| v.as_bool()) == Some(true)
+        })
+}
+
 /// Collect architecture indexes used by connectome snapshots and completeness checks.
 pub fn architecture_indexes_from_genome(
     genome: &feagi_evolutionary::RuntimeGenome,
@@ -1286,12 +1299,20 @@ impl GenomeService for GenomeServiceImpl {
                              genome.modulators"
                         )));
                     }
-                    Some(kind) if !kind.is_neuromodulator() => {
+                    Some(kind) if !kind.is_area_level() => {
                         return Err(ServiceError::InvalidInput(format!(
                             "modulator '{id}' ({}) on area {cortical_id} is synaptic; areas \
-                             subscribe to `neuro.*` modulators only. Put it on a mapping rule \
-                             instead.",
+                             subscribe to `neuro.*` and `memory.formation` modulators only. Put it \
+                             on a mapping rule instead.",
                             kind.as_str()
+                        )));
+                    }
+                    Some(feagi_structures::genomic::ModulatorKind::MemoryFormation)
+                        if !area_is_memory(genome.as_ref(), &cortical_id_typed_for_lock) =>
+                    {
+                        return Err(ServiceError::InvalidInput(format!(
+                            "modulator '{id}' (memory.formation) cannot subscribe area \
+                             {cortical_id}: it is not a memory area"
                         )));
                     }
                     Some(_) => {}
@@ -1634,6 +1655,20 @@ impl GenomeService for GenomeServiceImpl {
         }
         self.push_modulator_bindings()?;
         self.get_modulator(id).await
+    }
+
+    async fn set_simulation_timestep(&self, timestep_s: f64) -> ServiceResult<f64> {
+        if !timestep_s.is_finite() || timestep_s <= 0.0 || !(1.0 / timestep_s).is_finite() {
+            return Err(ServiceError::InvalidInput(format!(
+                "simulation_timestep must be finite and > 0 seconds, got {timestep_s}"
+            )));
+        }
+        let mut genome = self.current_genome.write();
+        let genome = genome
+            .as_mut()
+            .ok_or_else(|| ServiceError::InvalidInput("No genome is loaded".to_string()))?;
+        genome.physiology.simulation_timestep = timestep_s;
+        Ok(genome.physiology.simulation_timestep)
     }
 
     async fn rename_modulator(&self, old_id: &str, new_id: String) -> ServiceResult<()> {
@@ -6248,6 +6283,50 @@ mod tests {
         )
         .await
         .expect("clearing subscriptions is accepted");
+    }
+
+    #[tokio::test]
+    async fn memory_formation_is_listed_and_rejected_on_non_memory_areas() {
+        use crate::traits::GenomeService;
+        use crate::types::ServiceError;
+
+        let (svc, _npu, area_id, _idx) = modulator_runtime_fixture();
+        let types = svc.list_modulator_types().await.unwrap();
+        assert!(types.contains(&"memory.formation".to_string()), "{types:?}");
+        {
+            let arc = svc.get_current_genome_arc();
+            let mut guard = arc.write();
+            let genome = guard.as_mut().unwrap();
+            genome.modulators.insert(
+                "forget_none".to_string(),
+                feagi_evolutionary::ModulatorInstance {
+                    kind: feagi_structures::genomic::ModulatorKind::MemoryFormation,
+                    magnitude_percent: -100.0,
+                    effect_duration_bursts: 1,
+                    rest_bursts: 0,
+                    graded: false,
+                    full_scale_potential: None,
+                    driver_cortical_id:
+                        feagi_structures::genomic::cortical_area::CorticalID::modulator_driver(1),
+                },
+            );
+        }
+        let err = svc
+            .update_cortical_area(
+                &area_id.as_base_64(),
+                std::collections::HashMap::from([(
+                    "modulators".to_string(),
+                    serde_json::json!(["forget_none"]),
+                )]),
+            )
+            .await
+            .expect_err("a non-memory area must not subscribe to memory.formation");
+        match err {
+            ServiceError::InvalidInput(message) => {
+                assert!(message.contains("not a memory area"), "{message}");
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
     }
 
     #[tokio::test]

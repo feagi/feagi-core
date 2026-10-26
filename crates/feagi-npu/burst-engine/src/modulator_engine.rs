@@ -11,8 +11,8 @@ use ahash::{AHashMap, AHashSet};
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_runtime::NeuronStorage;
 use feagi_structures::genomic::{
-    gate_factor, modulator_signal, multiplicative_factor, scale_baseline, summed_reward,
-    ModulatorKind,
+    gate_factor, memory_formation_factor, modulator_signal, multiplicative_factor, scale_baseline,
+    summed_reward, ModulatorKind,
 };
 
 use crate::fire_structures::FireQueue;
@@ -64,6 +64,8 @@ struct ActiveFactors {
     learning_by_group: AHashMap<u16, f32>,
     transmission_by_group: AHashMap<u16, f32>,
     area_factor: AHashMap<(u32, NeuronParam), f32>,
+    /// cortical idx -> memory formation factor in `[0, 1]`, for subscribed areas only.
+    memory_formation_by_area: AHashMap<u32, f32>,
 }
 
 /// Burst-engine side of the modulator system.
@@ -165,6 +167,26 @@ impl ModulatorEngine {
             .get(&cortical_idx)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Whether a subscribed `memory.formation` modulator currently blocks new memory
+    /// neurons in this area (factor 0). No subscription means false. O(subscriptions).
+    pub fn memory_formation_suppressed(&self, cortical_idx: u32) -> bool {
+        let subscribed = self
+            .area_subscriptions
+            .get(&cortical_idx)
+            .is_some_and(|ids| {
+                ids.iter().any(|id| {
+                    self.binding(id)
+                        .is_some_and(|b| b.kind == ModulatorKind::MemoryFormation)
+                })
+            });
+        subscribed
+            && self
+                .active
+                .memory_formation_by_area
+                .get(&cortical_idx)
+                .is_some_and(|factor| *factor <= 0.0)
     }
 
     pub fn set_spike_train_areas(&mut self, areas: AHashSet<u32>) {
@@ -484,6 +506,25 @@ impl ModulatorEngine {
                     factor *= gate_factor(&gate);
                 }
                 active.transmission_by_group.insert(*group, factor);
+            }
+        }
+        for (area, ids) in &self.area_subscriptions {
+            let formation: Vec<f32> = ids
+                .iter()
+                .filter_map(|id| {
+                    let binding = self.binding(id)?;
+                    (binding.kind == ModulatorKind::MemoryFormation).then(|| {
+                        signals
+                            .get(&binding.driver_cortical_idx)
+                            .copied()
+                            .unwrap_or(0.0)
+                    })
+                })
+                .collect();
+            if !formation.is_empty() {
+                active
+                    .memory_formation_by_area
+                    .insert(*area, memory_formation_factor(&formation));
             }
         }
         let needed = self.needed_params();

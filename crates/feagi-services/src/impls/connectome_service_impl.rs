@@ -3000,6 +3000,16 @@ impl ConnectomeService for ConnectomeServiceImpl {
             return Ok(0);
         }
 
+        // Decision point: rules that differ from the stored ones only in plasticity settings
+        // (see `ConnectomeManager::mapping_rules_differ_only_in_plasticity`) are applied in place;
+        // anything that changes which synapses exist rebuilds the mapping.
+        let plasticity_params_only = existing_mapping.as_ref().is_some_and(|old_rules| {
+            feagi_brain_development::ConnectomeManager::mapping_rules_differ_only_in_plasticity(
+                old_rules,
+                &normalized_mapping_data,
+            )
+        });
+
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
         if let Some(genome) = self.current_genome.write().as_mut() {
             if let Some(src_area) = genome.cortical_areas.get_mut(&src_id) {
@@ -3028,6 +3038,26 @@ impl ConnectomeService for ConnectomeServiceImpl {
             manager
                 .update_cortical_mapping(&src_id, &dst_id, normalized_mapping_data.clone())
                 .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
+            if plasticity_params_only {
+                // Plasticity flag / parameters changed on otherwise identical rules: the set of
+                // synapses and their learned weights stay as they are; only the plasticity
+                // registration is refreshed (unregistered when plasticity is off).
+                manager
+                    .apply_mapping_plasticity_in_place(&src_id, &dst_id)
+                    .map_err(|e| {
+                        ServiceError::Backend(format!(
+                            "Failed to apply plasticity update in place: {}",
+                            e
+                        ))
+                    })?;
+                info!(
+                    target: "feagi-services",
+                    "Mapping {} -> {}: plasticity-only update applied in place; synapses and weights kept",
+                    src_area_id,
+                    dst_area_id
+                );
+                return Ok(0);
+            }
             let previous_morphology = existing_mapping
                 .as_ref()
                 .and_then(|rules| rules.first())
@@ -3607,6 +3637,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 restored_simulation_timestep_s = Some(genome.physiology.simulation_timestep);
                 self.apply_runtime_genome_to_connectome(&genome)?;
                 *self.current_genome.write() = Some(genome);
+            } else {
+                // A full snapshot without an embedded genome leaves the loaded genome alone, but
+                // when none was ever stored (fresh start, connectome-only load) save/export would
+                // fail with "No RuntimeGenome stored" while the brain is live. Seed an empty one;
+                // the sync below fills areas, regions and morphologies from the live connectome.
+                let mut slot = self.current_genome.write();
+                if slot.is_none() {
+                    *slot = Some(empty_runtime_genome("connectome-import"));
+                }
             }
 
             {
@@ -3659,6 +3698,35 @@ impl ConnectomeService for ConnectomeServiceImpl {
         self.clear_published_activity();
 
         Ok(())
+    }
+}
+
+/// Empty genome shell for a brain that was loaded without genome data; callers fill its
+/// structure from the live connectome via `sync_runtime_genome_from_connectome`.
+fn empty_runtime_genome(id: &str) -> feagi_evolutionary::RuntimeGenome {
+    feagi_evolutionary::RuntimeGenome {
+        metadata: feagi_evolutionary::GenomeMetadata {
+            genome_id: id.to_string(),
+            genome_title: id.to_string(),
+            genome_description: String::new(),
+            version: "3.0".to_string(),
+            timestamp: 0.0,
+            brain_regions_root: None,
+        },
+        cortical_areas: HashMap::new(),
+        brain_regions: HashMap::new(),
+        classifiers: HashMap::new(),
+        morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+        modulators: feagi_evolutionary::ModulatorRegistry::new(),
+        physiology: feagi_evolutionary::PhysiologyConfig::default(),
+        signatures: feagi_evolutionary::GenomeSignatures {
+            genome: "0".to_string(),
+            blueprint: "0".to_string(),
+            physiology: "0".to_string(),
+            morphologies: None,
+        },
+        stats: feagi_evolutionary::GenomeStats::default(),
+        change_history: Vec::new(),
     }
 }
 
@@ -6967,6 +7035,64 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "connectome-io")]
+    #[tokio::test]
+    async fn import_full_connectome_without_genome_json_stores_a_runtime_genome(
+    ) -> ServiceResult<()> {
+        use crate::traits::ConnectomeService;
+        use feagi_npu_neural::types::connectome::{
+            ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
+            SerializableSynapseArray,
+        };
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+        };
+
+        let area_id = CorticalID::try_from_bytes(b"cnogen01").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            7,
+            "live-area".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+        )
+        .unwrap();
+        let mut manager = connectome_manager_for_import_tests();
+        manager.add_cortical_area(area).unwrap();
+        let connectome = Arc::new(RwLock::new(manager));
+        let current_genome = Arc::new(RwLock::new(None));
+        let svc = ConnectomeServiceImpl::new(connectome, current_genome.clone());
+
+        let snapshot = ConnectomeSnapshot {
+            version: 1,
+            neurons: SerializableNeuronArray::default(),
+            synapses: SerializableSynapseArray::default(),
+            cortical_area_names: Default::default(),
+            burst_count: 0,
+            power_amount: 1.0,
+            fire_ledger_window: 20,
+            metadata: ConnectomeMetadata::default(),
+            persist_mode: feagi_npu_neural::types::connectome::ConnectomePersistMode::Full,
+            genome_json: None,
+            memory_area_ids: Vec::new(),
+            plastic_mappings: Vec::new(),
+            brain_region_ids: Vec::new(),
+            long_term_memory_neurons: Vec::new(),
+            long_term_memory_replay_frames: Vec::new(),
+            lite_synapses: Vec::new(),
+        };
+        svc.import_connectome(snapshot).await?;
+
+        let guard = current_genome.read();
+        let genome = guard
+            .as_ref()
+            .expect("connectome import must leave a RuntimeGenome so save/export works");
+        assert!(genome.cortical_areas.contains_key(&area_id));
+        assert!(feagi_evolutionary::save_genome_to_json(genome).is_ok());
+        Ok(())
+    }
+
     #[tokio::test]
     async fn import_connectome_lite_rebuilds_from_genome_json() -> ServiceResult<()> {
         use crate::traits::ConnectomeService;
@@ -9223,5 +9349,217 @@ mod raw_io_unit_name_tests {
             derive_friendly_cortical_name(misc_id).as_deref(),
             Some("Miscellaneous Input Unit 0")
         );
+    }
+}
+
+#[cfg(test)]
+mod plasticity_in_place_update_tests {
+    use super::ConnectomeServiceImpl;
+    use crate::traits::ConnectomeService;
+    use feagi_brain_development::ConnectomeManager;
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+    use feagi_npu_neural::types::{NeuronId, SynapticWeight};
+    use feagi_npu_runtime::StdRuntime;
+    use feagi_structures::genomic::cortical_area::{
+        CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, CustomCorticalType,
+    };
+    use parking_lot::RwLock;
+    use std::sync::Arc;
+
+    type Npu = Arc<TracingMutex<DynamicNPU>>;
+
+    /// 2x1x1 source and destination areas (2 neurons each) on a real NPU.
+    fn fixture() -> (ConnectomeServiceImpl, Npu, CorticalID, CorticalID, Vec<u64>) {
+        let npu: Npu = Arc::new(TracingMutex::new(
+            DynamicNPU::F32(RustNPU::new(StdRuntime, CPUBackend::new(), 1024, 2048, 8).unwrap()),
+            "plasticity-update-npu",
+        ));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(npu.clone());
+        manager.setup_core_morphologies_for_testing();
+        let mk = |bytes: &[u8; 8], name: &str| {
+            CorticalArea::new(
+                CorticalID::try_from_bytes(bytes).unwrap(),
+                0,
+                name.to_string(),
+                CorticalAreaDimensions::new(2, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
+            )
+            .unwrap()
+        };
+        let (src, dst) = (mk(b"cplssrc1", "src"), mk(b"cplsdst1", "dst"));
+        let (src_id, dst_id) = (src.cortical_id, dst.cortical_id);
+        manager.add_cortical_area(src).unwrap();
+        manager.add_cortical_area(dst).unwrap();
+        let mut srcs = Vec::new();
+        for x in 0..2 {
+            srcs.push(
+                manager
+                    .add_neuron(
+                        &src_id,
+                        x,
+                        0,
+                        0,
+                        1.0,
+                        f32::MAX,
+                        0.0,
+                        0.0,
+                        0,
+                        0,
+                        1.0,
+                        0,
+                        0,
+                        false,
+                    )
+                    .unwrap(),
+            );
+            manager
+                .add_neuron(
+                    &dst_id,
+                    x,
+                    0,
+                    0,
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    1.0,
+                    0,
+                    0,
+                    false,
+                )
+                .unwrap();
+        }
+        let svc =
+            ConnectomeServiceImpl::new(Arc::new(RwLock::new(manager)), Arc::new(RwLock::new(None)));
+        (svc, npu, src_id, dst_id, srcs)
+    }
+
+    fn rule(morphology: &str, flag: bool, window: u64) -> serde_json::Value {
+        serde_json::json!({
+            "morphology_id": morphology,
+            "morphology_scalar": 1,
+            "postSynapticCurrent_multiplier": 25,
+            "plasticity_flag": flag,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1,
+            "plasticity_window": window
+        })
+    }
+
+    /// Sorted (source, target, weight bits) of every synapse leaving `srcs`: bit-exact compare.
+    fn weights(npu: &Npu, srcs: &[u64]) -> Vec<(u64, u32, u32)> {
+        let npu = npu.lock().unwrap();
+        let mut out = Vec::new();
+        for s in srcs {
+            for (target, weight, _psp, _ty) in npu.get_outgoing_synapses(*s as u32) {
+                out.push((*s, target, weight.to_bits()));
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[tokio::test]
+    async fn plasticity_only_updates_keep_weights_and_morphology_change_rebuilds() {
+        let (svc, npu, src_id, dst_id, srcs) = fixture();
+        let (s, d) = (src_id.as_base_64(), dst_id.as_base_64());
+        let n = svc
+            .update_cortical_mapping(s.clone(), d.clone(), vec![rule("projector", true, 10)])
+            .await
+            .unwrap();
+        assert_eq!(n, 2, "projector over 2 neurons");
+        let initial = weights(&npu, &srcs);
+        assert_eq!(initial.len(), 2);
+        assert!(initial.iter().all(|(_, _, w)| f32::from_bits(*w) == 25.0));
+
+        // Learn: give every synapse a distinct weight (0.0 included, as in the live report).
+        {
+            let mut npu = npu.lock().unwrap();
+            for (i, (src, target, _)) in initial.iter().enumerate() {
+                assert!(npu.update_synapse_weight(
+                    NeuronId(*src as u32),
+                    NeuronId(*target),
+                    SynapticWeight(i as f32 * 3.5)
+                ));
+            }
+        }
+        let learned = weights(&npu, &srcs);
+        assert!(learned.iter().any(|(_, _, w)| f32::from_bits(*w) != 25.0));
+
+        let (src_idx, dst_idx) = {
+            let m = svc.connectome.read();
+            (
+                m.get_cortical_idx(&src_id).unwrap(),
+                m.get_cortical_idx(&dst_id).unwrap(),
+            )
+        };
+
+        // (a) flag true -> false: nothing rebuilt, learning registration dropped.
+        let n = svc
+            .update_cortical_mapping(s.clone(), d.clone(), vec![rule("projector", false, 10)])
+            .await
+            .unwrap();
+        assert_eq!(n, 0, "in-place update creates no synapses");
+        assert_eq!(weights(&npu, &srcs), learned);
+        assert!(
+            !npu.lock()
+                .unwrap()
+                .unregister_stdp_mapping(src_idx, dst_idx),
+            "flag off leaves no STDP registration"
+        );
+
+        // (a) flag false -> true (original rules): bit-identical, learning registered again.
+        svc.update_cortical_mapping(s.clone(), d.clone(), vec![rule("projector", true, 10)])
+            .await
+            .unwrap();
+        assert_eq!(weights(&npu, &srcs), learned);
+
+        // (b) plasticity parameter only (window): weights kept, registration refreshed.
+        svc.update_cortical_mapping(s.clone(), d.clone(), vec![rule("projector", true, 14)])
+            .await
+            .unwrap();
+        assert_eq!(weights(&npu, &srcs), learned);
+        assert!(
+            npu.lock()
+                .unwrap()
+                .unregister_stdp_mapping(src_idx, dst_idx),
+            "flag on registers STDP for the mapping"
+        );
+
+        // (c) morphology change still rebuilds: weights return to the rule's initial value.
+        let n = svc
+            .update_cortical_mapping(s, d, vec![rule("block_to_block", true, 14)])
+            .await
+            .unwrap();
+        assert_eq!(n, 2, "one_to_one over 2x2 neurons");
+        let rebuilt = weights(&npu, &srcs);
+        assert_eq!(rebuilt.len(), 2);
+        assert_ne!(rebuilt, learned, "rebuild resets learned weights");
+        assert!(rebuilt.iter().all(|(_, _, w)| f32::from_bits(*w) == 25.0));
+    }
+
+    #[test]
+    fn classifier_rejects_structural_changes() {
+        let base = vec![rule("projector", true, 10)];
+        let differs = ConnectomeManager::mapping_rules_differ_only_in_plasticity;
+        assert!(differs(&base, &[rule("projector", false, 10)]));
+        assert!(differs(&base, &[rule("projector", true, 99)]));
+        assert!(!differs(&base, &[rule("block_to_block", true, 10)]));
+        let mut psc = rule("projector", true, 10);
+        psc["postSynapticCurrent_multiplier"] = serde_json::json!(5);
+        assert!(!differs(&base, &[psc]));
+        let mut scalar = rule("projector", true, 10);
+        scalar["morphology_scalar"] = serde_json::json!(2);
+        assert!(!differs(&base, &[scalar]));
+        assert!(!differs(
+            &base,
+            &[rule("projector", true, 10), rule("projector", true, 10)]
+        ));
+        assert!(!differs(&[], &base));
     }
 }

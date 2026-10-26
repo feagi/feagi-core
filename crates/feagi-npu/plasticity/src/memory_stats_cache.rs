@@ -36,6 +36,11 @@ pub struct MemoryAreaStats {
     #[serde(default)]
     pub creation_failed_total: usize,
 
+    /// New-pattern creations skipped because a `memory.formation` modulator suppressed them.
+    /// Not failures.
+    #[serde(default)]
+    pub formation_suppressed_total: usize,
+
     /// Last update timestamp (milliseconds since epoch)
     pub last_updated: u64,
 }
@@ -48,6 +53,7 @@ impl Default for MemoryAreaStats {
             deleted_total: 0,
             evicted_total: 0,
             creation_failed_total: 0,
+            formation_suppressed_total: 0,
             last_updated: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -124,6 +130,17 @@ pub fn on_creation_failed(cache: &MemoryStatsCache, area_name: &str) {
     let mut stats = cache.write();
     let area_stats = stats.entry(area_name.to_string()).or_default();
     area_stats.creation_failed_total += 1;
+    area_stats.last_updated = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+}
+
+/// Update stats when a new-pattern creation was skipped by `memory.formation` suppression.
+pub fn on_formation_suppressed(cache: &MemoryStatsCache, area_name: &str) {
+    let mut stats = cache.write();
+    let area_stats = stats.entry(area_name.to_string()).or_default();
+    area_stats.formation_suppressed_total += 1;
     area_stats.last_updated = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()

@@ -293,3 +293,32 @@ impl ModulatorWrite {
         Ok(instance)
     }
 }
+
+#[cfg(test)]
+mod memory_formation_tests {
+    use super::*;
+
+    #[test]
+    fn memory_formation_instance_round_trips_through_genome_json() {
+        let mut registry = ModulatorRegistry::new();
+        registry.insert(
+            "no_new_memory".to_string(),
+            ModulatorInstance {
+                kind: ModulatorKind::MemoryFormation,
+                magnitude_percent: -100.0,
+                effect_duration_bursts: 1,
+                rest_bursts: 0,
+                graded: false,
+                full_scale_potential: None,
+                driver_cortical_id: CorticalID::modulator_driver(0),
+            },
+        );
+        let json = registry.to_json();
+        assert_eq!(json["no_new_memory"]["type"], "memory.formation");
+        let parsed = parse_modulator_registry(Some(&json)).expect("parse");
+        let instance = parsed.get("no_new_memory").expect("instance");
+        assert_eq!(instance.kind, ModulatorKind::MemoryFormation);
+        assert_eq!(instance.magnitude_percent, -100.0);
+        assert_eq!(parsed.to_json(), json);
+    }
+}

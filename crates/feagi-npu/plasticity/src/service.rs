@@ -319,6 +319,9 @@ pub struct MemoryCorticalAreaRuntimeInfo {
     /// New-pattern creations in this area that failed.
     #[serde(default)]
     pub creation_failed_total: usize,
+    /// New-pattern creations skipped by a `memory.formation` modulator (not failures).
+    #[serde(default)]
+    pub formation_suppressed_total: usize,
     /// Occupancy of the pool shared by all memory areas.
     #[serde(default)]
     pub memory_pool: MemoryPoolSnapshot,
@@ -576,6 +579,16 @@ impl PlasticityService {
             // This means plasticity will NEVER acquire NPU lock, so it's not the cause of lock contention
             return;
         }
+
+        // One NPU lock per burst: which memory areas a `memory.formation` modulator blocks.
+        let formation_suppressed: std::collections::HashSet<u32> = {
+            let npu_lock = npu.lock().unwrap();
+            memory_areas_snapshot
+                .keys()
+                .copied()
+                .filter(|idx| npu_lock.memory_formation_suppressed(*idx))
+                .collect()
+        };
 
         let mut commands = Vec::new();
         let mut array = memory_neuron_array.lock().unwrap();
@@ -964,6 +977,12 @@ impl PlasticityService {
                             neuron_id,
                         });
                     }
+                } else if formation_suppressed.contains(memory_area_idx) {
+                    // `memory.formation` at factor 0: detection ran, creation is skipped.
+                    if let Some(area_name) = memory_area_names.lock().unwrap().get(memory_area_idx)
+                    {
+                        memory_stats_cache::on_formation_suppressed(memory_stats_cache, area_name);
+                    }
                 } else {
                     // Create new memory neuron
                     tracing::debug!(target: "plasticity",
@@ -1097,6 +1116,7 @@ impl PlasticityService {
             &mut commands,
             stats,
             creation_failure_warn_limiter,
+            &formation_suppressed,
         );
         Self::run_episodic_scan(npu, &mut array, &memory_areas_snapshot, current_timestep);
 
@@ -1529,6 +1549,7 @@ impl PlasticityService {
         commands: &mut Vec<PlasticityCommand>,
         stats: &Arc<Mutex<PlasticityStats>>,
         creation_failure_warn_limiter: &Arc<Mutex<TimeLogRateLimiter>>,
+        formation_suppressed: &std::collections::HashSet<u32>,
     ) {
         let lifecycle_configs = memory_lifecycle_configs.lock().unwrap();
         for (kernel_area_idx, kernel_cfg) in memory_areas {
@@ -1601,6 +1622,21 @@ impl PlasticityService {
                         scan.class_channel_count,
                     );
                     if channels.is_empty() {
+                        continue;
+                    }
+                    if formation_suppressed.contains(kernel_area_idx)
+                        && array
+                            .find_neuron_by_pattern(*kernel_area_idx, &window.spatial_hash)
+                            .is_none()
+                    {
+                        if let Some(area_name) =
+                            memory_area_names.lock().unwrap().get(kernel_area_idx)
+                        {
+                            crate::memory_stats_cache::on_formation_suppressed(
+                                memory_stats_cache,
+                                area_name,
+                            );
+                        }
                         continue;
                     }
                     let Some(neuron_idx) = array.create_memory_neuron(
@@ -2868,14 +2904,20 @@ impl PlasticityService {
         let effective_mp_mode = self
             .memory_area_mp_mode(cortical_idx)
             .map(|mode| mode.as_str().to_string());
-        let (evicted_total, creation_failed_total) = self
+        let (evicted_total, creation_failed_total, formation_suppressed_total) = self
             .memory_area_names
             .lock()
             .unwrap()
             .get(&cortical_idx)
             .and_then(|name| memory_stats_cache::get_area_stats(&self.memory_stats_cache, name))
-            .map(|stats| (stats.evicted_total, stats.creation_failed_total))
-            .unwrap_or((0, 0));
+            .map(|stats| {
+                (
+                    stats.evicted_total,
+                    stats.creation_failed_total,
+                    stats.formation_suppressed_total,
+                )
+            })
+            .unwrap_or((0, 0, 0));
         let array = self.memory_neuron_array.lock().unwrap();
         let upstream_pattern_cache_size = self
             .pattern_detector
@@ -2887,6 +2929,7 @@ impl PlasticityService {
             effective_mp_mode,
             evicted_total,
             creation_failed_total,
+            formation_suppressed_total,
             memory_pool: MemoryPoolSnapshot {
                 pool_capacity: array.pool_capacity(),
                 pool_in_use: array.pool_in_use(),
@@ -4002,6 +4045,7 @@ mod tests {
             &mut commands,
             &service.stats,
             &service.creation_failure_warn_limiter,
+            &std::collections::HashSet::new(),
         );
 
         let expected_hash = super::spatial_signature_hash(&[vec![(0, 0, 0)]]);
@@ -4496,12 +4540,23 @@ mod tests {
     impl EvictionRig {
         /// Fire one upstream neuron (a distinct pattern per neuron) and run one plasticity pass.
         fn burst(&self, firing: Option<usize>) -> u64 {
+            self.burst_driving(firing, false)
+        }
+
+        /// Like `burst`, optionally firing the downstream neuron as a modulator driver.
+        fn burst_driving(&self, firing: Option<usize>, drive: bool) -> u64 {
             let burst = {
                 let mut guard = self.npu.lock().unwrap();
                 if let Some(which) = firing {
                     guard.inject_sensory_with_potentials(&[(
                         feagi_npu_neural::types::NeuronId(self.upstream[which]),
                         10.0,
+                    )]);
+                }
+                if drive {
+                    guard.inject_sensory_with_potentials(&[(
+                        feagi_npu_neural::types::NeuronId(self.downstream_neuron),
+                        1.0,
                     )]);
                 }
                 guard.process_burst().unwrap().burst
@@ -4525,6 +4580,33 @@ mod tests {
                 &pool,
             );
             burst
+        }
+
+        /// Bind a `memory.formation` instance driven by the downstream neuron at -100%.
+        fn bind_formation(&self, subscribe: bool) {
+            use feagi_npu_burst_engine::modulator_engine::ModulatorBinding;
+            let guard = self.npu.lock().unwrap();
+            guard.set_modulator_bindings(vec![ModulatorBinding {
+                instance_id: "no_new_memory".to_string(),
+                kind: feagi_structures::genomic::ModulatorKind::MemoryFormation,
+                magnitude_percent: -100.0,
+                graded: false,
+                full_scale_potential: 0.0,
+                driver_cortical_idx: DOWNSTREAM_IDX,
+            }]);
+            let mut subs = ahash::AHashMap::new();
+            if subscribe {
+                subs.insert(MEM_IDX, vec!["no_new_memory".to_string()]);
+            }
+            guard.set_modulator_area_subscriptions(subs);
+        }
+
+        fn area_stats(&self) -> memory_stats_cache::MemoryAreaStats {
+            memory_stats_cache::get_area_stats(
+                &self.service.memory_stats_cache,
+                &self.memory_cortical_id.as_base_64(),
+            )
+            .unwrap_or_default()
         }
 
         fn active_ids(&self) -> Vec<u32> {
@@ -4669,6 +4751,74 @@ mod tests {
             .drain_commands()
             .iter()
             .any(|c| matches!(c, PlasticityCommand::MemoryNeuronRemoved { .. })));
+    }
+
+    #[test]
+    fn memory_formation_driver_blocks_new_neurons_and_counts_them() {
+        let rig = eviction_rig(cfg(0, LtmEviction::Lru, 50));
+        rig.bind_formation(true);
+        rig.burst_driving(Some(0), true);
+        rig.burst_driving(Some(1), true);
+        assert!(
+            rig.active_ids().is_empty(),
+            "no neuron forms while suppressed"
+        );
+        let stats = rig.area_stats();
+        assert_eq!(stats.created_total, 0);
+        assert_eq!(stats.creation_failed_total, 0);
+        assert_eq!(stats.formation_suppressed_total, 2);
+        let info = rig.service.memory_cortical_area_runtime_info(MEM_IDX);
+        assert_eq!(info.formation_suppressed_total, 2);
+        assert_eq!(info.creation_failed_total, 0);
+    }
+
+    #[test]
+    fn memory_formation_forms_normally_when_driver_idle_or_unsubscribed() {
+        let rig = eviction_rig(cfg(0, LtmEviction::Lru, 50));
+        rig.bind_formation(true);
+        rig.burst_driving(Some(0), false);
+        assert_eq!(rig.active_ids().len(), 1, "driver silent: factor 1");
+        assert_eq!(rig.area_stats().formation_suppressed_total, 0);
+
+        let rig = eviction_rig(cfg(0, LtmEviction::Lru, 50));
+        rig.bind_formation(false);
+        rig.burst_driving(Some(0), true);
+        assert_eq!(rig.active_ids().len(), 1, "no subscription: no effect");
+        let stats = rig.area_stats();
+        assert_eq!(
+            (stats.created_total, stats.formation_suppressed_total),
+            (1, 0)
+        );
+    }
+
+    #[test]
+    fn memory_formation_suppression_keeps_existing_memories_firing() {
+        let rig = eviction_rig(cfg(0, LtmEviction::Lru, 50));
+        rig.bind_formation(true);
+        rig.burst_driving(Some(0), false);
+        let first = rig.active_ids();
+        assert_eq!(first.len(), 1);
+        let before = rig.service.get_stats().memory_neurons_reactivated;
+        // Known pattern reactivates while suppressed; a new pattern does not form.
+        rig.burst_driving(Some(0), true);
+        rig.burst_driving(Some(1), true);
+        assert_eq!(
+            rig.active_ids(),
+            first,
+            "existing neuron survives, none added"
+        );
+        assert_eq!(
+            rig.service.get_stats().memory_neurons_reactivated,
+            before + 1
+        );
+        let stats = rig.area_stats();
+        assert_eq!(
+            (stats.created_total, stats.formation_suppressed_total),
+            (1, 1)
+        );
+        // Releasing the driver lets the new pattern form.
+        rig.burst_driving(Some(1), false);
+        assert_eq!(rig.active_ids().len(), 2);
     }
 
     #[test]

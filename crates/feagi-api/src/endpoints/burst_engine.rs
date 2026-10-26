@@ -32,7 +32,9 @@ pub async fn get_simulation_timestep(State(state): State<ApiState>) -> ApiResult
     }
 }
 
-/// Set the simulation timestep in seconds (converted to burst frequency).
+/// Set the simulation timestep in seconds: stored in the genome's physiology AND applied live as
+/// burst frequency 1/timestep Hz (same behavior as `PUT /v1/physiology/`). Body:
+/// `{"simulation_timestep": 0.025}`. Contrast `PUT /v1/burst_engine/config`, which is live only.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/simulation_timestep",
@@ -42,19 +44,13 @@ pub async fn post_simulation_timestep(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, f64>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    let runtime_service = state.runtime_service.as_ref();
-
     if let Some(&timestep) = request.get("simulation_timestep") {
-        // Convert timestep (seconds) to frequency (Hz)
-        let frequency = if timestep > 0.0 { 1.0 / timestep } else { 0.0 };
-
-        match runtime_service.set_frequency(frequency).await {
-            Ok(_) => Ok(Json(HashMap::from([(
-                "message".to_string(),
-                format!("Timestep set to {}", timestep),
-            )]))),
-            Err(e) => Err(ApiError::internal(format!("Failed to set timestep: {}", e))),
-        }
+        let stored =
+            crate::endpoints::physiology::apply_simulation_timestep(&state, timestep).await?;
+        Ok(Json(HashMap::from([(
+            "message".to_string(),
+            format!("Timestep set to {}", stored),
+        )])))
     } else {
         Err(ApiError::invalid_input("simulation_timestep required"))
     }
@@ -1076,6 +1072,10 @@ pub async fn get_config(
 }
 
 /// Update burst engine configuration including frequency and timing parameters.
+///
+/// LIVE ONLY: changes the running engine and leaves the stored genome's
+/// `physiology.simulation_timestep` unchanged (a save or export still carries the genome's
+/// value). To store a rate in the genome and apply it live, use `PUT /v1/physiology/`.
 #[utoipa::path(
     put,
     path = "/v1/burst_engine/config",

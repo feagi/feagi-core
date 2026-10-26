@@ -251,6 +251,10 @@ pub async fn get_health_check(
                         serde_json::json!(stats.creation_failed_total),
                     );
                     inner_map.insert(
+                        "formation_suppressed_total".to_string(),
+                        serde_json::json!(stats.formation_suppressed_total),
+                    );
+                    inner_map.insert(
                         "last_updated".to_string(),
                         serde_json::json!(stats.last_updated),
                     );

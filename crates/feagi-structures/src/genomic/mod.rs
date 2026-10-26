@@ -15,8 +15,9 @@ mod sensory_cortical_unit;
 pub use brain_regions::{BrainRegion, RegionType, ROOT_BRAIN_REGION_NAME};
 pub use classifiers::{Classifier, ClassifierMapping};
 pub use modulator::{
-    gate_factor, modulator_signal, multiplicative_factor, scale_baseline, summed_reward,
-    validate_instance_fields, validate_spike_train, ModulatorKind, ModulatorValidationError,
+    gate_factor, memory_formation_factor, modulator_signal, multiplicative_factor, scale_baseline,
+    summed_reward, validate_instance_fields, validate_spike_train, ModulatorKind,
+    ModulatorValidationError,
 };
 pub use motor_cortical_unit::MotorCorticalUnit;
 pub use sensory_cortical_unit::SensoryCorticalUnit;

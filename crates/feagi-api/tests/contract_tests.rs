@@ -94,6 +94,11 @@ use tower::ServiceExt;
 
 /// Build ApiState with initialized components.
 /// Each test gets a fresh, isolated manager (no singleton conflicts)
+/// Last frequency applied through the mock runtime (f64 bits); 0 means never set.
+static MOCK_RUNTIME_FREQUENCY_BITS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+use std::sync::atomic::Ordering;
+
 fn build_test_state() -> ApiState {
     if std::env::var("FEAGI_CONFIG_PATH").is_err() {
         std::env::set_var(
@@ -210,10 +215,9 @@ fn build_test_state() -> ApiState {
                 avg_burst_time_ms: 0.0,
             })
         }
-        async fn set_frequency(&self, _frequency: f64) -> feagi_services::ServiceResult<()> {
-            Err(feagi_services::ServiceError::NotImplemented(
-                "MockRuntimeService".to_string(),
-            ))
+        async fn set_frequency(&self, frequency: f64) -> feagi_services::ServiceResult<()> {
+            MOCK_RUNTIME_FREQUENCY_BITS.store(frequency.to_bits(), Ordering::SeqCst);
+            Ok(())
         }
         async fn get_burst_count(&self) -> feagi_services::ServiceResult<u64> {
             Ok(0)
@@ -3792,4 +3796,130 @@ async fn test_saved_genome_carries_change_history() {
     assert_eq!(history.len(), 1);
     assert_eq!(history[0]["operation"]["kind"], "create_cortical_areas");
     assert_eq!(history[0]["targets"][0]["id"], cortical_id.as_str());
+}
+
+// ---- simulation_timestep: physiology stores + applies live; burst_engine/config is live only ----
+
+/// Tests share one process-wide mock frequency cell, so they run under this lock.
+/// Async mutex so the guard can stay held across `.await` without blocking a worker.
+static TIMESTEP_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+fn mock_applied_frequency_hz() -> f64 {
+    f64::from_bits(MOCK_RUNTIME_FREQUENCY_BITS.load(Ordering::SeqCst))
+}
+
+async fn stored_timestep(state: &ApiState) -> f64 {
+    // Read the way a save/export does.
+    let json = state
+        .genome_service
+        .save_genome(feagi_services::types::SaveGenomeParams {
+            genome_id: None,
+            genome_title: None,
+        })
+        .await
+        .expect("save genome");
+    let value: Value = serde_json::from_str(&json).expect("genome json");
+    value["physiology"]["simulation_timestep"]
+        .as_f64()
+        .expect("physiology.simulation_timestep in saved genome")
+}
+
+#[tokio::test]
+async fn test_physiology_timestep_is_stored_and_applied_live() {
+    let _guard = TIMESTEP_TEST_LOCK.lock().await;
+    let state = build_test_state();
+    MOCK_RUNTIME_FREQUENCY_BITS.store(0, Ordering::SeqCst);
+    let before = state
+        .genome_service
+        .get_genome_info()
+        .await
+        .map(|i| i.simulation_timestep)
+        .unwrap_or(0.0);
+    assert!((before - 0.0125).abs() > 1e-9);
+
+    let (status, body) = request_json_as(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/physiology/",
+        "t",
+        json!({"physiology": {"simulation_timestep": 0.0125}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["success"], json!(true));
+    assert_eq!(body["updated"]["simulation_timestep"], json!(0.0125));
+    // Running rate follows.
+    assert!((mock_applied_frequency_hz() - 80.0).abs() < 1e-9);
+    // Stored genome follows, and a save/export carries it.
+    assert!((stored_timestep(&state).await - 0.0125).abs() < 1e-12);
+    let (status, _) = request_json_as(
+        create_http_server(state.clone()),
+        "GET",
+        "/v1/genome/download",
+        "t",
+        json!(null),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_burst_engine_config_leaves_stored_timestep_unchanged() {
+    let _guard = TIMESTEP_TEST_LOCK.lock().await;
+    let state = build_test_state();
+    MOCK_RUNTIME_FREQUENCY_BITS.store(0, Ordering::SeqCst);
+    let (status, _) = request_json_as(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/physiology/",
+        "t",
+        json!({"physiology": {"simulation_timestep": 0.0125}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let stored_before = stored_timestep(&state).await;
+    assert!((stored_before - 0.0125).abs() < 1e-12);
+
+    let (status, body) = request_json_as(
+        create_http_server(state.clone()),
+        "PUT",
+        "/v1/burst_engine/config",
+        "t",
+        json!({"burst_frequency_hz": 40.0}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!((mock_applied_frequency_hz() - 40.0).abs() < 1e-9);
+    assert!((stored_timestep(&state).await - stored_before).abs() < 1e-15);
+}
+
+#[tokio::test]
+async fn test_physiology_timestep_rejects_invalid_values() {
+    let _guard = TIMESTEP_TEST_LOCK.lock().await;
+    let state = build_test_state();
+    let stored_before = stored_timestep(&state).await;
+    for bad in [json!(0.0), json!(-0.01), json!("fast"), json!(1e-320)] {
+        MOCK_RUNTIME_FREQUENCY_BITS.store(0, Ordering::SeqCst);
+        let (status, body) = request_json_as(
+            create_http_server(state.clone()),
+            "PUT",
+            "/v1/physiology/",
+            "t",
+            json!({"physiology": {"simulation_timestep": bad}}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "value {bad}: {body}");
+        assert_eq!(mock_applied_frequency_hz(), 0.0, "rate changed for {bad}");
+        assert!((stored_timestep(&state).await - stored_before).abs() < 1e-15);
+    }
+    // The burst_engine POST route shares the validation.
+    let (status, _) = request_json_as(
+        create_http_server(state.clone()),
+        "POST",
+        "/v1/burst_engine/simulation_timestep",
+        "t",
+        json!({"simulation_timestep": 0.0}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }

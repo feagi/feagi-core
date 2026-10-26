@@ -216,7 +216,7 @@ fn controller_runs_full_rollout_and_streams_lifecycle_events() {
 }
 
 #[test]
-fn controller_surfaces_cancellation_as_failed() {
+fn controller_surfaces_cancellation_as_cancelled() {
     let run_id = RunId("run-ctrl-cancel".to_string());
     let data = samples();
 
@@ -259,12 +259,13 @@ fn controller_surfaces_cancellation_as_failed() {
 
     let error = control.execute(&mut sink).unwrap_err();
     assert!(matches!(error, TrainerError::Cancelled(_)));
-    assert_eq!(control.status(), RunStatus::Failed);
+    assert_eq!(control.status(), RunStatus::Cancelled);
 
     let kinds: Vec<&RunEventKind> = sink.events.iter().map(|e| &e.kind).collect();
-    // Running first, Failed last; no Completed.
+    // Running first, Cancelled last; no Completed, no Failed.
     assert!(matches!(kinds.first(), Some(RunEventKind::Running)));
-    assert!(matches!(kinds.last(), Some(RunEventKind::Failed { .. })));
+    assert!(matches!(kinds.last(), Some(RunEventKind::Cancelled { .. })));
+    assert!(!kinds.iter().any(|k| matches!(k, RunEventKind::Failed { .. })));
     assert!(!kinds.iter().any(|k| matches!(k, RunEventKind::Completed)));
 }
 

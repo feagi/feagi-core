@@ -131,9 +131,14 @@ pub enum RunEventKind {
         /// Samples (or holds) planned for the split.
         samples_total: u64,
     },
-    /// The run terminated with an error (includes cooperative cancellation).
+    /// The run terminated with an error.
     Failed {
         /// Human-readable failure description.
+        message: String,
+    },
+    /// The host stopped the run through cooperative cancellation.
+    Cancelled {
+        /// Human-readable cancellation reason.
         message: String,
     },
     /// A non-fatal condition; the run continues (e.g. no detection readout from FEAGI).
@@ -257,7 +262,13 @@ mod tests {
                 message: "cancelled".to_string(),
             },
         );
-        for event in [update, failed] {
+        let cancelled = RunEvent::new(
+            run_id(),
+            RunEventKind::Cancelled {
+                message: "stopped".to_string(),
+            },
+        );
+        for event in [update, failed, cancelled] {
             let json = serde_json::to_string(&event).expect("serialize");
             let restored: RunEvent = serde_json::from_str(&json).expect("deserialize");
             assert_eq!(event, restored);

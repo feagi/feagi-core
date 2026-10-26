@@ -236,6 +236,9 @@ pub struct MemoryCorticalAreaResponse {
     pub evicted_total: usize,
     /// New-pattern creations in this area that failed because no slot could be freed.
     pub creation_failed_total: usize,
+    /// New-pattern creations skipped because a subscribed `memory.formation` modulator is
+    /// suppressing formation. Not failures.
+    pub formation_suppressed_total: usize,
     /// Occupancy of the pool shared by all memory areas.
     pub memory_pool: MemoryPoolResponse,
     /// Mode the plasticity layer actually runs: "pattern_only", "mp_learning",
@@ -3730,6 +3733,7 @@ pub async fn get_memory_cortical_area(
         memory_parameters: memory_parameters_from_reported_area(&area, &mem_props),
         evicted_total: runtime.evicted_total,
         creation_failed_total: runtime.creation_failed_total,
+        formation_suppressed_total: runtime.formation_suppressed_total,
         memory_pool: MemoryPoolResponse {
             pool_capacity: runtime.memory_pool.pool_capacity,
             pool_in_use: runtime.memory_pool.pool_in_use,

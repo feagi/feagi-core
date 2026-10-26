@@ -17,12 +17,13 @@ use serde::{Deserialize, Serialize};
 use crate::binding::reward::{AffectChannel, RewardSignal};
 use crate::contracts::{
     AttemptStand, BackendFingerprint, BackendKind, ConnectomeHash, ContentHash, DatasetAssetId,
-    EvaluationProtocolVersion, MetricScope, PluginId, PluginRef, RunEvent, RunEventKind, RunId,
-    Scorecard, ScorecardId, ScorecardStatus, ScorecardVisibility, SplitId,
+    EvaluationProtocolVersion, MetadataValue, MetricScope, PluginId, PluginRef, RunEvent,
+    RunEventKind, RunId, Scorecard, ScorecardId, ScorecardStatus, ScorecardVisibility, SplitId,
 };
 use crate::control::{CancelToken, RunEventSink};
 use crate::error::TrainerError;
 use crate::metrics::episodic_control::EpisodicControlMetricPack;
+use crate::plasticity_freeze::PlasticityControl;
 use crate::reach_hold::trainer_package_version;
 
 fn default_support_deadband_deg() -> f64 {
@@ -104,10 +105,12 @@ pub struct BalanceFeetCriterion {
     /// Support lowered by this much after each graduating block. Default 0.1.
     #[serde(default = "default_support_step")]
     pub support_step: f64,
-    /// Lowest support level. The test phase runs at this level. Default 0.0.
+    /// Lowest support level the train schedule can reach. The test phase ignores it and always
+    /// runs at support 0. Default 0.0.
     #[serde(default = "default_support_min")]
     pub support_min: f64,
-    /// Seconds the spring holds full support after a reset (samples flagged settling).
+    /// Seconds after a reset during which samples are flagged settling and do not count. Train
+    /// holds a full grip for them; the test phase holds no support (spring at level 0).
     #[serde(default = "default_settle_s")]
     pub settle_s: f64,
     /// Attempts per support block. Default 3.
@@ -307,6 +310,17 @@ impl BalanceFeetCriterion {
                 "hold_s must be <= attempt_cap_s".to_string(),
             ));
         }
+        // An attempt ends at `hold_s` (success) or `attempt_cap_s`, and hold_s <= cap, so no
+        // attempt can balance longer than `hold_s`: a larger threshold can never graduate.
+        if let Some(grad) = self.graduate_balanced_s {
+            if grad.is_finite() && grad > self.hold_s {
+                return Err(TrainerError::Config(format!(
+                    "graduate_balanced_s ({grad}) must be <= hold_s ({}) and attempt_cap_s ({}); \
+                     an attempt never balances longer than hold_s, so the level could never graduate",
+                    self.hold_s, self.attempt_cap_s
+                )));
+            }
+        }
         self.support_config().validate()?;
         if !non_negative(self.settle_s) {
             return Err(TrainerError::Config(
@@ -505,14 +519,6 @@ impl SupportSchedule {
         self.level
     }
 
-    /// Goal level of a test phase: `support_min`.
-    ///
-    /// A test that follows a train phase uses [`test_support_level`] instead, so an
-    /// ungraduated curriculum is scored at the level training left, not at this floor.
-    pub fn for_test_phase(config: &SupportConfig) -> f64 {
-        config.min
-    }
-
     /// Fold one finished attempt into the current block with `balanced_s` of 0. Use
     /// [`SupportSchedule::record_attempt`] when graduating on time balanced.
     pub fn record(&mut self, outcome: BalanceAttemptOutcome) {
@@ -550,32 +556,6 @@ impl SupportSchedule {
             }
         }
     }
-}
-
-/// Support level a test phase should score.
-///
-/// `support_min` when `train` is absent or that phase graduated. Otherwise the level the
-/// train schedule left for its next attempt, clamped to `[config.min, config.start]`.
-pub fn test_support_level(
-    config: &SupportConfig,
-    train: Option<&BalancePhaseReport>,
-) -> Result<f64, TrainerError> {
-    let Some(report) = train else {
-        return Ok(config.min);
-    };
-    if report.graduated {
-        return Ok(config.min);
-    }
-    let level = match report.support_level_next {
-        Some(level) => level,
-        None => SupportSchedule::level_after_attempts(*config, &report.attempts),
-    };
-    if !level.is_finite() {
-        return Err(TrainerError::Config(
-            "train report support level is not finite".to_string(),
-        ));
-    }
-    Ok(SupportSchedule::resume(*config, level).current_level())
 }
 
 /// How a phase picks the support level of each attempt.
@@ -1604,6 +1584,33 @@ pub struct BalancePhaseReport {
     /// Grip level the next training attempt should use. Absent for a fixed test phase.
     #[serde(default)]
     pub support_level_next: Option<f64>,
+    /// Conditions of a brain-only test phase. Absent for a train phase.
+    #[serde(default)]
+    pub brain_only: Option<BrainOnlyTest>,
+}
+
+/// How a test phase ran: the brain alone, with nothing from the Trainer in the loop.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BrainOnlyTest {
+    /// Support level of every attempt. Always 0.
+    pub support: f64,
+    /// Support during the opening settle. Always 0.
+    pub settle_support: f64,
+    /// Reward delivered to the brain: `none`.
+    pub reward: String,
+    /// Perturbation pulses were applied. Always false.
+    pub perturbation: bool,
+    /// Every plastic mapping was frozen for the phase.
+    pub plasticity_frozen: bool,
+    /// Why plasticity was not frozen. Absent when it was.
+    #[serde(default)]
+    pub plasticity_reason: Option<String>,
+    /// Mappings that were frozen.
+    #[serde(default)]
+    pub mappings_frozen: u32,
+    /// Memory-neuron formation was paused. FEAGI has no route for it, so false.
+    #[serde(default)]
+    pub memory_formation_paused: bool,
 }
 
 /// Mean, median and max of the per-attempt balanced time, in bursts and seconds.
@@ -1751,6 +1758,7 @@ impl BalancePhaseReport {
             balanced,
             balanced_by_support,
             support_level_next: None,
+            brain_only: None,
         })
     }
 }
@@ -1794,6 +1802,28 @@ pub fn balance_phase_metrics(phase: &BalancePhaseReport) -> BTreeMap<String, f64
     );
     for (level, rate) in &phase.success_rate_by_support {
         metrics.insert(format!("success_rate_at_support_{level}"), *rate);
+    }
+    if let Some(test) = &phase.brain_only {
+        metrics.insert("brain_only".to_string(), 1.0);
+        metrics.insert("test_support".to_string(), test.support);
+        metrics.insert("test_settle_support".to_string(), test.settle_support);
+        metrics.insert("test_reward_delivered".to_string(), 0.0);
+        metrics.insert(
+            "test_perturbation".to_string(),
+            if test.perturbation { 1.0 } else { 0.0 },
+        );
+        metrics.insert(
+            "test_plasticity_frozen".to_string(),
+            if test.plasticity_frozen { 1.0 } else { 0.0 },
+        );
+        metrics.insert(
+            "test_memory_formation_paused".to_string(),
+            if test.memory_formation_paused {
+                1.0
+            } else {
+                0.0
+            },
+        );
     }
     insert_balanced_metrics(&mut metrics, "", &phase.balanced);
     for (level, stats) in &phase.balanced_by_support {
@@ -1860,8 +1890,38 @@ pub fn balance_phase_scorecard(
         skip: None,
         elapsed_ms: None,
         sample_draw_seed: None,
-        metadata: BTreeMap::new(),
+        metadata: balance_phase_metadata(phase),
     }
+}
+
+/// Scorecard metadata: the brain-only conditions of a test phase, in words.
+fn balance_phase_metadata(phase: &BalancePhaseReport) -> BTreeMap<String, MetadataValue> {
+    let mut metadata = BTreeMap::new();
+    if let Some(test) = &phase.brain_only {
+        metadata.insert(
+            "test_mode".to_string(),
+            MetadataValue::Text("brain_only".to_string()),
+        );
+        metadata.insert(
+            "test_reward".to_string(),
+            MetadataValue::Text(test.reward.clone()),
+        );
+        metadata.insert(
+            "test_plasticity_frozen".to_string(),
+            MetadataValue::Bool(test.plasticity_frozen),
+        );
+        if let Some(reason) = &test.plasticity_reason {
+            metadata.insert(
+                "test_plasticity_reason".to_string(),
+                MetadataValue::Text(reason.clone()),
+            );
+        }
+        metadata.insert(
+            "test_graduated".to_string(),
+            MetadataValue::Bool(phase.graduated),
+        );
+    }
+    metadata
 }
 
 /// Controller side of one balance session: the generic physics primitives of the controller
@@ -1916,11 +1976,14 @@ pub struct BalancePhaseRun<'a> {
     pub criterion: &'a BalanceFeetCriterion,
     /// Run the progress events are stamped with.
     pub run_id: &'a RunId,
-    /// Support policy. `None`: `train` follows the schedule, `test` runs at `support_min`.
-    /// The desktop test phase passes [`SupportMode::Fixed`] from [`test_support_level`].
+    /// Support policy. `None`: `train` follows the schedule, `test` runs at support 0. A
+    /// test phase accepts only `None` or `Fixed(0.0)`.
     pub support_mode: Option<SupportMode>,
-    /// Affect delivery. `None` keeps the no-affect behavior.
+    /// Affect delivery. `None` keeps the no-affect behavior. A test phase refuses a sink.
     pub deliver_reward: Option<DeliverReward<'a>>,
+    /// Freeze/restore of learning around a test phase (ignored by train). `None` runs the
+    /// test unfrozen and the report says why.
+    pub plasticity: Option<&'a mut dyn PlasticityControl>,
     /// Which policy builds the affect signals when `deliver_reward` is set.
     pub reward_policy: BalanceRewardPolicy,
 }
@@ -1932,6 +1995,11 @@ struct BalanceSession {
 }
 
 /// Run one phase (`train` or `test`) and emit its progress.
+///
+/// A `test` phase measures the brain alone: support 0 for the whole attempt (the spring is set
+/// with zero gains at level 0, settle included), no perturbation pulses, no reward, and
+/// plasticity frozen through `run.plasticity`, restored on every exit path. The reset to the
+/// start keyframe stays. Configuration that would interfere is refused or overridden.
 pub fn run_balance_phase(
     run: &mut BalancePhaseRun<'_>,
     controller: &mut dyn BalanceController,
@@ -1951,11 +2019,24 @@ pub fn run_balance_phase(
             run.phase
         )));
     }
+    let brain_only = run.phase == "test";
+    if brain_only {
+        if run.deliver_reward.is_some() {
+            return Err(TrainerError::Config(
+                "the test phase measures the brain only and takes no reward sink".to_string(),
+            ));
+        }
+        if !matches!(run.support_mode, None | Some(SupportMode::Fixed(0.0))) {
+            return Err(TrainerError::Config(
+                "the test phase measures the brain only and runs at support 0".to_string(),
+            ));
+        }
+    }
     let support = run.criterion.support_config();
-    let mode = run.support_mode.unwrap_or(if run.phase == "train" {
-        SupportMode::Schedule
+    let mode = run.support_mode.unwrap_or(if brain_only {
+        SupportMode::Fixed(0.0)
     } else {
-        SupportMode::Fixed(SupportSchedule::for_test_phase(&support))
+        SupportMode::Schedule
     });
     if let SupportMode::Fixed(level) = mode {
         if !level.is_finite() || !(0.0..=1.0).contains(&level) {
@@ -1964,12 +2045,99 @@ pub fn run_balance_phase(
             ));
         }
     }
+    let mut test_criterion;
+    let criterion: &BalanceFeetCriterion = if brain_only && run.criterion.perturb_interval_s != 0.0
+    {
+        test_criterion = run.criterion.clone();
+        test_criterion.perturb_interval_s = 0.0;
+        &test_criterion
+    } else {
+        run.criterion
+    };
+
+    // Freeze learning for a test, then run, then restore on every exit path.
+    let mut conditions = brain_only.then(|| BrainOnlyTest {
+        support: 0.0,
+        settle_support: 0.0,
+        reward: "none".to_string(),
+        perturbation: false,
+        plasticity_frozen: false,
+        plasticity_reason: None,
+        mappings_frozen: 0,
+        memory_formation_paused: false,
+    });
+    let mut freeze_attempted = false;
+    if let Some(conditions) = conditions.as_mut() {
+        match run.plasticity.as_deref_mut() {
+            Some(control) => {
+                freeze_attempted = true;
+                match control.freeze() {
+                    Ok(outcome) => {
+                        conditions.plasticity_frozen = true;
+                        conditions.mappings_frozen = outcome.mappings_frozen;
+                        conditions.memory_formation_paused = outcome.memory_formation_paused;
+                    }
+                    Err(error) => conditions.plasticity_reason = Some(error.to_string()),
+                }
+            }
+            None => {
+                conditions.plasticity_reason =
+                    Some("no plasticity control was supplied".to_string());
+            }
+        }
+    }
+    let result = run_phase_attempts(
+        run,
+        criterion,
+        &support,
+        mode,
+        conditions,
+        controller,
+        present_goal,
+        events,
+        cancel,
+    );
+    let restored = if freeze_attempted {
+        run.plasticity
+            .as_deref_mut()
+            .map(|control| control.restore())
+    } else {
+        None
+    };
+    match (result, restored) {
+        (Ok(report), None | Some(Ok(()))) => Ok(report),
+        (Ok(_), Some(Err(restore))) => Err(TrainerError::Runtime(format!(
+            "test finished but learning stayed frozen: {restore}"
+        ))),
+        (Err(error), None | Some(Ok(()))) => Err(error),
+        (Err(error), Some(Err(restore))) => Err(match error {
+            TrainerError::Cancelled(message) => {
+                TrainerError::Cancelled(format!("{message}; learning stayed frozen: {restore}"))
+            }
+            other => TrainerError::Runtime(format!("{other}; learning stayed frozen: {restore}")),
+        }),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_phase_attempts(
+    run: &mut BalancePhaseRun<'_>,
+    criterion: &BalanceFeetCriterion,
+    support: &SupportConfig,
+    mode: SupportMode,
+    conditions: Option<BrainOnlyTest>,
+    controller: &mut dyn BalanceController,
+    present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
+    events: &mut dyn RunEventSink,
+    cancel: &CancelToken,
+) -> Result<BalancePhaseReport, TrainerError> {
+    let brain_only = conditions.is_some();
     let info = controller.model_info()?;
-    check_model(&info, run.criterion)?;
+    check_model(&info, criterion)?;
     let mut session = BalanceSession { info, sizing: None };
     let mut schedule = match mode {
-        SupportMode::Resume(level) => SupportSchedule::resume(support, level),
-        _ => SupportSchedule::new(support),
+        SupportMode::Resume(level) => SupportSchedule::resume(*support, level),
+        _ => SupportSchedule::new(*support),
     };
     let samples_total = run.seeds.len() as u64;
     let mut attempts = Vec::with_capacity(run.seeds.len());
@@ -1985,8 +2153,9 @@ pub fn run_balance_phase(
         };
         let record = run_balance_attempt(
             *seed,
-            run.criterion,
+            criterion,
             level,
+            brain_only,
             controller,
             &mut session,
             present_goal,
@@ -2021,11 +2190,17 @@ pub fn run_balance_phase(
             },
         ));
     }
-    let mut report = BalancePhaseReport::from_attempts_with(attempts, &support)?;
-    report.spring_gains = session.sizing.map(|(_, gains)| gains);
+    let mut report = BalancePhaseReport::from_attempts_with(attempts, support)?;
+    // A brain-only test applies no spring (zero gains), so there are no sized gains to report.
+    report.spring_gains = if brain_only {
+        None
+    } else {
+        session.sizing.map(|(_, gains)| gains)
+    };
     if !matches!(mode, SupportMode::Fixed(_)) {
         report.support_level_next = Some(schedule.current_level());
     }
+    report.brain_only = conditions;
     events.emit(RunEvent::new(
         run.run_id.clone(),
         RunEventKind::MetricUpdate {
@@ -2168,6 +2343,7 @@ fn run_balance_attempt(
     seed: u64,
     criterion: &BalanceFeetCriterion,
     support_level: f64,
+    brain_only: bool,
     controller: &mut dyn BalanceController,
     session: &mut BalanceSession,
     present_goal: &mut dyn FnMut([f64; 3]) -> Result<(), TrainerError>,
@@ -2206,17 +2382,30 @@ fn run_balance_attempt(
             sized
         }
     };
-    let settle_level = if criterion.settle_s > 0.0 {
+    // A brain-only attempt never supports the body: the spring exists (so measure reports its
+    // wrench) but has zero gains, no gravity compensation and level 0 from reset to the end.
+    let settle_level = if brain_only {
+        0.0
+    } else if criterion.settle_s > 0.0 {
         1.0
     } else {
         support_level
     };
-    controller.set_body_spring(
-        &torso,
-        &gains,
-        settle_level,
-        criterion.support_deadband_deg.to_radians(),
-    )?;
+    let (gains, deadband_rad) = if brain_only {
+        (
+            SpringGains {
+                k_rot: 0.0,
+                d_rot: 0.0,
+                k_lin: [0.0; 3],
+                d_lin: [0.0; 3],
+                gravity_comp: 0.0,
+            },
+            0.0,
+        )
+    } else {
+        (gains, criterion.support_deadband_deg.to_radians())
+    };
+    controller.set_body_spring(&torso, &gains, settle_level, deadband_rad)?;
     let t0 = first.sim_time_s;
     let steps_per_burst = criterion.burst_period_s / session.info.timestep_s;
     let features = upright_goal_features();
@@ -2246,7 +2435,13 @@ fn run_balance_attempt(
         if !settling {
             past_settle = true;
         }
-        let level_now = if settling { 1.0 } else { support_level };
+        let level_now = if brain_only {
+            0.0
+        } else if settling {
+            1.0
+        } else {
+            support_level
+        };
         let body = reading
             .bodies
             .get(&torso)
@@ -2854,33 +3049,6 @@ mod tests {
             feed(&mut low, &[Success; 3]);
         }
         assert_eq!(low.current_level(), 0.0, "clamps at min");
-        assert_eq!(SupportSchedule::for_test_phase(&cfg()), 0.0);
-    }
-
-    #[test]
-    fn test_phase_stays_at_the_train_level_until_graduation() {
-        let config = cfg();
-        assert_eq!(test_support_level(&config, None).expect("level"), 0.0);
-        let mut report = BalancePhaseReport::from_attempts(vec![record(
-            BalanceAttemptOutcome::Truncated,
-            0.6,
-            0.7,
-        )])
-        .expect("report");
-        report.graduated = false;
-        report.support_level_next = Some(0.7);
-        assert_eq!(
-            test_support_level(&config, Some(&report)).expect("level"),
-            0.7
-        );
-        report.graduated = true;
-        assert_eq!(
-            test_support_level(&config, Some(&report)).expect("level"),
-            0.0
-        );
-        report.graduated = false;
-        report.support_level_next = Some(f64::NAN);
-        assert!(test_support_level(&config, Some(&report)).is_err());
     }
 
     #[test]
@@ -3391,6 +3559,38 @@ mod tests {
         assert!(bad.validate().is_err());
     }
 
+    #[test]
+    fn graduate_balanced_s_above_hold_or_cap_is_rejected() {
+        let mut c = criterion();
+        c.hold_s = 3.0;
+        c.attempt_cap_s = 6.0;
+        c.graduate_balanced_s = Some(10.0);
+        let err = c.validate().unwrap_err().to_string();
+        assert!(err.contains("graduate_balanced_s"), "{err}");
+        c.graduate_balanced_s = Some(3.5);
+        assert!(c.validate().is_err(), "above hold_s");
+        c.graduate_balanced_s = Some(3.0);
+        assert!(c.validate().is_ok(), "equal to hold_s is allowed");
+        c.graduate_balanced_s = None;
+        assert!(c.validate().is_ok());
+    }
+
+    #[test]
+    fn two_failed_blocks_raise_support_after_attempts_per_level_each() {
+        // Documented rule: a failed block holds the level; two consecutive failed blocks raise it.
+        let mut config = cfg();
+        config.attempts_per_level = 2;
+        config.start = 1.0;
+        config.step = 0.5;
+        let mut s = SupportSchedule::resume(config, 0.5);
+        let mut levels = Vec::new();
+        for _ in 0..6 {
+            levels.push(s.current_level());
+            s.record(BalanceAttemptOutcome::Death);
+        }
+        assert_eq!(levels, vec![0.5, 0.5, 0.5, 0.5, 1.0, 1.0]);
+    }
+
     // ---- mock controller: the generic physics primitives of the contract ----
 
     #[derive(Debug, Clone, Copy)]
@@ -3623,6 +3823,7 @@ mod tests {
             run_id: &run_id,
             support_mode: None,
             deliver_reward: None,
+            plasticity: None,
             reward_policy: BalanceRewardPolicy::Affect,
         };
         run_balance_phase(
@@ -3763,22 +3964,25 @@ mod tests {
             mock.calls.last().map(String::as_str),
             Some("clear_body_spring")
         );
-        // settle (0.5 s) at level 1, then level 0 (test phase = support_min)
-        assert_eq!(mock.spring_sets[0].1, 1.0);
-        assert_eq!(mock.level_updates.len(), 1);
-        assert_eq!(mock.level_updates[0].0, 0.0);
-        assert!(
-            (mock.level_updates[0].1 - 0.5).abs() < 0.051,
-            "{:?}",
-            mock.level_updates
-        );
-        assert!(mock.spring_sets[0].2 == 0.0);
+        // brain-only: the spring is set once with zero gains at level 0, settle included
+        assert_eq!(mock.spring_sets.len(), 1);
+        assert_eq!(mock.spring_sets[0].1, 0.0);
+        assert_eq!(mock.spring_sets[0].2, 0.0);
+        assert_eq!(mock.spring_sets[0].0, zero_gains());
+        assert!(mock.level_updates.is_empty(), "{:?}", mock.level_updates);
+        assert!(mock.pulses.is_empty());
         assert_eq!(
             mock.count("measure"),
             1 + 9 + 10,
             "sizing read + 9 settle + 10 hold"
         );
-        assert!(report.spring_gains.is_some());
+        assert!(report.spring_gains.is_none(), "no spring was applied");
+        let test = report.brain_only.as_ref().expect("brain-only record");
+        assert_eq!((test.support, test.settle_support), (0.0, 0.0));
+        assert_eq!(test.reward, "none");
+        assert!(!test.perturbation);
+        assert!(!test.plasticity_frozen, "no control was supplied");
+        assert!(test.plasticity_reason.is_some());
     }
 
     #[test]
@@ -3797,6 +4001,7 @@ mod tests {
             run_id: &run_id,
             support_mode: None,
             deliver_reward: None,
+            plasticity: None,
             reward_policy: BalanceRewardPolicy::Affect,
         };
         let report = run_balance_phase(
@@ -3926,7 +4131,7 @@ mod tests {
     }
 
     #[test]
-    fn death_after_settle_keeps_the_attempt_grip_when_sim_time_rewinds() {
+    fn test_death_after_settle_stays_at_support_zero_when_sim_time_rewinds() {
         let mut c = criterion_for(2, 0.05);
         c.settle_s = 0.5;
         c.hold_s = 10.0;
@@ -3977,19 +4182,18 @@ mod tests {
                 }
             }),
         );
-        let mut during_c = c.clone();
-        during_c.support_min = 0.3;
+        let during_c = c.clone();
         let during = run_phase(&during_c, &mut early, "test", &[1]).expect("phase");
         assert_eq!(during.attempts[0].outcome, BalanceAttemptOutcome::Death);
         assert_eq!(during.attempts[0].balanced_s, 0.0);
         assert!(
-            (during.attempts[0].support_level - 0.3).abs() < 1.0e-9,
-            "a death inside the settle records the attempt grip, not the settle spring, got {}",
+            during.attempts[0].support_level.abs() < 1.0e-9,
+            "a test death inside the settle records support 0, got {}",
             during.attempts[0].support_level
         );
         assert_eq!(
-            early.spring_sets[0].1, 1.0,
-            "the settle spring stays at a full grip"
+            early.spring_sets[0].1, 0.0,
+            "the test settle spring carries no support"
         );
     }
 
@@ -4085,12 +4289,13 @@ mod tests {
             let period = 1.0 / hz;
             let mut c = criterion_for(2, period);
             c.settle_s = 0.5;
+            c.support_start = 0.5;
             c.hold_s = 1.0;
             c.attempt_cap_s = 4.0;
             c.perturb_interval_s = 0.4;
             c.perturb_duration_s = 0.1;
             let mut mock = MockController::new(period, 2, Box::new(|_, _| upright_step()));
-            let report = run_phase(&c, &mut mock, "test", &[3]).expect("phase");
+            let report = run_phase(&c, &mut mock, "train", &[3]).expect("phase");
             let attempt = &report.attempts[0];
             assert_eq!(attempt.outcome, BalanceAttemptOutcome::Success);
             let end_s = mock.seconds();
@@ -4120,11 +4325,12 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_delivers_reward_from_trainer_samples() {
+    fn train_phase_delivers_reward_from_trainer_samples() {
         let mut c = criterion_for(2, 0.05);
         c.settle_s = 0.0;
         c.hold_s = 0.1;
         c.attempt_cap_s = 1.0;
+        c.support_start = 0.0;
         let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
         let mut delivered: Vec<RewardSignal> = Vec::new();
         let mut sink = |signals: &[RewardSignal]| -> Result<(), TrainerError> {
@@ -4132,14 +4338,15 @@ mod tests {
             Ok(())
         };
         let mut events = CollectingEventSink::default();
-        let run_id = RunId("balance-test".to_string());
+        let run_id = RunId("balance-train".to_string());
         let mut run = BalancePhaseRun {
-            phase: "test",
+            phase: "train",
             seeds: &[1],
             criterion: &c,
             run_id: &run_id,
             support_mode: None,
             deliver_reward: Some(&mut sink),
+            plasticity: None,
             reward_policy: BalanceRewardPolicy::Affect,
         };
         run_balance_phase(
@@ -4155,6 +4362,297 @@ mod tests {
         assert_eq!(delivered[0].magnitude, 0.1);
         assert_eq!(delivered[1].channel, AffectChannel::Pleasure);
         assert_eq!(delivered[1].magnitude, 1.0);
+    }
+
+    // ---- brain-only test phase ----
+
+    fn zero_gains() -> SpringGains {
+        SpringGains {
+            k_rot: 0.0,
+            d_rot: 0.0,
+            k_lin: [0.0; 3],
+            d_lin: [0.0; 3],
+            gravity_comp: 0.0,
+        }
+    }
+
+    /// Records freeze/restore calls; `frozen` is readable from the goal presenter.
+    #[derive(Default)]
+    struct MockPlasticity {
+        frozen: std::rc::Rc<std::cell::Cell<bool>>,
+        freezes: u32,
+        restores: u32,
+        fail_freeze: bool,
+        fail_restore: bool,
+    }
+
+    impl PlasticityControl for MockPlasticity {
+        fn freeze(
+            &mut self,
+        ) -> Result<crate::plasticity_freeze::PlasticityFreezeOutcome, TrainerError> {
+            self.freezes += 1;
+            if self.fail_freeze {
+                return Err(TrainerError::Runtime("freeze refused".to_string()));
+            }
+            self.frozen.set(true);
+            Ok(crate::plasticity_freeze::PlasticityFreezeOutcome {
+                mappings_frozen: 3,
+                memory_formation_paused: false,
+            })
+        }
+
+        fn restore(&mut self) -> Result<(), TrainerError> {
+            self.restores += 1;
+            self.frozen.set(false);
+            if self.fail_restore {
+                return Err(TrainerError::Runtime("restore refused".to_string()));
+            }
+            Ok(())
+        }
+    }
+
+    fn brain_only_criterion() -> BalanceFeetCriterion {
+        let mut c = criterion_for(2, 0.05);
+        c.settle_s = 0.5;
+        c.hold_s = 0.5;
+        c.attempt_cap_s = 2.0;
+        c.support_min = 0.3;
+        c.perturb_interval_s = 0.2;
+        c.perturb_duration_s = 0.1;
+        c
+    }
+
+    fn run_test_phase(
+        c: &BalanceFeetCriterion,
+        mock: &mut MockController,
+        plasticity: &mut MockPlasticity,
+        cancel: &CancelToken,
+        seeds: &[u64],
+    ) -> Result<BalancePhaseReport, TrainerError> {
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-test".to_string());
+        let frozen = plasticity.frozen.clone();
+        let cancel_in_goal = cancel.clone();
+        let mut seen_frozen = Vec::new();
+        let result = {
+            let mut run = BalancePhaseRun {
+                phase: "test",
+                seeds,
+                criterion: c,
+                run_id: &run_id,
+                support_mode: None,
+                deliver_reward: None,
+                plasticity: Some(plasticity),
+                reward_policy: BalanceRewardPolicy::Affect,
+            };
+            run_balance_phase(
+                &mut run,
+                mock,
+                &mut |_| {
+                    seen_frozen.push(frozen.get());
+                    if cancel_in_goal.is_cancelled() {
+                        return Ok(());
+                    }
+                    Ok(())
+                },
+                &mut events,
+                cancel,
+            )
+        };
+        assert!(
+            seen_frozen.iter().all(|f| *f),
+            "learning was live during a test burst"
+        );
+        result
+    }
+
+    #[test]
+    fn test_phase_never_sets_a_nonzero_spring_or_perturbs_and_records_it() {
+        let c = brain_only_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut plasticity = MockPlasticity::default();
+        let report = run_test_phase(&c, &mut mock, &mut plasticity, &CancelToken::new(), &[1, 2])
+            .expect("phase");
+        assert_eq!(report.attempts.len(), 2);
+        assert_eq!(mock.spring_sets.len(), 2, "one zero spring per attempt");
+        for (gains, level, deadband) in &mock.spring_sets {
+            assert_eq!((*level, *deadband), (0.0, 0.0));
+            assert_eq!(*gains, zero_gains(), "no gravity comp, no xy spring");
+        }
+        assert!(mock.level_updates.is_empty(), "no update, settle included");
+        assert!(mock.pulses.is_empty(), "perturbation is off in test");
+        assert!(report.attempts.iter().all(|a| a.perturbations == 0));
+        assert!(report.attempts.iter().all(|a| a.support_level == 0.0));
+        assert_eq!((plasticity.freezes, plasticity.restores), (1, 1));
+        let test = report.brain_only.as_ref().expect("record");
+        assert!(test.plasticity_frozen && test.plasticity_reason.is_none());
+        assert_eq!(test.mappings_frozen, 3);
+        assert!(!test.memory_formation_paused);
+        let metrics = balance_phase_metrics(&report);
+        assert_eq!(metrics["test_support"], 0.0);
+        assert_eq!(metrics["test_plasticity_frozen"], 1.0);
+        let card = balance_phase_scorecard("s", "c", 1, "test", "d", "h", &report);
+        assert_eq!(card.metrics["brain_only"], 1.0);
+        assert!(card.metadata.contains_key("test_mode"));
+    }
+
+    #[test]
+    fn test_phase_ignores_train_graduation_and_rejects_other_support() {
+        let c = brain_only_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let seeds = [1u64];
+        let run_id = RunId("balance-test".to_string());
+        let mut events = CollectingEventSink::default();
+        let mut run = BalancePhaseRun {
+            phase: "test",
+            seeds: &seeds,
+            criterion: &c,
+            run_id: &run_id,
+            support_mode: Some(SupportMode::Fixed(0.7)),
+            deliver_reward: None,
+            plasticity: None,
+            reward_policy: BalanceRewardPolicy::Affect,
+        };
+        let error = run_balance_phase(
+            &mut run,
+            &mut mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("support 0"), "{error}");
+        assert!(
+            mock.calls.is_empty(),
+            "refused before touching the controller"
+        );
+        run.support_mode = Some(SupportMode::Fixed(0.0));
+        run_balance_phase(
+            &mut run,
+            &mut mock,
+            &mut |_| Ok(()),
+            &mut events,
+            &CancelToken::new(),
+        )
+        .expect("explicit zero is accepted");
+    }
+
+    #[test]
+    fn test_phase_rejects_a_reward_sink() {
+        let c = brain_only_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut sink = |_: &[RewardSignal]| -> Result<(), TrainerError> { Ok(()) };
+        let mut plasticity = MockPlasticity::default();
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-test".to_string());
+        // Scope ends the plasticity borrow. BalancePhaseRun does not implement Drop,
+        // so mem::drop would not release it.
+        let error = {
+            let mut run = BalancePhaseRun {
+                phase: "test",
+                seeds: &[1],
+                criterion: &c,
+                run_id: &run_id,
+                support_mode: None,
+                deliver_reward: Some(&mut sink),
+                plasticity: Some(&mut plasticity),
+                reward_policy: BalanceRewardPolicy::Affect,
+            };
+            run_balance_phase(
+                &mut run,
+                &mut mock,
+                &mut |_| Ok(()),
+                &mut events,
+                &CancelToken::new(),
+            )
+            .unwrap_err()
+            .to_string()
+        };
+        assert!(error.contains("no reward sink"), "{error}");
+        assert!(mock.calls.is_empty());
+        assert_eq!(plasticity.freezes, 0, "refused before freezing");
+    }
+
+    #[test]
+    fn test_phase_restores_plasticity_on_error_and_on_cancel() {
+        let c = brain_only_criterion();
+        // error: the controller reply has no contact points, so sizing fails mid-phase
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        mock.floor_z = None;
+        let mut plasticity = MockPlasticity::default();
+        let error =
+            run_test_phase(&c, &mut mock, &mut plasticity, &CancelToken::new(), &[1]).unwrap_err();
+        assert!(matches!(error, TrainerError::Runtime(_)), "{error}");
+        assert_eq!(
+            (plasticity.freezes, plasticity.restores),
+            (1, 1),
+            "error path"
+        );
+        // cancel
+        let cancel = CancelToken::new();
+        cancel.cancel();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut plasticity = MockPlasticity::default();
+        let error = run_test_phase(&c, &mut mock, &mut plasticity, &cancel, &[1]).unwrap_err();
+        assert!(matches!(error, TrainerError::Cancelled(_)), "{error}");
+        assert_eq!(
+            (plasticity.freezes, plasticity.restores),
+            (1, 1),
+            "cancel path"
+        );
+        // a restore failure surfaces, and keeps the Cancelled kind
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut plasticity = MockPlasticity {
+            fail_restore: true,
+            ..Default::default()
+        };
+        let error = run_test_phase(&c, &mut mock, &mut plasticity, &cancel, &[1]).unwrap_err();
+        assert!(
+            matches!(&error, TrainerError::Cancelled(m) if m.contains("stayed frozen")),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn test_phase_runs_unfrozen_and_says_why_when_the_freeze_fails() {
+        let c = brain_only_criterion();
+        let mut mock = MockController::new(0.05, 2, Box::new(|_, _| upright_step()));
+        let mut events = CollectingEventSink::default();
+        let run_id = RunId("balance-test".to_string());
+        let mut plasticity = MockPlasticity {
+            fail_freeze: true,
+            ..Default::default()
+        };
+        // Scope ends the plasticity borrow. BalancePhaseRun does not implement Drop,
+        // so mem::drop would not release it.
+        let report = {
+            let mut run = BalancePhaseRun {
+                phase: "test",
+                seeds: &[1],
+                criterion: &c,
+                run_id: &run_id,
+                support_mode: None,
+                deliver_reward: None,
+                plasticity: Some(&mut plasticity),
+                reward_policy: BalanceRewardPolicy::Affect,
+            };
+            run_balance_phase(
+                &mut run,
+                &mut mock,
+                &mut |_| Ok(()),
+                &mut events,
+                &CancelToken::new(),
+            )
+            .expect("phase")
+        };
+        let test = report.brain_only.expect("record");
+        assert!(!test.plasticity_frozen);
+        assert!(test
+            .plasticity_reason
+            .as_deref()
+            .is_some_and(|r| r.contains("freeze refused")));
+        assert_eq!(plasticity.restores, 1, "restore is still attempted");
     }
 
     #[test]

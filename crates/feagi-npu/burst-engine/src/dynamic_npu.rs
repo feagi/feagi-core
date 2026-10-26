@@ -791,6 +791,10 @@ where
         dispatch!(self, set_spike_train_areas(areas))
     }
 
+    pub fn memory_formation_suppressed(&self, cortical_idx: u32) -> bool {
+        dispatch!(self, memory_formation_suppressed(cortical_idx))
+    }
+
     pub fn modulator_area_subscriptions(&self, cortical_idx: u32) -> Vec<String> {
         dispatch!(self, modulator_area_subscriptions(cortical_idx))
     }
